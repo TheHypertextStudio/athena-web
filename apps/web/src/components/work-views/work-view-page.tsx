@@ -35,18 +35,30 @@ import {
 } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import type { ViewTarget } from '@docket/work/view-contract';
-import { Fragment, type JSX, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Fragment,
+  type JSX,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { useActiveOrg } from '@/components/active-org';
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
 import { ListPageLayout } from '@/components/views/page-layout';
+import { SelectionProvider, useSelection } from '@/components/selection';
+import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
 import { navigateAuthenticated } from '@/lib/app-location';
 import { openEntity } from '@/lib/local-first-navigation';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, type RpcResponse, useApiQuery } from '@/lib/query';
+import { objectHref } from '@/lib/actions/object';
 
 import { CARD_GRID_CLASS, CARD_INSET, CARD_MIN_HEIGHT } from './card-styles';
 import { InitiativeTimeline } from './initiative-timeline';
@@ -61,7 +73,11 @@ import { WorkBoard } from './work-board';
 import { WorkCards } from './work-cards';
 import { WorkList } from './work-list';
 import { WorkViewLoadFailure } from './work-view-load-failure';
-import { isRouteOwnedDirectWorkViewRow, workViewRowInteractionPolicy } from './work-view-object';
+import {
+  isRouteOwnedDirectWorkViewRow,
+  workViewRowInteractionPolicy,
+  workViewSelectionObjects,
+} from './work-view-object';
 import { supportsWorkViewRenderer } from './work-view-renderers';
 import { WorkViewToolbar } from './work-view-toolbar';
 
@@ -336,6 +352,72 @@ function externalRootContinuationError(layout: string, error: unknown): unknown 
   return layout === 'list' ? null : error;
 }
 
+/** Render bulk copy and clear controls from the same provider as the active renderer. */
+function WorkViewBulkActions(): JSX.Element | null {
+  const selection = useSelection();
+  const [copiedSignature, setCopiedSignature] = useState<string | null>(null);
+  const signature = [...selection.selectedKeys].sort().join('\n');
+  const previousSignatureRef = useRef(signature);
+  useEffect(() => {
+    if (previousSignatureRef.current !== signature) setCopiedSignature(null);
+    previousSignatureRef.current = signature;
+  }, [signature]);
+  if (selection.count === 0) return null;
+  const copied = copiedSignature === signature;
+  return (
+    <div
+      role="toolbar"
+      aria-label="Bulk actions"
+      className="border-outline-variant bg-surface-container-high text-body-medium flex min-h-12 shrink-0 items-center gap-3 rounded-xl border px-4"
+    >
+      <span>{selection.count} selected</span>
+      <Button
+        variant="secondary"
+        onClick={() => {
+          const links = selection.selectedObjects.flatMap((object) => {
+            const href = objectHref(object);
+            return href === null ? [] : [`${window.location.origin}${href}`];
+          });
+          void navigator.clipboard.writeText(links.join('\n')).then(
+            () => {
+              setCopiedSignature(signature);
+            },
+            () => {
+              setCopiedSignature(null);
+            },
+          );
+        }}
+      >
+        {copied ? 'Copied' : 'Copy links'}
+      </Button>
+      <Button variant="ghost" onClick={selection.clear}>
+        Clear
+      </Button>
+    </div>
+  );
+}
+
+/** Keep one renderer and its bulk bar under one keyed selection owner. */
+function WorkViewSelectionFrame({ children }: { readonly children: ReactNode }): JSX.Element {
+  return (
+    <>
+      {children}
+      <WorkViewBulkActions />
+    </>
+  );
+}
+
+/** Hide dependency-lens creation by omitting its callback for route viewers. */
+function projectDependencyCreateHandler(
+  canContribute: boolean,
+  create: (path?: readonly string[], returnFocusTo?: HTMLElement | null) => void,
+): ((returnFocusTo?: HTMLElement | null) => void) | undefined {
+  if (!canContribute) return undefined;
+  return (returnFocusTo) => {
+    create([], returnFocusTo);
+  };
+}
+
 /** Render one organization roster from the shared server query and target contract. */
 export function WorkViewPage<TTarget extends ViewTarget>({
   organizationId,
@@ -343,8 +425,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
 }: WorkViewPageProps<TTarget>): JSX.Element {
   const { openCreate } = useCreateObject();
   const { teams } = useActiveOrg();
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
-  const [copiedSelection, setCopiedSelection] = useState(false);
+  const { canManage, canContribute } = useCanManageOrg(organizationId);
   const [saveOpen, setSaveOpen] = useState(false);
   const [viewName, setViewName] = useState('');
   const [viewScope, setViewScope] = useState<ViewScope>('personal');
@@ -387,6 +468,18 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   // The target discriminator was validated by `useWorkView`. TypeScript loses that correlation
   // when it indexes the four response variants through a generic target.
   const rows = (controller.response?.rows ?? []) as unknown as readonly WorkViewRowFor<TTarget>[];
+  const selectionItems = useMemo(
+    () =>
+      workViewSelectionObjects(
+        [
+          ...rows,
+          ...controller.groupPages.flatMap((page) => page.rows),
+        ] as readonly WorkViewRowFor<ViewTarget>[],
+        organizationId,
+      ),
+    [controller.groupPages, organizationId, rows],
+  );
+  const selectionSurfaceId = `${organizationId}:${target}:${controller.executionKey}`;
   const requestedLayout = controller.definition.presentation.layout;
   const layout = supportsWorkViewRenderer(target, requestedLayout) ? requestedLayout : 'list';
   const { openSearch, restoreFocus } = useInPageSearchTarget({
@@ -432,6 +525,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   const activeCreatedProjectSelection =
     createdProjectSelection?.organizationId === organizationId ? createdProjectSelection : null;
   const create = (path: readonly string[] = [], returnFocusTo?: HTMLElement | null): void => {
+    if (!canContribute) return;
     const applyColumn = (itemId: string): void => {
       const groupValue = path[0] ?? null;
       if (path.length === 0) return;
@@ -508,9 +602,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         requestedSelectionAttempt={activeCreatedProjectSelection?.attempt ?? 0}
         onRequestedSelectionResolved={resolveCreatedProjectSelection}
         onRequestedSelectionMissing={markCreatedProjectMissing}
-        onCreateProject={(returnFocusTo) => {
-          create([], returnFocusTo);
-        }}
+        onCreateProject={projectDependencyCreateHandler(canContribute, create)}
       />
     );
   } else if (controller.loading) {
@@ -533,7 +625,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       <EmptyState
         icon={copy.icon}
         title={`No ${copy.title.toLowerCase()} yet`}
-        cta={{ label: `Create ${copy.singular}`, onClick: create }}
+        {...(canContribute ? { cta: { label: `Create ${copy.singular}`, onClick: create } } : {})}
       />
     );
   } else if (layout === 'board') {
@@ -546,15 +638,14 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         groups={controller.response?.groups ?? []}
         groupPages={controller.groupPages}
         hiddenColumns={controller.hiddenBoardColumns}
-        selectedIds={selectedIds}
-        rowInteraction={(row) => workViewRowInteractionPolicy(row, organizationId)}
-        onSelectionChange={setSelectedIds}
+        canContribute={canContribute}
+        rowInteraction={(row) => workViewRowInteractionPolicy(row, organizationId, canContribute)}
         onCreate={(path) => {
           create(path);
         }}
         onActivate={openRow}
         onDrop={(drop) => {
-          if (!isRouteOwnedDirectWorkViewRow(drop.item, organizationId)) return;
+          if (!canContribute || !isRouteOwnedDirectWorkViewRow(drop.item, organizationId)) return;
           const groupValue = drop.destinationPath[0] ?? null;
           const sourceGroupValue = drop.sourcePath[0] ?? null;
           orderMutation.mutate({
@@ -580,10 +671,10 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     content = (
       <WorkCards
         target={target}
+        organizationId={organizationId}
+        canContribute={canContribute}
         definition={controller.definition}
         rows={rows}
-        selectedIds={selectedIds}
-        onSelectionChange={setSelectedIds}
         onActivate={openRow}
         hasMoreRows={controller.response?.nextCursor !== null}
         loadingMoreRows={controller.loadingMoreRows}
@@ -596,7 +687,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         organizationId={organizationId}
         rows={rows as unknown as readonly ProjectViewRow[]}
         density={controller.definition.presentation.density}
-        canSchedule
+        canSchedule={canContribute}
         onReschedule={projectTimeline.reschedule}
         onApplyCascade={projectTimeline.applyCascade}
         applyingCascade={projectTimeline.applyingCascade}
@@ -625,13 +716,12 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       <WorkList
         target={target}
         organizationId={organizationId}
+        canContribute={canContribute}
         definition={controller.definition}
         rows={rows}
         groups={controller.response?.groups ?? []}
         groupPages={controller.groupPages}
-        selectedIds={selectedIds}
         collapsedGroups={controller.collapsedGroups}
-        onSelectionChange={setSelectedIds}
         onActivate={openRow}
         onLoadMore={controller.loadMoreGroup}
         hasMoreRows={controller.response?.nextCursor !== null}
@@ -780,14 +870,16 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         fill
         bodyPresentation={dependencyMode || layout === 'timeline' ? 'full-bleed' : 'inset'}
         actions={
-          <Button
-            className="min-h-10 gap-1.5"
-            onClick={() => {
-              create();
-            }}
-          >
-            <Plus aria-hidden className="size-4" /> New {copy.singular}
-          </Button>
+          canContribute ? (
+            <Button
+              className="min-h-10 gap-1.5"
+              onClick={() => {
+                create();
+              }}
+            >
+              <Plus aria-hidden className="size-4" /> New {copy.singular}
+            </Button>
+          ) : null
         }
         toolbar={
           <div className="flex min-w-0 flex-col gap-2">
@@ -819,6 +911,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                 setSaveOpen(true);
               }}
               onSetDefault={controller.setAsDefault}
+              canSetDefault={canManage}
               onReset={controller.resetPersonalOverride}
               onFind={(restoreElement) => {
                 openSearch(restoreElement);
@@ -836,112 +929,94 @@ export function WorkViewPage<TTarget extends ViewTarget>({
           </div>
         }
       >
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {projectTimeline.error || orderMutation.error ? (
-            <p role="alert" className="text-error text-body-medium px-3 py-2">
-              {projectTimeline.error
-                ? userErrorMessage(projectTimeline.error, 'Could not reschedule this project.')
-                : userErrorMessage(orderMutation.error, `Could not move this ${copy.singular}.`)}
-            </p>
-          ) : null}
-          <WorkViewOperationFailures
-            title={copy.title}
-            rootContinuationError={externalRootContinuationError(
-              layout,
-              controller.rootContinuationError,
-            )}
-            onRetryRoot={controller.loadMoreRows}
-            preferencesError={controller.preferencesError}
-            onRetryPreferences={controller.retryPreferences}
-            defaultError={controller.defaultError}
-            onRetryDefault={controller.setAsDefault}
-          />
-          {target === 'project' &&
-          dependencyMode &&
-          activeCreatedProjectSelection?.state === 'missing' ? (
-            <div className="bg-secondary-container text-on-secondary-container text-body-medium flex shrink-0 items-center gap-2 rounded-lg px-3 py-2">
-              <span role="status" className="min-w-0 flex-1">
-                Created, but hidden by current filters
-              </span>
-              <Button
-                variant="ghost"
-                controlSize="sm"
-                onClick={() => {
-                  controller.setDefinition({ ...controller.definition, filter: null });
-                  setSearch('');
-                  setCreatedProjectSelection((selection) =>
-                    selection?.organizationId === organizationId &&
-                    selection.id === activeCreatedProjectSelection.id
-                      ? {
-                          ...selection,
-                          state: 'pending',
-                          attempt: selection.attempt + 1,
-                        }
-                      : selection,
-                  );
-                }}
-              >
-                Clear filters
-              </Button>
-              <Button
-                variant="ghost"
-                controlSize="sm"
-                onClick={() => {
-                  setCreatedProjectSelection(null);
-                  navigateAuthenticated('/orgs/[orgId]/projects/[projectId]', {
-                    orgId: OrganizationId.parse(organizationId),
-                    projectId: ProjectId.parse(activeCreatedProjectSelection.id),
-                  });
-                }}
-              >
-                Open project
-              </Button>
-              <Button
-                variant="ghost"
-                iconOnly
-                controlSize="sm"
-                aria-label="Dismiss created Project notice"
-                onClick={() => {
-                  setCreatedProjectSelection(null);
-                }}
-              >
-                <X aria-hidden />
-              </Button>
+        <SelectionProvider
+          key={selectionSurfaceId}
+          surfaceId={selectionSurfaceId}
+          items={selectionItems}
+          organizationId={organizationId}
+          actionScope="all"
+        >
+          <WorkViewSelectionFrame>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {projectTimeline.error || orderMutation.error ? (
+                <p role="alert" className="text-error text-body-medium px-3 py-2">
+                  {projectTimeline.error
+                    ? userErrorMessage(projectTimeline.error, 'Could not reschedule this project.')
+                    : userErrorMessage(
+                        orderMutation.error,
+                        `Could not move this ${copy.singular}.`,
+                      )}
+                </p>
+              ) : null}
+              <WorkViewOperationFailures
+                title={copy.title}
+                rootContinuationError={externalRootContinuationError(
+                  layout,
+                  controller.rootContinuationError,
+                )}
+                onRetryRoot={controller.loadMoreRows}
+                preferencesError={controller.preferencesError}
+                onRetryPreferences={controller.retryPreferences}
+                defaultError={controller.defaultError}
+                onRetryDefault={controller.setAsDefault}
+              />
+              {target === 'project' &&
+              dependencyMode &&
+              activeCreatedProjectSelection?.state === 'missing' ? (
+                <div className="bg-secondary-container text-on-secondary-container text-body-medium flex shrink-0 items-center gap-2 rounded-lg px-3 py-2">
+                  <span role="status" className="min-w-0 flex-1">
+                    Created, but hidden by current filters
+                  </span>
+                  <Button
+                    variant="ghost"
+                    controlSize="sm"
+                    onClick={() => {
+                      controller.setDefinition({ ...controller.definition, filter: null });
+                      setSearch('');
+                      setCreatedProjectSelection((selection) =>
+                        selection?.organizationId === organizationId &&
+                        selection.id === activeCreatedProjectSelection.id
+                          ? {
+                              ...selection,
+                              state: 'pending',
+                              attempt: selection.attempt + 1,
+                            }
+                          : selection,
+                      );
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    controlSize="sm"
+                    onClick={() => {
+                      setCreatedProjectSelection(null);
+                      navigateAuthenticated('/orgs/[orgId]/projects/[projectId]', {
+                        orgId: OrganizationId.parse(organizationId),
+                        projectId: ProjectId.parse(activeCreatedProjectSelection.id),
+                      });
+                    }}
+                  >
+                    Open project
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    iconOnly
+                    controlSize="sm"
+                    aria-label="Dismiss created Project notice"
+                    onClick={() => {
+                      setCreatedProjectSelection(null);
+                    }}
+                  >
+                    <X aria-hidden />
+                  </Button>
+                </div>
+              ) : null}
+              {content}
             </div>
-          ) : null}
-          {content}
-        </div>
-        {selectedIds.size > 0 ? (
-          <div
-            role="toolbar"
-            aria-label="Bulk actions"
-            className="border-outline-variant bg-surface-container-high text-body-medium flex min-h-12 shrink-0 items-center gap-3 rounded-xl border px-4"
-          >
-            <span>{selectedIds.size} selected</span>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                const links = [...selectedIds].map(
-                  (id) => `${window.location.origin}/orgs/${organizationId}/${target}s/${id}`,
-                );
-                void navigator.clipboard.writeText(links.join('\n')).then(() => {
-                  setCopiedSelection(true);
-                });
-              }}
-            >
-              {copiedSelection ? 'Copied' : 'Copy links'}
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setSelectedIds(new Set());
-                setCopiedSelection(false);
-              }}
-            >
-              Clear
-            </Button>
-          </div>
-        ) : null}
+          </WorkViewSelectionFrame>
+        </SelectionProvider>
         <Dialog
           open={saveOpen}
           onOpenChange={(open) => {

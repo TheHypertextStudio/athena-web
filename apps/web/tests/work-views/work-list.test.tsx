@@ -1,7 +1,14 @@
 import '@testing-library/jest-dom/vitest';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import {
+  fireEvent,
+  render as renderElement,
+  screen,
+  type RenderResult,
+} from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { ReactElement, ReactNode } from 'react';
+import type { ViewTarget } from '@docket/work/view-contract';
 
 import {
   InitiativeViewDefinition,
@@ -20,11 +27,61 @@ const relationPreview = vi.hoisted<{
   effectLabel: null,
 }));
 
+const dragBindings = vi.hoisted(() => ({
+  options: [] as {
+    readonly object: { readonly id: string } | null;
+    readonly objects?: readonly { readonly id: string }[];
+    readonly disabled?: boolean;
+  }[],
+}));
+
+const relationBindings = vi.hoisted(() => ({
+  options: [] as {
+    readonly target: {
+      readonly id: string;
+      readonly kind?: string;
+      readonly organizationId?: string | null;
+      readonly meta?: Readonly<Record<string, unknown>>;
+    };
+    readonly disabled?: boolean;
+  }[],
+}));
+
+const dragContext = vi.hoisted(() => ({
+  objects: [] as {
+    readonly kind: 'initiative';
+    readonly id: string;
+    readonly organizationId: string;
+    readonly title: string;
+  }[],
+}));
+
+vi.mock('../../src/components/dnd/drag-context', () => ({
+  useDragState: () => ({ objects: dragContext.objects }),
+}));
+
+vi.mock('../../src/components/dnd/use-draggable', () => ({
+  useDraggable: (options: (typeof dragBindings.options)[number]) => {
+    dragBindings.options.push(options);
+    return {
+      ref: () => undefined,
+      className: options.disabled === true ? '' : 'cursor-grab',
+      'data-drag-state': 'idle',
+    };
+  },
+}));
+
 vi.mock('../../src/components/dnd/use-relation-drop-target', () => ({
   useRelationDropTarget: (options: {
-    readonly target: { readonly id: string };
+    readonly target: {
+      readonly id: string;
+      readonly kind?: string;
+      readonly organizationId?: string | null;
+      readonly meta?: Readonly<Record<string, unknown>>;
+    };
     readonly disabled?: boolean;
   }) => {
+    relationBindings.options.push(options);
     const active = options.target.id === relationPreview.targetId && options.disabled !== true;
     const dropState = active ? relationPreview.dropState : 'idle';
     return {
@@ -42,12 +99,47 @@ vi.mock('../../src/components/dnd/use-relation-drop-target', () => ({
 }));
 
 import { WorkList } from '../../src/components/work-views/work-list';
+import { SelectionProvider } from '../../src/components/selection';
+import type {
+  WorkViewGroupPage,
+  WorkViewRowFor,
+} from '../../src/components/work-views/renderer-types';
+import { workViewSelectionObjects } from '../../src/components/work-views/work-view-object';
 
 const ROUTE_ORGANIZATION_ID = '01ARZ3NDEKTSV4RRFFQ69G5FA0';
 let viewportHeight = 360;
 let restoreRect: (() => void) | undefined;
 let restoreHeight: (() => void) | undefined;
 let restoreWidth: (() => void) | undefined;
+
+function withSelection(element: ReactElement): ReactNode {
+  const props = element.props as {
+    readonly organizationId: string;
+    readonly rows: readonly WorkViewRowFor<ViewTarget>[];
+    readonly groupPages: readonly WorkViewGroupPage<ViewTarget>[];
+  };
+  const rows = [...props.rows, ...props.groupPages.flatMap((page) => page.rows)];
+  return (
+    <SelectionProvider
+      surfaceId={`${props.organizationId}:list:test`}
+      organizationId={props.organizationId}
+      actionScope="all"
+      items={workViewSelectionObjects(rows, props.organizationId)}
+    >
+      {element}
+    </SelectionProvider>
+  );
+}
+
+function render(element: ReactElement): RenderResult {
+  const result = renderElement(withSelection(element));
+  return {
+    ...result,
+    rerender: (next: ReactNode) => {
+      result.rerender(withSelection(next as ReactElement));
+    },
+  };
+}
 
 beforeAll(() => {
   const original = HTMLElement.prototype.getBoundingClientRect.bind(HTMLElement.prototype);
@@ -96,6 +188,9 @@ afterEach(() => {
   relationPreview.targetId = null;
   relationPreview.dropState = 'idle';
   relationPreview.effectLabel = null;
+  dragBindings.options.length = 0;
+  relationBindings.options.length = 0;
+  dragContext.objects.length = 0;
 });
 
 const taskDefinition = TaskViewDefinition.parse({
@@ -146,7 +241,6 @@ function task(index: number) {
 
 describe('WorkList', () => {
   it('renders through the bounded shared table and activates the active row with Enter', () => {
-    const onSelectionChange = vi.fn();
     const onActivate = vi.fn();
     render(
       <WorkList
@@ -156,8 +250,7 @@ describe('WorkList', () => {
         rows={Array.from({ length: 500 }, (_, index) => task(index))}
         groups={[]}
         groupPages={[]}
-        selectedIds={new Set()}
-        onSelectionChange={onSelectionChange}
+        canContribute
         onActivate={onActivate}
       />,
     );
@@ -189,7 +282,7 @@ describe('WorkList', () => {
     fireEvent.keyDown(grid, { key: 'Enter' });
     expect(onActivate).toHaveBeenCalledWith(task(0));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Task 0' }));
-    expect(onSelectionChange).toHaveBeenCalledWith(new Set([task(0).id]));
+    expect(screen.getByRole('checkbox', { name: 'Select Task 0' })).toBeChecked();
   });
 
   it('keeps context ancestors navigable without selection, write actions, or drag state', () => {
@@ -239,7 +332,6 @@ describe('WorkList', () => {
     relationPreview.dropState = 'accept';
     relationPreview.effectLabel = 'Move to Parent context';
 
-    const onSelectionChange = vi.fn();
     render(
       <WorkList
         target="initiative"
@@ -258,8 +350,7 @@ describe('WorkList', () => {
             loading: false,
           },
         ]}
-        selectedIds={new Set([parent.id])}
-        onSelectionChange={onSelectionChange}
+        canContribute
         onActivate={vi.fn()}
       />,
     );
@@ -301,8 +392,196 @@ describe('WorkList', () => {
     expect(childRow).toHaveAttribute('data-object-id', child.id);
     expect(childRow).toHaveClass('cursor-grab');
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Matching child' }));
-    expect(onSelectionChange).toHaveBeenCalledWith(new Set([child.id]));
+    expect(screen.getByRole('checkbox', { name: 'Select Matching child' })).toBeChecked();
     expect(screen.getByText('Matching child')).toBeVisible();
+  });
+
+  it('carries selected route rows in one drag and keeps a foreign direct row reference-only', () => {
+    const first = task(0);
+    const second = task(1);
+    const foreign = TaskViewRow.parse({
+      ...task(2),
+      organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FC0',
+      title: 'Foreign direct task',
+    });
+    render(
+      <WorkList
+        target="task"
+        organizationId={ROUTE_ORGANIZATION_ID}
+        definition={taskDefinition}
+        rows={[first, second, foreign]}
+        groups={[]}
+        groupPages={[]}
+        canContribute
+        onActivate={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Task 0' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Task 1' }));
+    const selectedDrag = dragBindings.options.find(
+      (binding) =>
+        binding.object?.id === first.id &&
+        binding.objects?.length === 2 &&
+        binding.objects.every(({ id }) => id === first.id || id === second.id),
+    );
+    expect(selectedDrag?.objects?.map(({ id }) => id)).toEqual([first.id, second.id]);
+
+    const foreignLink = screen.getByRole('link', { name: 'Foreign direct task' });
+    expect(foreignLink).toHaveAttribute(
+      'href',
+      `/orgs/${foreign.organizationId}/tasks/${foreign.id}`,
+    );
+    const foreignRow = foreignLink.closest<HTMLElement>('[role="row"]');
+    expect(foreignRow).toHaveAttribute('data-object-action-scope', 'reference');
+    expect(foreignRow).not.toHaveClass('cursor-grab');
+    expect(
+      screen.queryByRole('checkbox', { name: 'Select Foreign direct task' }),
+    ).not.toBeInTheDocument();
+    expect(
+      dragBindings.options.find((binding) => binding.object?.id === foreign.id)?.disabled,
+    ).toBe(true);
+  });
+
+  it('uses the route owner for the Initiative root target and the row owner for navigation', () => {
+    const foreignOrganizationId = '01ARZ3NDEKTSV4RRFFQ69G5FC0';
+    const initiative = InitiativeViewRow.parse({
+      target: 'initiative',
+      organizationId: foreignOrganizationId,
+      organization: foreignOrganizationId,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FC1',
+      name: 'Readable foreign Initiative',
+      status: 'planned',
+      priority: 'high',
+      health: null,
+      owner: null,
+      leadTeam: null,
+      labels: [],
+      targetDate: null,
+      updateCadence: 'monthly',
+      latestUpdate: null,
+      parent: null,
+      parentLinkId: null,
+      contributingProjects: [],
+      manualRank: 'a0',
+      isContext: false,
+      updatedAt: '2026-08-23T00:00:00.000Z',
+    });
+    const definition = InitiativeViewDefinition.parse({
+      version: 2,
+      target: 'initiative',
+      filter: null,
+      arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+      presentation: {
+        layout: 'list',
+        properties: [],
+        density: 'compact',
+        showEmptyGroups: false,
+      },
+    });
+
+    render(
+      <WorkList
+        target="initiative"
+        organizationId={ROUTE_ORGANIZATION_ID}
+        definition={definition}
+        rows={[initiative]}
+        groups={[]}
+        groupPages={[]}
+        canContribute
+        onActivate={vi.fn()}
+      />,
+    );
+
+    expect(
+      relationBindings.options.find(({ target }) => target.kind === 'initiative_root')?.target,
+    ).toMatchObject({
+      id: `${ROUTE_ORGANIZATION_ID}:initiative-root`,
+      organizationId: ROUTE_ORGANIZATION_ID,
+    });
+    expect(screen.getByRole('link', { name: initiative.name })).toHaveAttribute(
+      'href',
+      `/orgs/${foreignOrganizationId}/initiatives/${initiative.id}`,
+    );
+  });
+
+  it('marks a proven Initiative cycle and leaves an incomplete hierarchy for API authority', () => {
+    const definition = InitiativeViewDefinition.parse({
+      version: 2,
+      target: 'initiative',
+      filter: null,
+      arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+      presentation: {
+        layout: 'list',
+        properties: [],
+        density: 'compact',
+        showEmptyGroups: false,
+      },
+    });
+    const ancestor = InitiativeViewRow.parse({
+      target: 'initiative',
+      organizationId: ROUTE_ORGANIZATION_ID,
+      organization: ROUTE_ORGANIZATION_ID,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FC2',
+      name: 'Ancestor',
+      status: 'planned',
+      priority: 'high',
+      health: null,
+      owner: null,
+      leadTeam: null,
+      labels: [],
+      targetDate: null,
+      updateCadence: 'monthly',
+      latestUpdate: null,
+      parent: null,
+      parentLinkId: null,
+      contributingProjects: [],
+      manualRank: 'a0',
+      isContext: false,
+      updatedAt: '2026-08-23T00:00:00.000Z',
+    });
+    const descendant = InitiativeViewRow.parse({
+      ...ancestor,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FC3',
+      name: 'Known descendant',
+      parent: ancestor.id,
+      manualRank: 'a1',
+    });
+    const incomplete = InitiativeViewRow.parse({
+      ...ancestor,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FC4',
+      name: 'Incomplete hierarchy',
+      parent: '01ARZ3NDEKTSV4RRFFQ69G5FC5',
+      manualRank: 'a2',
+    });
+    dragContext.objects.push({
+      kind: 'initiative',
+      id: ancestor.id,
+      organizationId: ROUTE_ORGANIZATION_ID,
+      title: ancestor.name,
+    });
+
+    render(
+      <WorkList
+        target="initiative"
+        organizationId={ROUTE_ORGANIZATION_ID}
+        definition={definition}
+        rows={[ancestor, descendant, incomplete]}
+        groups={[]}
+        groupPages={[]}
+        canContribute
+        onActivate={vi.fn()}
+      />,
+    );
+
+    const descendantTarget = relationBindings.options.find(
+      ({ target }) => target.id === descendant.id,
+    )?.target;
+    const incompleteTarget = relationBindings.options.find(
+      ({ target }) => target.id === incomplete.id,
+    )?.target;
+    expect(descendantTarget?.meta).toMatchObject({ wouldCreateCycle: true });
+    expect(incompleteTarget?.meta?.['wouldCreateCycle']).not.toBe(true);
   });
 
   it.each([
@@ -324,8 +603,7 @@ describe('WorkList', () => {
         rows={[row]}
         groups={[]}
         groupPages={[]}
-        selectedIds={new Set()}
-        onSelectionChange={vi.fn()}
+        canContribute
         onActivate={vi.fn()}
       />,
     );
@@ -391,8 +669,7 @@ describe('WorkList', () => {
         groupPages={[
           { path: ['planned'], rows: [child, parent], nextCursor: null, loading: false },
         ]}
-        selectedIds={new Set()}
-        onSelectionChange={vi.fn()}
+        canContribute
         onActivate={vi.fn()}
       />,
     );
@@ -459,8 +736,7 @@ describe('WorkList', () => {
         rows={[parent, child]}
         groups={[]}
         groupPages={[]}
-        selectedIds={new Set()}
-        onSelectionChange={vi.fn()}
+        canContribute
         onActivate={onActivate}
       />,
     );
@@ -560,8 +836,7 @@ describe('WorkList', () => {
           },
           { path: ['planned'], rows: [root, child, grandchild], nextCursor: null, loading: false },
         ]}
-        selectedIds={new Set()}
-        onSelectionChange={vi.fn()}
+        canContribute
         onActivate={vi.fn()}
       />,
     );
@@ -627,8 +902,7 @@ describe('WorkList', () => {
         rows={[first, second]}
         groups={[]}
         groupPages={[]}
-        selectedIds={new Set()}
-        onSelectionChange={vi.fn()}
+        canContribute
         onActivate={vi.fn()}
       />,
     );
@@ -655,8 +929,7 @@ describe('WorkList', () => {
       definition,
       rows: [],
       groups: [{ path: ['todo'], key: 'todo', label: 'Active', count: 101 }],
-      selectedIds: new Set<string>(),
-      onSelectionChange: vi.fn(),
+      canContribute: true,
       onActivate: vi.fn(),
       onLoadMore,
     };

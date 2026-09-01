@@ -37,6 +37,7 @@ import {
   type Column,
   EntityTable,
   type EntityTableGroup,
+  type EntityTableRowInteraction,
   LabelChipRow,
 } from '@docket/ui/components';
 import Link from '@/components/docket-link';
@@ -56,9 +57,8 @@ import {
   SelectAllCheckbox,
   SelectionCheckbox,
   SelectionProvider,
-  useSelectableRow,
+  useEntityTableSelection,
   useSelection,
-  useSelectionContainerRef,
 } from '@/components/selection';
 import { useTaskHierarchyDrop } from '@/components/tasks/task-hierarchy-drop';
 import { TaskTimerButton } from '@/components/time-tracking';
@@ -309,6 +309,24 @@ function withoutUndefinedValues<T extends object>(
   return result;
 }
 
+/** Flatten nested task groups into the provider's visible object order. */
+function taskGroupRows(groups: readonly EntityTableGroup<TaskOut>[]): readonly TaskOut[] {
+  return groups.flatMap((group) => group.rows ?? taskGroupRows(group.children));
+}
+
+/** Resolve the provider row set without adding branches to the public renderer. */
+function taskTableRows(
+  tasks: readonly TaskOut[] | undefined,
+  groups: readonly EntityTableGroup<TaskOut>[] | undefined,
+): readonly TaskOut[] {
+  return groups === undefined ? (tasks ?? []) : taskGroupRows(groups);
+}
+
+/** Build one stable selection identity for a task table instance. */
+function taskTableSurfaceId(organizationId: string | null, label: string): string {
+  return `task-table:${organizationId ?? 'none'}:${label}`;
+}
+
 /**
  * Render a task list as the shared aligned-column {@link EntityTable}.
  *
@@ -334,9 +352,10 @@ export function TaskTable({
   defaultCollapsed,
   className,
 }: TaskTableProps): JSX.Element {
-  const visibleTasks = groups ? groups.flatMap((group) => group.rows) : (tasks ?? []);
+  const visibleTasks = taskTableRows(tasks, groups);
   const objects = visibleTasks.map(taskObject);
   const organizationId = objects[0]?.organizationId ?? null;
+  const selectionSurfaceId = taskTableSurfaceId(organizationId, label);
   const displaysQ = useApiQuery(
     apiQueryOptions(
       organizationId
@@ -356,6 +375,8 @@ export function TaskTable({
 
   return (
     <SelectionProvider
+      key={selectionSurfaceId}
+      surfaceId={selectionSurfaceId}
       items={objects}
       organizationId={objects[0]?.organizationId ?? null}
       actionScope="all"
@@ -387,35 +408,34 @@ function TaskRowInteraction({
 }: {
   readonly row: TaskOut;
   readonly tasks: readonly TaskOut[];
-  readonly children: (
-    binding: ReturnType<typeof useSelectableRow> & { readonly className?: string },
-  ) => ReactNode;
+  readonly children: (binding: EntityTableRowInteraction) => ReactNode;
 }): JSX.Element {
   const object = taskObject(row);
-  const binding = useSelectableRow(object);
   const selection = useSelection();
+  const selected = selection.isSelected(objectKey(object));
   const drag = useDraggable({
     object,
     actionScope: selection.actionScope,
     surfaceId: selection.surfaceId,
-    objects: selection.isSelected(objectKey(object)) ? selection.selectedObjects : [object],
+    objects: selected ? selection.selectedObjects : [object],
   });
   const drop = useTaskHierarchyDrop(object, tasks);
   return (
     <>
       {children({
-        ...binding,
-        rowProps: {
-          ...binding.rowProps,
-          ...objectTargetProps(object),
-          ...drop.rowProps,
-          ref: (element: HTMLElement | null) => {
-            binding.rowProps.ref(element);
-            drag.ref(element);
-            drop.rowProps.ref(element);
-          },
+        selected,
+        interactionRef: (element: HTMLElement | null) => {
+          drag.ref(element);
+          drop.rowProps.ref(element);
         },
-        className: cn(drop.className, drag.className),
+        rowProps: {
+          ...objectTargetProps(object),
+          'aria-selected': selected,
+          'data-selected': selected,
+          'data-drop-state': drop.rowProps['data-drop-state'],
+          'data-drag-state': drag['data-drag-state'],
+        },
+        className: cn(drop.className, drop.rowProps.className, drag.className),
       })}
       {drop.status ? (
         <span className="sr-only" role="status">
@@ -440,9 +460,8 @@ function SelectableTaskTable({
   displayByTaskId,
 }: TaskTableProps): JSX.Element {
   const pickerOverlay = usePickerOverlay();
-  const selection = useSelection();
-  const selectionRef = useSelectionContainerRef();
-  const visibleTasks = groups ? groups.flatMap((group) => group.rows) : (tasks ?? []);
+  const visibleTasks = taskTableRows(tasks, groups);
+  const tableSelection = useEntityTableSelection<TaskOut>(taskObject);
   const selectableColumns: readonly Column<TaskOut>[] = [
     {
       key: 'selection',
@@ -492,23 +511,9 @@ function SelectableTaskTable({
       columns={selectableColumns}
       {...(groups ? { groups } : { rows: tasks ?? [] })}
       getRowKey={(task) => task.id}
+      {...tableSelection}
       rowHref={(task) => taskHref(task)}
       rowLinkColumnKey="title"
-      containerInteraction={{
-        ...selection.containerProps,
-        ref: selectionRef,
-        onKeyDown: (event) => {
-          selection.containerProps.onKeyDown(event);
-          if (event.defaultPrevented || event.key.toLowerCase() !== 'l') return;
-          const activeId = selection.activeKey?.replace(/^task:/, '');
-          const task = [...(tasks ?? []), ...(groups?.flatMap((group) => group.rows) ?? [])].find(
-            ({ id }) => id === activeId,
-          );
-          if (!task) return;
-          event.preventDefault();
-          openLabels(task, event.currentTarget.querySelector<HTMLElement>('[data-active="true"]'));
-        },
-      }}
       renderRowInteraction={({ row, children }) => (
         <TaskRowInteraction row={row} tasks={visibleTasks}>
           {children}

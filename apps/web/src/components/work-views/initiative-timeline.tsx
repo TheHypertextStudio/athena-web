@@ -63,7 +63,7 @@ export function buildInitiativeTimelineCatalog(
     },
     edges: () => ({ blockedBy: [], blocks: [] }),
     statusLabel: (row) => row.status.replaceAll('_', ' '),
-    interaction: (row) => workViewRowInteractionPolicy(row, routeOrganizationId),
+    interaction: (row) => workViewRowInteractionPolicy(row, routeOrganizationId, false),
   };
 }
 

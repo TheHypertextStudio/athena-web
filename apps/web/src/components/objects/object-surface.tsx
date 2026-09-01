@@ -72,6 +72,8 @@ export interface ObjectSurfaceProps {
   readonly actionScope?: ObjectActionScope | undefined;
   /** The selection/list surface recorded as the drag origin. */
   readonly surfaceId?: string | undefined;
+  /** Ordered selected objects carried when this object belongs to a multi-selection. */
+  readonly objects?: readonly ObjectRef[] | undefined;
   /** Require Option/Alt for mouse or pen association drags on a spatially movable object. */
   readonly associationModifier?: 'alt' | undefined;
   /** Native detail destination used when no explicit activation callback is supplied. */
@@ -98,6 +100,7 @@ export function ObjectSurface({
   dragDisabled = false,
   actionScope = 'all',
   surfaceId,
+  objects,
   associationModifier,
   href,
   onActivate,
@@ -112,6 +115,7 @@ export function ObjectSurface({
     actionScope,
     disabled: dragDisabled || actionScope === 'reference',
     surfaceId,
+    objects,
     onDragStart: () => {
       suppressActivationRef.current = true;
       onDragStart?.();

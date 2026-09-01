@@ -304,6 +304,50 @@ describe('TaskTable', () => {
     expect(row(TASK_2)).toHaveClass('cursor-grab');
   });
 
+  it('keeps keyboard focus and range selection in the EntityTable command model', () => {
+    const first = task({ id: TASK_1, title: 'First' });
+    const second = task({ id: TASK_2, title: 'Second' });
+    const third = task({ id: TASK_3, title: 'Third' });
+    render(
+      withQueryClient(
+        <InteractionProvider registry={createActionRegistry()}>
+          <DragProvider>
+            <TaskTable
+              label="Tasks"
+              columns={columns}
+              tasks={[first, second, third]}
+              taskHref={(item) => `/orgs/${ORG_ID}/tasks/${item.id}`}
+            />
+          </DragProvider>
+        </InteractionProvider>,
+      ),
+    );
+
+    const grid = screen.getByRole('grid', { name: 'Tasks' });
+    const rows = [TASK_1, TASK_2, TASK_3].map((id) => {
+      const row = document.querySelector<HTMLElement>(`[role="row"][data-object-id="${id}"]`);
+      if (row === null) throw new Error(`Expected task row ${id}`);
+      return row;
+    });
+    expect(grid).toHaveAttribute('tabindex', '0');
+    expect(rows.every((row) => row.getAttribute('tabindex') !== '0')).toBe(true);
+
+    grid.focus();
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    expect(grid).toHaveAttribute('aria-activedescendant', rows[0]?.id);
+    fireEvent.keyDown(grid, { key: ' ' });
+    expect(rows[0]).toHaveAttribute('aria-selected', 'true');
+
+    fireEvent.keyDown(grid, { key: 'ArrowDown', shiftKey: true });
+    expect(rows[0]).toHaveAttribute('aria-selected', 'true');
+    expect(rows[1]).toHaveAttribute('aria-selected', 'true');
+
+    fireEvent.keyDown(grid, { key: 'a', metaKey: true });
+    expect(rows.every((row) => row.getAttribute('aria-selected') === 'true')).toBe(true);
+    fireEvent.keyDown(grid, { key: 'Escape' });
+    expect(rows.every((row) => row.getAttribute('aria-selected') === 'false')).toBe(true);
+  });
+
   it('publishes every row as a hierarchy relation destination', () => {
     const registry = createActionRegistry();
     render(

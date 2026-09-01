@@ -6,9 +6,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskViewDefinition, TaskViewRow } from '@docket/work/work-view-contract';
 
 import { ObjectContextMenuProvider } from '../../src/components/context-menu/object-context-menu';
+import { SelectionProvider } from '../../src/components/selection';
 import {
   objectForWorkViewRow,
   workViewRowInteractionPolicy,
+  workViewSelectionObjects,
 } from '../../src/components/work-views/work-view-object';
 import { WorkBoard } from '../../src/components/work-views/work-board';
 import { ActionRegistryProvider } from '../../src/lib/actions/registry-context';
@@ -167,34 +169,43 @@ function sourceFor(row: typeof local, path: readonly string[]) {
 
 function renderBoard(
   onDrop = vi.fn(),
-  onSelectionChange = vi.fn(),
   groupPages = [
     { path: ['todo'], rows: [local, foreign, context], nextCursor: null, loading: false },
     { path: ['started'], rows: [], nextCursor: null, loading: false },
   ],
 ) {
   const onActivate = vi.fn();
+  const items = workViewSelectionObjects(
+    groupPages.flatMap((page) => page.rows),
+    ROUTE_ORGANIZATION_ID,
+  );
   const view = () => (
     <ActionRegistryProvider registry={menuRegistry()}>
       <ObjectContextMenuProvider>
-        <WorkBoard
-          target="task"
-          definition={definition}
-          totalCount={101}
-          groups={[
-            { path: ['todo'], key: 'todo', label: 'Todo', count: 101 },
-            { path: ['started'], key: 'started', label: 'Started', count: 0 },
-          ]}
-          groupPages={groupPages}
-          hiddenColumns={new Set()}
-          selectedIds={new Set()}
-          rowInteraction={rowInteraction}
-          onSelectionChange={onSelectionChange}
-          onCreate={vi.fn()}
-          onActivate={onActivate}
-          onDrop={onDrop}
-          onLoadMore={vi.fn()}
-        />
+        <SelectionProvider
+          surfaceId={`${ROUTE_ORGANIZATION_ID}:task:test`}
+          organizationId={ROUTE_ORGANIZATION_ID}
+          actionScope="all"
+          items={items}
+        >
+          <WorkBoard
+            target="task"
+            definition={definition}
+            totalCount={101}
+            groups={[
+              { path: ['todo'], key: 'todo', label: 'Todo', count: 101 },
+              { path: ['started'], key: 'started', label: 'Started', count: 0 },
+            ]}
+            groupPages={groupPages}
+            hiddenColumns={new Set()}
+            canContribute
+            rowInteraction={rowInteraction}
+            onCreate={vi.fn()}
+            onActivate={onActivate}
+            onDrop={onDrop}
+            onLoadMore={vi.fn()}
+          />
+        </SelectionProvider>
       </ObjectContextMenuProvider>
     </ActionRegistryProvider>
   );
@@ -223,8 +234,7 @@ beforeEach(() => {
 
 describe('WorkBoard route-owned row interaction policy', () => {
   it('keeps foreign navigation but excludes context rows from the board and its count', () => {
-    const onSelectionChange = vi.fn();
-    const { onActivate } = renderBoard(vi.fn(), onSelectionChange);
+    const { onActivate } = renderBoard();
 
     const localCard = screen.getByRole('article', { name: 'Local task' });
     const foreignCard = screen.getByRole('article', { name: 'Foreign task' });
@@ -240,7 +250,7 @@ describe('WorkBoard route-owned row interaction policy', () => {
     expect(screen.queryByRole('checkbox', { name: 'Select Foreign task' })).toBeNull();
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Local task' }));
-    expect(onSelectionChange).toHaveBeenCalledWith(new Set([local.id]));
+    expect(screen.getByRole('checkbox', { name: 'Select Local task' })).toBeChecked();
 
     fireEvent.click(screen.getByRole('link', { name: 'Foreign task' }));
     expect(onActivate).toHaveBeenNthCalledWith(1, foreign);
@@ -351,7 +361,7 @@ describe('WorkBoard route-owned row interaction policy', () => {
     const contextMembership = task(sharedId, 'Context membership', ROUTE_ORGANIZATION_ID, true);
     const onDrop = vi.fn();
     dnd.source = sourceFor(contextMembership, ['started']);
-    renderBoard(onDrop, vi.fn(), [
+    renderBoard(onDrop, [
       {
         path: ['started'],
         rows: [contextMembership],

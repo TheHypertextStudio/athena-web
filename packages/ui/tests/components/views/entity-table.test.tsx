@@ -7,6 +7,8 @@ import {
   type Column,
   EntityTable,
   type EntityTableGroup,
+  type EntityTableProps,
+  type EntityTableRowInteraction,
 } from '../../../src/components/views/EntityTable';
 import { priorityVisibility } from '../../../src/components/views/entity-table-columns';
 import { assertDefined } from '@docket/test-utils';
@@ -414,7 +416,7 @@ describe('EntityTable — selection', () => {
     expect(anchorClick.mock.instances[0]).toHaveAttribute('target', '_blank');
   });
 
-  it('binds injected row refs and DOM interaction while keeping navigation on the title column', () => {
+  it('binds injected drag and drop refs without giving the row a second focus model', () => {
     const onRowClick = vi.fn();
     const register = vi.fn();
     const columns: Column<Row>[] = [
@@ -433,13 +435,10 @@ describe('EntityTable — selection', () => {
         renderRowInteraction={({ children }) =>
           children({
             selected: true,
-            active: true,
+            interactionRef: register,
             rowProps: {
-              ref: register,
-              tabIndex: 0,
               'aria-selected': true,
               'data-selected': true,
-              'data-active': true,
               onClick: onRowClick,
             },
             className: 'ring-primary',
@@ -451,7 +450,7 @@ describe('EntityTable — selection', () => {
     const row = screen.getByRole('row', { name: /Billing revamp/ });
     expect(row.tagName).toBe('DIV');
     expect(row).toHaveAttribute('aria-selected', 'true');
-    expect(row).toHaveAttribute('tabindex', '0');
+    expect(row).not.toHaveAttribute('tabindex', '0');
     expect(row).toHaveClass('bg-secondary-container', 'ring-primary');
     expect(register).toHaveBeenCalledWith(row);
     expect(within(row).getByRole('checkbox')).toBeInTheDocument();
@@ -461,6 +460,41 @@ describe('EntityTable — selection', () => {
     );
     fireEvent.click(row);
     expect(onRowClick).toHaveBeenCalledOnce();
+  });
+
+  it('rejects injected container keyboard ownership and row focus props at the type boundary', () => {
+    const container = {
+      ref: (_element: HTMLElement | null) => undefined,
+      onScroll: () => undefined,
+    } satisfies NonNullable<EntityTableProps<Row>['containerInteraction']>;
+    const interaction = {
+      selected: false,
+      interactionRef: (_element: HTMLElement | null) => undefined,
+      rowProps: {
+        'aria-selected': false,
+        'data-selected': false,
+        onClick: () => undefined,
+      },
+    } satisfies EntityTableRowInteraction;
+
+    const invalidContainer = {
+      // @ts-expect-error EntityTable is the only container keyboard owner.
+      onKeyDown: () => undefined,
+    } satisfies NonNullable<EntityTableProps<Row>['containerInteraction']>;
+    const invalidRow = {
+      selected: false,
+      rowProps: {
+        'aria-selected': false,
+        'data-selected': false,
+        // @ts-expect-error EntityTable rows never receive an injected roving tab index.
+        tabIndex: 0,
+      },
+    } satisfies EntityTableRowInteraction;
+
+    expect(container.onScroll).toBeTypeOf('function');
+    expect(interaction.interactionRef).toBeTypeOf('function');
+    expect(invalidContainer).toBeDefined();
+    expect(invalidRow).toBeDefined();
   });
 
   it('adopts the MD3 selected tone for rows in the selected set and toggles via onSelect', () => {
@@ -819,7 +853,7 @@ describe('EntityTable — keyboard navigation', () => {
     expect(screen.getByRole('row', { name: /Billing revamp/ })).not.toHaveAttribute('data-active');
   });
 
-  it('moves the active cursor to the first remaining row when filtering removes it', () => {
+  it('moves the active cursor to the nearest remaining row when filtering removes it', () => {
     const view = render(
       <EntityTable aria-label="Items" columns={COLUMNS} rows={ROWS} getRowKey={getRowKey} />,
     );
@@ -832,12 +866,42 @@ describe('EntityTable — keyboard navigation', () => {
       <EntityTable
         aria-label="Items"
         columns={COLUMNS}
-        rows={[assertDefined(ROWS[0])]}
+        rows={[assertDefined(ROWS[0]), assertDefined(ROWS[2])]}
         getRowKey={getRowKey}
       />,
     );
 
-    expect(screen.getByRole('row', { name: /Billing revamp/ })).toHaveAttribute('data-active', '');
+    expect(screen.getByRole('row', { name: /Search rewrite/ })).toHaveAttribute('data-active', '');
+  });
+
+  it('restores focus to the nearest flattened entry when a group collapses around the active row', () => {
+    const groups: readonly EntityTableGroup<Row>[] = [
+      {
+        id: 'first',
+        label: 'First group',
+        rows: [assertDefined(ROWS[0]), assertDefined(ROWS[1])],
+      },
+      { id: 'second', label: 'Second group', rows: [assertDefined(ROWS[2])] },
+    ];
+    render(
+      <EntityTable
+        aria-label="Grouped items"
+        columns={COLUMNS}
+        groups={groups}
+        getRowKey={getRowKey}
+      />,
+    );
+    const grid = screen.getByRole('grid', { name: 'Grouped items' });
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    expect(screen.getByRole('row', { name: /Auth migration/ })).toHaveAttribute('data-active', '');
+
+    fireEvent.click(screen.getByRole('row', { name: /First group/ }));
+
+    expect(screen.getByRole('row', { name: /Second group/ })).toHaveClass(
+      'bg-surface-container-high',
+    );
   });
 });
 

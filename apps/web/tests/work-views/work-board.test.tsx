@@ -1,12 +1,48 @@
 import '@testing-library/jest-dom/vitest';
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  fireEvent,
+  render as renderElement,
+  screen,
+  within,
+  type RenderResult,
+} from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import type { ReactElement } from 'react';
+import type { ViewTarget } from '@docket/work/view-contract';
 
 import { TaskViewDefinition, TaskViewRow } from '@docket/work/work-view-contract';
 
+import { SelectionProvider } from '../../src/components/selection';
 import { WorkBoard } from '../../src/components/work-views/work-board';
-import { workViewRowInteractionPolicy } from '../../src/components/work-views/work-view-object';
+import type {
+  WorkViewGroupPage,
+  WorkViewRowFor,
+} from '../../src/components/work-views/renderer-types';
+import {
+  workViewRowInteractionPolicy,
+  workViewSelectionObjects,
+} from '../../src/components/work-views/work-view-object';
+
+const ROUTE_ORGANIZATION_ID = '01ARZ3NDEKTSV4RRFFQ69G5FA0';
+
+function render(element: ReactElement): RenderResult {
+  const props = element.props as {
+    readonly rows?: readonly WorkViewRowFor<ViewTarget>[];
+    readonly groupPages: readonly WorkViewGroupPage<ViewTarget>[];
+  };
+  const rows = [...(props.rows ?? []), ...props.groupPages.flatMap((page) => page.rows)];
+  return renderElement(
+    <SelectionProvider
+      surfaceId={`${ROUTE_ORGANIZATION_ID}:board:test`}
+      organizationId={ROUTE_ORGANIZATION_ID}
+      actionScope="all"
+      items={workViewSelectionObjects(rows, ROUTE_ORGANIZATION_ID)}
+    >
+      {element}
+    </SelectionProvider>,
+  );
+}
 
 const definition = TaskViewDefinition.parse({
   version: 2,
@@ -24,7 +60,7 @@ const definition = TaskViewDefinition.parse({
 function task(id: string, title: string) {
   return TaskViewRow.parse({
     target: 'task',
-    organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
+    organizationId: ROUTE_ORGANIZATION_ID,
     id,
     title,
     status: 'todo',
@@ -72,9 +108,8 @@ describe('WorkBoard', () => {
         groups={[]}
         groupPages={[]}
         hiddenColumns={new Set()}
-        selectedIds={new Set()}
+        canContribute
         rowInteraction={(row) => workViewRowInteractionPolicy(row, '01ARZ3NDEKTSV4RRFFQ69G5FA0')}
-        onSelectionChange={vi.fn()}
         onCreate={vi.fn()}
         onActivate={vi.fn()}
         onDrop={vi.fn()}
@@ -111,10 +146,9 @@ describe('WorkBoard', () => {
       groups: [],
       groupPages: [],
       hiddenColumns: new Set<string>(),
-      selectedIds: new Set<string>(),
+      canContribute: true,
       rowInteraction: (row: ReturnType<typeof task>) =>
         workViewRowInteractionPolicy(row, '01ARZ3NDEKTSV4RRFFQ69G5FA0'),
-      onSelectionChange: vi.fn(),
       onCreate: vi.fn(),
       onActivate: vi.fn(),
       onDrop: vi.fn(),
@@ -157,9 +191,8 @@ describe('WorkBoard', () => {
           },
         ]}
         hiddenColumns={new Set(['done'])}
-        selectedIds={new Set()}
+        canContribute
         rowInteraction={(row) => workViewRowInteractionPolicy(row, '01ARZ3NDEKTSV4RRFFQ69G5FA0')}
-        onSelectionChange={vi.fn()}
         onCreate={onCreate}
         onActivate={onActivate}
         onDrop={vi.fn()}
@@ -217,11 +250,10 @@ describe('WorkBoard', () => {
           { path: ['started', 'medium'], rows: [], nextCursor: null, loading: false },
         ]}
         hiddenColumns={new Set()}
-        selectedIds={new Set()}
+        canContribute
         rowInteraction={(candidate) =>
           workViewRowInteractionPolicy(candidate, '01ARZ3NDEKTSV4RRFFQ69G5FA0')
         }
-        onSelectionChange={vi.fn()}
         onCreate={vi.fn()}
         onActivate={onActivate}
         onDrop={vi.fn()}
@@ -265,11 +297,10 @@ describe('WorkBoard', () => {
         groups={[{ path: ['todo'], key: 'todo', label: 'Todo', count: 1 }]}
         groupPages={[{ path: ['todo'], rows: [row], nextCursor: null, loading: false }]}
         hiddenColumns={new Set()}
-        selectedIds={new Set()}
+        canContribute
         rowInteraction={(candidate) =>
           workViewRowInteractionPolicy(candidate, '01ARZ3NDEKTSV4RRFFQ69G5FA0')
         }
-        onSelectionChange={vi.fn()}
         onCreate={vi.fn()}
         onActivate={vi.fn()}
         onDrop={vi.fn()}

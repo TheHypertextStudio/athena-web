@@ -234,6 +234,27 @@ describe('WorkViewToolbar', () => {
     expect(within(views).getByRole('menuitem', { name: 'Restore default view' })).toBeVisible();
   });
 
+  it('keeps the workspace default action out of a non-manager toolbar', async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkViewToolbar
+        target="task"
+        definition={taskDefinition}
+        onDefinitionChange={vi.fn()}
+        onSaveView={vi.fn()}
+        onSetDefault={vi.fn()}
+        canSetDefault={false}
+        onReset={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'More view controls' }));
+    expect(
+      screen.queryByRole('menuitem', { name: 'Use as workspace default' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Save as new view' })).toBeVisible();
+  });
+
   it('keeps hidden view tabs reachable from the dedicated More menu', async () => {
     const user = userEvent.setup();
     render(

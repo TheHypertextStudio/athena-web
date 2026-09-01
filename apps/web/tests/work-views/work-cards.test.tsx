@@ -1,6 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import {
+  fireEvent,
+  render as renderElement,
+  screen,
+  type RenderResult,
+} from '@testing-library/react';
 import {
   ProgramViewDefinition,
   ProgramViewRow,
@@ -8,8 +13,13 @@ import {
   TaskViewRow,
 } from '@docket/work/work-view-contract';
 import { describe, expect, it, vi } from 'vitest';
+import type { ReactElement } from 'react';
 
+import { SelectionProvider } from '../../src/components/selection';
 import { WorkCards } from '../../src/components/work-views/work-cards';
+import { workViewSelectionObjects } from '../../src/components/work-views/work-view-object';
+import type { WorkViewRowFor } from '../../src/components/work-views/renderer-types';
+import type { ViewTarget } from '@docket/work/view-contract';
 
 const definition = TaskViewDefinition.parse({
   version: 2,
@@ -102,17 +112,34 @@ const program = ProgramViewRow.parse({
   },
 });
 
+function render(element: ReactElement): RenderResult {
+  const props = element.props as {
+    readonly organizationId: string;
+    readonly rows: readonly WorkViewRowFor<ViewTarget>[];
+  };
+  const items = workViewSelectionObjects(props.rows, props.organizationId);
+  return renderElement(
+    <SelectionProvider
+      surfaceId={`${props.organizationId}:cards:test`}
+      organizationId={props.organizationId}
+      actionScope="all"
+      items={items}
+    >
+      {element}
+    </SelectionProvider>,
+  );
+}
+
 describe('WorkCards', () => {
   it('renders a target-neutral card grid with selection and activation', () => {
     const onActivate = vi.fn();
-    const onSelectionChange = vi.fn();
     render(
       <WorkCards
         target="task"
+        organizationId={task.organizationId}
         definition={definition}
         rows={[task]}
-        selectedIds={new Set()}
-        onSelectionChange={onSelectionChange}
+        canContribute
         onActivate={onActivate}
       />,
     );
@@ -131,17 +158,17 @@ describe('WorkCards', () => {
     fireEvent.click(link, { metaKey: true });
     expect(onActivate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Ship the roster' }));
-    expect(onSelectionChange).toHaveBeenCalledWith(new Set([task.id]));
+    expect(screen.getByRole('checkbox', { name: 'Select Ship the roster' })).toBeChecked();
   });
 
   it('continues the root roster after the first page', () => {
     const onLoadMoreRows = vi.fn();
     const props = {
       target: 'task' as const,
+      organizationId: task.organizationId,
       definition,
       rows: [task],
-      selectedIds: new Set<string>(),
-      onSelectionChange: vi.fn(),
+      canContribute: true,
       onActivate: vi.fn(),
       hasMoreRows: true,
       loadingMoreRows: false,
@@ -152,6 +179,46 @@ describe('WorkCards', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Load more tasks' }));
     expect(onLoadMoreRows).toHaveBeenCalledOnce();
+  });
+
+  it('omits context cards and keeps foreign cards reference-only outside selection', () => {
+    const context = TaskViewRow.parse({
+      ...task,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FA3',
+      title: 'Parent context',
+      isContext: true,
+    });
+    const foreign = TaskViewRow.parse({
+      ...task,
+      organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FC0',
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FA4',
+      title: 'Foreign reference',
+    });
+
+    render(
+      <WorkCards
+        target="task"
+        organizationId={task.organizationId}
+        definition={definition}
+        rows={[task, context, foreign]}
+        canContribute
+        onActivate={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('Parent context')).not.toBeInTheDocument();
+    const foreignLink = screen.getByRole('link', { name: /Foreign reference/ });
+    expect(foreignLink).toHaveAttribute(
+      'href',
+      `/orgs/${foreign.organizationId}/tasks/${foreign.id}`,
+    );
+    const foreignCard = foreignLink.closest<HTMLElement>('[data-object-id]');
+    expect(foreignCard).toHaveAttribute('data-object-action-scope', 'reference');
+    expect(foreignCard).not.toHaveClass('cursor-grab');
+    expect(
+      screen.queryByRole('checkbox', { name: 'Select Foreign reference' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
   });
 
   it('renders the projected assignee name instead of the relation id', () => {
@@ -173,10 +240,10 @@ describe('WorkCards', () => {
     render(
       <WorkCards
         target="task"
+        organizationId={task.organizationId}
         definition={assigneeDefinition}
         rows={[assignedTask]}
-        selectedIds={new Set()}
-        onSelectionChange={vi.fn()}
+        canContribute
         onActivate={vi.fn()}
       />,
     );
@@ -188,10 +255,10 @@ describe('WorkCards', () => {
     const { container } = render(
       <WorkCards
         target="program"
+        organizationId={program.organizationId}
         definition={programDefinition}
         rows={[program]}
-        selectedIds={new Set()}
-        onSelectionChange={vi.fn()}
+        canContribute
         onActivate={vi.fn()}
       />,
     );
@@ -228,10 +295,10 @@ describe('WorkCards', () => {
     render(
       <WorkCards
         target="program"
+        organizationId={program.organizationId}
         definition={programDefinition}
         rows={[program]}
-        selectedIds={new Set()}
-        onSelectionChange={vi.fn()}
+        canContribute
         onActivate={vi.fn()}
       />,
     );
@@ -248,10 +315,10 @@ describe('WorkCards', () => {
     render(
       <WorkCards
         target="program"
+        organizationId={program.organizationId}
         definition={programDefinition}
         rows={[ProgramViewRow.parse({ ...program, owner: null, ownerActor: null })]}
-        selectedIds={new Set()}
-        onSelectionChange={vi.fn()}
+        canContribute
         onActivate={vi.fn()}
       />,
     );
@@ -273,10 +340,10 @@ describe('WorkCards', () => {
     render(
       <WorkCards
         target="program"
+        organizationId={program.organizationId}
         definition={bareDefinition}
         rows={[program]}
-        selectedIds={new Set()}
-        onSelectionChange={vi.fn()}
+        canContribute
         onActivate={vi.fn()}
       />,
     );
@@ -304,10 +371,10 @@ describe('WorkCards', () => {
     render(
       <WorkCards
         target="program"
+        organizationId={program.organizationId}
         definition={withExtras}
         rows={[program]}
-        selectedIds={new Set()}
-        onSelectionChange={vi.fn()}
+        canContribute
         onActivate={vi.fn()}
       />,
     );
@@ -324,6 +391,7 @@ describe('WorkCards', () => {
     render(
       <WorkCards
         target="program"
+        organizationId={program.organizationId}
         definition={programDefinition}
         rows={[
           ProgramViewRow.parse({
@@ -333,8 +401,7 @@ describe('WorkCards', () => {
             activity: { weeks: [0, 0, 0, 0, 0, 0, 0, 0], latestOccurredAt: null },
           }),
         ]}
-        selectedIds={new Set()}
-        onSelectionChange={vi.fn()}
+        canContribute
         onActivate={vi.fn()}
       />,
     );

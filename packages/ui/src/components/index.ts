@@ -126,6 +126,7 @@ export {
   type EntityTableGroupBase,
   type EntityTableProps,
   type EntityTableRowAria,
+  type EntityTableRowInteraction,
   type EntityTableRowLinkProps,
   type EntityTableSelectionCommand,
   type EntityTableSelectionModifiers,

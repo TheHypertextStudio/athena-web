@@ -80,10 +80,17 @@ export interface SelectionContextValue {
   readonly count: number;
   /** The keyboard-active row's key, or `null`. */
   readonly activeKey: string | null;
+  /** The key from which the next range selection extends, or `null`. */
+  readonly anchorKey: string | null;
   /** Whether a key is selected. */
   readonly isSelected: (key: string) => boolean;
   /** Apply a selection intent directly (a "select all" button, restoring persisted state). */
   readonly dispatch: (intent: SelectionIntent) => void;
+  /** Apply an intent against table-provided eligible order after validating provider membership. */
+  readonly dispatchInOrder: (
+    intent: SelectionIntent,
+    orderedSelectionKeys: readonly string[],
+  ) => void;
   /** Select every row. */
   readonly selectAll: () => void;
   /** Clear the selection. */
@@ -174,6 +181,14 @@ export function SelectionProvider({
     },
     [order],
   );
+  const dispatchInOrder = useCallback(
+    (intent: SelectionIntent, orderedSelectionKeys: readonly string[]) => {
+      const providerKeys = new Set(order);
+      const validatedOrder = orderedSelectionKeys.filter((key) => providerKeys.has(key));
+      setState((current) => applySelectionIntent(current, intent, validatedOrder));
+    },
+    [order],
+  );
 
   const selectedObjects = useMemo(
     () => items.filter((item) => state.selected.has(objectKey(item))),
@@ -245,8 +260,10 @@ export function SelectionProvider({
       selectedObjects,
       count: state.selected.size,
       activeKey: state.activeKey,
+      anchorKey: state.anchorKey,
       isSelected: (key) => state.selected.has(key),
       dispatch,
+      dispatchInOrder,
       selectAll: () => {
         dispatch({ type: 'select-all' });
       },
@@ -259,7 +276,18 @@ export function SelectionProvider({
         onKeyDown,
       },
     }),
-    [id, actionScope, items, state.selected, state.activeKey, selectedObjects, dispatch, onKeyDown],
+    [
+      id,
+      actionScope,
+      items,
+      state.selected,
+      state.activeKey,
+      state.anchorKey,
+      selectedObjects,
+      dispatch,
+      dispatchInOrder,
+      onKeyDown,
+    ],
   );
 
   const internals = useMemo<SelectionInternals>(

@@ -29,9 +29,16 @@ function tint(health: ProjectViewRow['health']): TimelineTint {
   return 'neutral';
 }
 
-/** Build the shared timeline projection for Project rows in one route organization. */
+/**
+ * Build the shared timeline projection for Project rows in one route organization.
+ *
+ * @param routeOrganizationId - The organization whose direct Projects this route renders.
+ * @param canSchedule - Whether the route user may schedule or drag direct Projects.
+ * @returns A timeline catalog with route ownership and capability applied to every interaction.
+ */
 export function buildProjectViewTimelineCatalog(
   routeOrganizationId: string,
+  canSchedule = true,
 ): TimelineCatalog<ProjectViewRow> {
   return {
     id: (row) => row.id,
@@ -39,7 +46,7 @@ export function buildProjectViewTimelineCatalog(
     sublabel: () => null,
     href: (row) => `/orgs/${row.organizationId}/projects/${row.id}`,
     span: (row) => resolveSpan(parseDate(row.startDate), parseDate(row.targetDate)),
-    schedulable: (row) => isRouteOwnedDirectWorkViewRow(row, routeOrganizationId),
+    schedulable: (row) => canSchedule && isRouteOwnedDirectWorkViewRow(row, routeOrganizationId),
     markers: (row) =>
       row.milestones.flatMap((milestone) => {
         const at = parseDate(milestone.targetDate);
@@ -49,7 +56,7 @@ export function buildProjectViewTimelineCatalog(
     progress: (row) => row.progress,
     edges: (row) => ({ blockedBy: row.blockedByIds, blocks: row.blocksIds }),
     statusLabel: (row) => row.status.replaceAll('_', ' '),
-    interaction: (row) => workViewRowInteractionPolicy(row, routeOrganizationId),
+    interaction: (row) => workViewRowInteractionPolicy(row, routeOrganizationId, canSchedule),
   };
 }
 
@@ -101,7 +108,7 @@ export function ProjectTimelineAdapter({
   onActivate,
   onPrefetch,
 }: ProjectTimelineAdapterProps): JSX.Element {
-  const catalog = buildProjectViewTimelineCatalog(organizationId);
+  const catalog = buildProjectViewTimelineCatalog(organizationId, canSchedule);
   const applied: AppliedView<ProjectViewRow> = { rows, groups: null };
   const spans = rows.flatMap((row) => {
     const span = catalog.span(row);

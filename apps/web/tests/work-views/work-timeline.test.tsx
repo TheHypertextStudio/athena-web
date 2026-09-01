@@ -104,6 +104,20 @@ describe('typed work-view timelines', () => {
     expect(catalog.schedulable?.(context)).toBe(false);
   });
 
+  it('disables Project scheduling and generic drag for a route viewer', () => {
+    const local = projectRow({
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FEA',
+    });
+    const catalog = buildProjectViewTimelineCatalog(ROUTE_ORGANIZATION_ID, false);
+
+    expect(catalog.schedulable?.(local)).toBe(false);
+    expect(catalog.interaction(local)).toMatchObject({
+      writable: false,
+      dragDisabled: true,
+      actionScope: 'reference',
+    });
+  });
+
   it('maps cascade writes only for route-owned direct Projects', () => {
     const local = projectRow({
       id: '01ARZ3NDEKTSV4RRFFQ69G5FE7',
@@ -213,6 +227,37 @@ describe('typed work-view timelines', () => {
     );
     expect(catalog.interaction({ ...initiative, isContext: false })).toMatchObject({
       object: { id: initiative.id, organizationId: FOREIGN_ORGANIZATION_ID },
+      dragDisabled: true,
+      actionScope: 'reference',
+    });
+  });
+
+  it('keeps route-owned Initiatives non-draggable in the read-only timeline', () => {
+    const initiative = InitiativeViewRow.parse({
+      target: 'initiative',
+      organizationId: ROUTE_ORGANIZATION_ID,
+      organization: ROUTE_ORGANIZATION_ID,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FF5',
+      name: 'Read-only rollup',
+      status: 'started',
+      priority: 'high',
+      health: 'on_track',
+      owner: null,
+      leadTeam: null,
+      labels: [],
+      targetDate: '2026-12-31',
+      updateCadence: 'monthly',
+      latestUpdate: null,
+      updatedAt: '2026-08-21T00:00:00.000Z',
+      parent: null,
+      contributingProjects: [],
+      manualRank: 'a0',
+      isContext: false,
+    });
+    const catalog = buildInitiativeTimelineCatalog(ROUTE_ORGANIZATION_ID);
+
+    expect(catalog.interaction(initiative)).toMatchObject({
+      writable: false,
       dragDisabled: true,
       actionScope: 'reference',
     });

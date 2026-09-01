@@ -26,6 +26,20 @@ function rowSurfaceTone(tone: 'outlined' | 'tonal'): string {
   return surfaceToneColor(tone === 'tonal' ? 'card' : 'page');
 }
 
+/** Resolve row state attributes outside the main renderer's branch budget. */
+function rowStateDataAttributes(
+  active: boolean,
+  selected: boolean,
+): {
+  readonly 'data-active': '' | undefined;
+  readonly 'data-selected': '' | undefined;
+} {
+  return {
+    'data-active': active ? '' : undefined,
+    'data-selected': selected ? '' : undefined,
+  };
+}
+
 /** Props for the internal {@link EntityTableRow}. */
 export interface EntityTableRowProps<T> {
   /** Stable DOM id used by the owning grid's `aria-activedescendant`. */
@@ -151,9 +165,14 @@ function handleLinkedBodyClick(
   onSelectionCommand: ((event: React.MouseEvent<HTMLElement>) => void) | undefined,
   activateBody: (event: React.MouseEvent<HTMLElement>) => void,
 ): void {
-  interaction?.rowProps.onClick(event);
+  interaction?.rowProps.onClick?.(event);
   if (event.defaultPrevented) return;
-  onSelectionCommand?.(event);
+  const nestedControl = (event.target as HTMLElement).closest(
+    'a, button, input, textarea, select, [contenteditable="true"], [role="button"]',
+  );
+  if (nestedControl === null || nestedControl === event.currentTarget) {
+    onSelectionCommand?.(event);
+  }
   if (interaction === undefined || event.metaKey || event.ctrlKey || event.shiftKey) {
     activateBody(event);
   }
@@ -315,12 +334,15 @@ export function EntityTableRow<T>({
 
   const ariaCurrent: 'true' | undefined = active ? 'true' : undefined;
   const semantics = rowSemanticAttributes(id, ariaRowIndex, entryKey, rowHeight, rowAria);
+  const stateDataAttributes = rowStateDataAttributes(active, selected);
 
   if (linkColumnKey !== undefined) {
     return (
       <div
         {...interaction?.rowProps}
         {...semantics}
+        {...stateDataAttributes}
+        ref={interaction?.interactionRef}
         aria-current={ariaCurrent}
         className={cn(rowClassName, 'group/row', interaction?.className)}
         onClick={(event) => {
@@ -360,11 +382,10 @@ export function EntityTableRow<T>({
     return (
       <a
         {...semantics}
+        {...stateDataAttributes}
         href={href}
         aria-current={ariaCurrent}
         aria-selected={selected || undefined}
-        data-active={active ? '' : undefined}
-        data-selected={selected ? '' : undefined}
         tabIndex={-1}
         onClick={handleClick}
         onMouseEnter={onRowPrefetch}
@@ -380,11 +401,10 @@ export function EntityTableRow<T>({
   return (
     <button
       {...semantics}
+      {...stateDataAttributes}
       type="button"
       aria-pressed={selected || undefined}
       aria-current={ariaCurrent}
-      data-active={active ? '' : undefined}
-      data-selected={selected ? '' : undefined}
       tabIndex={-1}
       onClick={handleClick}
       onKeyDown={handleKeyDown}

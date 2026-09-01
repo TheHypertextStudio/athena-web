@@ -72,17 +72,18 @@ export interface EntityTableRowAria {
   readonly expanded?: boolean;
 }
 
-/** Selection/focus props an application can inject without coupling `@docket/ui` to its model. */
+/** Pointer, selection, and drag/drop props an application can inject without taking focus. */
 export interface EntityTableRowInteraction {
   readonly selected: boolean;
-  readonly active: boolean;
-  readonly rowProps: React.HTMLAttributes<HTMLElement> & {
+  /** Register drag/drop behavior without supplying a focus-management ref. */
+  readonly interactionRef?: ((element: HTMLElement | null) => void) | undefined;
+  readonly rowProps: Omit<
+    React.HTMLAttributes<HTMLElement>,
+    'aria-activedescendant' | 'onKeyDown' | 'role' | 'tabIndex'
+  > & {
     readonly 'aria-selected': boolean;
     readonly 'data-selected': boolean;
-    readonly 'data-active': boolean;
-    readonly tabIndex: number;
-    readonly ref: (element: HTMLElement | null) => void;
-    readonly onClick: (event: React.MouseEvent) => void;
+    readonly [key: `data-${string}`]: string | number | boolean | undefined;
   };
   /** State classes contributed by the interaction (selection/drop preview). */
   readonly className?: string;
@@ -136,14 +137,17 @@ export interface EntityTableProps<T> {
   onRowPropertyKey?: ((key: string, row: T, anchor: HTMLElement | null) => boolean) | undefined;
   /** Warm a row's destination cache on hover/focus (prefetch-on-intent). Optional; no-op if unset. */
   onRowPrefetch?: ((row: T) => void) | undefined;
-  /** Inject application-owned row selection/focus behavior. */
+  /** Inject application-owned row selection, pointer, and drag/drop behavior. */
   renderRowInteraction?:
     ((props: EntityTableRowInteractionProps<T>) => React.ReactNode) | undefined;
   /** Restrict `rowHref` navigation to this column instead of making the whole row a link. */
   rowLinkColumnKey?: string | undefined;
-  /** Application-owned props/ref merged onto the grid container. */
+  /** Application-owned non-keyboard props/ref merged onto the grid container. */
   containerInteraction?:
-    | (React.HTMLAttributes<HTMLDivElement> & {
+    | (Omit<
+        React.HTMLAttributes<HTMLDivElement>,
+        'aria-activedescendant' | 'onKeyDown' | 'role' | 'tabIndex'
+      > & {
         readonly ref?: ((element: HTMLElement | null) => void) | undefined;
       })
     | undefined;
@@ -214,6 +218,22 @@ function orderedEntityTableSelectionKeys<T>(
     const key = getRowSelectionKey(entry.row);
     return key === undefined ? [] : [key];
   });
+}
+
+/** Find the closest key that remains after a flattened entry disappears. */
+function nearestSurvivingEntityTableKey(
+  previousKeys: readonly string[],
+  currentKeys: ReadonlySet<string>,
+  removedKey: string,
+): string | undefined {
+  const previousIndex = previousKeys.indexOf(removedKey);
+  for (let distance = 1; previousIndex >= 0 && distance < previousKeys.length; distance += 1) {
+    const after = previousKeys[previousIndex + distance];
+    if (after !== undefined && currentKeys.has(after)) return after;
+    const before = previousKeys[previousIndex - distance];
+    if (before !== undefined && currentKeys.has(before)) return before;
+  }
+  return undefined;
 }
 
 /** Resolve table chrome classes from the two public presentation switches. */
@@ -440,6 +460,7 @@ export function EntityTable<T>({
   const resolvedRowHeight = entityTableRowHeight(rowHeight, density);
   const rowIdPrefix = React.useId().replaceAll(':', '');
   const activeKeyRef = React.useRef<string | null>(null);
+  const previousFlatKeysRef = React.useRef<readonly string[]>([]);
 
   const [internalCollapsed, setInternalCollapsed] = React.useState<ReadonlySet<string>>(
     () => new Set(defaultCollapsed ?? []),
@@ -592,13 +613,24 @@ export function EntityTable<T>({
 
   React.useEffect(() => {
     const activeKey = activeKeyRef.current;
+    const previousKeys = previousFlatKeysRef.current;
+    const currentKeys = flat.map(({ key }) => key);
+    previousFlatKeysRef.current = currentKeys;
     if (activeKey === null) return;
     const nextIndex = flat.findIndex((entry) => entry.key === activeKey);
     if (nextIndex < 0) {
-      const first = flat[0];
-      activeKeyRef.current = first?.key ?? null;
-      if (first === undefined) onActiveEntryChange?.(null);
-      setActiveIndex(first ? 0 : -1);
+      const nearestKey = nearestSurvivingEntityTableKey(
+        previousKeys,
+        new Set(currentKeys),
+        activeKey,
+      );
+      const fallbackIndex = Math.min(Math.max(activeIndex, 0), flat.length - 1);
+      const replacementIndex =
+        nearestKey === undefined ? fallbackIndex : flat.findIndex(({ key }) => key === nearestKey);
+      const replacement = flat[replacementIndex];
+      activeKeyRef.current = replacement?.key ?? null;
+      if (replacement === undefined) onActiveEntryChange?.(null);
+      setActiveIndex(replacement === undefined ? -1 : replacementIndex);
     } else if (nextIndex !== activeIndex) {
       setActiveIndex(nextIndex);
     }
@@ -640,13 +672,10 @@ export function EntityTable<T>({
 
   const handleGridKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      containerInteraction?.onKeyDown?.(event);
-      if (!event.defaultPrevented) {
-        onKeyDown(event);
-        if (event.key === 'Escape') activeKeyRef.current = null;
-      }
+      onKeyDown(event);
+      if (event.key === 'Escape') activeKeyRef.current = null;
     },
-    [containerInteraction, onKeyDown],
+    [onKeyDown],
   );
 
   const renderFlatEntry = (entry: FlatEntityTableEntry<T>, index: number): React.ReactNode => {
@@ -689,6 +718,7 @@ export function EntityTable<T>({
       );
     }
     const key = getRowKey(entry.row);
+    const selectionKey = getRowSelectionKey?.(entry.row) ?? key;
     const renderRow = (interaction?: EntityTableRowInteraction): React.ReactNode => (
       <EntityTableRow
         key={entry.key}
@@ -700,8 +730,8 @@ export function EntityTable<T>({
         tone={tone}
         columns={columns}
         row={entry.row}
-        active={interaction?.active ?? activeIndex === index}
-        selected={interaction?.selected ?? selected?.has(key) ?? false}
+        active={activeIndex === index}
+        selected={interaction?.selected ?? selected?.has(selectionKey) ?? false}
         href={rowHref?.(entry.row)}
         renderRowLink={renderRowLink}
         interaction={interaction}

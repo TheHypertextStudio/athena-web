@@ -26,6 +26,11 @@ export {
   useSelectionContainerRef,
 } from './selection-context';
 export {
+  type EntityTableSelectionBinding,
+  entityTableSelectionIntent,
+  useEntityTableSelection,
+} from './entity-table-selection';
+export {
   EMPTY_SELECTION,
   applySelectionIntent,
   intentFromClick,

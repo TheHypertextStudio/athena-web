@@ -60,7 +60,7 @@ import {
   removePersonalViewState,
   workViewFilterFieldCatalog,
 } from './view-state';
-import type { WorkViewGroupPage } from './renderer-types';
+import type { WorkViewGroupPage, WorkViewRowFor } from './renderer-types';
 import {
   emptyWorkViewPages,
   mergeWorkViewPageRows,
@@ -229,6 +229,8 @@ export interface SaveWorkViewInput {
 
 /** Data and mutations shared by every work-view page renderer. */
 export interface WorkViewController<TTarget extends ViewTarget> {
+  /** Stable identity for the organization, view instance, request, and timezone execution. */
+  readonly executionKey: string;
   readonly timezone: string;
   readonly definition: WorkViewDefinitionFor<TTarget>;
   readonly effectiveDefinition: WorkViewDefinitionFor<TTarget>;
@@ -547,7 +549,10 @@ export function useWorkView<TTarget extends ViewTarget>(
   const fetchGroupPage = useCallback(
     async (path: readonly string[], cursor: string | null): Promise<void> => {
       setGroupPageState((current) => {
-        const pages = current?.key === executionKey ? current.pages : emptyWorkViewPages();
+        const pages =
+          current?.key === executionKey
+            ? current.pages
+            : emptyWorkViewPages<WorkViewRowFor<TTarget>>();
         return {
           key: executionKey,
           pages: reduceWorkViewPages(pages, { type: 'request', path, cursor }),
@@ -627,7 +632,9 @@ export function useWorkView<TTarget extends ViewTarget>(
       .filter((group) => group.path.length === depth)
       .map((group) => group.path);
     const current =
-      groupPageState?.key === executionKey ? groupPageState.pages : emptyWorkViewPages();
+      groupPageState?.key === executionKey
+        ? groupPageState.pages
+        : emptyWorkViewPages<WorkViewRowFor<TTarget>>();
     for (const path of paths) {
       if (workViewPageForPath(current, path)) continue;
       void fetchGroupPage(path, null);
@@ -987,7 +994,10 @@ export function useWorkView<TTarget extends ViewTarget>(
 
   const loadMoreRows = useCallback((): void => {
     const response = queryQ.data;
-    const pages = rootPageState?.key === executionKey ? rootPageState.pages : emptyWorkViewPages();
+    const pages =
+      rootPageState?.key === executionKey
+        ? rootPageState.pages
+        : emptyWorkViewPages<WorkViewRowFor<TTarget>>();
     const current = workViewPageForPath(pages, []);
     const cursor = current?.nextCursor ?? response?.nextCursor ?? null;
     const groupField = definition.arrangement.groupBy as string | null;
@@ -1076,16 +1086,17 @@ export function useWorkView<TTarget extends ViewTarget>(
     if (!first || !continuation) return first;
     return {
       ...first,
-      rows: mergeWorkViewPageRows(
-        first.rows,
+      rows: mergeWorkViewPageRows<WorkViewRowFor<TTarget>>(
+        first.rows as unknown as readonly WorkViewRowFor<TTarget>[],
         continuation.rows,
-      ) as QueryResponseFor<TTarget>['rows'],
+      ) as unknown as QueryResponseFor<TTarget>['rows'],
       nextCursor: continuation.nextCursor,
     };
   }, [executionKey, queryQ.data, queryQ.isPlaceholderData, rootPageState]);
 
   return useMemo(
     () => ({
+      executionKey,
       timezone,
       definition,
       effectiveDefinition,

@@ -189,6 +189,7 @@ describe('useWorkView instance and request identity', () => {
     await waitFor(() => {
       expect(result.current.response?.totalCount).toBe(3);
     });
+    const executionKey = result.current.executionKey;
     expect(apiMocks.query).toHaveBeenCalledTimes(1);
 
     const boardDefinition = TaskViewDefinition.parse({
@@ -200,6 +201,7 @@ describe('useWorkView instance and request identity', () => {
     });
 
     expect(result.current.definition.presentation.layout).toBe('board');
+    expect(result.current.executionKey).toBe(executionKey);
     expect(result.current.response?.totalCount).toBe(3);
     await waitFor(() => {
       expect(result.current.updatingPreferences).toBe(false);
@@ -243,6 +245,7 @@ describe('useWorkView instance and request identity', () => {
     await waitFor(() => {
       expect(result.current.response).toBeDefined();
     });
+    const firstExecutionKey = result.current.executionKey;
     expect(apiMocks.query).toHaveBeenLastCalledWith(
       expect.objectContaining({ json: expect.not.objectContaining({ search: expect.anything() }) }),
     );
@@ -254,6 +257,7 @@ describe('useWorkView instance and request identity', () => {
         expect.objectContaining({ json: expect.objectContaining({ search: 'launch brief' }) }),
       );
     });
+    expect(result.current.executionKey).not.toBe(firstExecutionKey);
     expect(result.current.definition).toEqual(taskDefinition);
   });
 
@@ -345,7 +349,8 @@ describe('useWorkView row pagination', () => {
     const resolvers = new Map<string, (value: ReturnType<typeof okResponse>) => void>();
     apiMocks.query.mockImplementation(
       ({ json }: { json: { groupPath?: readonly string[]; target: 'task' } }) => {
-        if (!json.groupPath) {
+        const groupPath = json.groupPath;
+        if (!groupPath) {
           return Promise.resolve(
             okResponse(
               WorkViewQueryResponse.parse({
@@ -362,7 +367,7 @@ describe('useWorkView row pagination', () => {
             ),
           );
         }
-        const key = json.groupPath.join('/');
+        const key = groupPath.join('/');
         return new Promise((resolve) => {
           resolvers.set(key, resolve);
         });
@@ -419,7 +424,8 @@ describe('useWorkView row pagination', () => {
     );
     apiMocks.query.mockImplementation(
       ({ json }: { json: { groupPath?: readonly string[]; target: 'task' } }) => {
-        if (!json.groupPath) {
+        const groupPath = json.groupPath;
+        if (!groupPath) {
           return Promise.resolve(
             okResponse(
               WorkViewQueryResponse.parse({
@@ -439,7 +445,7 @@ describe('useWorkView row pagination', () => {
           );
         }
         return new Promise((resolve) => {
-          resolvers.set(json.groupPath.join('/'), resolve);
+          resolvers.set(groupPath.join('/'), resolve);
         });
       },
     );

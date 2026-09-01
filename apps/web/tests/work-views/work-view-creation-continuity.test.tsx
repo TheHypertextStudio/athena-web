@@ -4,6 +4,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { act, type JSX, type ReactNode, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as WorkBoardModule from '../../src/components/work-views/work-board';
+
 const { boardState, controller, createState, lensState, navigateAuthenticatedMock, orderState } =
   vi.hoisted(() => ({
     boardState: {
@@ -49,6 +51,10 @@ vi.mock('../../src/lib/app-location', () => ({
 
 vi.mock('../../src/components/active-org', () => ({
   useActiveOrg: () => ({ teams: [] }),
+}));
+
+vi.mock('../../src/components/settings/use-can-manage-org', () => ({
+  useCanManageOrg: () => ({ canManage: true, canContribute: true, loading: false }),
 }));
 
 vi.mock('../../src/components/create-object/create-object-provider', () => ({
@@ -153,7 +159,7 @@ vi.mock('../../src/components/work-views/use-work-view', () => ({
     error: null,
     retrying: false,
     retry: vi.fn(),
-    groupPages: {},
+    groupPages: [],
     hiddenBoardColumns: new Set(),
     collapsedGroups: new Set(),
     loadingMoreRows: false,
@@ -183,22 +189,26 @@ vi.mock('../../src/components/work-views/use-work-view-order', () => ({
   useWorkViewOrder: () => ({ mutate: orderState.mutate, error: null }),
 }));
 
-vi.mock('../../src/components/work-views/work-board', () => ({
-  WorkBoard: ({
-    onDrop,
-  }: {
-    onDrop: (drop: NonNullable<typeof boardState.drop>) => void;
-  }): JSX.Element => (
-    <button
-      type="button"
-      onClick={() => {
-        if (boardState.drop !== null) onDrop(boardState.drop);
-      }}
-    >
-      Drop grouped row
-    </button>
-  ),
-}));
+vi.mock('../../src/components/work-views/work-board', async (importOriginal) => {
+  const actual = await importOriginal<typeof WorkBoardModule>();
+  return {
+    ...actual,
+    WorkBoard: ({
+      onDrop,
+    }: {
+      onDrop: (drop: NonNullable<typeof boardState.drop>) => void;
+    }): JSX.Element => (
+      <button
+        type="button"
+        onClick={() => {
+          if (boardState.drop !== null) onDrop(boardState.drop);
+        }}
+      >
+        Drop grouped row
+      </button>
+    ),
+  };
+});
 
 vi.mock('../../src/components/work-views/use-initiative-hierarchy', () => ({
   useInitiativeHierarchy: () => ({ mutate: vi.fn(), error: null }),

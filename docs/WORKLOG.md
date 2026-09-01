@@ -497,13 +497,26 @@ offline_access marketplace`, and a bare `marketplace` names nothing in Lovelace'
         regression proof.
   - [x] Preserve sanitized Android authentication stage/status diagnostics so server rejection is
         actionable without exposing cookies, passkey material, or provider response text.
+  - [x] Remove runtime TypeScript transpilation from the production API image and prove the image
+        opens its listener and runs migrations without `tsx`/`esbuild` in either runtime command.
   - [ ] Validate production web auth, Android tests/build, and the emulator journey.
-- **Current failure**: A fresh production probe on 2026-09-01 proved that the challenge endpoint,
-  challenge cookie, RP ID, Digital Asset Links response, package, and debug fingerprint are
-  correct. The assertion POST is rejected before WebAuthn verification with HTTP 403
-  `INVALID_ORIGIN`: `BETTER_AUTH_PASSKEY_NATIVE_ORIGINS` feeds the passkey plugin's expected-origin
-  list, but the deployment leaves Better Auth's separate top-level `trustedOrigins` browser-only.
-  The Android client then maps that server exception to its generic recoverable-error copy.
+- **Current failure**: Production Cloud Run logs on 2026-09-01 show the API intermittently failing
+  before port 8080 opens: Node's runtime `tsx` loader starts `esbuild`, then fails with `EIO`,
+  `spawn EFAULT`, and SIGBUS. Cloud Run returns 500 because no instance becomes available; the
+  Android client correctly classifies that as `auth/challenge/http-500`. Three successive
+  revisions timed out their four-minute startup probes, and the same image later recovered on a
+  successful cold start. The image must therefore contain runnable JavaScript rather than
+  compiling TypeScript in the serving process. The earlier native-origin rejection is fixed in
+  source and covered by the deployment probe, but cannot be accepted live until a healthy revision
+  carrying it reaches production.
+- **Runtime-artifact validation**: The production Dockerfile now builds a 15 MiB ESM server and a
+  2.2 MiB migration artifact in its builder stage. The resulting image reports
+  `cmd=["node","dist/server.mjs"]`, opens the local container listener, returns HTTP 200 from
+  `/v1/health`, and applies a fresh PGlite migration through
+  `node /app/packages/db/dist/migrate.mjs`. The full API suite passes 451 files and 5,751 tests; the
+  auth suite passes 164 tests; all 266 repository-tooling tests, all 27 typecheck tasks, and all 26
+  lint tasks pass. Live Cloud Run cold-start and native-origin acceptance remain the deployment
+  gates.
 - **Blockers**: None for implementation. Final acceptance still requires a successful production
   deployment followed by one real Credential Manager assertion and session creation on a physical
   phone; the biometric/passkey choice remains intentionally user-mediated.

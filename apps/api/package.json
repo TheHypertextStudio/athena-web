@@ -16,10 +16,11 @@
     "script": "dev:app"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && pnpm build:runtime",
+    "build:runtime": "node scripts/build-runtime.mjs",
     "dev": "portless run --force",
     "dev:app": "tsx ../../scripts/portless-env.ts tsx watch --include .env.local --import ./src/dev-env.ts src/server.ts",
-    "start": "tsx src/server.ts",
+    "start": "node dist/server.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "NODE_OPTIONS=--max-old-space-size=4096 eslint src tests --cache --cache-location ../../node_modules/.cache/eslint/api --cache-strategy content",
     "lint:fix": "NODE_OPTIONS=--max-old-space-size=4096 eslint src tests --fix --cache --cache-location ../../node_modules/.cache/eslint/api --cache-strategy content",
@@ -47,6 +48,7 @@
     "@docket/notifications": "workspace:*",
     "@docket/planning": "workspace:*",
     "@docket/work": "workspace:*",
+    "@electric-sql/pglite": "catalog:",
     "@hono/node-server": "^2.0.8",
     "@hono/standard-validator": "catalog:",
     "@lovelace-ai/compute": "^0.0.1",
@@ -59,7 +61,6 @@
     "hono": "catalog:",
     "hono-openapi": "catalog:",
     "marked": "catalog:",
-    "tsx": "^4.23.1",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -67,9 +68,10 @@
     "@docket/test-utils": "workspace:*",
     "@docket/tsconfig": "workspace:*",
     "@dotenvx/dotenvx": "^2.6.0",
-    "@electric-sql/pglite": "catalog:",
     "@standard-schema/spec": "^1.0.0",
     "@types/node": "catalog:",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.23.1",
     "vite": "catalog:",
     "vitest": "catalog:"
   }

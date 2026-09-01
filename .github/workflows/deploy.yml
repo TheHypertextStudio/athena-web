@@ -93,7 +93,7 @@ jobs:
           docker run --rm \
             --env DATABASE_URL_UNPOOLED \
             "$API_IMAGE" \
-            node --import=tsx/esm /app/packages/db/src/migrate.ts
+            node /app/packages/db/dist/migrate.mjs
 
       - name: Write Cloud Run environment configuration
         shell: bash

@@ -13,14 +13,12 @@
  * OAuth 2.1 Resource-Server discovery metadata + Dynamic Client Registration are a
  * documented follow-up; for now the Better Auth session/bearer guard IS the auth.
  */
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { auth } from '@docket/auth';
 import { publicProblemTitle } from '../contracts/errors';
 import type { Context } from 'hono';
+import rootPackage from '../../../../package.json' with { type: 'json' };
 
 import { env } from '../env';
 import { ApiError, ConflictError, NotFoundError, problemTypeUrl } from '../error';
@@ -38,9 +36,7 @@ import { taskStoreForContext } from './task-store';
 import { registerTools } from './tools';
 
 /** The repo's release version (root `package.json`, tagged by semantic-release), read once at startup. */
-const { version: repoVersion } = JSON.parse(
-  readFileSync(fileURLToPath(new URL('../../../../package.json', import.meta.url)), 'utf8'),
-) as { version: string };
+const repoVersion = rootPackage.version;
 
 /** The web app's public origin, with no trailing slash — also the source for {@link authorizationServerMetadata}. */
 const WEB_ORIGIN = env.WEB_URL.replace(/\/$/, '');

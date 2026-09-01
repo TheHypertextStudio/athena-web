@@ -329,6 +329,9 @@ importers:
       '@docket/work':
         specifier: workspace:*
         version: link:../../domains/work
+      '@electric-sql/pglite':
+        specifier: 'catalog:'
+        version: 0.5.1
       '@hono/node-server':
         specifier: ^2.0.8
         version: 2.1.1(hono@4.12.23)
@@ -365,9 +368,6 @@ importers:
       marked:
         specifier: 'catalog:'
         version: 17.0.6
-      tsx:
-        specifier: ^4.23.1
-        version: 4.23.12
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -384,15 +384,18 @@ importers:
       '@dotenvx/dotenvx':
         specifier: ^2.6.0
         version: 2.21.0
-      '@electric-sql/pglite':
-        specifier: 'catalog:'
-        version: 0.5.1
       '@standard-schema/spec':
         specifier: ^1.0.0
         version: 1.1.0
       '@types/node':
         specifier: 26.1.1
         version: 26.1.1
+      esbuild:
+        specifier: ^0.28.1
+        version: 0.28.1
+      tsx:
+        specifier: ^4.23.1
+        version: 4.23.12
       vite:
         specifier: ^8.0.0
         version: 8.0.16(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0)

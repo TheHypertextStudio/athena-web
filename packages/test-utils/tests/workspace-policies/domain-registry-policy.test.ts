@@ -309,7 +309,7 @@ function fixturePackage(manifest: DomainManifest, id = 'fixture'): DomainPackage
 }
 
 describe('domain registry policy', () => {
-  it('declares the active Athena, Automation, Billing, Connections, Identity & Access, and Work domains', () => {
+  it('declares every active product domain', () => {
     const registry = readDomainRegistry();
 
     expect(registry.domains.map((domain) => domain.packageName)).toEqual([
@@ -318,6 +318,8 @@ describe('domain registry policy', () => {
       '@docket/billing',
       '@docket/connections',
       '@docket/identity-access',
+      '@docket/notifications',
+      '@docket/planning',
       '@docket/work',
     ]);
     for (const domain of registry.domains) {
@@ -341,7 +343,7 @@ describe('domain registry policy', () => {
         productOwner: 'Automation',
       }),
     );
-    expect(automation?.publicExports).toEqual(['./contracts', './evaluation']);
+    expect(automation?.publicExports).toEqual(['./ids', './contracts', './evaluation']);
     expect(automation?.allowedRuntimeDependencies).toEqual(['zod']);
     expect(automation?.supportedDeployableRuntimes).toEqual([
       'api',
@@ -349,6 +351,65 @@ describe('domain registry policy', () => {
       'admin',
       'runner',
       'desktop',
+    ]);
+  });
+
+  it('declares Notifications through named domain boundaries', () => {
+    const registry = readDomainRegistry();
+    const notifications = registry.domains.find(
+      (domain) => domain.packageName === '@docket/notifications',
+    );
+
+    expect(notifications?.publicExports).toEqual([
+      './ids',
+      './dispatch',
+      './policy',
+      './preferences',
+      './schemas',
+      './testing',
+      './web',
+      './webpush',
+      './webpush/node',
+      './notification-contract',
+    ]);
+    expect(notifications?.supportedDeployableRuntimes).toEqual(['api', 'web', 'admin']);
+  });
+
+  it('declares Planning contracts and portable time rules', () => {
+    const registry = readDomainRegistry();
+    const planning = registry.domains.find((domain) => domain.packageName === '@docket/planning');
+
+    expect(planning).toEqual(
+      expect.objectContaining({
+        id: 'planning',
+        packageName: '@docket/planning',
+        productOwner: 'Planning',
+      }),
+    );
+    expect(planning?.publicExports).toEqual([
+      './date-time',
+      './calendar-date',
+      './ids',
+      './wall-time',
+      './exact-move',
+      './exact-resize',
+      './intervals',
+      './zoned-time',
+      './work-location-resolution',
+      './hub-preferences-contract',
+      './daily-plan-contract',
+      './calendar-contract',
+      './work-location-contract',
+      './agenda-contract',
+      './time-share-contract',
+      './scheduling-contract',
+      './scheduling-directive-contract',
+    ]);
+    expect(planning?.allowedRuntimeDependencies).toEqual([
+      '@docket/identity-access',
+      '@docket/work',
+      '@js-temporal/polyfill',
+      'zod',
     ]);
   });
 

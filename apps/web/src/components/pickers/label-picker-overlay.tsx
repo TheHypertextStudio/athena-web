@@ -26,8 +26,9 @@
  * failed labels-list fetch each render the same inline error instead of an endless skeleton or a
  * false "No labels" empty state.
  */
-import type { LabelCreate, LabelOut, TaskOut } from '@docket/types';
-import { LabelId } from '@docket/types';
+import type { LabelCreate, LabelOut } from '@docket/work/label-contract';
+import type { TaskOut } from '@docket/work/task-model';
+import { LabelId } from '@docket/work/ids';
 import { PickerList, type PickerOption } from '@docket/ui/components';
 import { Popover, PopoverAnchor, PopoverContent, Skeleton } from '@docket/ui/primitives';
 import type { PopoverVirtualAnchor } from '@docket/ui/primitives';

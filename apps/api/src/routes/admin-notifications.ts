@@ -3,13 +3,13 @@ import {
   NotificationInboundEventOut,
   NotificationIntentOut,
   NotificationPreviewOut,
-} from '@docket/notifications';
+} from '@docket/notifications/schemas';
 import { AdminAuditPage } from '../admin-dto';
 import type { AppEnv } from '../context';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
-import { pageOf } from '@docket/types';
+import { pageOf } from '../contracts/pagination';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -20,7 +20,7 @@ const idParam = z.object({ id: z.string() });
  * An operator's review decision on a notification intent.
  *
  * @remarks
- * Local to this staff surface rather than shared through `@docket/types`: the public product
+ * Local to this staff surface rather than shared through `domain packages`: the public product
  * API never exposes intent review, so a shared schema would advertise a decision no product
  * client can make.
  */

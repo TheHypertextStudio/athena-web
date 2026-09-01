@@ -1,7 +1,7 @@
 import type {
   InitiativeHierarchyCandidateMode,
   InitiativeHierarchyCandidatesOut,
-} from '@docket/types';
+} from '@docket/work/initiative-contract';
 
 import type { api as ApiClient } from './api';
 import { apiQueryOptions } from './query-core';

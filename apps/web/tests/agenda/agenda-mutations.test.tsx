@@ -1,5 +1,5 @@
 /** Behavior tests for non-timebox Agenda daily-plan mutations. */
-import type { AgendaOut } from '@docket/types';
+import type { AgendaOut } from '@docket/planning/agenda-contract';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

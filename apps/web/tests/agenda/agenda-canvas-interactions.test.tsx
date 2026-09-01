@@ -1,13 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 
-import {
-  CalendarItemId,
-  type CalendarItemOut,
-  CalendarLayerId,
-  DailyPlanItemId,
-  OrganizationId,
-  TaskId,
-} from '@docket/types';
+import { CalendarItemId, CalendarLayerId, DailyPlanItemId } from '@docket/planning/ids';
+import { type CalendarItemOut } from '@docket/planning/calendar-contract';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { TaskId } from '@docket/work/ids';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

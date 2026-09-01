@@ -224,7 +224,7 @@ vi.mock('../../src/lib/api', () => ({
   },
 }));
 
-import { CycleOut } from '@docket/types';
+import { CycleOut } from '@docket/work/cycle-contract';
 
 import CyclesClient from '../../src/app/(app)/orgs/[orgId]/cycles/cycles-client';
 import {

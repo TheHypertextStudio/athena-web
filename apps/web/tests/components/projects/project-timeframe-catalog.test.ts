@@ -1,4 +1,4 @@
-import { ProjectOut, type ProjectOut as Project } from '@docket/types';
+import { ProjectOut, type ProjectOut as Project } from '../../../src/lib/contracts/project';
 import { describe, expect, it } from 'vitest';
 
 import {

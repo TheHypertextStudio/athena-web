@@ -11,7 +11,7 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import type { TimeRecordOut } from '@docket/types';
+import type { TimeRecordOut } from '../../src/lib/contracts/time';
 import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';

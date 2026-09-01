@@ -19,7 +19,7 @@ import type {
   AthenaInvocationContext,
   AthenaInvocationContextOut,
   AthenaWorkspaceOut,
-} from '@docket/types';
+} from '@docket/athena/agent-contract';
 import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import type { z } from 'zod';
 

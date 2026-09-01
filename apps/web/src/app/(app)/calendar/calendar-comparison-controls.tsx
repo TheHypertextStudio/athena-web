@@ -19,7 +19,7 @@
  *
  * @see {@link CalendarComparisonControls}
  */
-import type { OrgSummary } from '@docket/types';
+import type { OrgSummary } from '../../../lib/contracts/organization';
 import { cn } from '@docket/ui';
 import { Check, ChevronDown, Users } from '@docket/ui/icons';
 import {

@@ -14,7 +14,9 @@
  * the documented *remove-and-re-add* (POST the task onto the target day, then DELETE the old item),
  * not a field update.
  */
-import type { AgendaOut, DailyPlanItemOut, DailyPlanItemStatus, HubTodayOut } from '@docket/types';
+import type { AgendaOut } from '@docket/planning/agenda-contract';
+import type { DailyPlanItemOut, DailyPlanItemStatus } from '@docket/planning/daily-plan-contract';
+import type { HubTodayOut } from '../../lib/contracts/hub';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 

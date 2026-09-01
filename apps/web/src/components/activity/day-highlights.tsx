@@ -13,7 +13,7 @@
  * came in today" when a source was unreachable is the single most likely way for this surface to lie,
  * so the copy names which sources answered and which did not.
  */
-import type { HighlightsDayOut } from '@docket/types';
+import type { HighlightsDayOut } from '../../lib/contracts/highlights';
 import { Skeleton, Stack, Text } from '@docket/ui/primitives';
 import { EntityList } from '@docket/ui/components';
 import Link from '@/components/docket-link';

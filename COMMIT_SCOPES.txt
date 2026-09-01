@@ -24,6 +24,7 @@ marketing
 mcp
 onboarding
 permissions
+planning
 projects
 takeout
 time

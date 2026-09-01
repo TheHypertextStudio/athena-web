@@ -16,21 +16,21 @@ import {
   task,
   team,
 } from '@docket/db';
+import { CursorQuery, pageOf } from '../contracts/pagination';
+import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
 import {
-  CursorQuery,
-  defaultEntityDisplay,
-  pageOf,
   ProjectCreate,
-  ProjectDetailAggregate,
-  ProjectId,
   ProjectLabelLink,
   ProjectLabelLinked,
   ProjectOut,
   ProjectOverviewOut,
   ProjectProgress,
   ProjectUpdate,
-} from '@docket/types';
-import type { ProgramOut, TeamOut } from '@docket/types';
+} from '../contracts/project';
+import { ProjectDetailAggregate } from '../contracts/detail-aggregate';
+import { ProjectId } from '@docket/work/ids';
+import type { ProgramOut } from '@docket/work/program-contract';
+import type { TeamOut } from '../contracts/team';
 import { and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

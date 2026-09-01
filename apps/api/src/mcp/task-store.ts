@@ -34,7 +34,7 @@ import {
   type McpTaskInputRequest,
   type McpTaskInputRequests,
   type McpTaskInputResponses,
-} from '@docket/types';
+} from '@docket/integrations/mcp-tasks-contract';
 
 import type { McpContext } from './auth';
 import { notifyTaskStatus } from './notify';

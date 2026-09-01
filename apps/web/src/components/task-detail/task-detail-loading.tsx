@@ -1,4 +1,4 @@
-import type { TaskNavigationSnapshot } from '@docket/types';
+import type { TaskNavigationSnapshot } from '../../lib/contracts/entity-navigation';
 import { Skeleton, SkeletonChip, SkeletonText } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 

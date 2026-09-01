@@ -5,7 +5,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type * as DbModule from '@docket/db';
 import type { SessionActivityBody } from '@docket/db';
 import type * as AgentRuntimeModule from '@docket/athena/turn';
-import type { SessionStatus } from '@docket/types';
+import type { SessionStatus } from '@docket/athena/agent-contract';
 
 import type * as AsyncRunnerModule from '../../src/agent/async-runner';
 import { enqueueRunGeneration } from '../../src/agent/run-generation';

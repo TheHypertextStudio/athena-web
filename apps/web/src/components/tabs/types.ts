@@ -8,22 +8,23 @@
  * rendering. The store ({@link useOpenDocuments}) maps refs to open tabs, resolves titles
  * lazily, and persists the set across reloads.
  */
+import { AgentSessionId, type AgentSessionId as AgentSessionIdValue } from '@docket/athena/ids';
 import {
-  AgentSessionId,
   CycleId,
   InitiativeId,
-  OrganizationId,
   ProgramId,
   ProjectId,
   TaskId,
-  type AgentSessionId as AgentSessionIdValue,
   type CycleId as CycleIdValue,
   type InitiativeId as InitiativeIdValue,
-  type OrganizationId as OrganizationIdValue,
   type ProgramId as ProgramIdValue,
   type ProjectId as ProjectIdValue,
   type TaskId as TaskIdValue,
-} from '@docket/types';
+} from '@docket/work/ids';
+import {
+  OrganizationId,
+  type OrganizationId as OrganizationIdValue,
+} from '@docket/identity-access/ids';
 import type { OpenTab, TabDocType } from '@docket/ui/components';
 
 import { buildAuthenticatedHref } from '@/lib/authenticated-route';

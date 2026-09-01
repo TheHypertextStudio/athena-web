@@ -10,7 +10,12 @@
  * See `docs/engineering/specs/email-to-task.md` §6.
  */
 import { db, emailSuggestion, integration } from '@docket/db';
-import { EmailSuggestionOut, EmailThreadOut, SuggestionDisposition, pageOf } from '@docket/types';
+import {
+  EmailSuggestionOut,
+  EmailThreadOut,
+  SuggestionDisposition,
+} from '@docket/athena/email-suggestion-contract';
+import { pageOf } from '../contracts/pagination';
 import type { MailThread } from '@docket/integrations';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';

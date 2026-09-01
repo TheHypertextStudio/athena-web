@@ -15,7 +15,8 @@
  * ({@link AthenaPanelProvider}), and (in principle) any future entry point —
  * so the conversation itself is defined once and each door only supplies its own chrome.
  */
-import { parseMcpAppPresentation, type SessionActivityOut } from '@docket/types';
+import { parseMcpAppPresentation } from '@docket/integrations/mcp-apps-contract';
+import { type SessionActivityOut } from '@docket/athena/agent-contract';
 import { EmptyState } from '@docket/ui/components';
 import { Cable, Sparkles } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';

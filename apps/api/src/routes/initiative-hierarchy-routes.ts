@@ -7,7 +7,7 @@ import {
   InitiativeHierarchyLinkMove,
   InitiativeHierarchyLinkOut,
   InitiativeUnlinked,
-} from '@docket/types';
+} from '@docket/work/initiative-contract';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 

@@ -5,9 +5,9 @@ import {
   ProjectNavigationSnapshot,
   TaskNavigationSnapshot,
   type EntityNavigationSnapshot as EntityNavigationSnapshotValue,
-  type ProjectOut,
-  type TaskOut,
-} from '@docket/types';
+} from './contracts/entity-navigation';
+import { type ProjectOut } from './contracts/project';
+import { type TaskOut } from '@docket/work/task-model';
 
 import { navigateAuthenticated, type AuthenticatedNavigationOptions } from '@/lib/app-location';
 import { seedNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';

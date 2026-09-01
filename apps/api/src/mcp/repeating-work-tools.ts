@@ -9,13 +9,12 @@
 import { db } from '@docket/db';
 import {
   ProcessDefinitionCreate,
-  ProcessDefinitionId,
-  ProcessRevisionId,
   RecurrenceSeriesCreate,
   RecurrenceSeriesDetailOut,
   RecurringTaskCreate,
   RecurringTaskCreated,
-} from '@docket/types';
+} from '../contracts/recurrence';
+import { ProcessDefinitionId, ProcessRevisionId } from '@docket/work/ids';
 import { z } from 'zod';
 
 import { createScheduledProcess } from '../lib/recurrence/authoring';

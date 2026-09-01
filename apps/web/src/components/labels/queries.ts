@@ -20,7 +20,7 @@ import type {
   LabelGroupUpdate,
   LabelOut,
   LabelUpdate,
-} from '@docket/types';
+} from '@docket/work/label-contract';
 import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';

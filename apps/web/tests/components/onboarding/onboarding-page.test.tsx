@@ -17,7 +17,7 @@
  * or real navigation. The connect step's own create/import calls are not exercised here (that is
  * covered in `onboarding-step-connect.test.tsx`); these tests drive the orchestrator only.
  */
-import type { PublicConfigOut } from '@docket/types';
+import type { PublicConfigOut } from '@docket/identity-access/public-config-contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';

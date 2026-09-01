@@ -5,7 +5,7 @@
  * captured before it started, so a signal that arrives during the pass remains pending.
  */
 import { db, integration, notionMirrorState } from '@docket/db';
-import { ConnectorConfig } from '@docket/types';
+import { ConnectorConfig } from '@docket/connections/integration-contract';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
 /** The persisted demand and retry state returned after a mirror wake. */

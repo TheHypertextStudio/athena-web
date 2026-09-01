@@ -18,9 +18,11 @@ import type {
   CalendarItemCreateIntent,
   CalendarLayerShareAccess,
   CalendarLayerShareCreate,
+} from '@docket/planning/calendar-contract';
+import type {
   CalendarPreferences,
   HubPreferences,
-} from '@docket/types';
+} from '@docket/planning/hub-preferences-contract';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';

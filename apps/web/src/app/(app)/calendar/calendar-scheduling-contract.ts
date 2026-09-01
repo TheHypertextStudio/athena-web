@@ -1,4 +1,4 @@
-import type { CalendarPreferences } from '@docket/types';
+import type { CalendarPreferences } from '@docket/planning/hub-preferences-contract';
 
 import type { CalendarTimedRegionSelection } from '@/components/calendar/calendar-time-draft';
 import type { ScheduleRegionSelection, SchedulingCanvasProps } from '@/components/scheduling';

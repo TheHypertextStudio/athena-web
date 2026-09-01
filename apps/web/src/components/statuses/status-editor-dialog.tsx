@@ -13,8 +13,8 @@
  * line, because that is usually the intent ("Shipped should count as done") and occasionally a
  * costly accident.
  */
-import type { WorkStatusCategory } from '@docket/types';
-import { WORK_STATUS_CATEGORIES } from '@docket/types';
+import type { WorkStatusCategory } from '@docket/work/work-status-contract';
+import { WORK_STATUS_CATEGORIES } from '@docket/work/work-status-contract';
 import { StatusIcon } from '@docket/ui/components';
 import {
   Button,

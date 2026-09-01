@@ -1,7 +1,7 @@
 import { and, count, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import type { CalendarItemOut, CalendarItemsRangeOut } from '@docket/types';
+import type { CalendarItemOut, CalendarItemsRangeOut } from '@docket/planning/calendar-contract';
 
 import {
   appWithSession,

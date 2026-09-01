@@ -6,7 +6,7 @@
  * contains only real Better Auth social providers. Runtime availability is resolved by the
  * consuming surface so unavailable providers remain absent unless the user already linked one.
  */
-import type { IdentityProvider } from '@docket/types';
+import type { IdentityProvider } from '@docket/identity-access/identity-contract';
 import { Github, Google, Layers, type LucideIcon } from '@docket/ui/icons';
 
 /** A real identity provider that can be linked when runtime configuration permits it. */

@@ -1,6 +1,7 @@
 'use client';
 
-import { defaultEntityDisplay, type ProgramViewRow } from '@docket/types';
+import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
+import { type ProgramViewRow } from '@docket/work/work-view-contract';
 import { cn, relativeTime } from '@docket/ui';
 import { useVocabulary } from '@docket/ui/hooks';
 import { FolderKanban, ListChecks } from '@docket/ui/icons';

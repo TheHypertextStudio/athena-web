@@ -1,5 +1,5 @@
 /** Calendar item UI uses explicit event language to bind reusable process work. */
-import type { CalendarItemOut } from '@docket/types';
+import type { CalendarItemOut } from '@docket/planning/calendar-contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';

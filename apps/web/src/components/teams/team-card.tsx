@@ -14,7 +14,8 @@
  * carrying. The counts are last deliberately — they are the reason to open the page, not a
  * substitute for it.
  */
-import type { EntityDisplayOut, TeamOut } from '@docket/types';
+import type { EntityDisplayOut } from '@docket/work/entity-display-contract';
+import type { TeamOut } from '../../lib/contracts/team';
 import { ActorAvatar } from '@docket/ui/components';
 import { FolderKanban, ListChecks } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';

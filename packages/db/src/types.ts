@@ -4,17 +4,19 @@
  * @remarks
  * These are the db-internal `$type` shapes + their default constants. The canonical
  * Zod source of truth for the cross-app shapes (VocabularySkin, HubPreferences,
- * view config) lives in `@docket/types`; these mirror them so the schema is
+ * view config) lives in `domain packages`; these mirror them so the schema is
  * self-contained and drizzle can attach a typed default.
  */
 import {
   DEFAULT_WORKFLOW_STATES,
-  type HubPreferences as HubPreferencesShape,
+  type WorkflowState as WorkflowStateShape,
+} from '@docket/work/workflow';
+import { type HubPreferences as HubPreferencesShape } from '@docket/planning/hub-preferences-contract';
+import {
   type McpAppModelContext,
   type McpAppPresentation,
-  type WorkflowState as WorkflowStateShape,
-  type WorkStatusCategory,
-} from '@docket/types';
+} from '@docket/integrations/mcp-apps-contract';
+import { type WorkStatusCategory } from '@docket/work/work-status-contract';
 import type { Capability } from '@docket/identity-access/capabilities';
 import type { VocabularyPreset, VocabularySkin, VocabularyTerm } from '@docket/work/vocabulary';
 
@@ -24,7 +26,7 @@ export type { WorkStatusCategory };
  * The five workflow-state types a state key maps onto.
  *
  * @remarks
- * Re-exported from `@docket/types`, which is the one declaration. The copy that used to live
+ * Re-exported from `domain packages`, which is the one declaration. The copy that used to live
  * here drifted from it by construction; this alias cannot.
  */
 export type WorkflowStateType = WorkStatusCategory;
@@ -33,7 +35,7 @@ export type WorkflowStateType = WorkStatusCategory;
  * One configurable workflow state in a team's `workflow_states` array.
  *
  * @remarks
- * Re-exported from `@docket/types` so the drizzle `.$type<>()` annotation and the Zod schema
+ * Re-exported from `domain packages` so the drizzle `.$type<>()` annotation and the Zod schema
  * describe the same shape.
  */
 export type WorkflowState = WorkflowStateShape;
@@ -225,25 +227,30 @@ export interface NotificationDestination {
 export type NotificationProviderPayload = Record<string, unknown>;
 
 // The canonical event jsonb shapes (`event.actor`/`event.entity`/`event.detail`,
-// `daily_digest.stats`) are owned by `@docket/types` — the `event` substrate's contract.
+// `daily_digest.stats`) are owned by `domain packages` — the `event` substrate's contract.
 // We re-export them as the schema's `$type` shapes rather than re-mirroring, so the column
 // type and the DTO can never drift (the failure mode HubPreferences hit).
-export type { ActorRef, EntityRef, EventDetail, DigestStats } from '@docket/types';
+export type {
+  ActorRef,
+  EntityRef,
+  EventDetail,
+  DigestStats,
+} from '@docket/connections/event-contract';
 
 // The layered-calendar jsonb shapes (`calendar_connection.scope_state`,
 // `calendar_item.permissions`, `calendar_item.conflict`) are likewise owned by
-// `@docket/types` and re-exported rather than mirrored.
+// `domain packages` and re-exported rather than mirrored.
 export type {
   CalendarScopeState,
   CalendarItemPermission,
   CalendarItemConflict,
   CalendarItemWritePatch,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 
-// The durable transcript message shape is likewise owned by `@docket/types` — the
+// The durable transcript message shape is likewise owned by `domain packages` — the
 // agent-turn boundary port speaks it and `agent_session_transcript.messages` persists
 // it, so the resumed conversation can never drift from what the runtime emitted.
-export type { TurnContentBlock, TurnMessage } from '@docket/types';
+export type { TurnContentBlock, TurnMessage } from '@docket/athena/turn-protocol';
 
 /** A session Activity payload; `action` rows carry the proposed change. */
 export interface SessionActivityBody {

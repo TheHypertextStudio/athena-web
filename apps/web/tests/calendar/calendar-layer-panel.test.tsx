@@ -19,13 +19,12 @@
  */
 import '@testing-library/jest-dom/vitest';
 
+import { CalendarConnectionId, CalendarLayerId } from '@docket/planning/ids';
 import {
-  CalendarConnectionId,
   type CalendarConnectionOut,
-  CalendarLayerId,
   type CalendarLayerOut,
   type CalendarLayersOut,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';

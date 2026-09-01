@@ -16,7 +16,13 @@
  * (everyone). The team scope is offered only when the org has a team id to attach; without one
  * the option is omitted so a team-scoped view is never saved with a dangling team.
  */
-import type { SavedViewCreate, ViewFilter, ViewGrouping, ViewScope, ViewSort } from '@docket/types';
+import type {
+  SavedViewCreate,
+  ViewFilter,
+  ViewGrouping,
+  ViewScope,
+  ViewSort,
+} from '@docket/work/saved-view-contract';
 import { ChevronDown } from '@docket/ui/icons';
 import {
   Button,

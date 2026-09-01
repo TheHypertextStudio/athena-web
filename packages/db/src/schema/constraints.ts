@@ -2,7 +2,7 @@
  * `@docket/db` — CHECK constraint helpers shared across schema islands.
  *
  * @remarks
- * Constraints are the floor, not the ceiling: every DTO in `@docket/types` validates a write
+ * Constraints are the floor, not the ceiling: every DTO in `domain packages` validates a write
  * before it reaches the database, but a DTO only protects the writers that go through it. The
  * schema is also written by connector reconcile, MCP tools, the email-to-task path, seed data
  * and migrations, so the invariants a reader depends on are declared here too.

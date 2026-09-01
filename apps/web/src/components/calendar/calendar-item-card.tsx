@@ -29,7 +29,7 @@ import type {
   CalendarItemOut,
   CalendarItemPermission,
   CalendarLayerOut,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 import {
   Calendar,
   Layers,

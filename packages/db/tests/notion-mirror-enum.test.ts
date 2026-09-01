@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { NotionMirrorEntity } from '@docket/connections/notion/mirror-contract';
-import { SyncRunPurpose } from '@docket/types';
+import { SyncRunPurpose } from '@docket/connections/integration-contract';
 import { describe, expect, it } from 'vitest';
 
 import { syncRunPurpose } from '../src/enums';

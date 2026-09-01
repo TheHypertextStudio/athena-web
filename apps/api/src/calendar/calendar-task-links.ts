@@ -22,7 +22,10 @@ import {
   task,
   team,
 } from '@docket/db';
-import type { CalendarItemTaskLinkCreate, CalendarItemTaskRole } from '@docket/types';
+import type {
+  CalendarItemTaskLinkCreate,
+  CalendarItemTaskRole,
+} from '@docket/planning/calendar-contract';
 
 import { buildTaskViewFilter } from '../routes/task-helpers';
 import { CapabilityError, ConflictError, NotFoundError } from '../error';

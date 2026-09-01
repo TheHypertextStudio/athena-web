@@ -3,8 +3,8 @@ import type {
   AthenaSessionDetailOut,
   AthenaSessionSummaryOut,
   SessionActivityOut,
-} from '@docket/types';
-import { parseMcpAppPresentation } from '@docket/types';
+} from '@docket/athena/agent-contract';
+import { parseMcpAppPresentation } from '@docket/integrations/mcp-apps-contract';
 
 import type {
   PersonalAthenaActivity,

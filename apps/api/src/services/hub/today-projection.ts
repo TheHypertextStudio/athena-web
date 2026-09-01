@@ -1,4 +1,4 @@
-import type { WorkStatusCategory } from '@docket/types';
+import type { WorkStatusCategory } from '@docket/work/work-status-contract';
 import type { Priority } from '@docket/work/task-contract';
 
 /** Scheduling evidence used to distinguish an untouched day from a generated empty one. */

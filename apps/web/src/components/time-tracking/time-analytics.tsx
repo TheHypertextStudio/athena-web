@@ -1,7 +1,11 @@
 'use client';
 
 /** The private, URL-backed history surface for an individual’s actual tracked time. */
-import type { TimeBreakdownBucketOut, TimeBreakdownDimension, TimeRecordOut } from '@docket/types';
+import type {
+  TimeBreakdownBucketOut,
+  TimeBreakdownDimension,
+  TimeRecordOut,
+} from '../../lib/contracts/time';
 import { Temporal } from '@js-temporal/polyfill';
 import {
   Button,

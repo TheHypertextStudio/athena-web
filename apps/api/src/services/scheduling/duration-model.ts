@@ -14,8 +14,8 @@
  * below (two observations for a specific task, three for a whole shape) mean a single unusual
  * day never becomes the plan.
  */
-import type { WorkShape } from '@docket/types';
-import { workShapeProfile } from '@docket/types';
+import type { WorkShape } from '@docket/planning/scheduling-contract';
+import { workShapeProfile } from '@docket/planning/scheduling-contract';
 
 /** Observed session lengths for one subject. */
 export interface DurationSamples {

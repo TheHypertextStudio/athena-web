@@ -15,7 +15,7 @@ import type { Database } from '@docket/db';
 import {
   AccountExportScope,
   type AccountExportScope as AccountExportScopeValue,
-} from '@docket/types';
+} from '@docket/identity-access/account-contract';
 import {
   accountExport,
   activityDay,

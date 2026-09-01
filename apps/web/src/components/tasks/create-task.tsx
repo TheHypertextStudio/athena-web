@@ -30,17 +30,11 @@
  *
  * @see {@link useComposerOptions} for the assignee / project / cycle / label option sources.
  */
-import {
-  ActorId,
-  CycleId,
-  LabelId,
-  MilestoneId,
-  ProjectId,
-  type TaskOut,
-  TeamId,
-  type TeamOut,
-  type WorkflowState,
-} from '@docket/types';
+import { ActorId, TeamId } from '@docket/identity-access/ids';
+import { CycleId, LabelId, MilestoneId, ProjectId } from '@docket/work/ids';
+import { type TaskOut } from '@docket/work/task-model';
+import { type TeamOut } from '../../lib/contracts/team';
+import { type WorkflowState } from '@docket/work/workflow';
 import type { Priority } from '@docket/work/task-contract';
 import { todayIso } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';

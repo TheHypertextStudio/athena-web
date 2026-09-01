@@ -14,7 +14,10 @@
  * marker, since the App-install callback already wrote the truthful status/connection
  * server-side — the client re-reads it rather than duplicating a client-side error message.
  */
-import { IntegrationOut, type IntegrationDirectoryProvider } from '@docket/types';
+import {
+  IntegrationOut,
+  type IntegrationDirectoryProvider,
+} from '@docket/connections/integration-contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';

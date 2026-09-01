@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@docket/ui/primitives';
-import { entityNavigationSnapshotFromWorkViewRow } from '@docket/types';
+import { entityNavigationSnapshotFromWorkViewRow } from '../../lib/contracts/entity-navigation';
 import type { ViewTarget } from '@docket/work/view-contract';
 import { useDragDropMonitor, useDragOperation, useDroppable } from '@dnd-kit/react';
 import { type JSX, type ReactNode, useCallback, useMemo } from 'react';

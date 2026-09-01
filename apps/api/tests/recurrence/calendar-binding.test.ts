@@ -18,7 +18,8 @@ import {
   user,
   type Database,
 } from '@docket/db';
-import { ProcessDefinitionId, TeamId } from '@docket/types';
+import { ProcessDefinitionId } from '@docket/work/ids';
+import { TeamId } from '@docket/identity-access/ids';
 import { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';

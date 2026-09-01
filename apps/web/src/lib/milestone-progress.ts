@@ -1,5 +1,5 @@
 /** Shared per-milestone task-completion counting, used by the Overview summary and Milestones panel. */
-import type { TaskOut } from '@docket/types';
+import type { TaskOut } from '@docket/work/task-model';
 
 import type { CategoryOfState } from '@/lib/work-category';
 

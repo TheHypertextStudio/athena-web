@@ -15,7 +15,8 @@
  * The RPC client is mocked so the flow is asserted without a live API. The option rosters are fed
  * through the mocked `$get`s; the per-team workflow read seeds the status default.
  */
-import { OrganizationId, TeamId, type TeamOut } from '@docket/types';
+import { OrganizationId, TeamId } from '@docket/identity-access/ids';
+import { type TeamOut } from '../../src/lib/contracts/team';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { type JSX, useState } from 'react';

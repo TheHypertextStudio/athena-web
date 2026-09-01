@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SearchResult } from '@docket/types';
+import type { SearchResult } from '../../../src/lib/contracts/search';
 
 import { buildResourceCatalog } from '@/components/library/resource-catalog';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';

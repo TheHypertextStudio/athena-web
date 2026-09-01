@@ -32,7 +32,7 @@ being hub-and-spoke. They are different concepts and this sentence exists so nob
 ## Docket's canonical entities
 
 The entities every connector reads and writes. The closed taxonomy lives in
-`packages/types/src/event.ts:90–96`:
+`domains/connections/src/contracts/event.ts:90–96`:
 
 ```ts
 export const DOCKET_ENTITY_KIND: Readonly<Record<string, CanonicalEntityKind>> = {
@@ -61,7 +61,7 @@ Plus the substrate rows every spoke writes through:
 ## Connector inventory
 
 Five providers implement the Connector port. The list is a single `as const` tuple, so it is
-countable rather than scattered — `packages/types/src/provider-catalog.ts:14`:
+countable rather than scattered — `domains/connections/src/contracts/provider-catalog.ts:14`:
 
 ```ts
 export const CONNECTOR_PROVIDER_IDS = ['gmail', 'gtasks', 'calendar', 'github', 'linear'] as const;
@@ -296,7 +296,7 @@ None of the three creates a spoke-to-spoke path.
 
 ```bash
 # 1. The connector inventory is a single tuple; it cannot silently grow.
-grep -n 'CONNECTOR_PROVIDER_IDS\|WEBHOOK_PROVIDER_IDS' packages/types/src/provider-catalog.ts
+grep -n 'CONNECTOR_PROVIDER_IDS\|WEBHOOK_PROVIDER_IDS' domains/connections/src/contracts/provider-catalog.ts
 
 # 2. Every provider-client construction site.
 grep -rn 'connectorFor(\|createProviderClient(' apps/api/src --include='*.ts'

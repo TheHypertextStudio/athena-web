@@ -6,13 +6,8 @@
  * SQL and keyset-paginated. Reads the workspace and viewer actor from `orgContextMiddleware`.
  */
 import { db, event, savedView, task as taskTable } from '@docket/db';
-import {
-  PERSONAL_ACTIVITY_SOURCES,
-  StreamEventLinkBody,
-  StreamEventOut,
-  StreamPageOut,
-  StreamQuery,
-} from '@docket/types';
+import { PERSONAL_ACTIVITY_SOURCES, StreamEventLinkBody } from '../contracts/highlights';
+import { StreamEventOut, StreamPageOut, StreamQuery } from '../contracts/stream';
 import { and, asc, desc, eq, isNull, notInArray, or, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
 

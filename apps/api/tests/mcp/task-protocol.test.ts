@@ -19,7 +19,7 @@ import { z } from 'zod';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import { MCP_TASKS_EXTENSION } from '@docket/types';
+import { MCP_TASKS_EXTENSION } from '@docket/integrations/mcp-tasks-contract';
 
 import type { McpContext } from '../../src/mcp/auth';
 import { createMcpCatalog, registerOptionalTaskTool } from '../../src/mcp/catalog';

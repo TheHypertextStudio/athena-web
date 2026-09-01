@@ -17,8 +17,8 @@ import {
   EntityDisplayOut,
   EntityDisplaySubjectType,
   EntityDisplayUpdate,
-  pageOf,
-} from '@docket/types';
+} from '@docket/work/entity-display-contract';
+import { pageOf } from '../contracts/pagination';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

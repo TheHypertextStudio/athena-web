@@ -95,7 +95,7 @@ _from_ its scripted message for the same reason.
 input, toolUseId}` (what approval executes; `input` is editable until approved), `result
 {content, isError}`, and `mode: 'proposal' | 'suggestion'`.
 
-The canonical `TurnMessage`/`TurnContentBlock` Zod shapes live in `@docket/types`
+The canonical `TurnMessage`/`TurnContentBlock` Zod shapes live in the retired contract package
 (`agent.ts`); the boundaries port and the db `$type` both import them — the event-substrate
 anti-drift pattern.
 

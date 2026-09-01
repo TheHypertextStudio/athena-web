@@ -11,7 +11,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { MCP_UI_METHODS, MCP_UI_MIME_TYPE, MCP_UI_PROTOCOL_VERSION } from '@docket/types';
+import {
+  MCP_UI_METHODS,
+  MCP_UI_MIME_TYPE,
+  MCP_UI_PROTOCOL_VERSION,
+} from '@docket/integrations/mcp-apps-contract';
 
 import { McpAppView } from '@/components/athena/mcp-app-view';
 import { assertDefined } from '@docket/test-utils';

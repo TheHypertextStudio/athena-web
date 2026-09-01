@@ -1,5 +1,5 @@
 import { Button, DecorativeIcon, Select } from '@docket/ui/primitives';
-import type { IdentityOut } from '@docket/types';
+import type { IdentityOut } from '@docket/identity-access/identity-contract';
 import NextLink from '@/components/docket-link';
 import { Layers } from '@docket/ui/icons';
 import type { JSX } from 'react';

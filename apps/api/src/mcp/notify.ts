@@ -18,7 +18,7 @@
  * notification is a hint to re-read rather than the data itself.
  */
 import { actor, db, listenToChannel, logLevel, mcpSession, mcpSubscription } from '@docket/db';
-import type { McpDetailedTask } from '@docket/types';
+import type { McpDetailedTask } from '@docket/integrations/mcp-tasks-contract';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 

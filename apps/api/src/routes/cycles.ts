@@ -13,9 +13,8 @@ import {
   CycleUpdate,
   CycleWindow,
   CycleWindowQuery,
-  CursorQuery,
-  pageOf,
-} from '@docket/types';
+} from '@docket/work/cycle-contract';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { and, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

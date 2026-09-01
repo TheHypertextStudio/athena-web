@@ -389,7 +389,7 @@ Agents SHOULD create reusable utilities when:
 | ---------------- | ---------------------- | -------------------------- |
 | CLI scripts      | `scripts/`             | Build, deploy, maintenance |
 | Shared utilities | `packages/shared/`     | Cross-package code         |
-| Type definitions | `packages/types/`      | Shared TypeScript types    |
+| Domain contracts | `domains/`             | Portable business types    |
 | Test utilities   | `packages/test-utils/` | Testing helpers            |
 
 ### Claude Code Skills

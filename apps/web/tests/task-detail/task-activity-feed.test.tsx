@@ -1,7 +1,9 @@
 /** Behavior tests for the one task Activity feed. */
 import '@testing-library/jest-dom/vitest';
 
-import { ActorId, TaskId, type TaskActivityOut } from '@docket/types';
+import { ActorId } from '@docket/identity-access/ids';
+import { TaskId } from '@docket/work/ids';
+import { type TaskActivityOut } from '@docket/connections/activity-contract';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

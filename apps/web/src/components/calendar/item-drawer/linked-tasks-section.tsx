@@ -4,7 +4,7 @@ import type {
   CalendarItemLinkedTaskOut,
   CalendarItemOut,
   CalendarItemTaskRole,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 import { Link as LinkIcon, Plus, Workflow } from '@docket/ui/icons';
 import {
   Button,

@@ -15,7 +15,7 @@
  * associated children at all the component renders an explicit empty hint instead of a
  * misleading full-width neutral bar.
  */
-import type { InitiativeHealthDistribution } from '@docket/types';
+import type { InitiativeHealthDistribution } from '@docket/work/initiative-contract';
 import { cn } from '@docket/ui';
 import type { JSX } from 'react';
 

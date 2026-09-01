@@ -1,6 +1,9 @@
 'use client';
 
-import type { IntegrationDirectoryProvider, IntegrationOut } from '@docket/types';
+import type {
+  IntegrationDirectoryProvider,
+  IntegrationOut,
+} from '@docket/connections/integration-contract';
 import { Button, DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 

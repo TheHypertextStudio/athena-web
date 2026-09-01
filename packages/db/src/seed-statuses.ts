@@ -8,12 +8,15 @@
  * migration that backfills existing workspaces produces the same rows, and tests call it to make
  * a workspace usable.
  *
- * The seed itself lives in `@docket/types` ({@link DEFAULT_WORK_STATUSES}) so the API, the web
+ * The seed itself lives in `domain packages` ({@link DEFAULT_WORK_STATUSES}) so the API, the web
  * app, and this module cannot disagree about what a new workspace starts with.
  */
 import { and, eq, isNull } from 'drizzle-orm';
 
-import { DEFAULT_WORK_STATUSES, type WorkStatusEntityType } from '@docket/types';
+import {
+  DEFAULT_WORK_STATUSES,
+  type WorkStatusEntityType,
+} from '@docket/work/work-status-contract';
 
 import type { Database } from './client';
 import { genId } from './id';

@@ -18,15 +18,15 @@ import type {
   DirectiveGateOut,
   DirectiveGateStep,
   DirectivePosture,
-  WorkShape,
-} from '@docket/types';
-import { workShapeProfile } from '@docket/types';
+} from '@docket/planning/scheduling-directive-contract';
+import type { WorkShape } from '@docket/planning/scheduling-contract';
+import { workShapeProfile } from '@docket/planning/scheduling-contract';
 
-import type { AvailabilityWindow } from '@docket/types';
+import type { AvailabilityWindow } from '@docket/planning/scheduling-contract';
 import { expandAvailability } from './availability';
-import type { Interval, Span } from './intervals';
-import { SpanPool, spanMinutes } from './intervals';
-import { instantAt, localClock, weekStartOf } from './zoned-time';
+import type { Interval, Span } from '@docket/planning/intervals';
+import { SpanPool, spanMinutes } from '@docket/planning/intervals';
+import { instantAt, localClock, weekStartOf } from '@docket/planning/zoned-time';
 
 /** One block of today, as the loop sees it. */
 export interface DayBlock {

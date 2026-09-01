@@ -7,7 +7,7 @@
  * Three groups, each answering a different question, none of them repeating the plan below:
  *
  * - **Approvals** — an agent paused and is holding for a signature. The DTO calls this "the most
- *   urgent pane" (`packages/types/src/hub.ts`), and the product doctrine backs it: an agent never
+ *   urgent pane" (`apps/api/src/contracts/hub.ts`), and the product doctrine backs it: an agent never
  *   quietly changes things on someone's behalf. A signature outranks anything self-scheduled, so
  *   it sits first.
  * - **Blocked** — a dependency is incomplete, so the task cannot move no matter what else happens.
@@ -27,7 +27,7 @@
  * A group with nothing in it renders nothing, and the section itself disappears when all three are
  * empty. A clear day should be short, not a wall of zeroes.
  */
-import type { HubTaskItem } from '@docket/types';
+import type { HubTaskItem } from '../../lib/contracts/hub';
 import { EntityList } from '@docket/ui/components';
 import { Stack } from '@docket/ui/primitives';
 import type { JSX } from 'react';

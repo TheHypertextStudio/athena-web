@@ -24,8 +24,8 @@ import {
   Target,
   type LucideIcon,
 } from '@docket/ui/icons';
-import { RESOURCE_PROVIDER_LABEL } from '@docket/types';
-import type { ExternalResourceType } from '@docket/types';
+import { RESOURCE_PROVIDER_LABEL } from '@docket/connections/resource-provider-contract';
+import type { ExternalResourceType } from '@docket/connections/resource-provider-contract';
 
 /** The mark for each kind of external resource. */
 export const RESOURCE_TYPE_ICON: Record<ExternalResourceType, LucideIcon> = {

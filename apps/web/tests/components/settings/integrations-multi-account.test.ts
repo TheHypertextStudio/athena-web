@@ -1,4 +1,8 @@
-import type { IdentityOut, IntegrationDirectoryProvider, IntegrationOut } from '@docket/types';
+import type { IdentityOut } from '@docket/identity-access/identity-contract';
+import type {
+  IntegrationDirectoryProvider,
+  IntegrationOut,
+} from '@docket/connections/integration-contract';
 import { describe, expect, it } from 'vitest';
 
 import {

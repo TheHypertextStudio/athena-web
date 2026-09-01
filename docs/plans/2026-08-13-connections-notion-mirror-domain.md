@@ -8,7 +8,7 @@ real Connections vertical without changing its API, database, sync, or provider 
 **Architecture:** `@docket/connections` owns the executable mirror contract, design rules, value
 projection, provider port, SDK adapter, behavioral in-memory adapter, and provider-error
 classification. API, DB, and web remain delivery/persistence/UI callers. Work supplies the
-organization vocabulary; Connections must not depend on `@docket/types`, app routes, Drizzle, or
+organization vocabulary; Connections must not depend on the retired contract package, app routes, Drizzle, or
 UI source.
 
 **Tech Stack:** TypeScript, Zod, Vitest, Notion SDK, Drizzle schema adapters, Hono/OpenAPI,
@@ -200,7 +200,7 @@ Commit direct caller cutover with manifest/lock changes and behavior tests.
 
 **Step 1: Add a failing policy fixture for a legacy production import.**
 
-Assert that a source import of the migrated Notion mirror contract from `@docket/types` or a
+Assert that a source import of the migrated Notion mirror contract from the retired contract package or a
 private Connections path is rejected with the public replacement.
 
 **Step 2: Publish only named Connections subpaths.**

@@ -7,7 +7,7 @@
  * the target kind is already a path segment. Read-only and derived: a backlink is created by
  * writing a reference in some record's prose, and removed by deleting it from there.
  */
-import { EntityReferencesOut } from '@docket/types';
+import { EntityReferencesOut } from '../contracts/mention';
 import { Hono } from 'hono';
 import { z } from 'zod';
 

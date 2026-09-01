@@ -1,6 +1,6 @@
 'use client';
 
-import type { OrgOut, OrgUpdate } from '@docket/types';
+import type { OrgOut, OrgUpdate } from '../../lib/contracts/organization';
 import { WriteError } from './write-error';
 import type { VocabularyPreset } from '@docket/work/vocabulary';
 import { Field, Input, Select, Skeleton, Textarea } from '@docket/ui/primitives';

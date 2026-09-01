@@ -6,9 +6,22 @@
   "license": "UNLICENSED",
   "description": "Portable capability and explicit-grant policy for Docket identity and access decisions.",
   "exports": {
+    "./ids": "./src/ids.ts",
     "./capabilities": "./src/capabilities.ts",
     "./grants": "./src/grants.ts",
-    "./authorization": "./src/authorization.ts"
+    "./authorization": "./src/authorization.ts",
+    "./account-contract": "./src/contracts/account.ts",
+    "./actor-contract": "./src/contracts/actor.ts",
+    "./identity-contract": "./src/contracts/identity.ts",
+    "./google-oauth-contract": "./src/contracts/google-oauth.ts",
+    "./oauth-client-contract": "./src/contracts/oauth-client.ts",
+    "./oauth-scope-contract": "./src/contracts/oauth-scope.ts",
+    "./passkey": "./src/passkey.ts",
+    "./passkey-errors-contract": "./src/contracts/passkey-errors.ts",
+    "./public-config-contract": "./src/contracts/public-config.ts",
+    "./session-contract": "./src/contracts/session.ts",
+    "./settings-image-contract": "./src/contracts/settings-image.ts",
+    "./member-contract": "./src/contracts/member.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

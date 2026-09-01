@@ -8,7 +8,8 @@
  * new agent Actor from `displayName`. `manage` is required to mutate.
  */
 import { actor, agent, db } from '@docket/db';
-import { AgentCreate, AgentOut, AgentUpdate, pageOf } from '@docket/types';
+import { AgentCreate, AgentOut, AgentUpdate } from '@docket/athena/agent-contract';
+import { pageOf } from '../contracts/pagination';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

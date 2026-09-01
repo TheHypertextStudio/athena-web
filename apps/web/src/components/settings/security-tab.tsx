@@ -11,7 +11,7 @@
  * and {@link RecoveryCodesSection} (the backup way back into a passwordless account). Errors
  * render inline as `role="alert"` banners (there is no toast system).
  */
-import type { RecoveryCodesStatusOut } from '@docket/types';
+import type { RecoveryCodesStatusOut } from '@docket/identity-access/account-contract';
 import { LoadFailure } from './load-failure';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';

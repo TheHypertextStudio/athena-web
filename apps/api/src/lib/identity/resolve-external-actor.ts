@@ -9,8 +9,12 @@
  * "who is this, right now, as a Docket actor?" — without writing anything.
  */
 import { account, actor, db, externalActor, integration, user } from '@docket/db';
-import { PROVIDER_CATALOG, sourceIdentityProvider } from '@docket/types';
-import type { DirectoryProviderId, SourceSystemKind } from '@docket/types';
+import {
+  PROVIDER_CATALOG,
+  sourceIdentityProvider,
+} from '@docket/connections/provider-catalog-contract';
+import type { DirectoryProviderId } from '@docket/connections/provider-catalog-contract';
+import type { SourceSystemKind } from '@docket/connections/event-contract';
 import { and, eq, isNotNull, sql } from 'drizzle-orm';
 
 /**

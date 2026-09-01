@@ -22,7 +22,7 @@ vi.mock('@docket/integrations', async (importOriginal) => ({
 
 import type * as DbModule from '@docket/db';
 import type * as IntegrationsModule from '@docket/integrations';
-import type { PersonalMcpConnectionOut } from '@docket/types';
+import type { PersonalMcpConnectionOut } from '@docket/athena/athena-contract';
 
 import { env } from '../../src/env';
 import type personalAthenaRouter from '../../src/routes/personal-athena';

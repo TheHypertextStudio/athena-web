@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WorkLocationAssertionId, WorkPlaceId } from '@docket/types';
+import { WorkLocationAssertionId, WorkPlaceId } from '@docket/planning/ids';
 
 import {
   workLocationAllDayMove,

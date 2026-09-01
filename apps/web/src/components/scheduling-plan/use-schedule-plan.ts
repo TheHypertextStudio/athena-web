@@ -22,10 +22,12 @@ import type {
   DirectiveOut,
   ReconcileDisposition,
   ReviewPromptKey,
+} from '@docket/planning/scheduling-directive-contract';
+import type {
   SchedulingPreferencesOut,
   WeekPlanOut,
   WorkShapeProfile,
-} from '@docket/types';
+} from '@docket/planning/scheduling-contract';
 import type { UseQueryResult } from '@tanstack/react-query';
 
 /** The coarse key every plan surface hangs under; one invalidation refreshes them all. */

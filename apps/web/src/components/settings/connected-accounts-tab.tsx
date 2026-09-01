@@ -14,7 +14,7 @@
  * A provider appears when it can be linked now or when the user already has a linked account.
  * Runtime/deployment status is never exposed as roadmap copy in production UI.
  */
-import type { IdentityOut, IdentityProvider } from '@docket/types';
+import type { IdentityOut, IdentityProvider } from '@docket/identity-access/identity-contract';
 import { WriteError } from './write-error';
 import { Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';

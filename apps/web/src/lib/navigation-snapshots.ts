@@ -2,7 +2,7 @@
 import {
   EntityNavigationSnapshot,
   type EntityNavigationSnapshot as EntityNavigationSnapshotValue,
-} from '@docket/types';
+} from './contracts/entity-navigation';
 
 /** Default number of snapshots retained in the live JavaScript heap. */
 export const NAVIGATION_SNAPSHOT_MEMORY_CAPACITY = 3;

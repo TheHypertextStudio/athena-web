@@ -35,7 +35,7 @@
  * bounding the list keeps the decision reachable at any viewport height.
  *
  * **Copy.** Every word describing a permission comes from `@/lib/oauth-scope-copy`, which is keyed
- * by the closed issuable set in `@docket/types` and enumerated by a test. This screen never prints
+ * by the closed issuable set in `domain packages` and enumerated by a test. This screen never prints
  * a raw permission identifier: the page is read by someone deciding whether to trust an app, and
  * `connectors:link` in front of that person is noise that reads as something official.
  *

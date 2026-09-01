@@ -13,7 +13,7 @@
  * token because it is the one state that needs a human, `running` adopts the in-progress
  * `state-started` hue with a pulse, and settled states stay calm.
  */
-import type { SessionStatus } from '@docket/types';
+import type { SessionStatus } from '@docket/athena/agent-contract';
 import { CheckCircle2, CircleDashed, CircleDot, RefreshCw, XCircle } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';

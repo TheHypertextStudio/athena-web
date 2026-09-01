@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { OrganizationId } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
 import { act, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

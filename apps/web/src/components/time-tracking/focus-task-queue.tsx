@@ -1,7 +1,8 @@
 'use client';
 
 /** Planned work and task search for the Focus rail. */
-import type { HubTodayPlanItem, SearchOut, SearchResult } from '@docket/types';
+import type { HubTodayPlanItem } from '../../lib/contracts/hub';
+import type { SearchOut, SearchResult } from '../../lib/contracts/search';
 import { Plus, Search } from '@docket/ui/icons';
 import { Skeleton, surfaceToneColor, Text } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';

@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { TemplateOut } from '@docket/types';
+import type { TemplateOut } from '@docket/work/template-contract';
 import { inArray } from 'drizzle-orm';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';

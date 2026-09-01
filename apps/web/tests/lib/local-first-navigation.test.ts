@@ -1,10 +1,7 @@
-import {
-  OrganizationId,
-  TaskId,
-  TaskNavigationSnapshot,
-  TeamId,
-  type TaskOut,
-} from '@docket/types';
+import { OrganizationId, TeamId } from '@docket/identity-access/ids';
+import { TaskId } from '@docket/work/ids';
+import { TaskNavigationSnapshot } from '../../src/lib/contracts/entity-navigation';
+import { type TaskOut } from '@docket/work/task-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { seedNavigationSnapshot } = vi.hoisted(() => ({

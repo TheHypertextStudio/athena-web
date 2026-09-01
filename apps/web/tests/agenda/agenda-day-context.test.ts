@@ -1,4 +1,4 @@
-import { CalendarItemOut } from '@docket/types';
+import { CalendarItemOut } from '@docket/planning/calendar-contract';
 import { describe, expect, it } from 'vitest';
 
 import { partitionAgendaDay } from '@/components/agenda/agenda-day-context';

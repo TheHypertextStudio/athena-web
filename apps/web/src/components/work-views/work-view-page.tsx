@@ -1,22 +1,23 @@
 'use client';
 
+import { entityNavigationSnapshotFromWorkViewRow } from '../../lib/contracts/entity-navigation';
 import {
-  entityNavigationSnapshotFromWorkViewRow,
   InitiativeViewDefinition,
   type InitiativeViewRow,
-  OrganizationId,
-  pageOf,
   ProgramViewDefinition,
   ProjectViewDefinition,
-  ProjectId,
   type ProjectViewRow,
+  TaskViewDefinition,
+  ViewInstanceKey,
+} from '@docket/work/work-view-contract';
+import { OrganizationId, TeamId } from '@docket/identity-access/ids';
+import { pageOf } from '../../lib/contracts/pagination';
+import { ProjectId } from '@docket/work/ids';
+import {
   SavedWorkViewOut,
   type SavedWorkViewOut as SavedWorkViewOutValue,
-  TaskViewDefinition,
-  TeamId,
   type ViewScope,
-  ViewInstanceKey,
-} from '@docket/types';
+} from '@docket/work/saved-view-contract';
 import { EmptyState } from '@docket/ui/components';
 import { FolderKanban, Heart, Layers, ListChecks, Plus, Target, X } from '@docket/ui/icons';
 import {

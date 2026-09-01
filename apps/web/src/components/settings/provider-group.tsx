@@ -9,7 +9,7 @@
  * under it with an **Add account / Add another** action. Unavailable providers are filtered by the
  * parent; an existing account remains manageable even when adding another is unavailable.
  */
-import type { IdentityOut, IdentityProvider } from '@docket/types';
+import type { IdentityOut, IdentityProvider } from '@docket/identity-access/identity-contract';
 import { Plus } from '@docket/ui/icons';
 import { Badge, Button, DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';

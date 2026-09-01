@@ -1,7 +1,8 @@
 'use client';
 
 /** Keep same-kind canvas relation drops inside the canvas receipt history. */
-import { type ObjectCommandIn, ProjectId, TaskId } from '@docket/types';
+import { type ObjectCommandIn } from '../../lib/contracts/object-command';
+import { ProjectId, TaskId } from '@docket/work/ids';
 import type { RelationIntent } from '@docket/work/relation-contract';
 import { useCallback } from 'react';
 

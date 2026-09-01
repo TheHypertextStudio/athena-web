@@ -1,6 +1,8 @@
 'use client';
 
-import { WorkPlaceId, type CalendarItemOut, type WorkPlaceOut } from '@docket/types';
+import { WorkPlaceId } from '@docket/planning/ids';
+import { type CalendarItemOut } from '@docket/planning/calendar-contract';
+import { type WorkPlaceOut } from '@docket/planning/work-location-contract';
 import { Input, Select, Textarea } from '@docket/ui/primitives';
 import { type JSX, useEffect, useId, useState } from 'react';
 

@@ -28,7 +28,7 @@ import {
   team,
   user,
 } from '@docket/db';
-import { defaultCycleName } from '@docket/types';
+import { defaultCycleName } from '@docket/work/cycle-contract';
 import { and, eq, isNull, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { z } from 'zod';

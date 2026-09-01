@@ -1,7 +1,8 @@
 import { agentSession, agentSessionRun, db, sessionActivity, task } from '@docket/db';
 import { type Capability, satisfies } from '@docket/authz';
-import type { AgentSessionDetailOut, AgentSessionOut } from '@docket/types';
-import { parseMcpAppPresentation, SessionStatus } from '@docket/types';
+import type { AgentSessionDetailOut, AgentSessionOut } from '@docket/athena/agent-contract';
+import { parseMcpAppPresentation } from '@docket/integrations/mcp-apps-contract';
+import { SessionStatus } from '@docket/athena/agent-contract';
 import { and, desc, eq, inArray, or } from 'drizzle-orm';
 import type { Context } from 'hono';
 import { z } from 'zod';

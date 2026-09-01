@@ -4,8 +4,8 @@ import {
   CalendarItemKind,
   CalendarItemRelationCreate,
   CalendarItemRelationOut,
-  pageOf,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
+import { pageOf } from '../contracts/pagination';
 import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

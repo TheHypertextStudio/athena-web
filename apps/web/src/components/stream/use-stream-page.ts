@@ -10,7 +10,7 @@
  * the polling-now/SSE-later seam), and flattens the pages into rows. It returns exactly the data
  * half of {@link StreamViewProps}; the page supplies the view's own slots.
  */
-import type { StreamPageOut } from '@docket/types';
+import type { StreamPageOut } from '../../lib/contracts/stream';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';

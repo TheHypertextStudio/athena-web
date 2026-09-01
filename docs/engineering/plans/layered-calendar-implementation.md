@@ -18,8 +18,8 @@
 
 - Re-read:
   - `packages/db/src/schema/calendar.ts`
-  - `packages/types/src/calendar.ts`
-  - `packages/types/src/agenda.ts`
+  - `domains/planning/src/contracts/calendar.ts`
+  - `domains/planning/src/contracts/agenda.ts`
   - `apps/api/src/routes/me-calendar.ts`
   - `apps/api/src/routes/agenda.ts`
   - `apps/api/src/routes/google-calendar-sync.ts`
@@ -27,7 +27,7 @@
   - `apps/web/src/components/settings/google-calendar-settings.tsx`
 - Confirm current Google OAuth scopes in `packages/auth/src/auth-builder.ts`.
 - Run baseline focused checks:
-  - `pnpm --filter @docket/types typecheck`
+  - `pnpm domain:check`
   - `pnpm --filter @docket/db typecheck`
   - `pnpm --filter @docket/api test -- tests/routes/calendar-agenda.test.ts`
   - `pnpm --filter @docket/web test -- tests/agenda`
@@ -42,7 +42,7 @@ Acceptance:
   - `CalendarLayerId`
   - `CalendarItemId`
   - `CalendarItemWriteId`
-- Add DTOs in `packages/types/src/calendar.ts` or split into a focused calendar module if file size
+- Add DTOs in `domains/planning/src/contracts/calendar.ts` or split into a focused calendar module if file size
   becomes unwieldy.
 - Add Drizzle schema for:
   - `calendarLayer`

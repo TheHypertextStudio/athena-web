@@ -20,10 +20,12 @@ import { WORKSPACE_ROOT, filesUnder } from '../workspace';
 
 const DOCS_ROOT = resolve(WORKSPACE_ROOT, 'apps/docs');
 const MCP_SOURCE_DIR = resolve(WORKSPACE_ROOT, 'apps/api/src/mcp');
-// The declarations moved here when Work became its own domain; `packages/types/src/vocabulary.ts`
-// is now a deprecated re-export shim with no literals in it to read.
+// Work owns these declarations, so the policy reads the domain source instead of a delivery layer.
 const VOCABULARY_SOURCE = resolve(WORKSPACE_ROOT, 'domains/work/src/vocabulary.ts');
-const OAUTH_SCOPE_SOURCE = resolve(WORKSPACE_ROOT, 'packages/types/src/oauth-scope.ts');
+const OAUTH_SCOPE_SOURCE = resolve(
+  WORKSPACE_ROOT,
+  'domains/identity-access/src/contracts/oauth-scope.ts',
+);
 const OAUTH_SCOPE_COPY_SOURCE = resolve(WORKSPACE_ROOT, 'apps/web/src/lib/oauth-scope-copy.ts');
 
 const MCP_REFERENCE_PAGE = 'developers/mcp-tools-and-resources.mdx';

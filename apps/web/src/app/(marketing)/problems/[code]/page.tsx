@@ -1,4 +1,4 @@
-import { PROBLEM_CODES, problemDefinition } from '@docket/types';
+import { PROBLEM_CODES, problemDefinition } from '../../../../lib/contracts/errors';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';

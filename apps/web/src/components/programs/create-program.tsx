@@ -19,13 +19,9 @@
  *
  * @see {@link useComposerOptions} for the owner option source.
  */
-import {
-  ActorId,
-  type Health,
-  type ProgramOut,
-  type ProgramStatus,
-  type Visibility,
-} from '@docket/types';
+import { ActorId } from '@docket/identity-access/ids';
+import { type Health, type Visibility } from '@docket/work/capability-contract';
+import { type ProgramOut, type ProgramStatus } from '@docket/work/program-contract';
 import { ActorPicker } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight } from '@docket/ui/icons';

@@ -1,5 +1,5 @@
 /** Deferred, Project-scoped work content. */
-import type { ProjectWorkSectionsOut } from '@docket/types';
+import type { ProjectWorkSectionsOut } from './contracts/project';
 
 import { api } from './api';
 import { apiQueryOptions, queryKeys } from './query';

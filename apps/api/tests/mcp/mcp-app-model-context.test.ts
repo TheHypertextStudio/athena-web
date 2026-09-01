@@ -14,7 +14,7 @@ const getSession = vi.fn(async () => null);
 vi.mock('@docket/auth', () => ({ auth: { api: { getSession } } }));
 
 import type * as DbModule from '@docket/db';
-import { MCP_UI_MIME_TYPE } from '@docket/types';
+import { MCP_UI_MIME_TYPE } from '@docket/integrations/mcp-apps-contract';
 import { eq } from 'drizzle-orm';
 
 import type { retainWidgetModelContext as RetainWidgetModelContext } from '../../src/mcp/apps/host-routes';

@@ -40,8 +40,8 @@ import type {
   SchedulingCommitment,
   SchedulingPreferencesUpdate,
   WorkShape,
-} from '@docket/types';
-import { WORK_SHAPES, workShapeProfile } from '@docket/types';
+} from '@docket/planning/scheduling-contract';
+import { WORK_SHAPES, workShapeProfile } from '@docket/planning/scheduling-contract';
 import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm';
 
 import { NotFoundError } from '../../error';
@@ -51,7 +51,7 @@ import { defaultAvailabilityWindows } from './availability';
 import { DEFAULT_CHECK_IN_CADENCE_MINUTES } from './day-loop';
 import type { ActualsIndex } from './duration-model';
 import type { PlannedBlock } from './week-planner';
-import { addDays, instantAt, localDateString, localMinuteOfDay } from './zoned-time';
+import { addDays, instantAt, localDateString, localMinuteOfDay } from '@docket/planning/zoned-time';
 
 /** A Hub's resolved scheduling configuration, defaults filled in. */
 export interface ResolvedSchedulingPreferences {

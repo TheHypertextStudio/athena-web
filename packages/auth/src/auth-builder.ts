@@ -25,11 +25,9 @@ import {
   dispatchNotificationIntent,
   ensureAccountEmailContactPoint,
 } from '@docket/notifications/dispatch';
-import {
-  OAUTH_ISSUABLE_SCOPES,
-  PREVIOUSLY_REGISTERED_CODE,
-  SESSION_OWNER_HEADER,
-} from '@docket/types';
+import { OAUTH_ISSUABLE_SCOPES } from '@docket/identity-access/oauth-scope-contract';
+import { PREVIOUSLY_REGISTERED_CODE } from '@docket/identity-access/passkey-errors-contract';
+import { SESSION_OWNER_HEADER } from '@docket/identity-access/session-contract';
 import { type BetterAuthOptions, type BetterAuthPlugin } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
@@ -687,7 +685,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
         // — without it a connected client silently degrades to a 15-minute access token with no
         // renewal path, so it belongs in the set every client is offered at consent time.
         //
-        // The array itself now comes from `@docket/types` (`OAUTH_ISSUABLE_SCOPES`), which is the
+        // The array itself now comes from `domain packages` (`OAUTH_ISSUABLE_SCOPES`), which is the
         // one place the issuable set is written down — the resource server's advertised scopes and
         // the consent screen's plain-language copy derive from the same constant, so this ceiling
         // and what a person is shown can no longer disagree.

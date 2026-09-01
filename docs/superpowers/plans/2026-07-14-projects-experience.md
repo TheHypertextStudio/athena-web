@@ -28,8 +28,8 @@ Tailwind, Vitest, Testing Library, Playwright.
 
 **Files:**
 
-- Modify: `packages/types/src/project.ts`
-- Modify: `packages/types/src/attachment.ts`
+- Modify: `apps/api/src/contracts/project.ts`
+- Modify: `domains/work/src/contracts/attachment.ts`
 - Modify: `packages/db/src/schema/joins.ts`
 - Modify: `packages/db/src/schema/crosscutting.ts`
 - Create: generated migration under `packages/db/drizzle/`

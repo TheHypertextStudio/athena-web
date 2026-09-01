@@ -14,7 +14,7 @@
  * The negative case is asserted in the same run: two genuinely different events on the two accounts
  * stay two blocks, so a passing run cannot be explained by "the grid drew fewer things".
  */
-import { CalendarItemId, CalendarLayerId } from '@docket/types';
+import { CalendarItemId, CalendarLayerId } from '@docket/planning/ids';
 
 import { signUpAndOnboard } from '../helpers/app';
 import {

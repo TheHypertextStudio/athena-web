@@ -36,7 +36,7 @@
  *
  * @see {@link file://./calendar-layer-dedup.ts} for the calendar-level equivalent.
  */
-import type { CalendarItemOut, CalendarLayerOut } from '@docket/types';
+import type { CalendarItemOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
 
 /** One event and the copies of it that were folded away, in render order. */
 export interface CalendarItemDuplicateGroup {

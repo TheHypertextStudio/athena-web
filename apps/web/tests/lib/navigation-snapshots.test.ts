@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { EntityNavigationSnapshot } from '@docket/types';
+import type { EntityNavigationSnapshot } from '../../src/lib/contracts/entity-navigation';
 
 import {
   createNavigationSnapshotRepository,

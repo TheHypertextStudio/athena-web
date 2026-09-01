@@ -1,7 +1,7 @@
 'use client';
 
 /** Backlink from ordinary generated work to the series that created it. */
-import type { GeneratedWorkRecurrenceOut } from '@docket/types';
+import type { GeneratedWorkRecurrenceOut } from '../../lib/contracts/recurrence';
 import { RefreshCw } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';

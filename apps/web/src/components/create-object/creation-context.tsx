@@ -1,6 +1,9 @@
 'use client';
 
-import type { MemberOut, OrgOut, OrgSummary, RoleOut, TeamOut } from '@docket/types';
+import type { MemberOut } from '@docket/identity-access/member-contract';
+import type { OrgOut, OrgSummary } from '../../lib/contracts/organization';
+import type { RoleOut } from '../../lib/contracts/role';
+import type { TeamOut } from '../../lib/contracts/team';
 import type { VocabularySkin } from '@docket/work/vocabulary';
 import { createContext, type JSX, type ReactNode, useContext, useMemo } from 'react';
 

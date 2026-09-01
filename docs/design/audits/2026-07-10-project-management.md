@@ -125,7 +125,7 @@ of responsibility. The model should remain; its navigation weight should become 
 
 The Hub contract and `useTodayData` already provide a daily plan, timeboxes, approvals, blocked
 tasks, due-today tasks, inbox count, plan groups, and a combined attention count
-(`packages/types/src/hub.ts:100-166`,
+(`apps/api/src/contracts/hub.ts:100-166`,
 `apps/web/src/app/(app)/today/use-today-data.ts:64-107`).
 
 The page renders the capture box, active-org proposals, and `NextUp`, passing only calendar blocks
@@ -219,7 +219,7 @@ The default mental model should distinguish:
 
 Docket Projects have one team, one lead, fixed status, dates, and health but no project priority,
 project labels, project members, multiple teams, project dependencies, templates, or attached
-resources (`packages/types/src/project.ts:20-129`). Linear supports project priority, labels,
+resources (`apps/api/src/contracts/project.ts:20-129`). Linear supports project priority, labels,
 milestones, dependencies, templates, and rich project context. See
 [project priority](https://linear.app/docs/project-priority),
 [project labels](https://linear.app/docs/project-labels),
@@ -227,7 +227,7 @@ milestones, dependencies, templates, and rich project context. See
 [project templates](https://linear.app/docs/project-templates).
 
 Initiatives have only active/completed status and lack priority, labels, resources, and nested
-hierarchy (`packages/types/src/initiative.ts:9-75`). Linear supports richer Initiative properties
+hierarchy (`domains/work/src/contracts/initiative.ts:9-75`). Linear supports richer Initiative properties
 and sub-initiatives up to five levels. See [Linear initiatives](https://linear.app/docs/initiatives)
 and [sub-initiatives](https://linear.app/docs/sub-initiatives).
 
@@ -245,7 +245,7 @@ structured update reminders and overdue state are the relevant benchmark:
 ### P1 — Saved Views stop at org-scoped task lists
 
 Saved Views represent AND-only filters over one org's tasks, with personal/team/org sharing
-(`packages/types/src/saved-view.ts:63-90`,
+(`domains/work/src/contracts/saved-view.ts:63-90`,
 `apps/web/src/app/(app)/orgs/[orgId]/views/page.tsx:4-28`). Projects and Initiatives can be filtered
 temporarily but not saved; cross-workspace personal views do not exist; views cannot be favorited,
 made the default landing, subscribed to, or built with nested AND/OR logic.

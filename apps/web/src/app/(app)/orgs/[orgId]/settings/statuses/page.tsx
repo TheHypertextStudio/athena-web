@@ -15,11 +15,13 @@ import type {
   EntityDisplayColorKey,
   EntityDisplayIconKey,
   EntityDisplayOut,
-  TeamOut,
+} from '@docket/work/entity-display-contract';
+import type { TeamOut } from '../../../../../../lib/contracts/team';
+import type {
   WorkStatusCategory,
   WorkStatusCreate,
   WorkStatusEntityType,
-} from '@docket/types';
+} from '@docket/work/work-status-contract';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Skeleton } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
@@ -54,7 +56,7 @@ import {
   useApiMutation,
   useApiQuery,
 } from '@/lib/query';
-import { defaultEntityDisplay } from '@docket/types';
+import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** Which status the editor is open on, and which set and category it would be created into. */

@@ -1,7 +1,8 @@
 'use client';
 
-import type { EntityDisplayOut, TeamOut } from '@docket/types';
-import { defaultEntityDisplay } from '@docket/types';
+import type { EntityDisplayOut } from '@docket/work/entity-display-contract';
+import type { TeamOut } from '../../../../../lib/contracts/team';
+import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
 import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { LayoutGrid, ListView, Plus, Users } from '@docket/ui/icons';

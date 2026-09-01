@@ -12,7 +12,7 @@
  * is the mechanical form of the rule — the categories keep a fixed order, and a status moves only
  * among the ones it behaves like — so a move can never produce a set the API would reject.
  */
-import type { WorkStatusCategory } from '@docket/types';
+import type { WorkStatusCategory } from '@docket/work/work-status-contract';
 import { useReorderable } from '@docket/ui/hooks';
 import { Plus } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';

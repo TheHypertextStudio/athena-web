@@ -20,7 +20,8 @@
  * {@link buildTaskColumns} / {@link buildTaskCatalog} vocabulary, and every size resolves to an MD3
  * type token — there is no Cycles-only card, grid, or spacing constant here.
  */
-import type { CycleOut, CycleStats, TaskOut } from '@docket/types';
+import type { CycleOut, CycleStats } from '@docket/work/cycle-contract';
+import type { TaskOut } from '@docket/work/task-model';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Skeleton, Surface } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';

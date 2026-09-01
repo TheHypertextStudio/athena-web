@@ -11,17 +11,14 @@
  * Fixtures parse through the shared DTO schemas so the tests exercise the same branded shapes the
  * app receives from the API, without carrying local parallel DTO assertions.
  */
-import {
-  AgentOut,
-  CycleOut,
-  defaultCycleName,
-  EntityDisplayOut,
-  InitiativeOut,
-  LabelOut,
-  MemberOut,
-  ProgramOut,
-  ProjectOut,
-} from '@docket/types';
+import { AgentOut } from '@docket/athena/agent-contract';
+import { CycleOut, defaultCycleName } from '@docket/work/cycle-contract';
+import { EntityDisplayOut } from '@docket/work/entity-display-contract';
+import { InitiativeOut } from '@docket/work/initiative-contract';
+import { LabelOut } from '@docket/work/label-contract';
+import { MemberOut } from '@docket/identity-access/member-contract';
+import { ProgramOut } from '@docket/work/program-contract';
+import { ProjectOut } from '../../src/lib/contracts/project';
 import { describe, expect, it } from 'vitest';
 
 import { formatWindow } from '../../src/components/cycles/format-window';

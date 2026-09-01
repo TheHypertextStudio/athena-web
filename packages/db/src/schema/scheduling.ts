@@ -20,7 +20,7 @@
  *    §0); they record content and conditions, never enforcement instructions.
  *
  * Free-form vocabularies (posture, disposition, work shape) are stored as `text` rather than
- * `pgEnum`, matching the existing calendar island's `kind`/`status` columns. `@docket/types` is
+ * `pgEnum`, matching the existing calendar island's `kind`/`status` columns. `domain packages` is
  * the source of truth for the accepted values, and text avoids the `ALTER TYPE ... ADD VALUE`
  * migration hazard entirely when the taxonomy grows.
  */

@@ -19,7 +19,7 @@ import {
   type McpCapabilityScope,
   OAUTH_ISSUABLE_SCOPES,
   OFFLINE_ACCESS_SCOPE as ISSUABLE_OFFLINE_ACCESS_SCOPE,
-} from '@docket/types';
+} from '@docket/identity-access/oauth-scope-contract';
 
 import { InsufficientScopeError } from '../error';
 
@@ -27,7 +27,7 @@ import { InsufficientScopeError } from '../error';
  * One of the four flat, global Docket MCP scopes (mcp-surface.md §2.2).
  *
  * @remarks
- * An alias for `@docket/types`' {@link McpCapabilityScope} rather than a second literal union:
+ * An alias for `domain packages`' {@link McpCapabilityScope} rather than a second literal union:
  * the capability set is declared once, next to the issuable set the authorization server is
  * built from, so the resource server cannot come to enforce a scope the AS cannot issue (or
  * vice versa). The local name is kept because every call site in this app spells it `McpScope`.
@@ -38,7 +38,7 @@ export type McpScope = McpCapabilityScope;
  * The complete, ordered Docket MCP capability scope set.
  *
  * @remarks
- * Derived from `@docket/types`' `OAUTH_ISSUABLE_SCOPES` minus {@link OFFLINE_ACCESS_SCOPE}, so
+ * Derived from `domain packages`' `OAUTH_ISSUABLE_SCOPES` minus {@link OFFLINE_ACCESS_SCOPE}, so
  * this is the issuable set with the one non-capability scope removed rather than an independent
  * list that has to be kept in step by hand. The type predicate is what keeps `offline_access`
  * out of {@link McpScope} — see {@link OFFLINE_ACCESS_SCOPE} for why that separation matters.

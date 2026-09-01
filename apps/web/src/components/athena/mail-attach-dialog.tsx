@@ -14,7 +14,9 @@
  * defaults to the one the message was filed into — which is right nearly always, and cheap to
  * change when it is not.
  */
-import { OrganizationId, type AttachmentSubjectType, type SearchOut } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { type AttachmentSubjectType } from '@docket/work/attachment-contract';
+import { type SearchOut } from '../../lib/contracts/search';
 import { Folder, Search as SearchIcon, TaskAlt, Target } from '@docket/ui/icons';
 import {
   Button,

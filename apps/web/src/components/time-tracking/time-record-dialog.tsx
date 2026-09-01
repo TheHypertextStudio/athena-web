@@ -2,7 +2,7 @@
 
 /** Read and safely repair one personal Time Ledger record without turning its list row into a form. */
 import { Temporal } from '@js-temporal/polyfill';
-import type { TimeRecordOut } from '@docket/types';
+import type { TimeRecordOut } from '../../lib/contracts/time';
 import {
   Button,
   Dialog,

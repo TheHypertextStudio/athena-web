@@ -7,12 +7,12 @@
  * (rather than inline in a component or hook) makes each independently testable and lets the
  * controller hook read as orchestration rather than arithmetic.
  */
+import type { IdentityOut } from '@docket/identity-access/identity-contract';
 import type {
-  IdentityOut,
   IntegrationDirectoryProvider,
   IntegrationOut,
   IntegrationPattern,
-} from '@docket/types';
+} from '@docket/connections/integration-contract';
 
 /**
  * Group the directory's providers of one connect pattern by category, in first-seen order,

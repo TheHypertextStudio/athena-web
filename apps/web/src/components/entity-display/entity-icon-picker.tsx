@@ -1,6 +1,10 @@
 'use client';
 
-import type { EntityDisplayColorKey, EntityDisplayIconKey, EntityDisplayOut } from '@docket/types';
+import type {
+  EntityDisplayColorKey,
+  EntityDisplayIconKey,
+  EntityDisplayOut,
+} from '@docket/work/entity-display-contract';
 import { SearchRounded, STRATEGIC_WORK_ROUNDED_ICON_OPTIONS } from '@docket/ui/icons';
 import { Popover, PopoverBody, PopoverContent, PopoverTrigger } from '@docket/ui/primitives';
 

@@ -167,10 +167,10 @@ the calendar-component invariant.
 
 **Files:**
 
-- Modify: `packages/types/src/project.ts`
-- Modify: `packages/types/src/initiative.ts`
-- Modify: `packages/types/src/organization.ts`
-- Create: `packages/types/tests/dto/planning-timeframes.test.ts`
+- Modify: `apps/api/src/contracts/project.ts`
+- Modify: `domains/work/src/contracts/initiative.ts`
+- Modify: `apps/api/src/contracts/organization.ts`
+- Create: `the deleted legacy type warehouse tests/dto/planning-timeframes.test.ts`
 - Modify: `packages/db/src/enums.ts`
 - Modify: `packages/db/src/schema/identity.ts`
 - Modify: `packages/db/src/schema/work.ts`
@@ -212,7 +212,7 @@ expect(WorkspaceSettingsUpdate.safeParse({ fiscalYearStartMonth: 12 }).success).
 
 - [x] **Step 2: Run the DTO test and verify the new fields are stripped or rejected**
 
-Run: `pnpm --filter @docket/types test -- tests/dto/planning-timeframes.test.ts`
+Run: `pnpm domain:check`
 
 Expected: FAIL on the missing resolution and workspace fields.
 
@@ -273,7 +273,7 @@ generator permits a stable custom name without breaking the journal.
 
 - [x] **Step 7: Run DTO, schema, and migration gates**
 
-Run: `pnpm --filter @docket/types test -- tests/dto/planning-timeframes.test.ts && pnpm --filter @docket/db test -- tests/schema/planning-timeframe-schema.test.ts tests/schema/initiative-experience-schema.test.ts && pnpm --filter @docket/types typecheck && pnpm --filter @docket/db typecheck`
+Run: `pnpm domain:check&& pnpm --filter @docket/db test -- tests/schema/planning-timeframe-schema.test.ts tests/schema/initiative-experience-schema.test.ts && pnpm domain:check && pnpm --filter @docket/db typecheck`
 
 Expected: PASS.
 
@@ -794,7 +794,7 @@ stability, and unchanged timeline anchors.
 - Modify: `apps/web/src/components/initiatives/format-date.ts`
 - Modify: `apps/web/src/components/initiatives/initiative-catalog.ts`
 - Modify: `apps/web/src/components/initiatives/roadmap.tsx`
-- Modify: `packages/types/src/initiative.ts`
+- Modify: `domains/work/src/contracts/initiative.ts`
 - Modify: `apps/api/src/routes/initiatives.ts`
 - Modify: `apps/web/tests/composers/create-initiative.test.tsx`
 - Create: `apps/web/tests/components/initiatives/initiative-timeframes.test.tsx`
@@ -915,7 +915,7 @@ Run each command serially with `--maxWorkers=1`:
 
 ```bash
 pnpm --filter @docket/work exec vitest run --maxWorkers=1
-pnpm --filter @docket/types exec vitest run --maxWorkers=1
+pnpm domain:checkmaxWorkers=1
 pnpm --filter @docket/db exec vitest run --maxWorkers=1
 pnpm --filter @docket/integrations exec vitest run --maxWorkers=1
 pnpm --filter @docket/api exec vitest run tests/lib/planning-timeframe.test.ts tests/routes/projects-detail.test.ts tests/routes/initiatives-detail.test.ts tests/routes/integration-reconcile-graph-appliers.test.ts tests/mcp/mcp-surface.test.ts tests/mcp/mcp-update-tool.test.ts tests/search/projectors.test.ts tests/account/export.test.ts --maxWorkers=1

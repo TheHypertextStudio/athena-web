@@ -8,7 +8,7 @@ import type {
   RecurrenceSeriesLifecycle,
   RecurrenceSeriesOut,
   SeriesEdit,
-} from '@docket/types';
+} from '../../../../../../lib/contracts/recurrence';
 import { Calendar, CheckCircle2, Pause, Play, RefreshCw, Stop } from '@docket/ui/icons';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';

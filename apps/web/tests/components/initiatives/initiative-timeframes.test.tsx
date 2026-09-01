@@ -1,4 +1,4 @@
-import type { InitiativeOverviewItem } from '@docket/types';
+import type { InitiativeOverviewItem } from '@docket/work/initiative-contract';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

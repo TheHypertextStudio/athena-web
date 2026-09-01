@@ -9,7 +9,8 @@
  * `organizationId`) so a toolbar-built predicate translates straight to SQL. The cross-org
  * personal stream adds a Workspace field; the per-workspace firehose omits it.
  */
-import { CanonicalEntityKind, EventKind, PROVIDER_CATALOG } from '@docket/types';
+import { CanonicalEntityKind, EventKind } from '@docket/connections/event-contract';
+import { PROVIDER_CATALOG } from '@docket/connections/provider-catalog-contract';
 
 import type { FieldCatalog, FieldDescriptor, FieldOption } from '@/components/views/field-catalog';
 

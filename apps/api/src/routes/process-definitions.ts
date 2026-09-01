@@ -1,13 +1,13 @@
 /** `@docket/api` — reusable process-definition routes. */
 import { db } from '@docket/db';
+import { pageOf } from '../contracts/pagination';
 import {
-  pageOf,
   ProcessDefinitionCreate,
   ProcessDefinitionDetailOut,
   ProcessDefinitionFromProjectCreate,
   ProcessDefinitionSummaryOut,
   ProcessDefinitionUpdate,
-} from '@docket/types';
+} from '../contracts/recurrence';
 import { Hono } from 'hono';
 import { z } from 'zod';
 

@@ -13,7 +13,7 @@ import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import { defaultCycleName } from '@docket/types';
+import { defaultCycleName } from '@docket/work/cycle-contract';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type cyclesRouter from '../../src/routes/cycles';

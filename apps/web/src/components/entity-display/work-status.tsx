@@ -18,7 +18,7 @@
  * There is deliberately no per-status colour anywhere here: two statuses in the same category are
  * the same colour, because the colour means "this is in progress", not "this is called Building".
  */
-import type { WorkStatusCategory } from '@docket/types';
+import type { WorkStatusCategory } from '@docket/work/work-status-contract';
 import { StatusIcon } from '@docket/ui/components';
 import { Badge } from '@docket/ui/primitives';
 import type { CSSProperties, JSX } from 'react';

@@ -16,7 +16,7 @@
  * stays aligned, and each tile is plain text (not an interactive control) so the snapshot
  * reads as a calm status banner.
  */
-import type { Health } from '@docket/types';
+import type { Health } from '@docket/work/capability-contract';
 import { cn, relativeTime } from '@docket/ui';
 import { CheckCircle2, CircleDashed, CircleDot, FolderKanban, RefreshCw } from '@docket/ui/icons';
 import type { JSX, ReactNode } from 'react';

@@ -8,14 +8,14 @@ import {
   task,
   type calendarEvent,
 } from '@docket/db';
+import type { AgendaOut } from '@docket/planning/agenda-contract';
 import type {
-  AgendaOut,
   CalendarConnectionOut,
   CalendarEventOut,
   CalendarItemOut,
   CalendarListOut,
   CalendarSettingsOut,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import type { Context } from 'hono';
 import type { z } from 'zod';

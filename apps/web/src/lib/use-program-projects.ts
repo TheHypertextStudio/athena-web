@@ -1,7 +1,7 @@
 'use client';
 
 /** Attach/detach mutations for filing Projects under a Program, from the Program's own page. */
-import type { ProjectOut } from '@docket/types';
+import type { ProjectOut } from './contracts/project';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from './api';

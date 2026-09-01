@@ -6,7 +6,7 @@ import {
   ProgramViewRow,
   TaskViewDefinition,
   TaskViewRow,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
 import { describe, expect, it, vi } from 'vitest';
 
 import { WorkCards } from '../../src/components/work-views/work-cards';

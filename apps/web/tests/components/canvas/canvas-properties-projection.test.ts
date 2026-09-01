@@ -1,5 +1,5 @@
 /** `@docket/web` — approved canvas property snapshot projection. */
-import type { ProjectOverviewItem } from '@docket/types';
+import type { ProjectOverviewItem } from '../../../src/lib/contracts/project';
 import type { Node } from '@xyflow/react';
 import { describe, expect, it } from 'vitest';
 

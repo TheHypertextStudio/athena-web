@@ -1,12 +1,9 @@
 /** URL-only resource routes for Initiative strategic documents. */
 import { attachment, db, initiativeLabel, label } from '@docket/db';
-import {
-  AttachmentOut,
-  AttachmentRemoved,
-  InitiativeResourceCreate,
-  LabelOut,
-  pageOf,
-} from '@docket/types';
+import { AttachmentOut, AttachmentRemoved } from '@docket/work/attachment-contract';
+import { InitiativeResourceCreate } from '@docket/work/initiative-contract';
+import { LabelOut } from '@docket/work/label-contract';
+import { pageOf } from '../contracts/pagination';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

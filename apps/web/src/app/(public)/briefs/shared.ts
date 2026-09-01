@@ -8,7 +8,7 @@
  * the visitor's real host, refusing to cache an authorization decision, and building metadata from
  * the same live document the page renders — is identical, so it lives here once.
  */
-import type { PublicBriefOut } from '@docket/types';
+import type { PublicBriefOut } from '@docket/work/publish-contract';
 import { env } from '@docket/env/web';
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';

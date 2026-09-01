@@ -16,7 +16,8 @@
  * The display registry supplies each team's icon and color. The short team key remains available
  * to assistive technology without becoming the only visual identity.
  */
-import { defaultEntityDisplay, type EntityDisplayOut, type TeamOut } from '@docket/types';
+import { defaultEntityDisplay, type EntityDisplayOut } from '@docket/work/entity-display-contract';
+import { type TeamOut } from '../../lib/contracts/team';
 import { FolderKanban, ListChecks, Workflow } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Badge, Skeleton } from '@docket/ui/primitives';

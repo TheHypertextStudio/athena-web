@@ -9,7 +9,10 @@
  * key sits under the collection every create already invalidates, so a partial seed is corrected
  * by a refetch rather than left standing.
  */
-import type { InitiativeOut, ProgramOut, ProjectOut, TaskOut } from '@docket/types';
+import type { InitiativeOut } from '@docket/work/initiative-contract';
+import type { ProgramOut } from '@docket/work/program-contract';
+import type { ProjectOut } from '../../src/lib/contracts/project';
+import type { TaskOut } from '@docket/work/task-model';
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 

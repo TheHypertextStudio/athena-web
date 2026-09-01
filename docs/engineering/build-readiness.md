@@ -12,12 +12,12 @@ Coverage is complete and the dependency spine is sound and acyclic. Every one of
 
 2. **A one-time human bootstrap is unavoidable for real-service lanes.** Per `env-and-bootstrap.md`, creating Google/GitHub/Linear OAuth apps (paste client id/secret), `stripe login` + `stripe listen` (capture `whsec_`), and authenticating `neonctl`/`vercel` are interactive. An agent **can** one-shot Phase −1 → P5 + the vertical slice + the DB/UI/authz lanes (the manifest correctly scopes these to need no external creds), but the **Billing**, **MCP-OAuth**, and **connect-integration** lanes gate on the human running `pnpm bootstrap` first. → A **bootstrap gate sits between P5 and P6**.
 
-3. **Cross-domain file collisions need single owners.** The canonical `grant`/`role` tables + `grant_effect` enum are authored by _both_ the data-API and permissions domains; `@docket/types` primitives (`Id`, `Capability`) are triple-authored; `apps/api/src/app.ts` is listed by ~10 tickets. Run in parallel as-is, these conflict. **Fix → designate single owners** (next section).
+3. **Cross-domain file collisions need single owners.** The canonical `grant`/`role` tables + `grant_effect` enum are authored by _both_ the data-API and permissions domains; the retired contract package primitives (`Id`, `Capability`) are triple-authored; `apps/api/src/app.ts` is listed by ~10 tickets. Run in parallel as-is, these conflict. **Fix → designate single owners** (next section).
 
 ## Single-owner rules (resolve the collisions)
 
 - **All SQL** lives in `@docket/db` and the **canonical `grant`/`role`/enums are owned by the data-model db tickets**; permissions tickets _consume_ them (fold `PAB-DB-*` into the db lane or sequence them strictly before the data-API db tickets in **one** db worktree).
-- **`@docket/types` shared primitives** (`Id`, `Capability`, error/problem types) are owned **solely by `FND-P4-01`**; `DA-shared-01`, `PAB-TYPES-01`, `MCP-05` import them, never redefine.
+- **the retired contract package shared primitives** (`Id`, `Capability`, error/problem types) are owned **solely by `FND-P4-01`**; `DA-shared-01`, `PAB-TYPES-01`, `MCP-05` import them, never redefine.
 - **`apps/api/src/app.ts` (the chained-router composition root) is edited only by `DA-app-compose-01`.** Every other router self-registers in its own file — break the `.route()` chain and the `AppType` RPC contract silently collapses.
 - **Migrations are a global serialization point.** Within the db worktree all schema tickets are sequential and end with **one** `drizzle generate` → a single coherent migration. No two lanes generate migrations concurrently. Better Auth model changes are captured into a scratch CLI schema and reconciled into the hand-maintained `packages/db/src/schema/auth.ts` before any dependent lane migrates; no command overwrites that owned schema.
 

@@ -13,7 +13,7 @@
  * to forget). Required deployment URLs that must exist before any fetch (the auth base URL, the
  * passkey RP ID) are not feature config and stay in their dedicated resolvers.
  */
-import type { PublicConfigOut } from '@docket/types';
+import type { PublicConfigOut } from '@docket/identity-access/public-config-contract';
 import type { UseQueryResult } from '@tanstack/react-query';
 
 import { socialProviderForConnector } from '@/components/settings/integrations-config';

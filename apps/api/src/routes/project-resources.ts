@@ -1,6 +1,8 @@
 /** URL-only resource routes for Project operating records. */
 import { attachment, db, project } from '@docket/db';
-import { AttachmentOut, AttachmentRemoved, ProjectResourceCreate, pageOf } from '@docket/types';
+import { AttachmentOut, AttachmentRemoved } from '@docket/work/attachment-contract';
+import { ProjectResourceCreate } from '../contracts/project';
+import { pageOf } from '../contracts/pagination';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

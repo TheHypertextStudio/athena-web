@@ -47,7 +47,8 @@ import {
   taskDependency,
   taskLabel,
 } from '@docket/db';
-import { ConnectorConfig, type WorkStatusCategory } from '@docket/types';
+import { ConnectorConfig } from '@docket/connections/integration-contract';
+import { type WorkStatusCategory } from '@docket/work/work-status-contract';
 import type {
   ExternalCycle,
   ExternalLabel,

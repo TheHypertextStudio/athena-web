@@ -18,7 +18,7 @@ export interface DocketVitestOptions {
    *
    * Defaults to 90. The "trust spine" — packages where a silent coverage gap means
    * a security hole or data corruption, and that are pure enough for honest full
-   * coverage (`@docket/authz`, `@docket/auth`, `@docket/env`, `@docket/types`,
+   * coverage (`@docket/authz`, `@docket/auth`, `@docket/env`, `domain packages`,
    * `@docket/db`) — opts into `100`. Apps, UI, and IO adapters stay at the default.
    */
   coverageThreshold?: number;

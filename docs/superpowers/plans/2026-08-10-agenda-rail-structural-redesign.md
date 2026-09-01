@@ -18,8 +18,8 @@ the single-day presentation and draft host needed by a narrow rail.
 
 **Files:**
 
-- Modify: `packages/types/src/calendar.ts`
-- Test: `packages/types/tests/dto/calendar.test.ts`
+- Modify: `domains/planning/src/contracts/calendar.ts`
+- Test: `the deleted legacy type warehouse tests/dto/calendar.test.ts`
 - Create: `apps/api/src/calendar/calendar-provider-event-type.ts`
 - Modify: `apps/api/src/calendar/calendar-serializers.ts`
 - Test: `apps/api/tests/calendar-serializers.test.ts`
@@ -207,7 +207,7 @@ the single-day presentation and draft host needed by a narrow rail.
 Run the smallest focused test after each red/green cycle. Before completion, run:
 
 ```bash
-pnpm --filter @docket/types test -- calendar.test.ts
+pnpm domain:check
 pnpm --filter @docket/api test -- calendar-serializers.test.ts calendar-items.test.ts
 pnpm --filter @docket/web test -- agenda-context-navigation.test.tsx agenda-header.test.tsx agenda-day-context.test.ts agenda-canvas.test.tsx agenda-canvas-interactions.test.tsx agenda-draft-controller.test.ts create-block-draft.test.ts create-block-form.test.tsx scheduling-canvas-agenda-presentation.test.tsx scheduling-overlap-layout.test.ts scheduling-item-presentation.test.tsx
 pnpm typecheck

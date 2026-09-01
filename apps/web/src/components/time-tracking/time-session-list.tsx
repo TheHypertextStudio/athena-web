@@ -2,7 +2,7 @@
 
 /** The chronological, filter-aware source of truth behind Time review totals and breakdowns. */
 import { Temporal } from '@js-temporal/polyfill';
-import type { TimeRecordOut } from '@docket/types';
+import type { TimeRecordOut } from '../../lib/contracts/time';
 import { Skeleton, Surface, Text } from '@docket/ui/primitives';
 import { Computer, Edit } from '@docket/ui/icons';
 import type { JSX } from 'react';

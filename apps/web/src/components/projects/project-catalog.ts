@@ -18,7 +18,7 @@
  * injected from the page's already-loaded members/teams (Phase B data), so the value chooser
  * needs no extra fetch.
  */
-import type { ProjectOut } from '@docket/types';
+import type { ProjectOut } from '../../lib/contracts/project';
 import { ActorAvatar, type Column } from '@docket/ui/components';
 import { Calendar, ListChecks } from '@docket/ui/icons';
 import { createElement, type ReactNode } from 'react';

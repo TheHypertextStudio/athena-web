@@ -13,15 +13,15 @@ import {
   AthenaSessionCreateBody,
   AthenaSessionDetailOut,
   AthenaSessionSummaryOut,
-  pageOf,
   ProposalEditBody,
   ApprovalDecision,
   ApprovalDecisionBody,
   ProposalGroupDecision,
   ProposalGroupOut,
   SessionActivityOut,
-} from '@docket/types';
-import type { AthenaInvocationContext } from '@docket/types';
+} from '@docket/athena/agent-contract';
+import { pageOf } from '../contracts/pagination';
+import type { AthenaInvocationContext } from '@docket/athena/agent-contract';
 import { and, asc, count, desc, eq, gt, inArray, lt, ne, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { Context } from 'hono';

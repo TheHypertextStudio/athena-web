@@ -20,12 +20,8 @@ import {
   timeCategory,
 } from '@docket/db';
 import type { timeContext } from '@docket/db';
-import type {
-  EntityRef,
-  TimeAllocationReplace,
-  TimeContextCreate,
-  TimeRecordCreate,
-} from '@docket/types';
+import type { EntityRef } from '@docket/connections/event-contract';
+import type { TimeAllocationReplace, TimeContextCreate, TimeRecordCreate } from '../contracts/time';
 import { and, eq } from 'drizzle-orm';
 import type { z } from 'zod';
 import { ConflictError, NotFoundError } from '../error';

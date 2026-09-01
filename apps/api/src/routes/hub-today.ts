@@ -13,12 +13,8 @@ import {
   timeInterval,
   update as statusUpdate,
 } from '@docket/db';
-import type {
-  AvailabilityWindow,
-  HubTodayOut,
-  HubTodayStatusCard,
-  HubTodaySuggestion,
-} from '@docket/types';
+import type { AvailabilityWindow } from '@docket/planning/scheduling-contract';
+import type { HubTodayOut, HubTodayStatusCard, HubTodaySuggestion } from '../contracts/hub';
 import { and, asc, count, desc, eq, gt, gte, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 
@@ -29,7 +25,7 @@ import {
 } from '../permissions/resource-access';
 import { expandAvailability } from '../services/scheduling/availability';
 import { loadDayContext, type DayContext } from '../services/scheduling/directive-service';
-import { spanMinutes } from '../services/scheduling/intervals';
+import { spanMinutes } from '@docket/planning/intervals';
 import { loadSchedulingPreferences } from '../services/scheduling/repository';
 import {
   derivePlanState,
@@ -39,7 +35,7 @@ import {
   type TodayPlanCandidate,
   type TodayStatusCandidate,
 } from '../services/hub/today-projection';
-import { addDays, instantAt, weekStartOf } from '../services/scheduling/zoned-time';
+import { addDays, instantAt, weekStartOf } from '@docket/planning/zoned-time';
 import {
   callerActorIds,
   callerOrgIds,
@@ -48,7 +44,7 @@ import {
   toTaskItem,
   type TaskRow,
 } from './hub-helpers';
-import type { WorkStatusCategory } from '@docket/types';
+import type { WorkStatusCategory } from '@docket/work/work-status-contract';
 
 /**
  * Select the caller's live tasks blocked by at least one blocker that is still open.

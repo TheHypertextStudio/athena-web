@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 
-import { NotificationId, OrganizationId, type NotificationOut } from '@docket/types';
+import { NotificationId } from '@docket/notifications/ids';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { type NotificationOut } from '@docket/notifications/notification-contract';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

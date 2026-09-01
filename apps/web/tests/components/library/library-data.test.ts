@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SearchOut, SearchResult } from '@docket/types';
+import type { SearchOut, SearchResult } from '../../../src/lib/contracts/search';
 
 import { buildLibrarySearchQuery, mergeLibraryPages } from '@/components/library/library-data';
 

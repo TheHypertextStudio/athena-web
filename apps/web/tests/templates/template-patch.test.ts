@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 
 import { sortTemplates, templatePatch } from '../../src/components/templates/queries';
 
-import type { TemplateOut } from '@docket/types';
+import type { TemplateOut } from '@docket/work/template-contract';
 
 /**
  * Build a template row with only the fields these assertions read.

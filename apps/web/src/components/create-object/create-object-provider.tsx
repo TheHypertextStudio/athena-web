@@ -1,6 +1,10 @@
 'use client';
 
-import type { InitiativeOut, ProgramOut, ProjectOut, TaskOut, TeamOut } from '@docket/types';
+import type { InitiativeOut } from '@docket/work/initiative-contract';
+import type { ProgramOut } from '@docket/work/program-contract';
+import type { ProjectOut } from '../../lib/contracts/project';
+import type { TaskOut } from '@docket/work/task-model';
+import type { TeamOut } from '../../lib/contracts/team';
 import { useContextState } from '@docket/ui/components';
 import {
   createContext,

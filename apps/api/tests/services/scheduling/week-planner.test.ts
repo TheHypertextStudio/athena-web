@@ -1,5 +1,9 @@
-import type { AvailabilityWindow, SchedulingCommitment, WorkShape } from '@docket/types';
-import { WORK_SHAPES, workShapeProfile } from '@docket/types';
+import type {
+  AvailabilityWindow,
+  SchedulingCommitment,
+  WorkShape,
+} from '@docket/planning/scheduling-contract';
+import { WORK_SHAPES, workShapeProfile } from '@docket/planning/scheduling-contract';
 import { describe, expect, it } from 'vitest';
 
 import type { BusyItem } from '../../../src/services/scheduling/availability';
@@ -7,7 +11,7 @@ import { defaultAvailabilityWindows } from '../../../src/services/scheduling/ava
 import { EMPTY_ACTUALS } from '../../../src/services/scheduling/duration-model';
 import type { PlanWeekInput, PlannedBlock } from '../../../src/services/scheduling/week-planner';
 import { planWeek, shapesPresent } from '../../../src/services/scheduling/week-planner';
-import { addDays, instantAt, localDateString } from '../../../src/services/scheduling/zoned-time';
+import { addDays, instantAt, localDateString } from '@docket/planning/zoned-time';
 import { assertDefined } from '@docket/test-utils';
 
 const TZ = 'America/Los_Angeles';

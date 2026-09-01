@@ -12,7 +12,7 @@
  * dependency-light shape of the rest of this package's HTTP edge. Everything a preview needs is
  * declared in the head; the body is not read.
  */
-import type { ExternalResourceType } from '@docket/types';
+import type { ExternalResourceType } from '@docket/connections/resource-provider-contract';
 
 import { createSafeOutboundFetch } from './safe-fetch';
 import type { safeOutboundFetch, SafeNetworkLimits } from './safe-fetch';

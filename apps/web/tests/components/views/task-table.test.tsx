@@ -23,15 +23,10 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import {
-  ActorId,
-  DEFAULT_WORK_STATUSES,
-  LabelId,
-  OrganizationId,
-  TaskId,
-  TeamId,
-  type TaskOut,
-} from '@docket/types';
+import { ActorId, OrganizationId, TeamId } from '@docket/identity-access/ids';
+import { DEFAULT_WORK_STATUSES } from '@docket/work/work-status-contract';
+import { LabelId, TaskId } from '@docket/work/ids';
+import { type TaskOut } from '@docket/work/task-model';
 import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';

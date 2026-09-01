@@ -22,13 +22,9 @@
  *
  * @see {@link useActiveOrg} for the `teams` + `defaultTeamId` the {@link TeamPicker} is driven from.
  */
-import {
-  type CycleOut,
-  type CycleStatus,
-  defaultCycleName,
-  TeamId,
-  type TeamOut,
-} from '@docket/types';
+import { type CycleOut, type CycleStatus, defaultCycleName } from '@docket/work/cycle-contract';
+import { TeamId } from '@docket/identity-access/ids';
+import { type TeamOut } from '../../lib/contracts/team';
 import { DateRangePicker, EnumPicker } from '@docket/ui/components';
 import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 

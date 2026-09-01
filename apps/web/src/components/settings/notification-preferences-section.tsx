@@ -8,15 +8,15 @@
  * per-category channel matrix. The domain package owns defaults and locked-category policy; this
  * component only renders that policy and emits structured patches.
  */
+import { defaultNotificationChannelPreference } from '@docket/notifications/preferences';
+import { lockedPreference } from '@docket/notifications/policy';
 import {
-  defaultNotificationChannelPreference,
-  lockedPreference,
   type NotificationCategory as NotificationCategoryValue,
   type NotificationChannel,
   type NotificationPreferenceOut,
   type NotificationPreferencePatch,
   type NotificationQuietHours,
-} from '@docket/notifications';
+} from '@docket/notifications/schemas';
 import { cn } from '@docket/ui';
 import { WriteError } from './write-error';
 import { Schedule } from '@docket/ui/icons';

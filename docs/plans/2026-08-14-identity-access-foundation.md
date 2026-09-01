@@ -7,7 +7,7 @@ explicit-grant policy, while preserving the current API contracts and avoiding a
 
 **Architecture:** `@docket/identity-access` begins as a Zod-only product domain with named public
 entrypoints for capability vocabulary, grant applicability, and explicit-grant evaluation. It does
-not load Drizzle rows, decide public visibility, or expose HTTP DTOs. `@docket/types` and
+not load Drizzle rows, decide public visibility, or expose HTTP DTOs. the retired contract package and
 `@docket/authz` remain temporary compatibility facades; the latter continues to load DB facts and
 delegates only its pure decision portion. A later slice introduces a named DB adapter, then moves
 task/resource delivery policy after parity characterization.
@@ -20,14 +20,14 @@ manifests, domain registry policy.
 ## Non-negotiable boundaries
 
 - `domains/identity-access/src` may depend only on `zod` and local files. It must never import
-  `@docket/types`, `@docket/db`, Drizzle, API code, UI code, environment state, or test helpers.
+  the retired contract package, `@docket/db`, Drizzle, API code, UI code, environment state, or test helpers.
 - Do not move `Visibility`, `Health`, `ActorOut`, `GrantOut`, `GrantUpsert`, `RoleOut`,
   `RoleCreate`, or `RoleUpdate` in this batch. They are transport or unresolved-policy contracts.
 - Do not implement or activate `grant.visibilityOverride`; it is subject-scoped but documented as
   resource-global, and needs a separately approved data model.
 - Preserve current maximum-allow capability semantics. Do not introduce deny precedence,
   most-specific replacement, or unsupported initiative/cycle traversal in this refactor.
-- Keep the temporary facades explicit and one-way: `@docket/types` / `@docket/authz` may import
+- Keep the temporary facades explicit and one-way: the retired contract package / `@docket/authz` may import
   Identity & Access; Identity & Access may not import either one.
 
 ## Task 1: Correct Billing's deployable-runtime contract
@@ -153,10 +153,10 @@ source has no forbidden dependency imports.
 
 **Files:**
 
-- Modify: `packages/types/package.json`
-- Modify: `packages/types/src/capability.ts`
-- Modify: `packages/types/src/grant.ts`
-- Modify: `packages/types/tests/core/capability.test.ts`
+- Modify: `the deleted legacy type warehouse/package.json`
+- Modify: `domains/work/src/contracts/capability.ts`
+- Modify: `apps/api/src/contracts/grant.ts`
+- Modify: `the deleted legacy type warehouse tests/core/capability.test.ts`
 - Modify: `packages/authz/package.json`
 - Modify: `packages/authz/src/index.ts`
 - Modify: `packages/authz/src/can-actor.ts`
@@ -172,7 +172,7 @@ source has no forbidden dependency imports.
 
 ### Step 1: Write compatibility and parity failures
 
-Add tests showing `@docket/types` capability/grant vocabulary is the exact same runtime object as
+Add tests showing the retired contract package capability/grant vocabulary is the exact same runtime object as
 the new named domain export, and add table-driven `canActor` cases whose outcome must match the
 pure evaluator for direct actor grant, role grant, expiry, exact grant, and non-cascading ancestor.
 
@@ -225,7 +225,7 @@ Run Prettier and `git diff --check` on the changed documentation.
 
 - Existing API wire schema/OpenAPI output remains unchanged.
 - No source in `domains/identity-access` imports Types, DB, Drizzle, delivery code, or test code.
-- `@docket/types` and `@docket/authz` remain compatibility-only edges with no duplicate capability
+- the retired contract package and `@docket/authz` remain compatibility-only edges with no duplicate capability
   or grant-kind definitions.
 - Billing no longer falsely declares desktop, admin, or runner implementation support.
 - Focused tests prove the new behavior and the old compatibility surface; root/browser/hosted CI

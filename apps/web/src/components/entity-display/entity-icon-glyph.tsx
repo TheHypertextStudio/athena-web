@@ -14,7 +14,10 @@
  * One color table serves both the glyph and the generated covers, so a team whose color is Indigo
  * has an indigo glyph and an indigo cover without either side knowing about the other.
  */
-import type { EntityDisplayColorKey, EntityDisplayIconKey } from '@docket/types';
+import type {
+  EntityDisplayColorKey,
+  EntityDisplayIconKey,
+} from '@docket/work/entity-display-contract';
 import { STRATEGIC_WORK_ROUNDED_ICON_BY_KEY } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';

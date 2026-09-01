@@ -8,7 +8,7 @@ multi-step recurring projects/processes, rolling calendar materialization, compl
 work, missed-occurrence outcomes, future-only revisions, calendar-event bindings, management UI,
 and the API seams Athena uses without being required for correctness.
 
-**Architecture:** `@docket/types` owns named discriminated unions. `@docket/db` persists normalized,
+**Architecture:** the retired contract package owns named discriminated unions. `@docket/db` persists normalized,
 versioned process definitions and recurrence execution state. Pure API domain modules calculate
 calendar dates and process readiness. Org-scoped Hono routes expose the same deterministic commands
 to the web app, integrations, and Athena. Generated projects, milestones, and tasks remain ordinary
@@ -23,10 +23,10 @@ Docket scheduler and event bus.
 
 **Files:**
 
-- `packages/types/src/recurrence.ts`
-- `packages/types/src/primitives.ts`
-- `packages/types/src/index.ts`
-- `packages/types/tests/dto/recurrence.test.ts`
+- `apps/api/src/contracts/recurrence.ts`
+- `domain-local ID modules`
+- `deleted legacy module index`
+- `the deleted legacy type warehouse tests/dto/recurrence.test.ts`
 
 Define and test named schemas for:
 
@@ -68,7 +68,7 @@ Generate the migration, inspect every statement, and prove it applies to a fresh
 
 **Files:**
 
-- `apps/api/src/lib/recurrence/calendar-date.ts`
+- `domains/planning/src/calendar-date.ts`
 - `apps/api/src/lib/recurrence/expand.ts`
 - `apps/api/src/lib/recurrence/rrule.ts`
 - `apps/api/tests/recurrence/expand.test.ts`

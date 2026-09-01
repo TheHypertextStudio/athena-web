@@ -85,7 +85,7 @@ status `Ready for Athena`, `2 tools available`). The probe reopens the page and 
 | `../screenshots/2026-08-02-credential-masking/stored-connector-390x844-dark.png`   | same, mobile dark                                                               |
 
 Nothing credential-shaped appears — not a masked field, not a last-4, nothing. That is the contract,
-not an omission: `McpIntegrationOut` in `packages/types/src/integration.ts` has no credential field
+not an omission: `McpIntegrationOut` in `domains/connections/src/contracts/integration.ts` has no credential field
 for the row to render.
 
 ## 4. Network capture

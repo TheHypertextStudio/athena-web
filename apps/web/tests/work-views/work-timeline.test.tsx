@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { InitiativeViewRow, ProjectViewRow } from '@docket/types';
+import { InitiativeViewRow, ProjectViewRow } from '@docket/work/work-view-contract';
 
 import { buildInitiativeTimelineCatalog } from '../../src/components/work-views/initiative-timeline';
 import {

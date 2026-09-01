@@ -1,0 +1,49 @@
+flowchart LR
+  subgraph Delivery[Delivery applications]
+    API[API]
+    Web[Web]
+    Admin[Admin]
+  end
+
+  subgraph Domains[Business domains]
+    Work[Work]
+    Planning[Planning]
+    Identity[Identity and Access]
+    Athena[Athena]
+    Connections[Connections]
+    Automation[Automation]
+    Notifications[Notifications]
+  end
+
+  subgraph Technical[Narrow technical packages]
+    DB[DB]
+    Auth[Auth and Authz]
+    Integrations[Integrations]
+    UI[UI]
+  end
+
+  API --> Work
+  API --> Planning
+  API --> Identity
+  API --> Athena
+  API --> Connections
+  API --> Automation
+  API --> Notifications
+  Web -. erased RPC types .-> API
+  Admin -. erased RPC types .-> API
+  Web --> Work
+  Web --> Planning
+  Web --> Identity
+  Admin --> Identity
+  DB --> Work
+  DB --> Planning
+  DB --> Identity
+  DB --> Athena
+  DB --> Connections
+  DB --> Notifications
+  Auth --> Identity
+  Integrations --> Connections
+  Integrations --> Work
+  Integrations --> Athena
+  Web --> UI
+  Admin --> UI

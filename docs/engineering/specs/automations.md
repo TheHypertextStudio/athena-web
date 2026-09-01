@@ -59,7 +59,7 @@ resolves against this shape — it is the **only** contract rule authors program
 
 - `projectEmitInput(input, occurredAt)` — internal events. `source: 'docket'`;
   `subjectType`/`subjectId` from the emit subject; `entityKind` via the shared
-  `DOCKET_ENTITY_KIND` map (`@docket/types`).
+  `DOCKET_ENTITY_KIND` map from `@docket/connections/event-contract`.
 - `projectInboundDraft(input)` — drained external events. `subjectType`/`subjectId` are
   present only when enrichment resolved the external entity to a Docket one; otherwise rules
   address the event via `source` + `entityKind` + `detail.*`.
@@ -68,8 +68,7 @@ resolves against this shape — it is the **only** contract rule authors program
 
 Rules are stored per-org in `automation_rule` (columns `eventMatch`/`condition`/`actions`) and
 evaluated as `{ on, when, then }` through `@docket/automation/contracts` and
-`@docket/automation/evaluation`. `@docket/types` retains only the branded API DTO envelopes and a
-temporary compatibility facade for that grammar. CRUD is
+`@docket/automation/evaluation`. API owns the branded HTTP request and response DTOs. CRUD is
 `/v1/orgs/:orgId/automation-rules` (`apps/api/src/routes/automation-rules.ts`,
 capability-guarded `manage`).
 
@@ -252,7 +251,7 @@ a new domain event automatable:
 
 1. Emit it: `emitEvent({ organizationId, kind, subject: { type, id, title }, detail?, … })`.
 2. If it carries rule-relevant data, add a typed arm to `EventDetail`
-   (`packages/types/src/event.ts`) rather than overloading `generic` — one new union arm, no
+   (`domains/connections/src/contracts/event.ts`) rather than overloading `generic` — one new union arm, no
    migration.
 3. Document the new `kind` × `subjectType` (and any `detail` paths) in §7's vocabulary table.
 

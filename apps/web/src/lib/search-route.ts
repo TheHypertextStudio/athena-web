@@ -1,4 +1,4 @@
-import type { SearchDocumentKind, SearchResult, SearchRoute } from '@docket/types';
+import type { SearchDocumentKind, SearchResult, SearchRoute } from './contracts/search';
 
 const INTERNAL_ROUTE_PREFIX = '/';
 

@@ -14,7 +14,8 @@
  * hex this replaces could not respond to a theme change, so GitHub's near-black brand ink
  * rendered an invisible dot on every dark surface in the product.
  */
-import { PROVIDER_CATALOG, type SourceSystemKind } from '@docket/types';
+import { PROVIDER_CATALOG } from '@docket/connections/provider-catalog-contract';
+import { type SourceSystemKind } from '@docket/connections/event-contract';
 import { Badge } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 

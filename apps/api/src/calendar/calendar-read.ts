@@ -23,7 +23,7 @@ import {
   type CalendarItemLinkedTaskOut,
   type CalendarItemOut,
   type CalendarLayerOut,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
 

@@ -7,7 +7,8 @@
  * `displayName`; the window still rides along as the muted hint, but only when the label is not
  * already the window — otherwise a picker row printed the same string twice.
  */
-import { CycleOut, EntityDisplayOut } from '@docket/types';
+import { CycleOut } from '@docket/work/cycle-contract';
+import { EntityDisplayOut } from '@docket/work/entity-display-contract';
 import { describe, expect, it } from 'vitest';
 
 import { cycleOptions } from '../../src/components/pickers/options';

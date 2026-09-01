@@ -1,6 +1,6 @@
 'use client';
 
-import type { HubTodayOut, HubTodayPlanItem, HubTodaySuggestion } from '@docket/types';
+import type { HubTodayOut, HubTodayPlanItem, HubTodaySuggestion } from '../../../lib/contracts/hub';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 

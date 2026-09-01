@@ -1,7 +1,7 @@
 'use client';
 
 /** Docket context for one Library resource. */
-import type { SearchResult } from '@docket/types';
+import type { SearchResult } from '../../lib/contracts/search';
 import { Download, OpenInNew, X } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';

@@ -9,7 +9,11 @@
  * live from the mail provider for the card's preview expander (bodies are never persisted
  * server-side). See `docs/engineering/specs/email-to-task.md` §2/§9.
  */
-import type { EmailSuggestionOut, EmailThreadOut, SuggestionAcceptBody } from '@docket/types';
+import type {
+  EmailSuggestionOut,
+  EmailThreadOut,
+  SuggestionAcceptBody,
+} from '@docket/athena/email-suggestion-contract';
 import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 

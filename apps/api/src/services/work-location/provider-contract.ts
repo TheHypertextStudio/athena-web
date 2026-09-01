@@ -1,5 +1,8 @@
 /** Portable work-location provider capabilities and adapter boundary. */
-import type { WorkLocationProviderCapabilities, WorkLocationSchedule } from '@docket/types';
+import type {
+  WorkLocationProviderCapabilities,
+  WorkLocationSchedule,
+} from '@docket/planning/work-location-contract';
 
 /** One provider-neutral assertion projection supplied to an adapter. */
 export interface WorkLocationProviderAssertion {

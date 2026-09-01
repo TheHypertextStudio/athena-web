@@ -1,19 +1,23 @@
 import { account, actor, db, integration } from '@docket/db';
 import type { task } from '@docket/db';
 import { auth } from '@docket/auth';
-import type { IdentityOut, IdentityProvider, IntegrationOut, TaskOut } from '@docket/types';
+import type { IdentityOut, IdentityProvider } from '@docket/identity-access/identity-contract';
+import type { IntegrationOut } from '@docket/connections/integration-contract';
+import type { TaskOut } from '@docket/work/task-model';
 import {
   CONNECTOR_PROVIDER_IDS,
   DIRECTORY_PROVIDER_IDS,
-  IdentityProvider as IdentityProviderSchema,
   PROVIDER_CATALOG,
-  SyncFailureKind,
   WEBHOOK_PROVIDER_IDS,
   connectorIdentityProvider,
-  parseOAuthScopes,
-  type IntegrationDirectoryProvider,
   type WebhookProviderId,
-} from '@docket/types';
+} from '@docket/connections/provider-catalog-contract';
+import { IdentityProvider as IdentityProviderSchema } from '@docket/identity-access/identity-contract';
+import {
+  SyncFailureKind,
+  type IntegrationDirectoryProvider,
+} from '@docket/connections/integration-contract';
+import { parseOAuthScopes } from '@docket/identity-access/google-oauth-contract';
 import type { ConnectorProvider } from '@docket/integrations';
 import { WRITE_BACK_CAPABLE_PROVIDERS } from '@docket/integrations';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -360,12 +364,12 @@ export async function linkedIdentities(userId: string): Promise<IdentityOut[]> {
  * The user-facing reason a Linear write-back integration is blocked on scope.
  *
  * @remarks
- * Re-exported (not redefined) from `@docket/types` — that package has no server-only runtime
+ * Re-exported (not redefined) from `domain packages` — that package has no server-only runtime
  * deps, so `apps/web`'s `IntegrationConfigPanel` can import the same constant directly instead
  * of duplicating the string, while this module and `./integrations` keep importing it from here
  * unchanged. See the constant's own doc for the full remarks on where each side consumes it.
  */
-export { LINEAR_WRITE_SCOPE_MESSAGE } from '@docket/types';
+export { LINEAR_WRITE_SCOPE_MESSAGE } from '@docket/connections/integration-contract';
 
 /**
  * Whether the actor's linked Linear identity carries the `write` OAuth scope.

@@ -6,8 +6,8 @@ import {
   TaskDependencyOut,
   TaskOut,
   TaskRemoved,
-  pageOf,
-} from '@docket/types';
+} from '@docket/work/task-model';
+import { pageOf } from '../contracts/pagination';
 import { and, eq, isNull, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

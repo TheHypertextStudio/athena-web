@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { OrganizationId, type SearchResult } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { type SearchResult } from '../../../src/lib/contracts/search';
 
 import { primaryResourceAction } from '@/components/library/resource-actions';
 

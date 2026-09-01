@@ -1,4 +1,4 @@
-import type { SearchResult } from '@docket/types';
+import type { SearchResult } from '../../lib/contracts/search';
 
 import { hrefForSearchResult } from '@/lib/search-route';
 

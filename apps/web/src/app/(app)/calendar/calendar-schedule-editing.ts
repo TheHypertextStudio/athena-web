@@ -1,5 +1,5 @@
 import { Temporal } from '@js-temporal/polyfill';
-import type { CalendarItemOut } from '@docket/types';
+import type { CalendarItemOut } from '@docket/planning/calendar-contract';
 
 import {
   isInlineEditableScheduleItem,

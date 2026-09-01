@@ -9,12 +9,12 @@ import {
   notificationIntent as intentTable,
   notificationRecipient as recipientTable,
 } from '@docket/db';
-import { NotificationAudience } from '@docket/notifications';
+import { NotificationAudience } from '@docket/notifications/schemas';
 import type {
   NotificationDeliveryOut,
   NotificationIntentOut,
   NotificationRecipientOut,
-} from '@docket/notifications';
+} from '@docket/notifications/schemas';
 import type { z } from 'zod';
 import { eq } from 'drizzle-orm';
 

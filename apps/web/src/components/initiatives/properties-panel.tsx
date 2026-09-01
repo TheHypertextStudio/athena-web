@@ -1,13 +1,13 @@
 'use client';
 
 /** Initiative property controls rendered as an inline chip row in the entity masthead. */
+import type { Health } from '@docket/work/capability-contract';
 import type {
-  Health,
   InitiativePriority,
   InitiativeStatus,
   InitiativeUpdateCadence,
-  LabelOut,
-} from '@docket/types';
+} from '@docket/work/initiative-contract';
+import type { LabelOut } from '@docket/work/label-contract';
 import type { DateResolution, PlanningTimeframe } from '@docket/work/planning-timeframe';
 import {
   ActorPicker,

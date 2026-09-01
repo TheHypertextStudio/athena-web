@@ -1,5 +1,5 @@
 /** `@docket/db` — provider projection state for canonical work location. */
-import type { WorkLocationProviderCapabilities } from '@docket/types';
+import type { WorkLocationProviderCapabilities } from '@docket/planning/work-location-contract';
 import { sql } from 'drizzle-orm';
 import {
   check,

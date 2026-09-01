@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import type * as DbModule from '@docket/db';
 import { CaptureMailer } from '@docket/mail';
 import type { Capability } from '@docket/identity-access/capabilities';
-import type { WorkStatusEntityType } from '@docket/types';
+import type { WorkStatusEntityType } from '@docket/work/work-status-contract';
 import { and, eq } from 'drizzle-orm';
 
 import type { ActorCtx, AppEnv, AuthSession } from '../../src/context';

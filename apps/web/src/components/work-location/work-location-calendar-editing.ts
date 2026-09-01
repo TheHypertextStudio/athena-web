@@ -2,7 +2,7 @@ import type {
   WorkLocationAssertionOut,
   WorkLocationAssertionUpdate,
   WorkLocationOccurrenceException,
-} from '@docket/types';
+} from '@docket/planning/work-location-contract';
 import { Temporal } from '@js-temporal/polyfill';
 
 import { resolveScheduleWallInstant } from '@/components/scheduling';

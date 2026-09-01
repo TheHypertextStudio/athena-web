@@ -18,7 +18,7 @@
  * design system requires. A mention is structural, not semantic.
  */
 import { cn } from '@docket/ui/lib/utils';
-import type { MentionRef } from '@docket/types';
+import type { MentionRef } from '../../lib/contracts/mention';
 import type { ReactNode } from 'react';
 
 import Link from '@/components/docket-link';

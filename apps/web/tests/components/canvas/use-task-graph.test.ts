@@ -1,5 +1,5 @@
 /** `@docket/web` — task graph projection tests. */
-import { GraphOut } from '@docket/types';
+import { GraphOut } from '@docket/work/task-model';
 import { describe, expect, it } from 'vitest';
 
 import { taskGraphToFlow } from '@/components/canvas/use-task-graph';

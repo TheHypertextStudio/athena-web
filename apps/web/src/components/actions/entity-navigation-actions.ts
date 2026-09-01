@@ -2,7 +2,8 @@
 
 /** Baseline navigation actions for core objects whose richer domain actions remain additive. */
 import { ArrowRight, Flag, Layers, Tag, User, Users, Workflow } from '@docket/ui/icons';
-import { ProgramUpdate, ProjectUpdate } from '@docket/types';
+import { ProgramUpdate } from '@docket/work/program-contract';
+import { ProjectUpdate } from '../../lib/contracts/project';
 import type { RelationEndpoint } from '@docket/work/relation-contract';
 import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';

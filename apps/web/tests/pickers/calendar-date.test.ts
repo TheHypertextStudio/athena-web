@@ -1,4 +1,4 @@
-import { TASK_DATE_MAX, TASK_DATE_MIN } from '@docket/types';
+import { TASK_DATE_MAX, TASK_DATE_MIN } from '@docket/work/task-model';
 import { describe, expect, it } from 'vitest';
 
 import {

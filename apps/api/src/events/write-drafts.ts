@@ -35,9 +35,10 @@ import type {
   EntityAssociation,
   EntityRef,
   SourceSystemKind,
-  StreamRelevance,
-} from '@docket/types';
-import { EventKind, sourceIdentityProvider } from '@docket/types';
+} from '@docket/connections/event-contract';
+import type { StreamRelevance } from '../contracts/stream';
+import { EventKind } from '@docket/connections/event-contract';
+import { sourceIdentityProvider } from '@docket/connections/provider-catalog-contract';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { routeAndWriteRecipients, type RoutableEntity } from '../consumers/routing';

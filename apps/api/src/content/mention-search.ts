@@ -10,13 +10,8 @@
  * {@link loadRecentDocuments}. Nothing in this module writes its own `WHERE` over
  * `search_document`.
  */
-import {
-  mentionRefKey,
-  type MentionEntityKind,
-  type MentionItem,
-  type SearchDocumentKind,
-  type SearchOut,
-} from '@docket/types';
+import { mentionRefKey, type MentionEntityKind, type MentionItem } from '../contracts/mention';
+import { type SearchDocumentKind, type SearchOut } from '../contracts/search';
 
 import { loadRecentDocuments, searchWorkspace, type SearchCaller } from '../search/query';
 

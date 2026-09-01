@@ -11,7 +11,7 @@ import type {
   MaterializationPolicy,
   RecurrenceSchedule,
   RecurrenceWeekday,
-} from '@docket/types';
+} from '../../contracts/recurrence';
 
 import {
   addCalendarDays,
@@ -21,7 +21,7 @@ import {
   formatCalendarDate,
   mondayWeekdayIndex,
   parseCalendarDate,
-} from './calendar-date';
+} from '@docket/planning/calendar-date';
 
 const WEEKDAY_INDEX: Readonly<Record<RecurrenceWeekday, number>> = {
   monday: 0,

@@ -70,7 +70,6 @@ function namesConsumerDomain(value: string): boolean {
 
 /** Return whether a parsed module boundary belongs to a forbidden scheduling consumer domain. */
 function isForbiddenSchedulingModule(sourcePath: string, specifier: string): boolean {
-  if (specifier === '@docket/types' || specifier.startsWith('@docket/types/')) return true;
   if (specifier === '@docket/work' || specifier.startsWith('@docket/work/')) return true;
   const resolvedModule = resolveInternalModule(sourcePath, specifier);
   if (resolvedModule) return namesConsumerDomain(resolvedModule);
@@ -144,16 +143,6 @@ describe('shared scheduling import boundaries', () => {
     ['agenda relative path', `export * from '../agenda/agenda-context';`],
     ['task package', `type Task = import('@docket/work/task-contract').Task;`],
     ['work-location dynamic import', `const data = import('@/components/work-location/data');`],
-    [
-      'calendar symbol from the types umbrella',
-      `import type { CalendarItem } from '@docket/types';`,
-    ],
-    ['agenda symbol from the types umbrella', `import type { AgendaEntry } from '@docket/types';`],
-    ['task symbol from the types umbrella', `import type { Task } from '@docket/types';`],
-    [
-      'work-place symbol from the types umbrella',
-      `import type { WorkPlaceOut } from '@docket/types';`,
-    ],
     ['calendar module behind lib', `import { calendarItemsDef } from '@/lib/calendar-data';`],
   ])('detects a forbidden %s import from parsed module syntax', (_label, text) => {
     expect(

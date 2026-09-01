@@ -5,7 +5,7 @@
  * Default visibility is role-dependent: org *members* see public resources by
  * default, while *guests* are grant-only (they see nothing without an explicit grant).
  */
-import type { Visibility } from '@docket/types';
+import type { Visibility } from '@docket/work/capability-contract';
 
 /**
  * Whether a viewer is granted baseline view of a resource by its visibility alone.

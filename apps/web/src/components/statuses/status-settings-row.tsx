@@ -12,7 +12,7 @@
  * The grip is present in the DOM at all times and only *revealed* on hover or focus, because a
  * grip that appears with the pointer takes the keyboard path away with it.
  */
-import type { WorkStatusCategory } from '@docket/types';
+import type { WorkStatusCategory } from '@docket/work/work-status-contract';
 import { DragHandle, StatusIcon } from '@docket/ui/components';
 import type { ReorderableBinding } from '@docket/ui/hooks';
 import { Ellipsis } from '@docket/ui/icons';

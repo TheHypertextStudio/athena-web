@@ -1,5 +1,5 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import type { MentionItem } from '@docket/types';
+import type { MentionItem } from '../../../src/lib/contracts/mention';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import MentionMenu from '@/components/mentions/mention-menu';

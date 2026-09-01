@@ -1,6 +1,6 @@
 'use client';
 
-import type { CalendarItemOut } from '@docket/types';
+import type { CalendarItemOut } from '@docket/planning/calendar-contract';
 import { Trash2 } from '@docket/ui/icons';
 import {
   Button,

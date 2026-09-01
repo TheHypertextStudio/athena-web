@@ -35,12 +35,12 @@ import {
   type RecurrenceSeriesCreate as RecurrenceSeriesCreateValue,
   type RecurrenceSeriesLifecycle as RecurrenceSeriesLifecycleValue,
   type SeriesEdit as SeriesEditValue,
-} from '@docket/types';
+} from '../../contracts/recurrence';
 import { and, desc, eq, gte, inArray, isNull, lte } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '../../error';
-import { compareCalendarDates } from './calendar-date';
+import { compareCalendarDates } from '@docket/planning/calendar-date';
 import { materializeOccurrence, type MaterializedOccurrence } from './materialize';
 import type { TaskStateMutation } from '../task-state';
 

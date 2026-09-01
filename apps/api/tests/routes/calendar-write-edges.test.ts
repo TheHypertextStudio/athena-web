@@ -2,7 +2,8 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import { CalendarLayerId, WorkPlaceId, type CalendarItemPermission } from '@docket/types';
+import { CalendarLayerId, WorkPlaceId } from '@docket/planning/ids';
+import { type CalendarItemPermission } from '@docket/planning/calendar-contract';
 import type { z } from 'zod';
 
 import {

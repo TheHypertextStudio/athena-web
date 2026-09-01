@@ -12,7 +12,7 @@ import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import { WorkPlaceId } from '@docket/types';
+import { WorkPlaceId } from '@docket/planning/ids';
 
 import { NotFoundError } from '../../../src/error';
 import type { PlannedBlock } from '../../../src/services/scheduling/week-planner';

@@ -18,7 +18,7 @@
  * A template rewrites the document, so the action belongs with the empty document prompt. The
  * shared editor receives it through a generic contribution rather than importing template code.
  */
-import type { TemplateOut, TemplateTargetType } from '@docket/types';
+import type { TemplateOut, TemplateTargetType } from '@docket/work/template-contract';
 import {
   Button,
   DropdownMenu,

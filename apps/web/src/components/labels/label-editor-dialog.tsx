@@ -13,7 +13,7 @@
  * Merging is destructive and irreversible, so it is a second, explicit confirmation rather than
  * something the Save button quietly does.
  */
-import type { LabelColorKey, LabelCreate, LabelOut } from '@docket/types';
+import type { LabelColorKey, LabelCreate, LabelOut } from '@docket/work/label-contract';
 import {
   Button,
   Dialog,

@@ -25,7 +25,7 @@ import type {
   TimeRecordOut,
   TimeRecordStop,
   TimeRecordUpdate,
-} from '@docket/types';
+} from '../contracts/time';
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 

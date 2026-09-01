@@ -11,7 +11,12 @@
  * calling the thing what the workspace calls it ("Campaign", "Engagement") is the difference
  * between a document that reads as theirs and one that reads as a tool's export.
  */
-import type { BriefFact, BriefSection, Health, PublicationSubjectKind } from '@docket/types';
+import type {
+  BriefFact,
+  BriefSection,
+  PublicationSubjectKind,
+} from '@docket/work/publish-contract';
+import type { Health } from '@docket/work/capability-contract';
 import {
   VOCABULARY_PRESETS,
   type VocabularyKey,

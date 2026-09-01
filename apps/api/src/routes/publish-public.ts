@@ -18,7 +18,7 @@
  *
  * @see {@link ./publish-brief} for the live projection and every refusal rule.
  */
-import { PublicBriefOut } from '@docket/types';
+import { PublicBriefOut } from '@docket/work/publish-contract';
 import { Hono } from 'hono';
 import { z } from 'zod';
 

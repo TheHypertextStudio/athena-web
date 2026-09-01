@@ -4,7 +4,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { TaskWorkViewQueryRequest } from '@docket/types';
+import { TaskWorkViewQueryRequest } from '@docket/work/work-view-contract';
 
 import {
   compileFilterSql,

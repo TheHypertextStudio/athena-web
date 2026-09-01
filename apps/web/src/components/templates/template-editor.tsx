@@ -15,18 +15,19 @@
  * components take those axes as optional props for exactly this reason: the editor mounts them
  * without, so no control appears whose value would be silently dropped on save.
  */
+import type { Health, Visibility } from '@docket/work/capability-contract';
 import type {
-  Health,
   InitiativePriority,
   InitiativeStatus,
   InitiativeUpdateCadence,
-  ProgramStatus,
-  ProjectStatus,
+} from '@docket/work/initiative-contract';
+import type { ProgramStatus } from '@docket/work/program-contract';
+import type { ProjectStatus } from '../../lib/contracts/project';
+import type {
   TemplateDraft,
   TemplateOut,
   TemplateTargetType,
-  Visibility,
-} from '@docket/types';
+} from '@docket/work/template-contract';
 import type { Priority } from '@docket/work/task-contract';
 import { EnumPicker } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';

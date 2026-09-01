@@ -20,7 +20,7 @@ import type {
   RemoteToolDescriptor,
   RemoteUiResource,
 } from '@docket/integrations';
-import { MCP_UI_MIME_TYPE } from '@docket/types';
+import { MCP_UI_MIME_TYPE } from '@docket/integrations/mcp-apps-contract';
 
 import type * as ContainerModule from '../../src/container';
 

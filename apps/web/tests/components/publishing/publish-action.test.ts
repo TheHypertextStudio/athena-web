@@ -1,4 +1,4 @@
-import { PublicationOut } from '@docket/types';
+import { PublicationOut } from '@docket/work/publish-contract';
 import { describe, expect, it } from 'vitest';
 
 import {

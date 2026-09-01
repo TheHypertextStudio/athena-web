@@ -9,7 +9,7 @@ import {
   InitiativeViewDefinition,
   TaskViewDefinition,
   TaskWorkViewFacetResponse,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
 
 import { FilterBuilder } from '../../src/components/work-views/filter-builder';
 import { SortBuilder } from '../../src/components/work-views/sort-builder';

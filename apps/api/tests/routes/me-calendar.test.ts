@@ -13,7 +13,8 @@ import { genId } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import type { CalendarSettingsOut, TaskOut } from '@docket/types';
+import type { CalendarSettingsOut } from '@docket/planning/calendar-contract';
+import type { TaskOut } from '@docket/work/task-model';
 
 import {
   appWithSession,

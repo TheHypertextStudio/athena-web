@@ -22,8 +22,8 @@ import {
   LabelUpdate,
   nextLabelColor,
   normalizeLabelName,
-  pageOf,
-} from '@docket/types';
+} from '@docket/work/label-contract';
+import { pageOf } from '../contracts/pagination';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

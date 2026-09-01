@@ -13,7 +13,7 @@
  * justified only for an editable affordance, focus, or a genuine semantic boundary, and "this is
  * a different kind of block" is none of those.
  */
-import type { WorkShape } from '@docket/types';
+import type { WorkShape } from '@docket/planning/scheduling-contract';
 import { Chip, Text } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { Blueprint, Edit, OpenBook, SelfImprovement, Users, VideoCamera } from '@docket/ui/icons';

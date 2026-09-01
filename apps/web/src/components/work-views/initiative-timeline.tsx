@@ -1,6 +1,6 @@
 'use client';
 
-import type { InitiativeViewRow } from '@docket/types';
+import type { InitiativeViewRow } from '@docket/work/work-view-contract';
 import type { JSX } from 'react';
 
 import type { AppliedView } from '@/components/views/apply-view';

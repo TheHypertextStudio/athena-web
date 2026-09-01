@@ -1,15 +1,15 @@
 'use client';
 
+import type { AttachmentOut } from '@docket/work/attachment-contract';
+import type { Health } from '@docket/work/capability-contract';
+import type { LabelOut } from '@docket/work/label-contract';
 import type {
-  AttachmentOut,
-  Health,
-  LabelOut,
   ObjectCommandReceipt,
   ObjectCommandRequest,
   ObjectCommandResult,
-  UpdateOut,
-} from '@docket/types';
-import { ProjectSubjectRef } from '@docket/types';
+} from '../../../../../../lib/contracts/object-command';
+import type { UpdateOut } from '@docket/work/update-contract';
+import { ProjectSubjectRef } from '@docket/work/subject-ref-contract';
 import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Ellipsis, RefreshCw, Trash2, Undo } from '@docket/ui/icons';

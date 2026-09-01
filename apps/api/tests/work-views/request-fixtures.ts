@@ -4,8 +4,8 @@ import {
   ProgramWorkViewQueryRequest,
   ProjectWorkViewQueryRequest,
   TaskWorkViewQueryRequest,
-} from '@docket/types';
-import type { InitiativeWorkViewQueryRequest } from '@docket/types';
+} from '@docket/work/work-view-contract';
+import type { InitiativeWorkViewQueryRequest } from '@docket/work/work-view-contract';
 
 /** Validated Task query fixture input. */
 export type TaskQueryRequest = z.output<typeof TaskWorkViewQueryRequest>;

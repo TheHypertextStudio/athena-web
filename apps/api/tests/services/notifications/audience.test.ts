@@ -1,5 +1,5 @@
 import type * as DbModule from '@docket/db';
-import { NotificationAudience } from '@docket/notifications';
+import { NotificationAudience } from '@docket/notifications/schemas';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { expandNotificationAudience } from '@docket/notifications/dispatch';

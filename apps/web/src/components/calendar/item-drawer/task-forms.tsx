@@ -1,6 +1,7 @@
 'use client';
 
-import { OrganizationId, TaskId } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { TaskId } from '@docket/work/ids';
 import { Button, Input, Select } from '@docket/ui/primitives';
 import { type JSX, type SubmitEventHandler, useState } from 'react';
 

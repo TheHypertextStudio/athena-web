@@ -1,12 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 
-import {
-  CalendarItemId,
-  type CalendarItemOut,
-  CalendarLayerId,
-  OrganizationId,
-  TaskId,
-} from '@docket/types';
+import { CalendarItemId, CalendarLayerId } from '@docket/planning/ids';
+import { type CalendarItemOut } from '@docket/planning/calendar-contract';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { TaskId } from '@docket/work/ids';
 import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';

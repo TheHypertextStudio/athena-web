@@ -1,6 +1,6 @@
 'use client';
 
-import type { TaskDetail } from '@docket/types';
+import type { TaskDetail } from '@docket/work/task-model';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';

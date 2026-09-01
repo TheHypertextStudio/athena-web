@@ -20,7 +20,8 @@
  * width instead of costing the part of the diagram nearest the node you just clicked. On a host too
  * narrow for a column it covers the canvas instead — see {@link GraphInspectorHost}.
  */
-import type { Health, ProjectOverviewItem, ProjectStatus } from '@docket/types';
+import type { Health } from '@docket/work/capability-contract';
+import type { ProjectOverviewItem, ProjectStatus } from '../../lib/contracts/project';
 import { ArrowRight } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';

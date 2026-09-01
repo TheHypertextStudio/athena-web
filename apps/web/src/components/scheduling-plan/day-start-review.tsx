@@ -18,7 +18,11 @@
  * copy never says what holding the gate should *cost* — that is entirely the consuming client's
  * decision, and Docket does not have that vocabulary.
  */
-import type { DayStartOut, DirectiveOut, MorningProposalOut } from '@docket/types';
+import type {
+  DayStartOut,
+  DirectiveOut,
+  MorningProposalOut,
+} from '@docket/planning/scheduling-directive-contract';
 import { Button, ControlGroup, Separator, Stack, Text, Toolbar } from '@docket/ui/primitives';
 import { CheckCircle2, ScheduleOutlined } from '@docket/ui/icons';
 import type { JSX } from 'react';

@@ -11,7 +11,8 @@
  */
 import { actor, agentSession, comment, db, event, task } from '@docket/db';
 import type { auditEvent } from '@docket/db';
-import type { EventKind, StreamEventOut, StreamRelevance } from '@docket/types';
+import type { EventKind } from '@docket/connections/event-contract';
+import type { StreamEventOut, StreamRelevance } from '../contracts/stream';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 

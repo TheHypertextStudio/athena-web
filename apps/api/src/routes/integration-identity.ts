@@ -11,7 +11,7 @@
  * {@link externalActorReverseMap} feeds the push direction.
  */
 import { actor, db, externalActor, user } from '@docket/db';
-import type { ExternalActorOut } from '@docket/types';
+import type { ExternalActorOut } from '@docket/connections/integration-contract';
 import type { ExternalUser } from '@docket/integrations';
 import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import type { z } from 'zod';

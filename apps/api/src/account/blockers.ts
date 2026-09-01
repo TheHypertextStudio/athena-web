@@ -16,7 +16,7 @@
  */
 import type { Database } from '@docket/db';
 import { actor, organization, role } from '@docket/db';
-import type { OwnershipBlocker } from '@docket/types';
+import type { OwnershipBlocker } from '@docket/identity-access/account-contract';
 import { and, eq, inArray } from 'drizzle-orm';
 
 /** One human membership row, enriched with its org + role context. */

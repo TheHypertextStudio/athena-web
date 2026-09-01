@@ -1,5 +1,5 @@
 import { passkeyClient } from '@better-auth/passkey/client';
-import { SESSION_OWNER_HEADER } from '@docket/types';
+import { SESSION_OWNER_HEADER } from '@docket/identity-access/session-contract';
 import { createAuthClient } from 'better-auth/react';
 
 /**

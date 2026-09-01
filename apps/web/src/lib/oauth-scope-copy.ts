@@ -17,8 +17,8 @@
  *
  * @see {@link file://../app/(auth)/oauth/authorize/page.tsx} for the screen this feeds.
  */
-import type { OAuthIssuableScope } from '@docket/types';
-import { OAUTH_ISSUABLE_SCOPES } from '@docket/types';
+import type { OAuthIssuableScope } from '@docket/identity-access/oauth-scope-contract';
+import { OAUTH_ISSUABLE_SCOPES } from '@docket/identity-access/oauth-scope-contract';
 
 /**
  * What kind of reach a permission gives, as a category the screen turns into a phrase.

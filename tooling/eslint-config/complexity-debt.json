@@ -510,10 +510,6 @@
     "complexity": 15,
     "sonarjs/cognitive-complexity": 16
   },
-  "apps/api/src/services/scheduling/intervals.ts": {
-    "complexity": 16,
-    "sonarjs/cognitive-complexity": 17
-  },
   "apps/api/src/services/scheduling/repository.ts": {
     "complexity": 13,
     "sonarjs/cognitive-complexity": 20
@@ -528,10 +524,6 @@
   "apps/api/src/services/work-location/repository.ts": {
     "complexity": 13,
     "max-params": 6
-  },
-  "apps/api/src/services/work-location/resolver.ts": {
-    "complexity": 22,
-    "sonarjs/cognitive-complexity": 22
   },
   "apps/api/src/services/work-location/sync-engine.ts": {
     "complexity": 33,
@@ -1609,13 +1601,6 @@
   "packages/mail/src/resend-inbound.ts": {
     "complexity": 14
   },
-  "packages/notifications/src/dispatch/dispatcher.ts": {
-    "complexity": 23,
-    "sonarjs/cognitive-complexity": 31
-  },
-  "packages/notifications/tests/support/seed.ts": {
-    "max-params": 6
-  },
   "packages/service-worker/src/worker/routing.ts": {
     "complexity": 15
   },
@@ -1659,16 +1644,6 @@
   "packages/test-utils/tests/workspace-policies/workspace-lockfile-policy.test.ts": {
     "complexity": 13,
     "sonarjs/cognitive-complexity": 26
-  },
-  "packages/types/src/mcp-apps.ts": {
-    "complexity": 23
-  },
-  "packages/types/src/object-command.ts": {
-    "complexity": 24,
-    "sonarjs/cognitive-complexity": 30
-  },
-  "packages/types/src/saved-view.ts": {
-    "complexity": 14
   },
   "packages/ui/src/components/pickers/CalendarGrid.tsx": {
     "complexity": 15

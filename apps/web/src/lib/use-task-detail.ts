@@ -13,19 +13,19 @@
 import {
   type AgentOut,
   type AgentSessionOut,
-  type CommentOut,
-  type CycleOut,
-  type MemberOut,
-  type MilestoneOut,
-  type ProgramOut,
-  type ProjectOut,
-  type RoleOut,
   type SessionActivityOut,
-  type TaskDetail,
-  type TaskNavigationSnapshot,
-  TaskSubjectRef,
-  type WorkflowState,
-} from '@docket/types';
+} from '@docket/athena/agent-contract';
+import { type CommentOut } from '@docket/work/comment-contract';
+import { type CycleOut } from '@docket/work/cycle-contract';
+import { type MemberOut } from '@docket/identity-access/member-contract';
+import { type MilestoneOut } from '@docket/work/milestone-contract';
+import { type ProgramOut } from '@docket/work/program-contract';
+import { type ProjectOut } from './contracts/project';
+import { type RoleOut } from './contracts/role';
+import { type TaskDetail } from '@docket/work/task-model';
+import { type TaskNavigationSnapshot } from './contracts/entity-navigation';
+import { TaskSubjectRef } from '@docket/work/subject-ref-contract';
+import { type WorkflowState } from '@docket/work/workflow';
 import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 

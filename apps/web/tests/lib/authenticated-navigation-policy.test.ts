@@ -49,13 +49,10 @@ function isFragmentExpression(attribute: ts.JsxAttribute | undefined): boolean {
 }
 
 function rawInternalAnchorLines(file: string): number[] {
-  const source = ts.createSourceFile(
-    file,
-    readFileSync(file, 'utf8'),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const text = readFileSync(file, 'utf8');
+  if (!/<a(?:\s|>)/u.test(text)) return [];
+
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const lines: number[] = [];
   const visit = (node: ts.Node): void => {
     const element = ts.isJsxElement(node)

@@ -1,5 +1,7 @@
 /** Focused setup UI for repeating a project-shaped body of work. */
-import type { MilestoneOut, ProjectOut, TaskOut } from '@docket/types';
+import type { MilestoneOut } from '@docket/work/milestone-contract';
+import type { ProjectOut } from '../../src/lib/contracts/project';
+import type { TaskOut } from '@docket/work/task-model';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';

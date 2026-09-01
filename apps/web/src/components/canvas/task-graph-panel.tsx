@@ -19,7 +19,7 @@
  * every list surface. Canvas-only presentation (flow direction, overlays, neighbourhood depth)
  * lives in {@link import('./graph-display').GraphDisplayState} beside it.
  */
-import type { ObjectCommandIn } from '@docket/types';
+import type { ObjectCommandIn } from '../../lib/contracts/object-command';
 import { EmptyState } from '@docket/ui/components';
 import { Workflow, X } from '@docket/ui/icons';
 import { Button, Skeleton, Surface, surfaceToneVariable } from '@docket/ui/primitives';

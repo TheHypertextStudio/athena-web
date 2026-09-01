@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { WorkLocationAssertionId, WorkPlaceId } from '@docket/planning/ids';
 import {
-  WorkLocationAssertionId,
-  WorkPlaceId,
   type WorkLocationAssertionOut,
   type WorkLocationRangeOut,
   type WorkPlaceOut,
-} from '@docket/types';
+} from '@docket/planning/work-location-contract';
 import { assertDefined } from '@docket/test-utils';
 
 import { buildWorkLocationCalendarModel } from '@/components/work-location/work-location-calendar-model';

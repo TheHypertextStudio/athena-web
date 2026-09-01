@@ -8,7 +8,7 @@ import {
   InitiativeViewRow,
   TaskViewDefinition,
   TaskViewRow,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
 
 import { WorkList } from '../../src/components/work-views/work-list';
 

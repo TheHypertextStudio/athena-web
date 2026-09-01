@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import type { HubPreferences } from '@docket/types';
+import type { HubPreferences } from '@docket/planning/hub-preferences-contract';
 import { eq } from 'drizzle-orm';
 
 import { appWithSession, fakeSession, getDb, seedUserWithHub } from '../support/routes-harness';

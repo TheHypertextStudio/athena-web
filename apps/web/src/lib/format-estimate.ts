@@ -2,7 +2,7 @@
  * Human-readable formatting for a task's time estimate.
  *
  * @remarks
- * A {@link import('@docket/types').TaskOut | TaskOut} carries its estimate as
+ * A {@link import('domain packages').TaskOut | TaskOut} carries its estimate as
  * `estimateMinutes` — an integer count of minutes (Phase 1 backend). The aligned task
  * table surfaces it as a compact, tabular duration ("1h 30m", "45m", "2h") so estimates
  * line up and read at a glance in the table's end-aligned estimate column. A `null`,

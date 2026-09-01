@@ -25,7 +25,10 @@
  *
  * @see {@link file://./sign-in-client.tsx} for the passkey ceremony this sits beneath.
  */
-import type { PublicConfigOut, SignInProvider } from '@docket/types';
+import type {
+  PublicConfigOut,
+  SignInProvider,
+} from '@docket/identity-access/public-config-contract';
 import { Apple, Github, Google, Layers, ListChecks, type LucideIcon } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import { type JSX, useCallback, useState } from 'react';

@@ -47,7 +47,7 @@ import {
   CalendarProvider,
   type CalendarScopeState,
   type CalendarSyncResultOut,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 import { and, eq, isNull, lt, or } from 'drizzle-orm';
 import type { z } from 'zod';
 

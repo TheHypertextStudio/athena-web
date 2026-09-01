@@ -5,7 +5,10 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolTaskHandler } from '@modelcontextprotocol/sdk/experimental/tasks';
 import type { z } from 'zod';
 
-import { MCP_INTERNAL_ERROR, type McpTaskInputRequest } from '@docket/types';
+import {
+  MCP_INTERNAL_ERROR,
+  type McpTaskInputRequest,
+} from '@docket/integrations/mcp-tasks-contract';
 
 import { requestTaskInput, waitForTaskInputResponse } from './task-store';
 

@@ -6,7 +6,7 @@
  * into the one API mutation required, retaining the child id on every branch so optimistic lists
  * and detail invalidation do not have to reconstruct it differently.
  */
-import { InitiativeId } from '@docket/types';
+import { InitiativeId } from '@docket/work/ids';
 import type { QueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';

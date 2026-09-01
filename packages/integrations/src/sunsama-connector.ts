@@ -24,7 +24,7 @@
  * OAuth sign-in affordance for a provider that has none and never will, and would let a user
  * "connect" Sunsama from the Connections UI as if it were an ongoing sync — the opposite of what
  * "migration, not connector" means in this codebase (see `docs/migration/sunsama-to-docket.md` §5
- * and `packages/types/src/integration.ts`'s `IntegrationPattern` doc).
+ * and `domains/connections/src/contracts/integration.ts`'s `IntegrationPattern` doc).
  *
  * **Every documented destination is on the write path.** `ImportedItem` carries
  * `startDate`/`estimateMinutes`/`parentExternalId` alongside `title`/`body`/`completed`/`dueDate`

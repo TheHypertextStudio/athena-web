@@ -1,4 +1,4 @@
-import type { OrgSummary } from '@docket/types';
+import type { OrgSummary } from '../lib/contracts/organization';
 import {
   DENSITIES,
   type Density,

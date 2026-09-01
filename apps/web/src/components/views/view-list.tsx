@@ -15,7 +15,8 @@
  * {@link FieldCatalog} (the same one the toolbar drives), so the summary text matches the chips
  * the filter toolbar shows once the view is open.
  */
-import type { SavedViewOut, TaskOut } from '@docket/types';
+import type { SavedViewOut } from '@docket/work/saved-view-contract';
+import type { TaskOut } from '@docket/work/task-model';
 import { Filter, Layers } from '@docket/ui/icons';
 import { cn } from '@docket/ui';
 import { focusRing } from '@docket/ui/primitives';

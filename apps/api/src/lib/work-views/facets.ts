@@ -5,7 +5,7 @@ import {
   WorkViewFacetResponse,
   type WorkViewFacetRequest,
   type WorkViewFacetResponse as WorkViewFacetResponseValue,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
 import { and, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 

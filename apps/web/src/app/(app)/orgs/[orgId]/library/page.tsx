@@ -7,7 +7,7 @@
  * degrades to the client fetching it.
  */
 import { HydrationBoundary } from '@tanstack/react-query';
-import type { SearchOut } from '@docket/types';
+import type { SearchOut } from '../../../../../lib/contracts/search';
 import type { JSX } from 'react';
 
 import LibraryClient from '@/components/library/library-client';

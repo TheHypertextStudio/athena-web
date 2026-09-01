@@ -13,7 +13,7 @@
  *
  * @see `docs/engineering/specs/data-layer.md` for the binding data-layer rules.
  */
-import type { CalendarItemKind } from '@docket/types';
+import type { CalendarItemKind } from '@docket/planning/calendar-contract';
 import { useCallback } from 'react';
 
 import { api } from '@/lib/api';

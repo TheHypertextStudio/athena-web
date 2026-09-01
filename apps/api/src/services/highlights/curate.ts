@@ -12,7 +12,7 @@
  * `narration`, so the generated sentence is still there to come back to.
  */
 import { activityDay, activityHighlight, db, event } from '@docket/db';
-import type { HighlightOut, HighlightPatch } from '@docket/types';
+import type { HighlightOut, HighlightPatch } from '../../contracts/highlights';
 import type { z } from 'zod';
 import { and, eq, inArray } from 'drizzle-orm';
 

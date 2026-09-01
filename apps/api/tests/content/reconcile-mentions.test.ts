@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import { formatMentionLink } from '@docket/types';
+import { formatMentionLink } from '../../src/contracts/mention';
 
 import { createDrizzleMentionStorage } from '../../src/content/drizzle-mention-storage';
 import { createMentionReconciler } from '../../src/content/reconcile-mentions';

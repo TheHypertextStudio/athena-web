@@ -17,7 +17,7 @@ import { Hono } from 'hono';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { DirectiveOut } from '@docket/types';
+import type { DirectiveOut } from '@docket/planning/scheduling-directive-contract';
 
 import type { McpContext } from '../../src/mcp/auth';
 import type { resetNotifications as ResetNotifications } from '../../src/mcp/notify';

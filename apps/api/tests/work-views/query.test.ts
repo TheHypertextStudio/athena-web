@@ -2,13 +2,9 @@ import { sql, type SQL } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import {
-  FractionalRank,
-  InitiativeId,
-  LabelId,
-  TeamId,
-  WorkViewQueryResponse,
-} from '@docket/types';
+import { FractionalRank, WorkViewQueryResponse } from '@docket/work/work-view-contract';
+import { InitiativeId, LabelId } from '@docket/work/ids';
+import { TeamId } from '@docket/identity-access/ids';
 
 import { ApiError } from '../../src/error';
 import { rawResultRows } from '../../src/lib/raw-result';

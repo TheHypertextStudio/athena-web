@@ -1,4 +1,5 @@
-import { defaultCycleName, type SearchDocumentKind } from '@docket/types';
+import { defaultCycleName } from '@docket/work/cycle-contract';
+import { type SearchDocumentKind } from '../../contracts/search';
 
 import { markdownToPlainText } from '../../content/markdown-links';
 import { baseRankFor } from '../rank';

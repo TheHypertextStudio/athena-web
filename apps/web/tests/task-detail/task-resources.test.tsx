@@ -1,7 +1,8 @@
 /** Task Resources behavior tests. */
 import '@testing-library/jest-dom/vitest';
 
-import { AttachmentOut, EntityMention } from '@docket/types';
+import { AttachmentOut } from '@docket/work/attachment-contract';
+import { EntityMention } from '../../src/lib/contracts/mention';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

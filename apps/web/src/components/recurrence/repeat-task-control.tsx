@@ -7,7 +7,7 @@ import type {
   MissedOccurrencePolicy,
   RecurrenceEnd,
   RecurrenceWeekday,
-} from '@docket/types';
+} from '../../lib/contracts/recurrence';
 import { PropertyTrigger } from '@docket/ui/components';
 import { RefreshCw } from '@docket/ui/icons';
 import {

@@ -6,6 +6,7 @@
   "license": "UNLICENSED",
   "description": "Connection-owned contracts and application rules for Docket's external-service experiences.",
   "exports": {
+    "./ids": "./src/ids.ts",
     "./provider-error": "./src/provider-error.ts",
     "./notion/api-contract": "./src/notion/api-contract.ts",
     "./notion/mirror-contract": "./src/notion/mirror-contract.ts",
@@ -13,7 +14,13 @@
     "./notion/mirror-values": "./src/notion/mirror-values.ts",
     "./notion/mirror-port": "./src/notion/mirror-port.ts",
     "./notion/adapters/notion-sdk": "./src/notion/adapters/notion-sdk.ts",
-    "./notion/adapters/in-memory": "./src/notion/adapters/in-memory.ts"
+    "./notion/adapters/in-memory": "./src/notion/adapters/in-memory.ts",
+    "./activity-contract": "./src/contracts/activity.ts",
+    "./event-contract": "./src/contracts/event.ts",
+    "./integration-contract": "./src/contracts/integration.ts",
+    "./provider-catalog-contract": "./src/contracts/provider-catalog.ts",
+    "./resource-provider-contract": "./src/contracts/resource-provider.ts",
+    "./resource-contract": "./src/contracts/resource.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -25,6 +32,7 @@
     "clean": "rm -rf .turbo *.tsbuildinfo"
   },
   "dependencies": {
+    "@docket/identity-access": "workspace:*",
     "@docket/work": "workspace:*",
     "@notionhq/client": "^5.24.0",
     "zod": "catalog:"

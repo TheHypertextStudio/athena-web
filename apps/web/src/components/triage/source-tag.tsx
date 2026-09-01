@@ -22,7 +22,7 @@
  * Colors come exclusively from semantic tokens via the {@link Badge} variants — never
  * hardcoded.
  */
-import type { TaskProvenance } from '@docket/types';
+import type { TaskProvenance } from '@docket/work/task-model';
 import { Layers } from '@docket/ui/icons';
 import { Badge } from '@docket/ui/primitives';
 import type { JSX } from 'react';

@@ -11,9 +11,9 @@ import {
   RecurrenceSeriesCreate,
   type RecurrenceSeriesCreate as RecurrenceSeriesCreateValue,
   RecurrenceSeriesDetailOut,
-} from '@docket/types';
+} from '../../contracts/recurrence';
 
-import { compareCalendarDates } from './calendar-date';
+import { compareCalendarDates } from '@docket/planning/calendar-date';
 import {
   createRecurrenceSeries,
   loadRecurrenceSeriesDetail,

@@ -12,7 +12,7 @@ import type {
   TimeSubmissionCreate,
   TimeSubmissionOut,
   TimeSubmissionRecipientOut,
-} from '@docket/types';
+} from '../contracts/time';
 import { and, asc, eq } from 'drizzle-orm';
 import type { z } from 'zod';
 

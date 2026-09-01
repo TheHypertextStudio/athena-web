@@ -13,7 +13,7 @@
  *
  * @see {@link ../components/editor/markdown-clipboard} for the paste handler that calls this.
  */
-import type { DocumentImageOut } from '@docket/types';
+import type { DocumentImageOut } from '@docket/work/document-image-contract';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from './api';

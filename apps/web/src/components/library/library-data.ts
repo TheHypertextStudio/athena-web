@@ -1,4 +1,4 @@
-import type { SearchOut, SearchResult } from '@docket/types';
+import type { SearchOut, SearchResult } from '../../lib/contracts/search';
 
 import { LIBRARY_KINDS } from './resource-catalog';
 

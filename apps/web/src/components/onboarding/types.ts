@@ -8,7 +8,7 @@
  * are shared by the orchestrating page and the per-step screen components so the two stay in
  * lockstep without leaking step-component internals into one another.
  */
-import type { OrgCreate } from '@docket/types';
+import type { OrgCreate } from '../../lib/contracts/organization';
 
 /** The fork a new user picks on the first onboarding screen. */
 export type OnboardingIntent = Exclude<OrgCreate['intent'], undefined>;

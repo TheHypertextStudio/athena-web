@@ -1,5 +1,5 @@
 /** `@docket/api` — combined agenda router (mounted at `/v1/agenda`). */
-import { AgendaOut } from '@docket/types';
+import { AgendaOut } from '@docket/planning/agenda-contract';
 import { Hono } from 'hono';
 
 import type { AppEnv } from '../context';

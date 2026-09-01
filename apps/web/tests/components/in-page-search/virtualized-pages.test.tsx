@@ -1,4 +1,4 @@
-import type { TaskOut } from '@docket/types';
+import type { TaskOut } from '@docket/work/task-model';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 

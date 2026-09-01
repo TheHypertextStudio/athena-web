@@ -10,7 +10,7 @@
  * logic exercised against this port; only the I/O edge is swapped by the app container.
  * The mail capability's types live in `./mail`.
  */
-import type { ConnectorProviderId } from '@docket/types';
+import type { ConnectorProviderId } from '@docket/connections/provider-catalog-contract';
 
 import type { ActivitySource } from './activity-source';
 import type { MailActions } from './mail';

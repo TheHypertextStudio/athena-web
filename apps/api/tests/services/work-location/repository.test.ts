@@ -13,7 +13,7 @@ import {
 import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
-import { CalendarConnectionId } from '@docket/types';
+import { CalendarConnectionId } from '@docket/planning/ids';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { ConflictError, NotFoundError } from '../../../src/error';

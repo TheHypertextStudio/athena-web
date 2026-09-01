@@ -3,7 +3,7 @@
  */
 import type { MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
-import { SESSION_OWNER_HEADER } from '@docket/types';
+import { SESSION_OWNER_HEADER } from '@docket/identity-access/session-contract';
 
 import type { AppEnv } from './context';
 import { isReplayOwnerRequest, REPLAY_OWNER_HEADER } from './replay-owner-contract';

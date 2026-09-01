@@ -17,7 +17,7 @@
  * rows beneath it, and a tonal step does that without spending a border on a page that is trying to
  * lose them.
  */
-import type { HubTodayPlanItem } from '@docket/types';
+import type { HubTodayPlanItem } from '../../lib/contracts/hub';
 import { AlarmClock, ArrowRight, Check, Ellipsis } from '@docket/ui/icons';
 import {
   Button,

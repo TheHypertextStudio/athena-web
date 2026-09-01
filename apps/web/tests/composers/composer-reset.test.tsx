@@ -16,7 +16,8 @@
  *
  * @see {@link withComposerReset} for the mechanism under test.
  */
-import { OrganizationId, TeamId, type TeamOut } from '@docket/types';
+import { OrganizationId, TeamId } from '@docket/identity-access/ids';
+import { type TeamOut } from '../../src/lib/contracts/team';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { type JSX, useEffect, useState } from 'react';

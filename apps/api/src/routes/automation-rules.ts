@@ -14,8 +14,8 @@ import {
   AutomationRuleOut,
   AutomationRuleRemoved,
   AutomationRuleUpdate,
-  pageOf,
-} from '@docket/types';
+} from '../contracts/automation';
+import { pageOf } from '../contracts/pagination';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

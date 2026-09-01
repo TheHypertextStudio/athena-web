@@ -1,4 +1,4 @@
-import type { TeamOut } from '@docket/types';
+import type { TeamOut } from '../../lib/contracts/team';
 import { TaskAlt } from '@docket/ui/icons';
 import { DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';

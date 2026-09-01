@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { OrganizationId, type SearchRoute } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { type SearchRoute } from '../../src/lib/contracts/search';
 
 import { hrefForSearchRoute, isExternalSearchHref, labelFilterHref } from '@/lib/search-route';
 

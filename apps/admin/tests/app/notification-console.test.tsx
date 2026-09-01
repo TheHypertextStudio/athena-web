@@ -1,4 +1,4 @@
-import { Id } from '@docket/types';
+import { NotificationIntentId } from '@docket/notifications/ids';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -8,7 +8,7 @@ import { NotificationAnnouncementConsole } from '../../src/app/(admin)/notificat
 import type { AdminNotificationIntent } from '../../src/lib/types';
 
 const intent: AdminNotificationIntent = {
-  id: Id.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV'),
+  id: NotificationIntentId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV'),
   senderType: 'staff',
   senderId: null,
   organizationId: null,

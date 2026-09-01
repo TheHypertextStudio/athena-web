@@ -1,13 +1,13 @@
 import { count, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { CalendarLayerId } from '@docket/planning/ids';
 import {
-  CalendarLayerId,
   type CalendarItemConflict,
   type CalendarItemOut,
   type CalendarItemPermission,
-  publicProblemTitle,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
+import { publicProblemTitle } from '../../src/contracts/errors';
 
 import {
   getDb,

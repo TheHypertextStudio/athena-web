@@ -13,7 +13,7 @@
  * {@link CopyValue} for why that is a control rather than selectable text. Type is not one of
  * them: registrars offer it as a fixed choice, so there is nowhere to paste it.
  */
-import type { WorkspaceDomainOut } from '@docket/types';
+import type { WorkspaceDomainOut } from '@docket/work/publish-contract';
 import { Fragment, type JSX } from 'react';
 
 import { CopyValue } from './copy-value';

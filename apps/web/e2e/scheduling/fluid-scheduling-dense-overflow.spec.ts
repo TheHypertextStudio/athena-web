@@ -1,5 +1,5 @@
 /** Browser proof that dense calendar clusters retain every direct-edit interaction. */
-import { CalendarItemId } from '@docket/types';
+import { CalendarItemId } from '@docket/planning/ids';
 
 import { signUpAndOnboard } from '../helpers/app';
 import { makeCalendarItem, makeCalendarLayer, utcAt } from '../helpers/calendar-fixtures';

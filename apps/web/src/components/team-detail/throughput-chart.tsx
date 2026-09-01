@@ -12,7 +12,7 @@
  *
  * Dependency-free responsive SVG for the same reasons as {@link import('./capacity-chart')}.
  */
-import type { TeamActivityOut } from '@docket/types';
+import type { TeamActivityOut } from '../../lib/contracts/team';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useId } from 'react';
 

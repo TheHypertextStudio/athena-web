@@ -1,6 +1,6 @@
 /** `@docket/api` — atomic task hierarchy mutations shared by REST write surfaces. */
 import { task } from '@docket/db';
-import type { TaskReparentBatchOut } from '@docket/types';
+import type { TaskReparentBatchOut } from '@docket/work/task-model';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 

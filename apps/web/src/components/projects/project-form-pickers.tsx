@@ -11,7 +11,8 @@
  * that asks for one more click. The editor mounts this without them rather than showing controls
  * whose values would be dropped on save.
  */
-import type { Health, ProjectStatus } from '@docket/types';
+import type { Health } from '@docket/work/capability-contract';
+import type { ProjectStatus } from '../../lib/contracts/project';
 import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
 import {
   ActorPicker,
@@ -24,7 +25,7 @@ import {
 } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Activity, Layers, Target } from '@docket/ui/icons';
-import type { TeamOut } from '@docket/types';
+import type { TeamOut } from '../../lib/contracts/team';
 import { type JSX, useMemo } from 'react';
 
 import { HEALTH_OPTIONS, statusOptions } from '@/components/pickers/options';

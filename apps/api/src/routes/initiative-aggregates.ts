@@ -15,14 +15,14 @@ import {
   project,
   update,
 } from '@docket/db';
+import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
 import {
-  defaultEntityDisplay,
   InitiativeAggregateDetail,
-  InitiativeDetailAggregate,
-  InitiativeId,
   InitiativeOverviewOut,
   InitiativeRelationshipSections,
-} from '@docket/types';
+} from '@docket/work/initiative-contract';
+import { InitiativeDetailAggregate } from '../contracts/detail-aggregate';
+import { InitiativeId } from '@docket/work/ids';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

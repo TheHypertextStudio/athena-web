@@ -1,7 +1,9 @@
 'use client';
 
-import type { CycleTaskGroupBy, TaskOut } from '@docket/types';
-import { CycleId, TeamId } from '@docket/types';
+import type { CycleTaskGroupBy } from '@docket/work/cycle-contract';
+import type { TaskOut } from '@docket/work/task-model';
+import { CycleId } from '@docket/work/ids';
+import { TeamId } from '@docket/identity-access/ids';
 import { EmptyState, type EntityTableGroup } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Activity, RefreshCw } from '@docket/ui/icons';

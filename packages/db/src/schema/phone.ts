@@ -34,10 +34,10 @@ import { agentSession } from './agents';
 import { user } from './auth';
 import { organization } from './identity';
 
-/** Lifecycle of a bound phone number; mirrors `PhoneNumberStatus` in `@docket/types`. */
+/** Lifecycle of a bound phone number; mirrors `PhoneNumberStatus` in `domain packages`. */
 export type PhoneNumberStatus = 'pending' | 'verified' | 'blocked';
 
-/** Which transport a voice session ran over; mirrors `VoiceChannel` in `@docket/types`. */
+/** Which transport a voice session ran over; mirrors `VoiceChannel` in `domain packages`. */
 export type VoiceSessionChannel = 'web' | 'phone';
 
 /** Lifecycle of a voice session row. */

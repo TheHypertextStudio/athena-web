@@ -12,7 +12,8 @@
  * as a direct task create).
  */
 import { db, task } from '@docket/db';
-import { CaptureBody, TaskOut } from '@docket/types';
+import { CaptureBody } from '@docket/athena/agent-contract';
+import { TaskOut } from '@docket/work/task-model';
 import { Hono } from 'hono';
 
 import type { AppEnv } from '../context';

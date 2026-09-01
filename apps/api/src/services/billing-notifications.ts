@@ -1,7 +1,7 @@
 /** Essential customer notices for payment, access, discounts, and complimentary grants. */
 import type { Database } from '@docket/db';
 import { dispatchNotificationIntent } from '@docket/notifications/dispatch';
-import { OrganizationId } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
 
 /** Input for one organization-wide billing notice. */
 export interface EssentialBillingNotice {

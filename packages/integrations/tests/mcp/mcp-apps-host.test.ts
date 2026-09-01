@@ -14,7 +14,7 @@ import {
   MCP_UI_MIME_TYPE,
   MCP_UI_PROTOCOL_VERSION,
   MCP_UI_PROXIED_METHODS,
-} from '@docket/types';
+} from '../../src/contracts/mcp-apps';
 import {
   buildViewCsp,
   buildViewPermissionsAllow,

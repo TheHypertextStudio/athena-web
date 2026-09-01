@@ -44,7 +44,7 @@ export type FieldValueType =
  * A filter operator.
  *
  * @remarks
- * Mirrors the stored `op` union on {@link import('@docket/types').ViewFilter} so a toolbar-built
+ * Mirrors the stored `op` union on {@link import('domain packages').ViewFilter} so a toolbar-built
  * predicate is byte-compatible with a saved view. Not every operator applies to every field; the
  * natural set per {@link FieldValueType} is computed by {@link operatorsForType}.
  */

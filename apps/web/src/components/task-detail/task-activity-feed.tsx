@@ -1,7 +1,7 @@
 'use client';
 
 /** One filterable, chronological task Activity surface. */
-import type { TaskActivityCategory, TaskActivityOut } from '@docket/types';
+import type { TaskActivityCategory, TaskActivityOut } from '@docket/connections/activity-contract';
 import { ActorAvatar } from '@docket/ui/components';
 import { ChevronDown } from '@docket/ui/icons';
 import {

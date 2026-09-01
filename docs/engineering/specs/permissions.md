@@ -33,7 +33,7 @@ Five capabilities, ordered as a **strict implication chain**. A higher capabilit
 | `manage`     | 5       | edit resource settings, manage Grants/roles on the resource and its subtree, archive/delete, change visibility                      | `assign`, `contribute`, `comment`, `view` |
 
 ```ts
-// @docket/types
+// the retired contract package
 export const CAPABILITIES = ['view', 'comment', 'contribute', 'assign', 'manage'] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 export const CAPABILITY_RANK: Record<Capability, number> = {
@@ -592,7 +592,7 @@ apps/
   api/src/mcp/                       # MCP tool/resource authz wiring (§10)
 ```
 
-`@docket/authz` depends on `@docket/db` (for reads) and `@docket/types` (for `Capability`/`ResourceType` enums). It is **compiled** (per the engineering compilation strategy) and imported by API, Session executor, and MCP layers.
+`@docket/authz` depends on `@docket/db` (for reads) and the retired contract package (for `Capability`/`ResourceType` enums). It is **compiled** (per the engineering compilation strategy) and imported by API, Session executor, and MCP layers.
 
 ---
 

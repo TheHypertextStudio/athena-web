@@ -19,7 +19,7 @@
  * The trailing "Open project →" link is gone too: the whole row is the link, so the affordance was
  * a second control pointing where the first one already went.
  */
-import type { HubTodayStatusCard } from '@docket/types';
+import type { HubTodayStatusCard } from '../../lib/contracts/hub';
 import { EntityList, EntityListRow, RowMeta, RowProgress } from '@docket/ui/components';
 import { Flag, Layers } from '@docket/ui/icons';
 import { Badge } from '@docket/ui/primitives';

@@ -17,7 +17,7 @@
  * per-test because it gates whether the mock backs every provider (dev) or only OAuth-wired ones
  * (prod).
  */
-import type { PublicConfigOut } from '@docket/types';
+import type { PublicConfigOut } from '@docket/identity-access/public-config-contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';

@@ -14,7 +14,10 @@
  * (e.g. an integration since disconnected) falls back to a title-cased slug if one is somehow
  * known, otherwise to a neutral `"External"` label, so a linked task always reads as linked.
  */
-import type { IntegrationDirectoryProvider, IntegrationOut } from '@docket/types';
+import type {
+  IntegrationDirectoryProvider,
+  IntegrationOut,
+} from '@docket/connections/integration-contract';
 
 /** The neutral label used when a linked task's provider cannot be resolved. */
 const UNKNOWN_PROVIDER_LABEL = 'External';

@@ -11,7 +11,8 @@
  * real, explicit state rather than a placeholder. Controlled: the caller owns the mapping state
  * (external team id -> Docket team id) and this component only renders it and reports changes.
  */
-import type { ConnectorResourceRef, TeamOut } from '@docket/types';
+import type { ConnectorResourceRef } from '@docket/connections/integration-contract';
+import type { TeamOut } from '../../lib/contracts/team';
 import { Select, Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 

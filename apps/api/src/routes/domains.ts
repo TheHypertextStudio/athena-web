@@ -37,8 +37,8 @@ import {
   WorkspaceDomainCreate,
   WorkspaceDomainOut,
   WorkspaceDomainVerifyOut,
-  pageOf,
-} from '@docket/types';
+} from '@docket/work/publish-contract';
+import { pageOf } from '../contracts/pagination';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

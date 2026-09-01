@@ -6,13 +6,13 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
+import { ActorId } from '@docket/identity-access/ids';
 import {
-  ActorId,
   type ActorRef,
   type EventKind,
   type SourceSystemKind,
-  type StreamPageOut,
-} from '@docket/types';
+} from '@docket/connections/event-contract';
+import { type StreamPageOut } from '../../src/contracts/stream';
 import type { z } from 'zod';
 
 import {

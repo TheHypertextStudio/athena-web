@@ -35,11 +35,14 @@ export {
   type ScheduleLaneGeometry,
 } from './scheduling-geometry';
 export { projectInstantRangeToScheduleLane } from './scheduling-lane-projection';
-export { moveScheduleInstantRange, type MovedScheduleInstantRange } from './scheduling-exact-move';
+export {
+  moveScheduleInstantRange,
+  type MovedScheduleInstantRange,
+} from '@docket/planning/exact-move';
 export {
   resizeScheduleInstantRange,
   type ResizedScheduleInstantRange,
-} from './scheduling-exact-resize';
+} from '@docket/planning/exact-resize';
 export {
   layoutScheduleOverlaps,
   type ScheduleOverlapInput,

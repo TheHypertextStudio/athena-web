@@ -80,7 +80,7 @@ and belongs to no package, so nothing else hashes it. Everything inside `tooling
 `index.js`, `plugin.js`, `rules/**`, and `complexity-debt.json` — is already hashed through the
 workspace dependency graph, since every linted package declares `@docket/eslint-config` as a
 dependency. Verified: touching `rules/no-bespoke-overlay.js`, which is named in no `inputs` entry,
-changes both `@docket/ui#lint` and `@docket/types#lint` hashes.
+changes both `@docket/ui#lint` and `the retired contract package#lint` hashes.
 
 ## Where the debt is
 
@@ -96,5 +96,5 @@ wins:
 | `scripts/integrations-setup.ts`                                                               | 96 / 165               |
 | `apps/api/src/routes/notion-mirror-reconcile.ts`                                              | 68 / 133               |
 
-`packages/env`, `packages/auth`, `packages/types` and `domains/connections` carry only a handful
+`packages/env`, `packages/auth`, `the deleted legacy type warehouse` and `domains/connections` carry only a handful
 each and are the natural first trees to clear.

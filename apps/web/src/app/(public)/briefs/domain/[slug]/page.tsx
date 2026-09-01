@@ -1,4 +1,4 @@
-import type { PublicBriefOut } from '@docket/types';
+import type { PublicBriefOut } from '@docket/work/publish-contract';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import type { JSX } from 'react';

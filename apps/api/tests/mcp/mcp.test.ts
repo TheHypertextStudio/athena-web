@@ -17,7 +17,8 @@ import type {
   task as TaskTable,
   user as UserTable,
 } from '@docket/db';
-import { publicProblemTitle, type Capability } from '@docket/types';
+import { publicProblemTitle } from '../../src/contracts/errors';
+import { type Capability } from '@docket/identity-access/capabilities';
 
 import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';

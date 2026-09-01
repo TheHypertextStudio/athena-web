@@ -25,7 +25,7 @@ import {
   Skeleton,
 } from '@docket/ui/primitives';
 import { OpenInNew } from '@docket/ui/icons';
-import type { MentionCard, MentionRef } from '@docket/types';
+import type { MentionCard, MentionRef } from '../../lib/contracts/mention';
 
 import {
   SEARCH_KIND_ICON,

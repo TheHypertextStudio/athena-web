@@ -57,7 +57,7 @@
     //
     // Without it those tasks had NO `dependsOn` at all, and turbo's key is the package's own
     // files + task definition + env + the hashes of tasks named in `dependsOn`. So a breaking
-    // change in @docket/types contributed nothing to @docket/work#typecheck's key and turbo
+    // change in domain packages contributed nothing to @docket/work#typecheck's key and turbo
     // replayed a cached PASS. (`turbo run typecheck --filter=@docket/work --dry=json` reported
     // `dependencies: []`.) The three delivery apps were correct only for the one dependency that
     // has a build — @docket/api#build, declared in their own turbo.json — while all 21

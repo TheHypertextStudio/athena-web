@@ -183,7 +183,7 @@ Per `activity-feed.md`'s "adding a new tool touches only leaves", plus the two D
 additions (Ed25519 auth mode, attribution seam):
 
 1. **Types** — `SourceSystemKind += 'discord'`; a `discord.message` arm on the `EventDetail` union
-   (`packages/types/src/event.ts`). `EventKind` (message/mention/reaction) and
+   (`domains/connections/src/contracts/event.ts`). `EventKind` (message/mention/reaction) and
    `CanonicalEntityKind` (thread/message) already suffice.
 2. **Schema** — `'discord'` on the `sourceSystem` pgEnum (`packages/db/src/enums.ts`) — a Drizzle
    migration, following the `0015_whole_bloodaxe.sql` precedent that added `slack`.

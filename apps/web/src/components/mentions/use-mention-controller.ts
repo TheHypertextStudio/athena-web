@@ -15,8 +15,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/core';
 import type { EditorView } from '@tiptap/pm/view';
-import type { MentionItem, MentionRef } from '@docket/types';
-import { mentionRefKey } from '@docket/types';
+import type { MentionItem, MentionRef } from '../../lib/contracts/mention';
+import { mentionRefKey } from '../../lib/contracts/mention';
 import { readStoredJson, writeStoredJson } from '@docket/ui/lib/browser-storage';
 
 import { MENTION_NODE, attributesFromRef } from './mention-extension';

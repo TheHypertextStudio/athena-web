@@ -19,7 +19,7 @@
  * calm read-only text otherwise (a completed cycle is likewise read-only — reopening is its own
  * flow).
  */
-import { type CycleStatus } from '@docket/types';
+import { type CycleStatus } from '@docket/work/cycle-contract';
 import { DateRangePicker, EnumPicker } from '@docket/ui/components';
 import type { JSX } from 'react';
 

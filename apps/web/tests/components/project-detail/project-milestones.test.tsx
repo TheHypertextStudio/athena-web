@@ -11,15 +11,10 @@
  * Save) — `Enter` on the title forces an immediate commit rather than waiting on its
  * autosave debounce, which is what these tests drive to keep them synchronous.
  */
-import {
-  MilestoneId,
-  OrganizationId,
-  ProjectId,
-  TaskId,
-  TeamId,
-  type MilestoneOut,
-  type TaskOut,
-} from '@docket/types';
+import { MilestoneId, ProjectId, TaskId } from '@docket/work/ids';
+import { OrganizationId, TeamId } from '@docket/identity-access/ids';
+import { type MilestoneOut } from '@docket/work/milestone-contract';
+import { type TaskOut } from '@docket/work/task-model';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';

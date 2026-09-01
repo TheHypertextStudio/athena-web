@@ -12,7 +12,7 @@
  * confirmation (email gate + passkey step-up) lives in {@link DeleteAccountDialog}. Errors render
  * inline as `role="alert"` banners (there is no toast system).
  */
-import type { AccountStatusOut } from '@docket/types';
+import type { AccountStatusOut } from '@docket/identity-access/account-contract';
 import { LoadFailure } from './load-failure';
 import { WriteError } from './write-error';
 import { Button, Skeleton } from '@docket/ui/primitives';

@@ -11,7 +11,7 @@ import {
   taskDependency,
   update,
 } from '@docket/db';
-import { defaultCycleName } from '@docket/types';
+import { defaultCycleName } from '@docket/work/cycle-contract';
 import { and, asc, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';

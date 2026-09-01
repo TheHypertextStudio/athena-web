@@ -10,7 +10,7 @@
  * thread as the turn produces them rather than on the next poll. The focus-gated poll stays on
  * underneath as the delivery guarantee; the stream only ever makes it faster.
  */
-import type { AgentSessionDetailOut, SessionActivityOut } from '@docket/types';
+import type { AgentSessionDetailOut, SessionActivityOut } from '@docket/athena/agent-contract';
 import { useQueryClient, type QueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useEffect } from 'react';
 

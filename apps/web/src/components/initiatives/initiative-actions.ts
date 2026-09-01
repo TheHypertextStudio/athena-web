@@ -2,7 +2,7 @@
 
 /** The Initiative action domain shared by lists, relationship tabs, and detail pages. */
 import { ArrowRight, ArrowUp, CornerDownLeft, Plus, Tag, User, Users } from '@docket/ui/icons';
-import { type InitiativeOverviewOut, InitiativeUpdate } from '@docket/types';
+import { type InitiativeOverviewOut, InitiativeUpdate } from '@docket/work/initiative-contract';
 import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useCallback, useId, useMemo } from 'react';

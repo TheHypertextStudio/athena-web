@@ -14,7 +14,7 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import type { DayStartOut } from '@docket/types';
+import type { DayStartOut } from '@docket/planning/scheduling-directive-contract';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

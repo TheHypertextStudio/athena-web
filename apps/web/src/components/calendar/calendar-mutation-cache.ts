@@ -1,4 +1,4 @@
-import type { CalendarItemOut, CalendarItemsRangeOut } from '@docket/types';
+import type { CalendarItemOut, CalendarItemsRangeOut } from '@docket/planning/calendar-contract';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 
 /**

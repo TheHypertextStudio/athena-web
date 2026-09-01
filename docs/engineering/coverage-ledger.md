@@ -43,7 +43,7 @@ job.
 ### Where the thresholds live
 
 `tooling/vitest/preset.ts`, via `DocketVitestOptions.coverageThreshold`. Default **90**; the
-trust-spine packages (`@docket/authz`, `@docket/auth`, `@docket/env`, `@docket/types`) opt into
+trust-spine packages (`@docket/authz`, `@docket/auth`, `@docket/env`, the retired contract package) opt into
 **100**. Each package selects its own in its `vite.config.ts`. Do not edit the preset to move a
 number — raise the tests instead.
 
@@ -57,24 +57,24 @@ number — raise the tests instead.
 Percentages are the vitest/v8 `All files` row. **Every one of the 13 failures is a threshold
 failure — zero tests failed.**
 
-| Package                 | Threshold | Statements | Branches  | Functions | Lines     | Meets bar? |
-| ----------------------- | --------- | ---------- | --------- | --------- | --------- | ---------- |
-| `@docket/authz`         | 100       | 100        | 100       | 100       | 100       | **yes**    |
-| `@docket/test-utils`    | 90        | 100        | 100       | 100       | 100       | **yes**    |
-| `@docket/web`           | 90        | 94.54      | 91.19     | 94.25     | 97.21     | **yes**    |
-| `@docket/discord-relay` | 90        | 100        | **88.88** | 100       | 100       | no         |
-| `@docket/env`           | 100       | **94.44**  | **91.17** | 100       | **95.23** | no         |
-| `@docket/auth`          | 100       | **91.56**  | **82.95** | **90.19** | **92.69** | no         |
-| `@docket/types`         | 100       | **94.01**  | **61.53** | **71.18** | **94.22** | no         |
-| `@docket/api`           | 90        | **86.60**  | **75.61** | 91.53     | **89.49** | no         |
-| `@docket/mail`          | 90        | **87.27**  | 95.91     | **66.66** | **86.53** | no         |
-| `@docket/ui`            | 90        | **84.19**  | **76.95** | **82.35** | **86.15** | no         |
-| `@docket/agent-runtime` | 90        | **85.27**  | **72.68** | **83.33** | **85.39** | no         |
-| `@docket/db`            | 90        | **82.76**  | 97.05     | **71.46** | **82.25** | no         |
-| `@docket/integrations`  | 90        | **76.07**  | **67.53** | **72.70** | **78.58** | no         |
-| `@docket/billing`       | 90        | **63.06**  | **71.26** | **68.96** | **60.60** | no         |
-| `@docket/blob-store`    | 90        | **52.00**  | **58.33** | **40.00** | **48.88** | no         |
-| `@docket/notifications` | 90        | **29.55**  | **19.15** | **33.33** | **32.09** | no         |
+| Package                      | Threshold | Statements | Branches  | Functions | Lines     | Meets bar? |
+| ---------------------------- | --------- | ---------- | --------- | --------- | --------- | ---------- |
+| `@docket/authz`              | 100       | 100        | 100       | 100       | 100       | **yes**    |
+| `@docket/test-utils`         | 90        | 100        | 100       | 100       | 100       | **yes**    |
+| `@docket/web`                | 90        | 94.54      | 91.19     | 94.25     | 97.21     | **yes**    |
+| `@docket/discord-relay`      | 90        | 100        | **88.88** | 100       | 100       | no         |
+| `@docket/env`                | 100       | **94.44**  | **91.17** | 100       | **95.23** | no         |
+| `@docket/auth`               | 100       | **91.56**  | **82.95** | **90.19** | **92.69** | no         |
+| the retired contract package | 100       | **94.01**  | **61.53** | **71.18** | **94.22** | no         |
+| `@docket/api`                | 90        | **86.60**  | **75.61** | 91.53     | **89.49** | no         |
+| `@docket/mail`               | 90        | **87.27**  | 95.91     | **66.66** | **86.53** | no         |
+| `@docket/ui`                 | 90        | **84.19**  | **76.95** | **82.35** | **86.15** | no         |
+| `@docket/agent-runtime`      | 90        | **85.27**  | **72.68** | **83.33** | **85.39** | no         |
+| `@docket/db`                 | 90        | **82.76**  | 97.05     | **71.46** | **82.25** | no         |
+| `@docket/integrations`       | 90        | **76.07**  | **67.53** | **72.70** | **78.58** | no         |
+| `@docket/billing`            | 90        | **63.06**  | **71.26** | **68.96** | **60.60** | no         |
+| `@docket/blob-store`         | 90        | **52.00**  | **58.33** | **40.00** | **48.88** | no         |
+| `@docket/notifications`      | 90        | **29.55**  | **19.15** | **33.33** | **32.09** | no         |
 
 Bold = below that package's threshold.
 
@@ -131,7 +131,7 @@ cannot deploy through this gate.
 | `@docket/ui`                      | 6 pts of statements, 13 of branches              | P2                                                                            |
 | `@docket/api`                     | 3.4 pts of statements, 14 of branches            | P2 — closest of the 90-bar packages                                           |
 | `@docket/mail`                    | 2.7 pts of statements, 23 of functions           | P2                                                                            |
-| `@docket/types`                   | 6 pts of statements, 38 of branches (100 bar)    | P1 — trust spine; a 100 bar means every branch                                |
+| the retired contract package      | 6 pts of statements, 38 of branches (100 bar)    | P1 — trust spine; a 100 bar means every branch                                |
 | `@docket/auth`                    | 8.4 pts of statements, 17 of branches (100 bar)  | **P0** — trust spine, and it is the authentication package                    |
 | `@docket/env`                     | 5.6 pts of statements, 8.8 of branches (100 bar) | P1 — trust spine, and the smallest remaining gap of the three                 |
 | `@docket/discord-relay`           | 1.2 pts of branches                              | P3 — one uncovered branch                                                     |

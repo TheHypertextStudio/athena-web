@@ -206,7 +206,7 @@ Extend `ProjectOverviewItem` with a `milestones` array mirroring the existing `H
 so checkpoint markers can render on org project bars. Rescheduling reuses the existing project
 `PATCH` for `startDate`/`targetDate`.
 
-DTO changes require running `pnpm --filter @docket/types test`.
+DTO changes require running `pnpm domain:check`.
 
 ## Sequencing
 

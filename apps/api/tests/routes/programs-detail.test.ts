@@ -1,4 +1,4 @@
-import { defaultCycleName } from '@docket/types';
+import { defaultCycleName } from '@docket/work/cycle-contract';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';

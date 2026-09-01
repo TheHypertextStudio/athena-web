@@ -1,4 +1,8 @@
-import type { IntegrationDirectoryProvider, IntegrationOut, TeamOut } from '@docket/types';
+import type {
+  IntegrationDirectoryProvider,
+  IntegrationOut,
+} from '@docket/connections/integration-contract';
+import type { TeamOut } from '../../lib/contracts/team';
 import type { JSX } from 'react';
 
 import { IntegrationConfigPanel } from './integration-config-panel';

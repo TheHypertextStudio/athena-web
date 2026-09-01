@@ -119,7 +119,7 @@ New file: `apps/api/src/mcp/time-tools.ts`.
 
 ### 4.1 Cycle-aware, not calendar-week-aware
 
-Docket already has a `Cycle` primitive (`packages/types/src/cycle.ts`): team-scoped, auto-rolling
+Docket already has a `Cycle` primitive (`domains/work/src/contracts/cycle.ts`): team-scoped, auto-rolling
 iteration windows on a configurable cadence (default weekly; `team.cycle_cadence_weeks`), with
 `startsAt`/`endsAt` and an `isCurrent` flag. The auto-scheduler plans against a **Cycle window**, not
 a hardcoded Monday–Sunday grid:

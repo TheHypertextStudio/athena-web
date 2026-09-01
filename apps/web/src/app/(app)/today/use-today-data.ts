@@ -1,6 +1,6 @@
 'use client';
 
-import type { HubTodayOut } from '@docket/types';
+import type { HubTodayOut } from '../../../lib/contracts/hub';
 import { useContextState } from '@docket/ui/components';
 import { useMemo } from 'react';
 

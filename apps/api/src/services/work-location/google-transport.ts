@@ -1,8 +1,8 @@
 /** Production Google Calendar HTTP transport for canonical work-location sync. */
 import { auth } from '@docket/auth';
 
-import { addCalendarDays } from '../../lib/recurrence/calendar-date';
-import { instantAt, localDateString } from '../scheduling/zoned-time';
+import { addCalendarDays } from '@docket/planning/calendar-date';
+import { instantAt, localDateString } from '@docket/planning/zoned-time';
 import type { GoogleWorkingLocationEvent } from './google';
 import type { GoogleWorkLocationTransport } from './sync-engine';
 

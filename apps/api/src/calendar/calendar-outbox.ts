@@ -14,7 +14,7 @@
  * adapter contract those modules implement.
  */
 import { calendarConnection, calendarItem, calendarItemWrite, type Database } from '@docket/db';
-import { CalendarProvider, type CalendarItemConflict } from '@docket/types';
+import { CalendarProvider, type CalendarItemConflict } from '@docket/planning/calendar-contract';
 import { and, asc, desc, eq, inArray, isNull, lte, or } from 'drizzle-orm';
 
 import { ConflictError, NotFoundError } from '../error';

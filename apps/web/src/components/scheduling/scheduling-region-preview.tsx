@@ -2,7 +2,7 @@ import type { JSX, Ref } from 'react';
 
 import { minutesToPixels } from './scheduling-geometry';
 import { formatScheduleInstantRange } from './scheduling-time-label';
-import { resolveScheduleWallInstant } from './scheduling-wall-time';
+import { resolveScheduleWallInstant } from '@docket/planning/wall-time';
 import type { ScheduleLane } from './scheduling-types';
 
 /** User-facing meaning of one wall-clock region preview. */

@@ -22,7 +22,7 @@ implementation is asserted against that copy by
 
 | Concern                                                         | Module                                                              |
 | --------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Protocol constants and types (one spelling, both sides)         | `packages/types/src/mcp-apps.ts`                                    |
+| Protocol constants and types (one spelling, both sides)         | `packages/integrations/src/contracts/mcp-apps.ts`                   |
 | The host bridge — JSON-RPC over `postMessage`, framework-free   | `packages/integrations/src/mcp-apps-host.ts`                        |
 | The sandbox proxy document + CSP injection                      | `packages/integrations/src/mcp-apps-sandbox.ts`                     |
 | The proxy endpoint, served from the API origin                  | `apps/api/src/mcp/apps/sandbox.ts` → `GET /mcp/apps/sandbox`        |

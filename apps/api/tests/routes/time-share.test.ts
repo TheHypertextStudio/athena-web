@@ -13,7 +13,11 @@
  * router is mid-edit. What the rebuild cannot prove — that the real server actually mounts this —
  * is asserted separately, against the server's own source, in `time-wiring.test.ts`.
  */
-import type { PublicTimerStatusOut, TimeShareTokenCreated, TimeShareTokenOut } from '@docket/types';
+import type {
+  PublicTimerStatusOut,
+  TimeShareTokenCreated,
+  TimeShareTokenOut,
+} from '@docket/planning/time-share-contract';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it } from 'vitest';

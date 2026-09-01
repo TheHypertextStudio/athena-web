@@ -21,7 +21,8 @@
  *
  * Data is fetched at runtime, so the production build needs no running server.
  */
-import type { MemberOut, RoleOut } from '@docket/types';
+import type { MemberOut } from '@docket/identity-access/member-contract';
+import type { RoleOut } from '../../lib/contracts/role';
 import { EmptyState } from '@docket/ui/components';
 import { Skeleton } from '@docket/ui/primitives';
 import { Users } from '@docket/ui/icons';

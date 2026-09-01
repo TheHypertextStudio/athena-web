@@ -12,7 +12,7 @@
  */
 import { db, organization, task } from '@docket/db';
 import { and, eq, isNull } from 'drizzle-orm';
-import { isTerminalCategory, type WorkStatusCategory } from '@docket/types';
+import { isTerminalCategory, type WorkStatusCategory } from '@docket/work/work-status-contract';
 
 import { resolveStateTransition } from '../routes/task-helpers';
 import { emitEvent, emitEventStrict } from '../routes/event-emit';

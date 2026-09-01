@@ -14,7 +14,7 @@
  * than the copy map's own keys, so a permission added to the server and not to the copy fails
  * here — which is the direction the failure actually travels.
  */
-import { OAUTH_ISSUABLE_SCOPES } from '@docket/types';
+import { OAUTH_ISSUABLE_SCOPES } from '@docket/identity-access/oauth-scope-contract';
 import { describe, expect, it } from 'vitest';
 
 import type { OAuthScopeCopy } from '@/lib/oauth-scope-copy';

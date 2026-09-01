@@ -1,7 +1,7 @@
 'use client';
 
 /** Optimistic, atomic task hierarchy writes shared by menus, lists, and the Task graph. */
-import type { TaskReparentBatchOut } from '@docket/types';
+import type { TaskReparentBatchOut } from '@docket/work/task-model';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 

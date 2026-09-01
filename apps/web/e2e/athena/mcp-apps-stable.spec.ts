@@ -5,7 +5,7 @@ import {
   sandboxProxyDocument,
   sandboxResourceParams,
 } from '@docket/integrations/mcp-apps';
-import { MCP_UI_MIME_TYPE, MCP_UI_PROTOCOL_VERSION } from '@docket/types';
+import { MCP_UI_MIME_TYPE, MCP_UI_PROTOCOL_VERSION } from '@docket/integrations/mcp-apps-contract';
 
 import { newUser, signUp } from '../helpers/app';
 import { ORIGIN } from '../helpers/constants';

@@ -1,6 +1,7 @@
 import { agent, agentSession, db, sessionActivity, task } from '@docket/db';
-import { SessionTrigger } from '@docket/types';
-import { AgentId, AgentSessionId, SessionActivityId, TaskId } from '@docket/types';
+import { SessionTrigger } from '@docket/athena/agent-contract';
+import { AgentId, AgentSessionId, SessionActivityId } from '@docket/athena/ids';
+import { TaskId } from '@docket/work/ids';
 import { registerOptionalTaskTool, type McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';

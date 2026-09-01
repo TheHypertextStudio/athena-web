@@ -1,7 +1,11 @@
 /** `@docket/api` — remote-MCP integrations router (`/v1/orgs/:orgId/integrations/mcp`). */
 import { db, integration, integrationCredential } from '@docket/db';
 import { beginMcpOAuthAuthorization, parseMcpOAuthCredential } from '@docket/integrations';
-import { McpIntegrationCreate, McpIntegrationOut, McpIntegrationUpdate } from '@docket/types';
+import {
+  McpIntegrationCreate,
+  McpIntegrationOut,
+  McpIntegrationUpdate,
+} from '@docket/connections/integration-contract';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

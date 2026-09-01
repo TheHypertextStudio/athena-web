@@ -1,4 +1,6 @@
-import type { AgendaOut, CalendarItemOut, CalendarItemsRangeOut, HubTodayOut } from '@docket/types';
+import type { AgendaOut } from '@docket/planning/agenda-contract';
+import type { CalendarItemOut, CalendarItemsRangeOut } from '@docket/planning/calendar-contract';
+import type { HubTodayOut } from '../../lib/contracts/hub';
 
 import { todayISODate } from '@/lib/today';
 

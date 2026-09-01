@@ -16,8 +16,9 @@
  * a placeholder — no field at all, because a card that renders "Restricted task" still confirms
  * that the id names something real.
  */
-import type { MentionCard, MentionRef } from '@docket/types';
-import { canonicalizeResourceUrl, mentionRefKey } from '@docket/types';
+import type { MentionCard, MentionRef } from '../contracts/mention';
+import { canonicalizeResourceUrl } from '@docket/connections/resource-contract';
+import { mentionRefKey } from '../contracts/mention';
 
 import { loadVisibleDocuments, type SearchCaller } from '../search/query';
 

@@ -2,7 +2,7 @@
 
 import { CheckCircle2, Inbox as InboxIcon } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
-import type { NotificationOut } from '@docket/types';
+import type { NotificationOut } from '@docket/notifications/notification-contract';
 import { type JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';

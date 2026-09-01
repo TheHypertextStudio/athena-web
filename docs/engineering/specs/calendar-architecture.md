@@ -13,7 +13,7 @@ Athena already has a user-scoped first-party Google Calendar surface:
   - `calendarConnection`
   - `calendarList`
   - `calendarEvent`
-- `packages/types/src/calendar.ts` and `packages/types/src/agenda.ts`
+- `domains/planning/src/contracts/calendar.ts` and `domains/planning/src/contracts/agenda.ts`
 - `apps/api/src/routes/me-calendar.ts`
 - `apps/api/src/routes/agenda.ts`
 - `apps/api/src/routes/google-calendar-sync.ts`
@@ -184,7 +184,7 @@ Purpose:
 
 ## Public Types
 
-Add to `@docket/types`:
+Add to the retired contract package:
 
 - `CalendarProvider = 'docket' | 'google'`
 - `CalendarLayerSourceKind`

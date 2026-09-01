@@ -21,7 +21,8 @@
  *   quietly rewrote every task in an organization is not a recoverable mistake, even with undo.
  */
 import { db, initiative, organization, program, project, task } from '@docket/db';
-import { Health, InitiativePriority } from '@docket/types';
+import { Health } from '@docket/work/capability-contract';
+import { InitiativePriority } from '@docket/work/initiative-contract';
 import { DateResolution } from '@docket/work/planning-timeframe';
 import { Priority } from '@docket/work/task-contract';
 import { and, eq, inArray } from 'drizzle-orm';

@@ -12,7 +12,11 @@
  * exactly what is stored.
  */
 import { actor, db, sessionActivity } from '@docket/db';
-import type { GhostTaskOut, ProposalGroupOut, ProposalItemOut } from '@docket/types';
+import type {
+  GhostTaskOut,
+  ProposalGroupOut,
+  ProposalItemOut,
+} from '@docket/athena/agent-contract';
 import { and, asc, eq, isNotNull, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 

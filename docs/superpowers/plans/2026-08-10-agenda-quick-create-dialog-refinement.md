@@ -25,7 +25,7 @@
 
 ## File Map
 
-- `packages/types/src/calendar.ts` — public single/end timezone DTO and write-patch contract.
+- `domains/planning/src/contracts/calendar.ts` — public single/end timezone DTO and write-patch contract.
 - `packages/db/src/schema/calendar.ts` + generated migration — nullable persisted end timezone.
 - `apps/api/src/calendar/calendar-{sync-engine,serializers,write}.ts` — provider snapshot and native write persistence.
 - `apps/api/src/routes/calendar-google-adapter.ts` — Google start/end timezone mapping.
@@ -46,14 +46,14 @@
 
 **Files:**
 
-- Modify: `packages/types/src/calendar.ts`
+- Modify: `domains/planning/src/contracts/calendar.ts`
 - Modify: `packages/db/src/schema/calendar.ts`
 - Create: generated `packages/db/drizzle/0079_*.sql` and matching `packages/db/drizzle/meta/*`
 - Modify: `apps/api/src/calendar/calendar-sync-engine.ts`
 - Modify: `apps/api/src/calendar/calendar-serializers.ts`
 - Modify: `apps/api/src/calendar/calendar-write.ts`
 - Modify: `apps/api/src/routes/calendar-google-adapter.ts`
-- Test: `packages/types/tests/dto/calendar.test.ts`
+- Test: `the deleted legacy type warehouse tests/dto/calendar.test.ts`
 - Test: `apps/api/tests/calendar-serializers.test.ts`
 - Test: `apps/api/tests/routes/calendar-write-back.test.ts`
 - Test: `apps/api/tests/routes/calendar-google-adapter-edges.test.ts`
@@ -86,7 +86,7 @@ expect(googlePatch.end).toMatchObject({ timeZone: 'America/New_York' });
 
 - [ ] **Step 2: Run the focused contract tests and verify missing-field failures**
 
-Run: `pnpm --filter @docket/types test -- tests/dto/calendar.test.ts && pnpm --filter @docket/api test -- tests/calendar-serializers.test.ts tests/routes/calendar-write-back.test.ts tests/routes/calendar-google-adapter-edges.test.ts`
+Run: `pnpm domain:check&& pnpm --filter @docket/api test -- tests/calendar-serializers.test.ts tests/routes/calendar-write-back.test.ts tests/routes/calendar-google-adapter-edges.test.ts`
 
 Expected: FAIL because `endTimezone` is absent from the DTO, row, and provider patch.
 
@@ -119,7 +119,7 @@ the adapter can emit a complete effective start/end timezone pair; `null` clears
 
 - [ ] **Step 5: Run the focused tests and typechecks**
 
-Run: `pnpm --filter @docket/types test -- tests/dto/calendar.test.ts && pnpm --filter @docket/api test -- tests/calendar-serializers.test.ts tests/routes/calendar-write-back.test.ts tests/routes/calendar-google-adapter-edges.test.ts && pnpm --filter @docket/db typecheck && pnpm --filter @docket/api typecheck`
+Run: `pnpm domain:check&& pnpm --filter @docket/api test -- tests/calendar-serializers.test.ts tests/routes/calendar-write-back.test.ts tests/routes/calendar-google-adapter-edges.test.ts && pnpm --filter @docket/db typecheck && pnpm --filter @docket/api typecheck`
 
 Expected: PASS.
 

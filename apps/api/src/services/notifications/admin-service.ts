@@ -1,16 +1,16 @@
 import type { Database } from '@docket/db';
 import { notificationInboundEvent, notificationIntent, operatorAuditEvent } from '@docket/db';
+import { canCreateNotification } from '@docket/notifications/policy';
 import {
-  canCreateNotification,
   NotificationAudience,
   type NotificationAudienceEstimateOut,
   type NotificationChannel,
-  type NotificationChannelDecision,
   type NotificationInboundEventOut,
   type NotificationIntentOut,
   type NotificationPreviewOut,
   type NotificationSuppressionReason,
-} from '@docket/notifications';
+} from '@docket/notifications/schemas';
+import { type NotificationChannelDecision } from '@docket/notifications/preferences';
 import {
   expandNotificationAudience,
   resolveNotificationPreferences,

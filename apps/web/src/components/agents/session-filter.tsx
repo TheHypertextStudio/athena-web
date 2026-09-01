@@ -12,7 +12,7 @@
  * active bucket shows a check; the trigger reads as a calm, bordered control with a leading
  * filter glyph and a focus ring.
  */
-import type { SessionStatus } from '@docket/types';
+import type { SessionStatus } from '@docket/athena/agent-contract';
 import { ChevronDown, Filter } from '@docket/ui/icons';
 import {
   Button,

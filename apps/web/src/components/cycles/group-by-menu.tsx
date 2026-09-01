@@ -12,7 +12,7 @@
  * vocabulary-resolved by the caller so an org's skin (e.g. "Workstream" for project) shows
  * through.
  */
-import type { CycleTaskGroupBy } from '@docket/types';
+import type { CycleTaskGroupBy } from '@docket/work/cycle-contract';
 import { ChevronDown, Filter } from '@docket/ui/icons';
 import {
   Button,

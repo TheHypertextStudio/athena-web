@@ -329,7 +329,7 @@ Search page:
 Phase 1: foundation and parity.
 
 - Add DB enums/tables/migration.
-- Add DTOs in `packages/types/src/search.ts`.
+- Add DTOs in `apps/api/src/contracts/search.ts`.
 - Add projection service with projectors for `task`, `project`, `program`, and `event`.
 - Add durable job enqueue/processor and backfill script.
 - Upgrade `/v1/hub/search`.

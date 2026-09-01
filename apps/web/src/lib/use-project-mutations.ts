@@ -6,20 +6,16 @@
  * cache helpers that keep the composite {@link ProjectDetailData} snapshot consistent
  * between the request and the server's settle-time read-back.
  */
+import { ActorId } from '@docket/identity-access/ids';
+import { type Health } from '@docket/work/capability-contract';
+import { InitiativeId, LabelId, ProgramId } from '@docket/work/ids';
 import {
-  ActorId,
-  type Health,
-  InitiativeId,
   type ProjectInitiativeReference,
   type ProjectDetailAggregate,
-  LabelId,
-  type ProjectOut,
-  type ProjectStatus,
-  type ProjectUpdate,
-  ProgramId,
-  ProjectStatusKey,
-  ProjectSubjectRef,
-} from '@docket/types';
+} from './contracts/detail-aggregate';
+import { type ProjectOut, type ProjectStatus, type ProjectUpdate } from './contracts/project';
+import { ProjectStatusKey } from '@docket/work/work-view-contract';
+import { ProjectSubjectRef } from '@docket/work/subject-ref-contract';
 import type { DateResolution } from '@docket/work/planning-timeframe';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';

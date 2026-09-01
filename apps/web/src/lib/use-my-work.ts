@@ -1,13 +1,9 @@
-import type {
-  AgentOut,
-  AgentSessionOut,
-  MemberOut,
-  ProjectOut,
-  RoleOut,
-  SessionStatus,
-  TaskOut,
-  TeamOut,
-} from '@docket/types';
+import type { AgentOut, AgentSessionOut, SessionStatus } from '@docket/athena/agent-contract';
+import type { MemberOut } from '@docket/identity-access/member-contract';
+import type { ProjectOut } from './contracts/project';
+import type { RoleOut } from './contracts/role';
+import type { TaskOut } from '@docket/work/task-model';
+import type { TeamOut } from './contracts/team';
 import type { GroupKey } from '@docket/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';

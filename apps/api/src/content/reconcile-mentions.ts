@@ -12,13 +12,13 @@
  * Storage arrives through {@link MentionStorage} rather than being reached for, so this module
  * states domain rules and nothing about tables — and can be tested against an in-memory double.
  */
+import { canonicalizeResourceUrl } from '@docket/connections/resource-contract';
 import {
-  canonicalizeResourceUrl,
   parseMentionMarker,
   type MentionEntityKind,
   type MentionRef,
   type MentionSubjectType,
-} from '@docket/types';
+} from '../contracts/mention';
 
 import { extractMarkdownLinks, type MarkdownLink } from './markdown-links';
 import type { MentionDraft, MentionStorage } from './mention-ports';

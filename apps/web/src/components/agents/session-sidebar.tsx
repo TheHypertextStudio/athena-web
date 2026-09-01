@@ -17,7 +17,7 @@
  *
  * Token-only colors; calm, transparent presentation.
  */
-import type { SessionActivityOut, SessionStatus } from '@docket/types';
+import type { SessionActivityOut, SessionStatus } from '@docket/athena/agent-contract';
 import { ActorAvatar } from '@docket/ui/components';
 import { Button, Separator } from '@docket/ui/primitives';
 import type { JSX } from 'react';

@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { TaskViewDefinition, TaskViewRow } from '@docket/types';
+import { TaskViewDefinition, TaskViewRow } from '@docket/work/work-view-contract';
 
 import { WorkBoard } from '../../src/components/work-views/work-board';
 import { workViewRowInteractionPolicy } from '../../src/components/work-views/work-view-object';

@@ -18,7 +18,11 @@
  */
 import { Node, mergeAttributes } from '@tiptap/core';
 import type { MarkdownParseResult, MarkdownToken } from '@tiptap/core';
-import { formatMentionLink, parseMentionMarker, type MentionRef } from '@docket/types';
+import {
+  formatMentionLink,
+  parseMentionMarker,
+  type MentionRef,
+} from '../../lib/contracts/mention';
 
 /** Attributes stored on a mention node. */
 export interface MentionAttributes {

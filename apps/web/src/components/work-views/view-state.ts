@@ -11,7 +11,7 @@ import {
   TASK_VIEW_CONTRACT,
   type WorkViewFacetResponse,
   type ViewInstanceKey,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
 import {
   canonicalizeFilter,
   createFilterNodeSchema,

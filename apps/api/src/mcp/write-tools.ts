@@ -11,7 +11,7 @@
  * proposing. That is only a defensible trade if the caller can see what happened and reverse it.
  */
 import { changeSet, db, task } from '@docket/db';
-import { TaskId } from '@docket/types';
+import { TaskId } from '@docket/work/ids';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 

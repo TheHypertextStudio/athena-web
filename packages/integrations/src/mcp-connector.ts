@@ -19,7 +19,7 @@ import {
   type McpUiClientCapability,
   type McpUiResourceMeta,
   type McpUiToolMeta,
-} from '@docket/types';
+} from './contracts/mcp-apps';
 
 import { SUNSAMA_BACKLOG } from './fixtures';
 import { decodeUiResourceHtml, isRenderableUiResource } from './mcp-apps-host';
@@ -206,7 +206,7 @@ export interface RemoteMcpSession {
   close(): Promise<void>;
 }
 
-export { MCP_APP_PRESENTATION_MAX_BYTES } from '@docket/types';
+export { MCP_APP_PRESENTATION_MAX_BYTES } from './contracts/mcp-apps';
 
 /** Whether a remote tool may cross the requested stable MCP Apps visibility boundary. */
 export function isRemoteToolVisibleTo(

@@ -12,7 +12,7 @@
  * `rejected` uses `destructive`. The only thing that varies between the two call sites is
  * density, expressed via the {@link ApprovalStatusBadgeProps.size | size} prop.
  */
-import type { SessionActivityOut } from '@docket/types';
+import type { SessionActivityOut } from '@docket/athena/agent-contract';
 import { CheckCircle2, Sparkles, XCircle } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Badge } from '@docket/ui/primitives';

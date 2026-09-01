@@ -13,7 +13,7 @@
  * cannot tell a fresh suggestion from a stale one unless the interface says where it came from —
  * and the reason is also what makes accepting it a decision rather than a reflex.
  */
-import type { TimeAnchorSuggestion } from '@docket/types';
+import type { TimeAnchorSuggestion } from '../../lib/contracts/time';
 import { Play } from '@docket/ui/icons';
 import { Button, surfaceToneColor, Text } from '@docket/ui/primitives';
 import type { JSX } from 'react';

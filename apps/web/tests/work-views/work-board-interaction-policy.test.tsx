@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TaskViewDefinition, TaskViewRow } from '@docket/types';
+import { TaskViewDefinition, TaskViewRow } from '@docket/work/work-view-contract';
 
 import { ObjectContextMenuProvider } from '../../src/components/context-menu/object-context-menu';
 import {

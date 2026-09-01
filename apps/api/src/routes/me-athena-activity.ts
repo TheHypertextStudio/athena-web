@@ -1,5 +1,6 @@
 /** Owner-safe projection for activity returned by the personal Athena API. */
-import { parseMcpAppPresentation, type SessionActivityOut } from '@docket/types';
+import { parseMcpAppPresentation } from '@docket/integrations/mcp-apps-contract';
+import { type SessionActivityOut } from '@docket/athena/agent-contract';
 import type { z } from 'zod';
 
 import { toActivityOut, type ActivityRow } from './agent-session-helpers';

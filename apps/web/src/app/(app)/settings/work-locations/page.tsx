@@ -9,7 +9,7 @@ import type {
   WorkLocationSchedule,
   WorkPlaceOut,
   WorkPlaceUpdate,
-} from '@docket/types';
+} from '@docket/planning/work-location-contract';
 import { Calendar, Google, Home, MapPin, MoreHorizontal, Plus, Target } from '@docket/ui/icons';
 import { cn } from '@docket/ui';
 import { WriteError } from '@/components/settings/write-error';

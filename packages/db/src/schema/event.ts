@@ -375,7 +375,7 @@ export const activityHighlight = pgTable(
     activityDayId: text('activity_day_id')
       .notNull()
       .references(() => activityDay.id, { onDelete: 'cascade' }),
-    /** The order-independent episode key from `@docket/types` — stable under backfill. */
+    /** The order-independent episode key from `domain packages` — stable under backfill. */
     episodeKey: text('episode_key').notNull(),
     /** Chronological position within the day. */
     sort: integer('sort').notNull(),

@@ -1,6 +1,6 @@
 'use client';
 
-import type { AthenaApprovalMode, HubPreferences } from '@docket/types';
+import type { AthenaApprovalMode, HubPreferences } from '@docket/planning/hub-preferences-contract';
 import { Field, Select, Textarea } from '@docket/ui/primitives';
 import { useEffect, useRef, useState, type JSX } from 'react';
 

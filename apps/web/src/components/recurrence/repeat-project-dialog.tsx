@@ -1,8 +1,10 @@
 'use client';
 
 /** Focused setup for turning an existing Project into a repeating process. */
-import type { MilestoneOut, ProcessCreationMode, ProjectOut } from '@docket/types';
-import { ProcessDefinitionId } from '@docket/types';
+import type { MilestoneOut } from '@docket/work/milestone-contract';
+import type { ProcessCreationMode } from '../../lib/contracts/recurrence';
+import type { ProjectOut } from '../../lib/contracts/project';
+import { ProcessDefinitionId } from '@docket/work/ids';
 import { todayIso } from '@docket/ui/components';
 import { Check, FolderKanban, RefreshCw } from '@docket/ui/icons';
 import {

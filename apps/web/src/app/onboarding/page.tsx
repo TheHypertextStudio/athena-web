@@ -1,6 +1,6 @@
 'use client';
 
-import type { OrgCreate } from '@docket/types';
+import type { OrgCreate } from '../../lib/contracts/organization';
 import { cn } from '@docket/ui/lib/utils';
 import { Button } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';

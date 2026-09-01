@@ -2,7 +2,7 @@
 
 /** Controlled creation of one exact, personal historical time record. */
 import { Temporal } from '@js-temporal/polyfill';
-import type { OrgSummary } from '@docket/types';
+import type { OrgSummary } from '../../lib/contracts/organization';
 import {
   Button,
   Dialog,

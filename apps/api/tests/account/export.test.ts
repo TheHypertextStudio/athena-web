@@ -2,7 +2,7 @@ import { strFromU8, unzipSync } from 'fflate';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-import type { AccountExportScope } from '@docket/types';
+import type { AccountExportScope } from '@docket/identity-access/account-contract';
 
 import {
   addMember,

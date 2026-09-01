@@ -14,7 +14,7 @@
  * `/tasks` row (status glyph · title · due · workspace chip) and link into the task. Tonal cards, no
  * borders — the surface step carries the separation.
  */
-import type { HubTaskItem } from '@docket/types';
+import type { HubTaskItem } from '../../lib/contracts/hub';
 import { StatusIcon } from '@docket/ui/components';
 import { Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';

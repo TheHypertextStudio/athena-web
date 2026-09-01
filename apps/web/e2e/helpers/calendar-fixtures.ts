@@ -5,14 +5,9 @@
  * Calendar dates stay runtime-relative for the legacy account flows, while the fluid scheduling
  * contract can opt into explicit UTC dates when exact pointer geometry matters.
  */
-import {
-  CalendarConnectionId,
-  CalendarItemId,
-  type CalendarItemOut,
-  CalendarLayerId,
-  type CalendarLayerOut,
-  TaskId,
-} from '@docket/types';
+import { CalendarConnectionId, CalendarItemId, CalendarLayerId } from '@docket/planning/ids';
+import { type CalendarItemOut, type CalendarLayerOut } from '@docket/planning/calendar-contract';
+import { TaskId } from '@docket/work/ids';
 
 /** Stable ids used by the deterministic calendar route fixtures. */
 export const CALENDAR_IDS = {

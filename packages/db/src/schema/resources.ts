@@ -64,7 +64,7 @@ export const externalResource = pgTable(
   {
     ...auditColumns(),
     provider: resourceProvider('provider').notNull(),
-    /** Stable dedupe identity within the org. See `canonicalResourceKey` in `@docket/types`. */
+    /** Stable dedupe identity within the org. See `canonicalResourceKey` in `domain packages`. */
     canonicalKey: text('canonical_key').notNull(),
     canonicalUrl: text('canonical_url').notNull(),
     /** The provider's own id for the resource; null for generic web pages. */

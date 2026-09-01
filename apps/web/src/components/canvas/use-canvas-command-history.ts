@@ -6,7 +6,7 @@ import type {
   ObjectCommandReplayAccessResult,
   ObjectCommandRequest,
   ObjectCommandResult,
-} from '@docket/types';
+} from '../../lib/contracts/object-command';
 import type { QueryKey } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef, useState } from 'react';
 

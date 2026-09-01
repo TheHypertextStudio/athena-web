@@ -2,7 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { CalendarItemConflict } from '@docket/types';
+import type { CalendarItemConflict } from '@docket/planning/calendar-contract';
 
 import {
   attemptCalendarItemWrite,

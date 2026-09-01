@@ -15,7 +15,8 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { db, team } from '@docket/db';
-import type { WorkflowState, WorkflowStateType } from '@docket/types';
+import type { WorkflowState } from '@docket/work/workflow';
+import type { WorkflowStateType } from '../contracts/team';
 
 /** Each team's ordered workflow, keyed by team id. */
 export type TeamWorkflows = ReadonlyMap<string, readonly WorkflowState[]>;

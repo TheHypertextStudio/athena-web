@@ -1,6 +1,7 @@
 /** Pointer editing, collision layout, permissions, and resilient-error browser contracts. */
-import { CalendarItemId } from '@docket/types';
-import type { OrgCreateResult, ScheduleComparisonOut } from '@docket/types';
+import { CalendarItemId } from '@docket/planning/ids';
+import type { OrgCreateResult } from '../../src/lib/contracts/organization';
+import type { ScheduleComparisonOut } from '@docket/planning/calendar-contract';
 import type { Locator, Page } from '@playwright/test';
 
 import { signUpAndOnboard } from '../helpers/app';

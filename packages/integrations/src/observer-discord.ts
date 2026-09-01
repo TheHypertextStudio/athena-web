@@ -25,7 +25,7 @@
 import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
 import type { KeyObject } from 'node:crypto';
 
-import type { EventDetail, EventKind } from '@docket/types';
+import type { EventDetail, EventKind } from '@docket/connections/event-contract';
 
 import { type DetailBuilder, genericDetail, runDetailBuilders } from './event-detail';
 import { asRecord, str } from './json';

@@ -6,7 +6,10 @@
  * one-off/weekly assertions, their exceptions, and short-lived current-location evidence. It has
  * no provider vocabulary; account mappings and delivery state live in `work-location-sync`.
  */
-import type { WorkLocationOccurrenceException, WorkLocationSchedule } from '@docket/types';
+import type {
+  WorkLocationOccurrenceException,
+  WorkLocationSchedule,
+} from '@docket/planning/work-location-contract';
 import { sql } from 'drizzle-orm';
 import {
   check,

@@ -1,5 +1,7 @@
 import { comment, db, integration, task, team, update } from '@docket/db';
-import { CommentId, Health, IntegrationId, TaskId, UpdateId } from '@docket/types';
+import { CommentId, TaskId, UpdateId } from '@docket/work/ids';
+import { Health } from '@docket/work/capability-contract';
+import { IntegrationId } from '@docket/connections/ids';
 import type { McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';

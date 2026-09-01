@@ -12,7 +12,7 @@
  * `current_session`); that's what account sign-out is for. Errors render inline as `role="alert"`
  * banners — there is no toast system.
  */
-import type { SessionListOut, SessionOut } from '@docket/types';
+import type { SessionListOut, SessionOut } from '@docket/identity-access/session-contract';
 import { LoadFailure } from './load-failure';
 import { Computer, Phone } from '@docket/ui/icons';
 import { Badge, Button, DecorativeIcon, Skeleton } from '@docket/ui/primitives';

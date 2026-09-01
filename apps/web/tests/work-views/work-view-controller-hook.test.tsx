@@ -1,17 +1,16 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ActorId, TeamId } from '@docket/identity-access/ids';
 import {
-  ActorId,
   InitiativeViewDefinition,
   PersonalWorkViewState,
-  TeamId,
   TaskViewDefinition,
   TaskViewRow,
   ViewInstanceKey,
   WorkViewFacetResponse,
   WorkViewQueryResponse,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
 
 import {
   type UseWorkViewOptions,

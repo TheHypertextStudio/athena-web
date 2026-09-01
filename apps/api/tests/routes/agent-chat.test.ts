@@ -7,7 +7,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type * as AgentRuntimeModule from '@docket/athena/turn';
-import type { AgentSessionDetailOut } from '@docket/types';
+import type { AgentSessionDetailOut } from '@docket/athena/agent-contract';
 
 import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';

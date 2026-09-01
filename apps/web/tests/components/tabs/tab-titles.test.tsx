@@ -9,7 +9,8 @@
  * says what kind of document it is, a cached name is used without a request at all, and a rename
  * on the detail page reaches the tab.
  */
-import { ProjectNavigationSnapshot, type ProjectOut } from '@docket/types';
+import { ProjectNavigationSnapshot } from '../../../src/lib/contracts/entity-navigation';
+import { type ProjectOut } from '../../../src/lib/contracts/project';
 import type * as ResolveTitleModule from '../../../src/components/tabs/resolve-title';
 import { tabLabel, type OpenTab } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

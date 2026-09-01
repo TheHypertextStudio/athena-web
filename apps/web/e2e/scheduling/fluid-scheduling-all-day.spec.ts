@@ -1,5 +1,5 @@
 /** Browser coverage for editable all-day true-edge pointer resize and keyboard move gestures. */
-import { CalendarItemId } from '@docket/types';
+import { CalendarItemId } from '@docket/planning/ids';
 import type { Locator, Page } from '@playwright/test';
 
 import { signUpAndOnboard } from '../helpers/app';

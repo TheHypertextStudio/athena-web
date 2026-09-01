@@ -24,7 +24,7 @@ Markdown that renderers we do not control silently drop, so a digest, an export,
 prompt still shows a working link. Where Docket controls rendering, the marker distinguishes a
 deliberate mention from a URL the author typed — the two get different treatments.
 
-The grammar lives in `packages/types/src/mention.ts` because two implementations must agree on
+The grammar lives in `apps/api/src/contracts/mention.ts` because two implementations must agree on
 it byte for byte: the Tiptap node serializing on the client, and `reconcileMentions` parsing on
 the server.
 
@@ -71,7 +71,7 @@ nobody could delete.
 
 Two steps. Neither touches URL matching, canonicalization, dedupe, unfurl routing, or any UI.
 
-**1. Declare it** in `RESOURCE_PROVIDERS` (`packages/types/src/resource-provider.ts`): id, label,
+**1. Declare it** in `RESOURCE_PROVIDERS` (`domains/connections/src/contracts/resource-provider.ts`): id, label,
 the hosts it owns, the URL shapes that identify one of its resources, and whether metadata needs
 the viewer's credential. Add the id to the `ResourceProvider` enum and to the `resource_provider`
 Postgres enum — a test asserts those two agree, so forgetting the migration fails a test rather

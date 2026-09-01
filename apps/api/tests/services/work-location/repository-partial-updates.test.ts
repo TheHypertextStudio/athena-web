@@ -16,7 +16,7 @@ import { resolve } from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
 import { fullSchema, hub, user, type Database } from '@docket/db';
-import type { WorkPlaceId } from '@docket/types';
+import type { WorkPlaceId } from '@docket/planning/ids';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, describe, expect, it } from 'vitest';

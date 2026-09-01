@@ -14,10 +14,7 @@ import {
 } from '@docket/db';
 import {
   migrateLegacyTaskViewDefinition,
-  FractionalRank,
   legacyTaskNoMatchProjection,
-  type Page,
-  pageOf,
   parseSavedWorkViewUpdate,
   projectTaskViewDefinitionToLegacy,
   projectTaskViewDefinitionToLegacyFallback,
@@ -26,9 +23,13 @@ import {
   SavedWorkViewCreate,
   SavedWorkViewOut,
   SavedWorkViewUpdate,
+} from '@docket/work/saved-view-contract';
+import {
+  FractionalRank,
   TaskViewDefinition,
   type WorkViewContext,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
+import { type Page, pageOf } from '../contracts/pagination';
 import { and, eq, exists, or, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

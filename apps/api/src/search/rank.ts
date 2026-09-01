@@ -1,4 +1,4 @@
-import type { SearchDocumentKind } from '@docket/types';
+import type { SearchDocumentKind } from '../contracts/search';
 
 const BASE_RANK: Record<SearchDocumentKind, number> = {
   task: 100,

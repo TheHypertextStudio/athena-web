@@ -23,7 +23,7 @@
  * empty sections, not about kinds of team: a committee that meets monthly has cycles and tasks like
  * anyone else, and nothing here treats it as a lesser sort of team.
  */
-import { TeamId } from '@docket/types';
+import { TeamId } from '@docket/identity-access/ids';
 import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft, Folder } from '@docket/ui/icons';

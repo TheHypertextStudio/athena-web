@@ -18,21 +18,21 @@ import {
   teamMember,
   template,
 } from '@docket/db';
+import { pageOf } from '../contracts/pagination';
 import {
-  pageOf,
   TaskArchived,
   TaskCreate,
   TaskDetail,
-  TaskDetailAggregate,
-  TaskId,
   TaskListQuery,
   TaskOut,
   TaskReparentBatchIn,
   TaskReparentBatchOut,
   TaskStateUpdate,
-  TaskTemplateDraft,
   TaskUpdate,
-} from '@docket/types';
+} from '@docket/work/task-model';
+import { TaskDetailAggregate } from '../contracts/detail-aggregate';
+import { TaskId } from '@docket/work/ids';
+import { TaskTemplateDraft } from '@docket/work/template-contract';
 import { constrainTaskExpansion } from '@docket/athena/task-expansion';
 import { and, asc, desc, eq, exists, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 import { Hono } from 'hono';

@@ -1,6 +1,9 @@
 'use client';
 
-import type { ProfileSettingsOut, ProfileSettingsUpdate } from '@docket/types';
+import type {
+  ProfileSettingsOut,
+  ProfileSettingsUpdate,
+} from '@docket/identity-access/account-contract';
 import type { JSX } from 'react';
 import { useEffect, useState } from 'react';
 import { useSession } from '@/lib/auth-client';

@@ -39,7 +39,7 @@ import {
   ObjectCommandRequest,
   ObjectCommandResult,
   type ObjectCommandRequest as ObjectCommandRequestValue,
-} from '@docket/types';
+} from '../contracts/object-command';
 import { actor, db, idempotencyKey, label } from '@docket/db';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { MiddlewareHandler } from 'hono';

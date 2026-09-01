@@ -1,5 +1,5 @@
 /** `@docket/api` — the intentionally bounded RFC 5545 RRULE adapter. */
-import type { RecurrenceSchedule } from '@docket/types';
+import type { RecurrenceSchedule } from '../../src/contracts/recurrence';
 import { describe, expect, it } from 'vitest';
 
 import { exportRRule, importRRule } from '../../src/lib/recurrence/rrule';

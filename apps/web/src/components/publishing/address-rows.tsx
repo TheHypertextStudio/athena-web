@@ -14,7 +14,8 @@
  * left, badges for state, icon actions on the right, and any work the row still needs disclosed
  * underneath it rather than on another screen.
  */
-import { PublicSlug, type WorkspaceDomainOut } from '@docket/types';
+import { PublicSlug } from '@docket/work/slug-contract';
+import { type WorkspaceDomainOut } from '@docket/work/publish-contract';
 import { RelativeTime } from '@docket/ui/components';
 import { Check, Edit, Globe, Trash2, X } from '@docket/ui/icons';
 import { Badge, Button, Input, Text } from '@docket/ui/primitives';

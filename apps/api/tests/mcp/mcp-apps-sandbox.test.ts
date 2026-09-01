@@ -9,7 +9,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import { MCP_UI_METHODS } from '@docket/types';
+import { MCP_UI_METHODS } from '@docket/integrations/mcp-apps-contract';
 
 vi.mock('../../src/env', () => ({
   env: {

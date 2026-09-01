@@ -1,4 +1,4 @@
-import type { ProblemRecovery } from '@docket/types';
+import type { ProblemRecovery } from './contracts/errors';
 
 /** A safe generic recovery action rendered on a public Docket problem page. */
 export interface PublicProblemRecoveryAction {

@@ -1,15 +1,15 @@
 import type { Database } from '@docket/db';
 import { notificationPreference } from '@docket/db';
+import { defaultNotificationChannelPreference } from '@docket/notifications/preferences';
+import { lockedPreference } from '@docket/notifications/policy';
 import {
-  defaultNotificationChannelPreference,
-  lockedPreference,
   NotificationCategory,
   type NotificationCategoryPreferences,
   type NotificationChannelPreference,
   type NotificationOrganizationPreferences,
   type NotificationPreferenceOut,
   type NotificationPreferencePatch,
-} from '@docket/notifications';
+} from '@docket/notifications/schemas';
 import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
 

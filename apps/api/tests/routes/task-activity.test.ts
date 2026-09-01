@@ -11,7 +11,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import { taskCreationEntryId } from '@docket/types';
+import { taskCreationEntryId } from '@docket/work/task-model';
 
 import {
   appWithActor,

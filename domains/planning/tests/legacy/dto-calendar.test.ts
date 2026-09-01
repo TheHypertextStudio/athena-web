@@ -1,0 +1,592 @@
+import { describe, expect, it } from 'vitest';
+
+import { CalendarItemId, CalendarItemWriteId, CalendarLayerId } from '../../src/ids';
+import {
+  CalendarItemCreate,
+  CalendarItemKind,
+  CalendarItemOut,
+  CalendarProviderEventType,
+  CalendarItemRelationCreate,
+  CalendarItemRelationOut,
+  CalendarItemTaskRole,
+  CalendarItemTaskLinkCreate,
+  CalendarItemTaskLinkResultOut,
+  CalendarItemUpdate,
+  CalendarLayerShareCreate,
+  CalendarLayerSharesReplace,
+  CalendarLayerOut,
+  CalendarLayerUpdate,
+  CalendarListUpdate,
+  CalendarRangeQuery,
+  ScheduleComparisonItemOut,
+  ScheduleComparisonOut,
+  ScheduleComparisonQuery,
+} from '../../src/contracts/calendar';
+import type { CalendarItemLinkedTaskOut } from '../../src/contracts/calendar';
+import { assertDefined } from '@docket/test-utils';
+
+/** Plain ULID strings — used as-is (never pre-parsed) to exercise brand acceptance via `z.input`. */
+const LAYER_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+const CONNECTION_ID = '01BX5ZZKBKACTAV9WEVGEMMVRZ';
+const ITEM_ID = '01BX5ZZKBKACTAV9WEVGEMMVS0';
+const TASK_ID = '01BX5ZZKBKACTAV9WEVGEMMVS1';
+const ORG_ID = '01BX5ZZKBKACTAV9WEVGEMMVS2';
+
+describe('new branded ids accept plain ULID strings', () => {
+  it('CalendarLayerId / CalendarItemId / CalendarItemWriteId parse a raw ULID string', () => {
+    expect(CalendarLayerId.parse(LAYER_ID)).toBe(LAYER_ID);
+    expect(CalendarItemId.parse(ITEM_ID)).toBe(ITEM_ID);
+    expect(CalendarItemWriteId.parse(LAYER_ID)).toBe(LAYER_ID);
+  });
+
+  it('rejects a non-ULID string', () => {
+    expect(CalendarLayerId.safeParse('not-a-ulid').success).toBe(false);
+    expect(CalendarItemId.safeParse('not-a-ulid').success).toBe(false);
+    expect(CalendarItemWriteId.safeParse('not-a-ulid').success).toBe(false);
+  });
+});
+
+describe('CalendarLayerOut', () => {
+  it('round-trips a provider-backed layer', () => {
+    const parsed = CalendarLayerOut.parse({
+      id: LAYER_ID,
+      connectionId: CONNECTION_ID,
+      provider: 'google',
+      sourceKind: 'provider_calendar',
+      externalLayerId: 'primary',
+      title: 'Ada',
+      description: null,
+      timezone: 'America/Los_Angeles',
+      color: '#16a34a',
+      accessRole: 'owner',
+      primary: true,
+      selected: true,
+      visibleByDefault: true,
+      editableCore: false,
+      lastSyncedAt: '2026-06-30T09:00:00.000Z',
+      lastError: null,
+      watchExpiresAt: null,
+      createdAt: '2026-06-30T08:00:00.000Z',
+      updatedAt: '2026-06-30T09:00:00.000Z',
+    });
+    expect(parsed.sourceKind).toBe('provider_calendar');
+    expect(parsed.editableCore).toBe(false);
+  });
+
+  it('round-trips a Docket-native layer with null connection/provider', () => {
+    const parsed = CalendarLayerOut.parse({
+      id: LAYER_ID,
+      connectionId: null,
+      provider: null,
+      sourceKind: 'native_blocks',
+      externalLayerId: null,
+      title: 'My Blocks',
+      description: null,
+      timezone: null,
+      color: null,
+      accessRole: null,
+      primary: false,
+      selected: true,
+      visibleByDefault: true,
+      editableCore: true,
+      lastSyncedAt: null,
+      lastError: null,
+      watchExpiresAt: null,
+      createdAt: '2026-06-30T08:00:00.000Z',
+      updatedAt: '2026-06-30T09:00:00.000Z',
+    });
+    expect(parsed.connectionId).toBeNull();
+    expect(parsed.editableCore).toBe(true);
+  });
+
+  it('does not expose syncToken or watch-channel identifiers', () => {
+    expect(CalendarLayerOut.shape).not.toHaveProperty('syncToken');
+    expect(CalendarLayerOut.shape).not.toHaveProperty('watchChannelId');
+    expect(CalendarLayerOut.shape).not.toHaveProperty('watchResourceId');
+    expect(CalendarLayerOut.shape).not.toHaveProperty('watchToken');
+  });
+});
+
+const basePermissions = { canEditCore: true, canDelete: true, readOnlyReason: null };
+
+function baseItem() {
+  return {
+    id: ITEM_ID,
+    layerId: LAYER_ID,
+    connectionId: CONNECTION_ID,
+    kind: 'provider_event' as const,
+    provider: 'google' as const,
+    externalCalendarId: 'primary',
+    externalEventId: 'event-1',
+    recurringEventId: null,
+    recurrenceInstanceKey: null,
+    status: 'confirmed' as const,
+    title: 'Design review',
+    description: null,
+    location: null,
+    htmlLink: null,
+    startsAt: null,
+    endsAt: null,
+    allDayStartDate: null,
+    allDayEndDate: null,
+    timezone: null,
+    organizer: null,
+    attendees: [],
+    permissions: basePermissions,
+    syncState: 'clean' as const,
+    hasConflict: false,
+    updatedExternalAt: null,
+    archivedAt: null,
+    linkedTasks: [],
+    createdAt: '2026-06-30T08:00:00.000Z',
+    updatedAt: '2026-06-30T08:00:00.000Z',
+  };
+}
+
+describe('CalendarItemOut', () => {
+  it('accepts native events, first-class timeboxes, and the legacy native block kind', () => {
+    expect(CalendarItemKind.parse('native_event')).toBe('native_event');
+    expect(CalendarItemKind.parse('timebox')).toBe('timebox');
+    expect(CalendarItemKind.parse('native_block')).toBe('native_block');
+  });
+
+  it('normalizes recognized provider event semantics without accepting arbitrary strings', () => {
+    expect(CalendarProviderEventType.parse('working_location')).toBe('working_location');
+    expect(CalendarProviderEventType.parse('focus_time')).toBe('focus_time');
+    expect(CalendarProviderEventType.safeParse('home').success).toBe(false);
+
+    const parsed = CalendarItemOut.parse({
+      ...baseItem(),
+      providerEventType: 'working_location',
+      allDayStartDate: '2026-06-30',
+      allDayEndDate: '2026-07-01',
+    });
+    expect(parsed.providerEventType).toBe('working_location');
+  });
+
+  it('parses a timed item', () => {
+    const parsed = CalendarItemOut.parse({
+      ...baseItem(),
+      startsAt: '2026-06-30T16:00:00.000Z',
+      endsAt: '2026-06-30T17:00:00.000Z',
+      timezone: 'America/Los_Angeles',
+      endTimezone: 'America/New_York',
+    });
+    expect(parsed.startsAt).toContain('T16:00');
+    expect(parsed.endTimezone).toBe('America/New_York');
+  });
+
+  it('parses an all-day item', () => {
+    const parsed = CalendarItemOut.parse({
+      ...baseItem(),
+      allDayStartDate: '2026-06-30',
+      allDayEndDate: '2026-07-01',
+    });
+    expect(parsed.allDayStartDate).toBe('2026-06-30');
+  });
+
+  it('rejects an item with neither timed nor all-day bounds', () => {
+    const result = CalendarItemOut.safeParse(baseItem());
+    expect(result.success).toBe(false);
+  });
+
+  it('round-trips a linked task summary', () => {
+    const parsed = CalendarItemOut.parse({
+      ...baseItem(),
+      startsAt: '2026-06-30T16:00:00.000Z',
+      endsAt: '2026-06-30T17:00:00.000Z',
+      linkedTasks: [
+        {
+          taskId: TASK_ID,
+          organizationId: ORG_ID,
+          role: 'agenda',
+          sort: 0,
+          note: null,
+          title: 'Prep slides',
+          state: 'in_progress',
+          done: false,
+        },
+      ],
+    });
+    expect(parsed.linkedTasks).toHaveLength(1);
+    const [linkedTask] = parsed.linkedTasks;
+    expect(linkedTask).toBeDefined();
+    const parsedTask: CalendarItemLinkedTaskOut = assertDefined(linkedTask);
+    expect(parsedTask.role).toBe('agenda');
+    expect(parsedTask.done).toBe(false);
+  });
+});
+
+describe('CalendarRangeQuery', () => {
+  it('parses a valid range with optional filters', () => {
+    const parsed = CalendarRangeQuery.parse({
+      start: '2026-06-30T00:00:00.000Z',
+      end: '2026-07-01T00:00:00.000Z',
+      layerIds: [LAYER_ID],
+      kinds: ['provider_event'],
+    });
+    expect(parsed.layerIds).toEqual([LAYER_ID]);
+  });
+
+  it('parses a valid range with no optional filters', () => {
+    const parsed = CalendarRangeQuery.parse({
+      start: '2026-06-30T00:00:00.000Z',
+      end: '2026-07-01T00:00:00.000Z',
+    });
+    expect(parsed.kinds).toBeUndefined();
+  });
+
+  it('rejects end <= start', () => {
+    expect(
+      CalendarRangeQuery.safeParse({
+        start: '2026-07-01T00:00:00.000Z',
+        end: '2026-06-30T00:00:00.000Z',
+      }).success,
+    ).toBe(false);
+    expect(
+      CalendarRangeQuery.safeParse({
+        start: '2026-06-30T00:00:00.000Z',
+        end: '2026-06-30T00:00:00.000Z',
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('CalendarItemCreate', () => {
+  const base = { kind: 'native_block' as const, title: 'Focus block' };
+
+  it('accepts complete timed bounds', () => {
+    const parsed = CalendarItemCreate.parse({
+      ...base,
+      startsAt: '2026-06-30T16:00:00.000Z',
+      endsAt: '2026-06-30T17:00:00.000Z',
+    });
+    expect(parsed.startsAt).toBe('2026-06-30T16:00:00.000Z');
+  });
+
+  it('accepts complete all-day bounds', () => {
+    const parsed = CalendarItemCreate.parse({
+      ...base,
+      allDayStartDate: '2026-06-30',
+      allDayEndDate: '2026-07-01',
+    });
+    expect(parsed.allDayStartDate).toBe('2026-06-30');
+  });
+
+  it('accepts event and timebox create intents without a legacy kind', () => {
+    const event = CalendarItemCreate.parse({
+      intent: 'event',
+      title: 'Design review',
+      startsAt: '2026-06-30T16:00:00.000Z',
+      endsAt: '2026-06-30T17:00:00.000Z',
+      timezone: 'America/Los_Angeles',
+      endTimezone: 'America/New_York',
+    });
+    const timebox = CalendarItemCreate.parse({
+      intent: 'timebox',
+      title: 'Prepare slides',
+      startsAt: '2026-06-30T15:00:00.000Z',
+      endsAt: '2026-06-30T16:00:00.000Z',
+    });
+
+    expect(event.intent).toBe('event');
+    expect(event.endTimezone).toBe('America/New_York');
+    expect(timebox.intent).toBe('timebox');
+  });
+
+  it('rejects a body that mixes the legacy kind with the new create intent', () => {
+    expect(
+      CalendarItemCreate.safeParse({
+        kind: 'native_block',
+        intent: 'event',
+        title: 'Ambiguous',
+        startsAt: '2026-06-30T16:00:00.000Z',
+        endsAt: '2026-06-30T17:00:00.000Z',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects neither timed nor all-day bounds', () => {
+    expect(CalendarItemCreate.safeParse(base).success).toBe(false);
+  });
+
+  it('rejects an incomplete timed pair (only startsAt)', () => {
+    expect(
+      CalendarItemCreate.safeParse({ ...base, startsAt: '2026-06-30T16:00:00.000Z' }).success,
+    ).toBe(false);
+  });
+
+  it('rejects an empty title', () => {
+    expect(
+      CalendarItemCreate.safeParse({
+        ...base,
+        title: '',
+        startsAt: '2026-06-30T16:00:00.000Z',
+        endsAt: '2026-06-30T17:00:00.000Z',
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('CalendarItemUpdate', () => {
+  it('accepts a single-field patch', () => {
+    const parsed = CalendarItemUpdate.parse({ title: 'New title' });
+    expect(parsed.title).toBe('New title');
+  });
+
+  it('accepts an empty string to clear a clearable field', () => {
+    const parsed = CalendarItemUpdate.parse({ description: '' });
+    expect(parsed.description).toBe('');
+  });
+
+  it('accepts null to clear a separate end timezone', () => {
+    const parsed = CalendarItemUpdate.parse({ endTimezone: null });
+    expect(parsed.endTimezone).toBeNull();
+  });
+
+  it('rejects an empty patch (no fields present)', () => {
+    expect(CalendarItemUpdate.safeParse({}).success).toBe(false);
+  });
+
+  it('never combines .nullable() with .optional() (description accepts undefined, not null)', () => {
+    expect(CalendarItemUpdate.safeParse({ description: null }).success).toBe(false);
+  });
+});
+
+describe('CalendarLayerUpdate', () => {
+  it('accepts a patch that touches at least one layer field', () => {
+    expect(CalendarLayerUpdate.safeParse({ selected: true }).success).toBe(true);
+    expect(CalendarLayerUpdate.safeParse({ visibleByDefault: false }).success).toBe(true);
+    expect(CalendarLayerUpdate.safeParse({ title: 'Work' }).success).toBe(true);
+    expect(CalendarLayerUpdate.safeParse({ color: '#3b82f6' }).success).toBe(true);
+  });
+
+  it('rejects an empty patch (no layer field present)', () => {
+    expect(CalendarLayerUpdate.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('CalendarListUpdate', () => {
+  it('accepts a patch that sets at least one visibility field', () => {
+    expect(CalendarListUpdate.safeParse({ selected: true }).success).toBe(true);
+    expect(CalendarListUpdate.safeParse({ visibleByDefault: false }).success).toBe(true);
+  });
+
+  it('rejects an empty patch (no visibility field present)', () => {
+    expect(CalendarListUpdate.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('CalendarItemTaskLinkCreate', () => {
+  it('accepts the contained task role for task stacks inside calendar items', () => {
+    expect(CalendarItemTaskRole.parse('contained')).toBe('contained');
+  });
+
+  it('parses the "link" mode (existing task)', () => {
+    const parsed = CalendarItemTaskLinkCreate.parse({
+      mode: 'link',
+      organizationId: ORG_ID,
+      taskId: TASK_ID,
+      role: 'prep',
+    });
+    if (parsed.mode !== 'link') throw new Error('expected link mode');
+    expect(parsed.taskId).toBe(TASK_ID);
+  });
+
+  it('parses the "create" mode (new task)', () => {
+    const parsed = CalendarItemTaskLinkCreate.parse({
+      mode: 'create',
+      organizationId: ORG_ID,
+      title: 'Follow up',
+    });
+    if (parsed.mode !== 'create') throw new Error('expected create mode');
+    expect(parsed.title).toBe('Follow up');
+  });
+
+  it('rejects an unknown mode', () => {
+    expect(
+      CalendarItemTaskLinkCreate.safeParse({ mode: 'delete', organizationId: ORG_ID }).success,
+    ).toBe(false);
+  });
+});
+
+describe('CalendarItemTaskLinkResultOut', () => {
+  it('parses a link + task pair', () => {
+    const parsed = CalendarItemTaskLinkResultOut.parse({
+      link: {
+        calendarItemId: ITEM_ID,
+        taskId: TASK_ID,
+        organizationId: ORG_ID,
+        role: 'related',
+        sort: 0,
+        note: null,
+        createdBy: '01BX5ZZKBKACTAV9WEVGEMMVS3',
+        createdAt: '2026-07-01T00:00:00.000Z',
+      },
+      task: {
+        labels: [],
+        id: TASK_ID,
+        organizationId: ORG_ID,
+        title: 'Follow up',
+        summary: null,
+        teamId: '01BX5ZZKBKACTAV9WEVGEMMVS4',
+        state: 'backlog',
+        priority: 'none',
+        autoCompletedBySubtasks: false,
+        provenance: {
+          source: 'native',
+          sourceIntegrationId: null,
+          externalId: null,
+          externalUrl: null,
+          syncMode: null,
+        },
+        createdAt: '2026-07-01T00:00:00.000Z',
+        updatedAt: '2026-07-01T00:00:00.000Z',
+      },
+    });
+    expect(parsed.link.taskId).toBe(TASK_ID);
+    expect(parsed.task.title).toBe('Follow up');
+  });
+});
+
+describe('calendar item relationships', () => {
+  it('parses contained and related directed relationships', () => {
+    expect(CalendarItemRelationCreate.parse({ targetItemId: TASK_ID, role: 'contained' })).toEqual({
+      targetItemId: TASK_ID,
+      role: 'contained',
+    });
+    expect(CalendarItemRelationCreate.parse({ targetItemId: TASK_ID })).toEqual({
+      targetItemId: TASK_ID,
+      role: 'related',
+    });
+
+    const relation = CalendarItemRelationOut.parse({
+      sourceItemId: ITEM_ID,
+      targetItemId: TASK_ID,
+      role: 'related',
+      createdByUserId: 'user_1',
+      createdAt: '2026-07-12T12:00:00.000Z',
+    });
+    expect(relation.sourceItemId).toBe(ITEM_ID);
+  });
+
+  it('rejects unsupported relationship roles', () => {
+    expect(
+      CalendarItemRelationCreate.safeParse({ targetItemId: TASK_ID, role: 'blocks' }).success,
+    ).toBe(false);
+  });
+});
+
+describe('calendar layer sharing', () => {
+  it('defaults a layer exposure to details and replaces a workspace share set', () => {
+    expect(CalendarLayerShareCreate.parse({ layerId: LAYER_ID })).toEqual({
+      layerId: LAYER_ID,
+      access: 'details',
+    });
+    expect(
+      CalendarLayerSharesReplace.parse({
+        shares: [
+          { layerId: LAYER_ID, access: 'details' },
+          { layerId: CONNECTION_ID, access: 'busy' },
+        ],
+      }).shares,
+    ).toHaveLength(2);
+  });
+
+  it('rejects unsupported share access', () => {
+    expect(
+      CalendarLayerShareCreate.safeParse({ layerId: LAYER_ID, access: 'private' }).success,
+    ).toBe(false);
+  });
+});
+
+describe('schedule comparison', () => {
+  it('parses a bounded actor comparison query', () => {
+    const parsed = ScheduleComparisonQuery.parse({
+      start: '2026-07-12T00:00:00.000Z',
+      end: '2026-07-13T00:00:00.000Z',
+      actorIds: ['01BX5ZZKBKACTAV9WEVGEMMVS3'],
+    });
+    expect(parsed.actorIds).toHaveLength(1);
+  });
+
+  it('accepts a consumer-defined number of comparison lanes', () => {
+    const actorIds = Array.from(
+      { length: 75 },
+      (_, index) => `01BX5ZZKBKACTAV9WEVG${String(index).padStart(6, '0')}`,
+    );
+
+    expect(
+      ScheduleComparisonQuery.parse({
+        start: '2026-07-12T00:00:00.000Z',
+        end: '2026-07-13T00:00:00.000Z',
+        actorIds,
+      }).actorIds,
+    ).toHaveLength(75);
+  });
+
+  it('structurally redacts busy-only items while allowing detailed items', () => {
+    const busy = ScheduleComparisonItemOut.parse({
+      access: 'busy',
+      startsAt: '2026-07-12T16:00:00.000Z',
+      endsAt: '2026-07-12T17:00:00.000Z',
+      allDayStartDate: null,
+      allDayEndDate: null,
+      title: 'Must not cross the boundary',
+    });
+    expect(busy).not.toHaveProperty('title');
+
+    const detailed = ScheduleComparisonItemOut.parse({
+      access: 'details',
+      itemId: ITEM_ID,
+      layerId: LAYER_ID,
+      kind: 'native_event',
+      title: 'Design review',
+      startsAt: '2026-07-12T16:00:00.000Z',
+      endsAt: '2026-07-12T17:00:00.000Z',
+      allDayStartDate: null,
+      allDayEndDate: null,
+    });
+    expect(detailed).toHaveProperty('title', 'Design review');
+  });
+
+  it('accepts an all-day comparison item bounded by dates instead of instants', () => {
+    const allDay = ScheduleComparisonItemOut.parse({
+      access: 'busy',
+      startsAt: null,
+      endsAt: null,
+      allDayStartDate: '2026-07-12',
+      allDayEndDate: '2026-07-13',
+    });
+    expect(allDay.allDayStartDate).toBe('2026-07-12');
+  });
+
+  it('refuses an item with neither timed nor all-day bounds', () => {
+    expect(
+      ScheduleComparisonItemOut.safeParse({
+        access: 'busy',
+        startsAt: null,
+        endsAt: null,
+        allDayStartDate: null,
+        allDayEndDate: null,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('parses person headers alongside permission-filtered items', () => {
+    const result = ScheduleComparisonOut.parse({
+      start: '2026-07-12T00:00:00.000Z',
+      end: '2026-07-13T00:00:00.000Z',
+      people: [
+        {
+          actorId: '01BX5ZZKBKACTAV9WEVGEMMVS3',
+          displayName: 'Ada Lovelace',
+          avatar: null,
+          timezone: 'America/Los_Angeles',
+          items: [],
+        },
+      ],
+    });
+    expect(result.people[0]?.displayName).toBe('Ada Lovelace');
+  });
+});

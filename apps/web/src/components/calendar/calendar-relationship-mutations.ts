@@ -5,8 +5,10 @@ import type {
   CalendarItemTaskLinkCreate,
   CalendarItemTaskLinkOut,
   CalendarItemTaskLinkResultOut,
-} from '@docket/types';
-import { CalendarItemId, OrganizationId, TaskId } from '@docket/types';
+} from '@docket/planning/calendar-contract';
+import { CalendarItemId } from '@docket/planning/ids';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { TaskId } from '@docket/work/ids';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';

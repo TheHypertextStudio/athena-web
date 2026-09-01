@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 
-import type { HubTaskItem, HubTodayPlanItem } from '@docket/types';
-import { OrganizationId, TaskId } from '@docket/types';
+import type { HubTaskItem, HubTodayPlanItem } from '../../src/lib/contracts/hub';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { TaskId } from '@docket/work/ids';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

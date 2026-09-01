@@ -32,7 +32,7 @@
  */
 import * as React from 'react';
 
-import type { WorkStatusCategory } from '@docket/types';
+import type { WorkStatusCategory } from '@docket/work/work-status-contract';
 
 import { Check, Circle, CircleDashed, CircleDot, X } from '../../icons';
 import { cn } from '../../lib/utils';
@@ -43,7 +43,7 @@ import { IdentityGlyph } from './IdentityGlyph';
  * The five canonical workflow-state types.
  *
  * @remarks
- * Aliases {@link WorkStatusCategory} from `@docket/types`, the one declaration of this union.
+ * Aliases {@link WorkStatusCategory} from `domain packages`, the one declaration of this union.
  * Every workspace status maps onto exactly one of these, and the mapping drives the status icon
  * and its token color — the `state` key a workspace chose does not.
  */

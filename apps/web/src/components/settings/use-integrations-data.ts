@@ -13,18 +13,18 @@
  * (scope, categories, effect copy) is assembled by {@link useConnectionsController} /
  * {@link useImportController} on top of this. Every state exposed is the server's truth.
  */
+import type { ConnectorProviderId } from '@docket/connections/provider-catalog-contract';
+import type { IdentityOut } from '@docket/identity-access/identity-contract';
 import type {
-  ConnectorProviderId,
-  IdentityOut,
   IntegrationDirectoryProvider,
   IntegrationOut,
   IntegrationPattern,
   IntegrationRole,
   SyncMode,
   SyncRunOut,
-  TeamOut,
-} from '@docket/types';
-import { oauthScopesForConnector } from '@docket/types';
+} from '@docket/connections/integration-contract';
+import type { TeamOut } from '../../lib/contracts/team';
+import { oauthScopesForConnector } from '@docket/identity-access/google-oauth-contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useAppSearchParams } from '@/lib/app-location';

@@ -7,8 +7,8 @@ import {
   MilestoneListQuery,
   MilestoneOut,
   MilestoneUpdate,
-  pageOf,
-} from '@docket/types';
+} from '@docket/work/milestone-contract';
+import { pageOf } from '../contracts/pagination';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

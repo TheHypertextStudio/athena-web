@@ -14,13 +14,10 @@
  *
  * The RPC client is mocked so these assert real behavior without touching the live API.
  */
-import {
-  IntegrationId,
-  OrganizationId,
-  TeamId,
-  type IntegrationOut,
-  type TeamOut,
-} from '@docket/types';
+import { IntegrationId } from '@docket/connections/ids';
+import { OrganizationId, TeamId } from '@docket/identity-access/ids';
+import { type IntegrationOut } from '@docket/connections/integration-contract';
+import { type TeamOut } from '../../../src/lib/contracts/team';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

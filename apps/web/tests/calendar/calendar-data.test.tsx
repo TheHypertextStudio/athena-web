@@ -16,16 +16,15 @@
  * - The link/create-and-link/detach/retry-write hooks never touch the cache directly (no
  *   optimistic mutation) — only the settle-time invalidation refetches.
  */
+import { CalendarItemId, CalendarLayerId } from '@docket/planning/ids';
 import {
-  CalendarItemId,
   type CalendarItemOut,
   type CalendarItemsRangeOut,
-  CalendarLayerId,
   type CalendarLayerOut,
   type CalendarLayersOut,
-  OrganizationId,
-  TaskId,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { TaskId } from '@docket/work/ids';
 import { QueryClient, QueryClientProvider, type QueryKey } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';

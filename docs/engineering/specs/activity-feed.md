@@ -24,7 +24,7 @@ entry point into one canonical shape: **who** (`actor`) did **what** (`kind`) to
 thing** (`entity`), **when** (`occurredAt`), **from where** (`source`), plus an optional typed
 tool-specific pocket (`detail`).
 
-| Axis        | Type (`@docket/types`)                                                      | Notes                                                                                                                                                                                                                                                            |
+| Axis        | Type (the retired contract package)                                         | Notes                                                                                                                                                                                                                                                            |
 | ----------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | verb        | `EventKind`                                                                 | closed enum: created/status*change/completed/comment/mention/assignment/reaction/message/calendar*\*, plus the `timer_*`, `elicitation_*` and `agent_*` families and `email_received`/`field_change` (see [The reporting vocabulary](#the-reporting-vocabulary)) |
 | which thing | `EntityRef { kind, source, externalId, title?, url?, docketEntityId? }`     | `kind` is the closed `CanonicalEntityKind` — a Docket task, Linear issue, GitHub PR all map to `work_item`; this is what lets analogous things share one row                                                                                                     |
@@ -171,7 +171,7 @@ never a class hierarchy when the variation is data-shaped.
 
 A Docket feature that wants to report joins the existing vocabulary before it invents one. In
 order: (1) can an existing `kind` say it? Use it. (2) Does a consumer need to branch on it without
-reading `detail`? Then it earns a `kind` — appended to `EventKind` in `@docket/types` **and** to
+reading `detail`? Then it earns a `kind` — appended to `EventKind` in the retired contract package **and** to
 the `event_kind` pg enum in the same order, with an additive `ALTER TYPE … ADD VALUE` migration
 (never a rename, never a removal: stored rows must keep parsing, and a migration that adds an enum
 value must not also _use_ it — Postgres rejects that inside one transaction). (3) Add **one**

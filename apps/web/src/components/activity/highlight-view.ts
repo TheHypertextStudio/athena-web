@@ -7,11 +7,15 @@
  * in it and a day whose sources could not be read look identical on screen unless something insists
  * they are different, and this is that something.
  */
-import type { HighlightOut, HighlightSourceStatus, HighlightsDayOut } from '@docket/types';
+import type {
+  HighlightOut,
+  HighlightSourceStatus,
+  HighlightsDayOut,
+} from '../../lib/contracts/highlights';
 
 // Re-exported rather than redefined: the digest email names the same sources to the same person, so
 // one list is the only way "GitHub" cannot become "github" between the panel and the inbox.
-export { joinLabels, sourceLabel } from '@docket/types';
+export { joinLabels, sourceLabel } from '../../lib/contracts/highlights';
 
 /** What the panel needs to know about a day in order to describe it truthfully. */
 export interface DaySummary {

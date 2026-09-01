@@ -11,7 +11,7 @@
  * threshold. The inbox itself is connected in **Connections**; this only turns the workflow on.
  * See `docs/engineering/specs/email-to-task.md`.
  */
-import type { ConnectorConfig, IntegrationOut } from '@docket/types';
+import type { ConnectorConfig, IntegrationOut } from '@docket/connections/integration-contract';
 import { useState } from 'react';
 
 import { api } from '@/lib/api';

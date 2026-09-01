@@ -25,7 +25,10 @@ import {
 } from '@docket/db';
 import { apiHosts } from '@docket/env/api';
 import { mailboxHostOf, mailboxKeyOf } from '@docket/mail';
-import type { AthenaMailMessageOut, AthenaMailAttachmentTargetOut } from '@docket/types';
+import type {
+  AthenaMailMessageOut,
+  AthenaMailAttachmentTargetOut,
+} from '@docket/athena/athena-mail-contract';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { z } from 'zod';
 

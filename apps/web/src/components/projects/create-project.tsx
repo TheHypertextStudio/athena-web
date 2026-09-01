@@ -23,16 +23,11 @@
  * @see {@link useActiveOrg} for the `teams` + `defaultTeamId` the {@link TeamPicker} is driven from.
  * @see {@link useComposerOptions} for the lead + program + initiative option sources.
  */
-import {
-  ActorId,
-  type Health,
-  InitiativeId,
-  type ProjectOut,
-  type ProjectStatus,
-  ProgramId,
-  TeamId,
-  type TeamOut,
-} from '@docket/types';
+import { ActorId, TeamId } from '@docket/identity-access/ids';
+import { type Health } from '@docket/work/capability-contract';
+import { InitiativeId, ProgramId } from '@docket/work/ids';
+import { type ProjectOut, type ProjectStatus } from '../../lib/contracts/project';
+import { type TeamOut } from '../../lib/contracts/team';
 import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
 import { EntityPicker } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';

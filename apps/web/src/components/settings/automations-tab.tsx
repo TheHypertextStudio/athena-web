@@ -9,7 +9,7 @@
 'use client';
 
 import type { ActionSpec } from '@docket/automation/contracts';
-import type { AutomationRuleCreate, AutomationRuleOut } from '@docket/types';
+import type { AutomationRuleCreate, AutomationRuleOut } from '../../lib/contracts/automation';
 import { EmptyState } from '@docket/ui/components';
 import { Workflow } from '@docket/ui/icons';
 import { Badge, Button, Field, Input, Select, Skeleton } from '@docket/ui/primitives';

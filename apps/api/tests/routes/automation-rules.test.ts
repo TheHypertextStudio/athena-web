@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { AutomationRuleOut } from '@docket/types';
+import type { AutomationRuleOut } from '../../src/contracts/automation';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type automationRulesRouter from '../../src/routes/automation-rules';

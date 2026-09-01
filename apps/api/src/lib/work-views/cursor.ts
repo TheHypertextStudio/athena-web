@@ -1,6 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
-import type { CanonicalViewQuery, ViewCursor } from '@docket/types';
+import type { CanonicalViewQuery, ViewCursor } from '@docket/work/work-view-contract';
 import type { ViewTarget } from '@docket/work/view-contract';
 import { z } from 'zod';
 

@@ -4,7 +4,7 @@ import type {
   CalendarItemOut,
   CalendarItemRelationOut,
   CalendarLayerShareOut,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 
 import {
   addMember,

@@ -2,10 +2,10 @@
  * Every protocol name Docket uses, checked against the committed specification text.
  *
  * @remarks
- * `@docket/types` holds one spelling of each method, status, and capability key so the two sides
+ * `domain packages` holds one spelling of each method, status, and capability key so the two sides
  * of each bridge cannot drift from each other. This suite is what stops them drifting from the
  * SPEC: each name is asserted to appear in the verbatim copies under
- * `docs/engineering/specs/vendor/`. It lives here rather than in `@docket/types` because that
+ * `docs/engineering/specs/vendor/`. It lives here rather than in `domain packages` because that
  * package is isomorphic and deliberately has no filesystem.
  *
  * A test that restated the literals would be a tautology. Every assertion below reads the
@@ -25,6 +25,8 @@ import {
   MCP_TASK_RESULT_TYPE,
   MCP_TASK_STATUSES,
   MCP_TERMINAL_TASK_STATUSES,
+} from '../../src/contracts/mcp-tasks';
+import {
   MCP_UI_DISPLAY_MODES,
   MCP_UI_EXTENSION,
   MCP_UI_METHODS,
@@ -33,7 +35,7 @@ import {
   MCP_UI_PROTOCOL_VERSION,
   MCP_UI_PROXIED_METHODS,
   MCP_UI_SCHEME,
-} from '@docket/types';
+} from '../../src/contracts/mcp-apps';
 
 import { readVendored } from './mcp-apps-conformance';
 

@@ -13,7 +13,7 @@ import {
   sessionActivity,
 } from '@docket/db';
 import { canActor } from '@docket/authz';
-import type { SessionApprovalDecision } from '@docket/types';
+import type { SessionApprovalDecision } from '@docket/athena/agent-contract';
 import { and, asc, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 
 import { proposalOrganizationId } from '../agent/proposals';

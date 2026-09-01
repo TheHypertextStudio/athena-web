@@ -25,7 +25,7 @@
  * timeline's item set reshapes rather than jumping when a layer's items appear or disappear;
  * {@link useUpdateLayerGroupVisibility} is already optimistic, so no toggle waits on the network.
  */
-import type { CalendarLayerOut } from '@docket/types';
+import type { CalendarLayerOut } from '@docket/planning/calendar-contract';
 import { Globe, Layers } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Badge, Button, Checkbox, surfaceToneColor } from '@docket/ui/primitives';

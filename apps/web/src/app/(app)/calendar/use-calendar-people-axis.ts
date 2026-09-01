@@ -1,6 +1,8 @@
 'use client';
 
-import { ActorId, type OrgSummary, type ScheduleComparisonOut } from '@docket/types';
+import { ActorId } from '@docket/identity-access/ids';
+import { type OrgSummary } from '../../../lib/contracts/organization';
+import { type ScheduleComparisonOut } from '@docket/planning/calendar-contract';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';

@@ -1,6 +1,7 @@
 'use client';
 
-import type { CalendarItemOut, CalendarLayerOut, WorkPlaceOut } from '@docket/types';
+import type { CalendarItemOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
+import type { WorkPlaceOut } from '@docket/planning/work-location-contract';
 import { Sparkles } from '@docket/ui/icons';
 import { Badge, Button, DialogDescription, DialogTitle } from '@docket/ui/primitives';
 import { type JSX } from 'react';

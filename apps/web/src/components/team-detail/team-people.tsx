@@ -18,7 +18,7 @@
  * looking authoritative — and "how much is this person holding" is answerable from task state
  * without anyone maintaining anything.
  */
-import type { TeamMemberOut, TeamMemberRole } from '@docket/types';
+import type { TeamMemberOut, TeamMemberRole } from '../../lib/contracts/team';
 import { ActorAvatar, EmptyState } from '@docket/ui/components';
 import { Users } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';

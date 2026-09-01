@@ -10,7 +10,8 @@
  * These cover the replacement: name and glyph come off the status itself, and ordering comes from
  * the position the workspace put it in rather than from a list written in the app.
  */
-import type { TaskOut, WorkStatusCategory } from '@docket/types';
+import type { TaskOut } from '@docket/work/task-model';
+import type { WorkStatusCategory } from '@docket/work/work-status-contract';
 import { describe, expect, it } from 'vitest';
 
 import {

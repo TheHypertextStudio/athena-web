@@ -15,7 +15,7 @@
  * routes to its task detail. A composer at the top adds a task; the empty state invites the first
  * one.
  */
-import type { TaskOut } from '@docket/types';
+import type { TaskOut } from '@docket/work/task-model';
 import { type EntityTableGroup } from '@docket/ui/components';
 import { Button } from '@docket/ui/primitives';
 

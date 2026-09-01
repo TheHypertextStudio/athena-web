@@ -1,15 +1,14 @@
 import {
   type IntegrationDirectoryProvider,
   type IntegrationOut,
-  type MemberOut,
-  ProgramId,
-  type ProgramOut,
-  ProjectId,
-  type ProjectOut,
-  type RoleOut,
-  type TaskOut,
-  type TeamOut,
-} from '@docket/types';
+} from '@docket/connections/integration-contract';
+import { type MemberOut } from '@docket/identity-access/member-contract';
+import { ProgramId, ProjectId } from '@docket/work/ids';
+import { type ProgramOut } from '@docket/work/program-contract';
+import { type ProjectOut } from './contracts/project';
+import { type RoleOut } from './contracts/role';
+import { type TaskOut } from '@docket/work/task-model';
+import { type TeamOut } from './contracts/team';
 import type { GroupKey } from '@docket/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';

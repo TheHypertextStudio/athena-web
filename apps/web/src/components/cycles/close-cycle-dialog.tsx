@@ -19,7 +19,7 @@
  * Cancel / Close actions. All chrome uses `@docket/ui` primitives and semantic tokens — no bare
  * HTML controls, no hardcoded color.
  */
-import type { CycleCarryoverAction } from '@docket/types';
+import type { CycleCarryoverAction } from '@docket/work/cycle-contract';
 import {
   Button,
   Dialog,

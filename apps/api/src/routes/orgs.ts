@@ -18,7 +18,7 @@ import {
   teamMember,
   seedWorkspaceStatuses,
 } from '@docket/db';
-import type { DefaultTeamOut } from '@docket/types';
+import type { DefaultTeamOut } from '../contracts/organization';
 import {
   OrgCreate,
   OrgCreateResult,
@@ -27,8 +27,8 @@ import {
   OrgUpdate,
   WorkspaceSettingsOut,
   WorkspaceSettingsUpdate,
-  pageOf,
-} from '@docket/types';
+} from '../contracts/organization';
+import { pageOf } from '../contracts/pagination';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';

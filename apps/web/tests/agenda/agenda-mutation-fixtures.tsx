@@ -1,12 +1,10 @@
 /** Shared fixtures for Agenda plan and timebox mutation behavior tests. */
-import {
-  DailyPlanItemId,
-  type AgendaOut,
-  type DailyPlanItemOut,
-  type HubTodayOut,
-  OrganizationId,
-  TaskId,
-} from '@docket/types';
+import { DailyPlanItemId } from '@docket/planning/ids';
+import { type AgendaOut } from '@docket/planning/agenda-contract';
+import { type DailyPlanItemOut } from '@docket/planning/daily-plan-contract';
+import { type HubTodayOut } from '../../src/lib/contracts/hub';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { TaskId } from '@docket/work/ids';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { JSX, ReactNode } from 'react';
 

@@ -22,7 +22,8 @@
  * transaction replaces the join rows, so the client cannot leave a half-applied set behind after a
  * request fails midway through a sequence of independent link calls.
  */
-import { OrganizationId, ProjectId } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { ProjectId } from '@docket/work/ids';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';

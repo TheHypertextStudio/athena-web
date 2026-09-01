@@ -10,7 +10,7 @@
  * while only scheduling dependencies become visible edges. It polls on a focus-gated
  * interval because edges change out-of-band when teammates add or remove `blocks` links.
  */
-import type { GraphOut } from '@docket/types';
+import type { GraphOut } from '@docket/work/task-model';
 import { type Edge, MarkerType, type Node } from '@xyflow/react';
 import { useMemo } from 'react';
 

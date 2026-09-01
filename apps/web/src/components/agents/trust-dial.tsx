@@ -15,7 +15,7 @@
  * Reads always run under every position — the dial gates mutation, not observation.
  * Purely presentational: the parent owns the PATCH + pending state.
  */
-import type { ApprovalPolicy } from '@docket/types';
+import type { ApprovalPolicy } from '@docket/athena/agent-contract';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX } from 'react';
 

@@ -42,12 +42,12 @@ import {
   task,
   taskLabel,
 } from '@docket/db';
+import { EmailSuggestionMeta } from '@docket/athena/email-suggestion-contract';
+import { SourceSystemKind } from '@docket/connections/event-contract';
 import {
-  EmailSuggestionMeta,
-  SourceSystemKind,
   providerSourceSystem,
   type DirectoryProviderId,
-} from '@docket/types';
+} from '@docket/connections/provider-catalog-contract';
 import { Priority } from '@docket/work/task-contract';
 import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';

@@ -12,7 +12,11 @@
  * Linking/unlinking Google accounts happens under **Connected accounts**, not here: accounts are
  * user-level identities; a connection is an org-level choice of identity + resources (task lists).
  */
-import type { IntegrationDirectoryProvider, IntegrationOut, TeamOut } from '@docket/types';
+import type {
+  IntegrationDirectoryProvider,
+  IntegrationOut,
+} from '@docket/connections/integration-contract';
+import type { TeamOut } from '../../lib/contracts/team';
 import { EmptyState } from '@docket/ui/components';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { Plus, TaskAlt } from '@docket/ui/icons';

@@ -13,7 +13,7 @@
  * and from that moment they are ordinary rows: rename them, rewrite them, delete them. Marking
  * them would imply a distinction the API does not enforce and the product does not intend.
  */
-import type { TemplateOut, TemplateTargetType } from '@docket/types';
+import type { TemplateOut, TemplateTargetType } from '@docket/work/template-contract';
 import { useVocabulary } from '@docket/ui/hooks';
 import {
   Button,

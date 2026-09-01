@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { MCP_UI_EXTENSION, MCP_UI_META_KEY, MCP_UI_MIME_TYPE } from '@docket/types';
+import { MCP_UI_EXTENSION, MCP_UI_META_KEY, MCP_UI_MIME_TYPE } from '../../src/contracts/mcp-apps';
 
 import {
   createWidgetFixtureServer,

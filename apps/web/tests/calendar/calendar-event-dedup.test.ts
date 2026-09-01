@@ -12,13 +12,8 @@
  * that share a title and a time are two real entries — a double booking, a duplicated invite the
  * owner has to see — and collapsing those would make the app lie about what is scheduled.
  */
-import {
-  CalendarConnectionId,
-  CalendarItemId,
-  type CalendarItemOut,
-  CalendarLayerId,
-  type CalendarLayerOut,
-} from '@docket/types';
+import { CalendarConnectionId, CalendarItemId, CalendarLayerId } from '@docket/planning/ids';
+import { type CalendarItemOut, type CalendarLayerOut } from '@docket/planning/calendar-contract';
 import { describe, expect, it } from 'vitest';
 
 import { deduplicateCalendarItems } from '../../src/components/calendar/calendar-event-dedup';

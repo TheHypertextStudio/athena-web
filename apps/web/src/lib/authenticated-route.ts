@@ -1,27 +1,28 @@
 /** Runtime-validated, type-correlated contracts for authenticated routes. */
 import {
   ActorId,
-  AgentSessionId,
+  OrganizationId,
+  TeamId,
+  type ActorId as ActorIdValue,
+  type OrganizationId as OrganizationIdValue,
+  type TeamId as TeamIdValue,
+} from '@docket/identity-access/ids';
+import { AgentSessionId, type AgentSessionId as AgentSessionIdValue } from '@docket/athena/ids';
+import {
   CycleId,
   InitiativeId,
-  OrganizationId,
   ProgramId,
   ProjectId,
   RecurrenceSeriesId,
   TaskId,
-  TeamId,
-  type ActorId as ActorIdValue,
-  type AgentSessionId as AgentSessionIdValue,
   type CycleId as CycleIdValue,
-  type EntityNavigationSnapshot,
   type InitiativeId as InitiativeIdValue,
-  type OrganizationId as OrganizationIdValue,
   type ProgramId as ProgramIdValue,
   type ProjectId as ProjectIdValue,
   type RecurrenceSeriesId as RecurrenceSeriesIdValue,
   type TaskId as TaskIdValue,
-  type TeamId as TeamIdValue,
-} from '@docket/types';
+} from '@docket/work/ids';
+import { type EntityNavigationSnapshot } from './contracts/entity-navigation';
 
 import {
   OFFLINE_ROUTES,

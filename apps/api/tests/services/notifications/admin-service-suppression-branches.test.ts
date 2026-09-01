@@ -11,7 +11,7 @@
  * it would never otherwise see, and asserts on its own aggregation logic as a black box.
  */
 import type * as DbModule from '@docket/db';
-import type { NotificationAudienceEstimateOut } from '@docket/notifications';
+import type { NotificationAudienceEstimateOut } from '@docket/notifications/schemas';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { z } from 'zod';
 

@@ -1,4 +1,4 @@
-import { AthenaSessionDetailOut } from '@docket/types';
+import { AthenaSessionDetailOut } from '@docket/athena/agent-contract';
 import { describe, expect, it } from 'vitest';
 
 import { adaptAthenaDetail, type AthenaApiSessionDetail } from '../../src/lib/athena/api-adapter';

@@ -10,8 +10,8 @@
  * appears in travels with it, so the tab can say "in Description" rather than leaving the reader to
  * wonder where it came from.
  */
-import type { EntityMention, MentionRef, MentionSubjectType } from '@docket/types';
-import { mentionRefKey } from '@docket/types';
+import type { EntityMention, MentionRef, MentionSubjectType } from '../contracts/mention';
+import { mentionRefKey } from '../contracts/mention';
 
 import { loadVisibleDocuments, type SearchCaller } from '../search/query';
 

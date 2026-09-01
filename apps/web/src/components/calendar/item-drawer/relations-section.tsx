@@ -1,6 +1,6 @@
 'use client';
 
-import type { CalendarItemRelationOut } from '@docket/types';
+import type { CalendarItemRelationOut } from '@docket/planning/calendar-contract';
 import { Badge, Button, Skeleton, Surface } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 

@@ -10,9 +10,9 @@ import {
   type RecurrenceEnd,
   type RecurrenceSchedule,
   type RecurrenceWeekday,
-} from '@docket/types';
+} from '../../contracts/recurrence';
 
-import { formatCalendarDate, parseCalendarDate } from './calendar-date';
+import { formatCalendarDate, parseCalendarDate } from '@docket/planning/calendar-date';
 
 const WEEKDAY_CODE: Readonly<Record<RecurrenceWeekday, string>> = {
   monday: 'MO',

@@ -15,8 +15,8 @@
     "dev:app": "tsx ../../scripts/portless-env.ts next dev",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
+    "lint": "eslint . --cache --cache-location ../../node_modules/.cache/eslint/admin --cache-strategy content",
+    "lint:fix": "eslint . --fix --cache --cache-location ../../node_modules/.cache/eslint/admin --cache-strategy content",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -26,7 +26,7 @@
     "@better-auth/passkey": "catalog:",
     "@docket/api": "workspace:*",
     "@docket/env": "workspace:*",
-    "@docket/types": "workspace:*",
+    "@docket/identity-access": "workspace:*",
     "@docket/ui": "workspace:*",
     "@emotion/cache": "^11.14.0",
     "@emotion/server": "^11.11.0",
@@ -35,10 +35,12 @@
     "hono": "catalog:",
     "next": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@docket/eslint-config": "workspace:*",
+    "@docket/notifications": "workspace:*",
     "@docket/tsconfig": "workspace:*",
     "@tailwindcss/postcss": "^4.3.2",
     "@types/react": "catalog:",

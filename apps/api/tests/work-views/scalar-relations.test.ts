@@ -2,20 +2,14 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 
 import type * as DbModule from '@docket/db';
+import { ActorId, TeamId } from '@docket/identity-access/ids';
+import { CycleId, InitiativeId, MilestoneId, ProgramId, ProjectId, TaskId } from '@docket/work/ids';
 import {
-  ActorId,
-  CycleId,
-  InitiativeId,
   InitiativeWorkViewQueryRequest,
-  MilestoneId,
-  ProgramId,
   ProgramWorkViewQueryRequest,
-  ProjectId,
   ProjectWorkViewQueryRequest,
-  TaskId,
   TaskWorkViewQueryRequest,
-  TeamId,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
 
 import { queryWorkView } from '../../src/lib/work-views/query';
 import { getDb, seedBaseOrg } from '../support/routes-harness';

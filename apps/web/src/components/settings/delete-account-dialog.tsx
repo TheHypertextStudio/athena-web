@@ -11,7 +11,7 @@
  * recoverable 14-day grace window (`POST /v1/me/account/deletion`); the user stays signed in and
  * the Danger zone shows the pending banner. Failures surface inline (no toast system exists).
  */
-import { AccountStatusOut } from '@docket/types';
+import { AccountStatusOut } from '@docket/identity-access/account-contract';
 import { WriteError } from './write-error';
 import {
   Button,

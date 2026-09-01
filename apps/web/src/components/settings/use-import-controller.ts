@@ -11,7 +11,7 @@
  * `migration` integrations (`import` sync). It reuses only the shared {@link useIntegrationsData}
  * plumbing and the {@link ProviderCategorySection} content, never the Connections layout.
  */
-import type { TeamOut } from '@docket/types';
+import type { TeamOut } from '../../lib/contracts/team';
 import { useMemo } from 'react';
 
 import { groupDirectoryByCategory, visibleProviderConnections } from './integrations-selectors';

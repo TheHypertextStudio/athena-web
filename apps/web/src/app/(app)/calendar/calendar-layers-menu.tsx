@@ -16,7 +16,7 @@
  *
  * @see {@link CalendarLayersMenu}
  */
-import type { CalendarLayerOut } from '@docket/types';
+import type { CalendarLayerOut } from '@docket/planning/calendar-contract';
 import { ChevronDown, Layers } from '@docket/ui/icons';
 import {
   Button,

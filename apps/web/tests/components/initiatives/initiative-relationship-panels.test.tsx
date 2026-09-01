@@ -3,7 +3,8 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Id, InitiativeId, OrganizationId } from '@docket/types';
+import { InitiativeHierarchyLinkId, InitiativeId } from '@docket/work/ids';
+import { OrganizationId } from '@docket/identity-access/ids';
 
 import { InitiativeRelationshipPanels } from '../../../src/components/initiatives/initiative-relationship-panels';
 import { InteractionProvider } from '../../../src/lib/actions/interaction-provider';
@@ -13,7 +14,7 @@ import type { ActionContext } from '../../../src/lib/actions/types';
 const childId = InitiativeId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV');
 const organizationId = OrganizationId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAW');
 const parentInitiativeId = InitiativeId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAX');
-const parentLinkId = Id.parse('01ARZ3NDEKTSV4RRFFQ69G5FAY');
+const parentLinkId = InitiativeHierarchyLinkId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAY');
 
 const child = {
   id: childId,

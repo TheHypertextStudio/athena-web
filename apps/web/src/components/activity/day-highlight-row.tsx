@@ -14,7 +14,7 @@
  * primary act — hiding it would make the one thing a person came here to do undiscoverable, and
  * unreachable by touch entirely.
  */
-import type { HighlightOut } from '@docket/types';
+import type { HighlightOut } from '../../lib/contracts/highlights';
 import { cn } from '@docket/ui';
 import { EntityListRow, RowMeta } from '@docket/ui/components';
 import { Button, Text } from '@docket/ui/primitives';

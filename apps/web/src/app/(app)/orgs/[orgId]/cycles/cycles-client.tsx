@@ -32,12 +32,8 @@
  * now and how is it going" without a click. The active cycle *also* stays in the roster below —
  * subordination is by weight, not by hiding, so a filter never lies about what it matched.
  */
-import {
-  defaultEntityDisplay,
-  type CycleOut,
-  type CycleStats,
-  type EntityDisplayOut,
-} from '@docket/types';
+import { defaultEntityDisplay, type EntityDisplayOut } from '@docket/work/entity-display-contract';
+import { type CycleOut, type CycleStats } from '@docket/work/cycle-contract';
 import { EmptyState, StatusIcon } from '@docket/ui/components';
 import type { WorkflowStateType } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';

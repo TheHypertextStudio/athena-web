@@ -7,7 +7,7 @@
  * arm: adding a mentionable kind fails to compile until its route exists, rather than shipping a
  * chip that navigates nowhere.
  */
-import type { MentionRef } from '@docket/types';
+import type { MentionRef } from '../contracts/mention';
 
 /** A reference to a Docket entity, narrowed from the union. */
 export type EntityMentionRef = Extract<MentionRef, { kind: 'entity' }>;

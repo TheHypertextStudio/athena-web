@@ -22,7 +22,7 @@
  * (and `ACTIVITY_PROVIDER_IDS`) rather than in a manifest local to this package, so provider
  * capabilities stay declared in one place.
  */
-import type { SourceSystemKind } from '@docket/types';
+import type { SourceSystemKind } from '@docket/connections/event-contract';
 
 import type { EventDraft } from './observer';
 

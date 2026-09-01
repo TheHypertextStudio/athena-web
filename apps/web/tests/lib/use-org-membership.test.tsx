@@ -12,7 +12,8 @@
  * pin the replacement: capabilities resolve on their own shared keys, and `pending` exists so a
  * page can tell "not permitted" from "not known yet".
  */
-import type { MemberOut, RoleOut } from '@docket/types';
+import type { MemberOut } from '@docket/identity-access/member-contract';
+import type { RoleOut } from '../../src/lib/contracts/role';
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 

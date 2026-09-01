@@ -23,7 +23,7 @@ import { Sparkles } from '../../icons';
 import { cn } from '../../lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../../primitives';
 
-/** The actor kinds, mirroring `ActorOut.kind` in `@docket/types`. */
+/** The actor kinds, mirroring `ActorOut.kind` in `domain packages`. */
 export type ActorKind = 'human' | 'agent' | 'team';
 
 /** Compute up-to-two-letter initials from a display name for the avatar fallback. */

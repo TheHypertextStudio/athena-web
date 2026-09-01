@@ -8,7 +8,7 @@
  * source event remains in `allEvents`; conservative classification and duplicate folding affect
  * only which lines are initially visible.
  *
- * The grouping itself lives in `@docket/types` so the server groups activity through the same
+ * The grouping itself lives in `domain packages` so the server groups activity through the same
  * implementation — see {@link groupAdjacentEpisodes}. What stays here is presentation the server
  * has no business knowing: recency labels are relative to the *viewer's* clock, and only a browser
  * has one.
@@ -19,7 +19,7 @@ import {
   episodeEventFingerprint,
   episodeSubjectKey,
   isSubstantiveEpisodeEvent,
-} from '@docket/types';
+} from '@docket/athena/activity-episode-contract';
 
 import type { StreamEventRow } from './stream-meta';
 

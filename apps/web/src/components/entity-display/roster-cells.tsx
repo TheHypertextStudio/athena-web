@@ -13,7 +13,7 @@
  * Both take their type role from the caller, because a dense row and a card sit at different
  * sizes and neither should have to fight the other for one shared default.
  */
-import type { WorkViewActor } from '@docket/types';
+import type { WorkViewActor } from '@docket/work/work-view-contract';
 import { ActorAvatar } from '@docket/ui/components';
 import { Text, type TextTone, type TypeToken } from '@docket/ui/primitives';
 import type { ComponentType, JSX } from 'react';

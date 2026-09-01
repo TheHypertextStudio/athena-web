@@ -1,5 +1,5 @@
 /** Pure receipt projection for selected canvas objects that leave the active graph query. */
-import type { ObjectCommandReceipt, ObjectCommandValue } from '@docket/types';
+import type { ObjectCommandReceipt, ObjectCommandValue } from '../../lib/contracts/object-command';
 
 import type { CanvasPropertySnapshot } from '@/lib/actions';
 import { toPlanningTimeframe } from '@/lib/planning-timeframe';

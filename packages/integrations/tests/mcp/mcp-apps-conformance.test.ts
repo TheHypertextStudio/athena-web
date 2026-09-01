@@ -28,7 +28,7 @@ import {
   MCP_UI_METHODS,
   MCP_UI_MIME_TYPE,
   MCP_UI_PROTOCOL_VERSION,
-} from '@docket/types';
+} from '../../src/contracts/mcp-apps';
 import { createMcpAppHost, type JsonRpcMessage } from '../../src/mcp-apps-host';
 import { MCP_UI_CLIENT_CAPABILITY } from '../../src/mcp-connector';
 import {

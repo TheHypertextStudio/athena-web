@@ -6,7 +6,7 @@
  * submitted allocation credits, never a contributor's Hub, Time Record ids, titles, contexts,
  * or live intervals.
  */
-import { TimeSubmissionRecipientListOut } from '@docket/types';
+import { TimeSubmissionRecipientListOut } from '../contracts/time';
 import { Hono } from 'hono';
 
 import type { AppEnv } from '../context';

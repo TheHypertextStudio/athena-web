@@ -1,5 +1,5 @@
 /** Pure, session-local undo and redo history for graph-canvas object commands. */
-import type { ObjectCommandReceipt, ObjectCommandResult } from '@docket/types';
+import type { ObjectCommandReceipt, ObjectCommandResult } from '../../lib/contracts/object-command';
 
 const HISTORY_LIMIT = 50;
 

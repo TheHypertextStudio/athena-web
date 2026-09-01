@@ -19,7 +19,8 @@
  * SSR-prefetched by the list entries, so on any navigation from inside the app they are warm and
  * this costs no request at all.
  */
-import type { MemberOut, RoleOut } from '@docket/types';
+import type { MemberOut } from '@docket/identity-access/member-contract';
+import type { RoleOut } from './contracts/role';
 
 import { api } from '@/lib/api';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';

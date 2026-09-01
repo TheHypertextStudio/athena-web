@@ -12,8 +12,8 @@
  * path of *seeing* a mention — only of seeing its preview.
  */
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import type { MentionCard, MentionRef } from '@docket/types';
-import { mentionRefKey } from '@docket/types';
+import type { MentionCard, MentionRef } from '../../lib/contracts/mention';
+import { mentionRefKey } from '../../lib/contracts/mention';
 
 import { api } from '@/lib/api';
 import { apiQueryOptions, STALE, useApiQuery } from '@/lib/query';

@@ -1,4 +1,4 @@
-import type { MentionEntityKind, MentionItem } from '@docket/types';
+import type { MentionEntityKind, MentionItem } from '../../../src/lib/contracts/mention';
 import { describe, expect, it } from 'vitest';
 
 import {

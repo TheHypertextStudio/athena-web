@@ -10,13 +10,13 @@ import {
   ProjectViewRow,
   TASK_VIEW_CONTRACT,
   TaskViewRow,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
 import type {
   InitiativeViewRow as InitiativeViewRowOutput,
   ProgramViewRow as ProgramViewRowOutput,
   ProjectViewRow as ProjectViewRowOutput,
   TaskViewRow as TaskViewRowOutput,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
 import type {
   FilterableFieldKey,
   GroupableFieldKey,

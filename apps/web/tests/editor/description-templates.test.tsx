@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import type { TemplateOut } from '@docket/types';
+import type { TemplateOut } from '@docket/work/template-contract';
 import { assertDefined } from '@docket/test-utils';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

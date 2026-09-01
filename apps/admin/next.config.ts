@@ -45,7 +45,7 @@ const securityHeaders = [
  * Next.js config for the Docket service-admin console.
  *
  * @remarks
- * Workspace packages (`@docket/ui`, `@docket/types`, `@docket/env`) ship raw TypeScript and
+ * Workspace packages (`@docket/ui`, `domain packages`, `@docket/env`) ship raw TypeScript and
  * are transpiled by Next via `transpilePackages`. `@docket/api/rpc-contract` is consumed
  * type-only (for `AdminAppType`) so it needs no transpilation.
  *
@@ -59,7 +59,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: 'standalone',
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
-  transpilePackages: ['@docket/ui', '@docket/types', '@docket/env'],
+  transpilePackages: ['@docket/ui', 'domain packages', '@docket/env'],
   // Portless serves dev over https://admin.docket.localhost; allow its HMR/devtools
   // resources so hot-reload works (Next 16 blocks cross-origin dev resources by default).
   //

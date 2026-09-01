@@ -1,6 +1,6 @@
 'use client';
 
-import type { ScheduleComparisonItemOut } from '@docket/types';
+import type { ScheduleComparisonItemOut } from '@docket/planning/calendar-contract';
 import {
   Badge,
   Dialog,

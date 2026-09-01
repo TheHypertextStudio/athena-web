@@ -24,15 +24,17 @@ import {
   TimeRecordStatusUpdate,
   TimeRecordOut,
   TimeRecordUpdate,
-  TimeShareTokenCreate,
-  TimeShareTokenCreated,
-  TimeShareTokenListOut,
-  TimeShareTokenOut,
   TimeSubmissionCreate,
   TimeSubmissionOut,
   TimeTimelineOut,
   TimeTimelineQuery,
-} from '@docket/types';
+} from '../contracts/time';
+import {
+  TimeShareTokenCreate,
+  TimeShareTokenCreated,
+  TimeShareTokenListOut,
+  TimeShareTokenOut,
+} from '@docket/planning/time-share-contract';
 import { Hono } from 'hono';
 import { z } from 'zod';
 

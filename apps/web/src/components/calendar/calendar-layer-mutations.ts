@@ -1,6 +1,6 @@
 'use client';
 
-import type { CalendarLayersOut, CalendarLayerUpdate } from '@docket/types';
+import type { CalendarLayersOut, CalendarLayerUpdate } from '@docket/planning/calendar-contract';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';

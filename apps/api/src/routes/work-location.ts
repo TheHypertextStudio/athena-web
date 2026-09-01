@@ -1,9 +1,8 @@
 /** Authenticated personal work-location source-of-truth routes. */
 import { db } from '@docket/db';
+import { DateString } from '@docket/planning/date-time';
 import {
-  DateString,
   WorkLocationAssertionCreate,
-  WorkLocationAssertionId,
   WorkLocationAssertionListOut,
   WorkLocationAssertionMutationOut,
   WorkLocationAssertionUpdate,
@@ -18,11 +17,11 @@ import {
   WorkLocationRangeQuery,
   WorkLocationSyncOut,
   WorkPlaceCreate,
-  WorkPlaceId,
   WorkPlaceListOut,
   WorkPlaceMutationOut,
   WorkPlaceUpdate,
-} from '@docket/types';
+} from '@docket/planning/work-location-contract';
+import { WorkLocationAssertionId, WorkPlaceId } from '@docket/planning/ids';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -57,7 +56,7 @@ import {
 import {
   resolveExpectedWorkLocationRange,
   resolveWorkLocationPoint,
-} from '../services/work-location/resolver';
+} from '@docket/planning/work-location-resolution';
 
 /** Require the signed-in user on this Hub-owned surface. */
 function requireSession(c: { get: (key: 'session') => AuthSession }): NonNullable<AuthSession> {

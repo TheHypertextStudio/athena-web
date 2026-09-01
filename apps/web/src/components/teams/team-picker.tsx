@@ -14,7 +14,8 @@
  *
  * @see {@link useActiveOrg} for the `teams` + `defaultTeamId` this picker is driven from.
  */
-import { defaultEntityDisplay, type TeamOut } from '@docket/types';
+import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
+import { type TeamOut } from '../../lib/contracts/team';
 import { ChevronDown } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import {

@@ -10,7 +10,7 @@
  * statuses — a picker, a settings list, a label for a specific status — reads them through
  * {@link import('@/components/statuses/status-registry').useStatusRegistry}.
  */
-import { WORK_STATUS_CATEGORIES, type WorkStatusCategory } from '@docket/types';
+import { WORK_STATUS_CATEGORIES, type WorkStatusCategory } from '@docket/work/work-status-contract';
 
 /** The canonical category ordering, from not-started to ended. */
 export const CATEGORY_ORDER: readonly WorkStatusCategory[] = WORK_STATUS_CATEGORIES;

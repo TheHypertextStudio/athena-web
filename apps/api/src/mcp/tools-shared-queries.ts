@@ -3,7 +3,7 @@ import { db, initiative, program, project, task } from '@docket/db';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { OrganizationId } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
 
 import { NotFoundError, ValidationError } from '../error';
 import { resolveTaskStatus, type TaskStatusTransition } from '../lib/work-status';

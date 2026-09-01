@@ -35,7 +35,7 @@ Confirmed against current docs (ctx7, 2026-06-05). These are load-bearing for th
 Everything downstream depends on a stable contract at three seams. **These three must be sequential and land in this order:**
 
 1. **DB schema** (`@docket/db`) — every API route, permission check, and UI type traces back to a table.
-2. **API contract** (`apps/api` exported `AppType` + `@docket/types` Zod schemas) — every UI data call and every Playwright assertion traces back to a route signature.
+2. **API contract** (`apps/api` exported `AppType` + the retired contract package Zod schemas) — every UI data call and every Playwright assertion traces back to a route signature.
 3. **Design system shell** (`@docket/ui` + app shell layout) — every screen composes from it.
 
 Once **schema + API contract + design system are frozen**, feature work (Programs, Initiatives, Cycles, Triage, Agents/Sessions, Portfolio, Billing, MCP) can fan out in parallel because each touches new tables/routes/components without re-cutting the seams. **Before** they are frozen, parallelism creates churn (a renamed column re-types the whole RPC client; a re-chained router breaks every consumer).
@@ -58,8 +58,8 @@ P4 apps/api (RPC + auth mount) ─► P4.5 permissions core ─► P5 @docket/ui
 
 - **Do:** Fresh pnpm + Turborepo 2.9.x workspace. `pnpm-workspace.yaml` → `apps/*`, `packages/*`. Root `turbo.json` using the **2.x `tasks` key** (never `pipeline`), with `globalEnv`/`env` declared so cache invalidates on env value changes, **strict env mode** on, and **`.env` per-app** (not repo root).
 - **Create the empty workspace members** (folders + `package.json` with `@docket/*` names, no logic yet) so the dependency graph is declarable:
-  `apps/web`, `apps/marketing`, `apps/admin`, `apps/api`, `packages/db`, `packages/auth`, `packages/ui`, `packages/types`, `packages/env`, `packages/test-utils`, `tooling/{tsconfig,eslint-config,tailwind-config}`.
-- **Compilation policy wired now** (engineering plan §1, mandatory): `@docket/db`, `@docket/auth`, `apps/api` are **compiled** (`tsc → dist`, with `"main"`/`"types"` pointing at `dist`). `@docket/ui`, `@docket/types`, `@docket/env` are **JIT** (raw TS, consumed via `transpilePackages`). Hono pinned to one identical version everywhere.
+  `apps/web`, `apps/marketing`, `apps/admin`, `apps/api`, `packages/db`, `packages/auth`, `packages/ui`, `the deleted legacy type warehouse`, `packages/env`, `packages/test-utils`, `tooling/{tsconfig,eslint-config,tailwind-config}`.
+- **Compilation policy wired now** (engineering plan §1, mandatory): `@docket/db`, `@docket/auth`, `apps/api` are **compiled** (`tsc → dist`, with `"main"`/`"types"` pointing at `dist`). `@docket/ui`, the retired contract package, `@docket/env` are **JIT** (raw TS, consumed via `transpilePackages`). Hono pinned to one identical version everywhere.
 - **Exit gate:** `pnpm install` clean; `pnpm turbo run build` succeeds across empty packages; `turbo.json` validates against schema 2.x.
 
 #### Phase 1 — `@docket/env` _(sequential; everything imports it)_
@@ -87,7 +87,7 @@ P4 apps/api (RPC + auth mount) ─► P4.5 permissions core ─► P5 @docket/ui
   3. Auth mount: `app.on(['POST','GET'], '/api/auth/*', (c) => auth.handler(c.req.raw))`.
   4. Feature routers mounted via **method chaining** to preserve RPC types.
 - **RPC discipline (engineering plan §1):** routes defined with chained `.get().post()` and split across files (`routes/organizations.ts`, `routes/projects.ts`, `routes/tasks.ts`, …); `app.ts` chains them: `const routes = app.route('/organizations', orgs).route('/projects', projects).route('/tasks', tasks); export type AppType = typeof routes;`. Build to `dist` so consumers import a compiled `.d.ts` (not raw TS) — this is what keeps `tsserver` fast.
-- **Zod in and out**: request bodies validated with `@hono/zod-validator` against schemas from `@docket/types`; responses also typed via `@docket/types` so the RPC client and UI share one definition.
+- **Zod in and out**: request bodies validated with `@hono/zod-validator` against schemas from the retired contract package; responses also typed vithe retired contract package so the RPC client and UI share one definition.
 - **Exit gate:** `hc<AppType>` in a scratch consumer autocompletes `client.tasks.$post({...})` with correct body/response types; `/health` returns ok; an authed request to a protected route succeeds with a cookie and 401s without.
 
 #### Phase 4.5 — Permissions core _(sequential; thin but real — every read/write goes through it)_
@@ -135,17 +135,17 @@ Independent lanes, each = new tables + new chained routes + new components, no s
 
 ### 2.1 Packages this slice touches
 
-| Package                     | Role in the slice                                                                                                                           |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@docket/env`               | Validated `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_API_URL`.                                                   |
-| `@docket/db`                | Tables (below) + `db` client + Better Auth-backed tables.                                                                                   |
-| `@docket/auth`              | `betterAuth()` with `passkey({ registration:{ requireSession:false, resolveUser } })` + `nextCookies()`.                                    |
-| `@docket/types`             | Zod schemas: `createOrganizationInput`, `createProjectInput`, `createTaskInput`, and the response DTOs.                                     |
-| `apps/api`                  | Hono service: CORS → session middleware → `/api/auth/*` mount → chained `/organizations`, `/projects`, `/tasks` routers; exports `AppType`. |
-| `@docket/ui`                | shadcn shell + form/list components.                                                                                                        |
-| `apps/web`                  | Next 16 screens consuming RPC client + auth client.                                                                                         |
-| `apps/web-e2e` (Playwright) | The verifying flow `create-org-project-task` + a CI-safe non-passkey login fallback.                                                        |
-| `@docket/test-utils`        | per-worker tenant helper + session-seed helper for CI.                                                                                      |
+| Package                      | Role in the slice                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@docket/env`                | Validated `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_API_URL`.                                                   |
+| `@docket/db`                 | Tables (below) + `db` client + Better Auth-backed tables.                                                                                   |
+| `@docket/auth`               | `betterAuth()` with `passkey({ registration:{ requireSession:false, resolveUser } })` + `nextCookies()`.                                    |
+| the retired contract package | Zod schemas: `createOrganizationInput`, `createProjectInput`, `createTaskInput`, and the response DTOs.                                     |
+| `apps/api`                   | Hono service: CORS → session middleware → `/api/auth/*` mount → chained `/organizations`, `/projects`, `/tasks` routers; exports `AppType`. |
+| `@docket/ui`                 | shadcn shell + form/list components.                                                                                                        |
+| `apps/web`                   | Next 16 screens consuming RPC client + auth client.                                                                                         |
+| `apps/web-e2e` (Playwright)  | The verifying flow `create-org-project-task` + a CI-safe non-passkey login fallback.                                                        |
+| `@docket/test-utils`         | per-worker tenant helper + session-seed helper for CI.                                                                                      |
 
 ### 2.2 DB tables this slice touches _(subset of engineering plan §5; exact names)_
 
@@ -168,7 +168,7 @@ Generated/owned in `@docket/db`:
 
 All under `apps/api`, all behind the session middleware + `requireOrgMember` (except org-create, which only requires a session):
 
-| Method + path                           | Input (Zod, `@docket/types`)                                                       | Effect                                                                                                     | Response                        |
+| Method + path                           | Input (Zod, the retired contract package)                                          | Effect                                                                                                     | Response                        |
 | --------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------- |
 | `POST /api/auth/passkey/*`              | (Better Auth)                                                                      | passkey register/verify; `resolveUser` mints `user`+`hub`                                                  | session cookie                  |
 | `GET /api/auth/get-session`             | (Better Auth)                                                                      | session check                                                                                              | `{ user, session }`             |

@@ -1,11 +1,9 @@
-import type {
-  InitiativeAggregateDetail,
-  LabelOut,
-  MemberOut,
-  ProgramOut,
-  ProjectOut,
-  RoleOut,
-} from '@docket/types';
+import type { InitiativeAggregateDetail } from '@docket/work/initiative-contract';
+import type { LabelOut } from '@docket/work/label-contract';
+import type { MemberOut } from '@docket/identity-access/member-contract';
+import type { ProgramOut } from '@docket/work/program-contract';
+import type { ProjectOut } from './contracts/project';
+import type { RoleOut } from './contracts/role';
 
 import { api } from './api';
 import { type RpcResponse, apiQueryOptions, queryKeys, rpcErrorResponse } from './query';

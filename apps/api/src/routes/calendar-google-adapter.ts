@@ -18,7 +18,7 @@ import type {
   CalendarItemPermission,
   CalendarItemWritePatch,
   CalendarScopeState,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 import { and, eq } from 'drizzle-orm';
 
 import { decodeIdTokenClaims } from '../lib/id-token';

@@ -31,7 +31,8 @@
  * read-only state and pending state are controlled by the parent so the rail has no mutation state
  * of its own.
  */
-import type { EstimationScale, TaskDetail } from '@docket/types';
+import type { EstimationScale } from '../../lib/contracts/organization';
+import type { TaskDetail } from '@docket/work/task-model';
 import { DatePicker, EntityPicker, LabelsPicker, type PickerOption } from '@docket/ui/components';
 import { Flag, FolderKanban, Layers, RefreshCw, Tag } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';

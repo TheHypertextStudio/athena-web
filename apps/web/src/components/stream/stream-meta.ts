@@ -13,9 +13,8 @@ import type {
   EventDetail,
   EventKind,
   SourceSystemKind,
-  StreamEventOut,
-  StreamRelevance,
-} from '@docket/types';
+} from '@docket/connections/event-contract';
+import type { StreamEventOut, StreamRelevance } from '../../lib/contracts/stream';
 import type { ActorKind } from '@docket/ui/components';
 
 /**

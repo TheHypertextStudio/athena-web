@@ -16,7 +16,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MCP_UI_METHODS, MCP_UI_MIME_TYPE, MCP_UI_PROTOCOL_VERSION } from '@docket/types';
+import {
+  MCP_UI_METHODS,
+  MCP_UI_MIME_TYPE,
+  MCP_UI_PROTOCOL_VERSION,
+} from '@docket/integrations/mcp-apps-contract';
 import { assertDefined } from '@docket/test-utils';
 
 const WIDGET = {

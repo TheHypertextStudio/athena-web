@@ -11,12 +11,8 @@
  * {@link CycleRows} owns the frame + column header (mirroring `ProgramRows`); {@link CycleRow} is
  * one row, still a link to the cycle detail and a drag source for the cycle itself.
  */
-import {
-  defaultEntityDisplay,
-  type CycleOut,
-  type CycleStats,
-  type EntityDisplayOut,
-} from '@docket/types';
+import { defaultEntityDisplay, type EntityDisplayOut } from '@docket/work/entity-display-contract';
+import { type CycleOut, type CycleStats } from '@docket/work/cycle-contract';
 import { cn } from '@docket/ui/lib/utils';
 import { Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';

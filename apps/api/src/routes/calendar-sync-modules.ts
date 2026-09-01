@@ -9,7 +9,7 @@
  * (Microsoft Graph, CalDAV) means registering its module here, touching neither the
  * engine nor the routes.
  */
-import type { CalendarProvider } from '@docket/types';
+import type { CalendarProvider } from '@docket/planning/calendar-contract';
 
 import {
   createGoogleCalendarSyncModule,

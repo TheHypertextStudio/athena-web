@@ -15,7 +15,7 @@
  * stable key rather than an index, external groups always sort last, and once the user has arrowed
  * their choice is pinned.
  */
-import type { MentionEntityKind, MentionItem } from '@docket/types';
+import type { MentionEntityKind, MentionItem } from '../../lib/contracts/mention';
 
 /** How many rows one group may contribute before it starts crowding out the others. */
 const PER_GROUP_CAP = 5;

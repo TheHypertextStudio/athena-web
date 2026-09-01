@@ -175,6 +175,12 @@ function notionProtocolViolations(
   const canonicalReferences = new Set<string>();
 
   for (const { path, sourceText } of files) {
+    if (
+      !sourceText.includes(NOTION_API_VERSION_SYMBOL) &&
+      !sourceText.includes(NOTION_API_VERSION_LITERAL)
+    ) {
+      continue;
+    }
     const relativePath = relativeToWorkspaceRoot(path);
     const sourceFile = ts.createSourceFile(
       path,

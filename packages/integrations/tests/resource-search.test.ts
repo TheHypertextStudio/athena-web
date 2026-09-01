@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CONNECTOR_PROVIDER_IDS } from '@docket/types';
+import { CONNECTOR_PROVIDER_IDS } from '@docket/connections/provider-catalog-contract';
 
 import { MockConnector } from '../src/mock-connector';
 import { RESOURCE_SEARCH_CAPABLE_PROVIDERS } from '../src/resource-search';

@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { ProposalGroupOut } from '@docket/types';
+import type { ProposalGroupOut } from '@docket/athena/agent-contract';
 import type { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '../../src/error';

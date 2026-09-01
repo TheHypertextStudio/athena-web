@@ -34,7 +34,7 @@ import {
   WorkStatusSetOut,
   WorkStatusUpdate,
   type WorkStatusCategory,
-} from '@docket/types';
+} from '@docket/work/work-status-contract';
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

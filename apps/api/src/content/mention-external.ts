@@ -17,12 +17,10 @@
 import { and, eq } from 'drizzle-orm';
 import {
   PROVIDER_CATALOG,
-  ResourceProvider,
-  mentionRefKey,
   type ConnectorProviderId,
-  type MentionItem,
-  type MentionProviderStatus,
-} from '@docket/types';
+} from '@docket/connections/provider-catalog-contract';
+import { ResourceProvider } from '@docket/connections/resource-provider-contract';
+import { mentionRefKey, type MentionItem, type MentionProviderStatus } from '../contracts/mention';
 import { ConnectorError, type ExternalResource } from '@docket/integrations';
 
 import { createConnectorGateway, type ConnectorGateway } from './connector-gateway';

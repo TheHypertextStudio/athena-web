@@ -20,8 +20,10 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import { CycleId, OrganizationId, ProjectId, TaskId, TeamId } from '@docket/types';
-import type { CycleBurnupOut, CycleDetail, TaskOut } from '@docket/types';
+import { CycleId, ProjectId, TaskId } from '@docket/work/ids';
+import { OrganizationId, TeamId } from '@docket/identity-access/ids';
+import type { CycleBurnupOut, CycleDetail } from '@docket/work/cycle-contract';
+import type { TaskOut } from '@docket/work/task-model';
 import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -47,7 +49,7 @@ vi.mock('@/lib/query', async (importOriginal) => ({
 vi.mock('@/lib/use-org-capability', () => ({ useOrgCapability }));
 
 vi.mock('@/components/entity-display/use-entity-display', async () => {
-  const { defaultEntityDisplay } = await import('@docket/types');
+  const { defaultEntityDisplay } = await import('@docket/work/entity-display-contract');
   return {
     useEntityDisplay: ({ subjectId }: { subjectId: string }) => ({
       display: defaultEntityDisplay('cycle', subjectId),

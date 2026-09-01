@@ -4,9 +4,9 @@ import type {
   SearchDocumentFamily,
   SearchDocumentKind,
   SearchResult,
-  SourceSystemKind,
-} from '@docket/types';
-import { defaultEntityDisplay } from '@docket/types';
+} from '../../lib/contracts/search';
+import type { SourceSystemKind } from '@docket/connections/event-contract';
+import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
 import { EmptyState } from '@docket/ui/components';
 import { Activity, Search, type LucideIcon } from '@docket/ui/icons';
 import { Button, Input, Row, Skeleton, Stack } from '@docket/ui/primitives';

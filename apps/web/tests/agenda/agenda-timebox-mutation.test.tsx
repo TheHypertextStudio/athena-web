@@ -1,5 +1,7 @@
 /** Behavior tests for Agenda's serialized three-cache timebox mutation. */
-import type { AgendaOut, DailyPlanItemOut, HubTodayOut } from '@docket/types';
+import type { AgendaOut } from '@docket/planning/agenda-contract';
+import type { DailyPlanItemOut } from '@docket/planning/daily-plan-contract';
+import type { HubTodayOut } from '../../src/lib/contracts/hub';
 import type { QueryKey } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

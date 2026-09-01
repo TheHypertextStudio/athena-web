@@ -48,8 +48,8 @@ import {
 import {
   ENTITY_PRESENTATION_POLICIES,
   type EntityPresentationPolicyDefinition,
-  type Health,
-} from '@docket/types';
+} from '@docket/work/entity-display-contract';
+import { type Health } from '@docket/work/capability-contract';
 import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
 import type { Priority } from '@docket/work/task-contract';
 

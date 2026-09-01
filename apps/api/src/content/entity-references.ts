@@ -11,7 +11,7 @@
  * is exactly the surface where a second, subtly different permission check would leak the title of
  * something the reader cannot open.
  */
-import type { EntityReferencesOut } from '@docket/types';
+import type { EntityReferencesOut } from '../contracts/mention';
 import { and, eq, isNull } from 'drizzle-orm';
 
 import { loadVisibleDocuments, type SearchCaller } from '../search/query';

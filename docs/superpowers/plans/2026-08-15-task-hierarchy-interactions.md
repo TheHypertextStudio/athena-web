@@ -22,8 +22,8 @@ containers position indented task cards and semantic rails.
 
 **Files:**
 
-- Modify: `packages/types/src/task.ts`
-- Modify: `packages/types/tests/dto/dto.test.ts`
+- Modify: `domains/work/src/contracts/task.ts`
+- Modify: `the deleted legacy type warehouse tests/dto/dto.test.ts`
 - Create: `apps/api/src/services/task-hierarchy.ts`
 - Create: `apps/api/tests/routes/task-reparent-batch.test.ts`
 - Modify: `apps/api/src/routes/tasks.ts`
@@ -31,10 +31,10 @@ containers position indented task cards and semantic rails.
 
 - [ ] Add failing DTO tests for `TaskReparentBatchIn` and `TaskReparentBatchOut`, including a
       non-empty unique move list, nullable targets, and the returned previous-parent assignments.
-- [ ] Run `pnpm --filter @docket/types test -- dto.test.ts` and confirm the new exports are absent.
-- [ ] Export the schemas and inferred types from `packages/types/src/task.ts` with the approved wire
+- [ ] Run `pnpm domain:check` and confirm the new exports are absent.
+- [ ] Export the schemas and inferred types from `domains/work/src/contracts/task.ts` with the approved wire
       shape from the design.
-- [ ] Run the focused types tests and `pnpm --filter @docket/types typecheck`.
+- [ ] Run the focused types tests and `pnpm domain:check`.
 - [ ] Add route tests for one move, detach, multiple roots with different previous parents,
       selected ancestor/descendant reduction, same-parent no-op, and exact response assignments.
 - [ ] Add rejection tests proving zero rows change for self-parenting, a descendant target, a cycle

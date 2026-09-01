@@ -20,7 +20,11 @@
  * org-scoped, which is the tenant boundary here as elsewhere.
  */
 import { db, documentImage, genId } from '@docket/db';
-import { DocumentImageMimeType, DocumentImageOut, DocumentImageRemoved } from '@docket/types';
+import {
+  DocumentImageMimeType,
+  DocumentImageOut,
+  DocumentImageRemoved,
+} from '@docket/work/document-image-contract';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

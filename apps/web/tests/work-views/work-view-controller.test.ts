@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { TaskViewDefinition } from '@docket/types';
+import { TaskViewDefinition } from '@docket/work/work-view-contract';
 
 import { buildWorkViewFacetRequest } from '../../src/components/work-views/use-work-view';
 import { queryKeys } from '../../src/lib/query';

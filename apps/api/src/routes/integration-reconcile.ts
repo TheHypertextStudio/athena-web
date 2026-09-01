@@ -21,7 +21,8 @@
  */
 import { and, eq, isNull } from 'drizzle-orm';
 import { db, task, team } from '@docket/db';
-import { ConnectorConfig, type WorkStatusCategory } from '@docket/types';
+import { ConnectorConfig } from '@docket/connections/integration-contract';
+import { type WorkStatusCategory } from '@docket/work/work-status-contract';
 import type { ConnectorProvider, ImportedItem } from '@docket/integrations';
 import type { WritableConnector } from '@docket/integrations';
 

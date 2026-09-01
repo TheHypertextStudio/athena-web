@@ -7,6 +7,7 @@
       "productOwner": "Athena",
       "description": "Guided agent work, durable execution, and structured human elicitation.",
       "publicExports": [
+        "./ids",
         "./execution-protocol",
         "./elicitation",
         "./elicitation-api",
@@ -26,9 +27,20 @@
         "./turn/model-backend",
         "./task-drafting/adapters/anthropic",
         "./task-drafting/adapters/deterministic",
-        "./task-expansion"
+        "./task-expansion",
+        "./activity-episode-contract",
+        "./agent-contract",
+        "./athena-contract",
+        "./athena-mail-contract",
+        "./email-suggestion-contract"
       ],
-      "allowedRuntimeDependencies": ["@anthropic-ai/sdk", "@docket/work", "zod"],
+      "allowedRuntimeDependencies": [
+        "@anthropic-ai/sdk",
+        "@docket/connections",
+        "@docket/identity-access",
+        "@docket/work",
+        "zod"
+      ],
       "supportedDeployableRuntimes": ["api", "web", "runner", "desktop"]
     },
     {
@@ -36,7 +48,7 @@
       "packageName": "@docket/automation",
       "productOwner": "Automation",
       "description": "Portable Automation Rules grammar and pure evaluation.",
-      "publicExports": ["./contracts", "./evaluation"],
+      "publicExports": ["./ids", "./contracts", "./evaluation"],
       "allowedRuntimeDependencies": ["zod"],
       "supportedDeployableRuntimes": ["api", "web", "admin", "runner", "desktop"]
     },
@@ -64,6 +76,7 @@
       "productOwner": "Connections",
       "description": "External-service connection contracts and rules, beginning with the Docket-designed Notion mirror.",
       "publicExports": [
+        "./ids",
         "./provider-error",
         "./notion/api-contract",
         "./notion/mirror-contract",
@@ -71,9 +84,20 @@
         "./notion/mirror-values",
         "./notion/mirror-port",
         "./notion/adapters/notion-sdk",
-        "./notion/adapters/in-memory"
+        "./notion/adapters/in-memory",
+        "./activity-contract",
+        "./event-contract",
+        "./integration-contract",
+        "./provider-catalog-contract",
+        "./resource-provider-contract",
+        "./resource-contract"
       ],
-      "allowedRuntimeDependencies": ["@docket/work", "@notionhq/client", "zod"],
+      "allowedRuntimeDependencies": [
+        "@docket/identity-access",
+        "@docket/work",
+        "@notionhq/client",
+        "zod"
+      ],
       "supportedDeployableRuntimes": ["api", "web", "desktop"]
     },
     {
@@ -81,8 +105,85 @@
       "packageName": "@docket/identity-access",
       "productOwner": "Identity & Access",
       "description": "Portable capability vocabulary and explicit-grant authorization policy.",
-      "publicExports": ["./capabilities", "./grants", "./authorization"],
+      "publicExports": [
+        "./ids",
+        "./capabilities",
+        "./grants",
+        "./authorization",
+        "./account-contract",
+        "./actor-contract",
+        "./identity-contract",
+        "./google-oauth-contract",
+        "./oauth-client-contract",
+        "./oauth-scope-contract",
+        "./passkey",
+        "./passkey-errors-contract",
+        "./public-config-contract",
+        "./session-contract",
+        "./settings-image-contract",
+        "./member-contract"
+      ],
       "allowedRuntimeDependencies": ["zod"],
+      "supportedDeployableRuntimes": ["api", "web", "admin", "runner", "desktop"]
+    },
+    {
+      "id": "notifications",
+      "packageName": "@docket/notifications",
+      "productOwner": "Notifications",
+      "description": "Notification intent, policy, preferences, audience, delivery, and inbox projection behavior.",
+      "publicExports": [
+        "./ids",
+        "./dispatch",
+        "./policy",
+        "./preferences",
+        "./schemas",
+        "./testing",
+        "./web",
+        "./webpush",
+        "./webpush/node",
+        "./notification-contract"
+      ],
+      "allowedRuntimeDependencies": [
+        "@docket/athena",
+        "@docket/db",
+        "@docket/identity-access",
+        "@docket/integrations",
+        "@docket/mail",
+        "drizzle-orm",
+        "zod"
+      ],
+      "supportedDeployableRuntimes": ["api", "web", "admin"]
+    },
+    {
+      "id": "planning",
+      "packageName": "@docket/planning",
+      "productOwner": "Planning",
+      "description": "Calendar, agenda, scheduling, time, sharing, and work-location contracts and rules.",
+      "publicExports": [
+        "./date-time",
+        "./calendar-date",
+        "./ids",
+        "./wall-time",
+        "./exact-move",
+        "./exact-resize",
+        "./intervals",
+        "./zoned-time",
+        "./work-location-resolution",
+        "./hub-preferences-contract",
+        "./daily-plan-contract",
+        "./calendar-contract",
+        "./work-location-contract",
+        "./agenda-contract",
+        "./time-share-contract",
+        "./scheduling-contract",
+        "./scheduling-directive-contract"
+      ],
+      "allowedRuntimeDependencies": [
+        "@docket/identity-access",
+        "@docket/work",
+        "@js-temporal/polyfill",
+        "zod"
+      ],
       "supportedDeployableRuntimes": ["api", "web", "admin", "runner", "desktop"]
     },
     {
@@ -91,6 +192,7 @@
       "productOwner": "Work",
       "description": "The actionable-work hierarchy: initiatives, programs, projects, milestones, cycles, tasks, dependencies, labels, comments, templates, saved views, and recurrence.",
       "publicExports": [
+        "./ids",
         "./task-contract",
         "./task-drafting",
         "./task-titles",
@@ -98,9 +200,29 @@
         "./planning-timeframe",
         "./relation-contract",
         "./view-contract",
-        "./vocabulary"
+        "./vocabulary",
+        "./capability-contract",
+        "./initiative-contract",
+        "./program-contract",
+        "./cycle-contract",
+        "./milestone-contract",
+        "./task-model",
+        "./work-status-contract",
+        "./work-view-contract",
+        "./entity-display-contract",
+        "./label-contract",
+        "./comment-contract",
+        "./attachment-contract",
+        "./document-image-contract",
+        "./update-contract",
+        "./saved-view-contract",
+        "./template-contract",
+        "./subject-ref-contract",
+        "./slug-contract",
+        "./publish-contract",
+        "./workflow"
       ],
-      "allowedRuntimeDependencies": ["zod"],
+      "allowedRuntimeDependencies": ["@docket/identity-access", "zod"],
       "supportedDeployableRuntimes": ["api", "web", "admin", "runner", "desktop"]
     }
   ]

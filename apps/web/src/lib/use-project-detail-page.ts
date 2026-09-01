@@ -1,7 +1,7 @@
 'use client';
 
 import type { PickerOption } from '@docket/ui/components';
-import { ProjectSubjectRef } from '@docket/types';
+import { ProjectSubjectRef } from '@docket/work/subject-ref-contract';
 import { useMemo } from 'react';
 
 import type { ActorDirectory } from '@/components/project-detail/actor-directory';

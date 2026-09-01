@@ -35,7 +35,7 @@ So the taxonomy is the feature.
 | `reflection_debrief`      | **anchored after** | `desk` (or field) | a source event | 15m     | It is not scheduled against the clock; it is scheduled against the thing it reflects on, and links back to it. |
 | `architecture_brainstorm` | contiguous         | `desk` (or field) | —              | 90m     | Mid-length exploratory work; expands to fill available slack, which is what makes it a good backfill shape.    |
 
-The table is a **total map** in `packages/types/src/scheduling.ts` (`WORK_SHAPE_PROFILES`), so
+The table is a **total map** in `domains/planning/src/contracts/scheduling.ts` (`WORK_SHAPE_PROFILES`), so
 adding a seventh shape is a compile error until it is described. That is the only reliable way to
 stop a new kind of time from silently inheriting generic "one hour somewhere" behaviour.
 

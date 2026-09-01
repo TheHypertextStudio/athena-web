@@ -18,7 +18,7 @@ import {
   type McpUiHostStyles,
   type McpUiTheme,
   type McpUiUpdateModelContextParams,
-} from '@docket/types';
+} from '@docket/integrations/mcp-apps-contract';
 import {
   Button,
   Dialog,

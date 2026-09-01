@@ -18,13 +18,13 @@ import {
   task,
   taskDependency,
 } from '@docket/db';
+import { pageOf } from '../contracts/pagination';
+import { taskCreationEntryId } from '@docket/work/task-model';
 import {
-  pageOf,
-  taskCreationEntryId,
   TaskActivityChange,
   TaskActivityOut,
   TaskActivityQuery,
-} from '@docket/types';
+} from '@docket/connections/activity-contract';
 import { and, asc, eq, inArray, isNull, or, sql, type SQLWrapper } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';

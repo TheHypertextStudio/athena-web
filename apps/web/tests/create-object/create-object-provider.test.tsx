@@ -1,20 +1,14 @@
 import '@testing-library/jest-dom/vitest';
 
-import {
-  ActorId,
-  type InitiativeOut,
-  type MemberOut,
-  type OrgOut,
-  type OrgSummary,
-  OrganizationId,
-  type ProgramOut,
-  type ProjectOut,
-  RoleId,
-  type RoleOut,
-  type TaskOut,
-  TeamId,
-  type TeamOut,
-} from '@docket/types';
+import { ActorId, OrganizationId, RoleId, TeamId } from '@docket/identity-access/ids';
+import { type InitiativeOut } from '@docket/work/initiative-contract';
+import { type MemberOut } from '@docket/identity-access/member-contract';
+import { type OrgOut, type OrgSummary } from '../../src/lib/contracts/organization';
+import { type ProgramOut } from '@docket/work/program-contract';
+import { type ProjectOut } from '../../src/lib/contracts/project';
+import { type RoleOut } from '../../src/lib/contracts/role';
+import { type TaskOut } from '@docket/work/task-model';
+import { type TeamOut } from '../../src/lib/contracts/team';
 import { ContextProvider, useContextState } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';

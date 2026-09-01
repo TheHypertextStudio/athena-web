@@ -24,7 +24,7 @@
  * fetch per workspace to resolve edit capability; Today is a place to see where things stand and
  * click through, so it pays neither.
  */
-import type { HubTaskItem, HubTodayPlanItem } from '@docket/types';
+import type { HubTaskItem, HubTodayPlanItem } from '../../lib/contracts/hub';
 import { EntityListRow, RowMeta, StatusIcon } from '@docket/ui/components';
 import { AlarmClock, CircleStop } from '@docket/ui/icons';
 import Link from '@/components/docket-link';

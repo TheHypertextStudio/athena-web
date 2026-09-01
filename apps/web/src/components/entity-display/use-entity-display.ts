@@ -13,8 +13,8 @@ import type {
   EntityDisplayIconKey,
   EntityDisplayOut,
   EntityDisplaySubjectType,
-} from '@docket/types';
-import { defaultEntityDisplay } from '@docket/types';
+} from '@docket/work/entity-display-contract';
+import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';

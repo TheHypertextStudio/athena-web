@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import type { OrgOut } from '@docket/types';
+import type { OrgOut } from '../../src/contracts/organization';
 import { eq } from 'drizzle-orm';
 
 import type { AppEnv, AuthSession } from '../../src/context';

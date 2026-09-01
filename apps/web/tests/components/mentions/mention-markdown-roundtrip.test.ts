@@ -2,7 +2,7 @@ import Link from '@tiptap/extension-link';
 import { Markdown } from '@tiptap/markdown';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import { formatMentionLink } from '@docket/types';
+import { formatMentionLink } from '../../../src/lib/contracts/mention';
 import { describe, expect, it } from 'vitest';
 
 import { createMentionExtension } from '@/components/mentions/mention-extension';

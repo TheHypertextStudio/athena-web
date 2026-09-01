@@ -13,7 +13,7 @@
  * copy of the spec this launch item is graded against
  * (`docs/engineering/specs/vendor/mcp-tasks-draft.md`) is a newer draft that negotiates the
  * extension **per request** via `params._meta['io.modelcontextprotocol/clientCapabilities']`
- * (`declaresTasksExtension`, `@docket/types`), replies `-32003` to a request for one of these four
+ * (`declaresTasksExtension`, `domain packages`), replies `-32003` to a request for one of these four
  * methods from a client that never declared it, and uses `ttlMs`/`pollIntervalMs`/inline
  * `result`/`error`/`inputRequests` on `tasks/get`. Every method/field name below is read from that
  * committed copy, not from memory, and this module is what makes the four task-lifecycle methods
@@ -39,7 +39,7 @@ import {
   MCP_TASKS_REQUIRED_CAPABILITY_DATA,
   MCP_TASK_METHODS,
   MCP_TASK_NOTIFICATIONS,
-} from '@docket/types';
+} from '@docket/integrations/mcp-tasks-contract';
 import { z } from 'zod';
 
 import { ConflictError } from '../error';

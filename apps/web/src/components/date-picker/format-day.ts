@@ -15,14 +15,14 @@
  * (`—`, "No due date", or nothing at all), which is what the application-owned-copy rule
  * requires anyway.
  */
-import { TASK_DATE_MAX, TASK_DATE_MIN } from '@docket/types';
+import { TASK_DATE_MAX, TASK_DATE_MIN } from '@docket/work/task-model';
 import { formatCalendarDay, toCalendarDay } from '@docket/ui/components';
 
 /**
  * The earliest day any picker in the app offers.
  *
  * @remarks
- * Re-exported from `@docket/types` rather than restated, so the picker's floor and the DTO's
+ * Re-exported from `domain packages` rather than restated, so the picker's floor and the DTO's
  * validation floor cannot drift apart. A person can therefore never select a day the API will
  * reject — the 1799 and 3999 dates that reached the database, and visibly destroyed the project
  * timeline axis, were entered through pickers that had no bounds at all.

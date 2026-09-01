@@ -1,7 +1,9 @@
 'use client';
 
 /** Entity resources tab: linked documents and URLs as first-class operating context. */
-import { canonicalizeResourceUrl, type AttachmentOut, type EntityMention } from '@docket/types';
+import { canonicalizeResourceUrl } from '@docket/connections/resource-contract';
+import { type AttachmentOut } from '@docket/work/attachment-contract';
+import { type EntityMention } from '../../lib/contracts/mention';
 import { Calendar, FileText, Link as LinkIcon, Mail, Plus, Trash2 } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';

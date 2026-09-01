@@ -11,7 +11,7 @@
  * Linear account; the fixture entity collapses to `entity.kind = 'work_item'` with a `generic`
  * detail.
  */
-import { EventKind } from '@docket/types';
+import { EventKind } from '@docket/connections/event-contract';
 
 import { genericDetail } from './event-detail';
 import { asRecord, str } from './json';

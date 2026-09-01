@@ -1,6 +1,6 @@
 'use client';
 
-import type { IntegrationOut } from '@docket/types';
+import type { IntegrationOut } from '@docket/connections/integration-contract';
 import { Ellipsis } from '@docket/ui/icons';
 import {
   Button,

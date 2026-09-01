@@ -31,7 +31,7 @@ import {
   isRemoteToolVisibleTo,
   type RemoteMcpSession,
 } from '@docket/integrations';
-import type { McpAppPresentation } from '@docket/types';
+import type { McpAppPresentation } from '@docket/integrations/mcp-apps-contract';
 import { and, eq } from 'drizzle-orm';
 
 import { getContainer } from '../container';

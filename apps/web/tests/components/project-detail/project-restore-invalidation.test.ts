@@ -2,7 +2,7 @@ import type {
   ObjectCommandReceipt,
   ObjectCommandRequest,
   ObjectCommandResult,
-} from '@docket/types';
+} from '../../../src/lib/contracts/object-command';
 import { QueryClient, QueryClientProvider, QueryObserver } from '@tanstack/react-query';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

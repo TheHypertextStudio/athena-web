@@ -5,7 +5,7 @@
  * These cases are intentionally date-only. They must produce the same values regardless of the
  * server's timezone, daylight-saving transitions, or when the materialization sweep runs.
  */
-import type { MaterializationPolicy, RecurrenceSchedule } from '@docket/types';
+import type { MaterializationPolicy, RecurrenceSchedule } from '../../src/contracts/recurrence';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -14,7 +14,7 @@ import {
   daysInMonth,
   formatCalendarDate,
   parseCalendarDate,
-} from '../../src/lib/recurrence/calendar-date';
+} from '@docket/planning/calendar-date';
 import {
   expandCalendarSchedule,
   materializationWindow,

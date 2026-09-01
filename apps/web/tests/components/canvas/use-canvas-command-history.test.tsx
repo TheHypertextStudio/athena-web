@@ -11,7 +11,10 @@ import {
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ObjectCommandIn, ObjectCommandReceipt, ObjectCommandResult } from '@docket/types';
+import type {
+  ObjectCommandReceipt,
+  ObjectCommandResult,
+} from '../../../src/lib/contracts/object-command';
 import type * as QueryModule from '@/lib/query';
 
 const { mutateAsync, replayAccessPost } = vi.hoisted(() => ({
@@ -118,7 +121,7 @@ function AccessControls(): React.JSX.Element {
               objectKind: 'task',
               objectIds: ['task-a'],
               operation: { type: 'replace_property', property: 'priority', value: 'high' },
-            } as ObjectCommandIn,
+            },
             {
               historyLabel: 'Change object',
               title: 'Priority changed',
@@ -180,7 +183,7 @@ async function executeReceipt(
         objectKind: receipt.objectKind,
         objectIds: receipt.entries.map(({ objectId }) => objectId),
         operation: { type: 'replace_property', property: 'priority', value: 'high' },
-      } as ObjectCommandIn,
+      },
       {
         historyLabel: 'Change object',
         title: 'Priority changed',
@@ -212,7 +215,7 @@ describe('useCanvasCommandHistory', () => {
           objectKind: 'task',
           objectIds: ['task-a'],
           operation: { type: 'replace_property', property: 'priority', value: 'high' },
-        } as ObjectCommandIn,
+        },
         {
           historyLabel: 'Change priority',
           title: 'Priority changed',

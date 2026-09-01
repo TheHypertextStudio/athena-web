@@ -2,7 +2,7 @@
 
 /** Calendar-item relation actions shared by every calendar renderer. */
 import { CornerDownLeft, Link, Workflow } from '@docket/ui/icons';
-import { CalendarItemId } from '@docket/types';
+import { CalendarItemId } from '@docket/planning/ids';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 

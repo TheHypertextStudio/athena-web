@@ -10,7 +10,10 @@
  * implementing this interface, one entry in the manifest below, and one fixture block; the fan-out,
  * the deadline, the dedupe, and the UI are untouched.
  */
-import type { ExternalResourceType, ResourceProviderId } from '@docket/types';
+import type {
+  ExternalResourceType,
+  ResourceProviderId,
+} from '@docket/connections/resource-provider-contract';
 
 /** One resource as a source describes it. */
 export interface ExternalResource {
@@ -75,7 +78,7 @@ export interface ResourceSearch {
  * Sources with a working search adapter today.
  *
  * @remarks
- * Deliberately narrower than the URL registry in `@docket/types`: Docket recognizes many sources'
+ * Deliberately narrower than the URL registry in `domain packages`: Docket recognizes many sources'
  * links, and can search the ones listed here. `capability-manifest.test.ts` asserts this set and
  * the structural shape of each client agree, so a half-wired adapter fails a test rather than
  * silently returning nothing at runtime.

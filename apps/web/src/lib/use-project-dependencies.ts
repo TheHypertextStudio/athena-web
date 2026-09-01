@@ -1,7 +1,7 @@
 'use client';
 
 /** Query and mutations for native Project dependency links. */
-import type { ProjectDependencyCreated, ProjectDependencyOut } from '@docket/types';
+import type { ProjectDependencyCreated, ProjectDependencyOut } from './contracts/project';
 import { type QueryKey, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 

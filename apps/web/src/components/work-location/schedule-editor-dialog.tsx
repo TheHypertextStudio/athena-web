@@ -6,7 +6,7 @@ import type {
   WorkLocationAssertionOut,
   WorkLocationSchedule,
   WorkPlaceOut,
-} from '@docket/types';
+} from '@docket/planning/work-location-contract';
 import {
   Button,
   Dialog,

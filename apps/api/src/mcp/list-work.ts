@@ -46,7 +46,7 @@ import type { SQL } from 'drizzle-orm';
 import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
-import { WorkflowStateType } from '@docket/types';
+import { WorkflowStateType } from '../contracts/team';
 import { Priority } from '@docket/work/task-contract';
 import { DateResolution } from '@docket/work/planning-timeframe';
 

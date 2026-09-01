@@ -1,6 +1,6 @@
 'use client';
 
-import type { CalendarItemCreate, CalendarItemOut } from '@docket/types';
+import type { CalendarItemCreate, CalendarItemOut } from '@docket/planning/calendar-contract';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';

@@ -1,5 +1,5 @@
 /** Managed storage for raster images selected in Settings. */
-import { SettingsImageData } from '@docket/types';
+import { SettingsImageData } from '@docket/identity-access/settings-image-contract';
 
 import { getContainer } from '../container';
 

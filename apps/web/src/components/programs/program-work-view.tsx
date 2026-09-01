@@ -17,7 +17,8 @@
  * cycle" row, because the shared list view has no cycle grouping in its field catalog. Creating
  * work still goes through the normal "New task" composer elsewhere in the app.
  */
-import type { MemberOut, ProjectOut } from '@docket/types';
+import type { MemberOut } from '@docket/identity-access/member-contract';
+import type { ProjectOut } from '../../lib/contracts/project';
 import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ListChecks } from '@docket/ui/icons';

@@ -28,17 +28,9 @@ import {
   type Database,
 } from '@docket/db';
 import type * as DbModule from '@docket/db';
-import {
-  ActorId,
-  CycleId,
-  LabelId,
-  MilestoneId,
-  type ProcessDefinitionCreate,
-  ProgramId,
-  ProjectId,
-  TaskId,
-  TeamId,
-} from '@docket/types';
+import { ActorId, TeamId } from '@docket/identity-access/ids';
+import { CycleId, LabelId, MilestoneId, ProgramId, ProjectId, TaskId } from '@docket/work/ids';
+import { type ProcessDefinitionCreate } from '../../src/contracts/recurrence';
 import { PGlite } from '@electric-sql/pglite';
 import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';

@@ -5,8 +5,8 @@ import {
   NotificationOut,
   NotificationReadAll,
   NotificationReadAllResult,
-  pageOf,
-} from '@docket/types';
+} from '@docket/notifications/notification-contract';
+import { pageOf } from '../contracts/pagination';
 import { Hono } from 'hono';
 import { z } from 'zod';
 

@@ -20,7 +20,7 @@
  * around each tile, and the type scale resolves to real tokens (`text-label-medium` /
  * `text-title-medium`) rather than the raw `text-xs` / `text-lg font-semibold` the banner used.
  */
-import type { CycleBurnupOut } from '@docket/types';
+import type { CycleBurnupOut } from '@docket/work/cycle-contract';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';
 

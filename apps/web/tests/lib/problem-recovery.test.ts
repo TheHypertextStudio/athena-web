@@ -1,4 +1,4 @@
-import { PROBLEM_CATALOG } from '@docket/types';
+import { PROBLEM_CATALOG } from '../../src/lib/contracts/errors';
 import { describe, expect, it } from 'vitest';
 
 import { PUBLIC_PROBLEM_RECOVERY } from '../../src/lib/problem-recovery';

@@ -1,6 +1,6 @@
 'use client';
 
-import type { TaskRef } from '@docket/types';
+import type { TaskRef } from '@docket/work/task-model';
 import { StatusIcon } from '@docket/ui/components';
 import { Plus } from '@docket/ui/icons';
 import { Button, Input } from '@docket/ui/primitives';

@@ -1,6 +1,6 @@
 /** Capability projection for local-first aggregate detail responses. */
 import { type Capability, satisfies } from '@docket/authz';
-import type { DetailCapabilities } from '@docket/types';
+import type { DetailCapabilities } from '../contracts/detail-aggregate';
 
 /**
  * Project an actor's org capability bundle into the controls a detail view may render.

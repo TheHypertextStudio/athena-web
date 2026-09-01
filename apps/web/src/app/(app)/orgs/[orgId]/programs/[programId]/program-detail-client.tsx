@@ -1,6 +1,6 @@
 'use client';
 
-import type { UpdateOut } from '@docket/types';
+import type { UpdateOut } from '@docket/work/update-contract';
 import { ActorAvatar, type PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Ellipsis, Trash2 } from '@docket/ui/icons';

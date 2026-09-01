@@ -11,7 +11,7 @@ import type {
   ProgramDetailAggregate,
   ProjectDetailAggregate,
   TaskDetailAggregate,
-} from '@docket/types';
+} from './contracts/detail-aggregate';
 
 import { api } from './api';
 import { ApiRequestError, apiQueryOptions } from './query-core';

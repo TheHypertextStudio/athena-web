@@ -1,7 +1,9 @@
 'use client';
 
 /** Agenda read, navigation, and mutation context. */
-import type { AgendaOut, DailyPlanItemOut, WorkPlaceOut } from '@docket/types';
+import type { AgendaOut } from '@docket/planning/agenda-contract';
+import type { DailyPlanItemOut } from '@docket/planning/daily-plan-contract';
+import type { WorkPlaceOut } from '@docket/planning/work-location-contract';
 import {
   createContext,
   type JSX,

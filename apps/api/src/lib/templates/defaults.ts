@@ -18,7 +18,7 @@
  * every shipped default keeps it deleted. That is the intended reading of "editable".
  */
 import { db, template } from '@docket/db';
-import type { TemplateDraft, TemplateTargetType } from '@docket/types';
+import type { TemplateDraft, TemplateTargetType } from '@docket/work/template-contract';
 import { eq } from 'drizzle-orm';
 
 /** One shipped default template (seeded per org as an editable `isSeed` row). */

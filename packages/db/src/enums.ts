@@ -41,7 +41,7 @@ export const teamMemberRole = pgEnum('team_member_role', ['manager', 'member', '
  * carries meaning outside the workspace that named it. Status glyphs, cross-team grouping,
  * progress, capacity, and every integration mapping read the category — never the key.
  *
- * Mirrors `WorkStatusCategory` in `@docket/types`, the one declaration of the union.
+ * Mirrors `WorkStatusCategory` in `domain packages`, the one declaration of the union.
  */
 export const workStatusCategory = pgEnum('work_status_category', [
   'backlog',
@@ -208,7 +208,7 @@ export const recurrenceExceptionKind = pgEnum('recurrence_exception_kind', [
  * @remarks
  * `none` turns estimation off entirely (no picker renders; existing `estimate` values are left
  * alone but nothing new can be set). The other four each map to a fixed, ordered set of point
- * values — see `ESTIMATION_SCALES` in `@docket/types`, the single source of truth both the
+ * values — see `ESTIMATION_SCALES` in `domain packages`, the single source of truth both the
  * settings picker and the task estimate picker read from.
  */
 export const estimationScale = pgEnum('estimation_scale', [
@@ -814,7 +814,7 @@ export const objectCommandEffectStatus = pgEnum('object_command_effect_status', 
  * reserved now so later providers add no enum migration. Source attribution rides on the
  * separate {@link sourceSystem} axis; "which thing" rides on {@link canonicalEntityKind}.
  *
- * Mirrors `EventKind` in `@docket/types` **in order** — values are only ever appended
+ * Mirrors `EventKind` in `domain packages` **in order** — values are only ever appended
  * (`ALTER TYPE … ADD VALUE`), because Postgres cannot remove or reorder an enum value and
  * stored rows must keep parsing. The `timer_*`, `elicitation_*` and `agent_*` families exist
  * so the recipient router and notification policy can branch without decoding `detail`.
@@ -916,7 +916,7 @@ export const inboundEventStatus = pgEnum('inbound_event_status', [
  * `unmatched` and `pending` both leave `entity.docketEntityId` null, and the difference is what
  * bounds the re-association sweep: `pending` is "Docket could mirror this and has not yet",
  * `unmatched` is "no Docket table represents this kind". Order-locked against `EntityAssociation`
- * in `@docket/types`.
+ * in `domain packages`.
  */
 export const entityAssociation = pgEnum('entity_association', ['pending', 'matched', 'unmatched']);
 /** Lifecycle status of one user's daily digest for a given day (`skipped_empty` = no activity). */
@@ -1023,7 +1023,7 @@ export const changeSetOp = pgEnum('change_set_op', ['create', 'update', 'archive
  * Which system owns an {@link externalResource}.
  *
  * @remarks
- * Mirrors `RESOURCE_PROVIDERS` in `@docket/types`, which is the registry every other layer reads;
+ * Mirrors `RESOURCE_PROVIDERS` in `domain packages`, which is the registry every other layer reads;
  * a test asserts the two agree so adding a source without a migration fails loudly. `web` is the
  * generic case — any URL no provider claims, unfurled over HTTP with no credential.
  *
@@ -1112,7 +1112,7 @@ export const mentionSubjectType = pgEnum('mention_subject_type', [
  * `targetEntityKind` + `targetEntityId` and forbids `externalResourceId`, and `external` requires
  * the inverse. The discriminator exists so a query can filter without testing three columns for
  * null; it is not the boundary — the boundary is the pair of constraints plus the discriminated
- * union in `packages/types/src/mention.ts`.
+ * union in `apps/api/src/contracts/mention.ts`.
  */
 export const mentionTargetKind = pgEnum('mention_target_kind', ['entity', 'external']);
 /**

@@ -13,7 +13,7 @@ import {
   dayStartGate,
   reorganizeDay,
 } from '../../../src/services/scheduling/day-loop';
-import { instantAt } from '../../../src/services/scheduling/zoned-time';
+import { instantAt } from '@docket/planning/zoned-time';
 
 const TZ = 'America/Los_Angeles';
 /** A Tuesday. */

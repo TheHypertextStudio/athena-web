@@ -14,7 +14,7 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import { OAUTH_ISSUABLE_SCOPES } from '@docket/types';
+import { OAUTH_ISSUABLE_SCOPES } from '@docket/identity-access/oauth-scope-contract';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

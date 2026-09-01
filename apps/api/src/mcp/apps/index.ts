@@ -18,7 +18,7 @@
  */
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
 
-import { MCP_UI_META_KEY, type McpUiResourceMeta } from '@docket/types';
+import { MCP_UI_META_KEY, type McpUiResourceMeta } from '@docket/integrations/mcp-apps-contract';
 
 import type { McpRegistrar } from '../catalog';
 import { CHANGE_REPORT_HTML } from './change-report';

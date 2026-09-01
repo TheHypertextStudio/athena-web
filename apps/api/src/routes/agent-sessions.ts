@@ -3,7 +3,6 @@ import { agentSession, db, sessionActivity } from '@docket/db';
 import {
   AgentSessionDetailOut,
   AgentSessionOut,
-  pageOf,
   ProposalEditBody,
   ApprovalDecision,
   ApprovalDecisionBody,
@@ -12,7 +11,8 @@ import {
   SessionActivityOut,
   SessionFromPromptBody,
   SessionReplyBody,
-} from '@docket/types';
+} from '@docket/athena/agent-contract';
+import { pageOf } from '../contracts/pagination';
 import { and, asc, desc, eq, gt } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';

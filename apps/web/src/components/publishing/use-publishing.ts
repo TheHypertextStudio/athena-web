@@ -17,13 +17,13 @@
  * Every call goes through the typed RPC client and the shared query layer — no hand-rolled
  * `useEffect` + `fetch`, per the data-layer standard.
  */
+import type { OrgOut } from '../../lib/contracts/organization';
 import type {
-  OrgOut,
   PublicationOut,
   PublicationSubjectKind,
   WorkspaceDomainOut,
   WorkspaceDomainVerifyOut,
-} from '@docket/types';
+} from '@docket/work/publish-contract';
 
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, unwrap, useApiQuery, useApiMutation } from '@/lib/query';

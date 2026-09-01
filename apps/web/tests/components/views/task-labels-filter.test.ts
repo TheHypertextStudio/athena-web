@@ -7,7 +7,7 @@
  * if *any* value matches, and grouping fans one row into several buckets — are what these cover,
  * along with the deliberate choice to derive the field's options from the rows themselves.
  */
-import type { TaskOut } from '@docket/types';
+import type { TaskOut } from '@docket/work/task-model';
 import { describe, expect, it } from 'vitest';
 
 import { buildTaskCatalog } from '@/components/views/task-catalog';

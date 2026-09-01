@@ -16,7 +16,7 @@ import { ArrowRight } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import type { Edge, Node } from '@xyflow/react';
 
-import type { WorkStatusCategory } from '@docket/types';
+import type { WorkStatusCategory } from '@docket/work/work-status-contract';
 
 import { PriorityGlyph } from '@/components/task-detail/PriorityGlyph';
 

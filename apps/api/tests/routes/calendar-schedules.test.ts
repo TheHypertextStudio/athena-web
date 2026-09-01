@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import type { ScheduleComparisonOut } from '@docket/types';
+import type { ScheduleComparisonOut } from '@docket/planning/calendar-contract';
 import { eq } from 'drizzle-orm';
 
 import {

@@ -8,7 +8,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MCP_UI_MIME_TYPE } from '@docket/types';
+import { MCP_UI_MIME_TYPE } from '../../src/contracts/mcp-apps';
 
 const sdkState = vi.hoisted<{
   contents: unknown[];

@@ -10,7 +10,11 @@
  * initiatives — which is why {@link FieldDescriptor.values} exists at all. Grouping by it fans a
  * row into every container it serves, so the group sizes sum to more than the row count on purpose.
  */
-import { RESOURCE_PROVIDER_LABEL, type ResourceProvider, type SearchResult } from '@docket/types';
+import {
+  RESOURCE_PROVIDER_LABEL,
+  type ResourceProvider,
+} from '@docket/connections/resource-provider-contract';
+import { type SearchResult } from '../../lib/contracts/search';
 
 import type { FieldCatalog, FieldOption } from '@/components/views/field-catalog';
 
@@ -48,7 +52,7 @@ function facetString(row: SearchResult, key: string): string | null {
  * The display name for a resource provider.
  *
  * @remarks
- * Delegates to the registry exported from `@docket/types`, which is derived from `RESOURCE_PROVIDERS`
+ * Delegates to the registry exported from `domain packages`, which is derived from `RESOURCE_PROVIDERS`
  * and is therefore total — adding a provider is a compile error there rather than a raw enum value
  * rendered in a menu. A local copy had already drifted from it on two of nine entries.
  */

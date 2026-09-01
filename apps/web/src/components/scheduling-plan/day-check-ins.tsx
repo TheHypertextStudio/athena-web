@@ -9,7 +9,10 @@
  * that matters: a check-in nobody answered is a fact about the day, and hiding it would make the
  * record of the day flattering rather than true.
  */
-import type { CheckInResponse, DayCheckInOut } from '@docket/types';
+import type {
+  CheckInResponse,
+  DayCheckInOut,
+} from '@docket/planning/scheduling-directive-contract';
 import { Button, ControlGroup, Stack, Text } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 

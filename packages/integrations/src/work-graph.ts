@@ -13,7 +13,7 @@
  * work-graph-capable omits {@link import('./connector').Connector.asWorkGraph} or
  * returns `undefined` there.
  */
-import type { WorkStatusCategory } from '@docket/types';
+import type { WorkStatusCategory } from '@docket/work/work-status-contract';
 
 import type { ExternalWriteResult } from './connector';
 

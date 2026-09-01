@@ -14,7 +14,7 @@
  * Nothing here quotes Google. Why a provider refused is diagnostic text the provider wrote; what
  * the reader needs is what to do about it, which is application-owned and the same every time.
  */
-import type { WorkLocationSyncReason } from '@docket/types';
+import type { WorkLocationSyncReason } from '@docket/planning/work-location-contract';
 
 /** Why one linked account cannot publish your work location, and what ends it. */
 export const SYNC_REASON: Record<WorkLocationSyncReason, string> = {

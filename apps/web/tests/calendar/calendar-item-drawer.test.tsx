@@ -11,15 +11,11 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import {
-  CalendarItemId,
-  type CalendarItemOut,
-  CalendarLayerId,
-  type CalendarLayerOut,
-  OrganizationId,
-  type TaskOut,
-  TaskId,
-} from '@docket/types';
+import { CalendarItemId, CalendarLayerId } from '@docket/planning/ids';
+import { type CalendarItemOut, type CalendarLayerOut } from '@docket/planning/calendar-contract';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { type TaskOut } from '@docket/work/task-model';
+import { TaskId } from '@docket/work/ids';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';

@@ -38,7 +38,7 @@ import { cn } from '../../lib/utils';
  * The label palette keys the stylesheet knows how to resolve.
  *
  * @remarks
- * Mirrors `LABEL_COLOR_KEYS` in `@docket/types` rather than importing it, matching how
+ * Mirrors `LABEL_COLOR_KEYS` in `domain packages` rather than importing it, matching how
  * {@link ActorAvatar} and the date pickers mirror their domain constants: the design system
  * describes what it can render, and stays a value-level island from the domain types. The
  * `data-label-color` rules in `globals.css` are the third copy, and the design-contract test

@@ -16,7 +16,7 @@ import type {
   TemplateOut,
   TemplateTargetType,
   TemplateUpdate,
-} from '@docket/types';
+} from '@docket/work/template-contract';
 
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, STALE, unwrap, useApiMutation } from '@/lib/query';

@@ -60,7 +60,7 @@ import {
 } from '@docket/connections/notion/mirror-values';
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
-import { ConnectorConfig } from '@docket/types';
+import { ConnectorConfig } from '@docket/connections/integration-contract';
 import { resolveProductCapability } from '@docket/billing/application/entitlement';
 
 import { buildNotionMirror } from '../container';

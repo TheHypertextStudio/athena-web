@@ -11,7 +11,7 @@ import type {
   WorkStatusEntityType,
   WorkStatusReorder,
   WorkStatusUpdate,
-} from '@docket/types';
+} from '@docket/work/work-status-contract';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';

@@ -1,0 +1,47 @@
+{
+  "name": "@docket/notifications",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Docket notifications domain — schemas, policy, delivery orchestration, inbox state, and provider event handling.",
+  "exports": {
+    "./ids": "./src/ids.ts",
+    "./dispatch": "./src/dispatch/index.ts",
+    "./policy": "./src/policy/index.ts",
+    "./preferences": "./src/preferences/index.ts",
+    "./schemas": "./src/schemas/index.ts",
+    "./testing": "./src/testing/index.ts",
+    "./web": "./src/web/index.ts",
+    "./webpush": "./src/webpush/index.ts",
+    "./webpush/node": "./src/webpush/node.ts",
+    "./notification-contract": "./src/contracts/notification.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf .turbo *.tsbuildinfo",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@docket/athena": "workspace:*",
+    "@docket/db": "workspace:*",
+    "@docket/identity-access": "workspace:*",
+    "@docket/integrations": "workspace:*",
+    "@docket/mail": "workspace:*",
+    "drizzle-orm": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@docket/eslint-config": "workspace:*",
+    "@docket/test-utils": "workspace:*",
+    "@docket/tsconfig": "workspace:*",
+    "@electric-sql/pglite": "catalog:",
+    "@types/node": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

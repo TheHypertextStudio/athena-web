@@ -34,7 +34,7 @@ import {
   reorganizeRemainingDay,
 } from '../../../src/services/scheduling/directive-service';
 import { ensureDayDirective } from '../../../src/services/scheduling/repository';
-import { instantAt } from '../../../src/services/scheduling/zoned-time';
+import { instantAt } from '@docket/planning/zoned-time';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;

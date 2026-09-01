@@ -15,8 +15,12 @@
  */
 import { createContext, useCallback, useContext, useMemo, type JSX, type ReactNode } from 'react';
 
-import type { WorkStatusCategory, WorkStatusEntityType, WorkStatusOut } from '@docket/types';
-import { compareWorkStatusOrder, DEFAULT_WORK_STATUSES } from '@docket/types';
+import type {
+  WorkStatusCategory,
+  WorkStatusEntityType,
+  WorkStatusOut,
+} from '@docket/work/work-status-contract';
+import { compareWorkStatusOrder, DEFAULT_WORK_STATUSES } from '@docket/work/work-status-contract';
 
 import { useApiQuery } from '@/lib/query';
 

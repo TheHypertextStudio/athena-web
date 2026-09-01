@@ -77,7 +77,7 @@ Declare the same code to OpenAPI through `apiDoc({ status })`, so the published 
 
 ## Errors
 
-Every failure is an RFC 9457 problem document served as `application/problem+json`, carrying a stable `code` from the closed catalog in `@docket/types`. Throw a typed error from `src/error.ts` and let `onError` render it; never build an error response in a handler.
+Every failure is an RFC 9457 problem document served as `application/problem+json`, carrying a stable `code` from the closed catalog in the retired contract package. Throw a typed error from `src/error.ts` and let `onError` render it; never build an error response in a handler.
 
 `title` comes from the code catalog, never from the thrown `Error.message` — a server exception can carry configuration keys, provider payloads, or SQL detail, and none of that is interface copy. Add a new code to `ProblemCode` rather than overloading `conflict` when clients need to branch.
 

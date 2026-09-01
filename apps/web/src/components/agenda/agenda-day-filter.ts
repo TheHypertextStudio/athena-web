@@ -1,4 +1,4 @@
-import type { AgendaOut } from '@docket/types';
+import type { AgendaOut } from '@docket/planning/agenda-contract';
 
 import { scheduleDateRange } from '@/components/scheduling';
 

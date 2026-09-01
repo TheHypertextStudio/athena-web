@@ -196,7 +196,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
 - Modify: `apps/api/tests/work-views/query-plan.test.ts`
 - Modify: `apps/api/tests/work-views/performance.test.ts`
 - Modify: `apps/api/tests/routes/work-views.test.ts`
-- Modify: `packages/types/src/work-view.ts`
+- Modify: `domains/work/src/contracts/work-view.ts`
 
 **Interfaces:**
 
@@ -275,7 +275,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
     tests/routes/work-views.test.ts \
     --maxWorkers=1
   pnpm --filter @docket/api typecheck
-  pnpm --filter @docket/types typecheck
+  pnpm domain:check
   ```
 
 - [ ] **Step 9: Commit the API correction**

@@ -1,5 +1,6 @@
 /** Foreground-only browser location evidence for canonical work location. */
-import { WorkPlaceId, type WorkLocationObservationCreate } from '@docket/types';
+import { WorkPlaceId } from '@docket/planning/ids';
+import { type WorkLocationObservationCreate } from '@docket/planning/work-location-contract';
 
 import {
   matchWorkPlaceGeofence,

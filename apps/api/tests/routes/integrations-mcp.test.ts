@@ -8,7 +8,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type * as DbModule from '@docket/db';
 import type * as AgentRuntimeModule from '@docket/athena/turn';
 import type * as IntegrationsModule from '@docket/integrations';
-import type { McpIntegrationOut } from '@docket/types';
+import type { McpIntegrationOut } from '@docket/connections/integration-contract';
 
 import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';

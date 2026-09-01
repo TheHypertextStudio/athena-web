@@ -13,7 +13,8 @@
 import '@testing-library/jest-dom/vitest';
 
 import { TooltipProvider } from '@docket/ui/primitives';
-import { OrganizationId, type SearchResult } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { type SearchResult } from '../../../src/lib/contracts/search';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';

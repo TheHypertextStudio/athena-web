@@ -1,6 +1,6 @@
 'use client';
 
-import type { ObjectCommandRequest, ObjectCommandResult } from '@docket/types';
+import type { ObjectCommandRequest, ObjectCommandResult } from '../../lib/contracts/object-command';
 import type { DefaultError, UseMutationResult } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 

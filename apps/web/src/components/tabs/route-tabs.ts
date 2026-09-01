@@ -7,7 +7,7 @@
  * navigates to a document — including via in-page links, the command palette, or a direct
  * URL. Non-detail routes (list views, the Hub) resolve to `null` (no tab is active).
  */
-import { ULID_REGEX } from '@docket/types';
+import { docketIdPattern as ULID_REGEX } from '@/lib/docket-id';
 
 import { parseTabRef, type TabDocType, type TabRef, TAB_ROUTE_SEGMENT } from './types';
 

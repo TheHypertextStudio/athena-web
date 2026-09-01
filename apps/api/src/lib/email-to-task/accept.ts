@@ -10,7 +10,10 @@
  * status codes; the automation handler maps non-accepted outcomes to logged no-ops.
  */
 import { attachment, db, emailSuggestion, task } from '@docket/db';
-import { EmailSuggestionMeta, type SuggestionAcceptBody } from '@docket/types';
+import {
+  EmailSuggestionMeta,
+  type SuggestionAcceptBody,
+} from '@docket/athena/email-suggestion-contract';
 
 import { and, eq } from 'drizzle-orm';
 

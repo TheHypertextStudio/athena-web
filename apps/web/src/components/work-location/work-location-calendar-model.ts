@@ -3,7 +3,7 @@ import type {
   WorkLocationAssertionOut,
   WorkLocationRangeOut,
   WorkPlaceOut,
-} from '@docket/types';
+} from '@docket/planning/work-location-contract';
 
 import { scheduleInstantAt } from '@/components/scheduling';
 

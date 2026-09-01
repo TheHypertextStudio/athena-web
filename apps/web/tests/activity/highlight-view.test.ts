@@ -1,4 +1,4 @@
-import type { HighlightsDayOut } from '@docket/types';
+import type { HighlightsDayOut } from '../../src/lib/contracts/highlights';
 import { describe, expect, it } from 'vitest';
 
 import {

@@ -1,18 +1,16 @@
+import { ActorId } from '@docket/identity-access/ids';
+import { type Health } from '@docket/work/capability-contract';
 import {
-  ActorId,
-  type Health,
   type InitiativeDetail,
-  type InitiativeDetailAggregate,
   type InitiativeOut,
   type InitiativePriority,
   type InitiativeStatus,
   type InitiativeUpdate,
   type InitiativeUpdateCadence,
-  InitiativeStatusKey,
-  LabelId,
-  ProgramId,
-  ProjectId,
-} from '@docket/types';
+} from '@docket/work/initiative-contract';
+import { type InitiativeDetailAggregate } from './contracts/detail-aggregate';
+import { InitiativeStatusKey } from '@docket/work/work-view-contract';
+import { LabelId, ProgramId, ProjectId } from '@docket/work/ids';
 import type { DateResolution } from '@docket/work/planning-timeframe';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';

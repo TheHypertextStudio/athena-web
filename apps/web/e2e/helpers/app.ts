@@ -4,7 +4,7 @@
  * relative to `baseURL`.
  */
 import type { Page } from '@playwright/test';
-import { SESSION_OWNER_HEADER } from '@docket/types';
+import { SESSION_OWNER_HEADER } from '@docket/identity-access/session-contract';
 
 import { TIMEOUTS } from './constants';
 import { expect } from './fixtures';

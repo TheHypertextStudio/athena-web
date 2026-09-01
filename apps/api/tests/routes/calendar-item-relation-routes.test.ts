@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import type { CalendarItemOut, CalendarItemRelationOut, Page } from '@docket/types';
+import type { CalendarItemOut, CalendarItemRelationOut } from '@docket/planning/calendar-contract';
+import type { Page } from '../../src/contracts/pagination';
 
 import { appWithSession, fakeSession, getDb, seedUserWithHub } from '../support/routes-harness';
 

@@ -1,4 +1,7 @@
-import { ACTIVITY_PROVIDER_IDS, PROVIDER_CATALOG } from '@docket/types';
+import {
+  ACTIVITY_PROVIDER_IDS,
+  PROVIDER_CATALOG,
+} from '@docket/connections/provider-catalog-contract';
 import { describe, expect, it } from 'vitest';
 
 import type { ConnectorProvider } from '../../src/connector';

@@ -1,5 +1,8 @@
-import type { IntegrationOut } from '@docket/types';
-import { CONNECTOR_PROVIDER_IDS, connectorIdentityProvider } from '@docket/types';
+import type { IntegrationOut } from '@docket/connections/integration-contract';
+import {
+  CONNECTOR_PROVIDER_IDS,
+  connectorIdentityProvider,
+} from '@docket/connections/provider-catalog-contract';
 import {
   Calendar,
   Github,
@@ -125,7 +128,7 @@ export interface ConnectorCopy {
    * Whether this connector's containers route many-to-one onto Docket teams via
    * `config.teamMappings` (Linear: each external team picks its own Docket team) rather than a
    * flat container checklist plus a single target team (Google Tasks: pick lists, land in one
-   * team). See `ConnectorConfig.teamMappings` in `@docket/types`.
+   * team). See `ConnectorConfig.teamMappings` in `domain packages`.
    */
   usesTeamMapping: boolean;
 }

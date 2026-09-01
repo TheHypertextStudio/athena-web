@@ -5,7 +5,7 @@
  *
  * @remarks
  * Answers a cycle's headline question — "are we on pace?" — by drawing, over the cycle's
- * calendar window, two cumulative lines from the {@link import('@docket/types').CycleBurnupOut | burn-up report}:
+ * calendar window, two cumulative lines from the {@link import('domain packages').CycleBurnupOut | burn-up report}:
  *
  * - **Planned** — cumulative committed capacity known by each day. It steps *up* whenever
  *   scope is added mid-cycle, so a rising plan line reads as scope creep at a glance.
@@ -26,7 +26,7 @@
  * design tokens via `currentColor`/token utility classes — never hardcoded. A screen-reader
  * summary describes the trend for assistive tech.
  */
-import type { CycleBurnupOut } from '@docket/types';
+import type { CycleBurnupOut } from '@docket/work/cycle-contract';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useId, useMemo } from 'react';
 

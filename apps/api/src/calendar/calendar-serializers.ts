@@ -20,7 +20,7 @@ import {
   CalendarLayerSourceKind,
   type CalendarLayerOut,
   CalendarProvider,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 import type { z } from 'zod';
 
 import { defaultItemPermissionsForKind } from './calendar-permissions';

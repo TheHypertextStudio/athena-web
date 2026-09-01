@@ -9,7 +9,10 @@
  * `/orgs/[orgId]/settings/notifications` (which this page used to delegate to, purely to reach a
  * workspace id it never actually used) has been removed.
  */
-import type { ContactPointCreate, NotificationPreferencePatch } from '@docket/notifications';
+import type {
+  ContactPointCreate,
+  NotificationPreferencePatch,
+} from '@docket/notifications/schemas';
 import { WriteError } from '@/components/settings/write-error';
 import { Skeleton } from '@docket/ui/primitives';
 import { useState, type JSX } from 'react';

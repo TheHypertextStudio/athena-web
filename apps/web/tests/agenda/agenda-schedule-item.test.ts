@@ -1,4 +1,5 @@
-import { CalendarItemId, CalendarLayerId, type CalendarItemOut } from '@docket/types';
+import { CalendarItemId, CalendarLayerId } from '@docket/planning/ids';
+import { type CalendarItemOut } from '@docket/planning/calendar-contract';
 import { describe, expect, it } from 'vitest';
 
 import type { AgendaEntry } from '@/components/agenda/agenda-model';

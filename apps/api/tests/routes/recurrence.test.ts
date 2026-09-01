@@ -8,7 +8,7 @@ import type {
   RecurrenceSeriesDetailOut,
   RecurrenceSeriesOut,
   RecurringTaskCreated,
-} from '@docket/types';
+} from '../../src/contracts/recurrence';
 import { eq } from 'drizzle-orm';
 
 import type processDefinitionsRouter from '../../src/routes/process-definitions';

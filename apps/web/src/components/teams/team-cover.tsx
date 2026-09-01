@@ -14,7 +14,7 @@
  * The derived cover is deterministic: same icon and color, same picture, every render and every
  * reload. Nothing here is random, because a cover that shuffled on reload would read as a bug.
  */
-import type { EntityDisplayOut } from '@docket/types';
+import type { EntityDisplayOut } from '@docket/work/entity-display-contract';
 import { STRATEGIC_WORK_ROUNDED_ICON_BY_KEY } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';

@@ -12,7 +12,7 @@
  * every Library render and every palette keystroke.
  */
 import { and, eq, inArray, or } from 'drizzle-orm';
-import type { SearchDocumentKind, SearchUsedIn } from '@docket/types';
+import type { SearchDocumentKind, SearchUsedIn } from '../contracts/search';
 
 /** The kinds this module will name as a container, shallowest last. */
 type ContainerKind = SearchUsedIn['kind'];

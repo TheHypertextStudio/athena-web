@@ -16,7 +16,8 @@
  * Loading uses {@link Skeleton} rows; the empty state invites the first post; a failed load
  * is announced via `role="alert"`.
  */
-import type { Health, UpdateOut } from '@docket/types';
+import type { Health } from '@docket/work/capability-contract';
+import type { UpdateOut } from '@docket/work/update-contract';
 import { cn, relativeTime } from '@docket/ui';
 import { ActorAvatar } from '@docket/ui/components';
 import { ChevronDown } from '@docket/ui/icons';

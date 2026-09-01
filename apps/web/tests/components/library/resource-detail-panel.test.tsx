@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
-import { OrganizationId, type SearchResult } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { type SearchResult } from '../../../src/lib/contracts/search';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 

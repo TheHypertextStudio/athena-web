@@ -21,7 +21,7 @@
  * All counts group by status category and use the shared state tokens for
  * color, so the breakdown stays consistent with the status glyphs everywhere else.
  */
-import type { TaskOut } from '@docket/types';
+import type { TaskOut } from '@docket/work/task-model';
 import { cn } from '@docket/ui';
 import { StatusIcon, type WorkflowStateType } from '@docket/ui/components';
 import { Flag, ListChecks } from '@docket/ui/icons';

@@ -20,7 +20,12 @@
  * chain of detail-builders ending in a `generic` fallback — so an event we don't yet have a
  * specific shape for still surfaces (a degraded row) instead of being dropped.
  */
-import type { CanonicalEntityKind, EventDetail, EventKind, WebhookProviderId } from '@docket/types';
+import type {
+  CanonicalEntityKind,
+  EventDetail,
+  EventKind,
+} from '@docket/connections/event-contract';
+import type { WebhookProviderId } from '@docket/connections/provider-catalog-contract';
 
 /**
  * The providers an {@link Observer} can be bound to.
@@ -122,7 +127,7 @@ export interface EventEntityRef {
  * @remarks
  * Mirrors the `event` table's content minus the Docket-owned fields
  * (`organizationId`/`userId`/`integrationId`/`sourceSystem`/`sourceEventId`). `kind` is a
- * `@docket/types` {@link EventKind}; `detail` is a typed {@link EventDetail} variant (incl. the
+ * `domain packages` {@link EventKind}; `detail` is a typed {@link EventDetail} variant (incl. the
  * `generic` fallback).
  */
 export interface EventDraft {

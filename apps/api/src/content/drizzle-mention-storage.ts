@@ -7,7 +7,7 @@
  * change lands here rather than across five call sites.
  */
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import type { MentionEntityKind, MentionSubjectType } from '@docket/types';
+import type { MentionEntityKind, MentionSubjectType } from '../contracts/mention';
 
 import type {
   ExternalResourceRepository,

@@ -31,8 +31,9 @@ import {
 import type { SessionActivityBody } from '@docket/db';
 import type { AgentTurnRuntime } from '@docket/athena/turn';
 import type { TurnContentBlock, TurnMessage } from '@docket/athena/turn-protocol';
-import { HubPreferences } from '@docket/types';
-import type { AthenaApprovalMode, SessionApprovalDecision } from '@docket/types';
+import { HubPreferences } from '@docket/planning/hub-preferences-contract';
+import type { AthenaApprovalMode } from '@docket/planning/hub-preferences-contract';
+import type { SessionApprovalDecision } from '@docket/athena/agent-contract';
 import { and, asc, desc, eq } from 'drizzle-orm';
 
 import { assertProductCapability } from '../product-capability';

@@ -19,7 +19,10 @@
  * through the app's own drag-a-task-onto-the-grid flow, only the legacy kind no live write path
  * produces anymore.
  */
-import type { CalendarItemLinkedTaskOut, CalendarItemOut } from '@docket/types';
+import type {
+  CalendarItemLinkedTaskOut,
+  CalendarItemOut,
+} from '@docket/planning/calendar-contract';
 
 /** Kinds whose block can represent "doing" a specific task. */
 const TASK_SHAPED_KINDS: ReadonlySet<CalendarItemOut['kind']> = new Set([

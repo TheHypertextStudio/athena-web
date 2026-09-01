@@ -29,7 +29,8 @@
  * {@link usePickerOverlay}) seeded with that row's own labels, since a task row already has them
  * in hand and needs no fetch to show them.
  */
-import { defaultEntityDisplay, type EntityDisplayOut, type TaskOut } from '@docket/types';
+import { defaultEntityDisplay, type EntityDisplayOut } from '@docket/work/entity-display-contract';
+import { type TaskOut } from '@docket/work/task-model';
 import {
   ActorAvatar,
   type ActorKind,

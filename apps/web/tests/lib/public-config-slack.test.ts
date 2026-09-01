@@ -1,5 +1,5 @@
 /** Unit tests for the active provider branches of the public-config availability helpers. */
-import type { PublicConfigOut } from '@docket/types';
+import type { PublicConfigOut } from '@docket/identity-access/public-config-contract';
 import { describe, expect, it } from 'vitest';
 
 import { connectorAvailable, connectorOAuthConfigured } from '../../src/lib/public-config';

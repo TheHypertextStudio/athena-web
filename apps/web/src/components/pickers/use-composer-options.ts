@@ -18,15 +18,13 @@
  *
  * @see {@link actorOptions} and friends for the pure DTO→option mappers this composes.
  */
-import type {
-  CycleOut,
-  EntityDisplayOut,
-  LabelOut,
-  MilestoneOut,
-  ProjectOut,
-  TeamOut,
-  WorkflowState,
-} from '@docket/types';
+import type { CycleOut } from '@docket/work/cycle-contract';
+import type { EntityDisplayOut } from '@docket/work/entity-display-contract';
+import type { LabelOut } from '@docket/work/label-contract';
+import type { MilestoneOut } from '@docket/work/milestone-contract';
+import type { ProjectOut } from '../../lib/contracts/project';
+import type { TeamOut } from '../../lib/contracts/team';
+import type { WorkflowState } from '@docket/work/workflow';
 import type { PickerOption } from '@docket/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';

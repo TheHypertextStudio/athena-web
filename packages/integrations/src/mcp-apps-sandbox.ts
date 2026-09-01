@@ -18,7 +18,7 @@
  * The document is a string rather than a bundled asset for the same reason the widget runtime is:
  * it runs under a policy that forbids fetching anything, so there is nothing to bundle from.
  */
-import { MCP_UI_METHODS } from '@docket/types';
+import { MCP_UI_METHODS } from './contracts/mcp-apps';
 import {
   defaultTreeAdapter,
   html as parse5Html,

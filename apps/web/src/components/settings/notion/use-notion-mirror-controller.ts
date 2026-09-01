@@ -26,7 +26,7 @@ import {
   type NotionMappingProfile,
   type SyncFailureKind,
   type SyncRunOut,
-} from '@docket/types';
+} from '@docket/connections/integration-contract';
 import { useState } from 'react';
 
 import { api } from '@/lib/api';

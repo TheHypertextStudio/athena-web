@@ -1,11 +1,8 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
-import {
-  TaskNavigationSnapshot,
-  type OrganizationId,
-  type ProjectId,
-  type TaskId,
-} from '@docket/types';
+import { TaskNavigationSnapshot } from '../../src/lib/contracts/entity-navigation';
+import { type OrganizationId } from '@docket/identity-access/ids';
+import { type ProjectId, type TaskId } from '@docket/work/ids';
 
 import {
   buildAuthenticatedHref,

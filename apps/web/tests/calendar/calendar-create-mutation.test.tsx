@@ -1,10 +1,9 @@
+import { CalendarItemId, CalendarLayerId } from '@docket/planning/ids';
 import {
-  CalendarItemId,
   type CalendarItemCreate,
   type CalendarItemOut,
   type CalendarItemsRangeOut,
-  CalendarLayerId,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';

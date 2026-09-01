@@ -13,7 +13,7 @@
  * The card carries the check-off control (when the entry is on the plan) as a sibling of the
  * navigating content, so neither nests inside the other.
  */
-import type { CalendarItemKind } from '@docket/types';
+import type { CalendarItemKind } from '@docket/planning/calendar-contract';
 import {
   Calendar,
   CheckCircle2,

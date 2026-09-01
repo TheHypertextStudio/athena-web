@@ -18,7 +18,7 @@ import type {
   TeamMemberOut,
   TeamRosterEntry,
   WorkflowStateType,
-} from '@docket/types';
+} from '../contracts/team';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import { buildTaskViewFilter } from './task-helpers';

@@ -33,17 +33,17 @@ import {
   type WorkLocationProfileUpdate,
   type WorkLocationSchedule,
   type WorkPlaceUpdate,
-} from '@docket/types';
+} from '@docket/planning/work-location-contract';
 import { and, asc, desc, eq, inArray, isNull, lte, ne } from 'drizzle-orm';
 
 import { ConflictError, NotFoundError } from '../../error';
-import { addCalendarDays, mondayWeekdayIndex } from '../../lib/recurrence/calendar-date';
-import { instantAt, localDateString } from '../scheduling/zoned-time';
+import { addCalendarDays, mondayWeekdayIndex } from '@docket/planning/calendar-date';
+import { instantAt, localDateString } from '@docket/planning/zoned-time';
 import {
   GOOGLE_WORK_LOCATION_CAPABILITIES,
   MICROSOFT_WORK_LOCATION_CAPABILITIES,
 } from './provider-contract';
-import type { WorkLocationResolutionState } from './resolver';
+import type { WorkLocationResolutionState } from '@docket/planning/work-location-resolution';
 
 /** Require the row/result that a successful persistence operation must return. */
 function persisted<T>(value: T | undefined, operation: string): T {

@@ -16,7 +16,7 @@
  * and {@link MIRROR_LOOKUP} records that decision per kind rather than leaving it implied.
  */
 import { cycle, db, project, task } from '@docket/db';
-import type { CanonicalEntityKind } from '@docket/types';
+import type { CanonicalEntityKind } from '@docket/connections/event-contract';
 import { and, eq, inArray } from 'drizzle-orm';
 
 /** One external reference to resolve. */

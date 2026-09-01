@@ -1,4 +1,4 @@
-import type { CalendarProviderEventType } from '@docket/types';
+import type { CalendarProviderEventType } from '@docket/planning/calendar-contract';
 
 const GOOGLE_PROVIDER_EVENT_TYPES = {
   default: 'default',

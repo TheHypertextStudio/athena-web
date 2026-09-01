@@ -1,4 +1,5 @@
-import type { SearchDocumentFamily, SearchDocumentKind, SourceSystemKind } from '@docket/types';
+import type { SearchDocumentFamily, SearchDocumentKind } from '../../lib/contracts/search';
+import type { SourceSystemKind } from '@docket/connections/event-contract';
 
 /** Search-document families supported by the shareable search-page URL. */
 export const SEARCH_FAMILY_VALUES = ['work', 'people', 'content', 'activity'] as const;

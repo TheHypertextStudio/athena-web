@@ -23,7 +23,8 @@ import {
   task,
 } from '@docket/db';
 import { canActor } from '@docket/authz';
-import type { AthenaAssignmentEntityType, EventKind } from '@docket/types';
+import type { AthenaAssignmentEntityType } from '@docket/athena/athena-contract';
+import type { EventKind } from '@docket/connections/event-contract';
 import { and, eq, isNull, lte, or, sql } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';

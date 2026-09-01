@@ -1,5 +1,5 @@
 import type { Database } from '@docket/db';
-import { WorkViewQueryResponse, type WorkViewQueryRequest } from '@docket/types';
+import { WorkViewQueryResponse, type WorkViewQueryRequest } from '@docket/work/work-view-contract';
 import type { ViewTarget } from '@docket/work/view-contract';
 import { and, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';

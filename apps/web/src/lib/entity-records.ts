@@ -23,7 +23,10 @@
  * seed therefore only has to be *true*, not complete: it buys the first paint, and the read that
  * is already in flight fills in whatever the create response did not carry.
  */
-import type { InitiativeOut, ProgramOut, ProjectOut, TaskOut } from '@docket/types';
+import type { InitiativeOut } from '@docket/work/initiative-contract';
+import type { ProgramOut } from '@docket/work/program-contract';
+import type { ProjectOut } from './contracts/project';
+import type { TaskOut } from '@docket/work/task-model';
 import type { QueryClient } from '@tanstack/react-query';
 
 import { api } from './api';

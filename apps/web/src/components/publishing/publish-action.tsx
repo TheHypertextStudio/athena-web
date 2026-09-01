@@ -22,8 +22,8 @@
  * to publish work to the open internet deserves to see exactly what will be reachable.
  */
 import { env } from '@docket/env/web';
-import type { PublicationSubjectKind } from '@docket/types';
-import { suggestPublicSlug } from '@docket/types';
+import type { PublicationSubjectKind } from '@docket/work/publish-contract';
+import { suggestPublicSlug } from '@docket/work/publish-contract';
 import {
   Button,
   Dialog,

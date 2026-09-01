@@ -10,7 +10,11 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { formatMentionLink, type MentionEntityKind, type MentionSubjectType } from '@docket/types';
+import {
+  formatMentionLink,
+  type MentionEntityKind,
+  type MentionSubjectType,
+} from '../../src/contracts/mention';
 
 import { createMentionReconciler } from '../../src/content/reconcile-mentions';
 import type {

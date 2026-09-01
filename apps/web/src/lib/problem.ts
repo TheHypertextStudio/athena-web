@@ -1,4 +1,4 @@
-import { Problem, type ProblemCode } from '@docket/types';
+import { Problem, type ProblemCode } from './contracts/errors';
 
 /** A failure whose message is application-owned and safe to render. */
 export class UserFacingError extends Error {

@@ -7,7 +7,7 @@
  * way to add one of these is to write a mention in the prose, and the way to remove one is to
  * delete it from the prose.
  */
-import { EntityMentionsOut, type MentionSubjectType } from '@docket/types';
+import { EntityMentionsOut, type MentionSubjectType } from '../contracts/mention';
 import { Hono } from 'hono';
 import { z } from 'zod';
 

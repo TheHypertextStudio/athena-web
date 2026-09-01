@@ -3,7 +3,7 @@
  *
  * @remarks
  * Each tool mirrors the corresponding RPC router's domain logic against the SAME
- * `db` and reuses `@docket/types` field validators where they fit. Every handler
+ * `db` and reuses `domain packages` field validators where they fit. Every handler
  * authorizes via {@link authorize} (→ {@link canActor}) BEFORE writing — org-scoped
  * mutations check the org root, resource-scoped mutations check the target resource —
  * and returns the MCP result (or the `isError` contract on failure) via

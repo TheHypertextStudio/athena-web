@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 
 import type * as DbModule from '@docket/db';
 import type { TaskExpansionInput, TaskExpansionSynthesizer } from '@docket/athena/task-expansion';
-import { LabelId } from '@docket/types';
+import { LabelId } from '@docket/work/ids';
 
 import type tasksRouter from '../../src/routes/tasks';
 import * as container from '../../src/container';

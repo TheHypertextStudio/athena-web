@@ -1,4 +1,4 @@
-import type { EstimationScale } from '@docket/types';
+import type { EstimationScale } from './contracts/organization';
 import { useCallback } from 'react';
 
 import { api } from './api';

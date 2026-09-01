@@ -40,9 +40,9 @@ Do not use horizontal scrolling or wrapping for detail tabs. A controlled overfl
 
 **Files:**
 
-- Modify: `packages/types/src/entity-display.ts`
+- Modify: `domains/work/src/contracts/entity-display.ts`
 - Modify: `apps/web/src/lib/actions/object.ts`
-- Create: `packages/types/tests/entity-display.test.ts`
+- Create: `the deleted legacy type warehouse tests/entity-display.test.ts`
 - Modify: `apps/api/tests/routes/entity-display.test.ts`
 - Review: `apps/api/src/routes/orgs.ts`
 
@@ -55,14 +55,14 @@ Add a table-driven test that requires an explicit presentation policy for every 
 Run:
 
 ```sh
-pnpm --filter @docket/types test -- tests/entity-display.test.ts
+pnpm domain:check
 ```
 
 Expected: the current three-value `EntityDisplaySubjectType` fails the complete-policy assertion.
 
 **Step 3: Implement the pure typed registry.**
 
-Replace the three-value enum and subject-specific branches with a total registry in `@docket/types`. It must define the persisted subject type, default icon, default color resolver, and presentation policy. Preserve the current Initiative, Project, and Team defaults. Preserve Team's deterministic color resolver.
+Replace the three-value enum and subject-specific branches with a total registry in the retired contract package. It must define the persisted subject type, default icon, default color resolver, and presentation policy. Preserve the current Initiative, Project, and Team defaults. Preserve Team's deterministic color resolver.
 
 **Step 4: Keep semantic and virtual policies separate.**
 
@@ -73,8 +73,8 @@ Do not add `initiative_root`, `calendar_slot`, or other synthetic IDs as `entity
 Run:
 
 ```sh
-pnpm --filter @docket/types test -- tests/entity-display.test.ts
-pnpm --filter @docket/types typecheck
+pnpm domain:check
+pnpm domain:check
 pnpm --filter @docket/api test -- tests/routes/entity-display.test.ts
 ```
 
@@ -120,7 +120,7 @@ The migration must widen the check without deleting or backfilling display rows.
 
 **Step 4: Make API table mapping total.**
 
-Expand `SUBJECT_TABLE` in `apps/api/src/routes/entity-display.ts` for every persisted customizable type. Keep database table mapping in the API package and defaults in `@docket/types`. Reuse normal resource visibility policies so the display API cannot enumerate hidden records.
+Expand `SUBJECT_TABLE` in `apps/api/src/routes/entity-display.ts` for every persisted customizable type. Keep database table mapping in the API package and defaults in the retired contract package. Reuse normal resource visibility policies so the display API cannot enumerate hidden records.
 
 **Step 5: Add parameterized route coverage.**
 
@@ -145,8 +145,8 @@ feat(api): Support custom presentation for native entities
 
 **Files:**
 
-- Modify: `packages/types/src/detail-aggregate.ts`
-- Modify: `packages/types/src/project.ts`
+- Modify: `apps/api/src/contracts/detail-aggregate.ts`
+- Modify: `apps/api/src/contracts/project.ts`
 - Modify: `apps/api/src/routes/projects.ts`
 - Modify: `packages/db/src/schema/joins.ts`
 - Generate: `packages/db/drizzle/<next>_*.sql`
@@ -261,7 +261,7 @@ fix(ui): Keep detail sections reachable on compact screens
 
 - Create: `apps/web/src/components/views/use-detail-tab.ts`
 - Create: `apps/web/tests/components/views/use-detail-tab.test.tsx`
-- Modify: `packages/types/src/detail-aggregate.ts`
+- Modify: `apps/api/src/contracts/detail-aggregate.ts`
 - Modify: `apps/api/src/routes/initiative-aggregates.ts`
 - Modify: `apps/api/tests/routes/detail-aggregates.test.ts`
 - Modify: `apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx`
@@ -402,13 +402,13 @@ feat(ui): Customize identity across native detail pages
 **Files:**
 
 - Modify: `apps/api/src/lib/work-views/projection-sql.ts`
-- Modify: `packages/types/src/work-view.ts`
+- Modify: `domains/work/src/contracts/work-view.ts`
 - Modify: `apps/api/src/routes/projects.ts`
 - Modify: `apps/api/src/routes/tasks.ts`
 - Modify: `apps/api/src/routes/cycles.ts`
 - Modify: `apps/api/src/routes/milestones.ts`
 - Modify: `apps/api/src/search/query.ts`
-- Modify: `packages/types/src/search.ts`
+- Modify: `apps/api/src/contracts/search.ts`
 - Modify: `apps/web/src/components/work-views/work-list.tsx`
 - Modify: `apps/web/src/components/work-views/work-cards.tsx`
 - Modify: `apps/web/src/components/work-views/program-work-card.tsx`
@@ -501,7 +501,7 @@ At every viewport, assert no document horizontal overflow, no second header acti
 **Step 3: Run focused checks.**
 
 ```sh
-pnpm --filter @docket/types test -- tests/entity-display.test.ts tests/detail-aggregate.test.ts
+pnpm domain:check
 pnpm --filter @docket/db test -- tests/migrations/entity-display-subjects-migration.test.ts
 pnpm --filter @docket/api test -- tests/routes/entity-display.test.ts tests/routes/detail-aggregates.test.ts tests/routes/projects-detail.test.ts
 pnpm --filter @docket/web test -- tests/components/entity-display/use-entity-display.test.tsx tests/components/views/use-detail-tab.test.tsx tests/components/entity-detail-layout.test.tsx tests/components/initiative-visual-contract.test.ts tests/components/projects/projects-experience-contract.test.ts tests/components/programs/program-detail-header-contract.test.ts tests/lib/use-project-mutations.test.ts

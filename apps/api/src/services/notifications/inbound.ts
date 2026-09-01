@@ -4,7 +4,7 @@ import type {
   NotificationChannel,
   NotificationInboundEventKind,
   NotificationInboundEventOut,
-} from '@docket/notifications';
+} from '@docket/notifications/schemas';
 import { and, eq, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 

@@ -475,7 +475,7 @@ It defines the Athena core surface as `packages/agent-runtime/src/**` — verifi
 every workspace package; it is the only one whose subject is Athena's reasoning surface — and states
 in its `@remarks` why `apps/api/src/routes/*athena*` and `apps/api/src/agent/**` are Docket-side
 adapters rather than Athena core. It asserts that no file on that surface imports anything Docket
-owns except `@docket/types`, and that the package manifest declares no Docket internal package at
+owns except the retired contract package, and that the package manifest declares no Docket internal package at
 runtime (with build-tooling devDependencies allowed through a separate, narrower list so a runtime
 dependency cannot be smuggled in under `devDependencies`).
 
@@ -497,7 +497,7 @@ $ pnpm --filter @docket/test-utils exec vitest run tests/workspace-policies/athe
 ```
 
 `packages/agent-runtime` passes with zero violations: its whole dependency set is
-`@anthropic-ai/sdk`, `@docket/types`, and `zod`, so it already satisfies something stronger than the
+`@anthropic-ai/sdk`, the retired contract package, and `zod`, so it already satisfies something stronger than the
 acceptance — it needs no Docket adapter to mock, because it has none.
 
 **Residual gap:** the acceptance is about Athena's _core capabilities_, and the reasoning loop is not

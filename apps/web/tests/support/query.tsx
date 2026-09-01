@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { JSX, ReactNode } from 'react';
 
-import type { ProblemCode } from '@docket/types';
+import type { ProblemCode } from '../../src/lib/contracts/errors';
 
 import type { RpcResponse } from '../../src/lib/query';
 

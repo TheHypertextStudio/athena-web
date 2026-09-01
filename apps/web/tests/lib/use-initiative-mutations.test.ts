@@ -1,4 +1,4 @@
-import type { InitiativeDetailAggregate } from '@docket/types';
+import type { InitiativeDetailAggregate } from '../../src/lib/contracts/detail-aggregate';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

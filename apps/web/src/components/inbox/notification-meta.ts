@@ -10,7 +10,11 @@
  * dead-ending). Only icons already exported from `@docket/ui/icons` are used so the curated
  * icon barrel (owned by another surface) is never touched.
  */
-import type { AuditEventOut, NotificationOut, NotificationType } from '@docket/types';
+import type { AuditEventOut } from '@docket/connections/activity-contract';
+import type {
+  NotificationOut,
+  NotificationType,
+} from '@docket/notifications/notification-contract';
 import {
   Cable,
   CheckCircle2,

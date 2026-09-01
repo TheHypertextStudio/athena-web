@@ -9,7 +9,7 @@
  * enhancement. Multi-instance fan-out (Postgres LISTEN/NOTIFY or Redis) is a documented
  * follow-up; until then a subscriber only receives events published on its own instance.
  */
-import type { StreamEventOut } from '@docket/types';
+import type { StreamEventOut } from '../contracts/stream';
 import type { z } from 'zod';
 
 /** The serialized event delivered over the bus (the stream DTO's wire shape). */

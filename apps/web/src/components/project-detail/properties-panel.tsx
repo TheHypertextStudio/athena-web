@@ -1,7 +1,9 @@
 'use client';
 
 /** Progressive Project property controls rendered as an inline chip row in the entity masthead. */
-import type { Health, LabelOut, ProjectStatus } from '@docket/types';
+import type { Health } from '@docket/work/capability-contract';
+import type { LabelOut } from '@docket/work/label-contract';
+import type { ProjectStatus } from '../../lib/contracts/project';
 import type { DateResolution } from '@docket/work/planning-timeframe';
 import {
   EntityMultiPicker,

@@ -19,7 +19,7 @@ import {
   dispatchNotificationIntent,
   ensureAccountEmailContactPoint,
 } from '@docket/notifications/dispatch';
-import { RecoveryCodesOut, RecoveryCodesStatusOut } from '@docket/types';
+import { RecoveryCodesOut, RecoveryCodesStatusOut } from '@docket/identity-access/account-contract';
 import { type Context, Hono } from 'hono';
 import type { z } from 'zod';
 

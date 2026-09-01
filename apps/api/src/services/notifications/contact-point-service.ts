@@ -6,7 +6,7 @@ import type {
   ContactPointCreate,
   ContactPointOut,
   ContactPointVerify,
-} from '@docket/notifications';
+} from '@docket/notifications/schemas';
 import {
   ensureAccountEmailContactPoint,
   findContactPointByNormalizedValue,

@@ -5,7 +5,7 @@ import type {
   InitiativeHierarchyCandidate,
   InitiativeOverviewItem,
   InitiativeOverviewOut,
-} from '@docket/types';
+} from '@docket/work/initiative-contract';
 import { PickerList, type PickerOption } from '@docket/ui/components';
 import { Target } from '@docket/ui/icons';
 import {

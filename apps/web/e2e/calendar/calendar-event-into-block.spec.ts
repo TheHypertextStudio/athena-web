@@ -18,7 +18,7 @@
  *
  * Steps 4 and 5 are what a mocked spec structurally cannot do.
  */
-import type { CalendarItemOut } from '@docket/types';
+import type { CalendarItemOut } from '@docket/planning/calendar-contract';
 import type { Page } from '@playwright/test';
 
 import { signUpAndOnboard } from '../helpers/app';

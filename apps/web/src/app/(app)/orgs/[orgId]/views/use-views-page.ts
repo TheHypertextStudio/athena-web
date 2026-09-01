@@ -1,15 +1,12 @@
 'use client';
 
-import {
-  type AgentOut,
-  type MemberOut,
-  type ProgramOut,
-  type ProjectOut,
-  type SavedViewCreate,
-  type SavedViewOut,
-  type TaskOut,
-  TeamId,
-} from '@docket/types';
+import { type AgentOut } from '@docket/athena/agent-contract';
+import { type MemberOut } from '@docket/identity-access/member-contract';
+import { type ProgramOut } from '@docket/work/program-contract';
+import { type ProjectOut } from '../../../../../lib/contracts/project';
+import { type SavedViewCreate, type SavedViewOut } from '@docket/work/saved-view-contract';
+import { type TaskOut } from '@docket/work/task-model';
+import { TeamId } from '@docket/identity-access/ids';
 import { useVocabulary } from '@docket/ui/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { type Dispatch, type SetStateAction, useCallback, useMemo, useState } from 'react';

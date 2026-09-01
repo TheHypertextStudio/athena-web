@@ -6,7 +6,7 @@
 Projects, Programs, and Initiatives while correcting the shared detail-header overflow.
 
 **Architecture:** `@docket/work/view-contract` owns the generic algebra and canonicalization.
-`@docket/types` closes that algebra over four field catalogs and validates transport values. The
+the retired contract package closes that algebra over four field catalogs and validates transport values. The
 database adds compatible property and preference storage before the API compiles authorized SQL.
 The web app consumes one query client and one toolbar across target-specific renderers.
 
@@ -60,11 +60,11 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
 
 **Files:**
 
-- Create: `packages/types/src/work-view.ts`
-- Create: `packages/types/tests/work-view.test.ts`
-- Modify: `packages/types/src/index.ts`
-- Modify: `packages/types/src/saved-view.ts`
-- Modify: `packages/types/src/hub-preferences.ts`
+- Create: `domains/work/src/contracts/work-view.ts`
+- Create: `the deleted legacy type warehouse tests/work-view.test.ts`
+- Modify: `deleted legacy module index`
+- Modify: `domains/work/src/contracts/saved-view.ts`
+- Modify: `domains/planning/src/contracts/hub-preferences.ts`
 
 - [x] Keep type tests that reject cross-target status keys, Initiative boards, Program timelines,
       invalid contexts, and read-only group mutations.
@@ -72,7 +72,7 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
 - [x] Add symbolic actor/date operands, ranks, target cursors, canonical query fingerprints,
       instance keys, definitions, rows, facets, ordering requests, defaults, and saved-view schemas.
 - [x] Add v1-to-v2 saved-view migration and preference-precedence domain tests.
-- [x] Run focused Types tests plus `pnpm --filter @docket/types typecheck`.
+- [x] Run focused Types tests plus `pnpm domain:check`.
 - [x] Commit the slice as `feat: Close work views over every planning level`.
 
 ### Task 4: Add compatible storage and migration

@@ -11,7 +11,7 @@ import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { CommentOut } from '@docket/types';
+import type { CommentOut } from '@docket/work/comment-contract';
 
 import type commentsRouter from '../../src/routes/comments';
 import {

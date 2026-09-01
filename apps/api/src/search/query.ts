@@ -1,10 +1,6 @@
-import {
-  type EntityDisplaySubjectType,
-  OrganizationId,
-  type SearchDocumentKind,
-  type SearchOut,
-  type SearchUsedIn,
-} from '@docket/types';
+import { type EntityDisplaySubjectType } from '@docket/work/entity-display-contract';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { type SearchDocumentKind, type SearchOut, type SearchUsedIn } from '../contracts/search';
 import type { searchDocument } from '@docket/db';
 import { and, asc, desc, eq, gt, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 

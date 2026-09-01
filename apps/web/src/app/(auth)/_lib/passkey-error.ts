@@ -3,7 +3,7 @@
  *
  * @remarks
  * Keep auth screens importing this local path while the implementation lives in
- * `@docket/types`, shared with the admin client so WebAuthn/browser messages are classified
+ * `domain packages`, shared with the admin client so WebAuthn/browser messages are classified
  * consistently before any client renders copy.
  */
 export {
@@ -19,5 +19,9 @@ export {
   passkeyUserMessage,
   PREVIOUSLY_REGISTERED_CODE,
   SERVER_UNAVAILABLE_MESSAGE,
-} from '@docket/types';
-export type { PasskeyCeremonyError, PasskeyErrorKind, PasskeyUserMessage } from '@docket/types';
+} from '@docket/identity-access/passkey-errors-contract';
+export type {
+  PasskeyCeremonyError,
+  PasskeyErrorKind,
+  PasskeyUserMessage,
+} from '@docket/identity-access/passkey-errors-contract';

@@ -1,7 +1,7 @@
 'use client';
 
 /** The most recent narrative update, placed beside the entity's operating brief. */
-import type { UpdateOut } from '@docket/types';
+import type { UpdateOut } from '@docket/work/update-contract';
 import { ActorAvatar } from '@docket/ui/components';
 import type { JSX } from 'react';
 

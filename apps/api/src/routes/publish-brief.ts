@@ -45,7 +45,7 @@ import type {
   BriefWorkItem,
   PublicBriefOut,
   PublicationSubjectKind,
-} from '@docket/types';
+} from '@docket/work/publish-contract';
 import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 

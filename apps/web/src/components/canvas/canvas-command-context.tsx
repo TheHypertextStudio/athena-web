@@ -1,7 +1,7 @@
 'use client';
 
 /** Shared Project and Task canvas command, history, trash, and selection action surface. */
-import type { ObjectCommandIn } from '@docket/types';
+import type { ObjectCommandIn } from '../../lib/contracts/object-command';
 import type { QueryKey } from '@tanstack/react-query';
 import {
   createContext,
@@ -197,7 +197,7 @@ export function CanvasCommandProviderWithHistory({
         objectKind,
         objectIds: objects.map(({ id }) => id),
         operation: { type: 'trash' },
-      } as ObjectCommandIn;
+      };
       const subject =
         objects.length === 1
           ? (objects[0]?.title ?? objectKind)

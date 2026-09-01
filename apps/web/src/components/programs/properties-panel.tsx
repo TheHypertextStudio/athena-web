@@ -17,7 +17,8 @@
  * It takes pre-resolved {@link PickerOption}s and current values, and reports each change through a
  * typed `onChange`. The host resolves members into options and owns the PATCH.
  */
-import { type Health, type ProgramStatus, type Visibility } from '@docket/types';
+import { type Health, type Visibility } from '@docket/work/capability-contract';
+import { type ProgramStatus } from '@docket/work/program-contract';
 import { ActorPicker, EnumPicker, type PickerOption } from '@docket/ui/components';
 import { Activity } from '@docket/ui/icons';
 import { type JSX, useMemo } from 'react';

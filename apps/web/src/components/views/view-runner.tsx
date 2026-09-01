@@ -17,7 +17,7 @@
  * `ListView` (which buckets in first-seen order) reproduces exactly the engine's ordering. The
  * group header label + status glyph come from the engine's {@link AppliedGroup}.
  */
-import type { TaskOut } from '@docket/types';
+import type { TaskOut } from '@docket/work/task-model';
 import { type GroupKey, ListView, type TaskRowData, TaskRow } from '@docket/ui/components';
 import type { WorkflowStateType } from '@docket/ui/components';
 import type { JSX } from 'react';

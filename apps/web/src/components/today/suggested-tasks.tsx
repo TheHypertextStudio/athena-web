@@ -1,6 +1,6 @@
 'use client';
 
-import type { HubTodaySuggestion } from '@docket/types';
+import type { HubTodaySuggestion } from '../../lib/contracts/hub';
 import { ArrowRight, Play, Plus, Sparkles, X } from '@docket/ui/icons';
 import { Button, ControlGroup } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';

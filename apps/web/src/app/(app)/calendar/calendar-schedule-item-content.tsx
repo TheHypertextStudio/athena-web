@@ -1,4 +1,4 @@
-import type { CalendarItemOut } from '@docket/types';
+import type { CalendarItemOut } from '@docket/planning/calendar-contract';
 import type { JSX } from 'react';
 
 import type { ScheduleItemDensity } from '../../../components/scheduling';

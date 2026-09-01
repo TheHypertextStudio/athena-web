@@ -6,7 +6,7 @@
 **Goal:** Add the private `/v1/me/athena` API over the existing user-owned session substrate while
 preserving registered-agent and organization-route compatibility.
 
-**Architecture:** Define personal-only Zod DTOs in `@docket/types`, then mount one Hono router that
+**Architecture:** Define personal-only Zod DTOs in the retired contract package, then mount one Hono router that
 derives ownership from the authenticated Better Auth session. A focused context resolver validates
 source ownership, workspace consistency, and active membership at invocation. Existing loop,
 proposal, transcript, lifecycle, and owner-access services remain the behavior source of truth.
@@ -29,8 +29,8 @@ proposal, transcript, lifecycle, and owner-access services remain the behavior s
 
 **Files:**
 
-- Modify: `packages/types/src/agent.ts`
-- Modify: `packages/types/src/index.ts`
+- Modify: `domains/athena/src/contracts/agent.ts`
+- Modify: `deleted legacy module index`
 - Create: `apps/api/src/routes/me-athena-context.ts`
 - Test: `apps/api/tests/routes/me-athena.test.ts`
 

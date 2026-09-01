@@ -13,7 +13,7 @@
  * consenting to); no capability.
  */
 import { db, oauthClient } from '@docket/db';
-import { OAuthClientMetadataOut } from '@docket/types';
+import { OAuthClientMetadataOut } from '@docket/identity-access/oauth-client-contract';
 import { eq } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { z } from 'zod';

@@ -2,22 +2,21 @@
  * `@docket/api` — programs router (mounted at `/v1/orgs/:orgId/programs`).
  */
 import { actor, cycle, db, program, project, task, update } from '@docket/db';
+import { CursorQuery, pageOf } from '../contracts/pagination';
+import { defaultCycleName } from '@docket/work/cycle-contract';
 import {
-  CursorQuery,
-  defaultCycleName,
-  pageOf,
   ProgramCreate,
-  ProgramDetailAggregate,
   ProgramDetail,
-  ProgramId,
   ProgramLabelLink,
   ProgramLabelLinked,
   ProgramOut,
   ProgramUpdate,
   ProgramWorkOut,
   ProgramWorkQuery,
-  UpdateFeed,
-} from '@docket/types';
+} from '@docket/work/program-contract';
+import { ProgramDetailAggregate } from '../contracts/detail-aggregate';
+import { ProgramId } from '@docket/work/ids';
+import { UpdateFeed } from '@docket/work/update-contract';
 import { and, count, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

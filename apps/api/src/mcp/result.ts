@@ -10,7 +10,7 @@
  */
 import { type Capability, canActor, type ResourceRef } from '@docket/authz';
 import { db } from '@docket/db';
-import { publicProblemTitle, type FieldIssue } from '@docket/types';
+import { publicProblemTitle, type FieldIssue } from '../contracts/errors';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { ApiError, CapabilityError, InsufficientScopeError, NotFoundError } from '../error';

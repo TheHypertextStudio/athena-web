@@ -9,7 +9,8 @@
  * remove one is to delete it from the prose, and offering a button that silently does nothing to
  * the text would be a lie.
  */
-import { RESOURCE_PROVIDER_LABEL, type EntityMention } from '@docket/types';
+import { RESOURCE_PROVIDER_LABEL } from '@docket/connections/resource-provider-contract';
+import { type EntityMention } from '../../lib/contracts/mention';
 import type { JSX } from 'react';
 
 import {

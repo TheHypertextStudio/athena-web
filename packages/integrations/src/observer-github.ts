@@ -22,7 +22,7 @@
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-import type { CanonicalEntityKind, EventKind } from '@docket/types';
+import type { CanonicalEntityKind, EventKind } from '@docket/connections/event-contract';
 
 import { type DetailBuilder, genericDetail, runDetailBuilders } from './event-detail';
 import { asRecord, str } from './json';

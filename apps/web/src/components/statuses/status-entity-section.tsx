@@ -12,8 +12,8 @@
  * owns. It stays hidden in a personal workspace, and in a workspace with a single team, where
  * forking away from a set nobody else holds would mean nothing.
  */
-import type { WorkStatusCategory, WorkStatusEntityType } from '@docket/types';
-import { WORK_STATUS_CATEGORIES } from '@docket/types';
+import type { WorkStatusCategory, WorkStatusEntityType } from '@docket/work/work-status-contract';
+import { WORK_STATUS_CATEGORIES } from '@docket/work/work-status-contract';
 import { ChevronDown } from '@docket/ui/icons';
 import {
   Button,

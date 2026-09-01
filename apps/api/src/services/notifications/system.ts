@@ -5,7 +5,7 @@ import type {
   NotificationContent,
   NotificationPriority,
   NotificationReplyPolicy,
-} from '@docket/notifications';
+} from '@docket/notifications/schemas';
 import {
   dispatchNotificationIntent,
   ensureAccountEmailContactPoint,

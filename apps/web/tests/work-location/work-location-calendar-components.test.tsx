@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { WorkLocationAssertionId, WorkPlaceId } from '@docket/types';
+import { WorkLocationAssertionId, WorkPlaceId } from '@docket/planning/ids';
 import { assertDefined } from '@docket/test-utils';
 
 import type {

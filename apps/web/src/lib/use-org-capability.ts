@@ -19,7 +19,8 @@
  * before the roster loads — is treated as unable to edit, so the UI fails closed.
  */
 import { type Capability, CAPABILITY_RANK, satisfies } from '@docket/identity-access/capabilities';
-import type { MemberOut, RoleOut } from '@docket/types';
+import type { MemberOut } from '@docket/identity-access/member-contract';
+import type { RoleOut } from './contracts/role';
 import { useMemo } from 'react';
 
 import { useSession } from '@/lib/auth-client';

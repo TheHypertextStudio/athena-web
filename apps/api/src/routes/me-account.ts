@@ -23,7 +23,7 @@ import {
   ProfileSettingsOut,
   ProfileSettingsUpdate,
   type OwnershipBlocker,
-} from '@docket/types';
+} from '@docket/identity-access/account-contract';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import type { z } from 'zod';

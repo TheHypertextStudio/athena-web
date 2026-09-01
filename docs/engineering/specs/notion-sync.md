@@ -52,7 +52,7 @@ Docket models two relationships with an external tool:
 - **migration** — a one-time replace: import the work, then stop talking to the tool.
 - **connector** — an ongoing relationship: keep both sides current.
 
-Notion is registered as a `connector` (`packages/types/src/provider-catalog.ts`), because the
+Notion is registered as a `connector` (`domains/connections/src/contracts/provider-catalog.ts`), because the
 requirement is ongoing two-way sync, and only the connector pattern carries the `syncMode` /
 `writeBack` semantics that drive it. **That Docket holds the source of truth is a property of the
 conflict policy, not of the pattern** — see §5.

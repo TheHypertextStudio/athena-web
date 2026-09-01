@@ -28,7 +28,8 @@ import { Hono } from 'hono';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import { OAUTH_ISSUABLE_SCOPES, type Capability } from '@docket/types';
+import { OAUTH_ISSUABLE_SCOPES } from '@docket/identity-access/oauth-scope-contract';
+import { type Capability } from '@docket/identity-access/capabilities';
 
 import type * as AuthModule from '../../src/mcp/auth';
 import type { McpContext } from '../../src/mcp/auth';
@@ -287,7 +288,7 @@ describe('every issuable permission has an enforcement point', () => {
 
   it('advertises exactly the set the authorization server is configured from', () => {
     // `CONNECT_SCOPES` and `oauthProvider({ scopes })` now derive from one array in
-    // `@docket/types`, so the resource server cannot advertise a permission the AS will not issue.
+    // `domain packages`, so the resource server cannot advertise a permission the AS will not issue.
     expect([...scopeMod.CONNECT_SCOPES]).toEqual([...OAUTH_ISSUABLE_SCOPES]);
     expect(scopeMod.MCP_SCOPES).not.toContain(scopeMod.OFFLINE_ACCESS_SCOPE);
     expect([...scopeMod.MCP_SCOPES, scopeMod.OFFLINE_ACCESS_SCOPE]).toEqual([

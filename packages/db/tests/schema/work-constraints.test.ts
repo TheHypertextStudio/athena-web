@@ -2,7 +2,7 @@
  * `@docket/db` — the work island's data-integrity constraints, exercised against real Postgres DDL.
  *
  * @remarks
- * The DTO layer in `@docket/types` already rejects these values at the API boundary. This suite
+ * The DTO layer in `domain packages` already rejects these values at the API boundary. This suite
  * exists because a DTO only protects the writers that go through it, and the work island is also
  * written by connector reconcile, MCP tools, the email-to-task path, seed data and migrations. So
  * every assertion here goes **around** the API entirely — a raw insert straight into the table —

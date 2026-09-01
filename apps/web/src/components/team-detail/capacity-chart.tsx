@@ -16,7 +16,7 @@
  * fixed viewBox the browser scales to the container, every color from a semantic design token, and
  * a screen-reader summary carrying the same information the picture does.
  */
-import type { TeamActivityOut, WorkflowStateType } from '@docket/types';
+import type { TeamActivityOut, WorkflowStateType } from '../../lib/contracts/team';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';
 

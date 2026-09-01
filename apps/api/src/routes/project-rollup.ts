@@ -28,7 +28,7 @@ import {
   sessionActivity,
   task,
 } from '@docket/db';
-import { ProjectRollupOut, ProjectWorkSectionsOut } from '@docket/types';
+import { ProjectRollupOut, ProjectWorkSectionsOut } from '../contracts/project';
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

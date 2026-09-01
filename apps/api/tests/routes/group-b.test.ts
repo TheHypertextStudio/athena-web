@@ -6,7 +6,7 @@ import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
-import { InitiativeWorkViewQueryRequest } from '@docket/types';
+import { InitiativeWorkViewQueryRequest } from '@docket/work/work-view-contract';
 import { programRequest, projectRequest, taskRequest } from '../work-views/request-fixtures';
 
 let schema!: typeof DbModule;

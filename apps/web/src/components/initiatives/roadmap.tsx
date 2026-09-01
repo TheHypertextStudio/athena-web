@@ -21,7 +21,11 @@
  * laid out with percentage offsets against the window so the component is fully responsive,
  * and every bar carries an `aria-label` describing its span + health for assistive tech.
  */
-import type { Health, InitiativeTimelineBar, InitiativeTimelineLane } from '@docket/types';
+import type { Health } from '@docket/work/capability-contract';
+import type {
+  InitiativeTimelineBar,
+  InitiativeTimelineLane,
+} from '@docket/work/initiative-contract';
 import type { DateResolution } from '@docket/work/planning-timeframe';
 import { cn } from '@docket/ui';
 import { Flag, FolderKanban } from '@docket/ui/icons';

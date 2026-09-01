@@ -9,8 +9,12 @@
  * omit ids, kinds, and titles from the response.
  */
 import { actor, calendarItem, calendarLayer, calendarLayerShare, db, hub } from '@docket/db';
-import { CalendarItemKind, ScheduleComparisonOut, ScheduleComparisonQuery } from '@docket/types';
-import type { ScheduleComparisonItemOut } from '@docket/types';
+import {
+  CalendarItemKind,
+  ScheduleComparisonOut,
+  ScheduleComparisonQuery,
+} from '@docket/planning/calendar-contract';
+import type { ScheduleComparisonItemOut } from '@docket/planning/calendar-contract';
 import { and, eq, gt, inArray, isNull, lt, ne, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

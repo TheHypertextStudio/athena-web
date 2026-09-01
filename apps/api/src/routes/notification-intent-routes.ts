@@ -3,8 +3,8 @@ import {
   NotificationIntentCreate,
   NotificationIntentOut,
   NotificationRecipientOut,
-} from '@docket/notifications';
-import { pageOf } from '@docket/types';
+} from '@docket/notifications/schemas';
+import { pageOf } from '../contracts/pagination';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';

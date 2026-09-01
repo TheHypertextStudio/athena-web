@@ -1,4 +1,4 @@
-import { HubProjectBar } from '@docket/types';
+import { HubProjectBar } from '../../src/lib/contracts/hub';
 import { describe, expect, it } from 'vitest';
 
 import { buildHubTimelineCatalog } from '../../src/components/portfolio/hub-timeline-catalog';

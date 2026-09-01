@@ -2,10 +2,10 @@
  * Searchable rounded Material icon catalog for strategic-work display metadata.
  *
  * @remarks
- * Persisted keys remain presentation-library neutral in `@docket/types`; this module is the only
+ * Persisted keys remain presentation-library neutral in `domain packages`; this module is the only
  * place that maps those keys to the current rounded Material glyphs and search vocabulary.
  */
-import type { EntityDisplayIconKey } from '@docket/types';
+import type { EntityDisplayIconKey } from '@docket/work/entity-display-contract';
 import AccountBalanceRounded from '@mui/icons-material/AccountBalanceRounded';
 import AccountBalanceWalletRounded from '@mui/icons-material/AccountBalanceWalletRounded';
 import AccountTreeRounded from '@mui/icons-material/AccountTreeRounded';

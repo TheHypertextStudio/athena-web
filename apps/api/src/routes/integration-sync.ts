@@ -16,7 +16,7 @@ import {
   type SyncRunOut,
   type SyncRunPurpose,
   type SyncTrigger,
-} from '@docket/types';
+} from '@docket/connections/integration-contract';
 import {
   isProviderAuthError,
   providerErrorKind,

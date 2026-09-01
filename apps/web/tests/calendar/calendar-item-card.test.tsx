@@ -19,15 +19,14 @@
  */
 import '@testing-library/jest-dom/vitest';
 
+import { CalendarItemId, CalendarLayerId } from '@docket/planning/ids';
 import {
-  CalendarItemId,
   type CalendarItemKind,
   type CalendarItemOut,
-  CalendarLayerId,
   type CalendarLayerOut,
-  OrganizationId,
-  TaskId,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { TaskId } from '@docket/work/ids';
 import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';

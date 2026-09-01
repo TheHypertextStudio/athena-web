@@ -1,0 +1,49 @@
+{
+  "name": "@docket/planning",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Planning contracts and portable scheduling, time, and work-location rules.",
+  "exports": {
+    "./date-time": "./src/date-time.ts",
+    "./calendar-date": "./src/calendar-date.ts",
+    "./ids": "./src/ids.ts",
+    "./wall-time": "./src/wall-time.ts",
+    "./exact-move": "./src/exact-move.ts",
+    "./exact-resize": "./src/exact-resize.ts",
+    "./intervals": "./src/intervals.ts",
+    "./zoned-time": "./src/zoned-time.ts",
+    "./work-location-resolution": "./src/work-location-resolution.ts",
+    "./hub-preferences-contract": "./src/contracts/hub-preferences.ts",
+    "./daily-plan-contract": "./src/contracts/daily-plan.ts",
+    "./calendar-contract": "./src/contracts/calendar.ts",
+    "./work-location-contract": "./src/contracts/work-location.ts",
+    "./agenda-contract": "./src/contracts/agenda.ts",
+    "./time-share-contract": "./src/contracts/time-share.ts",
+    "./scheduling-contract": "./src/contracts/scheduling.ts",
+    "./scheduling-directive-contract": "./src/contracts/scheduling-directive.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf .turbo *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@docket/identity-access": "workspace:*",
+    "@docket/work": "workspace:*",
+    "@js-temporal/polyfill": "^0.5.1",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@docket/eslint-config": "workspace:*",
+    "@docket/test-utils": "workspace:*",
+    "@docket/tsconfig": "workspace:*",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

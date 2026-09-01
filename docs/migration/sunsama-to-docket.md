@@ -170,7 +170,7 @@ stamp `task.source_integration_id` + `task.external_id`.
 `integration.pattern = 'migration'`; `'sunsama'` is not, and must never be, in
 `provider-catalog.ts`'s `CONNECTOR_PROVIDER_IDS` — that would wire an OAuth sign-in affordance and
 a "Connect" entry in the Connections wizard for a provider that has neither and never will (Sunsama
-is a one-time **replace**, not an ongoing **complement** — see `packages/types/src/integration.ts`'s
+is a one-time **replace**, not an ongoing **complement** — see `domains/connections/src/contracts/integration.ts`'s
 `IntegrationPattern` doc). `sunsama-connector.ts`'s own top doc has the full boundary rationale.
 
 **Proven, not asserted — run twice.** `pnpm sunsama:import --source=fixture --apply`, run against a

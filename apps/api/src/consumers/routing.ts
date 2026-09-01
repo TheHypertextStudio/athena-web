@@ -29,13 +29,13 @@ import {
   streamSubscription,
   task,
 } from '@docket/db';
-import { PERSONAL_EVENT_KINDS } from '@docket/types';
+import { PERSONAL_EVENT_KINDS } from '@docket/connections/event-contract';
 import type {
   CanonicalEntityKind,
   EventKind,
   SourceSystemKind,
-  StreamRelevance,
-} from '@docket/types';
+} from '@docket/connections/event-contract';
+import type { StreamRelevance } from '../contracts/stream';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import type { db } from '@docket/db';

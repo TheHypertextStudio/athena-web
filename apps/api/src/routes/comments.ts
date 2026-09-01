@@ -16,8 +16,8 @@ import {
   CommentOut,
   CommentRemoved,
   CommentUpdate,
-  pageOf,
-} from '@docket/types';
+} from '@docket/work/comment-contract';
+import { pageOf } from '../contracts/pagination';
 import { type Capability, satisfies } from '@docket/authz';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';

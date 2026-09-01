@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import type { WorkStatusCategory } from '@docket/types';
+import type { WorkStatusCategory } from '@docket/work/work-status-contract';
 import { describe, expect, it } from 'vitest';
 
 import { CYCLE_STATUS, CYCLE_STATUS_ORDER } from '@/components/cycles/cycle-status';

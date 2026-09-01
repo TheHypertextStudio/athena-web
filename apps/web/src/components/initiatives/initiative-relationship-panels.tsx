@@ -1,7 +1,10 @@
 'use client';
 
 /** Dedicated Initiative relationship tabs composed from first-class object rows. */
-import type { InitiativeConnectedWork, InitiativeHierarchyReference } from '@docket/types';
+import type {
+  InitiativeConnectedWork,
+  InitiativeHierarchyReference,
+} from '@docket/work/initiative-contract';
 import { Plus } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';

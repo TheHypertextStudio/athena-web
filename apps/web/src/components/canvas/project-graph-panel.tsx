@@ -25,7 +25,8 @@
  *   workspace to twice life size, so the canvas is capped at 1:1 — fitting means fitting, never
  *   enlarging.
  */
-import { type ObjectCommandIn, type ProjectOverviewItem } from '@docket/types';
+import { type ObjectCommandIn } from '../../lib/contracts/object-command';
+import { type ProjectOverviewItem } from '../../lib/contracts/project';
 import { type Edge, type Node, type ReactFlowInstance } from '@xyflow/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';

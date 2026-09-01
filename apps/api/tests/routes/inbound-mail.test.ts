@@ -730,7 +730,7 @@ describe('the receiving domain is configuration', () => {
       resolve(import.meta.dirname, '../../../web/src'),
       resolve(import.meta.dirname, '../../../../packages/mail/src'),
       resolve(import.meta.dirname, '../../../../packages/db/src'),
-      resolve(import.meta.dirname, '../../../../packages/types/src'),
+      resolve(import.meta.dirname, '../../../../domains'),
     ];
     const offenders: string[] = [];
     const walk = (dir: string): void => {

@@ -32,8 +32,8 @@ import {
   MemberOut,
   MemberRemoveOut,
   MemberUpdate,
-  pageOf,
-} from '@docket/types';
+} from '@docket/identity-access/member-contract';
+import { pageOf } from '../contracts/pagination';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 

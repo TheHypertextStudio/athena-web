@@ -1,5 +1,9 @@
 import { actor, db, genId, invitation, organization, role } from '@docket/db';
-import type { InvitationOut, MemberInvite, MemberOut } from '@docket/types';
+import type {
+  InvitationOut,
+  MemberInvite,
+  MemberOut,
+} from '@docket/identity-access/member-contract';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 

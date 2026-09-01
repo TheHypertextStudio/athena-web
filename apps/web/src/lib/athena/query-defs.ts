@@ -1,4 +1,4 @@
-import { AthenaInvocationContext, type AthenaPulseOut } from '@docket/types';
+import { AthenaInvocationContext, type AthenaPulseOut } from '@docket/athena/agent-contract';
 
 import { api } from '@/lib/api';
 import { apiQueryOptions, rpcErrorResponse, type RpcResponse, STALE } from '@/lib/query-core';

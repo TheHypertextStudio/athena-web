@@ -19,7 +19,7 @@
  * accounts. See `docs/engineering/specs/{email-to-task,integration-sync,mail-providers}.md`.
  */
 import { db, integration } from '@docket/db';
-import { ConnectorConfig, IntegrationSyncState } from '@docket/types';
+import { ConnectorConfig, IntegrationSyncState } from '@docket/connections/integration-contract';
 import { MAIL_CAPABLE_PROVIDERS, type MailActions, type MailListPage } from '@docket/integrations';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 

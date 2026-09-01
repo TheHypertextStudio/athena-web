@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import type { ProjectOverviewItem } from '@docket/types';
+import type { ProjectOverviewItem } from '../../../src/lib/contracts/project';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';

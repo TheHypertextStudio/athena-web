@@ -1,4 +1,4 @@
-import { AgendaOut, type AgendaOut as AgendaValue } from '@docket/types';
+import { AgendaOut, type AgendaOut as AgendaValue } from '@docket/planning/agenda-contract';
 import { describe, expect, it } from 'vitest';
 
 import { filterAgendaForDisplayDate } from '@/components/agenda/agenda-day-filter';

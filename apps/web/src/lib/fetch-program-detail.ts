@@ -1,4 +1,7 @@
-import type { AgentOut, MemberOut, ProgramDetail, RoleOut } from '@docket/types';
+import type { AgentOut } from '@docket/athena/agent-contract';
+import type { MemberOut } from '@docket/identity-access/member-contract';
+import type { ProgramDetail } from '@docket/work/program-contract';
+import type { RoleOut } from './contracts/role';
 
 import { api } from './api';
 import { rpcErrorResponse, type RpcResponse } from './query';

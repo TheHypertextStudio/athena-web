@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import type { TaskDetail } from '@docket/types';
+import type { TaskDetail } from '@docket/work/task-model';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

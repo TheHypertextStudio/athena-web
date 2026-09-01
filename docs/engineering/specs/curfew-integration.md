@@ -173,7 +173,7 @@ date parameter, because a device-control client asking "what should I be doing r
 means a day other than today.
 
 ```ts
-// packages/types/src/directive.ts — net-new
+// deleted legacy module directive — net-new
 export const DirectivePosture = z
   .enum(['on_track', 'attention_needed', 'intervention_recommended'])
   .describe(
@@ -293,7 +293,7 @@ freebie, not a dependency of this feature.
 ### 3.3 Tool: `acknowledge_directive` (net-new)
 
 ```ts
-// packages/types/src/directive.ts
+// deleted legacy module directive
 export const AcknowledgeDirectiveInput = z
   .object({
     directiveId: z.string().describe('The directiveId being acknowledged.'),
@@ -444,7 +444,7 @@ and it says so nowhere near the framing of "AI decided you're failing."
 `/internal/cron/directive-posture`) runs every 5 minutes — the same floor `sweepAthenaAssignmentTriggers`
 already established for "how often is it reasonable to re-evaluate a person's day"
 (`apps/api/src/agent/assignments.ts`) — over every Hub with `HubPreferences.directive.enabled: true`
-(a new opt-in field, added to `packages/types/src/hub-preferences.ts` beside the existing
+(a new opt-in field, added to `domains/planning/src/contracts/hub-preferences.ts` beside the existing
 `proactive`/`digest` blocks, same shape, same "explicit opt-in, no hidden default" convention). It
 persists the new posture only when it changed and publishes the resource-updated notification (§3.2)
 only in that case.
@@ -518,11 +518,11 @@ reshaping what ships:
 
 ### Docket/Athena side (this repo)
 
-- [ ] `packages/types/src/directive.ts` — `DirectivePosture`, `DirectivePlanItemOut`,
+- [ ] `deleted legacy module directive` — `DirectivePosture`, `DirectivePlanItemOut`,
       `DirectiveRecommendedAction`, `DirectiveOut`, `AcknowledgeDirectiveInput/Output` (§3.2, §3.3)
 - [ ] `packages/db` — `directive_posture` enum + `directive_acknowledgment` table + migration
       (§3.3)
-- [ ] `HubPreferences.directive.enabled` opt-in field, `packages/types/src/hub-preferences.ts`,
+- [ ] `HubPreferences.directive.enabled` opt-in field, `domains/planning/src/contracts/hub-preferences.ts`,
       beside `proactive`/`digest` (§4)
 - [ ] `docket://hub/directive` static resource, `apps/api/src/mcp/resource-statics.ts`, gated
       `work:read`, subscribable (§3.2)

@@ -20,8 +20,8 @@ import {
   type EntityDisplayColorKey,
   type EntityDisplayIconKey,
   type EntityDisplayOut,
-  type MilestoneOut,
-} from '@docket/types';
+} from '@docket/work/entity-display-contract';
+import { type MilestoneOut } from '@docket/work/milestone-contract';
 import { DatePicker } from '@docket/ui/components';
 import { Flag, Plus, X } from '@docket/ui/icons';
 import { Button, DecorativeIcon, Textarea } from '@docket/ui/primitives';

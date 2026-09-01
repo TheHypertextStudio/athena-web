@@ -11,7 +11,7 @@
  * affordance with its own capability check.
  */
 import type { QueryKey } from '@tanstack/react-query';
-import type { TaskOut } from '@docket/types';
+import type { TaskOut } from '@docket/work/task-model';
 
 import { api } from '@/lib/api';
 import { unwrap, useApiMutation } from '@/lib/query';

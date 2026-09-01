@@ -664,7 +664,7 @@ Create `apps/web/tests/components/pickers/picker-overlay.test.tsx`:
 ```tsx
 import '@testing-library/jest-dom/vitest';
 
-import { OrganizationId } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
 import { act, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -894,8 +894,8 @@ Create `apps/web/src/components/pickers/label-picker-overlay.tsx`:
  * partially- or un-applied label applies it to every object that lacks it; unchecking a fully-
  * applied label removes it from every object that has it.
  */
-import type { LabelCreate, LabelOut } from '@docket/types';
-import { LabelId } from '@docket/types';
+import type { LabelCreate, LabelOut } from '@docket/work/label-contract';
+import { LabelId } from '@docket/work/ids';
 import { PickerList, type PickerOption } from '@docket/ui/components';
 import { Popover, PopoverAnchor, PopoverContent, Skeleton } from '@docket/ui/primitives';
 import type { PopoverVirtualAnchor } from '@docket/ui/primitives';
@@ -1144,7 +1144,8 @@ Create `apps/web/tests/components/pickers/label-picker-overlay.test.tsx`:
 ```tsx
 import '@testing-library/jest-dom/vitest';
 
-import { LabelId, OrganizationId } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { LabelId } from '@docket/work/ids';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -1788,7 +1789,8 @@ Create `apps/web/tests/components/command-palette/sub-modes.test.ts`:
 ```ts
 import '@testing-library/jest-dom/vitest';
 
-import { LabelId, OrganizationId } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { LabelId } from '@docket/work/ids';
 import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -2090,7 +2092,8 @@ Create `apps/web/tests/components/command-palette/command-palette.test.tsx`:
 ```tsx
 import '@testing-library/jest-dom/vitest';
 
-import { LabelId, OrganizationId } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { LabelId } from '@docket/work/ids';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

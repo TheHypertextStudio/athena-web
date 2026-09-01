@@ -19,7 +19,7 @@
  * shell consumes the former, because a shell that re-rendered every second while a timer ran would
  * re-render the entire application every second while a timer ran.
  */
-import type { TimeActiveOut, TimeAnchorSuggestion, TimeRecordOut } from '@docket/types';
+import type { TimeActiveOut, TimeAnchorSuggestion, TimeRecordOut } from '../../lib/contracts/time';
 import { writeStoredValue } from '@docket/ui/lib/browser-storage';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';

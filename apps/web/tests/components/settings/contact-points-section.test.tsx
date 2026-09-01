@@ -3,18 +3,18 @@ import '@testing-library/jest-dom/vitest';
 import {
   ContactPointOut as ContactPointOutSchema,
   type ContactPointOut,
-} from '@docket/notifications';
+} from '@docket/notifications/schemas';
 import { makeContactPointOutFixture } from '@docket/notifications/testing';
-import { Id } from '@docket/types';
+import { ContactPointId } from '@docket/notifications/ids';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ContactPointsSection } from '../../../src/components/settings/contact-points-section';
 
-const EMAIL_PRIMARY_ID = Id.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV');
-const PHONE_PENDING_ID = Id.parse('01BX5ZZKBKACTAV9WEVGEMMVRZ');
-const EMAIL_BOUNCED_ID = Id.parse('01D78XYFJ1PRM1WPBCBT3VHMNV');
-const PHONE_UNSUBSCRIBED_ID = Id.parse('01F8MECHZX3TBDSZ7XRADM79XV');
+const EMAIL_PRIMARY_ID = ContactPointId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV');
+const PHONE_PENDING_ID = ContactPointId.parse('01BX5ZZKBKACTAV9WEVGEMMVRZ');
+const EMAIL_BOUNCED_ID = ContactPointId.parse('01D78XYFJ1PRM1WPBCBT3VHMNV');
+const PHONE_UNSUBSCRIBED_ID = ContactPointId.parse('01F8MECHZX3TBDSZ7XRADM79XV');
 
 afterEach(cleanup);
 

@@ -1,5 +1,6 @@
 import { db, type GrantCapability, organization } from '@docket/db';
-import { PUBLIC_SLUG_MAX_LENGTH, RESERVED_PUBLIC_SLUGS, type OrgOut } from '@docket/types';
+import { PUBLIC_SLUG_MAX_LENGTH, RESERVED_PUBLIC_SLUGS } from '@docket/work/slug-contract';
+import { type OrgOut } from '../contracts/organization';
 import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
 

@@ -1,6 +1,6 @@
 'use client';
 
-import type { EntityNavigationSnapshot } from '@docket/types';
+import type { EntityNavigationSnapshot } from './contracts/entity-navigation';
 import { useEffect, useState } from 'react';
 
 import {

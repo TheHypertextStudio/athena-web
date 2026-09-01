@@ -34,13 +34,16 @@
  * it. Work that does not fit stays on the plan, in order, without a timebox, and is reported —
  * an over-full day is stated rather than silently truncated.
  */
-import type { AvailabilityWindow, AvailabilityWindowKind } from '@docket/types';
+import type {
+  AvailabilityWindow,
+  AvailabilityWindowKind,
+} from '@docket/planning/scheduling-contract';
 
 import { expandAvailability } from './availability';
 import type { DurationSource } from './duration-model';
-import type { Interval, Span } from './intervals';
-import { SpanPool } from './intervals';
-import { weekStartOf } from './zoned-time';
+import type { Interval, Span } from '@docket/planning/intervals';
+import { SpanPool } from '@docket/planning/intervals';
+import { weekStartOf } from '@docket/planning/zoned-time';
 
 /** Task priority, ordered most to least urgent by {@link PRIORITY_RANK}. */
 export type TaskPriority = 'none' | 'urgent' | 'high' | 'medium' | 'low';

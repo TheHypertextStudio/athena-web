@@ -15,7 +15,10 @@
  * exception text ever reaches the screen. `unwrap` is the boundary that enforces it, so the
  * mutations are exercised through it rather than around it.
  */
-import { OrganizationId, type TaskDetail, type TaskDetailAggregate, TaskId } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { type TaskDetail } from '@docket/work/task-model';
+import { type TaskDetailAggregate } from '../../src/lib/contracts/detail-aggregate';
+import { TaskId } from '@docket/work/ids';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';

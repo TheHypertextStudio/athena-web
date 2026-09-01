@@ -14,8 +14,8 @@
  * rules — is shared with the editor.
  */
 import { cn } from '@docket/ui/lib/utils';
-import type { MentionItem } from '@docket/types';
-import { formatMentionLink } from '@docket/types';
+import type { MentionItem } from '../../lib/contracts/mention';
+import { formatMentionLink } from '../../lib/contracts/mention';
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TextareaHTMLAttributes } from 'react';
 

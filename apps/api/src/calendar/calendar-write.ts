@@ -30,7 +30,7 @@ import {
   type CalendarItemUpdate,
   type CalendarItemWritePatch,
   type CalendarProvider,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 
 import type { ApiError } from '../error';
 import {

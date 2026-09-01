@@ -10,7 +10,7 @@
  * The port says what the slice needs — "give me a resource search for this provider, on behalf of
  * this actor, or tell me why you cannot" — and says nothing about tokens, OAuth, or HTTP.
  */
-import type { ConnectorProviderId } from '@docket/types';
+import type { ConnectorProviderId } from '@docket/connections/provider-catalog-contract';
 import type { ResourceSearch } from '@docket/integrations';
 
 /** Why a source could not be searched, in terms the caller can act on. */

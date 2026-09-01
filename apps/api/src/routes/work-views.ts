@@ -6,13 +6,15 @@ import {
   OrganizationWorkViewDefault,
   OrganizationWorkViewDefaultBody,
   OrganizationWorkViewDefaultWrite,
+} from '@docket/work/saved-view-contract';
+import {
   WorkViewFacetRequest,
   WorkViewFacetResponse,
   WorkViewOrderRequest,
   WorkViewOrderResponse,
   WorkViewQueryRequest,
   WorkViewQueryResponse,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

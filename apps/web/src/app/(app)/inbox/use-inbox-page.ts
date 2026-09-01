@@ -1,6 +1,7 @@
 'use client';
 
-import type { AuditEventOut, NotificationOut } from '@docket/types';
+import type { AuditEventOut } from '@docket/connections/activity-contract';
+import type { NotificationOut } from '@docket/notifications/notification-contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 

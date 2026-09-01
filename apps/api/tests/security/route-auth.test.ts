@@ -41,7 +41,7 @@ const PUBLIC_ROUTES = new Set(['GET /v1/config']);
  *
  * @remarks
  * Pinned so the one public endpoint cannot quietly grow a field that leaks tenant, user, or
- * credential data. Mirrors `PublicConfigOut` in `packages/types/src/public-config.ts`; every entry
+ * credential data. Mirrors `PublicConfigOut` in `domains/identity-access/src/contracts/public-config.ts`; every entry
  * is deployment configuration a signed-out browser already needs. `stripePublishableKey` is the
  * browser-safe *publishable* key (the schema states it is never a secret key). Some fields are
  * optional, so the assertion is a subset check — a key not on this list fails.

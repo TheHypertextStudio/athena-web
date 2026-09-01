@@ -14,7 +14,11 @@
  * confirming tomorrow early is rejected) — this surface makes those rules visible rather than
  * being the only thing that holds them.
  */
-import type { DayReviewOut, ReconcileDisposition, ReviewPromptKey } from '@docket/types';
+import type {
+  DayReviewOut,
+  ReconcileDisposition,
+  ReviewPromptKey,
+} from '@docket/planning/scheduling-directive-contract';
 import {
   Button,
   ControlGroup,

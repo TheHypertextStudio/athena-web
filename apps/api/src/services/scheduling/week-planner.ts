@@ -31,16 +31,16 @@ import type {
   SchedulingCommitment,
   UnplacedDemandOut,
   WorkShape,
-} from '@docket/types';
-import { WORK_SHAPES, workShapeProfile } from '@docket/types';
+} from '@docket/planning/scheduling-contract';
+import { WORK_SHAPES, workShapeProfile } from '@docket/planning/scheduling-contract';
 
 import type { BusyItem } from './availability';
 import { detectTransitGaps, expandAvailability } from './availability';
 import type { ActualsIndex, DurationSource } from './duration-model';
 import { estimateSessionMinutes } from './duration-model';
-import type { Interval, Span } from './intervals';
-import { SpanPool, spanMinutes, subtractIntervals } from './intervals';
-import { localDateString } from './zoned-time';
+import type { Interval, Span } from '@docket/planning/intervals';
+import { SpanPool, spanMinutes, subtractIntervals } from '@docket/planning/intervals';
+import { localDateString } from '@docket/planning/zoned-time';
 
 /** One block the planner decided to place. */
 export interface PlannedBlock {

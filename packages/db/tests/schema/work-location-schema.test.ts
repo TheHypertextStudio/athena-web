@@ -127,7 +127,7 @@ describe('work-location schema', () => {
           hubId,
           placeId: place.id,
           schedule: {
-            type: 'one_off_all_day',
+            type: 'one_off_all_day' as const,
             date: '2026-08-13',
             timezone: 'America/Los_Angeles',
           },
@@ -136,7 +136,7 @@ describe('work-location schema', () => {
           hubId,
           placeId: place.id,
           schedule: {
-            type: 'weekly_timed',
+            type: 'weekly_timed' as const,
             effectiveFrom: '2026-08-10',
             effectiveUntil: null,
             weekdays: [0, 2, 4],

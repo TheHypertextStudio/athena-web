@@ -13,7 +13,7 @@
  * response is `no-store` because "what I am doing right now" is by definition not cacheable, and
  * a CDN answering with a stale task would be worse than not answering.
  */
-import { PublicTimerStatusOut } from '@docket/types';
+import { PublicTimerStatusOut } from '@docket/planning/time-share-contract';
 import { Hono } from 'hono';
 
 import type { AppEnv } from '../context';

@@ -19,7 +19,7 @@
  * import cycle resolves at query time, not module-init time.
  */
 import { sql } from 'drizzle-orm';
-import type { AccountExportScope } from '@docket/types';
+import type { AccountExportScope } from '@docket/identity-access/account-contract';
 import { defaultVocabularySkin, type VocabularySkin } from '@docket/work/vocabulary';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
@@ -185,7 +185,7 @@ export const organization = pgTable(
       'organization_fiscal_year_start_month_check',
       sql`${t.fiscalYearStartMonth} >= 0 and ${t.fiscalYearStartMonth} <= 11`,
     ),
-    // Mirrors `PublicSlug` (`@docket/types`): the slug is now always a workspace's default brief
+    // Mirrors `PublicSlug` (`domain packages`): the slug is now always a workspace's default brief
     // address too, unless a custom domain is set, so it takes the same public-path-segment shape
     // — lowercase alphanumerics, single-hyphen separated, capped at 64 characters. Reserved-word
     // screening lives in application code (`RESERVED_PUBLIC_SLUGS`), not here — a CHECK constraint

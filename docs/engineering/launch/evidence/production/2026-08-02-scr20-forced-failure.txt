@@ -52,7 +52,7 @@ $ SKIP_ENV_VALIDATION=1 turbo run test:coverage --cache-dir=.turbo --continue; e
  Failed:   @docket/agent-runtime#test:coverage, @docket/api#test:coverage, @docket/auth#test:coverage,
            @docket/billing#test:coverage, @docket/blob-store#test:coverage, @docket/db#test:coverage,
            @docket/discord-relay#test:coverage, @docket/env#test:coverage, @docket/integrations#test:coverage,
-           @docket/mail#test:coverage, @docket/notifications#test:coverage, @docket/types#test:coverage,
+           @docket/mail#test:coverage, @docket/notifications#test:coverage, the retired contract package#test:coverage,
            @docket/ui#test:coverage
  ERROR  run failed: command  exited (1)
 1

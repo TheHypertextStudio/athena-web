@@ -9,7 +9,7 @@
  * Extracted from the stream's episode header so the highlights row and the timeline cannot drift
  * into two different pictures of the same kind of thing.
  */
-import type { CanonicalEntityKind } from '@docket/types';
+import type { CanonicalEntityKind } from '@docket/connections/event-contract';
 import {
   Activity,
   Building,

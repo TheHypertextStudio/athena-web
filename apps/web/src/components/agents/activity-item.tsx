@@ -18,7 +18,7 @@
  * The approval and reply affordances are passed in as callbacks so the page owns the RPC +
  * pending/error state; this component is purely presentational beyond firing them.
  */
-import type { SessionActivityOut } from '@docket/types';
+import type { SessionActivityOut } from '@docket/athena/agent-contract';
 import { cn } from '@docket/ui/lib/utils';
 import { Button } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';

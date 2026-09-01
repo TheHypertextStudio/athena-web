@@ -1,5 +1,6 @@
 /** Pure aggregation, compatibility, projection, and command helpers for canvas bulk Properties. */
-import type { ObjectCommandIn, ProjectOverviewItem } from '@docket/types';
+import type { ObjectCommandIn } from '../../lib/contracts/object-command';
+import type { ProjectOverviewItem } from '../../lib/contracts/project';
 import type { Node } from '@xyflow/react';
 
 import type { CanvasPropertySnapshot } from '@/lib/actions';

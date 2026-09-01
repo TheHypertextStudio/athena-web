@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { db } from '@docket/db';
-import { NotificationInboundEventOut } from '@docket/notifications';
+import { NotificationInboundEventOut } from '@docket/notifications/schemas';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 

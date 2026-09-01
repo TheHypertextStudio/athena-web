@@ -13,7 +13,9 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import { ProcessDefinitionId, TeamId, type ProcessDefinitionCreate } from '@docket/types';
+import { ProcessDefinitionId } from '@docket/work/ids';
+import { TeamId } from '@docket/identity-access/ids';
+import { type ProcessDefinitionCreate } from '../../src/contracts/recurrence';
 import { eq } from 'drizzle-orm';
 
 import { appWithSession, fakeSession, getDb, seedBaseOrg } from '../support/routes-harness';
@@ -1400,7 +1402,7 @@ describe('hub /search (cross-org typed hits)', () => {
     const { userId } = await seedUserWithHub();
     const app = appWithSession(hub, fakeSession(userId));
 
-    // `q` is optional by design (see SearchQuery in @docket/types): omitting it — or sending it
+    // `q` is optional by design (see SearchQuery in domain packages): omitting it — or sending it
     // empty, which trims to the same thing — asks for the same permission-filtered corpus ordered
     // by recency instead of relevance. The Library rides this path rather than getting its own
     // endpoint, so that no second copy of the visibility filter can drift from this one.

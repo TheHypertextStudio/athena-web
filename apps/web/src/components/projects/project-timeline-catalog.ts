@@ -1,5 +1,5 @@
 /** Project timeline display helpers shared by Project surfaces. */
-import type { ProjectOverviewItem } from '@docket/types';
+import type { ProjectOverviewItem } from '../../lib/contracts/project';
 
 import { formatPlanningTimeframe, toPlanningTimeframe } from '@/lib/planning-timeframe';
 

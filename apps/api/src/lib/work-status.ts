@@ -23,7 +23,7 @@ import {
   type WorkStatusEntityType,
   compareWorkStatusOrder,
   isTerminalCategory,
-} from '@docket/types';
+} from '@docket/work/work-status-contract';
 import { and, eq, inArray, isNull, or, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 

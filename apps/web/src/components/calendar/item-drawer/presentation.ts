@@ -1,4 +1,4 @@
-import type { CalendarItemOut, CalendarItemTaskRole } from '@docket/types';
+import type { CalendarItemOut, CalendarItemTaskRole } from '@docket/planning/calendar-contract';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
 import { formatScheduleInstantRange } from '@/components/scheduling';

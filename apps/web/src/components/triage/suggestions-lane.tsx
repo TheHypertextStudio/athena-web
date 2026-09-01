@@ -12,7 +12,10 @@
  */
 'use client';
 
-import type { EmailSuggestionOut, SuggestionAcceptBody } from '@docket/types';
+import type {
+  EmailSuggestionOut,
+  SuggestionAcceptBody,
+} from '@docket/athena/email-suggestion-contract';
 import { Sparkles } from '@docket/ui/icons';
 import { Badge, Button, Card, CardContent, DecorativeIcon, Input } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';

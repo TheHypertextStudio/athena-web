@@ -60,7 +60,7 @@ conversation.
 
 ## 2. The event vocabulary
 
-`packages/types/src/voice.ts`. This is the contract between an adapter and the engine.
+`domains/athena/src/voice.ts`. This is the contract between an adapter and the engine.
 
 **Inbound** (adapter → engine): `user.transcript` (with `final`) · `assistant.transcript.delta` ·
 `assistant.audio.start` · `assistant.audio.end` · `user.interrupted` (`spokenText`, `elapsedMs`) ·

@@ -103,7 +103,7 @@ before its transport can be enabled.
 ## 3. Cursor storage (`integration.sync_state`)
 
 Incremental listing state lives in the integration's `sync_state` jsonb, validated as
-`IntegrationSyncState` (`@docket/types`): `{ mail: { cursor, updatedAt } }`. Rules:
+`IntegrationSyncState` (the retired contract package): `{ mail: { cursor, updatedAt } }`. Rules:
 
 - **Opaque**: cursors are provider-owned resume tokens (Gmail `historyId`, Graph
   `deltaLink`) — the app never parses them, only echoes them into `listThreads`.

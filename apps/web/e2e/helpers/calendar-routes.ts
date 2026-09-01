@@ -3,10 +3,10 @@ import {
   CalendarItemCreate,
   CalendarItemRelationCreate,
   CalendarItemTaskLinkCreate,
-  TaskCreate,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
+import { TaskCreate } from '@docket/work/task-model';
+import type { AgendaOut } from '@docket/planning/agenda-contract';
 import type {
-  AgendaOut,
   CalendarItemCreate as CalendarItemCreateType,
   CalendarItemOut,
   CalendarItemRelationCreate as CalendarItemRelationCreateType,
@@ -15,10 +15,10 @@ import type {
   CalendarItemUpdate,
   CalendarLayerOut,
   CalendarLayerUpdate,
-  HubPreferences,
   ScheduleComparisonOut,
-  TaskCreate as TaskCreateType,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
+import type { HubPreferences } from '@docket/planning/hub-preferences-contract';
+import type { TaskCreate as TaskCreateType } from '@docket/work/task-model';
 import type { Page } from '@playwright/test';
 
 import { CALENDAR_IDS, makeCalendarItem } from './calendar-fixtures';

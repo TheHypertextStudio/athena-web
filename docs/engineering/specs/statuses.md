@@ -36,7 +36,7 @@ questions with different answers.
 ## The model
 
 One status is `{ key, name, description, category, position, isDefault }`, declared in
-`packages/types/src/work-status.ts` and stored in `work_status`
+`domains/work/src/contracts/work-status.ts` and stored in `work_status`
 (`packages/db/src/schema/work-status.ts`).
 
 | Field         | What it is                                                                                                                  |
@@ -130,7 +130,7 @@ teams that differed, so no customization was lost.
 
 `/v1/orgs/:orgId/statuses`. One surface for all four kinds, discriminated by `entityType`. Reading
 requires `org:view`; every mutation requires `org:manage`. The DTOs in
-`packages/types/src/work-status.ts` are authoritative, and `api-rpc-contract.md` §3.2 carries the
+`domains/work/src/contracts/work-status.ts` are authoritative, and `api-rpc-contract.md` §3.2 carries the
 route table.
 
 | Route                        | Body                                              | Returns                                            |

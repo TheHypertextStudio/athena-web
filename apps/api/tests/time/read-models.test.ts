@@ -14,7 +14,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 
 import type * as DbModule from '@docket/db';
-import { TimeTimelineQuery, type TimeRecordOut } from '@docket/types';
+import { TimeTimelineQuery, type TimeRecordOut } from '../../src/contracts/time';
 
 import {
   getDb,

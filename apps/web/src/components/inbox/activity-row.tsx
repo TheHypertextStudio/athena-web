@@ -11,7 +11,7 @@
  * adopt a subtle token tint so resolved agent decisions read at a glance, but nothing here
  * is interactive beyond navigating onward — the actionable queue lives on the Inbox tab.
  */
-import type { AuditEventOut } from '@docket/types';
+import type { AuditEventOut } from '@docket/connections/activity-contract';
 import { CheckCircle2, type LucideIcon, Sparkles, XCircle } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import Link from '@/components/docket-link';

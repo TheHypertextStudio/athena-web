@@ -23,7 +23,7 @@
  */
 import { actor, db, inboundEvent, integration } from '@docket/db';
 import type { Observer, ObserverProvider } from '@docket/integrations';
-import { providerSourceSystem } from '@docket/types';
+import { providerSourceSystem } from '@docket/connections/provider-catalog-contract';
 import { and, eq, lt, or } from 'drizzle-orm';
 
 import { buildObserver, toAppRuntimeEnv, type AppRuntimeEnv } from '../container';

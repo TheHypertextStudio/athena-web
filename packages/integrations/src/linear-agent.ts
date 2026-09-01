@@ -22,7 +22,7 @@
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-import type { SessionActivityType } from '@docket/types';
+import type { SessionActivityType } from '@docket/athena/agent-contract';
 import { z } from 'zod';
 
 import { ConnectorError } from './connector-error';
@@ -436,7 +436,7 @@ export async function resolveLinearAgentInstallation(
  * The Activity-stream entry kind Linear's `agentActivityCreate` accepts.
  *
  * @remarks
- * Mirrors `SessionActivityType` from `@docket/types` (`packages/types/src/agent.ts`) 1:1 —
+ * Mirrors `SessionActivityType` from `domain packages` (`domains/athena/src/contracts/agent.ts`) 1:1 —
  * Docket's own session-activity taxonomy was modeled on Linear's Agent-platform vocabulary, so
  * the two must stay in sync if either changes. Re-exported under this name rather than
  * re-exporting `SessionActivityType` directly so call sites reading this file don't have to

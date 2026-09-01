@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { MentionEntityKind as MentionEntityKindSchema } from '@docket/types';
+import { MentionEntityKind as MentionEntityKindSchema } from '../../src/contracts/mention';
 
 import { entityMentionHref } from '../../src/content/mention-href';
 

@@ -37,8 +37,8 @@ import {
   CalendarSettingsOut,
   CalendarListUpdate,
   CalendarSyncResultOut,
-  TaskOut,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
+import { TaskOut } from '@docket/work/task-model';
 import { and, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

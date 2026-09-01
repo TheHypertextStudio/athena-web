@@ -14,7 +14,7 @@
  * Closing after a successful reveal calls {@link RecoveryCodesDialogProps.onGenerated} so the
  * Security tab refetches the remaining count.
  */
-import { RecoveryCodesOut } from '@docket/types';
+import { RecoveryCodesOut } from '@docket/identity-access/account-contract';
 import { WriteError } from './write-error';
 import {
   Button,

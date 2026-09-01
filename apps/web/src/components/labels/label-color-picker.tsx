@@ -12,7 +12,7 @@
  * Colour is never a required decision either — inline creation assigns one by rotation, and this
  * grid only exists for the person who later wants `urgent` to be red.
  */
-import { LABEL_COLOR_KEYS, type LabelColorKey } from '@docket/types';
+import { LABEL_COLOR_KEYS, type LabelColorKey } from '@docket/work/label-contract';
 import { Check } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';

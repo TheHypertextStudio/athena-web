@@ -1,4 +1,4 @@
-import type { InitiativeDetail } from '@docket/types';
+import type { InitiativeDetail } from '@docket/work/initiative-contract';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 

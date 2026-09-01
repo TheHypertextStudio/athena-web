@@ -16,7 +16,10 @@ import {
   type Workspace,
   type WorkspaceNavKey,
 } from '@docket/ui/components';
-import { defaultEntityDisplay, type EntityDisplaySubjectType } from '@docket/types';
+import {
+  defaultEntityDisplay,
+  type EntityDisplaySubjectType,
+} from '@docket/work/entity-display-contract';
 import { VocabularyProvider } from '@docket/ui/hooks';
 import {
   Calendar,

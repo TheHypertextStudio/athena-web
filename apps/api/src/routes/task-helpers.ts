@@ -2,7 +2,7 @@ import { canActor, type Capability } from '@docket/authz';
 import type { cycle, program } from '@docket/db';
 import { actor, db, grant, milestone, project, role, task, type Database } from '@docket/db';
 import type { GrantResourceKind } from '@docket/identity-access/grants';
-import type { TaskOut, TaskRef } from '@docket/types';
+import type { TaskOut, TaskRef } from '@docket/work/task-model';
 import { and, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 

@@ -1,12 +1,8 @@
 'use client';
 
 /** The workspace Library: full-corpus resource search and work-context browsing. */
-import type {
-  ExternalResourceType,
-  SearchDocumentKind,
-  SearchOut,
-  SearchResult,
-} from '@docket/types';
+import type { ExternalResourceType } from '@docket/connections/resource-provider-contract';
+import type { SearchDocumentKind, SearchOut, SearchResult } from '../../lib/contracts/search';
 import { type Column, EntityTable, type EntityTableGroup, EmptyState } from '@docket/ui/components';
 import { Info, Library, Link as LinkIcon, RefreshCw, type LucideIcon } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';

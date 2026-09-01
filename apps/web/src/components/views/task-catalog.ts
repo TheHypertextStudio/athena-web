@@ -9,7 +9,7 @@
  * Save-view affordance. Migrating it onto the unified {@link FilterToolbar} would otherwise mean
  * two filter UIs in the app; instead this module bridges the gap so the screen uses the *same*
  * toolbar as every entity list while still reading/writing the API's stored
- * {@link import('@docket/types').ViewFilter}/{@link ViewGrouping}/{@link ViewSort} shapes:
+ * {@link import('domain packages').ViewFilter}/{@link ViewGrouping}/{@link ViewSort} shapes:
  *
  * - {@link buildTaskCatalog} declares the task fields (status, priority, assignee, project,
  *   program, due date, title) as a {@link FieldCatalog} over {@link TaskOut}, so status sorts by
@@ -23,7 +23,8 @@
  * Keeping this adapter local to `views` means the generic engine stays free of any saved-view
  * coupling, and the entity-list pages (Projects, …) use the catalog model directly without it.
  */
-import type { TaskOut, ViewFilter, ViewGrouping, ViewSort } from '@docket/types';
+import type { TaskOut } from '@docket/work/task-model';
+import type { ViewFilter, ViewGrouping, ViewSort } from '@docket/work/saved-view-contract';
 
 import {
   type WorkStatusDisplay,

@@ -18,23 +18,19 @@
  *
  * @see {@link useComposerOptions} for the hook that fetches the data these map over.
  */
-import { defaultEntityDisplay } from '@docket/types';
-import type {
-  AgentOut,
-  CycleOut,
-  CycleStatus,
-  EntityDisplayOut,
-  Health,
-  InitiativeOut,
-  LabelOut,
-  MemberOut,
-  MilestoneOut,
-  ProgramOut,
-  ProjectOut,
-  TeamOut,
-  Visibility,
-  WorkflowState,
-} from '@docket/types';
+import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
+import type { AgentOut } from '@docket/athena/agent-contract';
+import type { CycleOut, CycleStatus } from '@docket/work/cycle-contract';
+import type { EntityDisplayOut } from '@docket/work/entity-display-contract';
+import type { Health, Visibility } from '@docket/work/capability-contract';
+import type { InitiativeOut } from '@docket/work/initiative-contract';
+import type { LabelOut } from '@docket/work/label-contract';
+import type { MemberOut } from '@docket/identity-access/member-contract';
+import type { MilestoneOut } from '@docket/work/milestone-contract';
+import type { ProgramOut } from '@docket/work/program-contract';
+import type { ProjectOut } from '../../lib/contracts/project';
+import type { TeamOut } from '../../lib/contracts/team';
+import type { WorkflowState } from '@docket/work/workflow';
 import type { Priority } from '@docket/work/task-contract';
 import { ActorAvatar, type PickerOption, StatusIcon } from '@docket/ui/components';
 import { Globe, Shield } from '@docket/ui/icons';

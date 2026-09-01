@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { canonicalizeResourceUrl } from '@docket/types';
+import { canonicalizeResourceUrl } from '@docket/connections/resource-contract';
 
 import {
   getDb,

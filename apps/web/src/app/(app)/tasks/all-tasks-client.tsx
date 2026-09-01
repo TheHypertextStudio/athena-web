@@ -18,7 +18,7 @@
  * do have, above a notice saying the list may be incomplete, because a silently-short list reads as
  * a complete one.
  */
-import type { TaskOut } from '@docket/types';
+import type { TaskOut } from '@docket/work/task-model';
 import type { Priority } from '@docket/work/task-contract';
 import { EmptyState, StatusGlyph } from '@docket/ui/components';
 import { ListChecks } from '@docket/ui/icons';

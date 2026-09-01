@@ -20,7 +20,8 @@
  * chain visible while its non-matching ancestors are hidden is tree-specific behavior the page
  * itself implements (it needs the parent/child index the catalog has no reason to hold).
  */
-import type { Health, InitiativeOverviewItem } from '@docket/types';
+import type { Health } from '@docket/work/capability-contract';
+import type { InitiativeOverviewItem } from '@docket/work/initiative-contract';
 
 import {
   type WorkStatusDisplay,

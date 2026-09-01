@@ -5,7 +5,7 @@
  * These intentionally sit between the personal API and React. The personal API lane can replace
  * the structural transport types without changing the queue, dock, or workbench components.
  */
-import type { McpAppPresentation } from '@docket/types';
+import type { McpAppPresentation } from '@docket/integrations/mcp-apps-contract';
 
 /** A Docket object Athena was opened from. */
 export interface PersonalAthenaSource {

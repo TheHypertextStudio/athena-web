@@ -11,7 +11,8 @@
  * with the neutral `'Agent'` tag and the `agent` kind so the avatar reads as automated.
  */
 import type { ActorKind } from '@docket/ui/components';
-import type { AgentOut, MemberOut } from '@docket/types';
+import type { AgentOut } from '@docket/athena/agent-contract';
+import type { MemberOut } from '@docket/identity-access/member-contract';
 
 /** A resolved actor descriptor (name + kind + optional avatar). */
 export interface ResolvedActor {

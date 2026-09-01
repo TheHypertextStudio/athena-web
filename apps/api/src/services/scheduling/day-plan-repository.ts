@@ -17,7 +17,7 @@ import { dailyPlanItem, task, taskDependency } from '@docket/db';
 import { and, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm';
 
 import type { DayCandidate, DependencyEdge, TaskPriority } from './day-planner';
-import { addDays, instantAt } from './zoned-time';
+import { addDays, instantAt } from '@docket/planning/zoned-time';
 
 /** Which tasks a day is planned from. */
 export interface DayCandidateQuery {

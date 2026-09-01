@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
-import { WorkPlaceId, type WorkPlaceOut } from '@docket/types';
+import { WorkPlaceId } from '@docket/planning/ids';
+import { type WorkPlaceOut } from '@docket/planning/work-location-contract';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';

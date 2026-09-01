@@ -13,7 +13,7 @@
  * the dialog can block the close. Both controls are `@docket/ui` DropdownMenus — never bare
  * `<select>`s — with focus rings and keyboard operation.
  */
-import type { CycleCarryoverAction } from '@docket/types';
+import type { CycleCarryoverAction } from '@docket/work/cycle-contract';
 import { cn } from '@docket/ui';
 import { StatusIcon, type WorkflowStateType } from '@docket/ui/components';
 import { ChevronDown } from '@docket/ui/icons';

@@ -1,4 +1,4 @@
-import { PROBLEM_CATALOG, PROBLEM_CODES } from '@docket/types';
+import { PROBLEM_CATALOG, PROBLEM_CODES } from '../../../lib/contracts/errors';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { JSX } from 'react';

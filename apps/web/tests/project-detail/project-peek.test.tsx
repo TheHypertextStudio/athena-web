@@ -9,7 +9,7 @@
  * dependency panel that lists neighbours without saying which direction they run in is worse than
  * none: it inverts the only question the lens exists to answer.
  */
-import type { ProjectOverviewItem } from '@docket/types';
+import type { ProjectOverviewItem } from '../../src/lib/contracts/project';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

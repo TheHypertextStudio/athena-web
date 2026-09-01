@@ -1,13 +1,9 @@
-import type {
-  CycleBurnupOut,
-  CycleDetail,
-  CycleOut,
-  MemberOut,
-  ProgramOut,
-  ProjectOut,
-  RoleOut,
-  TaskOut,
-} from '@docket/types';
+import type { CycleBurnupOut, CycleDetail, CycleOut } from '@docket/work/cycle-contract';
+import type { MemberOut } from '@docket/identity-access/member-contract';
+import type { ProgramOut } from '@docket/work/program-contract';
+import type { ProjectOut } from './contracts/project';
+import type { RoleOut } from './contracts/role';
+import type { TaskOut } from '@docket/work/task-model';
 
 import { type ActorDirectory, buildActorDirectory } from '@/components/agents/actor-directory';
 import { api } from './api';

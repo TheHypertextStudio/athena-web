@@ -12,12 +12,12 @@
  * the connections. Connect and re-consent actions request the minimum Calendar scopes and return
  * here to trigger an immediate sync.
  */
+import { GOOGLE_CONNECTOR_SCOPES } from '@docket/identity-access/google-oauth-contract';
 import {
-  GOOGLE_CONNECTOR_SCOPES,
   type CalendarConnectionOut,
   type CalendarConnectionStatus,
   type CalendarListOut,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 import { Calendar, RefreshCw } from '@docket/ui/icons';
 import { firstWriteError, WriteError } from './write-error';
 import { Checkbox, Badge, Button } from '@docket/ui/primitives';

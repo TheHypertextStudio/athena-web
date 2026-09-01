@@ -1,5 +1,5 @@
 /** Time Ledger route contract: exact segments, task anchoring, personal ownership, switching. */
-import type { TimeRecordOut } from '@docket/types';
+import type { TimeRecordOut } from '../../src/contracts/time';
 import { and, asc, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 

@@ -1,15 +1,14 @@
+import { ActorId } from '@docket/identity-access/ids';
+import { type Health, type Visibility } from '@docket/work/capability-contract';
+import { type ProgramDetailAggregate } from './contracts/detail-aggregate';
 import {
-  ActorId,
-  type Health,
-  type ProgramDetailAggregate,
   type ProgramDetail,
   type ProgramOut,
   type ProgramStatus,
-  ProgramStatusKey,
-  ProgramSubjectRef,
   type ProgramUpdate,
-  type Visibility,
-} from '@docket/types';
+} from '@docket/work/program-contract';
+import { ProgramStatusKey } from '@docket/work/work-view-contract';
+import { ProgramSubjectRef } from '@docket/work/subject-ref-contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 

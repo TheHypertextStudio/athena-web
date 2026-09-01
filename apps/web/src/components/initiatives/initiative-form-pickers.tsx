@@ -9,12 +9,12 @@
  * the thing the template makes, and the only way to guarantee that without drift is to render one
  * component in both places.
  */
+import type { Health } from '@docket/work/capability-contract';
 import type {
-  Health,
   InitiativePriority,
   InitiativeStatus,
   InitiativeUpdateCadence,
-} from '@docket/types';
+} from '@docket/work/initiative-contract';
 import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
 import { ActorPicker, EnumPicker, type PickerOption, TimeframePicker } from '@docket/ui/components';
 import { Activity } from '@docket/ui/icons';

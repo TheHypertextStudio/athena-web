@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProjectViewRow } from '@docket/types';
+import type { ProjectViewRow } from '@docket/work/work-view-contract';
 import type { JSX } from 'react';
 
 import type { AppliedView } from '@/components/views/apply-view';

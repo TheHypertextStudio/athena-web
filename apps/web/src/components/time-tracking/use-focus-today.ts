@@ -1,7 +1,7 @@
 'use client';
 
 /** Focus-sized access to today's personal Time Ledger. */
-import type { TimeRecordOut } from '@docket/types';
+import type { TimeRecordOut } from '../../lib/contracts/time';
 
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';

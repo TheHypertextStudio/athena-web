@@ -12,7 +12,7 @@
  * else now reads. That shape is what lets a cycle row render through the same badge and glyph as a
  * project or a task, without a second mapping table for a set of three.
  */
-import type { CycleStatus } from '@docket/types';
+import type { CycleStatus } from '@docket/work/cycle-contract';
 
 import type { WorkStatusDisplay } from '@/components/entity-display/work-status';
 

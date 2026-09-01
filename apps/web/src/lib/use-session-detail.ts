@@ -1,4 +1,9 @@
-import type { AgentOut, AgentSessionDetailOut, MemberOut, ProposalGroupOut } from '@docket/types';
+import type {
+  AgentOut,
+  AgentSessionDetailOut,
+  ProposalGroupOut,
+} from '@docket/athena/agent-contract';
+import type { MemberOut } from '@docket/identity-access/member-contract';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { buildActorDirectory, type ActorDirectory } from '@/components/agents/actor-directory';

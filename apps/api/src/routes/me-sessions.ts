@@ -14,7 +14,7 @@
  * callers get HTTP 401.
  */
 import { db, session as sessionTable } from '@docket/db';
-import { SessionListOut, SessionOut } from '@docket/types';
+import { SessionListOut, SessionOut } from '@docket/identity-access/session-contract';
 import { and, eq, gt, ne } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { z } from 'zod';

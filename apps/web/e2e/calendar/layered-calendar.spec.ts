@@ -1,5 +1,5 @@
 /** Layered-calendar page coverage over browser-visible deterministic provider fixtures. */
-import type { CalendarItemOut } from '@docket/types';
+import type { CalendarItemOut } from '@docket/planning/calendar-contract';
 
 import { signUpAndOnboard } from '../helpers/app';
 import { CALENDAR_IDS, makeCalendarItem, makeCalendarLayer } from '../helpers/calendar-fixtures';

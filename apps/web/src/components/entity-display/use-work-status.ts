@@ -12,7 +12,7 @@
  * stays a leaf: the field catalogs import it, and a catalog has no business pulling a query client
  * into a unit test through a transitive import.
  */
-import type { WorkStatusEntityType } from '@docket/types';
+import type { WorkStatusEntityType } from '@docket/work/work-status-contract';
 import { useCallback, useEffect, useRef } from 'react';
 
 import { useStatusRegistry } from '@/components/statuses/status-registry';

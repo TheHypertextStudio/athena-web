@@ -3,8 +3,8 @@ import {
   notification as notificationTable,
   notificationDelivery as notificationDeliveryTable,
 } from '@docket/db';
-import type { NotificationDeliveryHint } from '@docket/notifications';
-import type { NotificationOut } from '@docket/types';
+import type { NotificationDeliveryHint } from '@docket/notifications/schemas';
+import type { NotificationOut } from '@docket/notifications/notification-contract';
 import { and, desc, eq, inArray, isNull, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
 

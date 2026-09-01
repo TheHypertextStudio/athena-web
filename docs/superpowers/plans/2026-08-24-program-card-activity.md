@@ -19,8 +19,8 @@ Vitest, Playwright visual review.
 
 **Files:**
 
-- Modify: `packages/types/src/work-view.ts:1308-1329`
-- Modify: `packages/types/tests/work-view.test.ts:39-265`
+- Modify: `domains/work/src/contracts/work-view.ts:1308-1329`
+- Modify: `the deleted legacy type warehouse tests/work-view.test.ts:39-265`
 
 - [ ] **Step 1: Write the failing schema test.**
 
@@ -41,7 +41,7 @@ expect(
 
 - [ ] **Step 2: Run the focused types test and confirm it fails because `activity` is unknown.**
 
-Run: `pnpm --filter @docket/types test packages/types/tests/work-view.test.ts`
+Run: `pnpm domain:check`
 
 - [ ] **Step 3: Add the exact Zod contract.**
 
@@ -67,7 +67,7 @@ Add `activity: ProgramActivitySummary` to `ProgramViewRow`. The eight slots run 
 
 - [ ] **Step 4: Re-run the focused types test and confirm it passes.**
 
-Run: `pnpm --filter @docket/types test packages/types/tests/work-view.test.ts`
+Run: `pnpm domain:check`
 
 ### Task 2: Aggregate real visible Program activity inside the work-view statement
 
@@ -167,7 +167,7 @@ Run: `pnpm --filter @docket/web test src/components/work-views/program-work-card
 
 - [ ] **Step 1: Run targeted static and behavior checks.**
 
-Run: `pnpm --filter @docket/types typecheck && pnpm --filter @docket/api typecheck && pnpm --filter @docket/web typecheck`
+Run: `pnpm domain:check && pnpm --filter @docket/api typecheck && pnpm --filter @docket/web typecheck`
 
 Run: `pnpm --filter @docket/api lint && pnpm --filter @docket/web lint`
 

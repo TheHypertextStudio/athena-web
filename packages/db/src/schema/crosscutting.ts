@@ -15,12 +15,13 @@ import {
   type EntityDisplayColorKey,
   type EntityDisplayIconKey,
   type EntityDisplaySubjectType,
-  type FractionalRank,
+} from '@docket/work/entity-display-contract';
+import { type FractionalRank, type WorkViewContext } from '@docket/work/work-view-contract';
+import {
   type OrganizationWorkViewDefault,
   type SavedWorkViewOut,
-  type TemplateDraft,
-  type WorkViewContext,
-} from '@docket/types';
+} from '@docket/work/saved-view-contract';
+import { type TemplateDraft } from '@docket/work/template-contract';
 import {
   boolean,
   check,
@@ -531,7 +532,7 @@ export const integration = pgTable(
     /** Background re-sync cadence in minutes (null = manual-only, no auto-sync). */
     syncCadenceMinutes: integer('sync_cadence_minutes').default(60),
     /**
-     * Per-purpose incremental-sync cursors (see `IntegrationSyncState` in `@docket/types`):
+     * Per-purpose incremental-sync cursors (see `IntegrationSyncState` in `domain packages`):
      * `{ mail: { cursor, updatedAt } }` today. Opaque, provider-owned values (Gmail
      * `historyId`; Microsoft Graph `deltaLink`), written only while the sync lease is held.
      * `{}` = no cursor yet — the next pull is a full one.

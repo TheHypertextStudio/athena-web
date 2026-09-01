@@ -1,4 +1,4 @@
-import type { OrgCreate, OrgCreateResult } from '@docket/types';
+import type { OrgCreate, OrgCreateResult } from './contracts/organization';
 
 import { api } from '@/lib/api';
 import { unwrap } from '@/lib/query';

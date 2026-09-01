@@ -9,7 +9,8 @@
  * agent `actorId` and the human `initiatorId`).
  */
 import { auditEvent, db } from '@docket/db';
-import { AuditEventOut, pageOf } from '@docket/types';
+import { AuditEventOut } from '@docket/connections/activity-contract';
+import { pageOf } from '../contracts/pagination';
 import { desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';

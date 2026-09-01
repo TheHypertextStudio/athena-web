@@ -20,7 +20,11 @@
  * only ever narrows — it never blanks.
  */
 import { useMemo } from 'react';
-import type { MentionExternalOut, MentionItem, MentionSearchOut } from '@docket/types';
+import type {
+  MentionExternalOut,
+  MentionItem,
+  MentionSearchOut,
+} from '../../lib/contracts/mention';
 
 import { api } from '@/lib/api';
 import { STALE } from '@/lib/query';

@@ -3,12 +3,12 @@
 /** Google-style quick create for a toolbar action or selected scheduling region. */
 import {
   CalendarItemCreate,
-  CalendarLayerId,
   type CalendarItemCreateIntent,
   type CalendarLayerOut,
-  type CalendarPreferences,
-  type WorkPlaceOut,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
+import { CalendarLayerId } from '@docket/planning/ids';
+import { type CalendarPreferences } from '@docket/planning/hub-preferences-contract';
+import { type WorkPlaceOut } from '@docket/planning/work-location-contract';
 import { SHELL_DESKTOP_QUERY, useShellOverlayHost } from '@docket/ui/components';
 import { Plus, X } from '@docket/ui/icons';
 import { useMediaQuery } from '@docket/ui/hooks';

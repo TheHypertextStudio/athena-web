@@ -16,9 +16,9 @@ import {
   AttachmentCreate,
   AttachmentOut,
   AttachmentRemoved,
-  canonicalizeResourceUrl,
-  pageOf,
-} from '@docket/types';
+} from '@docket/work/attachment-contract';
+import { canonicalizeResourceUrl } from '@docket/connections/resource-contract';
+import { pageOf } from '../contracts/pagination';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

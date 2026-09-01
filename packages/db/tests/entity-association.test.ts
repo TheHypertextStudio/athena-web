@@ -1,4 +1,4 @@
-import { EntityAssociation } from '@docket/types';
+import { EntityAssociation } from '@docket/connections/event-contract';
 import { describe, expect, it } from 'vitest';
 
 import { entityAssociation } from '../src/enums';

@@ -8,7 +8,7 @@
  * account email/name, and friendly scope badges) plus a destructive **Remove** that unlinks just
  * this account. Used by {@link ProviderGroup}; a provider can list several of these.
  */
-import type { IdentityOut } from '@docket/types';
+import type { IdentityOut } from '@docket/identity-access/identity-contract';
 import { Avatar, AvatarFallback, AvatarImage, Badge, Button } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import type { JSX } from 'react';

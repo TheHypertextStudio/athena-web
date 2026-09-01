@@ -6,23 +6,14 @@
  * their optimistic cache writes. Returns stable callbacks the page wires into its
  * interactive affordances.
  */
-import {
-  ActorId,
-  type CommentOut,
-  CycleId,
-  LabelId,
-  MilestoneId,
-  type ObjectCommandResult,
-  ProgramId,
-  ProjectId,
-  TaskId,
-  TaskSubjectRef,
-  TaskStatusKey,
-  type TaskArchived,
-  type TaskDetail,
-  type TaskDetailAggregate,
-  type TaskOut,
-} from '@docket/types';
+import { ActorId } from '@docket/identity-access/ids';
+import { type CommentOut } from '@docket/work/comment-contract';
+import { CycleId, LabelId, MilestoneId, ProgramId, ProjectId, TaskId } from '@docket/work/ids';
+import { type ObjectCommandResult } from './contracts/object-command';
+import { TaskSubjectRef } from '@docket/work/subject-ref-contract';
+import { TaskStatusKey } from '@docket/work/work-view-contract';
+import { type TaskArchived, type TaskDetail, type TaskOut } from '@docket/work/task-model';
+import { type TaskDetailAggregate } from './contracts/detail-aggregate';
 import type { Priority } from '@docket/work/task-contract';
 import type { QueryKey } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';

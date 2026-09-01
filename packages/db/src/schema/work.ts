@@ -7,7 +7,7 @@
  * (program/project/task) carry `visibility` + `ancestor_path` (GIN-indexed) for the
  * permission cascade. Task dependencies are cross-project and live in `./joins`.
  *
- * **Constraints are the floor, not the ceiling.** Every DTO in `@docket/types` validates a write
+ * **Constraints are the floor, not the ceiling.** Every DTO in `domain packages` validates a write
  * before it reaches here, but a DTO only protects the writers that go through it. This island is
  * also written by connector reconcile, MCP tools, the email-to-task path, seed data and future
  * migrations, so the invariants a reader depends on — a date that names a possible day, a duration
@@ -27,7 +27,7 @@ import {
   timestamp,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import type { FractionalRank } from '@docket/types';
+import type { FractionalRank } from '@docket/work/work-view-contract';
 import type { ViewTarget } from '@docket/work/view-contract';
 
 import {
@@ -74,7 +74,7 @@ import { workStatus } from './work-status';
  * anyone meant. A `0226-05-01` mistyped for `2026-05-01` is a perfectly valid timestamp and a
  * perfectly broken due date — it sorts to the top of every list forever and no UI ever shows it
  * back. Bounding the range is what turns "parses" into "possible", which is what the product means
- * by a date being valid. Mirrored by `TASK_DATE_MIN`/`TASK_DATE_MAX` in `@docket/types` so the API
+ * by a date being valid. Mirrored by `TASK_DATE_MIN`/`TASK_DATE_MAX` in `domain packages` so the API
  * boundary rejects the same values with a 422 instead of a constraint violation.
  */
 const TASK_DATE_FLOOR = '1970-01-01';

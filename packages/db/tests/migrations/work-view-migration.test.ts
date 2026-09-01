@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
-import { TaskViewDefinition } from '@docket/types';
+import { TaskViewDefinition } from '@docket/work/work-view-contract';
 import { afterAll, describe, expect, it } from 'vitest';
 
 const migrationsFolder = resolve(import.meta.dirname, '../../drizzle');

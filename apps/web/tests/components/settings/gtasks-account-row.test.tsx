@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { IntegrationOut } from '@docket/types';
+import { IntegrationOut } from '@docket/connections/integration-contract';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

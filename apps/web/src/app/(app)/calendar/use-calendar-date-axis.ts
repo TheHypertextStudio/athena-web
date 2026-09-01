@@ -1,6 +1,6 @@
 'use client';
 
-import type { CalendarItemOut, CalendarLayerOut } from '@docket/types';
+import type { CalendarItemOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
 import { useCallback, useMemo } from 'react';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';

@@ -17,17 +17,11 @@
  * place a person WITH an account is deliberately treated differently from one without.
  */
 import { actor, db, initiative, project, role, task } from '@docket/db';
-import {
-  ActorId,
-  Health,
-  InitiativeId,
-  InitiativeStatus,
-  OrganizationId,
-  ProjectId,
-  ProjectStatus,
-  RoleId,
-  TaskId,
-} from '@docket/types';
+import { ActorId, OrganizationId, RoleId } from '@docket/identity-access/ids';
+import { Health } from '@docket/work/capability-contract';
+import { InitiativeId, ProjectId, TaskId } from '@docket/work/ids';
+import { InitiativeStatus } from '@docket/work/initiative-contract';
+import { ProjectStatus } from '../contracts/project';
 import { Priority } from '@docket/work/task-contract';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';

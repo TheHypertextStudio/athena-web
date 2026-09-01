@@ -1,11 +1,48 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-31
+> **Last Updated**: 2026-09-01
 
 ---
 
 ## Active Tasks
+
+### [TYPES-DOMAIN-001] Delete the global types warehouse
+
+- **Status**: REVIEW
+- **Started**: 2026-08-31
+- **Priority**: P1
+- **Description**: Remove `@docket/types` and place each portable business contract with Work,
+  Planning, Identity and Access, Athena, Connections, Automation, or Notifications. Keep transport
+  contracts in API features, presentation models in delivery features, and persistence-only shapes
+  in DB.
+- **Implementation**: A generated ownership map drove one disposable codemod across 70 legacy
+  modules. The codemod rewrote 1,163 imports and re-exports, moved the owned contracts and tests,
+  updated manifests and explicit package exports, and deleted `packages/types`. The repository now
+  has a permanent retirement policy. Each domain owns branded ULID schemas, and one behavior policy
+  checks their shared accepted and rejected examples. Planning now owns the portable calendar,
+  wall-time, DST, interval, exact move and resize, scheduling, time-share, and work-location rules.
+  Notifications moved from `packages/` to `domains/` without changing its package name.
+- **Transport and persistence**: API DTOs and serializers now live under API feature contracts. Web
+  and Admin use `@docket/api/rpc-contract` only as an erased type boundary. The generated OpenAPI
+  document matches current `origin/main` byte for byte at SHA-256
+  `56e13a634f215e8fb4119d4be7a1169fc1e0d823a65828f2a07df7619a6d2be2`. Drizzle migrations and
+  snapshots have no diff from current `origin/main`.
+- **Validation**: Formatting, the configured domain check, all 27 type tasks, the production build,
+  the 26-package lint graph, domain retirement and ownership policies, 168 Planning tests, 249 Work
+  tests, 367 Athena tests, 323 Connections tests, 54 Identity and Access tests, 1,073 Integrations
+  tests, and the focused API config and admin route suites pass. The final complexity audit adds no
+  exemptions and removes the seven entries that belonged to retired or moved source files. The
+  final-base test graph passed all 27 tasks with coverage after the root runner was constrained to
+  two Turbo workers.
+- **Throughput**: Root lint and test graphs now use two Turbo workers instead of one. API, Web, and
+  Admin ESLint runs cache content hashes under `node_modules/.cache`. The Web production build uses
+  a command-local 4 GB heap because Next.js type analysis exhausted Node's default 2 GB heap.
+- **Blocker**: The standard authenticated screenshot run completed passkey setup but the cold Today
+  route never returned bytes before the bounded timeout while the host was memory constrained. The
+  screenshot helper failed before its first frame. The standard stack was stopped, and `pnpm
+db:reset` completed. The migration changes no UI behavior, but the requested desktop and phone
+  screenshot set remains unrecorded.
 
 ### [ATHENA-LATTICE-ROUNDTRIP-001] Prove the durable Docket–Lattice round trip
 

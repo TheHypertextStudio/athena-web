@@ -16,7 +16,7 @@
  * open the *same* dialog. Teams have no detail route, so on success the parent simply prepends the
  * new row via {@link CreateTeamDialogProps.onCreated}; this component closes the dialog itself.
  */
-import type { TeamOut } from '@docket/types';
+import type { TeamOut } from '../../lib/contracts/team';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { Check } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';

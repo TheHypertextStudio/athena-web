@@ -12,12 +12,12 @@
  * its rows stay pure. Health is ALWAYS the server's truth — a row reads "Connected" only after a
  * real `verify` validated the credential.
  */
+import type { IdentityOut } from '@docket/identity-access/identity-contract';
 import type {
-  IdentityOut,
   IntegrationDirectoryProvider,
   IntegrationOut,
-  TeamOut,
-} from '@docket/types';
+} from '@docket/connections/integration-contract';
+import type { TeamOut } from '../../lib/contracts/team';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 

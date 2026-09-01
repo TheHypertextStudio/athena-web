@@ -1,6 +1,7 @@
 'use client';
 
-import { defaultEntityDisplay, entityNavigationSnapshotFromWorkViewRow } from '@docket/types';
+import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
+import { entityNavigationSnapshotFromWorkViewRow } from '../../lib/contracts/entity-navigation';
 import { Button, Card, Checkbox } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import type { ViewTarget } from '@docket/work/view-contract';

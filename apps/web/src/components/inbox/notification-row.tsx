@@ -17,8 +17,8 @@
  *   agent's work directly from the Inbox.
  * - **Mark read** — shown for any unread row, dismisses it from the attention queue.
  */
-import { notificationDeliveryHintsFromBody } from '@docket/notifications';
-import type { NotificationOut } from '@docket/types';
+import { notificationDeliveryHintsFromBody } from '@docket/notifications/web';
+import type { NotificationOut } from '@docket/notifications/notification-contract';
 import { Check, Mail, MessageSquare } from '@docket/ui/icons';
 import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import { cn } from '@docket/ui/lib/utils';

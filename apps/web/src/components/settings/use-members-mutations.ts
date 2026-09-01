@@ -1,5 +1,5 @@
-import type { InvitationOut, MemberOut } from '@docket/types';
-import { RoleId } from '@docket/types';
+import type { InvitationOut, MemberOut } from '@docket/identity-access/member-contract';
+import { RoleId } from '@docket/identity-access/ids';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';

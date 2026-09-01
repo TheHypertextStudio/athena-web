@@ -3,11 +3,13 @@
 import {
   defaultEntityDisplay,
   type EntityDisplaySubjectType,
-  type MentionEntityKind,
+} from '@docket/work/entity-display-contract';
+import { type MentionEntityKind } from '../../lib/contracts/mention';
+import {
   type SearchDocumentKind,
   type SearchOut,
   type SearchResult,
-} from '@docket/types';
+} from '../../lib/contracts/search';
 import {
   Activity,
   Building,

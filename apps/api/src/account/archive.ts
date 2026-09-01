@@ -9,7 +9,7 @@
  * synchronously with `fflate` (zero-dependency, runs anywhere) so the export sweep can produce the
  * bytes in one call before handing them to the blob store.
  */
-import type { AccountExportScope } from '@docket/types';
+import type { AccountExportScope } from '@docket/identity-access/account-contract';
 import { strToU8, zipSync } from 'fflate';
 
 /** The structured export payload collected for one user (the input to the archive). */

@@ -1,7 +1,7 @@
 /**
  * `@docket/api` — org-scoped semantic search route.
  */
-import { SearchOut } from '@docket/types';
+import { SearchOut } from '../contracts/search';
 import { Hono } from 'hono';
 
 import type { AppEnv } from '../context';

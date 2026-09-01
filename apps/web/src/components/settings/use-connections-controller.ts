@@ -10,7 +10,11 @@
  * "This workspace" scope framing, the Google Tasks multi-account section, the Calendar link-out,
  * and per-card connection copy. It creates `connector` integrations (`mirror` sync).
  */
-import type { IntegrationDirectoryProvider, IntegrationOut, TeamOut } from '@docket/types';
+import type {
+  IntegrationDirectoryProvider,
+  IntegrationOut,
+} from '@docket/connections/integration-contract';
+import type { TeamOut } from '../../lib/contracts/team';
 import { useMemo, useState } from 'react';
 
 import { groupDirectoryByCategory, visibleProviderConnections } from './integrations-selectors';

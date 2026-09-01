@@ -1,5 +1,8 @@
 /** `@docket/web` — route-scoped canvas command history tests. */
-import type { ObjectCommandReceipt, ObjectCommandResult } from '@docket/types';
+import type {
+  ObjectCommandReceipt,
+  ObjectCommandResult,
+} from '../../../src/lib/contracts/object-command';
 import { describe, expect, it } from 'vitest';
 
 import {

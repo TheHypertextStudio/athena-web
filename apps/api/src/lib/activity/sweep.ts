@@ -20,7 +20,7 @@
  */
 import { actor, calendarConnection, db, hub, integration, organization, syncRun } from '@docket/db';
 import type { ActivitySource } from '@docket/integrations';
-import { ACTIVITY_PROVIDER_IDS } from '@docket/types';
+import { ACTIVITY_PROVIDER_IDS } from '@docket/connections/provider-catalog-contract';
 import {
   and,
   asc,

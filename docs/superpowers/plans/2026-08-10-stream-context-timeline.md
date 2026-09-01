@@ -23,8 +23,8 @@ Tailwind/MD3 tokens, Vitest, Testing Library, Playwright, GitHub Actions, Vercel
 
 **Files:**
 
-- Modify: `packages/types/src/stream.ts`
-- Modify: `packages/types/tests/dto/stream.test.ts`
+- Modify: `apps/api/src/contracts/stream.ts`
+- Modify: `the deleted legacy type warehouse tests/dto/stream.test.ts`
 - Modify: `apps/api/src/routes/stream-helpers.ts`
 - Modify: `apps/api/src/routes/stream.ts`
 - Modify: `apps/api/src/routes/hub.ts`
@@ -35,7 +35,7 @@ Tailwind/MD3 tokens, Vitest, Testing Library, Playwright, GitHub Actions, Vercel
 Add `actorIsViewer: false` to the valid fixture, then assert an omitted or non-boolean value fails.
 
 ```bash
-pnpm --filter @docket/types test tests/dto/stream.test.ts
+pnpm domain:check
 ```
 
 Expected: FAIL because `StreamEventOut` does not declare the field.

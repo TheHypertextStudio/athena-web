@@ -8,7 +8,8 @@
  * than the full task-detail hook avoids loading rosters, comments, sessions, and activity into a
  * surface whose job is to protect attention.
  */
-import type { TaskDetail, WorkflowState } from '@docket/types';
+import type { TaskDetail } from '@docket/work/task-model';
+import type { WorkflowState } from '@docket/work/workflow';
 
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';

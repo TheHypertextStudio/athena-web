@@ -11,7 +11,7 @@
  * Nodes arrive carrying the *category* their status behaves as rather than the status key, so
  * this analysis never needs a workspace's status set — which is what keeps it pure.
  */
-import type { WorkStatusCategory } from '@docket/types';
+import type { WorkStatusCategory } from '@docket/work/work-status-contract';
 
 import { isEnded } from '@/lib/work-category';
 

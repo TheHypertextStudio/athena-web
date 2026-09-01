@@ -25,7 +25,10 @@ import {
   Textarea,
 } from '@docket/ui/primitives';
 import { Share } from '@docket/ui/icons';
-import type { TimeShareTokenCreated, TimeShareTokenOut } from '@docket/types';
+import type {
+  TimeShareTokenCreated,
+  TimeShareTokenOut,
+} from '@docket/planning/time-share-contract';
 import { type JSX, useState } from 'react';
 
 import { api } from '@/lib/api';

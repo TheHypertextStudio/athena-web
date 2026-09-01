@@ -10,7 +10,7 @@
  * means a single coarse invalidation after an attach refreshes the list, the open message and its
  * attachment list together — the three things an attach actually changes.
  */
-import type { AthenaMailAttachBody } from '@docket/types';
+import type { AthenaMailAttachBody } from '@docket/athena/athena-mail-contract';
 
 import { api } from '@/lib/api';
 import { apiQueryOptions, STALE } from '@/lib/query-core';

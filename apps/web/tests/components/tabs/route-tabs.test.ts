@@ -11,7 +11,8 @@
  * - a malformed id segment — above all the literal `undefined` (which produced the infamous
  *   "Session undefi…" junk tab) — resolves to `null`, so no junk tab is ever opened.
  */
-import type { OrganizationId, ProjectId } from '@docket/types';
+import type { OrganizationId } from '@docket/identity-access/ids';
+import type { ProjectId } from '@docket/work/ids';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { tabRefFromPath } from '@/components/tabs/route-tabs';

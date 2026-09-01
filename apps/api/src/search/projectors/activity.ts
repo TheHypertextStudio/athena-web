@@ -1,4 +1,5 @@
-import type { SearchDocumentKind, SourceSystemKind } from '@docket/types';
+import type { SearchDocumentKind } from '../../contracts/search';
+import type { SourceSystemKind } from '@docket/connections/event-contract';
 
 import { baseRankFor } from '../rank';
 import { activityRoute } from '../routes';

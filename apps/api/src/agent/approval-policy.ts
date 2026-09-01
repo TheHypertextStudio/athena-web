@@ -15,7 +15,8 @@
  * that is what keeps a session under "Ask first" feeling alive rather than stalling
  * on every lookup.
  */
-import type { ApprovalPolicy, AthenaApprovalMode } from '@docket/types';
+import type { ApprovalPolicy } from '@docket/athena/agent-contract';
+import type { AthenaApprovalMode } from '@docket/planning/hub-preferences-contract';
 
 /** The MCP tool-annotation hints the classifier reads (a subset of `ToolAnnotations`). */
 export interface ToolAnnotationHints {

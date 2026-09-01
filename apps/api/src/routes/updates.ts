@@ -3,7 +3,13 @@
  */
 import { type Capability, satisfies } from '@docket/authz';
 import { db, initiative, program, project, update } from '@docket/db';
-import { pageOf, UpdateCreate, UpdateListQuery, UpdateOut, UpdateRemoved } from '@docket/types';
+import { pageOf } from '../contracts/pagination';
+import {
+  UpdateCreate,
+  UpdateListQuery,
+  UpdateOut,
+  UpdateRemoved,
+} from '@docket/work/update-contract';
 import { and, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

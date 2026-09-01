@@ -6,6 +6,7 @@
   "license": "UNLICENSED",
   "description": "Athena domain contracts and pure execution rules shared by its delivery runtimes.",
   "exports": {
+    "./ids": "./src/ids.ts",
     "./execution-protocol": "./src/execution-protocol.ts",
     "./elicitation": "./src/elicitation.ts",
     "./elicitation-api": "./src/elicitation-api.ts",
@@ -25,7 +26,12 @@
     "./turn/model-backend": "./src/turn/model-backend.ts",
     "./task-drafting/adapters/anthropic": "./src/task-drafting/adapters/anthropic.ts",
     "./task-drafting/adapters/deterministic": "./src/task-drafting/adapters/deterministic.ts",
-    "./task-expansion": "./src/task-expansion/index.ts"
+    "./task-expansion": "./src/task-expansion/index.ts",
+    "./activity-episode-contract": "./src/contracts/activity-episode.ts",
+    "./agent-contract": "./src/contracts/agent.ts",
+    "./athena-contract": "./src/contracts/athena.ts",
+    "./athena-mail-contract": "./src/contracts/athena-mail.ts",
+    "./email-suggestion-contract": "./src/contracts/email-suggestion.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -38,11 +44,14 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
+    "@docket/connections": "workspace:*",
+    "@docket/identity-access": "workspace:*",
     "@docket/work": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@docket/eslint-config": "workspace:*",
+    "@docket/test-utils": "workspace:*",
     "@docket/tsconfig": "workspace:*",
     "vite": "catalog:",
     "vitest": "catalog:"

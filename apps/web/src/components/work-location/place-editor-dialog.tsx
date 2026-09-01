@@ -1,7 +1,7 @@
 'use client';
 
 /** Name-first add/edit dialog for one arbitrary saved work place. */
-import type { WorkPlaceGeofence, WorkPlaceOut } from '@docket/types';
+import type { WorkPlaceGeofence, WorkPlaceOut } from '@docket/planning/work-location-contract';
 import { MapPin } from '@docket/ui/icons';
 import {
   Button,

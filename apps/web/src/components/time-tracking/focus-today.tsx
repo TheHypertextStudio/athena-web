@@ -1,7 +1,7 @@
 'use client';
 
 /** Today's real time-ledger summary shared by both Focus surfaces. */
-import type { TimeRecordOut } from '@docket/types';
+import type { TimeRecordOut } from '../../lib/contracts/time';
 import { Surface, Text } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import type { JSX } from 'react';

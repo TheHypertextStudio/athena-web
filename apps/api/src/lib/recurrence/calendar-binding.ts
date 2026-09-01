@@ -10,7 +10,7 @@ import {
   CalendarProcessBindingCreate,
   CalendarProcessBindingOut,
   type CalendarProcessBindingCreate as CalendarProcessBindingCreateValue,
-} from '@docket/types';
+} from '../../contracts/recurrence';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 

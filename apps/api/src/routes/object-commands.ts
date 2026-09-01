@@ -29,7 +29,7 @@ import {
   type ObjectCommandRelationReceiptEntry,
   type ObjectCommandRequest as ObjectCommandRequestValue,
   type ObjectCommandValue,
-} from '@docket/types';
+} from '../contracts/object-command';
 import {
   canActor,
   canActorBatch,

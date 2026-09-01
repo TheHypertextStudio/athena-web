@@ -17,7 +17,7 @@
  * re-running over already-rewritten prose is a no-op, so a backfill that dies halfway can simply
  * be run again.
  */
-import { formatMentionLink } from '@docket/types';
+import { formatMentionLink } from '../contracts/mention';
 
 import { entityMentionHref } from './mention-href';
 

@@ -4,7 +4,7 @@ import {
   WorkViewOrderRequest,
   type WorkViewOrderRequest as WorkViewOrderRequestValue,
   WorkViewOrderResponse,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
 import type { ViewTarget } from '@docket/work/view-contract';
 import { useQueryClient } from '@tanstack/react-query';
 

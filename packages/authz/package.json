@@ -22,7 +22,7 @@
   "dependencies": {
     "@docket/db": "workspace:*",
     "@docket/identity-access": "workspace:*",
-    "@docket/types": "workspace:*",
+    "@docket/work": "workspace:*",
     "drizzle-orm": "catalog:"
   },
   "devDependencies": {

@@ -12,7 +12,7 @@
  * caller's registered OAuth client id ({@link McpContext.clientId}) as its only attribution.
  */
 import { db } from '@docket/db';
-import { DirectivePosture } from '@docket/types';
+import { DirectivePosture } from '@docket/planning/scheduling-directive-contract';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';

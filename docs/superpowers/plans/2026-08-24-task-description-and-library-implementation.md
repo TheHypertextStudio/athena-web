@@ -16,9 +16,9 @@
 
 - Modify: `packages/db/src/schema/work.ts`
 - Modify: `packages/db/src/schema/joins.ts`
-- Modify: `packages/types/src/task.ts`
+- Modify: `domains/work/src/contracts/task.ts`
 - Modify: `packages/db/src/schema/index.ts` and the generated migration directory
-- Test: `packages/types/tests/dto/task-data-integrity.test.ts`
+- Test: `the deleted legacy type warehouse tests/dto/task-data-integrity.test.ts`
 - Test: `apps/api/tests/routes/tasks-detail.test.ts`
 
 - [ ] Add failing DTO and route tests proving that a task round-trips its optional `templateId` and separate reciprocal related-task links.
@@ -32,7 +32,7 @@
 **Files:**
 
 - Modify: `packages/db/src/schema/organization.ts` or the existing workspace-preference schema
-- Modify: `packages/types/src/workspace.ts` and its DTO tests
+- Modify: `deleted legacy module workspace` and its DTO tests
 - Modify: `apps/api/src/lib/task-state.ts`
 - Modify: `apps/api/src/services/task-hierarchy.ts`
 - Test: `apps/api/tests/routes/task-reparent.test.ts`
@@ -87,7 +87,7 @@
 
 - Modify: `apps/api/src/routes/task-activity-routes.ts`
 - Modify: `apps/api/src/routes/event-emit.ts`
-- Modify: `packages/types/src/activity.ts`
+- Modify: `domains/connections/src/contracts/activity.ts`
 - Create: `apps/web/src/components/task-detail/task-activity-feed.tsx`
 - Remove: `apps/web/src/components/task-detail/CommentActivityFeed.tsx`
 - Remove: `apps/web/src/components/task-detail/task-activity-section.tsx`

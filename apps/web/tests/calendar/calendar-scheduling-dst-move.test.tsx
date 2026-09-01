@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
-import { CalendarItemId, type CalendarItemOut, CalendarLayerId } from '@docket/types';
+import { CalendarItemId, CalendarLayerId } from '@docket/planning/ids';
+import { type CalendarItemOut } from '@docket/planning/calendar-contract';
 import { act, render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarDateAxisState } from '../../src/app/(app)/calendar/use-calendar-date-axis';

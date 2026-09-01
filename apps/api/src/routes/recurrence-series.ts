@@ -5,7 +5,6 @@ import {
   CalendarProcessBindingOut,
   MaterializeSeriesOccurrence,
   GeneratedWorkRecurrenceOut,
-  pageOf,
   RecurringTaskCreate,
   RecurringTaskCreated,
   RecurrenceSeriesCreate,
@@ -13,7 +12,8 @@ import {
   RecurrenceSeriesLifecycle,
   RecurrenceSeriesOut,
   SeriesEdit,
-} from '@docket/types';
+} from '../contracts/recurrence';
+import { pageOf } from '../contracts/pagination';
 import { Hono } from 'hono';
 import { z } from 'zod';
 

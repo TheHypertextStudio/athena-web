@@ -1,4 +1,7 @@
-import type { AccountExportOut, AccountExportScope } from '@docket/types';
+import type {
+  AccountExportOut,
+  AccountExportScope,
+} from '@docket/identity-access/account-contract';
 
 /** Application-owned labels and descriptions for each selectable archive category. */
 export const EXPORT_CATEGORY_COPY = {

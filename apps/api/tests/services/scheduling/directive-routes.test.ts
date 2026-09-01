@@ -1,5 +1,5 @@
 import type * as DbModule from '@docket/db';
-import type { DayStartOut } from '@docket/types';
+import type { DayStartOut } from '@docket/planning/scheduling-directive-contract';
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 

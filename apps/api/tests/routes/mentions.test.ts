@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import type { MentionHydrateOut, MentionSearchOut } from '@docket/types';
+import type { MentionHydrateOut, MentionSearchOut } from '../../src/contracts/mention';
 
 import {
   addMember,

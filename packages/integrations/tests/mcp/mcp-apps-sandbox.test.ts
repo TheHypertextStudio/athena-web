@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { MCP_UI_METHODS } from '@docket/types';
+import { MCP_UI_METHODS } from '../../src/contracts/mcp-apps';
 import { MCP_APP_PROXY_SANDBOX, MCP_APP_VIEW_SANDBOX, buildViewCsp } from '../../src/mcp-apps-host';
 import {
   MCP_APP_SANDBOX_CSP,

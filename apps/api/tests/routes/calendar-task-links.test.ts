@@ -6,8 +6,8 @@ import type {
   CalendarItemOut,
   CalendarItemTaskLinkOut,
   CalendarItemTaskLinkResultOut,
-  Capability,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
+import type { Capability } from '@docket/identity-access/capabilities';
 
 import {
   appWithSession,

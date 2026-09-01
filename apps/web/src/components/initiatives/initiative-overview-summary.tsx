@@ -1,7 +1,7 @@
 'use client';
 
 /** Connected-work health and scope for an Initiative's document-first overview. */
-import type { InitiativeDetail } from '@docket/types';
+import type { InitiativeDetail } from '@docket/work/initiative-contract';
 import { FolderKanban, Layers, Target } from '@docket/ui/icons';
 import { DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';

@@ -34,7 +34,7 @@ Migration `0068_cold_next_avengers.sql`.
 
 ## What a payload may hold
 
-`TemplateDraft` (`packages/types/src/template.ts`) is a discriminated union on `targetType`, one
+`TemplateDraft` (`domains/work/src/contracts/template.ts`) is a discriminated union on `targetType`, one
 member per kind, each a **partial of that kind's `*Create` body**. That is what makes applying a
 template a merge into the create call rather than a translation between two vocabularies — field
 names match, so the only mapping step is dropping the discriminant.

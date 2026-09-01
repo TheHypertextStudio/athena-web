@@ -5,7 +5,7 @@
  * This read never participates in the document's first paint. The route requests it only after a
  * reader selects Sub-initiatives or Connected work.
  */
-import type { InitiativeRelationshipSections } from '@docket/types';
+import type { InitiativeRelationshipSections } from '@docket/work/initiative-contract';
 
 import { api } from './api';
 import { apiQueryOptions, queryKeys } from './query';

@@ -18,7 +18,7 @@
  * silently. A calendar the person cannot see and was never told about is exactly the failure mode
  * the connector-reliability rule exists to prevent.
  */
-import type { CalendarConnectionOut, CalendarLayerOut } from '@docket/types';
+import type { CalendarConnectionOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
 
 /** Why two or more layers are considered the same calendar. */
 export type CalendarLayerDuplicateReason =

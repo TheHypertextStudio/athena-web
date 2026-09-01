@@ -9,7 +9,7 @@
  * Nothing here is derived from a provider response. A Notion error message never reaches the
  * screen; the UI branches on the error's type or status and renders one of these.
  */
-import type { SyncFailureKind } from '@docket/types';
+import type { SyncFailureKind } from '@docket/connections/integration-contract';
 import type {
   NotionMirrorEntity,
   NotionPersonRepresentation,

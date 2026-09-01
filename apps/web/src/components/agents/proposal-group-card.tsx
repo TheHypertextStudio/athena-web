@@ -12,7 +12,7 @@
  * `view-transition-name` keyed by its activity id, so when approval materializes the
  * real task the browser can morph ghost → row instead of swapping views.
  */
-import type { ProposalGroupOut, ProposalItemOut } from '@docket/types';
+import type { ProposalGroupOut, ProposalItemOut } from '@docket/athena/agent-contract';
 import { cn } from '@docket/ui/lib/utils';
 import { Button } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';

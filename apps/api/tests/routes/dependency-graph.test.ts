@@ -11,7 +11,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { GraphOut } from '@docket/types';
+import type { GraphOut } from '@docket/work/task-model';
 import { eq } from 'drizzle-orm';
 
 import { appWithActor, getDb, one, seedBaseOrg, seedStatuses } from '../support/routes-harness';

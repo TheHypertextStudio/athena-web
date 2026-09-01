@@ -22,7 +22,7 @@
  */
 import { actor, db, integration, threadParticipation } from '@docket/db';
 import { asRecord, slackMentionedUserIds, str } from '@docket/integrations';
-import type { StreamRelevance } from '@docket/types';
+import type { StreamRelevance } from '../contracts/stream';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
 /** The Slack facts one normalized message draft carries, as the drain extracts them. */

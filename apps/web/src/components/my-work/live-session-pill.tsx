@@ -1,6 +1,6 @@
 'use client';
 
-import type { SessionStatus } from '@docket/types';
+import type { SessionStatus } from '@docket/athena/agent-contract';
 import { CircleDot, RefreshCw, Sparkles, XCircle } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import Link from '@/components/docket-link';

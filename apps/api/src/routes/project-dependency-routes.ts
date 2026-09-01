@@ -11,8 +11,8 @@ import {
   ProjectDependencyCreated,
   ProjectDependencyOut,
   ProjectDependencyRemoved,
-} from '@docket/types';
-import type { ProjectRef } from '@docket/types';
+} from '../contracts/project';
+import type { ProjectRef } from '../contracts/project';
 import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

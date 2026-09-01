@@ -1,4 +1,4 @@
-import type { CalendarItemKind } from '@docket/types';
+import type { CalendarItemKind } from '@docket/planning/calendar-contract';
 import { describe, expect, it } from 'vitest';
 
 import { calendarScheduleItemAppearance } from '@/components/calendar/calendar-schedule-appearance';

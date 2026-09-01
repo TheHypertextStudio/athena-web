@@ -10,7 +10,7 @@
  * deliberately not projected. They are how the sweep coordinates with itself, and a client that
  * could read them would start rendering our retry state as if it were the resource's state.
  */
-import type { ExternalResourceOut } from '@docket/types';
+import type { ExternalResourceOut } from '@docket/connections/resource-contract';
 
 import type { StoredResource } from './mention-ports';
 

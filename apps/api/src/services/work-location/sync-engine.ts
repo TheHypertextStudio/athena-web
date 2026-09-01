@@ -13,10 +13,13 @@ import {
   workPlaceProviderMapping,
   type Database,
 } from '@docket/db';
-import type { WorkLocationAssertionOut, WorkLocationSchedule } from '@docket/types';
+import type {
+  WorkLocationAssertionOut,
+  WorkLocationSchedule,
+} from '@docket/planning/work-location-contract';
 import { and, asc, eq, isNull, lte, ne, or } from 'drizzle-orm';
 
-import { instantAt } from '../scheduling/zoned-time';
+import { instantAt } from '@docket/planning/zoned-time';
 import {
   archiveWorkLocationAssertion,
   enqueueWorkLocationProjection,

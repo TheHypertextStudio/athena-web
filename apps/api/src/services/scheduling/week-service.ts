@@ -10,8 +10,8 @@
  */
 import type { Database } from '@docket/db';
 import { genId } from '@docket/db';
-import type { WeekCoverageOut, WeekPlanOut } from '@docket/types';
-import { workShapeProfile } from '@docket/types';
+import type { WeekCoverageOut, WeekPlanOut } from '@docket/planning/scheduling-contract';
+import { workShapeProfile } from '@docket/planning/scheduling-contract';
 import type { z } from 'zod';
 
 import {
@@ -27,7 +27,7 @@ import {
 import type { ResolvedSchedulingPreferences } from './repository';
 import type { PlanWeekResult, PlannedBlock } from './week-planner';
 import { planWeek, shapesPresent } from './week-planner';
-import { addDays, localDateString, weekStartOf } from './zoned-time';
+import { addDays, localDateString, weekStartOf } from '@docket/planning/zoned-time';
 
 /**
  * The pre-brand wire shape of a generated week.

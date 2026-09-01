@@ -8,17 +8,12 @@ import type {
   project,
   task,
 } from '@docket/db';
-import type {
-  AuditEventOut,
-  HubMilestoneItem,
-  HubSearchHit,
-  HubTaskItem,
-  NotificationOut,
-  OrgChip,
-} from '@docket/types';
+import type { AuditEventOut } from '@docket/connections/activity-contract';
+import type { HubMilestoneItem, HubSearchHit, HubTaskItem, OrgChip } from '../contracts/hub';
+import type { NotificationOut } from '@docket/notifications/notification-contract';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
-import type { WorkStatusCategory } from '@docket/types';
+import type { WorkStatusCategory } from '@docket/work/work-status-contract';
 import { loadStatusSets } from '../lib/work-status';
 
 import { buildTaskViewFilter, type ViewableTaskParts } from './task-helpers';

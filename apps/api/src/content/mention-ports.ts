@@ -10,14 +10,12 @@
  * Two things follow from that. The services become testable with an in-memory double instead of a
  * migrated database, and the permission-relevant reads stay in one place where they can be audited.
  */
+import type { ExternalResourceOut } from '@docket/connections/resource-contract';
+import type { MentionEntityKind, MentionRef, MentionSubjectType } from '../contracts/mention';
 import type {
-  ExternalResourceOut,
-  MentionEntityKind,
-  MentionRef,
-  MentionSubjectType,
   ResourceProvider,
   ExternalResourceType,
-} from '@docket/types';
+} from '@docket/connections/resource-provider-contract';
 
 /** One stored edge, as the slice reads it back. */
 export interface StoredMention {

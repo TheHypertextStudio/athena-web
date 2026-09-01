@@ -1,5 +1,5 @@
 import { actor, agentSession, db, organization, program, project, task } from '@docket/db';
-import { DirectiveOut } from '@docket/types';
+import { DirectiveOut } from '@docket/planning/scheduling-directive-contract';
 import type { McpRegistrar } from './catalog';
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
 import { and, desc, eq, ilike, inArray, isNull, lt, or } from 'drizzle-orm';
@@ -9,7 +9,7 @@ import { buildHubTodayPayload } from '../routes/hub-today';
 import { buildTaskViewFilter } from '../routes/task-helpers';
 import { computeDirective, loadDayContext } from '../services/scheduling/directive-service';
 import { loadSchedulingPreferences } from '../services/scheduling/repository';
-import { localDateString } from '../services/scheduling/zoned-time';
+import { localDateString } from '@docket/planning/zoned-time';
 import { resolveActor, type McpContext } from './auth';
 import { callerHub } from './plan-tools';
 import { RESOURCE_READ_SCOPE, requireScope } from './scope';

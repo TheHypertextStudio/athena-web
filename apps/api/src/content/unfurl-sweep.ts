@@ -13,7 +13,7 @@
  */
 import { and, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import type { Unfurler } from '@docket/integrations';
-import { resourceProviderById } from '@docket/types';
+import { resourceProviderById } from '@docket/connections/resource-provider-contract';
 
 import { enqueueSearchUpsert } from '../search/write-through';
 

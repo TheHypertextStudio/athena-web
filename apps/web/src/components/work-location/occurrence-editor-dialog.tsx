@@ -5,7 +5,7 @@ import type {
   WorkLocationAssertionOut,
   WorkLocationOccurrenceException,
   WorkPlaceOut,
-} from '@docket/types';
+} from '@docket/planning/work-location-contract';
 import {
   Button,
   Dialog,

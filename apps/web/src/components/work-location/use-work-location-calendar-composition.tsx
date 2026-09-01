@@ -1,6 +1,9 @@
 'use client';
 
-import type { WorkLocationAssertionOut, WorkLocationOccurrenceException } from '@docket/types';
+import type {
+  WorkLocationAssertionOut,
+  WorkLocationOccurrenceException,
+} from '@docket/planning/work-location-contract';
 import { type ReactNode, useMemo, useState } from 'react';
 
 import type { SchedulingCanvasProps } from '@/components/scheduling';

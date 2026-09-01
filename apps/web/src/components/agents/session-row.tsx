@@ -11,7 +11,7 @@
  * runs). The whole row is a button that opens the Session view; it carries a focus ring and
  * keyboard activation (Enter/Space) so the feed is fully navigable without a mouse.
  */
-import type { SessionStatus } from '@docket/types';
+import type { SessionStatus } from '@docket/athena/agent-contract';
 import { ActorAvatar } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';

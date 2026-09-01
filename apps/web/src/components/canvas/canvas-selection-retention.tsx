@@ -19,7 +19,7 @@ import {
   applyCanvasReceiptToSnapshots,
   type CanvasReceiptDirection,
 } from './canvas-retained-snapshots';
-import type { ObjectCommandReceipt } from '@docket/types';
+import type { ObjectCommandReceipt } from '../../lib/contracts/object-command';
 
 interface CanvasPropertySnapshotsContextValue {
   readonly snapshots: readonly CanvasPropertySnapshot[];

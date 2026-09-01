@@ -1,6 +1,6 @@
 'use client';
 
-import type { WorkflowState } from '@docket/types';
+import type { WorkflowState } from '@docket/work/workflow';
 import { StatusIcon, type WorkflowStateType } from '@docket/ui/components';
 import { Check, ChevronDown } from '@docket/ui/icons';
 import {

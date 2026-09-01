@@ -293,7 +293,7 @@ commands that establish it.
 - **Names Docket as the hub** — the document's first claim, with an explicit note that
   `architecture.md`'s "Hub" (the personal cross-org cockpit) is a different, product-surface concept.
 - **Inventories every connector** — 5 work connectors from a single `as const` tuple
-  (`packages/types/src/provider-catalog.ts:14`), 2 live webhook observers
+  (`domains/connections/src/contracts/provider-catalog.ts:14`), 2 live webhook observers
   (`apps/api/src/routes/ingest.ts:131–132`), 1 calendar sync module
   (`calendar-sync-modules.ts:27`), remote MCP servers, the Linear Agent edge, and 4 outbound
   notification channels — plus 2 _unwired_ observer adapters (slack, discord) recorded as unwired

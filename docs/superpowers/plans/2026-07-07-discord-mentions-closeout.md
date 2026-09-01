@@ -85,7 +85,7 @@
   Run:
 
   ```bash
-  rg -n "calendar.*items|items.*calendar|layers|scopeState" apps/api/src packages/types/src apps/web/src
+  rg -n "calendar.*items|items.*calendar|layers|scopeState" apps/api/src the deleted legacy type warehouse source tree apps/web/src
   pnpm --filter @docket/api build
   pnpm --filter @docket/web typecheck
   ```
@@ -116,7 +116,7 @@
 - [ ] **Step 5: Commit**
 
   ```bash
-  git add apps/api apps/web packages/types
+  git add apps/api apps/web the deleted legacy type warehouse
   git commit -m "fix(calendar): restore calendar rpc type contract"
   ```
 
@@ -134,12 +134,12 @@
   pnpm --filter @docket/discord-relay typecheck
   pnpm --filter @docket/discord-relay lint
   pnpm --filter @docket/discord-relay test
-  pnpm --filter @docket/types typecheck
+  pnpm domain:check
   pnpm --filter @docket/env typecheck
   pnpm --filter @docket/auth typecheck
   pnpm --filter @docket/boundaries typecheck
   pnpm --filter @docket/api typecheck
-  pnpm --filter @docket/types lint
+  pnpm domain:check
   pnpm --filter @docket/env lint
   pnpm --filter @docket/auth lint
   pnpm --filter @docket/boundaries lint

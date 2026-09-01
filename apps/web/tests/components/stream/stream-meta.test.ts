@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { type StreamEventOut as StreamEventOutType, StreamEventOut } from '@docket/types';
+import {
+  type StreamEventOut as StreamEventOutType,
+  StreamEventOut,
+} from '../../../src/lib/contracts/stream';
 
 import {
   streamActorKind,

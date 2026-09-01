@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProjectOut } from '@docket/types';
+import type { ProjectOut } from '../../lib/contracts/project';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 

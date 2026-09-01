@@ -1,4 +1,4 @@
-import type { InitiativeTimelineBar } from '@docket/types';
+import type { InitiativeTimelineBar } from '@docket/work/initiative-contract';
 
 import { toMillis } from './format-date';
 

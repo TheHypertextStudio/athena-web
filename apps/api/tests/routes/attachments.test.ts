@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { AttachmentOut } from '@docket/types';
+import type { AttachmentOut } from '@docket/work/attachment-contract';
 import { and, eq } from 'drizzle-orm';
 
 import {

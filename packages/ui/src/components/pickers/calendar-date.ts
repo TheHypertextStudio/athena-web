@@ -31,7 +31,7 @@ export interface CalendarDate {
 const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /**
- * The earliest day any picker offers, mirroring `TASK_DATE_MIN` in `@docket/types`.
+ * The earliest day any picker offers, mirroring `TASK_DATE_MIN` in `domain packages`.
  *
  * @remarks
  * Duplicated as a literal rather than imported because `@docket/ui` must not depend on the
@@ -41,7 +41,7 @@ const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
  */
 export const CALENDAR_MIN_DAY = '1970-01-01';
 
-/** The latest day any picker offers, mirroring `TASK_DATE_MAX` in `@docket/types`. */
+/** The latest day any picker offers, mirroring `TASK_DATE_MAX` in `domain packages`. */
 export const CALENDAR_MAX_DAY = '2200-12-31';
 
 /** Days in a rendered month grid: always six weeks, so the popover never changes height. */

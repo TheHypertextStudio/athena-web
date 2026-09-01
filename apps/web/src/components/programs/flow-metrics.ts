@@ -1,5 +1,5 @@
 /** Pure aggregation for the Program Overview's health-and-flow snapshot. */
-import type { ProgramWorkOut } from '@docket/types';
+import type { ProgramWorkOut } from '@docket/work/program-contract';
 
 import type { CategoryOfState } from '@/lib/work-category';
 

@@ -34,7 +34,7 @@ import {
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 import { ConflictError, NotFoundError } from '../../error';
-import { addCalendarDays, parseCalendarDate } from './calendar-date';
+import { addCalendarDays, parseCalendarDate } from '@docket/planning/calendar-date';
 import type { TaskStateMutation } from '../task-state';
 import { loadStatusSets } from '../work-status';
 

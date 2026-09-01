@@ -24,11 +24,9 @@ import {
   type EntityDisplayColorKey,
   type EntityDisplayIconKey,
   type EntityDisplayOut,
-  type LabelGroupOut,
-  type LabelOut,
-  type LabelUpdate,
-  type TeamOut,
-} from '@docket/types';
+} from '@docket/work/entity-display-contract';
+import { type LabelGroupOut, type LabelOut, type LabelUpdate } from '@docket/work/label-contract';
+import { type TeamOut } from '../../../../../../lib/contracts/team';
 import { Button, Checkbox, Skeleton } from '@docket/ui/primitives';
 import { EmptyState } from '@docket/ui/components';
 import { Plus, Tag } from '@docket/ui/icons';

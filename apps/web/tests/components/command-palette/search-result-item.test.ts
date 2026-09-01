@@ -1,7 +1,8 @@
 import { isValidElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { OrganizationId, type SearchResult } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { type SearchResult } from '../../../src/lib/contracts/search';
 
 import { searchResultToPaletteItem } from '@/components/command-palette/use-hub-search';
 

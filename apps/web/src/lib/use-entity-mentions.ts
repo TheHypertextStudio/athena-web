@@ -8,7 +8,9 @@
  * its own beyond the description's own save: the reconciler runs on that write, and the standard
  * staleness tier picks the change up.
  */
-import type { EntityMention, MentionSubjectType, SubjectRef, TeamId } from '@docket/types';
+import type { EntityMention, MentionSubjectType } from './contracts/mention';
+import type { SubjectRef } from '@docket/work/subject-ref-contract';
+import type { TeamId } from '@docket/identity-access/ids';
 
 import { api } from './api';
 import { apiQueryOptions, queryKeys, STALE, useApiQuery } from './query';

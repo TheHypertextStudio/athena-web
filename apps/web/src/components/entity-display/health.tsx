@@ -14,7 +14,7 @@
  * earned by semantics), which is why the colour sits on the label itself rather than only on a 6px
  * dot: it has to survive being read at a glance.
  */
-import type { Health } from '@docket/types';
+import type { Health } from '@docket/work/capability-contract';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';
 

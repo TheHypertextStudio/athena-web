@@ -21,7 +21,11 @@ import {
   passkey,
   sessionActivity,
 } from '@docket/db';
-import { IdentityDeleteOut, IdentityListOut, IdentityProvider } from '@docket/types';
+import {
+  IdentityDeleteOut,
+  IdentityListOut,
+  IdentityProvider,
+} from '@docket/identity-access/identity-contract';
 import { and, eq } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { z } from 'zod';

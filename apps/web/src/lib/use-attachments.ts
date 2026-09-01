@@ -9,7 +9,7 @@
  * bytes are then fetched via {@link TaskAttachmentsData.downloadUrl}). See
  * `docs/engineering/specs/email-to-task.md` §9.
  */
-import type { AttachmentOut } from '@docket/types';
+import type { AttachmentOut } from '@docket/work/attachment-contract';
 import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 

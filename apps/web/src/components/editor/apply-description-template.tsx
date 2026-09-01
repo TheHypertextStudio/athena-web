@@ -8,7 +8,7 @@
  * This feature owns the template query, visibility rules, empty-state menu, slash commands, and
  * append semantics, then supplies them through that generic boundary.
  */
-import type { TemplateOut, TemplateTargetType } from '@docket/types';
+import type { TemplateOut, TemplateTargetType } from '@docket/work/template-contract';
 import { LayoutTemplate } from '@docket/ui/icons';
 import type { Editor } from '@tiptap/react';
 import { type JSX, useMemo, useState } from 'react';

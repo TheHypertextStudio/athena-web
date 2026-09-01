@@ -1,7 +1,7 @@
 import { Temporal } from '@js-temporal/polyfill';
 
 import { deriveSnapMinutes, MINUTES_PER_DAY } from './scheduling-geometry';
-import { resolveScheduleTimezone, resolveScheduleWallTime } from './scheduling-wall-time';
+import { resolveScheduleTimezone, resolveScheduleWallTime } from '@docket/planning/wall-time';
 
 export {
   resolveScheduleTimezone,
@@ -10,13 +10,13 @@ export {
   scheduleInstantAt,
   scheduleWallPositionForInstant,
   resolveScheduleWallInstant,
-} from './scheduling-wall-time';
+} from '@docket/planning/wall-time';
 export type {
   ScheduleTimeDisambiguation,
   ScheduleWallInstantResolution,
   ScheduleWallTimeCandidate,
   ScheduleWallTimeResolution,
-} from './scheduling-wall-time';
+} from '@docket/planning/wall-time';
 
 const MINIMUM_MAJOR_TICK_SEPARATION = 44;
 const MAJOR_TICK_INTERVALS = [15, 30, 60, 120] as const;

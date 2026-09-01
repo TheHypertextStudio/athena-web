@@ -12,7 +12,8 @@
  *
  * `useSession` is mocked to a fixed signed-in user so the hook resolves a stable member id.
  */
-import type { MemberOut, RoleOut } from '@docket/types';
+import type { MemberOut } from '@docket/identity-access/member-contract';
+import type { RoleOut } from '../../src/lib/contracts/role';
 import { cleanup, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

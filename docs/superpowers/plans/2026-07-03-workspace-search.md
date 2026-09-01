@@ -6,7 +6,7 @@
 
 **Architecture:** Postgres owns the durable read model through `search_document` and `search_index_job`. API projectors convert source rows into semantic search documents, a job processor keeps the index fresh and repairable, and both the command palette and `/search` page consume one shared DTO.
 
-**Tech Stack:** Drizzle ORM, PGlite-compatible migrations, Hono, Zod DTOs in `@docket/types`, TanStack Query helpers, Next.js App Router, Vitest.
+**Tech Stack:** Drizzle ORM, PGlite-compatible migrations, Hono, Zod DTOs in the retired contract package, TanStack Query helpers, Next.js App Router, Vitest.
 
 ---
 
@@ -16,9 +16,9 @@
 - Modify `packages/db/src/enums.ts`: search enums for document family/kind and job operation/reason/status.
 - Modify `packages/db/src/schema/index.ts` and `packages/db/src/index.ts`: export the search schema island.
 - Create `packages/db/tests/search.test.ts`: schema and migration smoke tests.
-- Create `packages/types/src/search.ts`: public search query/result DTOs.
-- Modify `packages/types/src/hub.ts` and `packages/types/src/index.ts`: make Hub search use the shared search DTO and export it.
-- Create `packages/types/tests/search.test.ts`: DTO acceptance/rejection tests.
+- Create `apps/api/src/contracts/search.ts`: public search query/result DTOs.
+- Modify `apps/api/src/contracts/hub.ts` and `deleted legacy module index`: make Hub search use the shared search DTO and export it.
+- Create `the deleted legacy type warehouse tests/search.test.ts`: DTO acceptance/rejection tests.
 - Create `apps/api/src/search/{types,rank,routes,registry,enqueue,process-jobs,backfill,query}.ts`: API search service.
 - Create `apps/api/src/search/projectors/{work,people,content,activity,calendar}.ts`: source-to-document projectors.
 - Modify `apps/api/src/routes/hub.ts`: replace direct task/project/program `ILIKE` with the search query service.
@@ -125,10 +125,10 @@ Expected: PASS.
 
 **Files:**
 
-- Create: `packages/types/src/search.ts`
-- Modify: `packages/types/src/hub.ts`
-- Modify: `packages/types/src/index.ts`
-- Test: `packages/types/tests/search.test.ts`
+- Create: `apps/api/src/contracts/search.ts`
+- Modify: `apps/api/src/contracts/hub.ts`
+- Modify: `deleted legacy module index`
+- Test: `the deleted legacy type warehouse tests/search.test.ts`
 
 - [x] **Step 1: Write failing DTO tests**
 
@@ -136,7 +136,7 @@ Create tests that prove `SearchOut` accepts semantic task, comment, activity, an
 
 - [x] **Step 2: Run the failing DTO tests**
 
-Run: `pnpm --filter @docket/types exec vitest run tests/search.test.ts`
+Run: `pnpm domain:check`
 
 Expected: FAIL because `SearchOut` and semantic result DTOs do not exist.
 
@@ -146,13 +146,13 @@ Define `SearchDocumentFamily`, `SearchDocumentKind`, `SearchRoute`, `SearchSubje
 
 - [x] **Step 4: Run DTO tests green**
 
-Run: `pnpm --filter @docket/types exec vitest run tests/search.test.ts`
+Run: `pnpm domain:check`
 
 Expected: PASS.
 
 - [x] **Step 5: Run package types validation**
 
-Run: `pnpm --filter @docket/types typecheck && pnpm --filter @docket/types test`
+Run: `pnpm domain:check && pnpm domain:check`
 
 Expected: PASS.
 
@@ -383,8 +383,8 @@ Move `SEARCH-002` from Active to Completed with summary, files changed, validati
 Run:
 
 ```bash
-pnpm --filter @docket/types typecheck
-pnpm --filter @docket/types test
+pnpm domain:check
+pnpm domain:check
 pnpm --filter @docket/db typecheck
 pnpm --filter @docket/db test
 pnpm --filter @docket/api typecheck

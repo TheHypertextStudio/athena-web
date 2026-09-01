@@ -1,4 +1,4 @@
-import { SearchDocumentKind, type SearchResult, type SearchRoute } from '@docket/types';
+import { SearchDocumentKind, type SearchResult, type SearchRoute } from '../contracts/search';
 import { z } from 'zod';
 
 import { type SearchCaller, searchWorkspace } from '../search/query';

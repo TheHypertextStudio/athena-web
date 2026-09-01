@@ -20,7 +20,8 @@
  * Read-only mirror only: imported items become linked tasks whose external source stays
  * authoritative (no write-back, no take-over) — the import endpoint enforces this.
  */
-import type { IntegrationCreate, IntegrationOut, TaskOut } from '@docket/types';
+import type { IntegrationCreate, IntegrationOut } from '@docket/connections/integration-contract';
+import type { TaskOut } from '@docket/work/task-model';
 import { Calendar, Layers, TaskAlt } from '@docket/ui/icons';
 import { type JSX, useCallback, useEffect, useState } from 'react';
 

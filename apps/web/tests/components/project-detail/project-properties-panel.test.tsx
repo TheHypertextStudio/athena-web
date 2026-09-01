@@ -1,6 +1,7 @@
 /** Behavior tests for progressive Project property controls. */
 import type { PickerOption } from '@docket/ui/components';
-import { LabelId, OrganizationId } from '@docket/types';
+import { LabelId } from '@docket/work/ids';
+import { OrganizationId } from '@docket/identity-access/ids';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

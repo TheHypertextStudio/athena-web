@@ -14,7 +14,10 @@
 
 ### 1.2 Compilation strategy (mandatory)
 
-Per the eng doc §1: `@docket/db`, `@docket/auth`, and `apps/api` are **compiled** (`tsc → dist`). The Hono router is **split across many files** (one router module per resource group) so Hono RPC type inference does not cripple `tsserver`. `@docket/types`, `@docket/ui`, `@docket/env` are JIT (raw TS + `transpilePackages`). The **Hono version must be byte-identical** across `apps/api` and every consumer (pin in root catalog).
+The API's `@docket/api/rpc-contract` subpath is **compiled** (`tsc → dist`). The Hono router is
+**split across many files** so Hono RPC type inference does not cripple `tsserver`. Domain packages,
+`@docket/ui`, and `@docket/env` are consumed as raw TypeScript where their manifests declare that
+boundary. The **Hono version must be byte-identical** across `apps/api` and every consumer.
 
 ### 1.3 The RPC `AppType` export pattern
 
@@ -24,7 +27,8 @@ Every resource group is its own `Hono` instance built with **method chaining** (
 // apps/api/src/routes/tasks.ts
 import { Hono } from "hono";
 import { validator } from "hono-openapi";
-import { TaskCreate, TaskUpdate, TaskList, Task as TaskOut, ListQuery } from "@docket/types";
+import { TaskCreate, TaskUpdate, TaskList, Task as TaskOut } from "@docket/work/task-model";
+import { ListQuery } from "../contracts/pagination";
 import type { AppEnv } from "../env"; // { Variables: { session, actorCtx }, ... }
 
 const tasks = new Hono<AppEnv>()
@@ -67,7 +71,10 @@ the user-facing SSE stream and the binary export download stay on `/v1` outside 
 - Use **`hono-openapi`** (`validator`, `describeRoute`, `resolver`, `openAPIRouteHandler`) — **not** `@hono/zod-openapi`'s `OpenAPIHono`. Rationale: `hono-openapi`'s `validator("json"|"query"|"param"|"header", schema)` is a drop-in for `@hono/zod-validator` that **preserves RPC type inference on chained routers** while _also_ feeding the OpenAPI document. `OpenAPIHono` + `createRoute` breaks the `.route()` chaining inference that the AppType contract depends on.
 - **Validated input** is read via `c.req.valid("json"|"query"|"param")`.
 - **Output is validated too** (eng constraint "Zod in and out"): every handler returns through a shared `ok(c, schema, data)` helper that `schema.parse()`es the payload in dev/test (and on a sampled basis in prod) before `c.json(...)`. The same output schema is attached to `describeRoute` via `resolver(schema)` so the documented response and the runtime response cannot drift.
-- All input schemas live in **`@docket/types`** (shared with MCP tool schemas and Next server actions). Zod v4 (`zod`), schemas authored with `.meta({ id, description })` for clean OpenAPI `$ref`s.
+- HTTP input and output schemas live beside their owning API feature. Portable business contracts
+  come from explicit domain subpaths. MCP Apps protocol schemas live in `@docket/integrations`.
+  Web and Admin do not import API runtime schemas. Zod schemas use `.meta({ id, description })` for
+  stable OpenAPI `$ref` names.
 
 ### 1.5 OpenAPI / Scalar generation
 
@@ -159,7 +166,7 @@ statuses (`statuses.md`), so the authority on what a Task may be set to is the t
 status set: its own forked rows when it has any, otherwise the workspace's.
 
 **Statuses — `/orgs/:orgId/statuses`.** Design-complete; the DTOs are shipped in
-`@docket/types/work-status.ts` and the routes are the remaining slice. One surface serves all four
+`domains/work/src/contracts/work-status.ts` and the routes are the remaining slice. One surface serves all four
 kinds of work — Task, Project, Program, Initiative — discriminated by `entityType`. Cycles are
 absent because a Cycle's status follows its window rather than a choice.
 
@@ -461,24 +468,32 @@ Mounted at `/admin` — its **own** non-`/v1` app exporting `AdminAppType`, cons
 | `/api/auth/*`           | Better Auth handler (`auth.handler(c.req.raw)`) — **outside `/v1`, not in AppType**                                                                      | per Better Auth      |
 | `/mcp` (POST + GET-SSE) | MCP Streamable HTTP transport (`withMcpAuth`) — **outside `/v1`, not in RPC AppType**; tools/resources map to the same service layer the RPC routes call | OAuth 2.1 (mcpOAuth) |
 
-> **MCP ↔ RPC alignment:** the MCP server does NOT re-implement logic — its tools (`create_task`, `move_task`, `post_update`, `assign`, `link_external`, `trigger_agent_session`, `approve`/`reject`, `run_view`) and resources (`docket://{org}/{type}/{id}`) call the **same service functions** that the Hono RPC handlers call, sharing the `@docket/types` Zod schemas as both `inputSchema` and (Zod→JSON-Schema) `outputSchema`. Org/user context derives ONLY from the verified MCP token `sub` + grants — identical rule to `orgContextMiddleware`.
+> **MCP ↔ RPC alignment:** the MCP server does not re-implement business logic. Its tools and
+> resources call the same service functions as the Hono handlers. Each transport owns its schema,
+> and both use the same named domain contracts and rules. Org and user context derive only from the
+> verified MCP token `sub` and grants, which matches the `orgContextMiddleware` rule.
 
 ---
 
-## 5. Shared `@docket/types` schema inventory (sketch)
+## 5. Schema ownership
 
-Authored in `@docket/types`, consumed by API handlers, MCP tools, and Next server actions:
+Schemas have one owner based on what they describe:
 
-- **Primitives:** `OrganizationId`, `TeamId`, `InitiativeId`, `ProgramId`, `ProjectId`, `CycleId`, `TaskId`, `MilestoneId`, `UpdateId`, `CommentId`, `AgentId`, `SessionId`, `IntegrationId`, `NotificationId`, `ActorId`, `RoleId`, `GrantId`, `LabelId` (branded `z.string().brand()`); `DateString` (`z.iso.date()`); `Capability` (`z.enum(["view","comment","contribute","assign","manage"])`); `Health`, `Priority`, `WorkflowState`, `Visibility`.
-- **Query/page:** `ListQuery`, `Page<T>` (factory `page(schema)`), `IdParam` factory.
-- **Per-resource:** `<Resource>Out`, `<Resource>Create`, `<Resource>Update` for each entity above; `Problem` (error); `TaskFilter`, `TaskGroup`, `CapabilityGrid`.
-- **Contract:** `@docket/api/rpc-contract` is the API-owned public transport subpath for `type AppType` and `type AdminAppType`; `@docket/types` does not re-export either contract.
+- Domains own branded entity IDs, portable vocabulary, and pure business rules through explicit
+  package subpaths.
+- API features own query schemas, pages, Problems, request DTOs, response DTOs, serializers, and
+  OpenAPI component names.
+- `@docket/integrations` owns MCP Apps protocol contracts.
+- Web and Admin own client runtime parsing and view-only projections.
+- `@docket/api/rpc-contract` is the only public delivery-client type boundary for `AppType` and
+  `AdminAppType`.
 
 ---
 
 ## 6. Validation, OpenAPI & RPC interplay (the one rule that must not be broken)
 
-1. Define schema in `@docket/types`.
+1. Define the HTTP schema beside the API feature and import any portable domain contracts through
+   their named public subpaths.
 2. In the handler chain, attach **`validator("json"|"query"|"param", Schema)`** (input) and **`describeRoute({ responses: { 2xx: { content: { "application/json": { schema: resolver(OutSchema) } } } }, security, tags })`** (output + docs) — in that order, before the handler.
 3. Return through `ok(c, OutSchema, data)` so runtime output matches the documented schema.
 4. **Never** convert any router to `OpenAPIHono`/`createRoute` — it breaks the `.route()` chaining that the `AppType` export depends on. `hono-openapi`'s `validator` is the only path that satisfies _both_ RPC inference _and_ OpenAPI generation.

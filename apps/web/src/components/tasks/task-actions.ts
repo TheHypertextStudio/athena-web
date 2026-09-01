@@ -37,14 +37,11 @@ import {
   Users,
   Workflow,
 } from '@docket/ui/icons';
-import {
-  CalendarItemId,
-  LabelId,
-  OrganizationId,
-  TaskId,
-  TaskUpdate,
-  WorkViewOrderRequest,
-} from '@docket/types';
+import { CalendarItemId } from '@docket/planning/ids';
+import { LabelId, TaskId } from '@docket/work/ids';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { TaskUpdate } from '@docket/work/task-model';
+import { WorkViewOrderRequest } from '@docket/work/work-view-contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useCallback, useMemo } from 'react';

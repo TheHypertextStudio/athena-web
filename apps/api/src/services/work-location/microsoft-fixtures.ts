@@ -1,5 +1,5 @@
 /** Tested Microsoft Graph mapping fixtures for a future, deliberately unconnected adapter. */
-import type { WorkLocationSchedule } from '@docket/types';
+import type { WorkLocationSchedule } from '@docket/planning/work-location-contract';
 
 const WEEKDAY = {
   monday: 0,

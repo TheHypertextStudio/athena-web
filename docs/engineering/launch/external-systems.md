@@ -50,7 +50,7 @@ returns account-scoped data, so a successful non-empty response is proof of a li
 
 **Product-side status.** Google is Docket's most-shipped external system: three of the five
 connectors (`gmail`, `calendar`, `gtasks`) are Google products, all funded by one Better Auth
-`google` identity grant (`packages/types/src/provider-catalog.ts:81–113`,
+`google` identity grant (`domains/connections/src/contracts/provider-catalog.ts:81–113`,
 `packages/integrations/src/real-connector.ts:79–86`). Locally the OAuth client is intentionally
 unset — `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are empty in `.env.local` and the dev stack
 runs against the mock connector — so a _product-level_ Google OAuth round trip is a deploy-state item,
@@ -75,7 +75,7 @@ than a person record — so it is a captured authenticated session.
 
 **Product-side status: not integrated.** `grep -rniE 'notion' . --exclude-dir=node_modules` returns
 hits only in the audit baseline (`docs/engineering/launch-compliance.{json,md}`) and one unrelated
-display-vocabulary constant (`packages/types/src/entity-display.ts`). There is no Notion connector,
+display-vocabulary constant (`domains/work/src/contracts/entity-display.ts`). There is no Notion connector,
 no `notion` entry in `CONNECTOR_PROVIDER_IDS`, and no Notion env var in the registry. Building it is
 owned by **WIL-08 … WIL-13** (bidirectional Notion database/task sync, Docket-wins conflict
 resolution, per-workspace configuration for Las Vegans for Better Transit) — all `not-built` in the

@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
-import { OrganizationId, type SearchOut, type SearchResult } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { type SearchOut, type SearchResult } from '../../../src/lib/contracts/search';
 import type * as DocketComponents from '@docket/ui/components';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';

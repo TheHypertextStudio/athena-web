@@ -35,7 +35,7 @@
  */
 import type { dayCheckIn } from '@docket/db';
 import { db, genId } from '@docket/db';
-import type { CheckInResponse } from '@docket/types';
+import type { CheckInResponse } from '@docket/planning/scheduling-directive-contract';
 
 import { dispatchSystemUserNotification } from '../services/notifications/system';
 import {

@@ -7,7 +7,9 @@
   "description": "Third-party provider connectors, observers, fixtures, and integration test doubles.",
   "exports": {
     ".": "./src/index.ts",
-    "./mcp-apps": "./src/mcp-apps.ts"
+    "./mcp-apps": "./src/mcp-apps.ts",
+    "./mcp-apps-contract": "./src/contracts/mcp-apps.ts",
+    "./mcp-tasks-contract": "./src/contracts/mcp-tasks.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -22,16 +24,16 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@docket/athena": "workspace:*",
     "@docket/connections": "workspace:*",
     "@docket/env": "workspace:*",
-    "@docket/types": "workspace:*",
     "@docket/work": "workspace:*",
     "@lovelace-ai/compute": "^0.0.1",
     "@modelcontextprotocol/ext-apps": "catalog:",
     "@modelcontextprotocol/sdk": "catalog:",
     "@notionhq/client": "^5.24.0",
-    "parse5": "8.0.1",
     "@reasonabletech/lattice-client": "^0.0.1",
+    "parse5": "8.0.1",
     "zod": "catalog:"
   },
   "devDependencies": {

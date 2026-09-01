@@ -41,7 +41,7 @@ minimumReleaseAgeExclude:
 # which is what mechanically guarantees the single Hono version the Hono RPC
 # AppType contract depends on, and the single Better Auth 1.6.14 used everywhere.
 catalog:
-  # Hono RPC contract — one byte-identical version everywhere (api + @docket/types)
+  # Hono RPC contract — one byte-identical version everywhere the API contract is inferred.
   hono: ^4.12.23
   hono-openapi: ^1.3.0
   # hono-openapi's `validator` delegates to this Standard-Schema validator (its top-level

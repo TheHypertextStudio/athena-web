@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { auth } from '@docket/auth';
-import { publicProblemTitle } from '@docket/types';
+import { publicProblemTitle } from '../contracts/errors';
 import type { Context } from 'hono';
 
 import { env } from '../env';

@@ -175,7 +175,7 @@ Indexes: `automation_rule_org_idx` on `(organizationId)`; partial `automation_ru
 branches. The **funnel confidence threshold** is a runtime config value (org/integration config),
 also not a literal.
 
-## 4. Wire DTOs (`packages/types/src`)
+## 4. Wire DTOs (`the deleted legacy type warehouse source tree`)
 
 New slice files, colocating schema + types (no `*-types.ts`):
 

@@ -1,7 +1,10 @@
 'use client';
 
-import type { AttachmentOut, Health, LabelOut, UpdateOut } from '@docket/types';
-import { InitiativeSubjectRef } from '@docket/types';
+import type { AttachmentOut } from '@docket/work/attachment-contract';
+import type { Health } from '@docket/work/capability-contract';
+import type { LabelOut } from '@docket/work/label-contract';
+import type { UpdateOut } from '@docket/work/update-contract';
+import { InitiativeSubjectRef } from '@docket/work/subject-ref-contract';
 import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { CornerDownLeft, Ellipsis, Trash2 } from '@docket/ui/icons';

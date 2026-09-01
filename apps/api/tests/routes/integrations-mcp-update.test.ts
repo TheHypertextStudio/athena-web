@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { McpIntegrationOut } from '@docket/types';
+import type { McpIntegrationOut } from '@docket/connections/integration-contract';
 
 import { appWithActor, getDb, seedOrg } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';

@@ -7,12 +7,11 @@
  * to hide the only copy of a calendar), and it never throws or degrades to nothing when the linked
  * accounts are unknown.
  */
+import { CalendarConnectionId, CalendarLayerId } from '@docket/planning/ids';
 import {
-  CalendarConnectionId,
   type CalendarConnectionOut,
-  CalendarLayerId,
   type CalendarLayerOut,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 import { describe, expect, it } from 'vitest';
 
 import {

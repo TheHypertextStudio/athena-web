@@ -143,7 +143,7 @@ paid modules retain explicit product guards, and that `accessMode` now reports b
 - Modify: `apps/api/src/routes/webhooks.ts`
 - Modify: `apps/api/src/services/billing-reconciliation.ts`
 - Modify: `apps/api/src/routes/admin-billing-routes.ts`
-- Modify: `packages/types/src/errors.ts`
+- Modify: `apps/api/src/contracts/errors.ts`
 - Modify: focused Web and API tests for those surfaces
 - Modify: current billing, architecture, reconciliation, API, and MVP documents that promise
   shared work becomes read-only

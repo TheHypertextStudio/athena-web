@@ -9,8 +9,8 @@
  * duplicate key with a 409. Delete is a soft archive (sets `archived_at`).
  */
 import { actor, db, defaultWorkflowStates, team, teamMember } from '@docket/db';
+import { pageOf } from '../contracts/pagination';
 import {
-  pageOf,
   TeamActivityOut,
   TeamCreate,
   TeamDeleteResult,
@@ -21,7 +21,7 @@ import {
   TeamOut,
   TeamRosterEntry,
   TeamUpdate,
-} from '@docket/types';
+} from '../contracts/team';
 import { and, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

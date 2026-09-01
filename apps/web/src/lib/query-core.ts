@@ -12,7 +12,7 @@
  *
  * @see `docs/engineering/specs/data-layer.md` for the full standard.
  */
-import type { Problem } from '@docket/types';
+import type { Problem } from './contracts/errors';
 import {
   infiniteQueryOptions,
   MutationCache,

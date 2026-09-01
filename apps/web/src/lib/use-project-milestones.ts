@@ -1,7 +1,7 @@
 'use client';
 
 /** Mutations for a Project's milestones — the list itself lives in the composite project-detail read. */
-import type { MilestoneOut } from '@docket/types';
+import type { MilestoneOut } from '@docket/work/milestone-contract';
 import type { QueryKey } from '@tanstack/react-query';
 
 import { api } from './api';

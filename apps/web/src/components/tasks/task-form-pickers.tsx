@@ -1,6 +1,6 @@
 'use client';
 
-import type { EstimationScale } from '@docket/types';
+import type { EstimationScale } from '../../lib/contracts/organization';
 import type { Priority } from '@docket/work/task-contract';
 import {
   ActorPicker,

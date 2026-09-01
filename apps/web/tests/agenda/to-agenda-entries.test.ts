@@ -10,7 +10,7 @@
  * - a timeboxed block whose task isn't in the plan is appended (so the timeline never drops it);
  * - no data → no entries.
  */
-import { HubTodayOut } from '@docket/types';
+import { HubTodayOut } from '../../src/lib/contracts/hub';
 import { describe, expect, it } from 'vitest';
 
 import { toAgendaEntries } from '@/components/agenda/agenda-context';

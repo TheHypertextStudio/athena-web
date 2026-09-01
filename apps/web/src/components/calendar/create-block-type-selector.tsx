@@ -10,7 +10,7 @@
  * how the app shell separates its own regions. Each segment carries an inline glyph, because a
  * choice between two *kinds of thing* reads faster with an icon than with a capitalized word alone.
  */
-import type { CalendarItemCreateIntent } from '@docket/types';
+import type { CalendarItemCreateIntent } from '@docket/planning/calendar-contract';
 import { Calendar, Schedule } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { focusRingInset, surfaceToneColor } from '@docket/ui/primitives';

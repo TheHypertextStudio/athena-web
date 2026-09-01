@@ -21,7 +21,7 @@
  * The store is read through {@link useOpenDocuments}; the shell frame wires it to the
  * {@link TabBar} and the router.
  */
-import { ULID_REGEX } from '@docket/types';
+import { docketIdPattern as ULID_REGEX } from '@/lib/docket-id';
 import type { OpenTab } from '@docket/ui/components';
 import { readStoredJson, writeStoredJson } from '@docket/ui/lib/browser-storage';
 import { useQueryClient } from '@tanstack/react-query';

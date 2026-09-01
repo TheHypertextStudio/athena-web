@@ -42,7 +42,7 @@ TanStack Query, Vitest, Testing Library, Playwright, Tailwind CSS, Docket UI pri
 
 ## File map
 
-- `packages/types/src/hub.ts` owns the public Today DTOs and semantic-action contracts.
+- `apps/api/src/contracts/hub.ts` owns the public Today DTOs and semantic-action contracts.
 - `apps/api/src/services/hub/today-projection.ts` owns pure plan-state, focus, status, and momentum
   selection.
 - `apps/api/src/routes/hub-today.ts` loads bounded candidate rows, resolves access in batches, and
@@ -64,7 +64,7 @@ TanStack Query, Vitest, Testing Library, Playwright, Tailwind CSS, Docket UI pri
 
 **Files:**
 
-- Modify: `packages/types/src/hub.ts`
+- Modify: `apps/api/src/contracts/hub.ts`
 - Create: `apps/api/src/services/hub/today-projection.ts`
 - Create: `apps/api/tests/services/hub-today-projection.test.ts`
 
@@ -230,7 +230,7 @@ TanStack Query, Vitest, Testing Library, Playwright, Tailwind CSS, Docket UI pri
 
   ```bash
   pnpm --filter @docket/api test -- tests/routes/hub-aggregation.test.ts tests/services/hub-today-projection.test.ts
-  pnpm --filter @docket/types typecheck
+  pnpm domain:check
   ```
 
   Expected: PASS.
@@ -247,7 +247,7 @@ TanStack Query, Vitest, Testing Library, Playwright, Tailwind CSS, Docket UI pri
 - Create: `apps/api/src/routes/hub-today-actions.ts`
 - Modify: `apps/api/src/routes/hub.ts`
 - Modify: `apps/api/src/lib/task-state.ts`
-- Modify: `packages/types/src/hub.ts`
+- Modify: `apps/api/src/contracts/hub.ts`
 - Create: `apps/api/tests/routes/hub-today-actions.test.ts`
 
 **Interfaces:**

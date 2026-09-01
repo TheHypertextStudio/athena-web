@@ -13,7 +13,7 @@ how to exercise the whole path offline.
 A message that arrives at Athena's address becomes a row in **`athena_inbound_message`** — Athena's
 own store — and that row is modelled as a **context object**, not as an email.
 
-The context-object contract (`packages/types/src/athena-mail.ts`, `ContextObjectOut`) is:
+The context-object contract (`domains/athena/src/contracts/athena-mail.ts`, `ContextObjectOut`) is:
 
 | field           | meaning                                                               |
 | --------------- | --------------------------------------------------------------------- |
@@ -267,7 +267,7 @@ not forbidden. The attach route's tenant check is membership in the _target_ wor
 | `packages/mail/src/fixture-inbound.ts`         | the offline adapter + payload builder                       |
 | `packages/mail/src/inbound-transport.ts`       | env-driven selection (fails closed in production)           |
 | `packages/db/src/schema/athena-mail.ts`        | `athena_mailbox`, `athena_inbound_message`                  |
-| `packages/types/src/athena-mail.ts`            | the context-object contract + the mail DTOs                 |
+| `domains/athena/src/contracts/athena-mail.ts`  | the context-object contract + the mail DTOs                 |
 | `apps/api/src/routes/inbound-mail.ts`          | the public webhook                                          |
 | `apps/api/src/routes/inbound-mail-delivery.ts` | store → announce → deliver → link                           |
 | `apps/api/src/routes/athena-mail-store.ts`     | mailbox minting, address resolution, projections            |

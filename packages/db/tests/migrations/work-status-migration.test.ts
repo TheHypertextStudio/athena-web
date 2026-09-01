@@ -326,7 +326,7 @@ describe('work status migration', () => {
     const ids = await client.query<{ id: string }>(`SELECT "id" FROM "work_status"`);
     expect(ids.rows.length).toBeGreaterThan(0);
     for (const row of ids.rows) {
-      // The shape `@docket/types` validates on every read.
+      // The shape `domain packages` validates on every read.
       expect(row.id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
     }
     expect(new Set(ids.rows.map((r) => r.id)).size).toBe(ids.rows.length);

@@ -1,13 +1,13 @@
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
+import type { AgendaOut } from '@docket/planning/agenda-contract';
 import type {
-  AgendaOut,
   CalendarLayerOut,
   CalendarLayersOut,
   CalendarSettingsOut,
-  TaskOut,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
+import type { TaskOut } from '@docket/work/task-model';
 
 import {
   appWithSession,

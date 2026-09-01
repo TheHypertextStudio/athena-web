@@ -14,13 +14,13 @@
  *    widen casually.
  */
 import { db, teamMember, template } from '@docket/db';
+import { pageOf } from '../contracts/pagination';
 import {
-  pageOf,
   TemplateCreate,
   TemplateOut,
   TemplateTargetType,
   TemplateUpdate,
-} from '@docket/types';
+} from '@docket/work/template-contract';
 import { and, eq, exists, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

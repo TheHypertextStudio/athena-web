@@ -26,8 +26,8 @@ import {
   ReorganizeResultOut,
   ReviewAnswerInput,
   ReviewDispositionInput,
-  pageOf,
-} from '@docket/types';
+} from '@docket/planning/scheduling-directive-contract';
+import { pageOf } from '../contracts/pagination';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -54,7 +54,7 @@ import {
   respondToCheckIn,
 } from '../services/scheduling/directive-service';
 import { loadSchedulingPreferences } from '../services/scheduling/repository';
-import { localDateString } from '../services/scheduling/zoned-time';
+import { localDateString } from '@docket/planning/zoned-time';
 
 /** Resolve (or 404) the caller's Hub. */
 async function resolveHub(userId: string): Promise<string> {

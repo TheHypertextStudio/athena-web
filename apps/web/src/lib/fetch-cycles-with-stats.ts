@@ -1,4 +1,4 @@
-import type { CycleOut, CycleStats } from '@docket/types';
+import type { CycleOut, CycleStats } from '@docket/work/cycle-contract';
 
 import type { api as ApiClient } from '@/lib/api';
 import { rpcErrorResponse, type RpcResponse } from '@/lib/query-core';

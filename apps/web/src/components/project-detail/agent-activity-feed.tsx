@@ -1,7 +1,7 @@
 'use client';
 
 /** A read-only agent activity trail, deliberately without social replies. */
-import type { SessionActivityType } from '@docket/types';
+import type { SessionActivityType } from '@docket/athena/agent-contract';
 import { ActorAvatar } from '@docket/ui/components';
 import { Sparkles } from '@docket/ui/icons';
 import { DecorativeIcon } from '@docket/ui/primitives';

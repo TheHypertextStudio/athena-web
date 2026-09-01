@@ -32,9 +32,8 @@ import {
   InitiativeTimelineQuery,
   InitiativeUnlinked,
   InitiativeUpdate,
-  CursorQuery,
-  pageOf,
-} from '@docket/types';
+} from '@docket/work/initiative-contract';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';

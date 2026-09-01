@@ -1,20 +1,20 @@
 import type { Database, NotificationContent as DbNotificationContent } from '@docket/db';
 import { notificationIntent, staffUser } from '@docket/db';
+import { canCreateNotification } from '@docket/notifications/policy';
 import {
-  canCreateNotification,
   NotificationDeliveryOut,
   NotificationIntentCreate,
   NotificationIntentStatus,
   NotificationRecipientOut,
   type NotificationIntentCreate as NotificationIntentCreateInput,
   type NotificationIntentOut,
-} from '@docket/notifications';
+} from '@docket/notifications/schemas';
 import {
   dispatchNotificationIntent,
   dispatchPersistedNotificationIntent,
   type DispatchNotificationResult,
 } from '@docket/notifications/dispatch';
-import { NotificationOut } from '@docket/types';
+import { NotificationOut } from '@docket/notifications/notification-contract';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 

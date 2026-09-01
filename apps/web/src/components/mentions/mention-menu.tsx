@@ -31,7 +31,7 @@ import {
   Skeleton,
 } from '@docket/ui/primitives';
 import type { PopoverVirtualAnchorRef } from '@docket/ui/primitives';
-import type { MentionItem } from '@docket/types';
+import type { MentionItem } from '../../lib/contracts/mention';
 import { useEffect, useRef } from 'react';
 
 import MentionRow from './mention-row';

@@ -25,8 +25,8 @@
 
 **Files:**
 
-- Modify: `packages/types/tests/dto/work-location.test.ts`
-- Modify: `packages/types/src/work-location.ts`
+- Modify: `the deleted legacy type warehouse tests/dto/work-location.test.ts`
+- Modify: `domains/planning/src/contracts/work-location.ts`
 - Modify: `packages/db/tests/schema/work-location-schema.test.ts`
 - Modify: `packages/db/src/schema/work-location.ts`
 - Create: `packages/db/drizzle/0086_work_place_address.sql`
@@ -52,7 +52,7 @@ expect(WorkPlaceCreate.safeParse({ name: 'Library', address: 'x'.repeat(241) }).
 
 - [ ] **Step 2: Run the focused tests and verify the missing address contract fails**
 
-Run: `pnpm --filter @docket/types test -- tests/dto/work-location.test.ts`
+Run: `pnpm domain:check`
 
 - [ ] **Step 3: Add the nullable address contract, schema column, repository mappings, and generated migration**
 
@@ -62,7 +62,7 @@ address: z.string().trim().min(1).max(240).nullable().optional();
 
 - [ ] **Step 4: Run the contract, schema, and repository tests**
 
-Run: `pnpm --filter @docket/types test -- tests/dto/work-location.test.ts && pnpm --filter @docket/db test -- tests/schema/work-location-schema.test.ts && pnpm --filter @docket/api test -- tests/services/work-location/repository.test.ts`
+Run: `pnpm domain:check&& pnpm --filter @docket/db test -- tests/schema/work-location-schema.test.ts && pnpm --filter @docket/api test -- tests/services/work-location/repository.test.ts`
 
 - [ ] **Step 5: Commit the completed persistence slice**
 

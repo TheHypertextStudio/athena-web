@@ -12,7 +12,7 @@
  * agent shape), the task it is working, and a status pill colored by the session lifecycle —
  * with `awaiting_approval` / `awaiting_input` called out since they need a human.
  */
-import type { SessionStatus } from '@docket/types';
+import type { SessionStatus } from '@docket/athena/agent-contract';
 import { cn } from '@docket/ui';
 import { ActorAvatar } from '@docket/ui/components';
 import { Sparkles } from '@docket/ui/icons';

@@ -7,7 +7,7 @@
  * The dialog shell owns selection and loading only. Focused sections live under `item-drawer/` so
  * editing task links, relationships, fields, or sync actions does not grow this orchestrator.
  */
-import type { CalendarItemOut } from '@docket/types';
+import type { CalendarItemOut } from '@docket/planning/calendar-contract';
 import {
   Dialog,
   DialogContent,

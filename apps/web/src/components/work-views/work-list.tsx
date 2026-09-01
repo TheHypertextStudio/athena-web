@@ -1,11 +1,9 @@
 'use client';
 
-import {
-  defaultEntityDisplay,
-  entityNavigationSnapshotFromWorkViewRow,
-  type Health,
-  type WorkViewActor,
-} from '@docket/types';
+import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
+import { entityNavigationSnapshotFromWorkViewRow } from '../../lib/contracts/entity-navigation';
+import { type Health } from '@docket/work/capability-contract';
+import { type WorkViewActor } from '@docket/work/work-view-contract';
 import { ListCell, ListRow, ListView } from '@docket/ui/components';
 import { Calendar } from '@docket/ui/icons';
 import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';

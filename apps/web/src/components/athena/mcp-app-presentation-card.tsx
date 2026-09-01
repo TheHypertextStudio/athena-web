@@ -1,7 +1,7 @@
 'use client';
 
 import type { JSX } from 'react';
-import type { McpAppPresentation } from '@docket/types';
+import type { McpAppPresentation } from '@docket/integrations/mcp-apps-contract';
 import type { McpAppResource } from '@docket/integrations/mcp-apps';
 
 import { McpAppView } from '@/components/athena/mcp-app-view';

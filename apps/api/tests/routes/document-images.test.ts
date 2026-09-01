@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { DocumentImageOut } from '@docket/types';
+import type { DocumentImageOut } from '@docket/work/document-image-contract';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type documentImageRouter from '../../src/routes/document-images';

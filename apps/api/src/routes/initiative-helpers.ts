@@ -8,8 +8,8 @@ import {
   program,
   project,
 } from '@docket/db';
-import type { Health } from '@docket/types';
-import type { InitiativeDetail, InitiativeOut } from '@docket/types';
+import type { Health } from '@docket/work/capability-contract';
+import type { InitiativeDetail, InitiativeOut } from '@docket/work/initiative-contract';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 

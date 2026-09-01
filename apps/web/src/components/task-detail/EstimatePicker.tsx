@@ -15,7 +15,7 @@
  * estimation off should show no Estimate row at all, and that is a decision the call site makes
  * by not rendering this component, not something this component silently no-ops.
  */
-import { ESTIMATION_SCALES, type EstimationScale } from '@docket/types';
+import { ESTIMATION_SCALES, type EstimationScale } from '../../lib/contracts/organization';
 import { EnumPicker, type PickerOption } from '@docket/ui/components';
 import type { JSX } from 'react';
 

@@ -23,14 +23,14 @@
  *
  * @see {@link useComposerOptions} for the owner option source.
  */
+import { ActorId } from '@docket/identity-access/ids';
+import { type Health } from '@docket/work/capability-contract';
 import {
-  ActorId,
-  type Health,
   type InitiativeOut,
   type InitiativePriority,
   type InitiativeStatus,
   type InitiativeUpdateCadence,
-} from '@docket/types';
+} from '@docket/work/initiative-contract';
 import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
 import { ActorPicker } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';

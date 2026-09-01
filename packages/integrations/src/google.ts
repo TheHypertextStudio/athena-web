@@ -22,7 +22,7 @@ import type {
   ResourceRef,
   TaskPushOp,
 } from './connector';
-import type { ExternalResourceType } from '@docket/types';
+import type { ExternalResourceType } from '@docket/connections/resource-provider-contract';
 import { ConnectorError } from './connector-error';
 import type {
   ConnectorProviderClient,

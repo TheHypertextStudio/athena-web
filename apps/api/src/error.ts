@@ -3,7 +3,7 @@
  *
  * @remarks
  * Handlers throw these domain errors; {@link onError} maps each to its HTTP status
- * and emits the `@docket/types` {@link Problem} shape as `application/problem+json`.
+ * and emits the `domain packages` {@link Problem} shape as `application/problem+json`.
  */
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import {
@@ -11,7 +11,7 @@ import {
   type FieldIssue,
   type FieldIssueCode,
   type ProblemCode,
-} from '@docket/types';
+} from './contracts/errors';
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ZodError } from 'zod';

@@ -14,7 +14,7 @@ import type {
   agentSession as AgentSessionTable,
   sessionActivity as SessionActivityTable,
 } from '@docket/db';
-import { publicProblemTitle } from '@docket/types';
+import { publicProblemTitle } from '../../src/contracts/errors';
 
 import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';

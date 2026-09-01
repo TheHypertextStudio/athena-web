@@ -21,7 +21,7 @@
  * browser's today from a zone behind it is asking for a day that has not happened yet, which the API
  * correctly refuses. The client has no business deciding which day it is.
  */
-import type { HighlightPatch, HighlightsDayOut } from '@docket/types';
+import type { HighlightPatch, HighlightsDayOut } from '../../lib/contracts/highlights';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';

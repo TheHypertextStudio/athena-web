@@ -1,6 +1,6 @@
 import { satisfies } from '@docket/authz';
 import { actor, dailyPlanItem, db, hub, role, task, team } from '@docket/db';
-import type { HubTodayCompleteOut } from '@docket/types';
+import type { HubTodayCompleteOut } from '../contracts/hub';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 

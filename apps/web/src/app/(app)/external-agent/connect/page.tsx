@@ -1,6 +1,6 @@
 'use client';
 
-import { oauthScopesForConnector } from '@docket/types';
+import { oauthScopesForConnector } from '@docket/identity-access/google-oauth-contract';
 import { Button } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX, type ReactNode } from 'react';
 

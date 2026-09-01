@@ -8,7 +8,7 @@ API transport, persistence, or provider-action behavior.
 
 **Architecture:** `@docket/automation` owns the declarative `on → when → then` rule grammar and
 the side-effect-free predicate/event evaluators. API code keeps rule persistence, event projection,
-handler registration, logging, re-entrancy, and action dispatch. `@docket/types` becomes a
+handler registration, logging, re-entrancy, and action dispatch. the retired contract package becomes a
 one-way facade for the moved grammar while retaining branded-ID API DTOs.
 
 **Tech Stack:** TypeScript, Zod, Vitest, pnpm workspace manifests and lockfile, domain registry,
@@ -25,7 +25,7 @@ AST-backed import policies.
 - Preserve existing predicate semantics exactly: missing paths are `undefined`; `and` is vacuously
   true; `or` is false when empty; numeric comparisons require numbers; `contains` supports arrays
   and strings; absent match fields are wildcards.
-- `@docket/types` may re-export owned schemas but must not duplicate their runtime definitions.
+- the retired contract package may re-export owned schemas but must not duplicate their runtime definitions.
 
 ## Task 1: Characterize the portable rule language
 
@@ -33,7 +33,7 @@ AST-backed import policies.
 
 - Create: `domains/automation/tests/contracts.test.ts`
 - Create: `domains/automation/tests/evaluation.test.ts`
-- Read as behavior oracles: `packages/types/tests/dto/automation.test.ts`,
+- Read as behavior oracles: `the deleted legacy type warehouse tests/dto/automation.test.ts`,
   `apps/api/tests/lib/automation/predicate.test.ts`, and
   `apps/api/tests/lib/automation/engine.test.ts`
 
@@ -97,10 +97,10 @@ AST-backed import policies.
 
 **Files:**
 
-- Modify: `packages/types/package.json`
-- Modify: `packages/types/src/automation.ts`
-- Modify: `packages/types/src/recurrence.ts`
-- Modify: `packages/types/tests/dto/automation.test.ts`
+- Modify: `the deleted legacy type warehouse/package.json`
+- Modify: `domains/automation/src/contracts.ts`
+- Modify: `apps/api/src/contracts/recurrence.ts`
+- Modify: `the deleted legacy type warehouse tests/dto/automation.test.ts`
 - Modify: `apps/api/package.json`
 - Modify: `apps/api/src/lib/automation/predicate.ts`
 - Modify: `apps/api/src/lib/automation/engine.ts`
@@ -121,7 +121,7 @@ AST-backed import policies.
 
 - [x] **Step 2: Make Types one-way**
 
-  Replace the six portable schema/type definitions in `packages/types/src/automation.ts` with
+  Replace the six portable schema/type definitions in `domains/automation/src/contracts.ts` with
   explicit value-and-type re-exports from `@docket/automation/contracts`. Retain
   `AutomationRuleCreate`, `AutomationRuleUpdate`, `AutomationRuleRemoved`, and
   `AutomationRuleOut`, since their branded IDs and API transport fields remain Types-owned.

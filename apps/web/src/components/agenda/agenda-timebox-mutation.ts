@@ -9,13 +9,11 @@
  * from letting an older rollback overwrite a newer edit. Setup is transactional: if any cache
  * patch throws, earlier patches are reversed before the queue lease is released.
  */
-import {
-  type AgendaOut,
-  type DailyPlanItemOut,
-  type HubTodayOut,
-  OrganizationId,
-  TaskId,
-} from '@docket/types';
+import { type AgendaOut } from '@docket/planning/agenda-contract';
+import { type DailyPlanItemOut } from '@docket/planning/daily-plan-contract';
+import { type HubTodayOut } from '../../lib/contracts/hub';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { TaskId } from '@docket/work/ids';
 import { type DefaultError, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 
 import { CALENDAR_ITEMS_PREFIX } from '@/components/calendar/calendar-mutation-cache';

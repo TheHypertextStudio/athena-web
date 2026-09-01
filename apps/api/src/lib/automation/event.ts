@@ -11,7 +11,7 @@
  * no connectors, no env) so the projection contract is testable in isolation. See
  * `docs/engineering/specs/automations.md`.
  */
-import { DOCKET_ENTITY_KIND } from '@docket/types';
+import { DOCKET_ENTITY_KIND } from '@docket/connections/event-contract';
 
 import type { EmitEventInput } from '../../routes/event-emit';
 

@@ -34,8 +34,12 @@ import {
   integration,
   syncRun,
 } from '@docket/db';
-import type { HighlightSourceState, HighlightsDayOut, SourceSystemKind } from '@docket/types';
-import { ACTIVITY_PROVIDER_IDS, PROVIDER_CATALOG } from '@docket/types';
+import type { HighlightSourceState, HighlightsDayOut } from '../../contracts/highlights';
+import type { SourceSystemKind } from '@docket/connections/event-contract';
+import {
+  ACTIVITY_PROVIDER_IDS,
+  PROVIDER_CATALOG,
+} from '@docket/connections/provider-catalog-contract';
 import type { z } from 'zod';
 import { and, asc, desc, eq, gte, inArray, isNull, lt } from 'drizzle-orm';
 

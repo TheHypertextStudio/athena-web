@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { PublicConfigOut } from '@docket/types';
+import { PublicConfigOut } from '@docket/identity-access/public-config-contract';
 
 import type configRouter from '../../src/routes/config';
 import { appWithSession } from '../support/routes-harness';

@@ -11,7 +11,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import { publicProblemTitle } from '@docket/types';
+import { publicProblemTitle } from '../../src/contracts/errors';
 import { ConnectorError } from '@docket/integrations';
 import { ProviderError } from '@docket/connections/provider-error';
 

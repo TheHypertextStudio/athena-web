@@ -7,22 +7,19 @@
  * merges tenant data (fan-out queries per membership, each item carries its own org id).
  */
 import { auditEvent, db, event, hub as hubTable, notification } from '@docket/db';
+import { HighlightOut, HighlightPatch, HighlightsDayOut } from '../contracts/highlights';
 import {
-  HighlightOut,
-  HighlightPatch,
-  HighlightsDayOut,
   HubActivityOut,
   HubInboxOut,
   HubPortfolioOut,
-  HubPreferences,
   HubSearchOut,
   HubTodayCompleteOut,
   HubTodayOut,
-  ListQuery,
-  StreamPageOut,
-  StreamQuery,
-} from '@docket/types';
-import type { HubPreferences as HubPreferencesValue } from '@docket/types';
+} from '../contracts/hub';
+import { HubPreferences } from '@docket/planning/hub-preferences-contract';
+import { ListQuery } from '../contracts/pagination';
+import { StreamPageOut, StreamQuery } from '../contracts/stream';
+import type { HubPreferences as HubPreferencesValue } from '@docket/planning/hub-preferences-contract';
 import { and, asc, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

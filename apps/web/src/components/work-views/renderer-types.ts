@@ -4,7 +4,7 @@ import type {
   ProjectViewRow,
   TaskViewRow,
   WorkViewGroup,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
 import type { ViewTarget } from '@docket/work/view-contract';
 import { formatCalendarDate } from '@/lib/format-date';
 

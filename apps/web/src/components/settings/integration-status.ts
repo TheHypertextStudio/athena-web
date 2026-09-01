@@ -14,7 +14,7 @@
  * text the provider wrote; what the reader needs is what to *do*, which is application-owned copy
  * and always the same for a given state.
  */
-import type { IntegrationOut } from '@docket/types';
+import type { IntegrationOut } from '@docket/connections/integration-contract';
 
 import { relativeTime } from './format-time';
 

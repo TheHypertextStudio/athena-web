@@ -19,7 +19,7 @@
  * pass for every user later in `rows`.
  */
 import { calendarConnection, db } from '@docket/db';
-import type { CalendarProvider } from '@docket/types';
+import type { CalendarProvider } from '@docket/planning/calendar-contract';
 import { ne } from 'drizzle-orm';
 
 import { drainDueCalendarItemWrites } from '../calendar/calendar-outbox';

@@ -13,7 +13,7 @@ import {
   passkeyAuthenticatorKind,
   passkeyAuthenticatorKindLabel,
   type PasskeyAuthenticatorKind,
-} from '@docket/types';
+} from '@docket/identity-access/passkey';
 import { cn } from '@docket/ui';
 import { EmptyState } from '@docket/ui/components';
 import {

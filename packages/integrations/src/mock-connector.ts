@@ -8,7 +8,10 @@
  * counter and timestamps anchor to an injectable `now` (defaulting to
  * {@link FIXED_NOW}). Exercises the import / read-only-mirror / link logic offline.
  */
-import { PROVIDER_CATALOG, providerSourceSystem } from '@docket/types';
+import {
+  PROVIDER_CATALOG,
+  providerSourceSystem,
+} from '@docket/connections/provider-catalog-contract';
 
 import type { ActivitySource } from './activity-source';
 import {

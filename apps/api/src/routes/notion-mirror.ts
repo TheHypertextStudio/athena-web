@@ -23,7 +23,8 @@ import {
   NotionWorkspacePerson,
 } from '@docket/connections/notion/mirror-contract';
 import type { MirrorParentPage } from '@docket/connections/notion/mirror-port';
-import { ConnectorConfig, SyncRunOut, CursorQuery, pageOf } from '@docket/types';
+import { ConnectorConfig, SyncRunOut } from '@docket/connections/integration-contract';
+import { CursorQuery, pageOf } from '../contracts/pagination';
 import { and, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

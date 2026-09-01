@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { OrganizationId, TaskId } from '@docket/types';
+import { OrganizationId } from '@docket/identity-access/ids';
+import { TaskId } from '@docket/work/ids';
 
 const { nextPush, nextReplace, scrollTo } = vi.hoisted(() => ({
   nextPush: vi.fn(),

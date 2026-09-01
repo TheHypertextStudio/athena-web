@@ -9,7 +9,7 @@
  * re-enrichment). {@link runDetailBuilders} is the runner; adding a tool's detail is one new
  * builder at the front of an adapter's chain.
  */
-import type { EventDetail } from '@docket/types';
+import type { EventDetail } from '@docket/connections/event-contract';
 
 /**
  * A pure detail-builder: inspect the adapter's per-event context and either claim it by

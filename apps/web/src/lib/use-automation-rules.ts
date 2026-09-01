@@ -7,7 +7,7 @@
  * delete. Editing predicates/actions is a future surface — this v1 covers list + toggle +
  * delete. See `docs/engineering/specs/email-to-task.md` §7/§9.
  */
-import type { AutomationRuleCreate, AutomationRuleOut } from '@docket/types';
+import type { AutomationRuleCreate, AutomationRuleOut } from './contracts/automation';
 import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 

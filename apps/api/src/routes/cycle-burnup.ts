@@ -1,4 +1,4 @@
-import type { CycleBurnupOut } from '@docket/types';
+import type { CycleBurnupOut } from '@docket/work/cycle-contract';
 import type { z } from 'zod';
 
 import { committedTasks, computeStats, effort, loadCycle } from './cycle-helpers';

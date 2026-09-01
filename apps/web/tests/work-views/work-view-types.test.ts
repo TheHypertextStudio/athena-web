@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { InitiativeViewDefinition, TaskViewDefinition, ViewInstanceKey } from '@docket/types';
+import {
+  InitiativeViewDefinition,
+  TaskViewDefinition,
+  ViewInstanceKey,
+} from '@docket/work/work-view-contract';
 
 import type {
   UseWorkViewOptions,

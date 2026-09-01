@@ -26,7 +26,8 @@
  * The card carries a stable `view-transition-name` (`project-node-<id>`) so filtering, relayout,
  * or expanding the canvas morphs the same node between arrangements rather than hard-swapping it.
  */
-import type { Health, ProjectStatus } from '@docket/types';
+import type { Health } from '@docket/work/capability-contract';
+import type { ProjectStatus } from '../../lib/contracts/project';
 import { ArrowRight } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { surfaceToneColor } from '@docket/ui/primitives';

@@ -24,7 +24,7 @@
  * Timebox positions are not drawn here. The shell's agenda rail renders the same day on every
  * route, and two grids of one day on one screen is the duplication that rail was extracted to end.
  */
-import type { HubTodayPlanItem } from '@docket/types';
+import type { HubTodayPlanItem } from '../../lib/contracts/hub';
 import { EmptyState, EntityList } from '@docket/ui/components';
 import { Check, ListChecks } from '@docket/ui/icons';
 import { Button, ControlGroup, Row, Skeleton, Stack } from '@docket/ui/primitives';

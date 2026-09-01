@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 
 import { ContextProvider } from '@docket/ui/components';
-import { LabelId, OrganizationId } from '@docket/types';
+import { LabelId } from '@docket/work/ids';
+import { OrganizationId } from '@docket/identity-access/ids';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

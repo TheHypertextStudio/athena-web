@@ -30,7 +30,7 @@ import {
   team,
   timeRecord,
 } from '@docket/db';
-import type { TimeAnchorSuggestion } from '@docket/types';
+import type { TimeAnchorSuggestion } from '../contracts/time';
 import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, lte } from 'drizzle-orm';
 import type { z } from 'zod';
 

@@ -22,7 +22,7 @@
  *
  * @see `app/(public)/brief.css` for the screen/print split.
  */
-import type { BriefSection, BriefWorkItem, PublicBriefOut } from '@docket/types';
+import type { BriefSection, BriefWorkItem, PublicBriefOut } from '@docket/work/publish-contract';
 import { Text } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 

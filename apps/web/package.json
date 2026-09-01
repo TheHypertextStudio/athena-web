@@ -10,13 +10,13 @@
     "script": "dev:app"
   },
   "scripts": {
-    "build": "next build && tsx ../../packages/service-worker/bin/build.ts --app-root=. --production",
+    "build": "NODE_OPTIONS=--max-old-space-size=4096 next build && tsx ../../packages/service-worker/bin/build.ts --app-root=. --production",
     "dev": "portless run --force",
     "dev:app": "tsx ../../scripts/portless-env.ts sh -c 'tsx ../../packages/service-worker/bin/build.ts --app-root=. && next dev'",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "lint": "NODE_OPTIONS=--max-old-space-size=3072 eslint .",
-    "lint:fix": "NODE_OPTIONS=--max-old-space-size=3072 eslint . --fix",
+    "lint": "NODE_OPTIONS=--max-old-space-size=3072 eslint . --cache --cache-location ../../node_modules/.cache/eslint/web --cache-strategy content",
+    "lint:fix": "NODE_OPTIONS=--max-old-space-size=3072 eslint . --fix --cache --cache-location ../../node_modules/.cache/eslint/web --cache-strategy content",
     "test": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest run",
     "test:watch": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest",
     "test:coverage": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest run --coverage --exclude tests/components/canvas/graph-layout-performance.test.ts",
@@ -39,7 +39,7 @@
     "@docket/integrations": "workspace:*",
     "@docket/markdown-tree": "workspace:*",
     "@docket/notifications": "workspace:*",
-    "@docket/types": "workspace:*",
+    "@docket/planning": "workspace:*",
     "@docket/ui": "workspace:*",
     "@docket/work": "workspace:*",
     "@emotion/cache": "^11.14.0",
@@ -70,7 +70,8 @@
     "marked": "17.0.6",
     "next": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@docket/brand": "workspace:*",

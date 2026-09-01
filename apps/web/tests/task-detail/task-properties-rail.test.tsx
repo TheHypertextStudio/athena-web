@@ -14,7 +14,7 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import type { TaskDetail, TaskProvenance } from '@docket/types';
+import type { TaskDetail, TaskProvenance } from '@docket/work/task-model';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

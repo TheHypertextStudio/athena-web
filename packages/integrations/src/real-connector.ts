@@ -23,7 +23,7 @@
  * response-mapping path here is pure and unit-tested through the injected client; only
  * the real network call (in {@link defaultHttpClient}) is the untestable IO edge.
  */
-import { providerSourceSystem } from '@docket/types';
+import { providerSourceSystem } from '@docket/connections/provider-catalog-contract';
 
 import type {
   ConnectInput,

@@ -19,7 +19,7 @@
  * label resolution are injected from the page's already-loaded teams (Phase B data), so the value
  * chooser needs no extra fetch.
  */
-import type { CycleOut } from '@docket/types';
+import type { CycleOut } from '@docket/work/cycle-contract';
 
 import { statusFieldOptions, statusRankOf } from '@/components/entity-display/work-status';
 import { type FieldCatalog, type FieldOption } from '@/components/views/field-catalog';

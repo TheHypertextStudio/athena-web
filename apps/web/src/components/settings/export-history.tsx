@@ -1,6 +1,6 @@
 'use client';
 
-import type { AccountExportOut } from '@docket/types';
+import type { AccountExportOut } from '@docket/identity-access/account-contract';
 import { type JSX } from 'react';
 
 import { formatCalendarDate } from '@/lib/format-date';

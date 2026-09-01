@@ -8,7 +8,7 @@
  * small lifecycle actions the API supports: add phone, verify pending destinations, make active
  * destinations primary, and disable destinations without deleting delivery history.
  */
-import type { ContactPointCreate, ContactPointOut } from '@docket/notifications';
+import type { ContactPointCreate, ContactPointOut } from '@docket/notifications/schemas';
 import { WriteError } from './write-error';
 import { cn } from '@docket/ui';
 import { EmptyState } from '@docket/ui/components';

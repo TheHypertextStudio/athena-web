@@ -9,10 +9,10 @@ import {
   IntegrationDirectoryOut,
   IntegrationOut,
   IntegrationUpdate,
-  pageOf,
   SyncRunOut,
-  TaskOut,
-} from '@docket/types';
+} from '@docket/connections/integration-contract';
+import { pageOf } from '../contracts/pagination';
+import { TaskOut } from '@docket/work/task-model';
 import { providerErrorKind } from '@docket/connections/provider-error';
 import { isConnectorError, uninstallInstallation, type ImportedItem } from '@docket/integrations';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';

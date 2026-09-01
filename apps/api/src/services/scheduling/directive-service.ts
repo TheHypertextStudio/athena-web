@@ -26,8 +26,8 @@ import type {
   ReconcileDisposition,
   ReviewPromptKey,
   ReviewStepKey,
-} from '@docket/types';
-import { REVIEW_PROMPT_KEYS } from '@docket/types';
+} from '@docket/planning/scheduling-directive-contract';
+import { REVIEW_PROMPT_KEYS } from '@docket/planning/scheduling-directive-contract';
 import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
 
@@ -51,7 +51,7 @@ import {
   loadSchedulingPreferences,
   moveCalendarItem,
 } from './repository';
-import { addDays, instantAt } from './zoned-time';
+import { addDays, instantAt } from '@docket/planning/zoned-time';
 
 /** The fixed questions the end-of-day review asks, in order. */
 const REVIEW_PROMPTS: Readonly<Record<ReviewPromptKey, string>> = Object.freeze({

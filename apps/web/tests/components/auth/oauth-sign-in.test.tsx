@@ -13,7 +13,7 @@
  * test against, so the button must be withheld until the stage opens rather than offered to
  * everyone and refused for most.
  */
-import type { PublicConfigOut } from '@docket/types';
+import type { PublicConfigOut } from '@docket/identity-access/public-config-contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { JSX } from 'react';

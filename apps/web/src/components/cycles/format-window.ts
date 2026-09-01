@@ -7,7 +7,7 @@
  * between the two ends) so a banner can show how much runway is left.
  *
  * Everything here is anchored to **UTC calendar days**, and the range string is produced by the
- * shared {@link defaultCycleName} in `@docket/types` — the same function the API uses to derive a
+ * shared {@link defaultCycleName} in `domain packages` — the same function the API uses to derive a
  * cycle's `displayName`. Both choices fix real defects:
  *
  * - The window bounds are UTC instants (`2026-07-27T00:00:00.000Z`). Formatting them with a
@@ -20,7 +20,7 @@
  *   whole UTC calendar days, which yields 7 for the auto-rolled
  *   `[Mon 00:00:00.000Z, Sun 23:59:59.999Z]` window *and* 7 for a hand-created `[Jul 1, Jul 7]`.
  */
-import { defaultCycleName } from '@docket/types';
+import { defaultCycleName } from '@docket/work/cycle-contract';
 
 /** Milliseconds in a whole day. */
 const DAY_MS = 86_400_000;

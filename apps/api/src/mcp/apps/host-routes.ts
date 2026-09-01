@@ -34,7 +34,7 @@ import {
   type RemoteToolDescriptor,
   type RemoteUiResource,
 } from '@docket/integrations';
-import { MCP_UI_MIME_TYPE, parseMcpAppModelContext } from '@docket/types';
+import { MCP_UI_MIME_TYPE, parseMcpAppModelContext } from '@docket/integrations/mcp-apps-contract';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

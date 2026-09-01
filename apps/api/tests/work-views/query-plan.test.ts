@@ -2,7 +2,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import { TaskWorkViewQueryRequest } from '@docket/types';
+import { TaskWorkViewQueryRequest } from '@docket/work/work-view-contract';
 
 import { queryWorkView } from '../../src/lib/work-views/query';
 import { getDb, seedBaseOrg } from '../support/routes-harness';

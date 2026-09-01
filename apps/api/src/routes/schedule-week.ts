@@ -12,7 +12,7 @@
  * payload rather than an assertion in a document.
  */
 import { db, genId, hub } from '@docket/db';
-import type { SchedulingCommitment } from '@docket/types';
+import type { SchedulingCommitment } from '@docket/planning/scheduling-contract';
 import {
   SchedulingPreferencesOut,
   SchedulingPreferencesUpdate,
@@ -22,7 +22,7 @@ import {
   WorkShapeProfile,
   WORK_SHAPES,
   WORK_SHAPE_PROFILES,
-} from '@docket/types';
+} from '@docket/planning/scheduling-contract';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -44,7 +44,7 @@ import {
 import { generateWeek, toWeekPlan } from '../services/scheduling/week-service';
 import { planWeek } from '../services/scheduling/week-planner';
 import { EMPTY_ACTUALS } from '../services/scheduling/duration-model';
-import { localDateString, weekStartOf } from '../services/scheduling/zoned-time';
+import { localDateString, weekStartOf } from '@docket/planning/zoned-time';
 
 /** Resolve (or 404) the caller's Hub from the session user. */
 async function resolveHub(userId: string): Promise<{ hubId: string }> {

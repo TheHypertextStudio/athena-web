@@ -3,7 +3,7 @@ import type {
   InitiativeAttentionSeverity,
   InitiativeStatus,
   InitiativeUpdateCadence,
-} from '@docket/types';
+} from '@docket/work/initiative-contract';
 
 const CADENCE_DAYS: Record<Exclude<InitiativeUpdateCadence, 'none'>, number> = {
   weekly: 7,

@@ -12,7 +12,7 @@
  * definition*, not the data it can surface. All color comes from semantic tokens via the
  * {@link Badge} variant.
  */
-import type { ViewScope } from '@docket/types';
+import type { ViewScope } from '@docket/work/saved-view-contract';
 import { type LucideIcon, LayoutGrid, User, Users } from '@docket/ui/icons';
 import { Badge } from '@docket/ui/primitives';
 import type { JSX } from 'react';

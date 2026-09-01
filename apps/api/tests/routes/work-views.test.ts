@@ -8,7 +8,6 @@ import {
   FractionalRank,
   InitiativeWorkViewQueryRequest,
   TaskWorkViewFacetRequest,
-  TimestampString,
   WorkViewFacetResponse,
   WorkViewOrderRequest,
   type WorkViewFacetResponse as WorkViewFacetResponseValue,
@@ -19,7 +18,8 @@ import {
   type ProjectViewRow,
   type TaskViewRow,
   type WorkViewQueryResponse as WorkViewQueryResponseValue,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
+import { TimestampString } from '@docket/planning/date-time';
 
 import { appWithActor, fakeSession, getDb, seedBaseOrg } from '../support/routes-harness';
 import type workViewRoutes from '../../src/routes/work-views';

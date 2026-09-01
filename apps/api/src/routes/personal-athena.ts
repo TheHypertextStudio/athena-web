@@ -23,7 +23,7 @@ import {
   PersonalMcpConnectionOut,
   PersonalMcpConnectionPreviewOut,
   PersonalMcpConnectionUpdate,
-} from '@docket/types';
+} from '@docket/athena/athena-contract';
 import { and, asc, eq, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

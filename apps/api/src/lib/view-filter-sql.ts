@@ -11,7 +11,7 @@
  */
 import { event } from '@docket/db';
 import type { ViewFilter } from '@docket/db';
-import { ViewFilterOp } from '@docket/types';
+import { ViewFilterOp } from '@docket/work/saved-view-contract';
 import {
   and,
   type AnyColumn,

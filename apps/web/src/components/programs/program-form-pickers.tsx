@@ -8,7 +8,8 @@
  * Owner is the one optional axis: a template cannot store one, because an owner who leaves the
  * workspace would turn every template naming them into a template that fails to apply.
  */
-import type { Health, ProgramStatus, Visibility } from '@docket/types';
+import type { Health, Visibility } from '@docket/work/capability-contract';
+import type { ProgramStatus } from '@docket/work/program-contract';
 import { ActorPicker, EnumPicker, type PickerOption } from '@docket/ui/components';
 import { Activity } from '@docket/ui/icons';
 import { type JSX, useMemo } from 'react';

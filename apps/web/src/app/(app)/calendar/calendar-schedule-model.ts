@@ -2,7 +2,7 @@ import type {
   CalendarItemOut,
   ScheduleComparisonItemOut,
   ScheduleComparisonOut,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
 import { formatDay } from '@/components/date-picker';

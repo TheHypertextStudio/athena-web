@@ -493,10 +493,10 @@ timebox was completed from its elapsed calendar window.
 
 ### 9.1 Storage
 
-The DB owns the time tables and their cross-workspace Hub boundary. API routes own validation,
-clock commands, authorization, and report queries. `@docket/types` owns the Zod DTOs and
-discriminated unions. The web app accesses all reads/writes through the standard typed TanStack
-Query definitions in `data-layer.md`.
+The DB owns the time tables and their cross-workspace Hub boundary. Planning owns portable time IDs,
+time-sharing contracts, and interval rules. API routes own HTTP DTOs, validation, clock commands,
+authorization, and report queries. The web app accesses all reads and writes through the standard
+typed TanStack Query definitions in `data-layer.md`.
 
 The Time service emits typed domain observations for meaningful record lifecycle events (started,
 stopped, submitted) only after the time transaction commits. The activity feed is a downstream

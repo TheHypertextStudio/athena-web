@@ -1,4 +1,5 @@
-import type { SearchDocumentFamily, SearchDocumentKind, SourceSystemKind } from '@docket/types';
+import type { SearchDocumentFamily, SearchDocumentKind } from '../contracts/search';
+import type { SourceSystemKind } from '@docket/connections/event-contract';
 
 /** Structured route metadata persisted on a search document. */
 export type SearchRouteDraft = Record<string, unknown> & { href: string };

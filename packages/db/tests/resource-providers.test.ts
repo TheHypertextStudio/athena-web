@@ -1,4 +1,7 @@
-import { RESOURCE_PROVIDERS, ResourceProvider } from '@docket/types';
+import {
+  RESOURCE_PROVIDERS,
+  ResourceProvider,
+} from '@docket/connections/resource-provider-contract';
 import { describe, expect, it } from 'vitest';
 
 import { resourceProvider } from '../src/enums';

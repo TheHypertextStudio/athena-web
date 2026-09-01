@@ -13,7 +13,7 @@
  * than replacing it. The same add-a-server form is reused inline from the Athena chat surface
  * (see {@link AddMcpConnectorForm}), so a connector never has to be added from Settings alone.
  */
-import type { McpIntegrationOut } from '@docket/types';
+import type { McpIntegrationOut } from '@docket/connections/integration-contract';
 import { WriteError } from './write-error';
 import { Cable } from '@docket/ui/icons';
 import {

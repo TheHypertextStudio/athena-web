@@ -6,6 +6,7 @@
   "license": "UNLICENSED",
   "description": "Actionable-work contracts and application rules shared by Docket delivery runtimes.",
   "exports": {
+    "./ids": "./src/ids.ts",
     "./task-contract": "./src/task-contract.ts",
     "./task-drafting": "./src/task-drafting.ts",
     "./task-titles": "./src/task-titles.ts",
@@ -13,7 +14,27 @@
     "./planning-timeframe": "./src/planning-timeframe.ts",
     "./relation-contract": "./src/relation-contract.ts",
     "./view-contract": "./src/view-contract.ts",
-    "./vocabulary": "./src/vocabulary.ts"
+    "./vocabulary": "./src/vocabulary.ts",
+    "./capability-contract": "./src/contracts/capability.ts",
+    "./initiative-contract": "./src/contracts/initiative.ts",
+    "./program-contract": "./src/contracts/program.ts",
+    "./cycle-contract": "./src/contracts/cycle.ts",
+    "./milestone-contract": "./src/contracts/milestone.ts",
+    "./task-model": "./src/contracts/task.ts",
+    "./work-status-contract": "./src/contracts/work-status.ts",
+    "./work-view-contract": "./src/contracts/work-view.ts",
+    "./entity-display-contract": "./src/contracts/entity-display.ts",
+    "./label-contract": "./src/contracts/label.ts",
+    "./comment-contract": "./src/contracts/comment.ts",
+    "./attachment-contract": "./src/contracts/attachment.ts",
+    "./document-image-contract": "./src/contracts/document-image.ts",
+    "./update-contract": "./src/contracts/update.ts",
+    "./saved-view-contract": "./src/contracts/saved-view.ts",
+    "./template-contract": "./src/contracts/template.ts",
+    "./subject-ref-contract": "./src/contracts/subject-ref.ts",
+    "./slug-contract": "./src/contracts/slug.ts",
+    "./publish-contract": "./src/contracts/publish.ts",
+    "./workflow": "./src/workflow.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -25,6 +46,7 @@
     "clean": "rm -rf .turbo *.tsbuildinfo"
   },
   "dependencies": {
+    "@docket/identity-access": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {

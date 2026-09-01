@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { z, type ZodError } from 'zod';
 
 import type { AppEnv } from '../../src/context';
-import { publicProblemTitle, type FieldIssue } from '@docket/types';
+import { publicProblemTitle, type FieldIssue } from '../../src/contracts/errors';
 import {
   ApiError,
   AuthError,

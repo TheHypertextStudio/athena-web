@@ -5,7 +5,7 @@ import {
   ESTIMATION_SCALES,
   type EstimationScale,
   type WorkspaceSettingsOut,
-} from '@docket/types';
+} from '../../../../../../lib/contracts/organization';
 import { Field, Select, Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { LoadFailure } from '@/components/settings/load-failure';

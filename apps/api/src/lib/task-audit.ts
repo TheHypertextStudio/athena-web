@@ -34,7 +34,8 @@
  * mutation, paid once, on the write.
  */
 import { actor, auditEvent, cycle, db, genId, milestone, program, project, task } from '@docket/db';
-import { defaultCycleName, type TaskActivityChange } from '@docket/types';
+import { defaultCycleName } from '@docket/work/cycle-contract';
+import { type TaskActivityChange } from '@docket/connections/activity-contract';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { emitFieldChange } from '../routes/event-emit';

@@ -1,7 +1,8 @@
 'use client';
 
 /** Task metadata and progress shared by both Focus surfaces. */
-import type { TaskDetail, WorkflowState } from '@docket/types';
+import type { TaskDetail } from '@docket/work/task-model';
+import type { WorkflowState } from '@docket/work/workflow';
 import { Text } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 

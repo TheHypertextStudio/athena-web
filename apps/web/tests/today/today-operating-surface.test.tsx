@@ -4,11 +4,9 @@ import {
   type HubTodayPlanItem,
   type HubTodayStatusCard,
   type HubTodaySuggestion,
-  InitiativeId,
-  MilestoneId,
-  OrganizationId,
-  ProjectId,
-} from '@docket/types';
+} from '../../src/lib/contracts/hub';
+import { InitiativeId, MilestoneId, ProjectId } from '@docket/work/ids';
+import { OrganizationId } from '@docket/identity-access/ids';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

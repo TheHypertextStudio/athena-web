@@ -1,6 +1,6 @@
 'use client';
 
-import type { AccountExportOptionsOut } from '@docket/types';
+import type { AccountExportOptionsOut } from '@docket/identity-access/account-contract';
 import { WriteError } from './write-error';
 import { Button, Checkbox, Surface } from '@docket/ui/primitives';
 import { SettingsGroup } from './settings-group';

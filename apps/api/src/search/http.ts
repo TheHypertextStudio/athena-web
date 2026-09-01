@@ -1,4 +1,5 @@
-import { SearchDocumentFamily, SearchDocumentKind, SourceSystemKind } from '@docket/types';
+import { SearchDocumentFamily, SearchDocumentKind } from '../contracts/search';
+import { SourceSystemKind } from '@docket/connections/event-contract';
 import { z } from 'zod';
 
 function csvEnum<T extends z.ZodEnum>(schema: T) {

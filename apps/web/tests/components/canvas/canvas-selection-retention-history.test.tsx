@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ObjectCommandIn, ObjectCommandResult } from '@docket/types';
+import type { ObjectCommandResult } from '../../../src/lib/contracts/object-command';
 
 import type { CanvasPropertySnapshot, ObjectRef } from '@/lib/actions';
 
@@ -78,7 +78,7 @@ function HistoryControls(): React.JSX.Element {
                 property: 'projectId',
                 value: 'project-after',
               },
-            } as ObjectCommandIn,
+            },
             {
               historyLabel: 'Change Project',
               title: 'Project changed',

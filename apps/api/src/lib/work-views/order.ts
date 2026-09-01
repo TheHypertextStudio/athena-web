@@ -6,7 +6,7 @@ import {
   WorkViewOrderResponse,
   type WorkViewOrderRequest,
   type WorkViewOrderResponse as WorkViewOrderResponseValue,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 

@@ -6,6 +6,7 @@
   "license": "UNLICENSED",
   "description": "Portable Automation Rules contracts and pure evaluation for Docket delivery runtimes.",
   "exports": {
+    "./ids": "./src/ids.ts",
     "./contracts": "./src/contracts.ts",
     "./evaluation": "./src/evaluation.ts"
   },

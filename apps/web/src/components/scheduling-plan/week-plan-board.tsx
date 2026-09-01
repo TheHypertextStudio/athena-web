@@ -14,7 +14,7 @@
  * at a glance is about sequence and kind, and a proportional day grid at seven-column width turns
  * a twenty-minute reading block into an unreadable sliver.
  */
-import type { UnplacedDemandOut, WeekPlanOut } from '@docket/types';
+import type { UnplacedDemandOut, WeekPlanOut } from '@docket/planning/scheduling-contract';
 import { Button, ControlGroup, Stack, Text, Toolbar } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { MapPin, Users } from '@docket/ui/icons';

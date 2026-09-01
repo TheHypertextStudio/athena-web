@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 
-import type { TaskWorkViewQueryRequest } from '@docket/types';
+import type { TaskWorkViewQueryRequest } from '@docket/work/work-view-contract';
 
 import { ApiError } from '../../src/error';
 import {

@@ -18,7 +18,8 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import { LabelId, OrganizationId } from '@docket/types';
+import { LabelId } from '@docket/work/ids';
+import { OrganizationId } from '@docket/identity-access/ids';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

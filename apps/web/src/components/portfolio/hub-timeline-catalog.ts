@@ -11,7 +11,7 @@
  *
  * Like every catalog this is a pure projection with no state and no writes.
  */
-import type { HubPortfolioSwimlane, HubProjectBar } from '@docket/types';
+import type { HubPortfolioSwimlane, HubProjectBar } from '../../lib/contracts/hub';
 
 import {
   type TimelineCatalog,

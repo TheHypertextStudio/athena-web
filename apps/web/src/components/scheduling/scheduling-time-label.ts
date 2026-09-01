@@ -1,12 +1,12 @@
 import type { ScheduleItemLaneBounds } from './scheduling-date-lanes';
-import { moveScheduleInstantRange } from './scheduling-exact-move';
-import { resizeScheduleInstantRange } from './scheduling-exact-resize';
+import { moveScheduleInstantRange } from '@docket/planning/exact-move';
+import { resizeScheduleInstantRange } from '@docket/planning/exact-resize';
 import {
   resolveScheduleWallInstant,
   resolveScheduleWallTime,
   scheduleInstantAt,
   scheduleWallPositionForInstant,
-} from './scheduling-wall-time';
+} from '@docket/planning/wall-time';
 import type {
   ScheduleGestureMode,
   ScheduleGesturePreview,

@@ -20,7 +20,7 @@
  * {@link HoverCard} preview on hover/focus, and right-clicking (or long-pressing) the row opens
  * a {@link ContextMenu} mirroring the sort/dismiss actions at the cursor.
  */
-import type { TaskProvenance } from '@docket/types';
+import type { TaskProvenance } from '@docket/work/task-model';
 import {
   ActorAvatar,
   ListCell,

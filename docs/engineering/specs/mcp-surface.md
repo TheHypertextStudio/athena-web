@@ -204,7 +204,7 @@ This is how an agent that started **read-only** (engineering plan / product §4)
 ### 3.1 Conventions
 
 - **Naming:** `snake_case`, verb-first, ≤128 chars (spec §"Tool Names"). Allowed chars: `[A-Za-z0-9_.-]`.
-- **`inputSchema` / `outputSchema`:** authored as **Zod** in `@docket/types`, converted to JSON Schema 2020-12 via `zod-to-json-schema` (or Zod 4 native `z.toJSONSchema`). `outputSchema` is provided for **every** tool; the result MUST populate `structuredContent` AND a serialized-JSON `TextContent` block (spec §"Structured Content", backwards compat).
+- **`inputSchema` / `outputSchema`:** authored as **Zod** in the retired contract package, converted to JSON Schema 2020-12 via `zod-to-json-schema` (or Zod 4 native `z.toJSONSchema`). `outputSchema` is provided for **every** tool; the result MUST populate `structuredContent` AND a serialized-JSON `TextContent` block (spec §"Structured Content", backwards compat).
 - **`orgId` argument:** every org-scoped tool takes `orgId` = the Organization **id**, which `workspaces` supplies. An earlier draft of this spec mandated the slug; the code has always taken the id, and `workspaces` returning both closed the discoverability gap that the slug was meant to solve.
 - **Names work wherever ids do**, for every _other_ reference: `assignee: "Sarah"`, `project: "Platform Migration"`, `state: "In Review"` all resolve server-side (`descriptors.ts`). Matching runs exact → prefix → substring and accepts only an unambiguous hit. An ambiguous name elicits when the client can answer, and otherwise comes back listing the candidates. Task titles are deliberately **not** resolvable — they repeat too often to name one by.
 - **Annotations (verified defaults from `ToolAnnotations`):** `readOnlyHint` default `false`; `destructiveHint` default `true` (meaningful only when not read-only); `idempotentHint` default `false`; `openWorldHint` default `true`. Every Docket mutation sets `openWorldHint: false` (closed world — Docket's own DB) **except** `link_external` and `run_agent` (they touch external systems → `true`). We set all four explicitly to avoid relying on defaults.
@@ -304,10 +304,10 @@ Documents are self-contained (the host serves them under a deny-all CSP) and tak
 
 ### 3.3 Where the definitions actually live
 
-This section used to carry a `@docket/types` fragment sketch and then ~350 lines of per-tool
+This section used to carry the retired contract package fragment sketch and then ~350 lines of per-tool
 input/output/annotation definitions. Both are deleted rather than updated, because both had already
 drifted from the code in ways that mattered: the sketch typed ids as `z.string().uuid()` (they are
-Crockford-base32 ULIDs, branded per entity in `packages/types/src/primitives.ts`) and used
+Crockford-base32 ULIDs, branded per entity in `domain-local ID modules`) and used
 `snake_case` field names the API never spoke, while the tool definitions described a surface that
 no longer exists — `run_view`, `start_connector_link`, `trigger_agent_session`,
 `add_to_daily_plan`, and the fourteen per-field task tools.
@@ -319,7 +319,7 @@ evidence for what happens to one. The code is the specification:
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | Every tool's input/output + annotations | `apps/api/src/mcp/*-tool.ts`, `write-tools.ts`, `view-plan-tools.ts`, `content-tools.ts`, `session-tools.ts` |
 | Scope per tool                          | `TOOL_SCOPE` in `apps/api/src/mcp/scope.ts`                                                                  |
-| Branded ids and shared enums            | `packages/types/src/primitives.ts` and its siblings                                                          |
+| Branded ids and shared enums            | `domain-local ID modules` and its siblings                                                                   |
 | Name→id resolution                      | `apps/api/src/mcp/descriptors.ts`                                                                            |
 | Change sets and undo                    | `apps/api/src/mcp/change-set.ts`                                                                             |
 | Widgets                                 | `apps/api/src/mcp/apps/`                                                                                     |
@@ -391,7 +391,7 @@ Each `{var}` is completable via the **completion API** (§5 capabilities). `mime
 | `docket://{org}/agent/{id}`      | Agent         | provider connection (endpoint/protocol — **no credentials**), `grants[]`, `approval_policy`, accountable owner, guidance.                                                                                                                                  |
 | `docket://{org}/view/{id}`       | Saved View    | View definition (permission-filtered); executing a stored view is not supported; `list_work` takes filters as arguments.                                                                                                                                   |
 
-**`resources/read` contract:** returns `contents: [{ uri, mimeType: "application/json", text: <JSON projection> }]`. The projection is a **Zod-validated** read DTO in `@docket/types` (one per type) so the shape is stable. Not-found → JSON-RPC `-32002`; no-grant → `-32002` (do NOT leak existence to unauthorized callers — return not-found, not forbidden).
+**`resources/read` contract:** returns `contents: [{ uri, mimeType: "application/json", text: <JSON projection> }]`. The projection is a **Zod-validated** read DTO in the retired contract package (one per type) so the shape is stable. Not-found → JSON-RPC `-32002`; no-grant → `-32002` (do NOT leak existence to unauthorized callers — return not-found, not forbidden).
 
 ### 4.4 Subscriptions
 

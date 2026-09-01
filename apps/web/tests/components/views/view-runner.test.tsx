@@ -15,14 +15,10 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import {
-  DEFAULT_WORK_STATUSES,
-  OrganizationId,
-  ProjectId,
-  TaskId,
-  TeamId,
-  type TaskOut,
-} from '@docket/types';
+import { DEFAULT_WORK_STATUSES } from '@docket/work/work-status-contract';
+import { OrganizationId, TeamId } from '@docket/identity-access/ids';
+import { ProjectId, TaskId } from '@docket/work/ids';
+import { type TaskOut } from '@docket/work/task-model';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 

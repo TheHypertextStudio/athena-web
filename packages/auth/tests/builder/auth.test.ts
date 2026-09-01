@@ -5,7 +5,7 @@ import type * as DocketEnvApi from '@docket/env/api';
 import type * as DocketMail from '@docket/mail';
 import type * as GoogleDirectory from '../../src/google-directory';
 import type { Mailer, OutboundMessage } from '@docket/mail';
-import { SESSION_OWNER_HEADER } from '@docket/types';
+import { SESSION_OWNER_HEADER } from '@docket/identity-access/session-contract';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { assertDefined } from '@docket/test-utils';

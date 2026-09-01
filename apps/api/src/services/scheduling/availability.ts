@@ -16,11 +16,14 @@
  * is the difference between "reading is scheduled where reading actually happens" and "reading is
  * a desk block you will skip".
  */
-import type { AvailabilityWindow, AvailabilityWindowKind } from '@docket/types';
+import type {
+  AvailabilityWindow,
+  AvailabilityWindowKind,
+} from '@docket/planning/scheduling-contract';
 
-import type { Interval, Span } from './intervals';
-import { mergeIntervals, spanMinutes, subtractIntervals } from './intervals';
-import { instantAt, localDateString, weekDates, weekdayOf } from './zoned-time';
+import type { Interval, Span } from '@docket/planning/intervals';
+import { mergeIntervals, spanMinutes, subtractIntervals } from '@docket/planning/intervals';
+import { instantAt, localDateString, weekDates, weekdayOf } from '@docket/planning/zoned-time';
 
 /** A pre-existing commitment the planner must schedule around. */
 export interface BusyItem {

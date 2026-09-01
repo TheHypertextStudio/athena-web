@@ -2,15 +2,8 @@
 
 import {
   FractionalRank,
-  HubPreferences,
-  OrganizationWorkViewDefault,
-  OrganizationWorkViewDefaultBody,
   PersonalWorkViewState,
   type PersonalWorkViewState as PersonalWorkViewStateValue,
-  SavedWorkViewCreate,
-  type SavedWorkViewCreate as SavedWorkViewCreateValue,
-  type SavedWorkViewOut,
-  SavedWorkViewOut as SavedWorkViewOutSchema,
   type InitiativeWorkViewFacetRequest,
   type InitiativeWorkViewQueryRequest,
   type ProgramWorkViewFacetRequest,
@@ -28,7 +21,16 @@ import {
   type WorkViewQueryRequest as WorkViewQueryRequestValue,
   WorkViewQueryResponse,
   type WorkViewQueryResponse as WorkViewQueryResponseValue,
-} from '@docket/types';
+} from '@docket/work/work-view-contract';
+import { HubPreferences } from '@docket/planning/hub-preferences-contract';
+import {
+  OrganizationWorkViewDefault,
+  OrganizationWorkViewDefaultBody,
+  SavedWorkViewCreate,
+  type SavedWorkViewCreate as SavedWorkViewCreateValue,
+  type SavedWorkViewOut,
+  SavedWorkViewOut as SavedWorkViewOutSchema,
+} from '@docket/work/saved-view-contract';
 import type { ViewTarget } from '@docket/work/view-contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';

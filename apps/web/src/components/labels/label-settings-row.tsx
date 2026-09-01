@@ -11,7 +11,8 @@
  * The count is the reason a person can keep a label set small without auditing it by hand: a
  * `0` is the signal to delete, and a large number is the warning that deleting will be felt.
  */
-import type { LabelOut, TeamOut } from '@docket/types';
+import type { LabelOut } from '@docket/work/label-contract';
+import type { TeamOut } from '../../lib/contracts/team';
 import { cn } from '@docket/ui';
 import { ROW_BASE, ROW_INTERACTIVE } from '@/components/settings/setting-row';
 import { LabelChip } from '@docket/ui/components';

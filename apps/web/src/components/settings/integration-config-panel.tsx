@@ -20,7 +20,11 @@
  * current `config` (from the `integration` prop, itself sourced from the query cache) so fields
  * this panel doesn't manage (`defaultListId`, `pushNativeTasks`, …) survive the write.
  */
-import { type ConnectorConfig, type IntegrationOut, type TeamOut } from '@docket/types';
+import {
+  type ConnectorConfig,
+  type IntegrationOut,
+} from '@docket/connections/integration-contract';
+import { type TeamOut } from '../../lib/contracts/team';
 import { WriteError } from './write-error';
 import { cn } from '@docket/ui';
 import { Check } from '@docket/ui/icons';

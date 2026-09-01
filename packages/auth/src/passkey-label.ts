@@ -3,7 +3,7 @@ import {
   passkeyAuthenticatorKind,
   passkeyAuthenticatorKindLabel,
   type PasskeyAuthenticatorFacts,
-} from '@docket/types';
+} from '@docket/identity-access/passkey';
 import Bowser from 'bowser';
 
 /** The registration evidence available after Better Auth verifies a new credential. */

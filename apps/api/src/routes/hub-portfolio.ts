@@ -7,8 +7,8 @@ import {
   program,
   project,
 } from '@docket/db';
-import type { HubProgramLane, HubProjectBar } from '@docket/types';
-import type { HubPortfolioOut } from '@docket/types';
+import type { HubProgramLane, HubProjectBar } from '../contracts/hub';
+import type { HubPortfolioOut } from '../contracts/hub';
 import { and, eq, inArray, isNull, notInArray } from 'drizzle-orm';
 import type { z } from 'zod';
 

@@ -15,7 +15,7 @@
  */
 import { MenuOption } from '@docket/ui/components';
 import { Badge } from '@docket/ui/primitives';
-import type { MentionItem } from '@docket/types';
+import type { MentionItem } from '../../lib/contracts/mention';
 import { CornerDownLeft } from '@docket/ui/icons';
 
 import {

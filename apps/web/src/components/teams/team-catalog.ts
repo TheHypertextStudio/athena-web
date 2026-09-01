@@ -15,7 +15,7 @@
  * {@link import('@/components/projects/project-catalog').buildProjectCatalog} — the same unified
  * engine, declared over the fields that make sense for a team.
  */
-import type { TeamOut } from '@docket/types';
+import type { TeamOut } from '../../lib/contracts/team';
 
 import { type FieldCatalog, type FieldOption } from '@/components/views/field-catalog';
 

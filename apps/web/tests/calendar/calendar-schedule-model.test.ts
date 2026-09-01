@@ -1,10 +1,9 @@
+import { ActorId } from '@docket/identity-access/ids';
+import { CalendarItemId, CalendarLayerId } from '@docket/planning/ids';
 import {
-  ActorId,
-  CalendarItemId,
   type CalendarItemOut,
-  CalendarLayerId,
   type ScheduleComparisonOut,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 import { describe, expect, it } from 'vitest';
 
 import {

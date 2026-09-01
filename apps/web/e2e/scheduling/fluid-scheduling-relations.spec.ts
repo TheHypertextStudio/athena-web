@@ -1,5 +1,5 @@
 /** Native browser drag coverage for directed calendar-item relationships. */
-import { CalendarItemId } from '@docket/types';
+import { CalendarItemId } from '@docket/planning/ids';
 
 import { signUpAndOnboard } from '../helpers/app';
 import {

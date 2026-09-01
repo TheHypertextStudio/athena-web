@@ -23,14 +23,14 @@ import {
   timeInterval,
   timeRecord,
 } from '@docket/db';
+import type { EntityRef } from '@docket/connections/event-contract';
 import type {
-  EntityRef,
   TimeBreakdownQuery,
   TimeCategoryOut,
   TimeCyclePeriodOut,
   TimeRecordOut,
   TimeTimelineQuery,
-} from '@docket/types';
+} from '../contracts/time';
 import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 

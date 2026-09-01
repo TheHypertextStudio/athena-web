@@ -15,7 +15,11 @@
 import { createHash, randomBytes } from 'node:crypto';
 
 import { db, hub, organization, task, timeInterval, timeRecord, timeShareToken } from '@docket/db';
-import type { PublicTimerStatusOut, TimeShareTokenCreate, TimeShareTokenOut } from '@docket/types';
+import type {
+  PublicTimerStatusOut,
+  TimeShareTokenCreate,
+  TimeShareTokenOut,
+} from '@docket/planning/time-share-contract';
 import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 

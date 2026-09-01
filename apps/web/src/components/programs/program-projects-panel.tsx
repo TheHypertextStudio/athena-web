@@ -11,7 +11,7 @@
  * already established: an `EntityPicker` with a permanently-null `value` acts as a stateless
  * "add" trigger, and each row gets its own remove button.
  */
-import type { ProjectOut } from '@docket/types';
+import type { ProjectOut } from '../../lib/contracts/project';
 import { EntityPicker } from '@docket/ui/components';
 import { Plus, X } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';

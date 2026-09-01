@@ -1,4 +1,4 @@
-import type { AvailabilityWindow } from '@docket/types';
+import type { AvailabilityWindow } from '@docket/planning/scheduling-contract';
 import { describe, expect, it } from 'vitest';
 
 import { defaultAvailabilityWindows } from '../../../src/services/scheduling/availability';
@@ -15,8 +15,8 @@ import {
   planDay,
   topologicalOrder,
 } from '../../../src/services/scheduling/day-planner';
-import type { Interval } from '../../../src/services/scheduling/intervals';
-import { instantAt } from '../../../src/services/scheduling/zoned-time';
+import type { Interval } from '@docket/planning/intervals';
+import { instantAt } from '@docket/planning/zoned-time';
 import { assertDefined } from '@docket/test-utils';
 
 const TZ = 'America/Los_Angeles';

@@ -1,4 +1,4 @@
-import type { CalendarItemOut } from '@docket/types';
+import type { CalendarItemOut } from '@docket/planning/calendar-contract';
 import { describe, expect, it } from 'vitest';
 
 import { itemTimeLabel } from '../../src/components/calendar/item-drawer/presentation';

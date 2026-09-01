@@ -9,21 +9,19 @@
  * {@link useApiQuery}. Sub-reads degrade to benign defaults so the screen still renders when
  * optional data is unavailable.
  */
-import type {
-  AgentSessionOut,
-  EntityDisplayOut,
-  InitiativeOut,
-  LabelOut,
-  MemberOut,
-  MilestoneOut,
-  ProjectOut,
-  ProjectProgress,
-  ProgramOut,
-  RoleOut,
-  SessionActivityOut,
-  TaskOut,
-} from '@docket/types';
-import { defaultEntityDisplay, ProjectId, ProjectSubjectRef } from '@docket/types';
+import type { AgentSessionOut, SessionActivityOut } from '@docket/athena/agent-contract';
+import type { EntityDisplayOut } from '@docket/work/entity-display-contract';
+import type { InitiativeOut } from '@docket/work/initiative-contract';
+import type { LabelOut } from '@docket/work/label-contract';
+import type { MemberOut } from '@docket/identity-access/member-contract';
+import type { MilestoneOut } from '@docket/work/milestone-contract';
+import type { ProjectOut, ProjectProgress } from './contracts/project';
+import type { ProgramOut } from '@docket/work/program-contract';
+import type { RoleOut } from './contracts/role';
+import type { TaskOut } from '@docket/work/task-model';
+import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
+import { ProjectId } from '@docket/work/ids';
+import { ProjectSubjectRef } from '@docket/work/subject-ref-contract';
 
 import type { AgentHere } from '@/components/project-detail/agents-strip';
 import type { AgentActivityEntry } from '@/components/project-detail/agent-activity-feed';

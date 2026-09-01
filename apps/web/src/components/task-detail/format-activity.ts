@@ -12,7 +12,7 @@
  * Distinguishing "set" from "changed" matters — "changed Assignee from  to Grace" reads as a bug,
  * and an unset value must never surface as a literal "null" or a bare dash.
  */
-import type { TaskActivityOut } from '@docket/types';
+import type { TaskActivityOut } from '@docket/connections/activity-contract';
 
 /**
  * Build the one-sentence description of what an activity entry records.

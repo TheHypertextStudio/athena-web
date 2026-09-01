@@ -1,6 +1,6 @@
 'use client';
 
-import type { EntityNavigationSnapshot } from '@docket/types';
+import type { EntityNavigationSnapshot } from '../../lib/contracts/entity-navigation';
 import { useEffect, useState, type ComponentType, type JSX } from 'react';
 
 import { OfflineContent } from '@/components/offline-state';

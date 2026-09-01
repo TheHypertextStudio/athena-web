@@ -6,7 +6,7 @@
 
 **Architecture:** Add a notification-service spine around the existing `notification` inbox table rather than replacing it first. `notification_intent` owns product truth, `notification_recipient` snapshots audience expansion, `notification_delivery` tracks per-channel attempts, and the current `notification` table remains the web-channel projection. The API layer exposes user inbox/preference/contact-point routes under `/v1/me`, trusted intent routes under `/v1/notifications`, staff operational routes under `/admin/notifications`, and provider callbacks under `/internal/notifications/*`.
 
-**Tech Stack:** Hono, Drizzle/Postgres/PGlite migrations, the new `@docket/notifications` domain package for notification schemas/policy/dispatcher code, existing `@docket/types` shared primitives, existing `@docket/boundaries` `Mailer` port, Vitest route/service tests, TanStack Query web clients, existing admin/web app shells, pnpm/turbo validation.
+**Tech Stack:** Hono, Drizzle/Postgres/PGlite migrations, the new `@docket/notifications` domain package for notification schemas/policy/dispatcher code, existing the retired contract package shared primitives, existing `@docket/boundaries` `Mailer` port, Vitest route/service tests, TanStack Query web clients, existing admin/web app shells, pnpm/turbo validation.
 
 ---
 
@@ -31,7 +31,7 @@
 - Create `packages/notifications`
   - Own the notification domain surface: public schemas first, then policy, audience, preference, dispatcher, and channel adapter helpers as later milestones land.
   - Keep package-level exports small. Focused modules under `src/schemas/` own intents, recipients, deliveries, preferences, contact points, inbound events, route bodies, route queries, and route responses.
-- Modify `packages/types/src/notification.ts`
+- Modify `domains/notifications/src/contracts/notification.ts`
   - Keep current inbox DTOs working; add service-announcement-compatible notification type if the schema needs it.
 
 ### API Service Layer
@@ -120,7 +120,7 @@
 - Create: `packages/notifications/src/schemas/*`
 - Generate: `packages/db/drizzle/0023_*.sql`
 - Test: `packages/notifications` typecheck/lint/test
-- Test: `packages/types` typecheck/lint/test after removing notification-domain drift
+- Test: `the deleted legacy type warehouse` typecheck/lint/test after removing notification-domain drift
 - Test: `packages/db` typecheck
 
 - [x] **Step 1: Write type-level DTO tests by compiling desired imports**
@@ -193,7 +193,7 @@ Expected: one new migration file and updated Drizzle metadata. Inspect the SQL f
 Run:
 
 ```bash
-pnpm --filter @docket/types typecheck
+pnpm domain:check
 pnpm --filter @docket/notifications typecheck
 pnpm --filter @docket/notifications lint
 pnpm --filter @docket/notifications test
@@ -206,7 +206,7 @@ pnpm --filter @docket/api test tests/routes/notifications-inbox.test.ts
 Update `docs/WORKLOG.md` under `[NOTIF-SPEC-001]` with the schema milestone. Commit:
 
 ```bash
-git add packages/notifications packages/types packages/db docs/WORKLOG.md
+git add packages/notifications the deleted legacy type warehouse packages/db docs/WORKLOG.md
 git commit -m "feat(data): add notification service spine"
 ```
 

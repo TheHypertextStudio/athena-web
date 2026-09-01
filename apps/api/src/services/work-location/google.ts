@@ -1,8 +1,8 @@
 /** Pure Google Calendar working-location mapping and import normalization. */
-import type { WorkLocationSchedule } from '@docket/types';
+import type { WorkLocationSchedule } from '@docket/planning/work-location-contract';
 
-import { addCalendarDays, mondayWeekdayIndex } from '../../lib/recurrence/calendar-date';
-import { instantAt, localDateString, localMinuteOfDay } from '../scheduling/zoned-time';
+import { addCalendarDays, mondayWeekdayIndex } from '@docket/planning/calendar-date';
+import { instantAt, localDateString, localMinuteOfDay } from '@docket/planning/zoned-time';
 import type {
   WorkLocationProviderAssertion,
   WorkLocationProviderProjection,

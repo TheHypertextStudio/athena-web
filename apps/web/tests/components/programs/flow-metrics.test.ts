@@ -1,4 +1,4 @@
-import type { ProgramWorkOut } from '@docket/types';
+import type { ProgramWorkOut } from '@docket/work/program-contract';
 import { describe, expect, it } from 'vitest';
 
 import { programFlowMetrics } from '../../../src/components/programs/flow-metrics';

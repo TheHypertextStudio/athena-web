@@ -13,7 +13,7 @@ import {
   CalendarItemKind,
   type CalendarItemPermission,
   CalendarItemSyncState,
-} from '@docket/types';
+} from '@docket/planning/calendar-contract';
 
 /** The database row shape backing a calendar layer. */
 export type CalendarLayerRow = typeof calendarLayer.$inferSelect;

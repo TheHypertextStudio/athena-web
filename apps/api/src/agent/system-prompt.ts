@@ -9,7 +9,8 @@
  * it). Org/agent `guidance` is appended verbatim when set (team-over-org layering is a
  * later concern; the column is a single text field today).
  */
-import type { ApprovalPolicy, AthenaApprovalMode } from '@docket/types';
+import type { ApprovalPolicy } from '@docket/athena/agent-contract';
+import type { AthenaApprovalMode } from '@docket/planning/hub-preferences-contract';
 
 import { PROVENANCE_SYSTEM_RULE } from './provenance';
 

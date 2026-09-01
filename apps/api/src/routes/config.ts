@@ -12,10 +12,12 @@
 import { configuredSocialProviders, type SocialProvider } from '@docket/auth';
 import {
   CONNECTOR_PROVIDER_IDS,
-  PublicConfigOut,
   connectorIdentityProvider,
+} from '@docket/connections/provider-catalog-contract';
+import {
+  PublicConfigOut,
   type SignInProvider,
-} from '@docket/types';
+} from '@docket/identity-access/public-config-contract';
 import { Hono } from 'hono';
 
 import type { AppEnv } from '../context';

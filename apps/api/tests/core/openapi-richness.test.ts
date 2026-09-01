@@ -9,7 +9,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { AgentSessionOut } from '@docket/athena/agent-contract';
+import { CommentOut } from '@docket/work/comment-contract';
+import { TaskOut } from '@docket/work/task-model';
 import { describe, expect, it } from 'vitest';
+import { OrgOut } from '../../src/contracts/organization';
+import { ProjectOut } from '../../src/contracts/project';
 
 /** The published page that deep-links readers into the Scalar reference by tag. */
 const REST_API_PAGE = resolve(import.meta.dirname, '../../../../apps/docs/developers/rest-api.mdx');
@@ -79,10 +84,8 @@ describe('openapi documentation richness', () => {
   it('documents DTO fields with descriptions', async () => {
     // Field-level descriptions live on the Zod schemas; verify a representative sample has a
     // description on every property (these flow into the spec's component schemas).
-    const t = await import('@docket/types');
-    const sample = ['TaskOut', 'OrgOut', 'ProjectOut', 'CommentOut', 'AgentSessionOut'] as const;
-    for (const name of sample) {
-      const schema = (t as Record<string, unknown>)[name];
+    const sample = { TaskOut, OrgOut, ProjectOut, CommentOut, AgentSessionOut };
+    for (const schema of Object.values(sample)) {
       interface JsonSchema {
         readonly properties?: Readonly<Record<string, { readonly description?: string }>>;
         readonly anyOf?: readonly JsonSchema[];

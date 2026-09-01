@@ -8,7 +8,8 @@
  * requires an Owner membership.
  */
 import { actor, db, grant, role } from '@docket/db';
-import { pageOf, RoleCreate, RoleOut, RoleUpdate } from '@docket/types';
+import { pageOf } from '../contracts/pagination';
+import { RoleCreate, RoleOut, RoleUpdate } from '../contracts/role';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

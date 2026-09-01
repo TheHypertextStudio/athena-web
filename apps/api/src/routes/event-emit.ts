@@ -20,7 +20,7 @@
  * {@link EmitEventInput} by hand, and so cannot invent a second vocabulary for the same fact.
  */
 import { actor, db, event } from '@docket/db';
-import { DOCKET_ENTITY_KIND } from '@docket/types';
+import { DOCKET_ENTITY_KIND } from '@docket/connections/event-contract';
 import type {
   ActorRef,
   AgentEventKind,
@@ -28,10 +28,10 @@ import type {
   ElicitationEventKind,
   EventDetail,
   EventKind,
-  StreamRelevance,
-  TaskActivityChange,
   TimerEventKind,
-} from '@docket/types';
+} from '@docket/connections/event-contract';
+import type { StreamRelevance } from '../contracts/stream';
+import type { TaskActivityChange } from '@docket/connections/activity-contract';
 import { eq } from 'drizzle-orm';
 
 import type { RoutableEvent } from '../consumers/routing';

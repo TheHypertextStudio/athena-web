@@ -24,7 +24,7 @@
  * the browser there; Linear's callback lands back on this page with `?linear_agent=connected` or
  * `?linear_agent=error` (see `integrations-linear-agent-oauth.ts`'s `settingsRedirect`).
  */
-import type { IntegrationOut } from '@docket/types';
+import type { IntegrationOut } from '@docket/connections/integration-contract';
 import { Sparkles } from '@docket/ui/icons';
 import { Badge, Button, DecorativeIcon } from '@docket/ui/primitives';
 import { useAppSearchParams } from '@/lib/app-location';

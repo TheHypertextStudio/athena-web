@@ -20,10 +20,9 @@ import {
   AthenaMailAttachmentTargetOut,
   AthenaMailboxOut,
   AthenaMailMessageOut,
-  AttachmentRemoved,
-  AttachmentSubjectType,
-  pageOf,
-} from '@docket/types';
+} from '@docket/athena/athena-mail-contract';
+import { AttachmentRemoved, AttachmentSubjectType } from '@docket/work/attachment-contract';
+import { pageOf } from '../contracts/pagination';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { Context } from 'hono';

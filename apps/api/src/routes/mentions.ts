@@ -16,7 +16,7 @@ import {
   MentionHydrateIn,
   MentionHydrateOut,
   MentionSearchOut,
-} from '@docket/types';
+} from '../contracts/mention';
 import { Hono } from 'hono';
 import { z } from 'zod';
 

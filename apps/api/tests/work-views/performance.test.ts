@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import { InitiativeWorkViewQueryRequest, WorkViewQueryResponse } from '@docket/types';
+import {
+  InitiativeWorkViewQueryRequest,
+  WorkViewQueryResponse,
+} from '@docket/work/work-view-contract';
 import { and, eq, gt, sql } from 'drizzle-orm';
 
 import { queryWorkView } from '../../src/lib/work-views/query';

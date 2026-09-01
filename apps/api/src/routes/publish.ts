@@ -26,9 +26,9 @@ import {
   PublicationStateOut,
   PublicationSubjectKind,
   PublicationUpdate,
-  pageOf,
   suggestPublicSlug,
-} from '@docket/types';
+} from '@docket/work/publish-contract';
+import { pageOf } from '../contracts/pagination';
 import { and, desc, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

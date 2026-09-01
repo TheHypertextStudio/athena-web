@@ -18,7 +18,6 @@ const DEPENDENCY_SECTIONS = [
   'peerDependencies',
 ] as const;
 const AUTOMATION_DIRECT_CONSUMER_MANIFESTS = [
-  'packages/types/package.json',
   'apps/api/package.json',
   'apps/web/package.json',
 ] as const;

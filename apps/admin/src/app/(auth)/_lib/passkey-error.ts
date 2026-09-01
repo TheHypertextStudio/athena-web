@@ -18,5 +18,9 @@ export {
   passkeyUserMessage,
   PREVIOUSLY_REGISTERED_CODE,
   SERVER_UNAVAILABLE_MESSAGE,
-} from '@docket/types';
-export type { PasskeyCeremonyError, PasskeyErrorKind, PasskeyUserMessage } from '@docket/types';
+} from '@docket/identity-access/passkey-errors-contract';
+export type {
+  PasskeyCeremonyError,
+  PasskeyErrorKind,
+  PasskeyUserMessage,
+} from '@docket/identity-access/passkey-errors-contract';

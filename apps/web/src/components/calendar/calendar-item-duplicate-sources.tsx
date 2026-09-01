@@ -12,7 +12,7 @@
  * So this is not decoration — it is the other half of the dedup. It renders nothing at all for the
  * overwhelmingly common case of an event that arrived once.
  */
-import type { CalendarItemOut, CalendarLayerOut } from '@docket/types';
+import type { CalendarItemOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
 import { Layers } from '@docket/ui/icons';
 import { type JSX, useMemo } from 'react';
 

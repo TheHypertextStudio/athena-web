@@ -1,6 +1,11 @@
 /** `@docket/api` — task dependency-graph router (mounted at `/v1/orgs/:orgId/graph`). */
 import { db, task, taskDependency, taskLabel } from '@docket/db';
-import { dependencyEdgeId, GraphOut, subtaskEdgeId, type TaskGraphNode } from '@docket/types';
+import {
+  dependencyEdgeId,
+  GraphOut,
+  subtaskEdgeId,
+  type TaskGraphNode,
+} from '@docket/work/task-model';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';

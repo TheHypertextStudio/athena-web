@@ -33,6 +33,7 @@ function moduleSpecifier(node: ts.Node): ts.StringLiteralLike | undefined {
 }
 
 function legacyRuntimeSpecifiers(sourceText: string): readonly string[] {
+  if (!sourceText.includes(RETIRED_PACKAGE)) return [];
   const sourceFile = ts.createSourceFile(
     'source.ts',
     sourceText,

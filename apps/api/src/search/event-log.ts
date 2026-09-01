@@ -1,4 +1,4 @@
-import type { CanonicalEntityKind } from '@docket/types';
+import type { CanonicalEntityKind } from '@docket/connections/event-contract';
 
 /** The source row an event should cause the search indexer to reproject. */
 export interface EventSearchReindexTarget {

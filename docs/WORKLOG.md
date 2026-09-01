@@ -8430,6 +8430,37 @@ superadmin; highest tier wins across groups.
   which blocks deploys outright — `deploy.yml` is a `workflow_call` that only runs once every CI gate
   is green. All three now derive their dates instead of stating them.
 
+#### Aligning the SDLC so a broken config cannot ship
+
+Three production incidents in one day were all configuration, none code, and none caught by review
+or a green suite — because no stage compared a value against its declaration. Four changes close
+that, each deriving from a declaration that already existed rather than adding a new one to keep:
+
+- **`checkEnvForTarget`** in `packages/env/src/registry.ts`. The registry recorded which targets a
+  var belongs to and nothing ever asked; three callers hand-rolled the filter and none agreed.
+- **A deploy-manifest gate.** `deploy.yml` interpolates `vars.*` into a heredoc and handed it
+  straight to Cloud Run. It is now parsed against the real zod schemas between writing and
+  deploying, rejecting unknown keys too — a variable worth deploying is worth declaring. Running it
+  against the real manifest found two things a fixture never would: `PORT` is required but injected
+  by Cloud Run, and secret-mounted values cannot be schema-parsed because they are not knowable
+  there. Without both, the gate would have failed every deploy.
+- **`pnpm doctor`.** Live project versus what bootstrap provisions, expectations imported from
+  `bootstrap.ts` rather than restated. Live testing found two bugs in it: a project nested under a
+  folder made `parent.id` the folder, so an org role that _was_ bound reported missing; and an
+  expired `gh` token made every variable look absent. The second drove the design — an unreadable
+  boundary reports `unknown`, never `fail`, because blocking a deploy while naming the wrong cause
+  is worse than saying nothing.
+- **`pnpm rollback`.** The guide has always stated the policy and never carried the command.
+  Testing it live found traffic lives on the _service_, not the revision — the first version would
+  have reported every revision as serving nothing.
+
+`deploy-admin` now waits for `deploy-api`; the note defending otherwise was written when both jobs
+built images, which stopped being true when builds moved out.
+
+**Learning, repeated from the operator-SSO work and now general: a tool that talks to a boundary is
+unproven until it has talked to the real one.** Every bug above survived tests and review, and each
+appeared within minutes of a live run.
+
 #### Making bootstrap actually turnkey
 
 A review of the first provisioning attempt found it did not work, and would have failed quietly.

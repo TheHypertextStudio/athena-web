@@ -146,6 +146,17 @@ jobs:
           MCP_TASKS_ENABLED: "false"
           EOF
 
+      # Drift between what bootstrap provisions and what the project actually has: a variable never
+      # created, a role granted by hand and never recorded, an API left on the default compute
+      # account. Read-only, and it reports an unreadable boundary as unknown rather than as drift,
+      # so a credential hiccup cannot block a deploy while naming the wrong cause.
+      - name: Check the project against what bootstrap provisions
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ env.REGION }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: pnpm exec tsx scripts/doctor.ts
+
       # The manifest above is interpolated from `vars.*`, so an unset repository variable becomes an
       # empty string and the API refuses to boot — which Cloud Run reports as a failed rollout with
       # no pointer to the cause. This checks it against the same env contract the container parses,

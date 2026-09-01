@@ -47,7 +47,7 @@ import { parseEnvFile } from './env-file';
 import { cloudflaredConfigYaml, launchAgentPlist, tunnelRegistrationUrls } from './tunnel';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const SA_NAME = 'docket-deploy';
+export const SA_NAME = 'docket-deploy';
 /**
  * Runtime identity the `docket-api` Cloud Run service runs as.
  *
@@ -58,7 +58,7 @@ const SA_NAME = 'docket-deploy';
  * reads your Workspace directory. A dedicated, unprivileged account is also the only thing you
  * can name when granting the *Groups Reader* admin role in the Workspace admin console.
  */
-const API_RUNTIME_SA_NAME = 'docket-api';
+export const API_RUNTIME_SA_NAME = 'docket-api';
 
 /**
  * The Workspace groups that grant operator access, and the tier each one carries.
@@ -69,11 +69,12 @@ const API_RUNTIME_SA_NAME = 'docket-api';
  * `roles/cloudidentity.groupsReader` binding can read — the same lookup against a discussion
  * forum answers `PERMISSION_DENIED`.
  */
-const OPERATOR_GROUPS: readonly { readonly localPart: string; readonly role: StaffRole }[] = [
-  { localPart: 'docket-support', role: 'support' },
-  { localPart: 'docket-finance', role: 'finance' },
-  { localPart: 'docket-admins', role: 'superadmin' },
-];
+export const OPERATOR_GROUPS: readonly { readonly localPart: string; readonly role: StaffRole }[] =
+  [
+    { localPart: 'docket-support', role: 'support' },
+    { localPart: 'docket-finance', role: 'finance' },
+    { localPart: 'docket-admins', role: 'superadmin' },
+  ];
 
 /**
  * Quote a value for safe interpolation into a `sh -c` command string.
@@ -110,9 +111,44 @@ export function normalizeWorkspaceDomain(answer: string): string {
     .replace(/\.$/, '');
   return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(bare) ? bare : '';
 }
-const AR_REPO = 'docket';
-const WIF_POOL = 'github';
-const WIF_PROVIDER = 'github-actions';
+/**
+ * Every Google Cloud API a Docket deployment depends on.
+ *
+ * @remarks
+ * Exported so `pnpm doctor` reports a disabled API against the same list `pnpm bootstrap` enables.
+ * A second copy would drift, and the failure it causes is remote from its cause: a disabled API
+ * surfaces as a 403 from whichever feature happened to need it.
+ */
+export const REQUIRED_GCP_APIS: readonly string[] = [
+  'run.googleapis.com',
+  'artifactregistry.googleapis.com',
+  'secretmanager.googleapis.com',
+  'iam.googleapis.com',
+  'iamcredentials.googleapis.com',
+  'sts.googleapis.com', // required for WIF OIDC token exchange
+  'cloudresourcemanager.googleapis.com',
+  'cloudscheduler.googleapis.com', // drives the secret-guarded cron endpoints (pnpm scheduler:setup)
+  'cloudidentity.googleapis.com', // reads Workspace group membership for operator SSO
+];
+
+/** Project roles the CI deploy account needs. */
+export const DEPLOY_SA_ROLES: readonly string[] = [
+  'roles/run.developer',
+  'roles/artifactregistry.writer',
+  'roles/secretmanager.secretAccessor',
+  'roles/iam.serviceAccountUser',
+  'roles/cloudscheduler.admin', // create/update the cron jobs from CI (pnpm scheduler:setup)
+];
+
+/** Project roles the Cloud Run runtime account needs to read its mounted secrets. */
+export const API_RUNTIME_SA_ROLES: readonly string[] = ['roles/secretmanager.secretAccessor'];
+
+/** Org-level role the runtime account needs to resolve Workspace group membership. */
+export const API_RUNTIME_ORG_ROLE = 'roles/cloudidentity.groupsReader';
+
+export const AR_REPO = 'docket';
+export const WIF_POOL = 'github';
+export const WIF_PROVIDER = 'github-actions';
 
 /** Parsed phase controls accepted by `pnpm bootstrap -- <flags>`. */
 export interface BootstrapFlags {
@@ -495,19 +531,8 @@ function setupGcp(cfg: Config): {
 } {
   section('GCP — APIs');
 
-  const apis = [
-    'run.googleapis.com',
-    'artifactregistry.googleapis.com',
-    'secretmanager.googleapis.com',
-    'iam.googleapis.com',
-    'iamcredentials.googleapis.com',
-    'sts.googleapis.com', // required for WIF OIDC token exchange
-    'cloudresourcemanager.googleapis.com',
-    'cloudscheduler.googleapis.com', // drives the secret-guarded cron endpoints (pnpm scheduler:setup)
-    'cloudidentity.googleapis.com', // reads Workspace group membership for operator SSO
-  ];
-  step(`enabling ${apis.length} APIs (may take ~30s)…`);
-  exec(`gcloud services enable ${apis.join(' ')} --project=${cfg.project}`);
+  step(`enabling ${REQUIRED_GCP_APIS.length} APIs (may take ~30s)…`);
+  exec(`gcloud services enable ${REQUIRED_GCP_APIS.join(' ')} --project=${cfg.project}`);
   ok('APIs enabled');
 
   section('GCP — Service Account');
@@ -538,14 +563,7 @@ function setupGcp(cfg: Config): {
     ok(`created: ${apiRuntimeSaEmail}`);
   }
 
-  const roles = [
-    'roles/run.developer',
-    'roles/artifactregistry.writer',
-    'roles/secretmanager.secretAccessor',
-    'roles/iam.serviceAccountUser',
-    'roles/cloudscheduler.admin', // create/update the cron jobs from CI (pnpm scheduler:setup)
-  ];
-  for (const role of roles) {
+  for (const role of DEPLOY_SA_ROLES) {
     exec(`gcloud projects add-iam-policy-binding ${cfg.project} \
       --member="serviceAccount:${saEmail}" \
       --role="${role}" \

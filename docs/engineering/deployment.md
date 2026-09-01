@@ -330,6 +330,22 @@ commits on `main`, only the `.github`-only and `scripts`-only ones would have sk
 of tonight's apps/api and packages/integrations work still triggers a web build, correctly,
 because it changes what `@docket/web` imports.
 
+### Checking a project for drift
+
+```bash
+GCP_PROJECT_ID=<project> GCP_REGION=<region> GITHUB_REPOSITORY=<owner/repo> pnpm doctor
+```
+
+Read-only. Compares the live project against what `pnpm bootstrap` provisions — enabled APIs,
+service accounts, project and organization IAM, Artifact Registry, Workload Identity, the GitHub
+variables the deploy reads, and whether the API runs as its own account rather than the project's
+default compute account. Expectations are imported from `scripts/bootstrap.ts` rather than restated,
+so the two cannot disagree.
+
+A check whose boundary could not be read reports `UNKNOWN`, not `FAIL`: an expired `gh` token makes
+every variable look absent, and calling that drift would name the wrong cause. Only a definite
+difference fails. The same check runs in `deploy.yml` before the rollout.
+
 ### Rolling back
 
 Traffic-only. Migrations are additive by policy precisely so the previous revision keeps working

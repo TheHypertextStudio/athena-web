@@ -8087,6 +8087,44 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [API-STARTUP-DEGRADE-001] Keep the API serving when a dependency is unreachable
+
+- **Completed**: 2026-09-01
+- **Priority**: P0
+- **Summary**: Production `docket-api` stopped serving entirely and logged nothing. Cloud Run
+  reported `Default STARTUP TCP probe failed ... DEADLINE_EXCEEDED` and replaced the instance,
+  which then did the same thing, 35 times. Not one line of application output appeared — no
+  listening line, no stack trace.
+
+#### Cause
+
+`server.ts` called `getContainer()` before `serve()`. The container build reaches its
+dependencies, and a dependency that is unreachable rather than broken does not fail — it waits.
+Every one of those waits sat in front of the listening socket, so an unreachable database
+produced a process that was alive, silent, and had no port open. The platform can only observe
+the port, so it read a healthy-but-waiting process as one that never started. The absence of a
+stack trace is what distinguishes this from a crash, and is why it was invisible: nothing threw.
+
+The blast radius was total. Routes that need nothing from the database went down with the rest,
+because the failure was in front of the socket rather than inside a handler.
+
+#### Change
+
+`serve()` now binds the port first; the container build follows in the same synchronous turn and
+is wrapped so a failure is logged rather than fatal. Running in that same turn preserves what the
+eager build was for — `configureNotificationTransports` completes before the event loop can
+deliver a request, so container.ts's stated contract still holds.
+
+- **Files changed**: `apps/api/src/server.ts`
+- **Validation**: `pnpm typecheck` and `pnpm lint` clean, Prettier clean, and the 38 tests across
+  the three suites that import `src/server` pass.
+- **Learnings**: A readiness probe can only see the port. Work placed before the bind converts
+  every dependency's latency into total unavailability, and a hang is worse than a crash because
+  it produces no diagnostic at all. Bind first, then degrade per route.
+- **Not covered**: There is no automated test that the process still listens when the container
+  build throws — the entrypoint binds a real port at import, so asserting this needs a spawned
+  process rather than a module import. Worth adding.
+
 ### [UI-SHEET-ANCHOR-001] Anchor a responsive-fullscreen sheet to its edge
 
 - **Completed**: 2026-09-01

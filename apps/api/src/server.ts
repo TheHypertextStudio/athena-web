@@ -218,11 +218,38 @@ server.onError(onError);
 // never configured". Forcing the build here, unconditionally, before the server accepts its first
 // request, makes the container's own stated contract ("configured once via
 // configureNotificationTransports... at process startup") actually true instead of order-dependent.
-getContainer();
-
 const nodeServer = serve({ fetch: server.fetch, port: env.PORT });
 
 console.log(`▶ Docket API listening on :${String(env.PORT)}`);
+
+// Bind the port before doing any of this, and survive it failing.
+//
+// The container build reaches its dependencies, and a dependency that is unreachable rather
+// than broken does not fail — it waits. Building before `serve()` therefore put every one of
+// those waits in front of the listening socket, so an unreachable database produced a process
+// that was alive, silent, and had no port open. The platform can only see the port, so it read
+// that as a container that never started, replaced it, and the replacement did the same thing:
+// a total outage of every route, including the ones that need nothing from the database, and
+// no log line to say why.
+//
+// Listening first inverts that. The process answers immediately, each route fails on its own
+// terms while its dependency is down, and the health checks report what is actually wrong
+// instead of the whole service disappearing.
+// The build itself still has to be eager. `getContainer()` is memoized-lazy, so
+// `configureNotificationTransports` (a container-build side effect — see container.ts) would
+// otherwise run only once something happened to call `getContainer()` first. Most requests do,
+// transitively, but `POST /v1/me/recovery-codes` dispatches a notification directly and never
+// touches the container, so on a cold process, hitting it before anything else did left the
+// module-level transports unset and the route 500'd. This call runs in the same synchronous
+// turn as `serve()` above, so it still completes before the event loop can deliver a request —
+// the contract container.ts states ("configured once... at process startup") holds.
+try {
+  getContainer();
+} catch (error) {
+  // Deliberately not fatal, and deliberately logged: a route that needs the container will
+  // still fail loudly on its own, and the ones that do not should keep serving.
+  console.error('Container build failed at startup; continuing to serve', error);
+}
 
 // Local dev has no Cloud Scheduler, so run the account sweeps in-process (export/deletion).
 if (env.APP_MODE === 'local') startDevScheduler();

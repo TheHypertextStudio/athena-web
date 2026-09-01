@@ -455,8 +455,14 @@ export function useWorkView<TTarget extends ViewTarget>(
   const [facetRetry, setFacetRetry] = useState<{
     readonly key: string;
     readonly operation: 'initial' | 'continuation';
+    readonly cursor: string | null;
   } | null>(null);
-  const facetOperation = useRef<'initial' | 'continuation'>('initial');
+  const facetOperations = useRef(
+    new Map<
+      string,
+      { readonly operation: 'initial' | 'continuation'; readonly cursor: string | null }
+    >(),
+  );
   const [groupPageState, setGroupPageState] = useState<{
     readonly key: string;
     readonly pages: WorkViewPages<WorkViewGroupPage<TTarget>['rows'][number]>;
@@ -665,6 +671,10 @@ export function useWorkView<TTarget extends ViewTarget>(
           ...facetRequest,
           ...(cursor ? { cursor } : {}),
         });
+        facetOperations.current.set(facetRequestKey, {
+          operation: cursor ? 'continuation' : 'initial',
+          cursor: cursor ?? null,
+        });
         return validatedRpcResponse(
           () =>
             api.v1.orgs[':orgId']['work-views'].facets.$post({
@@ -685,9 +695,11 @@ export function useWorkView<TTarget extends ViewTarget>(
       setFacetRetry((current) => (current?.key === facetRequestKey ? null : current));
       return;
     }
+    const operation = facetOperations.current.get(facetRequestKey);
     setFacetRetry({
       key: facetRequestKey,
-      operation: facetOperation.current,
+      operation: operation?.operation ?? 'initial',
+      cursor: operation?.cursor ?? null,
     });
   }, [facetQ.error, facetRequestKey]);
   const facetResponse = useMemo<FacetResponseFor<TTarget> | undefined>(() => {
@@ -855,7 +867,6 @@ export function useWorkView<TTarget extends ViewTarget>(
 
   const requestFacet = useCallback(
     (field: WorkViewFilterFieldKey<TTarget>, search: string): void => {
-      facetOperation.current = 'initial';
       setFacetState((current) =>
         current?.key === controllerKey &&
         String(current.field) === String(field) &&
@@ -944,14 +955,15 @@ export function useWorkView<TTarget extends ViewTarget>(
 
   const loadMoreFacets = useCallback((): void => {
     if (facetQ.hasNextPage && !facetQ.isFetchingNextPage) {
-      facetOperation.current = 'continuation';
       void facetQ.fetchNextPage();
     }
   }, [facetQ]);
 
   const retryFacet = useCallback((): void => {
     const operation =
-      facetRetry?.key === facetRequestKey ? facetRetry.operation : facetOperation.current;
+      facetRetry?.key === facetRequestKey
+        ? facetRetry.operation
+        : (facetOperations.current.get(facetRequestKey)?.operation ?? 'initial');
     if (operation === 'continuation') {
       void facetQ.fetchNextPage();
       return;
@@ -1108,7 +1120,12 @@ export function useWorkView<TTarget extends ViewTarget>(
           ? (workViewPageForPath(rootPageState.pages, [])?.error ?? null)
           : null,
       facetError: facetQ.error,
-      preferencesError: preferenceError ?? preferencesQ.error,
+      preferencesError:
+        preferenceError ??
+        (failedPreferenceWrite
+          ? new UserFacingError('Could not save your view preferences.')
+          : null) ??
+        preferencesQ.error,
       saveError: saveMutation.error,
       defaultError: defaultMutation.error,
       saving: saveMutation.isPending,

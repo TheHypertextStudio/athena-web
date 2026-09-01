@@ -921,6 +921,79 @@ describe('useWorkView facet pagination', () => {
     });
     expect(apiMocks.facets.mock.calls[3]?.[0].json.cursor).toBe('facet-page-2');
   });
+
+  it('retries a new facet request as initial after another request failed at a continuation cursor', async () => {
+    const responses = [
+      { nextCursor: 'facet-a-page-2', failure: false },
+      { nextCursor: null, failure: true },
+      { nextCursor: null, failure: true },
+      { nextCursor: null, failure: false },
+    ];
+    let calls = 0;
+    apiMocks.facets.mockImplementation(() => {
+      const response = responses[calls];
+      calls += 1;
+      if (!response || response.failure) return Promise.reject(new Error('facet provider failure'));
+      return Promise.resolve(
+        okResponse(
+          WorkViewFacetResponse.parse({
+            target: 'task',
+            buckets: [
+              {
+                field: 'assignee',
+                options: [],
+                emptyCount: 0,
+                nextCursor: response.nextCursor,
+              },
+            ],
+            distinctCount: 0,
+          }),
+        ),
+      );
+    });
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+    await waitFor(() => {
+      expect(result.current.response).toBeDefined();
+    });
+    act(() => {
+      result.current.requestFacet('assignee', '');
+    });
+    await waitFor(() => {
+      expect(result.current.facetHasMore).toBe(true);
+    });
+    act(() => {
+      result.current.loadMoreFacets();
+    });
+    await waitFor(() => {
+      expect(result.current.facetError).toBeDefined();
+    });
+    expect(apiMocks.facets.mock.calls[1]?.[0].json.cursor).toBe('facet-a-page-2');
+
+    act(() => {
+      result.current.setDefinition(
+        TaskViewDefinition.parse({
+          ...taskDefinition,
+          arrangement: { ...taskDefinition.arrangement, groupBy: 'priority' },
+        }),
+      );
+    });
+    await waitFor(() => {
+      expect(apiMocks.facets).toHaveBeenCalledTimes(3);
+    });
+    expect(apiMocks.facets.mock.calls[2]?.[0].json).not.toHaveProperty('cursor');
+    await waitFor(() => {
+      expect(result.current.facetError).toBeDefined();
+    });
+
+    act(() => {
+      result.current.retryFacet();
+    });
+    await waitFor(() => {
+      expect(apiMocks.facets).toHaveBeenCalledTimes(4);
+    });
+    expect(apiMocks.facets.mock.calls[3]?.[0].json).not.toHaveProperty('cursor');
+  });
 });
 
 describe('useWorkView preference serialization', () => {
@@ -1149,6 +1222,9 @@ describe('useWorkView preference serialization', () => {
       expect(apiMocks.patchPreferences).toHaveBeenCalledTimes(2);
     });
     expect(apiMocks.patchPreferences.mock.calls[1]?.[0].json.viewState).not.toEqual(failedPayload);
+    expect(result.current.preferencesError).toMatchObject({
+      message: 'Could not save your view preferences.',
+    });
 
     act(() => {
       result.current.retryPreferences();

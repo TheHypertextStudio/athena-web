@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { verifyProduction } from '../../scripts/production-verify';
 
-function response(body: BodyInit, init: ResponseInit, url: string): Response {
+function response(body: string, init: ResponseInit, url: string): Response {
   const value = new Response(body, init);
   Object.defineProperty(value, 'url', { value: url });
   return value;

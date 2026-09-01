@@ -63,7 +63,12 @@ function frontmatter(source: string): { readonly title?: string; readonly descri
       ?.trim();
     return value === '' ? undefined : value;
   };
-  return { title: field('title'), description: field('description') };
+  const title = field('title');
+  const description = field('description');
+  return {
+    ...(title === undefined ? {} : { title }),
+    ...(description === undefined ? {} : { description }),
+  };
 }
 
 function headingSlugs(source: string): Set<string> {

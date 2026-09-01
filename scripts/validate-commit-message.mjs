@@ -82,13 +82,19 @@ function isIndentedCode(line) {
 }
 
 function isCommitTrailer(line) {
-  return /^(?:BREAKING CHANGE|Co-authored-by|Signed-off-by|Reviewed-by|Acked-by|Refs|Fixes|Closes)(?:!?):\s+\S/.test(
+  return /^(?:BREAKING CHANGE|Co-authored-by|Docs-impact|Signed-off-by|Reviewed-by|Acked-by|Refs|Fixes|Closes)(?:!?):\s+\S/.test(
     line,
   );
 }
 
 function hasCoAuthorTrailer(raw) {
   return raw.split('\n').some((line) => /^Co-authored-by:\s+.+\s+<[^<>\s]+>$/.test(line.trim()));
+}
+
+function hasDocsImpactTrailer(raw) {
+  return raw
+    .split('\n')
+    .some((line) => /^Docs-impact:\s+(?:Updated|Not needed)\s+-\s+\S.+$/.test(line.trim()));
 }
 
 function isAgentCommitEnvironment(env) {
@@ -313,6 +319,12 @@ if (!hasBodySeparator(formattedMessage)) {
 
 if (!hasNontrivialBody(formattedMessage)) {
   fail(`every commit needs a body with at least ${minimumBodyCharacters} non-comment characters.`);
+}
+
+if ((type === 'feat' || type === 'fix') && !hasDocsImpactTrailer(formattedMessage)) {
+  fail(
+    'feat and fix commits require a Docs-impact trailer: "Updated - <page>" or "Not needed - <reason>".',
+  );
 }
 
 if (formattedMessage !== message) {

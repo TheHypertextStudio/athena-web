@@ -18,9 +18,12 @@ const agentEnvironmentVariables = [
 ] as const;
 
 function humanEnvironment(): NodeJS.ProcessEnv {
-  const env = { ...process.env };
-  for (const name of agentEnvironmentVariables) delete env[name];
-  return env;
+  return Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([name]) =>
+        !agentEnvironmentVariables.includes(name as (typeof agentEnvironmentVariables)[number]),
+    ),
+  );
 }
 
 function validate(
@@ -40,10 +43,30 @@ const validBody = `Normalize operator-provided credentials before writing them t
 `;
 
 describe('commit message policy', () => {
-  it.each(['feat', 'fix', 'chore'])('accepts the %s type with a substantive body', (type) => {
-    expect(validate(`${type}(dx): Enforce repository commit policy\n\n${validBody}`).status).toBe(
-      0,
-    );
+  it('accepts a chore with a substantive body', () => {
+    expect(validate(`chore(dx): Enforce repository commit policy\n\n${validBody}`).status).toBe(0);
+  });
+
+  it.each(['feat', 'fix'])('requires the %s type to declare its documentation impact', (type) => {
+    const result = validate(`${type}(dx): Enforce repository commit policy\n\n${validBody}`);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Docs-impact trailer');
+  });
+
+  it.each(['feat', 'fix'])('accepts the %s type with updated documentation', (type) => {
+    expect(
+      validate(
+        `${type}(dx): Enforce repository commit policy\n\n${validBody}\nDocs-impact: Updated - apps/docs/guides/manage/workflow-configuration.mdx\n`,
+      ).status,
+    ).toBe(0);
+  });
+
+  it('accepts a documented reason when a fix needs no public docs change', () => {
+    expect(
+      validate(
+        `fix(dx): Enforce repository commit policy\n\n${validBody}\nDocs-impact: Not needed - Internal commit validation only.\n`,
+      ).status,
+    ).toBe(0);
   });
 
   it.each(['build', 'ci', 'docs', 'perf', 'refactor', 'revert', 'style', 'test'])(
@@ -80,6 +103,8 @@ The copied Google client identifier contained an invisible trailing newline.
 ## Resolution
 
 Normalize secret input before persistence so OAuth requests use the exact provider identifier.
+
+Docs-impact: Not needed - Internal secret normalization only.
 `);
     expect(result.status).toBe(0);
   });
@@ -105,6 +130,7 @@ ${validBody}`,
       `fix(dx): Enforce repository commit policy
 
 ${validBody}
+Docs-impact: Not needed - Internal commit validation only.
 Co-authored-by: Codex <codex@openai.com>
 `,
       { CODEX_THREAD_ID: 'thread-1' },
@@ -116,7 +142,10 @@ Co-authored-by: Codex <codex@openai.com>
   it('formats the subject and wraps substantive body prose', () => {
     const directory = mkdtempSync(join(tmpdir(), 'docket-commit-format-'));
     const messagePath = join(directory, 'COMMIT_EDITMSG');
-    writeFileSync(messagePath, `fix(dx): enforce repository commit policy\n\n${validBody}`);
+    writeFileSync(
+      messagePath,
+      `fix(dx): enforce repository commit policy\n\n${validBody}\nDocs-impact: Not needed - Internal commit validation only.\n`,
+    );
     execFileSync(process.execPath, [validator, messagePath], { env: humanEnvironment() });
     const formatted = readFileSync(messagePath, 'utf8');
     expect(formatted).toMatch(/^fix\(dx\): Enforce repository commit policy/);

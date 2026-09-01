@@ -54,6 +54,37 @@
 
 ---
 
+### [ANDROID-CREDENTIAL-UX-001] Add native credential and restore contracts
+
+- **Status**: COMPLETED
+- **Started**: 2026-09-01
+- **Completed**: 2026-09-01
+- **Priority**: P0
+- **Description**: Provide the backward-compatible Athena contracts required by Docket Android's
+  offline-first account experience: public Google configuration, typed passkey management with
+  last-used evidence, and isolated system-managed restore credentials.
+- **Subtasks**:
+  - [x] Expose the gated Google server client ID through public configuration.
+  - [x] Add passkey last-used tracking and safe authenticated management routes.
+  - [x] Move the web Security surface to the typed passkey routes.
+  - [x] Add isolated restore-credential registration, authentication, and deletion support.
+  - [x] Validate migrations, compatibility, API behavior, and the web Security journey.
+- **Blockers**: None.
+- **Validation**: The branch was rebased onto `main` after the FedCM slice, so its migration was
+  regenerated as `0123_native_credentials` with every new column stored as timestamptz, and the
+  new `passkey-management-contract` entrypoint was registered in `domains/registry.json`; the
+  workspace policy, db, and auth suites pass on the rebased tree. Public-config, passkey route,
+  route-auth, Security UI, onboarding, auth, and database suites pass. The restore integration test proves single-use challenges, RP/native-origin
+  verification inputs, counter advancement, session issuance, registration, ownership-hidden
+  deletion, and replay rejection against migrated PGlite.
+- **Notes**: Server contracts land before Android consumes them. Existing web and older Android
+  clients remain compatible throughout the migration, and deployment remains separately
+  authorized. Better Auth's generic passkey management paths remain temporarily enabled until the
+  Android Security consumer moves to the typed routes; they are disabled in the final Android
+  milestone.
+
+---
+
 ### [DEPLOY-DOCTOR-DEPS-001] Install the production doctor's runtime dependencies
 
 - **Status**: COMPLETED

@@ -42,6 +42,7 @@ import { hasRecoveryCodes } from './backup-codes';
 import { changeEmailConfirmationEmail, recoveryCodeUsedEmail } from './emails';
 import { derivePasskeyLabel } from './passkey-label';
 import { recoveryChallenge } from './recovery-challenge';
+import { restoreCredentialPlugin, type RestoreWebAuthn } from './restore-credential';
 import { signupChallenge } from './signup-challenge';
 import { INTENT_IDENTIFIER_PREFIX, type SignupIntent } from './signup-intent';
 
@@ -59,6 +60,8 @@ export interface AuthDeps {
    * sign-in grants nothing, which is the correct posture when no directory is reachable.
    */
   readonly googleDirectory?: GoogleDirectoryPort | undefined;
+  /** Test seam for deterministic Restore Credentials ceremonies. */
+  readonly restoreWebAuthn?: RestoreWebAuthn | undefined;
 }
 
 /**
@@ -415,6 +418,20 @@ const CONNECTORS_BY_IDENTITY: Readonly<Record<string, readonly string[]>> = {
   notion: ['notion'],
 };
 
+/** Whether removing one passkey leaves another supported account-recovery path. */
+export async function canRemovePasskey(userId: string): Promise<boolean> {
+  const remaining = await db
+    .select({ id: passkeyTable.id })
+    .from(passkeyTable)
+    .where(eq(passkeyTable.userId, userId));
+  if (remaining.length > 1) return true;
+  const [hasCodes, linkedAccounts] = await Promise.all([
+    hasRecoveryCodes(userId),
+    db.select({ id: account.id }).from(account).where(eq(account.userId, userId)).limit(1),
+  ]);
+  return hasCodes || linkedAccounts.length > 0;
+}
+
 /**
  * Build the Better Auth configuration from the validated environment + injected boundaries.
  *
@@ -575,6 +592,14 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
             context,
           ),
       },
+      authentication: {
+        afterVerification: async ({ clientData }) => {
+          await db
+            .update(passkeyTable)
+            .set({ lastUsedAt: new Date() })
+            .where(eq(passkeyTable.credentialID, clientData.id));
+        },
+      },
     }),
     // Account recovery codes (backup codes). Configured backup-codes-only for this passwordless,
     // passkey-first app: `allowPasswordless` lets passkey users enable/manage codes without a
@@ -599,6 +624,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       mailer: deps.mailer,
       ...(deps.devEchoSignupCode ? { devEchoCode: true } : {}),
     }),
+    restoreCredentialPlugin(e, deps.restoreWebAuthn),
   ];
 
   // A REAL OAuth 2.0 client provider (Better Auth's `genericOAuth` plugin) that performs a
@@ -769,20 +795,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
           const currentSession = await getSessionFromCtx(ctx);
           if (!currentSession) return;
           const userId = currentSession.user.id;
-          const remaining = await db
-            .select({ id: passkeyTable.id })
-            .from(passkeyTable)
-            .where(eq(passkeyTable.userId, userId));
-          // Only the LAST passkey is at risk — with two or more, deleting one always leaves
-          // another way in.
-          if (remaining.length > 1) return;
-          const [hasCodes, linkedAccounts] = await Promise.all([
-            hasRecoveryCodes(userId),
-            db.select({ id: account.id }).from(account).where(eq(account.userId, userId)).limit(1),
-          ]);
-          // Docket is passwordless-only (no credential provider), so any `account` row is by
-          // construction an OAuth sign-in method — its existence alone means another way in.
-          if (!hasCodes && linkedAccounts.length === 0) {
+          if (!(await canRemovePasskey(userId))) {
             throw new APIError('FORBIDDEN', {
               message:
                 'Add a recovery code or a linked sign-in provider before removing your last passkey.',

@@ -51,6 +51,22 @@ function isPublicSignInProvider(provider: SocialProvider): provider is SignInPro
   );
 }
 
+/** Resolve the browser-safe Google server client ID under the existing public sign-in gate. */
+export function resolveGoogleServerClientId(
+  authEnv: {
+    readonly APP_MODE: 'local' | 'test' | 'production';
+    readonly GOOGLE_CLIENT_ID?: string | undefined;
+    readonly GOOGLE_OAUTH_PUBLIC?: boolean | undefined;
+  },
+  oauthProviders: readonly SignInProvider[],
+): string | null {
+  const publiclyOfferable =
+    authEnv.APP_MODE !== 'production' || authEnv.GOOGLE_OAUTH_PUBLIC === true;
+  return oauthProviders.includes('google') && publiclyOfferable
+    ? (authEnv.GOOGLE_CLIENT_ID ?? null)
+    : null;
+}
+
 const config = new Hono<AppEnv>().get(
   '/',
   apiDoc({
@@ -71,6 +87,7 @@ Carries nothing secret and requires no session. Related: the authenticated perso
       appMode: env.APP_MODE,
       oauthProviders,
       googleOAuthPublic: env.GOOGLE_OAUTH_PUBLIC,
+      googleServerClientId: resolveGoogleServerClientId(env, oauthProviders),
       adminGoogleSso: env.ADMIN_GOOGLE_SSO_ENABLED && oauthProviders.includes('google'),
       stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY ?? null,
       connectors,

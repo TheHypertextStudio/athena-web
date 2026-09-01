@@ -5,19 +5,27 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { addPasskey, deletePasskey, listUserPasskeys, updatePasskey } = vi.hoisted(() => ({
+const { addPasskey, deletePasskey, listPasskeys, renamePasskey } = vi.hoisted(() => ({
   addPasskey: vi.fn(),
   deletePasskey: vi.fn(),
-  listUserPasskeys: vi.fn(),
-  updatePasskey: vi.fn(),
+  listPasskeys: vi.fn(),
+  renamePasskey: vi.fn(),
 }));
 
 vi.mock('../../../src/lib/auth-client', () => ({
-  passkey: {
-    addPasskey,
-    deletePasskey,
-    listUserPasskeys,
-    updatePasskey,
+  passkey: { addPasskey },
+}));
+
+vi.mock('../../../src/lib/api', () => ({
+  api: {
+    v1: {
+      me: {
+        passkeys: {
+          $get: listPasskeys,
+          ':id': { $patch: renamePasskey, $delete: deletePasskey },
+        },
+      },
+    },
   },
 }));
 
@@ -28,9 +36,10 @@ interface PasskeyFixture {
   name: string;
   deviceType: string;
   backedUp: boolean;
-  transports: string;
-  aaguid: string;
-  createdAt: Date;
+  transports: string[];
+  aaguid: string | null;
+  createdAt: string | null;
+  lastUsedAt: string | null;
 }
 
 const CREATED_AT = new Date('2026-08-30T17:00:00.000Z');
@@ -41,9 +50,10 @@ function passkeyFixture(overrides: Partial<PasskeyFixture>): PasskeyFixture {
     name: 'MacBook passkey',
     deviceType: 'singleDevice',
     backedUp: false,
-    transports: 'internal',
+    transports: ['internal'],
     aaguid: '00000000-0000-0000-0000-000000000000',
-    createdAt: CREATED_AT,
+    createdAt: CREATED_AT.toISOString(),
+    lastUsedAt: null,
     ...overrides,
   };
 }
@@ -54,15 +64,22 @@ function wrapper(): ({ children }: { children: ReactNode }) => JSX.Element {
 }
 
 function renderPasskeys(records: PasskeyFixture[]): void {
-  listUserPasskeys.mockResolvedValue({ data: records, error: null });
+  listPasskeys.mockResolvedValue(
+    new Response(JSON.stringify({ items: records }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
   render(<PasskeysSection />, { wrapper: wrapper() });
 }
 
 beforeEach(() => {
   addPasskey.mockReset().mockResolvedValue({ data: {}, error: null });
-  deletePasskey.mockReset().mockResolvedValue({ data: {}, error: null });
-  listUserPasskeys.mockReset();
-  updatePasskey.mockReset().mockResolvedValue({ data: {}, error: null });
+  deletePasskey
+    .mockReset()
+    .mockResolvedValue(new Response(JSON.stringify({ status: true, credentialId: 'credential' })));
+  listPasskeys.mockReset();
+  renamePasskey.mockReset().mockResolvedValue(new Response(JSON.stringify(passkeyFixture({}))));
 });
 
 afterEach(cleanup);
@@ -87,16 +104,16 @@ describe('PasskeysSection', () => {
         name: 'iCloud Keychain',
         deviceType: 'multiDevice',
         backedUp: true,
-        transports: 'internal,hybrid',
+        transports: ['internal', 'hybrid'],
       }),
       passkeyFixture({ id: 'device', name: 'MacBook Touch ID' }),
       passkeyFixture({
         id: 'security-key',
         name: 'YubiKey',
-        transports: 'usb,nfc',
+        transports: ['usb', 'nfc'],
       }),
-      passkeyFixture({ id: 'phone', name: 'Nearby phone', transports: 'hybrid' }),
-      passkeyFixture({ id: 'unknown', name: 'Other passkey', transports: '' }),
+      passkeyFixture({ id: 'phone', name: 'Nearby phone', transports: ['hybrid'] }),
+      passkeyFixture({ id: 'unknown', name: 'Other passkey', transports: [] }),
     ]);
 
     await screen.findByText('iCloud Keychain');
@@ -142,7 +159,19 @@ describe('PasskeysSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
 
     await waitFor(() => {
-      expect(updatePasskey).toHaveBeenCalledWith({ id: 'passkey-1', name: 'Personal MacBook' });
+      expect(renamePasskey).toHaveBeenCalledWith({
+        param: { id: 'passkey-1' },
+        json: { name: 'Personal MacBook' },
+      });
     });
+  });
+
+  it('shows when a passkey was last used', async () => {
+    renderPasskeys([
+      passkeyFixture({ lastUsedAt: new Date('2026-08-31T17:00:00.000Z').toISOString() }),
+    ]);
+
+    const row = (await screen.findByText('MacBook passkey')).closest('li');
+    expect(row).toHaveTextContent('Last used');
   });
 });

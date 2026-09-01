@@ -45,9 +45,11 @@ export {
   type StaffSyncSweep,
 } from './staff-google-sync';
 export type { AuthDeps, AuthEnv, PasskeyUserAdapter } from './auth-builder';
+export { restoreCredentialPlugin, type RestoreWebAuthn } from './restore-credential';
 export {
   adminGoogleSsoEnabled,
   buildAuthOptions,
+  canRemovePasskey,
   canUseGoogleOAuth,
   isAdminOrigin,
   syncStaffOnGoogleCallback,

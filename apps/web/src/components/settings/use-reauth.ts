@@ -19,8 +19,10 @@
  */
 import { useCallback } from 'react';
 
-import { passkey, signIn } from '@/lib/auth-client';
+import { api } from '@/lib/api';
+import { signIn } from '@/lib/auth-client';
 import { toUserFacingError } from '@/lib/problem';
+import { unwrap } from '@/lib/query';
 
 /** The actionable error a no-passkey user sees when a sensitive action needs step-up re-auth. */
 const NO_PASSKEY_MESSAGE =
@@ -30,8 +32,8 @@ const NO_PASSKEY_MESSAGE =
 export function useReauth(): () => Promise<void> {
   return useCallback(async () => {
     // A social-only account has no passkey to challenge — surface a fix, not a cryptic failure.
-    const list = await passkey.listUserPasskeys();
-    if (!list.error && list.data.length === 0) {
+    const list = await unwrap(() => api.v1.me.passkeys.$get(), 'Could not check your passkeys.');
+    if (list.items.length === 0) {
       throw toUserFacingError(undefined, NO_PASSKEY_MESSAGE);
     }
     const result = await signIn.passkey();

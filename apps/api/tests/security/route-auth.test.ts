@@ -50,6 +50,7 @@ const PUBLIC_CONFIG_KEYS = new Set([
   'appMode',
   'connectors',
   'googleOAuthPublic',
+  'googleServerClientId',
   'mcpUrl',
   'oauthProviders',
   'stripePublishableKey',

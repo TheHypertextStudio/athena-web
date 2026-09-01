@@ -212,6 +212,7 @@ export const queryKeys = {
   accountExport: (exportId: string) => ['me', 'account', 'exports', exportId] as const,
   accountExportOptions: () => ['me', 'account', 'exports', 'options'] as const,
   recoveryCodes: () => ['me', 'recovery-codes'] as const,
+  passkeys: () => ['me', 'passkeys'] as const,
   notificationPreferences: () => ['me', 'notification-preferences'] as const,
   contactPoints: () => ['me', 'contact-points'] as const,
   /** The caller's bound phone numbers — the identities Athena answers calls from. */

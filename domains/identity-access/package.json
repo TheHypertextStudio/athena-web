@@ -18,6 +18,7 @@
     "./oauth-scope-contract": "./src/contracts/oauth-scope.ts",
     "./passkey": "./src/passkey.ts",
     "./passkey-errors-contract": "./src/contracts/passkey-errors.ts",
+    "./passkey-management-contract": "./src/contracts/passkey-management.ts",
     "./public-config-contract": "./src/contracts/public-config.ts",
     "./session-contract": "./src/contracts/session.ts",
     "./settings-image-contract": "./src/contracts/settings-image.ts",

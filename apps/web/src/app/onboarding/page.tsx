@@ -14,8 +14,10 @@ import type { OnboardingIntent, OnboardingStep } from '@/components/onboarding/t
 import { WizardShell } from '@/components/onboarding/wizard-shell';
 import { WorkspaceNameField } from '@/components/workspace-creation/workspace-name-field';
 import { useAuthenticationRecovery } from '@/components/authentication-interlock';
+import { api } from '@/lib/api';
 import { passkey, useSession } from '@/lib/auth-client';
 import { userErrorMessage } from '@/lib/problem';
+import { unwrap } from '@/lib/query';
 import { createWorkspace } from '@/lib/workspace-creation';
 
 /** The ordered steps for the individual ("just me") fork. */
@@ -81,8 +83,15 @@ export default function OnboardingPage(): JSX.Element {
   // Only ever flips the flag on (never off), so a late resolve after unmount is a harmless no-op.
   useEffect(() => {
     void (async () => {
-      const list = await passkey.listUserPasskeys();
-      if (!list.error && list.data.length === 0) setNeedsPasskey(true);
+      try {
+        const list = await unwrap(
+          () => api.v1.me.passkeys.$get(),
+          'Could not check your passkeys.',
+        );
+        if (list.items.length === 0) setNeedsPasskey(true);
+      } catch {
+        // Enrollment is an optional onboarding beat; a failed check leaves the original flow.
+      }
     })();
   }, []);
 

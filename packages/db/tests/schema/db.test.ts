@@ -108,6 +108,7 @@ import {
   organizationProductEntitlement,
   organizationWorkViewDefault,
   passkey,
+  restoreCredential,
   personalMcpConnection,
   personalMcpCredential,
   phoneCallAuthorization,
@@ -570,6 +571,21 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
             counter: 0,
             deviceType: 'singleDevice',
             backedUp: false,
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['restoreCredential'] = assertDefined(
+      (
+        await db
+          .insert(restoreCredential)
+          .values({
+            publicKey: 'restore-pk',
+            userId: ids['user'],
+            credentialID: 'restore-cred-1',
+            counter: 0,
+            deviceType: 'multiDevice',
+            backedUp: true,
           })
           .returning()
       )[0],
@@ -1051,6 +1067,7 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
       'grant',
       'user',
       'passkey',
+      'restore_credential',
     ];
     for (const table of coreTables) {
       const res = await assertDefined(client).query<{ reg: string | null }>(
@@ -1059,6 +1076,21 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
       );
       expect(res.rows[0]?.reg, `table ${table} should exist`).not.toBeNull();
     }
+  });
+
+  it('adds nullable last-use evidence to existing passkeys', async () => {
+    const columns = await assertDefined(client).query<{ column_name: string; is_nullable: string }>(
+      `select column_name, is_nullable
+       from information_schema.columns
+       where table_schema = 'public' and table_name = 'passkey' and column_name = 'last_used_at'`,
+    );
+
+    expect(columns.rows).toEqual([{ column_name: 'last_used_at', is_nullable: 'YES' }]);
+    const [stored] = await db
+      .select({ lastUsedAt: passkey.lastUsedAt })
+      .from(passkey)
+      .where(eq(passkey.id, assertDefined(ids['passkey'])));
+    expect(stored?.lastUsedAt).toBeNull();
   });
 
   it('generated a ULID id for every inserted row', () => {

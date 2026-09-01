@@ -8,6 +8,7 @@ function config(overrides: Partial<PublicConfigOut>): PublicConfigOut {
   return {
     appMode: 'production',
     oauthProviders: [],
+    googleServerClientId: null,
     connectors: [],
     mcpUrl: null,
     ...overrides,

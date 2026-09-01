@@ -40,11 +40,11 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('../../../src/lib/auth-client', () => ({
   useSession: () => ({ data: { user: { id: 'u1', name: 'Ada Lovelace' } } }),
-  passkey: { listUserPasskeys, addPasskey },
+  passkey: { addPasskey },
 }));
 
 vi.mock('../../../src/lib/api', () => ({
-  api: { v1: { orgs: { $post: orgPost } } },
+  api: { v1: { orgs: { $post: orgPost }, me: { passkeys: { $get: listUserPasskeys } } } },
 }));
 
 import OnboardingPage from '../../../src/app/onboarding/page';
@@ -58,6 +58,7 @@ function renderPage(ui: ReactElement): ReturnType<typeof render> {
   const config: PublicConfigOut = {
     appMode: 'local',
     oauthProviders: [],
+    googleServerClientId: null,
     connectors: [],
     mcpUrl: null,
   };
@@ -77,7 +78,7 @@ beforeEach(() => {
   // Default: the account already has a passkey, so the optional passkey beat stays off and connect
   // remains the terminal step (the contract the fork tests below assert).
   listUserPasskeys.mockReset();
-  listUserPasskeys.mockResolvedValue({ data: [{ id: 'pk_1' }], error: null });
+  listUserPasskeys.mockResolvedValue(jsonResponse(true, { items: [{ id: 'pk_1' }] }));
 });
 
 afterEach(() => {
@@ -171,7 +172,7 @@ describe('OnboardingPage — team fork', () => {
 describe('OnboardingPage — passkey enrollment (social sign-up)', () => {
   it('offers a passkey beat after connect when the account has none, then enrols and enters', async () => {
     // A social sign-up: no passkey yet, so the optional enrollment beat is appended.
-    listUserPasskeys.mockResolvedValue({ data: [], error: null });
+    listUserPasskeys.mockResolvedValue(jsonResponse(true, { items: [] }));
     addPasskey.mockResolvedValue({ data: { id: 'pk_new' }, error: null });
     orgPost.mockResolvedValue(
       jsonResponse(true, { organization: { id: 'org_personal', name: "Ada's space" } }),
@@ -200,7 +201,7 @@ describe('OnboardingPage — passkey enrollment (social sign-up)', () => {
   });
 
   it('lets the user skip the passkey beat straight into the workspace', async () => {
-    listUserPasskeys.mockResolvedValue({ data: [], error: null });
+    listUserPasskeys.mockResolvedValue(jsonResponse(true, { items: [] }));
     orgPost.mockResolvedValue(
       jsonResponse(true, { organization: { id: 'org_personal', name: "Ada's space" } }),
     );

@@ -143,11 +143,40 @@ export const passkey = pgTable(
     backedUp: boolean('backed_up').notNull(),
     transports: text('transports'),
     createdAt: timestamp('created_at').defaultNow(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
     aaguid: text('aaguid'),
   },
   (t) => [
     index('passkey_user_id_idx').on(t.userId),
     index('passkey_credential_id_idx').on(t.credentialID),
+  ],
+);
+
+/** A system-managed, cloud-backed Android restore credential, separate from visible passkeys. */
+export const restoreCredential = pgTable(
+  'restore_credential',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    publicKey: text('public_key').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    credentialID: text('credential_id').notNull(),
+    counter: integer('counter').notNull(),
+    deviceType: text('device_type').notNull(),
+    backedUp: boolean('backed_up').notNull(),
+    transports: text('transports'),
+    aaguid: text('aaguid'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('restore_credential_user_id_idx').on(t.userId),
+    uniqueIndex('restore_credential_credential_id_idx').on(t.credentialID),
   ],
 );
 

@@ -51,6 +51,7 @@ import meAthena from './routes/me-athena';
 import meCalendar from './routes/me-calendar';
 import meIdentities from './routes/me-identities';
 import { createMeNotificationsRoutes } from './routes/me-notifications';
+import mePasskeys from './routes/me-passkeys';
 import meRecovery from './routes/me-recovery';
 import meSessions from './routes/me-sessions';
 import workLocation from './routes/work-location';
@@ -94,6 +95,8 @@ for (const path of [
   '/me/account/*',
   '/me/recovery-codes',
   '/me/recovery-codes/*',
+  '/me/passkeys',
+  '/me/passkeys/*',
 ]) {
   app.use(path, authoritativeSessionMiddleware);
 }
@@ -191,6 +194,7 @@ const routes = app
   .route('/me/calendar', meCalendar)
   .route('/me/work-location', workLocation)
   .route('/me/identities', meIdentities)
+  .route('/me/passkeys', mePasskeys)
   .route('/me/notifications', createMeNotificationsRoutes(notificationInbox))
   .route(
     '/me/notification-preferences',

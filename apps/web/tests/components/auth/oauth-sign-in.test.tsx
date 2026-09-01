@@ -39,6 +39,7 @@ function config(overrides: Partial<PublicConfigOut> = {}): PublicConfigOut {
   return {
     appMode: 'local',
     oauthProviders: [],
+    googleServerClientId: null,
     connectors: [],
     mcpUrl: null,
     ...overrides,

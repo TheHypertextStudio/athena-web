@@ -38,6 +38,7 @@ afterEach(() => {
 const LOCAL_CONFIG: PublicConfigOut = {
   appMode: 'local',
   oauthProviders: [],
+  googleServerClientId: null,
   connectors: [],
   mcpUrl: null,
 };
@@ -165,6 +166,7 @@ describe('StepConnect (prod / OAuth gating)', () => {
     const prodConfig: PublicConfigOut = {
       appMode: 'production',
       oauthProviders: [],
+      googleServerClientId: null,
       connectors: [],
       mcpUrl: null,
     };
@@ -182,6 +184,7 @@ describe('StepConnect (prod / OAuth gating)', () => {
     const prodConfig: PublicConfigOut = {
       appMode: 'production',
       oauthProviders: ['google'],
+      googleServerClientId: null,
       connectors: ['gmail', 'calendar', 'gtasks'],
       mcpUrl: null,
     };

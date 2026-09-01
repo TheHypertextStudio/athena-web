@@ -1049,6 +1049,7 @@ describe('auth config', () => {
       'two-factor',
       'recovery-challenge',
       'signup-challenge',
+      'restore-credential',
       'generic-oauth',
       'jwt',
       'oauth-provider',
@@ -1343,6 +1344,7 @@ describe('buildAuthOptions env-gating', () => {
       'two-factor',
       'recovery-challenge',
       'signup-challenge',
+      'restore-credential',
       'next-cookies',
     ]);
     // Passwordless: no email/password sign-in.
@@ -1434,6 +1436,57 @@ describe('buildAuthOptions env-gating', () => {
       clientData: { response: { transports: ['usb', 'nfc'] } },
     });
     expect(kindFallback).toEqual({ name: 'Security key' });
+  });
+
+  it('records the asserted credential as recently used after successful authentication', async () => {
+    const { buildAuthOptions } = await import('../../src/index');
+    const { db, passkey: passkeyTable, user } = await import('@docket/db');
+    const { eq } = await import('drizzle-orm');
+    await migrate(db as never, {
+      migrationsFolder: resolve(import.meta.dirname, '../../../db/drizzle'),
+    });
+    const credentialID = `credential-${randomUUID()}`;
+    const [owner] = await db
+      .insert(user)
+      .values({ name: 'Passkey owner', email: `${randomUUID()}@example.com` })
+      .returning();
+    const userId = assertDefined(owner).id;
+    const [stored] = await db
+      .insert(passkeyTable)
+      .values({
+        publicKey: 'public-key',
+        userId,
+        credentialID,
+        counter: 0,
+        deviceType: 'singleDevice',
+        backedUp: false,
+      })
+      .returning();
+    const passkeyId = assertDefined(stored).id;
+    const opts = buildAuthOptions(baseEnv, MAILER_DEPS);
+    const plugin = (opts.plugins ?? []).find((candidate) => candidate.id === 'passkey');
+    type AfterVerification = (args: {
+      ctx: unknown;
+      verification: unknown;
+      clientData: { id: string };
+    }) => Promise<void>;
+    const authentication = (
+      plugin as { options?: { authentication?: { afterVerification?: AfterVerification } } }
+    ).options?.authentication;
+
+    expect(typeof authentication?.afterVerification).toBe('function');
+    if (!authentication?.afterVerification) return;
+    await authentication.afterVerification({
+      ctx: {},
+      verification: {},
+      clientData: { id: credentialID },
+    });
+
+    const [updated] = await db
+      .select({ lastUsedAt: passkeyTable.lastUsedAt })
+      .from(passkeyTable)
+      .where(eq(passkeyTable.id, passkeyId));
+    expect(updated?.lastUsedAt).toBeInstanceOf(Date);
   });
 
   it('allows the explicit Android origin without changing browser passkey origins', async () => {
@@ -1670,6 +1723,7 @@ describe('buildAuthOptions env-gating', () => {
       'two-factor',
       'recovery-challenge',
       'signup-challenge',
+      'restore-credential',
       'next-cookies',
     ]);
   });
@@ -1879,6 +1933,7 @@ describe('buildAuthOptions env-gating', () => {
       'two-factor',
       'recovery-challenge',
       'signup-challenge',
+      'restore-credential',
       'jwt',
       'oauth-provider',
       'next-cookies',
@@ -1903,6 +1958,7 @@ describe('buildAuthOptions env-gating', () => {
       'two-factor',
       'recovery-challenge',
       'signup-challenge',
+      'restore-credential',
       'jwt',
       'oauth-provider',
       'next-cookies',

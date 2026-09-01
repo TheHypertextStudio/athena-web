@@ -58,6 +58,13 @@ export const PublicConfigOut = z
       .boolean()
       .optional()
       .describe('False while Google OAuth is staged for designated test users only.'),
+    /** Google OAuth web client ID used as Android's server client ID when Google is offerable. */
+    googleServerClientId: z
+      .string()
+      .nullable()
+      .describe(
+        'The Google OAuth web client ID Android supplies to Google Identity Services, or null when Google is unconfigured or not publicly offerable.',
+      ),
     /** Whether the operator console offers Google Workspace sign-in. */
     adminGoogleSso: z
       .boolean()

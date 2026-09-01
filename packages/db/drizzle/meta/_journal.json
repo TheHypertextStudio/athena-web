@@ -862,6 +862,13 @@
       "when": 1788296255451,
       "tag": "0122_certain_hobgoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1788313012621,
+      "tag": "0123_native_credentials",
+      "breakpoints": true
     }
   ]
 }

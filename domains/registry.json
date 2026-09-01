@@ -118,6 +118,7 @@
         "./oauth-scope-contract",
         "./passkey",
         "./passkey-errors-contract",
+        "./passkey-management-contract",
         "./public-config-contract",
         "./session-contract",
         "./settings-image-contract",

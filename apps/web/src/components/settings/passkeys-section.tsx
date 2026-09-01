@@ -14,6 +14,10 @@ import {
   passkeyAuthenticatorKindLabel,
   type PasskeyAuthenticatorKind,
 } from '@docket/identity-access/passkey';
+import type {
+  PasskeyDeleteOut,
+  PasskeySummary,
+} from '@docket/identity-access/passkey-management-contract';
 import { cn } from '@docket/ui';
 import { EmptyState } from '@docket/ui/components';
 import {
@@ -46,51 +50,38 @@ import {
   Input,
   Skeleton,
 } from '@docket/ui/primitives';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { type JSX, useId, useState } from 'react';
 
 import { ROW_BASE, ROW_INTERACTIVE } from '@/components/settings/setting-row';
+import { api } from '@/lib/api';
 import { passkey } from '@/lib/auth-client';
 import { formatCalendarDate } from '@/lib/format-date';
+import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { toUserFacingError, userErrorMessage } from '@/lib/problem';
 import { LoadFailure } from './load-failure';
 import { SETTINGS_NODES } from './settings-capabilities';
 import { SettingsGroup } from './settings-group';
 import { WriteError } from './write-error';
 
-/** The Better Auth passkey record fields this UI renders. */
-interface PasskeyRecord {
-  readonly id: string;
-  readonly name?: string | undefined;
-  readonly deviceType: string;
-  readonly backedUp?: boolean | undefined;
-  readonly transports?: string | undefined;
-  readonly aaguid?: string | undefined;
-  readonly createdAt: string | Date;
-}
-
-/** The TanStack cache key for the signed-in user's passkey list. */
-const PASSKEYS_QUERY_KEY = ['passkeys'] as const;
-
-/** Fetch the current user's passkeys, retaining only application-owned failure copy. */
-async function fetchPasskeys(): Promise<PasskeyRecord[]> {
-  const result = await passkey.listUserPasskeys();
-  if (result.error) {
-    throw toUserFacingError(result.error, 'Could not load your passkeys.');
-  }
-  return result.data;
-}
-
 /** Return the stored label or a neutral fallback for an old unnamed passkey. */
-function passkeyLabel(record: PasskeyRecord): string {
+function passkeyLabel(record: PasskeySummary): string {
   const name = record.name?.trim();
   return name && name.length > 0 ? name : 'Passkey';
 }
 
 /** Render a passkey's creation date while tolerating a string or Date wire value. */
-function addedOn(record: PasskeyRecord): string | null {
+function addedOn(record: PasskeySummary): string | null {
+  if (!record.createdAt) return null;
   const formatted = formatCalendarDate(new Date(record.createdAt).toISOString());
   return formatted ? `Added ${formatted}` : null;
+}
+
+/** Render the most recent successful authentication date when the credential has been used. */
+function lastUsed(record: PasskeySummary): string | null {
+  if (!record.lastUsedAt) return null;
+  const formatted = formatCalendarDate(new Date(record.lastUsedAt).toISOString());
+  return formatted ? `Last used ${formatted}` : null;
 }
 
 /** The icon, label, and MD3 tone assigned to one inferred authenticator kind. */
@@ -101,7 +92,7 @@ interface AuthenticatorPresentation {
 }
 
 /** Map stored WebAuthn facts to an authenticator-kind presentation. */
-function authenticatorPresentation(record: PasskeyRecord): AuthenticatorPresentation {
+function authenticatorPresentation(record: PasskeySummary): AuthenticatorPresentation {
   const kind = passkeyAuthenticatorKind(record);
   const label = passkeyAuthenticatorKindLabel(kind);
   const presentations: Record<PasskeyAuthenticatorKind, AuthenticatorPresentation> = {
@@ -136,12 +127,15 @@ function authenticatorPresentation(record: PasskeyRecord): AuthenticatorPresenta
 
 /** The Security-tab card that lists and manages the user's passkeys. */
 export function PasskeysSection(): JSX.Element {
-  const queryClient = useQueryClient();
-  const listQ = useQuery({ queryKey: PASSKEYS_QUERY_KEY, queryFn: fetchPasskeys });
-  const [removing, setRemoving] = useState<PasskeyRecord | null>(null);
-  const [renaming, setRenaming] = useState<PasskeyRecord | null>(null);
-  const invalidate = (): Promise<void> =>
-    queryClient.invalidateQueries({ queryKey: PASSKEYS_QUERY_KEY });
+  const listQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.passkeys(),
+      () => api.v1.me.passkeys.$get(),
+      'Could not load your passkeys.',
+    ),
+  );
+  const [removing, setRemoving] = useState<PasskeySummary | null>(null);
+  const [renaming, setRenaming] = useState<PasskeySummary | null>(null);
   const add = useMutation({
     mutationFn: async () => {
       const result = await passkey.addPasskey();
@@ -150,7 +144,7 @@ export function PasskeysSection(): JSX.Element {
       }
     },
     onSuccess: () => {
-      void invalidate();
+      void listQ.refetch();
     },
   });
 
@@ -166,7 +160,7 @@ export function PasskeysSection(): JSX.Element {
     );
   }
 
-  const passkeys = listQ.data;
+  const passkeys = listQ.data.items;
   const addLabel = add.isPending ? 'Waiting for your device…' : 'Add passkey';
   const startEnrollment = (): void => {
     if (!add.isPending) add.mutate();
@@ -230,7 +224,7 @@ export function PasskeysSection(): JSX.Element {
           }}
           onRenamed={() => {
             setRenaming(null);
-            void invalidate();
+            void listQ.refetch();
           }}
         />
       ) : null}
@@ -242,7 +236,7 @@ export function PasskeysSection(): JSX.Element {
           if (!open) setRemoving(null);
         }}
         onRemoved={() => {
-          void invalidate();
+          void listQ.refetch();
         }}
       />
     </section>
@@ -251,7 +245,7 @@ export function PasskeysSection(): JSX.Element {
 
 /** Props for the optional post-creation passkey rename dialog. */
 interface RenamePasskeyDialogProps {
-  readonly record: PasskeyRecord;
+  readonly record: PasskeySummary;
   readonly onOpenChange: (open: boolean) => void;
   readonly onRenamed: () => void;
 }
@@ -265,13 +259,17 @@ function RenamePasskeyDialog({
   const nameId = useId();
   const persistedName = passkeyLabel(record);
   const [name, setName] = useState(persistedName);
-  const rename = useMutation({
-    mutationFn: async (nextName: string) => {
-      const result = await passkey.updatePasskey({ id: record.id, name: nextName });
-      if (result.error) {
-        throw toUserFacingError(result.error, 'Could not rename the passkey.');
-      }
-    },
+  const rename = useApiMutation({
+    mutationFn: (nextName: string) =>
+      unwrap(
+        () =>
+          api.v1.me.passkeys[':id'].$patch({
+            param: { id: record.id },
+            json: { name: nextName },
+          }),
+        'Could not rename the passkey.',
+      ),
+    invalidateKeys: [queryKeys.passkeys()],
     onSuccess: onRenamed,
   });
   const trimmedName = name.trim();
@@ -341,7 +339,7 @@ function RenamePasskeyDialog({
 
 /** Props for one passkey row. */
 interface PasskeyRowProps {
-  readonly record: PasskeyRecord;
+  readonly record: PasskeySummary;
   readonly onRename: () => void;
   readonly onRemove: () => void;
 }
@@ -357,7 +355,7 @@ function PasskeyRow({ record, onRename, onRemove }: PasskeyRowProps): JSX.Elemen
       <div className="min-w-0 flex-1">
         <p className="text-on-surface text-label-large truncate">{label}</p>
         <p className="text-on-surface-variant text-body-small truncate">
-          {[presentation.label, addedOn(record)].filter(Boolean).join(' · ')}
+          {[presentation.label, addedOn(record), lastUsed(record)].filter(Boolean).join(' · ')}
         </p>
       </div>
       <DropdownMenu>
@@ -384,7 +382,7 @@ function PasskeyRow({ record, onRename, onRemove }: PasskeyRowProps): JSX.Elemen
 
 /** Props for the passkey removal confirmation. */
 interface RemovePasskeyDialogProps {
-  readonly record: PasskeyRecord | null;
+  readonly record: PasskeySummary | null;
   readonly isLast: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly onRemoved: () => void;
@@ -397,13 +395,13 @@ function RemovePasskeyDialog({
   onOpenChange,
   onRemoved,
 }: RemovePasskeyDialogProps): JSX.Element {
-  const remove = useMutation({
-    mutationFn: async (id: string) => {
-      const result = await passkey.deletePasskey({ id });
-      if (result.error) {
-        throw toUserFacingError(result.error, 'Could not remove the passkey.');
-      }
-    },
+  const remove = useApiMutation<PasskeyDeleteOut, string>({
+    mutationFn: (id: string) =>
+      unwrap(
+        () => api.v1.me.passkeys[':id'].$delete({ param: { id } }),
+        'Could not remove the passkey.',
+      ),
+    invalidateKeys: [queryKeys.passkeys()],
     onSuccess: () => {
       onRemoved();
       onOpenChange(false);

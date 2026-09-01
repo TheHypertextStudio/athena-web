@@ -6,21 +6,25 @@ import { build } from 'esbuild';
 
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const workspaceRoot = resolve(apiRoot, '../..');
-const releaseVersion = JSON.parse(
-  readFileSync(resolve(workspaceRoot, 'package.json'), 'utf8'),
-).version;
+const workspaceManifest = JSON.parse(readFileSync(resolve(workspaceRoot, 'package.json'), 'utf8'));
+
+if (typeof workspaceManifest.version !== 'string' || workspaceManifest.version.length === 0) {
+  throw new Error('The workspace package version must be a non-empty string.');
+}
 
 const shared = {
   banner: {
     js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
   },
   bundle: true,
-  define: { __DOCKET_VERSION__: JSON.stringify(releaseVersion) },
   format: 'esm',
   platform: 'node',
   target: 'node24',
   packages: 'bundle',
   external: ['@electric-sql/pglite'],
+  define: {
+    __DOCKET_RELEASE_VERSION__: JSON.stringify(workspaceManifest.version),
+  },
   sourcemap: true,
 };
 

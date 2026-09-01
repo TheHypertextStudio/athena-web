@@ -515,10 +515,12 @@ offline_access marketplace`, and a bare `marketplace` names nothing in Lovelace'
   `/v1/health`, and applies a fresh PGlite migration through
   `node /app/packages/db/dist/migrate.mjs`. The full API suite passes 451 files and 5,751 tests; the
   auth suite passes 164 tests; all 266 repository-tooling tests, all 27 typecheck tasks, and all 26
-  lint tasks pass. A release follow-up injects the root semantic-release version into the ESM bundle
-  at build time, while direct source execution keeps the manifest fallback. This removes the private
-  cross-workspace JSON import that the domain-boundary gate rejected without duplicating the release
-  version. Live Cloud Run cold-start and native-origin acceptance remain the deployment gates.
+  lint tasks pass. The first hosted run also caught a production-boundary violation in the MCP
+  version lookup: source code reached across the workspace to import the root manifest. The runtime
+  builder now reads the release metadata once and substitutes it into the bundle, while source-mode
+  development uses a stable fallback. The exact 49-test delivery-boundary policy and the artifact
+  contract pass, and the generated server contains release version `1.3.0` without a cross-package
+  source import. Live Cloud Run cold-start and native-origin acceptance remain the deployment gates.
 - **Blockers**: None for implementation. Final acceptance still requires a successful production
   deployment followed by one real Credential Manager assertion and session creation on a physical
   phone; the biometric/passkey choice remains intentionally user-mediated.

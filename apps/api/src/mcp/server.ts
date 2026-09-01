@@ -13,9 +13,6 @@
  * OAuth 2.1 Resource-Server discovery metadata + Dynamic Client Registration are a
  * documented follow-up; for now the Better Auth session/bearer guard IS the auth.
  */
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { auth } from '@docket/auth';
@@ -37,21 +34,12 @@ import { installTaskProtocolHandlers } from './task-protocol';
 import { taskStoreForContext } from './task-store';
 import { registerTools } from './tools';
 
-/** Root release version injected into the production bundle by `build-runtime.mjs`. */
-declare const __DOCKET_VERSION__: string | undefined;
+/** Replaced with the root release version by the production artifact build. */
+declare const __DOCKET_RELEASE_VERSION__: string;
 
-/** Read the semantic-release version when source runs directly in development or tests. */
-function readDevelopmentRepoVersion(): string {
-  return (
-    JSON.parse(
-      readFileSync(fileURLToPath(new URL('../../../../package.json', import.meta.url)), 'utf8'),
-    ) as { version: string }
-  ).version;
-}
-
-/** The repo's release version, embedded in production and read from the root manifest in source. */
+/** The repository release version, with a stable fallback for source-mode tests and development. */
 const repoVersion =
-  typeof __DOCKET_VERSION__ === 'string' ? __DOCKET_VERSION__ : readDevelopmentRepoVersion();
+  typeof __DOCKET_RELEASE_VERSION__ === 'string' ? __DOCKET_RELEASE_VERSION__ : '0.0.0';
 
 /** The web app's public origin, with no trailing slash — also the source for {@link authorizationServerMetadata}. */
 const WEB_ORIGIN = env.WEB_URL.replace(/\/$/, '');

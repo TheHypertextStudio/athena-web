@@ -63,6 +63,7 @@ import {
 import type { WorkViewGroupPage } from './renderer-types';
 import {
   emptyWorkViewPages,
+  mergeWorkViewPageRows,
   orderedWorkViewPages,
   reduceWorkViewPages,
   workViewPageForPath,
@@ -97,6 +98,7 @@ interface QueryResponseByTarget {
 type QueryResponseFor<TTarget extends ViewTarget> = QueryResponseByTarget[TTarget];
 
 type FacetResponseFor<TTarget extends ViewTarget> = WorkViewFacetResponseForTarget<TTarget>;
+type DefaultWorkViewInput = ReturnType<typeof OrganizationWorkViewDefaultBody.parse>;
 
 interface RuntimeSchema<T> {
   parse(value: unknown): T;
@@ -450,6 +452,11 @@ export function useWorkView<TTarget extends ViewTarget>(
     readonly key: string;
     readonly response: WorkViewFacetResponseValue;
   } | null>(null);
+  const [facetRetry, setFacetRetry] = useState<{
+    readonly key: string;
+    readonly operation: 'initial' | 'continuation';
+  } | null>(null);
+  const facetOperation = useRef<'initial' | 'continuation'>('initial');
   const [groupPageState, setGroupPageState] = useState<{
     readonly key: string;
     readonly pages: WorkViewPages<WorkViewGroupPage<TTarget>['rows'][number]>;
@@ -673,6 +680,16 @@ export function useWorkView<TTarget extends ViewTarget>(
       { enabled: readyToQuery && facetRequest !== null },
     ),
   );
+  useEffect(() => {
+    if (!facetQ.error) {
+      setFacetRetry((current) => (current?.key === facetRequestKey ? null : current));
+      return;
+    }
+    setFacetRetry({
+      key: facetRequestKey,
+      operation: facetOperation.current,
+    });
+  }, [facetQ.error, facetRequestKey]);
   const facetResponse = useMemo<FacetResponseFor<TTarget> | undefined>(() => {
     const pages = facetQ.data?.pages;
     if (!pages || pages.length === 0) return undefined;
@@ -727,6 +744,10 @@ export function useWorkView<TTarget extends ViewTarget>(
   const preferenceRevision = useRef(0);
   const [preferenceWritesPending, setPreferenceWritesPending] = useState(0);
   const [preferenceError, setPreferenceError] = useState<unknown>(null);
+  const [failedPreferenceWrite, setFailedPreferenceWrite] = useState<{
+    readonly input: readonly PersonalWorkViewStateValue[];
+    readonly onLatestFailure: () => void;
+  } | null>(null);
 
   useEffect(() => {
     if (queuedPreferenceWrites.current === 0) preferredStates.current = persistedStates;
@@ -746,8 +767,11 @@ export function useWorkView<TTarget extends ViewTarget>(
           try {
             const saved = await preferenceMutation.mutateAsync(next);
             preferredStates.current = saved.viewState ?? next;
+            setPreferenceError(null);
+            setFailedPreferenceWrite((current) => (current?.input === next ? null : current));
           } catch {
             setPreferenceError(new UserFacingError('Could not save your view preferences.'));
+            setFailedPreferenceWrite({ input: next, onLatestFailure });
             if (preferenceRevision.current === revision) onLatestFailure();
           } finally {
             queuedPreferenceWrites.current -= 1;
@@ -787,10 +811,9 @@ export function useWorkView<TTarget extends ViewTarget>(
 
   const defaultMutation = useApiMutation<
     ReturnType<typeof OrganizationWorkViewDefault.parse>,
-    undefined
+    DefaultWorkViewInput
   >({
-    mutationFn: async () => {
-      const body = OrganizationWorkViewDefaultBody.parse({ definition });
+    mutationFn: async (body) => {
       return unwrap(
         () =>
           validatedRpcResponse(
@@ -806,6 +829,7 @@ export function useWorkView<TTarget extends ViewTarget>(
     },
     invalidateKeys: [queryKeys.workViewDefault(organizationId, target)],
   });
+  const [failedDefaultInput, setFailedDefaultInput] = useState<DefaultWorkViewInput | null>(null);
 
   const setDefinition = useCallback(
     (next: WorkViewDefinitionFor<TTarget>): void => {
@@ -831,6 +855,7 @@ export function useWorkView<TTarget extends ViewTarget>(
 
   const requestFacet = useCallback(
     (field: WorkViewFilterFieldKey<TTarget>, search: string): void => {
+      facetOperation.current = 'initial';
       setFacetState((current) =>
         current?.key === controllerKey &&
         String(current.field) === String(field) &&
@@ -919,9 +944,20 @@ export function useWorkView<TTarget extends ViewTarget>(
 
   const loadMoreFacets = useCallback((): void => {
     if (facetQ.hasNextPage && !facetQ.isFetchingNextPage) {
+      facetOperation.current = 'continuation';
       void facetQ.fetchNextPage();
     }
   }, [facetQ]);
+
+  const retryFacet = useCallback((): void => {
+    const operation =
+      facetRetry?.key === facetRequestKey ? facetRetry.operation : facetOperation.current;
+    if (operation === 'continuation') {
+      void facetQ.fetchNextPage();
+      return;
+    }
+    void facetQ.refetch();
+  }, [facetQ, facetRequestKey, facetRetry]);
 
   const loadMoreGroup = useCallback(
     (path: readonly string[]): void => {
@@ -929,8 +965,10 @@ export function useWorkView<TTarget extends ViewTarget>(
         groupPageState?.key === executionKey
           ? workViewPageForPath(groupPageState.pages, path)
           : undefined;
-      if (!page || page.loading || page.nextCursor === null) return;
-      void fetchGroupPage(path, page.nextCursor);
+      if (!page || page.loading) return;
+      const cursor = page.error ? page.retryCursor : page.nextCursor;
+      if (cursor === null && !page.error) return;
+      void fetchGroupPage(path, cursor ?? null);
     },
     [executionKey, fetchGroupPage, groupPageState],
   );
@@ -1026,7 +1064,10 @@ export function useWorkView<TTarget extends ViewTarget>(
     if (!first || !continuation) return first;
     return {
       ...first,
-      rows: [...first.rows, ...continuation.rows] as QueryResponseFor<TTarget>['rows'],
+      rows: mergeWorkViewPageRows(
+        first.rows,
+        continuation.rows,
+      ) as QueryResponseFor<TTarget>['rows'],
       nextCursor: continuation.nextCursor,
     };
   }, [executionKey, queryQ.data, queryQ.isPlaceholderData, rootPageState]);
@@ -1079,15 +1120,14 @@ export function useWorkView<TTarget extends ViewTarget>(
       loadMoreGroup,
       loadMoreRows,
       retryInitial,
-      retryFacet: () => {
-        void facetQ.refetch();
-      },
+      retryFacet,
       retryPreferences: () => {
         if (preferencesQ.error) {
           void preferencesQ.refetch();
           return;
         }
-        void preferenceMutation.mutateAsync(preferredStates.current);
+        if (!failedPreferenceWrite) return;
+        enqueuePreferenceWrite(failedPreferenceWrite.input, failedPreferenceWrite.onLatestFailure);
       },
       toggleCollapsedGroup,
       toggleHiddenBoardColumn,
@@ -1098,7 +1138,15 @@ export function useWorkView<TTarget extends ViewTarget>(
         await saveMutation.mutateAsync(input);
       },
       setAsDefault: () => {
-        defaultMutation.mutate(undefined);
+        const input = failedDefaultInput ?? OrganizationWorkViewDefaultBody.parse({ definition });
+        void defaultMutation
+          .mutateAsync(input)
+          .then(() => {
+            setFailedDefaultInput(null);
+          })
+          .catch(() => {
+            setFailedDefaultInput(input);
+          });
       },
     }),
     [
@@ -1123,6 +1171,8 @@ export function useWorkView<TTarget extends ViewTarget>(
       loadMoreGroup,
       loadMoreRows,
       preferenceError,
+      failedPreferenceWrite,
+      failedDefaultInput,
       preferenceWritesPending,
       preferencesQ.error,
       preferencesQ.refetch,
@@ -1135,6 +1185,7 @@ export function useWorkView<TTarget extends ViewTarget>(
       response,
       rootPageState,
       retryInitial,
+      retryFacet,
       showAllBoardColumns,
       requestFacet,
       resetPersonalOverride,
@@ -1147,6 +1198,8 @@ export function useWorkView<TTarget extends ViewTarget>(
       toggleFavoriteView,
       toggleHiddenBoardColumn,
       defaultMutation.error,
+      defaultMutation.mutateAsync,
+      enqueuePreferenceWrite,
     ],
   );
 }

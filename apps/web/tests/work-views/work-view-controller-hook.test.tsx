@@ -589,6 +589,42 @@ describe('useWorkView row pagination', () => {
     });
   });
 
+  it('merges root boundary rows by id without changing group page ownership', async () => {
+    apiMocks.getDefault.mockResolvedValue(
+      okResponse({ ...defaultResponse('task'), definition: flatTaskDefinition }),
+    );
+    apiMocks.query.mockImplementation(({ json }: { json: { cursor?: string } }) =>
+      Promise.resolve(
+        okResponse(
+          WorkViewQueryResponse.parse({
+            target: 'task',
+            rows: json.cursor ? [taskRow(1), taskRow(2)] : [taskRow(1)],
+            groups: [],
+            totalCount: 2,
+            nextCursor: json.cursor ? null : 'page-2',
+            queryFingerprint: 'sha256:0000000000000002',
+          }),
+        ),
+      ),
+    );
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+    await waitFor(() => {
+      expect(result.current.response?.rows).toHaveLength(1);
+    });
+
+    act(() => {
+      result.current.loadMoreRows();
+    });
+
+    await waitFor(() => {
+      expect(result.current.response?.rows.map((row) => row.id)).toEqual([
+        taskRow(1).id,
+        taskRow(2).id,
+      ]);
+    });
+  });
+
   it('keeps group rows available and retries only that failed continuation path', async () => {
     apiMocks.query.mockImplementation(
       ({ json }: { json: { groupPath?: readonly string[]; cursor?: string } }) => {
@@ -650,6 +686,49 @@ describe('useWorkView row pagination', () => {
         }),
       );
     });
+  });
+
+  it('retries an initial failed group page with its null cursor', async () => {
+    apiMocks.query.mockImplementation(
+      ({ json }: { json: { groupPath?: readonly string[]; cursor?: string } }) => {
+        if (!json.groupPath) {
+          return Promise.resolve(
+            okResponse(
+              WorkViewQueryResponse.parse({
+                target: 'task',
+                rows: [],
+                groups: [{ path: ['todo'], key: 'todo', label: 'To do', count: 1 }],
+                totalCount: 1,
+                nextCursor: null,
+                queryFingerprint: 'sha256:0000000000000001',
+              }),
+            ),
+          );
+        }
+        return Promise.reject(new Error('initial group failure'));
+      },
+    );
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+    await waitFor(() => {
+      expect(result.current.groupPages[0]?.error).toMatchObject({
+        message: 'Could not load tasks in this group.',
+      });
+    });
+
+    act(() => {
+      result.current.loadMoreGroup(['todo']);
+    });
+
+    await waitFor(() => {
+      expect(apiMocks.query).toHaveBeenCalledTimes(3);
+    });
+    expect(apiMocks.query).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({ groupPath: ['todo'] }),
+      }),
+    );
+    expect(apiMocks.query.mock.calls.at(-1)?.[0].json).not.toHaveProperty('cursor');
   });
 });
 
@@ -782,6 +861,65 @@ describe('useWorkView facet pagination', () => {
     expect(apiMocks.facets).toHaveBeenLastCalledWith(
       expect.objectContaining({ json: expect.not.objectContaining({ cursor: expect.anything() }) }),
     );
+  });
+
+  it('retries failed initial and continuation facet requests at their original cursors', async () => {
+    let calls = 0;
+    apiMocks.facets.mockImplementation(() => {
+      calls += 1;
+      if (calls === 1 || calls === 3) return Promise.reject(new Error('facet provider failure'));
+      return Promise.resolve(
+        okResponse(
+          WorkViewFacetResponse.parse({
+            target: 'task',
+            buckets: [
+              {
+                field: 'assignee',
+                options: [],
+                emptyCount: 0,
+                nextCursor: calls === 2 ? 'facet-page-2' : null,
+              },
+            ],
+            distinctCount: 0,
+          }),
+        ),
+      );
+    });
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+    await waitFor(() => {
+      expect(result.current.response).toBeDefined();
+    });
+
+    act(() => {
+      result.current.requestFacet('assignee', '');
+    });
+    await waitFor(() => {
+      expect(result.current.facetError).toBeDefined();
+    });
+    act(() => {
+      result.current.retryFacet();
+    });
+    await waitFor(() => {
+      expect(result.current.facetHasMore).toBe(true);
+    });
+    expect(apiMocks.facets.mock.calls[1]?.[0].json).not.toHaveProperty('cursor');
+
+    act(() => {
+      result.current.loadMoreFacets();
+    });
+    await waitFor(() => {
+      expect(result.current.facetError).toBeDefined();
+    });
+    expect(apiMocks.facets.mock.calls[2]?.[0].json.cursor).toBe('facet-page-2');
+
+    act(() => {
+      result.current.retryFacet();
+    });
+    await waitFor(() => {
+      expect(apiMocks.facets).toHaveBeenCalledTimes(4);
+    });
+    expect(apiMocks.facets.mock.calls[3]?.[0].json.cursor).toBe('facet-page-2');
   });
 });
 
@@ -979,5 +1117,89 @@ describe('useWorkView preference serialization', () => {
     expect(result.current.preferencesError).toMatchObject({
       message: 'Could not save your view preferences.',
     });
+  });
+
+  it('retries the failed preference payload after a later preference write changes current state', async () => {
+    apiMocks.patchPreferences
+      .mockRejectedValueOnce(new Error('first preference write failed'))
+      .mockImplementation(({ json }: { json: { viewState: unknown[] } }) =>
+        Promise.resolve(okResponse({ timezone: 'America/Los_Angeles', viewState: json.viewState })),
+      );
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+    await waitFor(() => {
+      expect(result.current.response).toBeDefined();
+    });
+    const changed = TaskViewDefinition.parse({
+      ...taskDefinition,
+      arrangement: { ...taskDefinition.arrangement, groupBy: 'priority' },
+    });
+    act(() => {
+      result.current.setDefinition(changed);
+    });
+    await waitFor(() => {
+      expect(result.current.preferencesError).toBeDefined();
+    });
+    const failedPayload = apiMocks.patchPreferences.mock.calls[0]?.[0].json.viewState;
+
+    act(() => {
+      result.current.toggleHiddenBoardColumn('done');
+    });
+    await waitFor(() => {
+      expect(apiMocks.patchPreferences).toHaveBeenCalledTimes(2);
+    });
+    expect(apiMocks.patchPreferences.mock.calls[1]?.[0].json.viewState).not.toEqual(failedPayload);
+
+    act(() => {
+      result.current.retryPreferences();
+    });
+    await waitFor(() => {
+      expect(apiMocks.patchPreferences).toHaveBeenCalledTimes(3);
+    });
+    expect(apiMocks.patchPreferences.mock.calls[2]?.[0].json.viewState).toEqual(failedPayload);
+    await waitFor(() => {
+      expect(result.current.preferencesError).toBeNull();
+    });
+  });
+
+  it('retries the failed default body after the current definition changes', async () => {
+    apiMocks.patchDefault
+      .mockRejectedValueOnce(new Error('default write failed'))
+      .mockImplementation(({ json }: { json: unknown }) =>
+        Promise.resolve(
+          okResponse({
+            ...defaultResponse('task'),
+            definition: (json as { definition: unknown }).definition,
+          }),
+        ),
+      );
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+    await waitFor(() => {
+      expect(result.current.response).toBeDefined();
+    });
+    act(() => {
+      result.current.setAsDefault();
+    });
+    await waitFor(() => {
+      expect(result.current.defaultError).toBeDefined();
+    });
+    const failedBody = apiMocks.patchDefault.mock.calls[0]?.[0].json;
+
+    act(() => {
+      result.current.setDefinition(
+        TaskViewDefinition.parse({
+          ...taskDefinition,
+          arrangement: { ...taskDefinition.arrangement, groupBy: 'priority' },
+        }),
+      );
+    });
+    act(() => {
+      result.current.setAsDefault();
+    });
+    await waitFor(() => {
+      expect(apiMocks.patchDefault).toHaveBeenCalledTimes(2);
+    });
+    expect(apiMocks.patchDefault.mock.calls[1]?.[0].json).toEqual(failedBody);
   });
 });

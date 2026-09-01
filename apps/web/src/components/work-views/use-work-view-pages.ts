@@ -46,7 +46,8 @@ export type WorkViewPagesAction<TRow extends { readonly id: string }> =
       readonly error: unknown;
     };
 
-function mergeRows<TRow extends { readonly id: string }>(
+/** Merge rows by id while preserving the first page's display order. */
+export function mergeWorkViewPageRows<TRow extends { readonly id: string }>(
   existing: readonly TRow[],
   next: readonly TRow[],
 ): readonly TRow[] {
@@ -81,7 +82,7 @@ export function reduceWorkViewPages<TRow extends { readonly id: string }>(
       ...pages,
       [key]: {
         path: action.path,
-        rows: action.cursor === null ? action.rows : mergeRows(base.rows, action.rows),
+        rows: action.cursor === null ? action.rows : mergeWorkViewPageRows(base.rows, action.rows),
         nextCursor: action.nextCursor,
         retryCursor: null,
         loading: false,

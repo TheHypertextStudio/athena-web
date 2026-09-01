@@ -71,18 +71,19 @@ async function openGroupedProjects(page: Page, orgId: string): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });
+  const display = page.getByRole('dialog', { name: 'Display view' });
+  const groupBy = display.getByRole('combobox', { name: 'Group by', exact: true });
   await expect(async () => {
-    await page.getByRole('button', { name: 'Display', exact: true }).click();
-    await expect(
-      page
-        .getByRole('dialog', { name: 'Display view' })
-        .getByRole('combobox', { name: 'Group by', exact: true }),
-    ).toBeVisible({ timeout: 1000 });
+    if (!(await display.isVisible())) {
+      await page.getByRole('button', { name: 'Display', exact: true }).click();
+    }
+    await expect(display).toBeVisible({ timeout: 1000 });
+    if (!(await groupBy.isVisible())) {
+      await display.getByRole('button', { name: 'Organize', exact: true }).click();
+    }
+    await expect(groupBy).toBeVisible({ timeout: 1000 });
   }).toPass({ timeout: TIMEOUTS.pageReady });
-  await page
-    .getByRole('dialog', { name: 'Display view' })
-    .getByRole('combobox', { name: 'Group by', exact: true })
-    .selectOption('targetTimeframe');
+  await groupBy.selectOption('targetTimeframe');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Display view' })).toHaveCount(0);
   await expect(page.getByText('H2 FY 2027', { exact: true }).first()).toBeVisible();

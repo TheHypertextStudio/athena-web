@@ -487,6 +487,35 @@ function setupGcp(cfg: Config): {
     --quiet`);
   ok(`roles/secretmanager.secretAccessor (${API_RUNTIME_SA_NAME})`);
 
+  // Operator SSO reads Workspace group membership as this account. `groupsReader` is an ordinary
+  // ORG-level IAM role, which is why no Workspace admin console step and no domain-wide delegation
+  // are involved — but it only covers SECURITY groups, so the operator groups must be created as
+  // such (`gcloud identity groups create --group-type=security`). Best-effort: a project outside an
+  // organization, or an operator without org-level IAM rights, simply skips it and can grant it
+  // later; every other capability here is unaffected.
+  const orgId = tryRun(`gcloud projects describe ${cfg.project} --format='value(parent.id)'`);
+  if (orgId) {
+    // `tryRun` yields '' on failure and the updated policy on success, so emptiness IS the signal.
+    const bound = tryRun(`gcloud organizations add-iam-policy-binding ${orgId} \
+      --member="serviceAccount:${apiRuntimeSaEmail}" \
+      --role="roles/cloudidentity.groupsReader" \
+      --condition=None \
+      --quiet`);
+    if (bound) {
+      ok(`roles/cloudidentity.groupsReader (${API_RUNTIME_SA_NAME}, org ${orgId})`);
+    } else {
+      warn(
+        `could not grant roles/cloudidentity.groupsReader on organization ${orgId} — operator ` +
+          'SSO will not resolve groups until someone with org-level IAM rights grants it.',
+      );
+    }
+  } else {
+    warn(
+      'project has no parent organization — skipping roles/cloudidentity.groupsReader; ' +
+        'operator SSO needs it to read Workspace groups.',
+    );
+  }
+
   section('GCP — Artifact Registry');
 
   const arExists = tryRun(`gcloud artifacts repositories describe ${AR_REPO} \

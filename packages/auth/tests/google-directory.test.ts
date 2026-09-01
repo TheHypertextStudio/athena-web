@@ -55,6 +55,24 @@ describe('createGoogleDirectory', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it('sends the label clause the API requires, against security groups', async () => {
+    const fetchImpl = fetchStub(
+      tokenResponse({ access_token: 'token-1', expires_in: 3600 }),
+      tokenResponse({ memberships: [] }),
+    );
+
+    await createGoogleDirectory(fetchImpl).groupsFor('op@x.dev');
+
+    // Verified against the live API: a query without a label clause is rejected outright with
+    // INVALID_ARGUMENT, and `groups.discussion_forum` answers PERMISSION_DENIED for a caller
+    // holding only `roles/cloudidentity.groupsReader`. Only this pairing works.
+    const requested = vi.mocked(fetchImpl).mock.calls[1]?.[0];
+    const query = new URL(typeof requested === 'string' ? requested : '').searchParams.get('query');
+    expect(query).toBe(
+      "member_key_id == 'op@x.dev' && 'cloudidentity.googleapis.com/groups.security' in labels",
+    );
+  });
+
   it('reuses a cached token until it is close to expiring', async () => {
     const fetchImpl = fetchStub(
       tokenResponse({ access_token: 'token-1', expires_in: 3600 }),

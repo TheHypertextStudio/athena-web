@@ -408,17 +408,36 @@ Two things write that row: the OAuth callback (so a sign-in takes effect immedia
 revocation real** — sessions last 30 days, so without it, removing someone from a group would not
 lock them out of the console until their session happened to expire.
 
-Setup, in order. Steps 2 and 3 cannot be automated — they live in the Workspace admin console:
+Setup, in order. All of it is scriptable; only the repository variables in step 4 need a
+GitHub-authenticated shell:
 
 1. `pnpm bootstrap` creates the runtime service account `docket-api@<project>.iam.gserviceaccount.com`
    and publishes it as `vars.GCP_API_RUNTIME_SERVICE_ACCOUNT`. The deploy workflow then passes
    `--service-account`, so the API stops running as the broadly-privileged default compute account.
-2. In the Workspace admin console, create the groups you want to map, e.g.
-   `docket-support@<domain>`, `docket-finance@<domain>`, `docket-admins@<domain>`.
-3. In the Workspace admin console (Account → Admin roles), assign the **Groups Reader** admin role
-   to that service account. This is what lets it read the Cloud Identity Groups API; there is no
-   domain-wide delegation to configure and no admin user to impersonate. (`pnpm bootstrap` already
-   enables `cloudidentity.googleapis.com` on the project.)
+2. Create the groups you want to map, as **security** groups. The group type is load-bearing, not
+   cosmetic: the IAM role in step 3 governs security groups only, and the same lookup against a
+   discussion-forum group answers `PERMISSION_DENIED`.
+
+   ```bash
+   gcloud identity groups create docket-support@<domain> --organization=<org-id> \
+     --group-type=security --display-name="Docket operators — support"
+   ```
+
+   Repeat for `docket-finance@` and `docket-admins@`. Add people with
+   `gcloud identity groups memberships add --group-email=… --member-email=…`. Note that whoever
+   creates a group is automatically a member of it.
+
+3. `pnpm bootstrap` grants the runtime service account `roles/cloudidentity.groupsReader` on the
+   organization, which is all the read access the lookup needs — there is no Workspace admin
+   console step, no admin role to assign, no domain-wide delegation, and no admin user to
+   impersonate. It also enables `cloudidentity.googleapis.com`. To grant it by hand:
+
+   ```bash
+   gcloud organizations add-iam-policy-binding <org-id> \
+     --member="serviceAccount:docket-api@<project>.iam.gserviceaccount.com" \
+     --role="roles/cloudidentity.groupsReader" --condition=None
+   ```
+
 4. Set `GOOGLE_WORKSPACE_DOMAIN` and `ADMIN_GOOGLE_GROUP_ROLES`, then flip
    `ADMIN_GOOGLE_SSO_ENABLED=true` **last** — the console hides the Google button until the API
    reports it configured, so an operator never sees a button that cannot work. Both values are

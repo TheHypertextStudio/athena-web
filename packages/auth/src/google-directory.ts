@@ -7,9 +7,10 @@
  * testable without a network and so local development runs against a fixture.
  *
  * The real adapter reads the **Cloud Identity Groups API**, chosen over the Admin SDK Directory
- * API because the Cloud Run runtime service account can be granted the *Groups Reader* admin role
- * directly in the Workspace admin console — there is no domain-wide delegation to configure and no
- * admin user to impersonate. It authenticates as that service account through the GCP metadata
+ * API because the Cloud Run runtime service account can be granted read access through an
+ * ordinary org-level IAM binding (`roles/cloudidentity.groupsReader`) — there is no domain-wide
+ * delegation to configure, no admin user to impersonate, and no Workspace admin console step.
+ * That binding covers SECURITY groups, which is why operator groups must be created as such. It authenticates as that service account through the GCP metadata
  * server, which is why it runs only on Google Cloud; operator SSO is disabled everywhere else
  * (`ADMIN_GOOGLE_SSO_ENABLED=false`) and staff access comes from `STAFF_BOOTSTRAP_EMAILS` instead.
  */
@@ -24,6 +25,19 @@ const METADATA_TOKEN_URL =
 /** Cloud Identity's transitive-membership search — resolves nested groups, not just direct ones. */
 const SEARCH_TRANSITIVE_GROUPS_URL =
   'https://cloudidentity.googleapis.com/v1/groups/-/memberships:searchTransitiveGroups';
+
+/**
+ * The label clause every `searchTransitiveGroups` query must carry.
+ *
+ * @remarks
+ * Not optional and not a filter of convenience: a query without a label clause is rejected
+ * outright with `INVALID_ARGUMENT`. `groups.security` is the one that pairs with the org-level
+ * `roles/cloudidentity.groupsReader` IAM binding the runtime service account holds — the same
+ * query against `groups.discussion_forum` answers `PERMISSION_DENIED`, because that label is
+ * governed by a Workspace admin role instead. Operator groups must therefore be created as
+ * SECURITY groups (`gcloud identity groups create --group-type=security`).
+ */
+const SECURITY_GROUPS_LABEL = "'cloudidentity.googleapis.com/groups.security' in labels";
 
 /** Seconds of headroom applied to a cached token so it is never presented at the moment it expires. */
 const TOKEN_EXPIRY_SKEW_S = 60;
@@ -135,7 +149,9 @@ export function createGoogleDirectory(
     token: string,
     pageToken: string | undefined,
   ): Promise<SearchTransitiveGroupsResponse> {
-    const query = new URLSearchParams({ query: `member_key_id == '${normalized}'` });
+    const query = new URLSearchParams({
+      query: `member_key_id == '${normalized}' && ${SECURITY_GROUPS_LABEL}`,
+    });
     if (pageToken) query.set('pageToken', pageToken);
     const response = await fetchImpl(`${SEARCH_TRANSITIVE_GROUPS_URL}?${query.toString()}`, {
       headers: { authorization: `Bearer ${token}` },

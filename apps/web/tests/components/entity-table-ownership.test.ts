@@ -15,6 +15,30 @@ const rosterPaths = [
   'apps/web/src/components/work-views/work-list.tsx',
 ];
 
+function resolvesToSharedEntityTable(
+  node: Parameters<Rule.RuleListener['JSXOpeningElement']>[0],
+  sourceCode: Readonly<Rule.RuleContext['sourceCode']>,
+): boolean {
+  if (node.name.type !== 'JSXIdentifier') return false;
+  let scope = sourceCode.getScope(node);
+  while (scope !== null) {
+    const variable = scope.set.get(node.name.name);
+    if (variable !== undefined) {
+      return variable.defs.some(
+        (definition) =>
+          definition.type === 'ImportBinding' &&
+          definition.node.type === 'ImportSpecifier' &&
+          definition.node.imported.type === 'Identifier' &&
+          definition.node.imported.name === 'EntityTable' &&
+          definition.parent?.type === 'ImportDeclaration' &&
+          definition.parent.source.value === '@docket/ui/components',
+      );
+    }
+    scope = scope.upper;
+  }
+  return false;
+}
+
 const requireEntityTable: Rule.RuleModule = {
   meta: {
     type: 'problem',
@@ -23,11 +47,10 @@ const requireEntityTable: Rule.RuleModule = {
   },
   create(context) {
     let ownsRoster = false;
+    const sourceCode = context.sourceCode;
     return {
       JSXOpeningElement(node) {
-        if (node.name.type === 'JSXIdentifier' && node.name.name === 'EntityTable') {
-          ownsRoster = true;
-        }
+        if (resolvesToSharedEntityTable(node, sourceCode)) ownsRoster = true;
       },
       'Program:exit'(node) {
         if (!ownsRoster) context.report({ node, messageId: 'missingOwner' });
@@ -35,6 +58,18 @@ const requireEntityTable: Rule.RuleModule = {
     };
   },
 };
+
+function rosterOwnerMessages(code: string): ReturnType<Linter['verify']> {
+  const linter = new Linter();
+  return linter.verify(code, {
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: { ecmaFeatures: { jsx: true }, projectService: false },
+    },
+    plugins: { 'roster-test': { rules: { 'require-entity-table': requireEntityTable } } },
+    rules: { 'roster-test/require-entity-table': 'error' },
+  });
+}
 
 describe('EntityTable ownership', () => {
   it('executes the AST ownership policy on application code but not its shared owner', () => {
@@ -70,19 +105,23 @@ describe('EntityTable ownership', () => {
   });
 
   it('renders each roster adapter through EntityTable instead of retaining a dead import', () => {
-    const linter = new Linter();
-
     for (const path of rosterPaths) {
-      const messages = linter.verify(readFileSync(join(root, path), 'utf8'), {
-        languageOptions: {
-          parser: tseslint.parser,
-          parserOptions: { ecmaFeatures: { jsx: true }, projectService: false },
-        },
-        plugins: { 'roster-test': { rules: { 'require-entity-table': requireEntityTable } } },
-        rules: { 'roster-test/require-entity-table': 'error' },
-      });
-
-      expect(messages).toEqual([]);
+      expect(rosterOwnerMessages(readFileSync(join(root, path), 'utf8'))).toEqual([]);
     }
+  });
+
+  it('requires the rendered owner to resolve to the shared EntityTable import', () => {
+    const shared =
+      'import { EntityTable } from "@docket/ui/components"; export const Roster = () => <EntityTable />;';
+    const local = 'const EntityTable = () => null; export const Roster = () => <EntityTable />;';
+    const foreign =
+      'import { EntityTable } from "./local-table"; export const Roster = () => <EntityTable />;';
+    const shadowed =
+      'import { EntityTable } from "@docket/ui/components"; function Roster() { const EntityTable = () => null; return <EntityTable />; }';
+
+    expect(rosterOwnerMessages(shared)).toEqual([]);
+    expect(rosterOwnerMessages(local)).toHaveLength(1);
+    expect(rosterOwnerMessages(foreign)).toHaveLength(1);
+    expect(rosterOwnerMessages(shadowed)).toHaveLength(1);
   });
 });

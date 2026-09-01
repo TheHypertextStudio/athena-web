@@ -59,11 +59,47 @@ ruleTester.run('docket-ui/no-app-owned-columnheader', plugin.rules['no-app-owned
       errors: [{ messageId: 'useEntityTable' }],
     },
     {
+      code: 'function Header(props) { return <div {...props} />; }',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'import props from "./props"; <div {...props} />;',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: '<div {...getProps()} />;',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
       code: 'React.createElement("div", { role: "columnheader" });',
       errors: [{ messageId: 'useEntityTable' }],
     },
     {
       code: 'const role = "columnheader"; createElement("div", { role });',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'function Header(props) { return React.createElement("div", props); }',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'import props from "./props"; React.createElement("div", props);',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'React.createElement("div", getProps());',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'function Header(props) { return createElement("div", props); }',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'import props from "./props"; createElement("div", props);',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'createElement("div", getProps());',
       errors: [{ messageId: 'useEntityTable' }],
     },
   ],

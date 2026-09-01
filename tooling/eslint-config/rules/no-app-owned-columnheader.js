@@ -90,9 +90,10 @@ function propertyName(property) {
 function objectOwnsColumnheader(rawExpression, sourceCode, seen = new Set()) {
   const expression = unwrapExpression(rawExpression);
   if (expression.type === 'Identifier') {
+    if (expression.name === 'undefined') return false;
     if (seen.has(expression)) return false;
     const initializer = identifierInitializer(expression, sourceCode);
-    if (initializer === undefined) return false;
+    if (initializer === undefined) return true;
     seen.add(expression);
     return objectOwnsColumnheader(initializer, sourceCode, seen);
   }
@@ -102,7 +103,8 @@ function objectOwnsColumnheader(rawExpression, sourceCode, seen = new Set()) {
       objectOwnsColumnheader(expression.alternate, sourceCode, seen)
     );
   }
-  if (expression.type !== 'ObjectExpression') return false;
+  if (expression.type === 'Literal') return false;
+  if (expression.type !== 'ObjectExpression') return true;
   return expression.properties.some((property) => {
     if (property.type === 'SpreadElement') {
       return objectOwnsColumnheader(property.argument, sourceCode, seen);

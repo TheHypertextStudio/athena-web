@@ -30,6 +30,7 @@ export const queryKeys = {
 
   /** Headline platform metrics. */
   staff: () => [...queryKeys.all, 'staff'] as const,
+  athenaUsage: () => [...queryKeys.all, 'athena-usage'] as const,
   status: () => [...queryKeys.all, 'status'] as const,
   resources: () => [...queryKeys.all, 'resources'] as const,
   metrics: () => [...queryKeys.all, 'metrics'] as const,

@@ -104,6 +104,69 @@ function turnStop(reason: string): RawMessageStreamEvent {
   } as RawMessageStreamEvent;
 }
 
+/** Build a raw message-start event carrying the provider's input counts and model. */
+function turnStart(
+  usage: Record<string, number>,
+  model = 'claude-opus-4-8',
+): RawMessageStreamEvent {
+  return {
+    type: 'message_start',
+    message: { model, usage },
+  } as unknown as RawMessageStreamEvent;
+}
+
+describe('turn usage', () => {
+  it('reports what the turn cost, from both events that carry part of it', async () => {
+    const events = [
+      turnStart({
+        input_tokens: 120,
+        output_tokens: 0,
+        cache_read_input_tokens: 4000,
+        cache_creation_input_tokens: 88,
+      }),
+      textStart(0),
+      delta(0, { type: 'text_delta', text: 'done' }),
+      blockStop(0),
+      turnStop('end_turn'),
+    ];
+
+    const emitted = [];
+    for await (const event of translateTurnEvents(asStream(events))) emitted.push(event);
+    const end = emitted.at(-1);
+
+    // Input counts and the model come from `message_start`; the final output count only ever
+    // arrives on `message_delta`, where it used to be discarded beside the stop reason that was read.
+    expect(end).toMatchObject({
+      type: 'turn_end',
+      usage: {
+        inputTokens: 120,
+        outputTokens: 1,
+        cacheReadTokens: 4000,
+        cacheCreationTokens: 88,
+        model: 'claude-opus-4-8',
+      },
+    });
+  });
+
+  it('omits usage entirely when the stream reported none', async () => {
+    const events = [
+      textStart(0),
+      delta(0, { type: 'text_delta', text: 'done' }),
+      blockStop(0),
+      turnStop('end_turn'),
+    ];
+
+    const emitted = [];
+    for await (const event of translateTurnEvents(asStream(events))) emitted.push(event);
+    const end = emitted.at(-1);
+
+    // Absent, not zeroed: a runtime that does not account for tokens has not said the turn was
+    // free, and an operator total must keep those two apart.
+    expect(end).toHaveProperty('type', 'turn_end');
+    expect(end && 'usage' in end ? end.usage : undefined).toBeUndefined();
+  });
+});
+
 describe('Athena turn contracts', () => {
   it('exposes intentional public paths without a catch-all domain barrel', () => {
     expect(PublicMockAgentTurnRuntime).toBe(MockAgentTurnRuntime);

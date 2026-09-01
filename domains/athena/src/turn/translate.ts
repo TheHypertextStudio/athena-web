@@ -3,7 +3,7 @@ import type { RawMessageStreamEvent } from '@anthropic-ai/sdk/resources/messages
 
 import type { TurnContentBlock } from '../turn-protocol';
 
-import type { TurnEvent, TurnStopReason } from './turn';
+import type { TurnEvent, TurnStopReason, TurnUsage } from './turn';
 
 /** Buffer for one provider content block until its stream stop event arrives. */
 interface TurnBlockBuffer {
@@ -89,12 +89,58 @@ function toContentBlock(buffer: TurnBlockBuffer): YieldableContentBlock | null {
  * Completed blocks are retained by provider index, then ordered before the terminal message is
  * emitted. That preserves the exact message the host can append and replay on a later turn.
  */
+/**
+ * Append one streamed delta to the block it belongs to.
+ *
+ * @remarks
+ * Each delta kind lands in a different field of the buffer, and an unrecognised kind is ignored
+ * rather than guessed at.
+ *
+ * @param buffer - The in-flight block being accumulated.
+ * @param delta - The delta the provider sent.
+ */
+function appendDelta(
+  buffer: TurnBlockBuffer,
+  delta: Extract<RawMessageStreamEvent, { type: 'content_block_delta' }>['delta'],
+): void {
+  if (delta.type === 'text_delta') buffer.text += delta.text;
+  else if (delta.type === 'thinking_delta') buffer.text += delta.thinking;
+  else if (delta.type === 'input_json_delta') buffer.json += delta.partial_json;
+  else if (delta.type === 'signature_delta') buffer.signature += delta.signature;
+}
+
+/**
+ * Read the counts a message-start event reports.
+ *
+ * @remarks
+ * Cache fields are absent rather than zero when a turn used no cache, so they are defaulted here.
+ * The output count is always zero at this point — the real figure arrives on `message_delta`.
+ *
+ * @param message - The provider's opening message.
+ * @returns the usage known so far.
+ */
+function usageFromStart(
+  message: Extract<RawMessageStreamEvent, { type: 'message_start' }>['message'],
+): TurnUsage {
+  return {
+    inputTokens: message.usage.input_tokens,
+    outputTokens: message.usage.output_tokens,
+    cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+    cacheCreationTokens: message.usage.cache_creation_input_tokens ?? 0,
+    model: message.model,
+  };
+}
+
 export async function* translateTurnEvents(
   events: AsyncIterable<RawMessageStreamEvent>,
 ): AsyncIterable<TurnEvent> {
   const inFlight = new Map<number, TurnBlockBuffer>();
   const completed = new Map<number, TurnContentBlock>();
   let stopReason: TurnStopReason = 'end_turn';
+  // Accumulated across the stream: the provider reports input counts and the model on
+  // `message_start`, and the output count only on `message_delta`, so neither event alone
+  // describes the turn.
+  let usage: TurnUsage | undefined;
 
   for await (const event of events) {
     switch (event.type) {
@@ -113,13 +159,7 @@ export async function* translateTurnEvents(
 
       case 'content_block_delta': {
         const buffer = inFlight.get(event.index);
-        if (!buffer) break;
-
-        const delta = event.delta;
-        if (delta.type === 'text_delta') buffer.text += delta.text;
-        else if (delta.type === 'thinking_delta') buffer.text += delta.thinking;
-        else if (delta.type === 'input_json_delta') buffer.json += delta.partial_json;
-        else if (delta.type === 'signature_delta') buffer.signature += delta.signature;
+        if (buffer) appendDelta(buffer, event.delta);
         break;
       }
 
@@ -142,8 +182,14 @@ export async function* translateTurnEvents(
         break;
       }
 
+      case 'message_start':
+        usage = usageFromStart(event.message);
+        break;
+
       case 'message_delta':
         stopReason = toStopReason(event.delta.stop_reason);
+        // The final output count arrives here, not on `message_start`, where it is still zero.
+        if (usage) usage = { ...usage, outputTokens: event.usage.output_tokens };
         break;
 
       default:
@@ -159,5 +205,8 @@ export async function* translateTurnEvents(
     type: 'turn_end',
     stopReason,
     message: { role: 'assistant', content: orderedContent },
+    // Omitted rather than zeroed when the stream reported none, so "not measured" stays
+    // distinguishable from "measured as free".
+    ...(usage ? { usage } : {}),
   };
 }

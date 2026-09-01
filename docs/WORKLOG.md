@@ -65,12 +65,7 @@ db:reset` completed. The migration changes no UI behavior, but the requested des
   - [x] Phase 2d — internal job health derived from the run ledgers that already record failures
   - [x] Phase 2e — the status board, with per-service disclosure and 24h/7d/30d uptime
   - [x] Phase 4 — a standardization and enforcement pass over the whole effort (see below)
-  - [ ] Phase 3 — Athena usage and per-session token capture. **Not started.** It is the only phase
-        that touches the agent turn pipeline (`domains/athena/src/turn/translate.ts`, a new field on
-        `TurnEvent.turn_end`, `apps/api/src/agent/loop.ts`) and needs a migration, and it reverses
-        the documented decision in `packages/db/src/schema/agents.ts` that compute and cost are not
-        stored. Agreed shape: per-session totals on `agent_session_run`, Anthropic-only coverage
-        because the Lattice adapter returns no token counts.
+  - [x] Phase 3 — Athena usage and per-session token capture
 - **Decisions**: Third-party health is **derived** from the ledgers recording real provider traffic
   (`billing_provider_sync`, `agent_session_run`, `sync_run`) rather than from synthetic pings. The
   first draft pinged each provider directly, which meant reading `STRIPE_SECRET_KEY`,

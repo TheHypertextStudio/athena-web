@@ -638,3 +638,52 @@ export const AdminStatusOut = z.object({
 });
 /** Validated status-board value. */
 export type AdminStatusOut = z.infer<typeof AdminStatusOut>;
+
+/** Token counts for one slice of Athena's work. */
+export const AdminTokenTotals = z.object({
+  inputTokens: z.number().int().describe('Fresh input tokens, excluding cache reads and writes.'),
+  outputTokens: z.number().int().describe('Tokens the model generated.'),
+  cacheReadTokens: z.number().int().describe('Input tokens served from the prompt cache.'),
+  cacheCreationTokens: z.number().int().describe('Input tokens written into the prompt cache.'),
+});
+/** Validated token-totals value. */
+export type AdminTokenTotals = z.infer<typeof AdminTokenTotals>;
+
+/** One dimension's share of Athena's work, with its token cost. */
+export const AdminUsageSlice = z.object({
+  key: z.string().describe('The value being grouped by, as stored.'),
+  runs: z.number().int().describe('Generations recorded in the window for this value.'),
+  measuredRuns: z
+    .number()
+    .int()
+    .describe(
+      'How many of those reported token counts. The rest ran where we cannot see the bill.',
+    ),
+  tokens: AdminTokenTotals.describe('Token totals across the measured generations.'),
+});
+/** Validated usage-slice value. */
+export type AdminUsageSlice = z.infer<typeof AdminUsageSlice>;
+
+/**
+ * What Athena did, and what it cost, over one window.
+ *
+ * @remarks
+ * `measuredRuns` is reported everywhere a token total is, because the two answer different
+ * questions and one without the other misleads. A generation executed on a person's own Lattice
+ * runtime returns no counts at all, so a token total alone cannot say whether a small number means
+ * light use or unlit work.
+ */
+export const AdminAthenaUsageOut = z.object({
+  windowHours: z.number().int().describe('How many hours back every figure covers.'),
+  runs: z.number().int().describe('Generations recorded in the window.'),
+  failedRuns: z.number().int().describe('How many of them ended in the `failed` state.'),
+  measuredRuns: z.number().int().describe('How many reported token counts.'),
+  tokens: AdminTokenTotals.describe('Token totals across every measured generation.'),
+  byModel: z.array(AdminUsageSlice).describe('Grouped by the model that served the work.'),
+  bySurface: z
+    .array(AdminUsageSlice)
+    .describe("Grouped by where the work executed: Docket's own compute, or a personal runtime."),
+  byKind: z.array(AdminUsageSlice).describe('Grouped by whether the session was a chat or a job.'),
+});
+/** Validated Athena-usage value. */
+export type AdminAthenaUsageOut = z.infer<typeof AdminAthenaUsageOut>;

@@ -6,6 +6,7 @@ import {
   type LucideIcon,
   Layers,
   Settings,
+  Sparkles,
   Shield,
   Tag,
   Users,
@@ -84,6 +85,7 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
     items: [
       { href: '/notifications', label: 'Announcements', icon: Bell },
       { href: '/status', label: 'Service status', icon: Activity },
+      { href: '/athena', label: 'Athena usage', icon: Sparkles },
       { href: '/audit', label: 'Audit log', icon: Activity },
       { href: '/lifecycle', label: 'Retention markers', icon: Layers },
     ],

@@ -9,7 +9,8 @@
  */
 import { agentSession, agentSessionDispatch, agentSessionRun, db, genId, user } from '@docket/db';
 import { workflowIdFor, type ExecutionMessage } from '@docket/athena/execution-protocol';
-import { and, count, desc, eq, gt, lte, ne, or } from 'drizzle-orm';
+import type { TurnUsage } from '@docket/athena/turn';
+import { and, count, desc, eq, gt, lte, ne, or, sql } from 'drizzle-orm';
 
 import { ConflictError, NotFoundError } from '../error';
 import { env } from '../env';
@@ -739,4 +740,39 @@ export function startRunGenerationHeartbeat(
       clearInterval(timer);
     },
   };
+}
+
+/**
+ * Add one turn's provider usage to its run's running totals.
+ *
+ * @remarks
+ * Accumulates in SQL rather than reading, adding, and writing back, so two turns settling close
+ * together cannot lose one another's counts.
+ *
+ * A turn that reported no usage leaves the columns exactly as they were — still null if nothing has
+ * ever reported for this run. That is the distinction the whole feature rests on: a generation
+ * executed on a person's own Lattice runtime returns no counts, and recording it as zero would tell
+ * an operator the work was free rather than unmeasured.
+ *
+ * @param tx - The transaction persisting the turn this usage belongs to.
+ * @param runId - The generation to credit.
+ * @param usage - What the turn consumed, or `undefined` when the runtime reported nothing.
+ */
+export async function addRunUsage(
+  tx: Pick<typeof db, 'update'>,
+  runId: string,
+  usage: TurnUsage | undefined,
+): Promise<void> {
+  if (!usage) return;
+
+  await tx
+    .update(agentSessionRun)
+    .set({
+      inputTokens: sql`coalesce(${agentSessionRun.inputTokens}, 0) + ${usage.inputTokens}`,
+      outputTokens: sql`coalesce(${agentSessionRun.outputTokens}, 0) + ${usage.outputTokens}`,
+      cacheReadTokens: sql`coalesce(${agentSessionRun.cacheReadTokens}, 0) + ${usage.cacheReadTokens}`,
+      cacheCreationTokens: sql`coalesce(${agentSessionRun.cacheCreationTokens}, 0) + ${usage.cacheCreationTokens}`,
+      model: usage.model,
+    })
+    .where(eq(agentSessionRun.id, runId));
 }

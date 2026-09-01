@@ -29,7 +29,7 @@ import {
   task,
 } from '@docket/db';
 import type { SessionActivityBody } from '@docket/db';
-import type { AgentTurnRuntime } from '@docket/athena/turn';
+import type { AgentTurnRuntime, TurnUsage } from '@docket/athena/turn';
 import type { TurnContentBlock, TurnMessage } from '@docket/athena/turn-protocol';
 import { HubPreferences } from '@docket/planning/hub-preferences-contract';
 import type { AthenaApprovalMode } from '@docket/planning/hub-preferences-contract';
@@ -70,6 +70,7 @@ import {
   type RunGenerationEffect,
   type RunGenerationHeartbeat,
   type RunGenerationLease,
+  addRunUsage,
 } from './run-generation';
 
 /** A deterministic boundary immediately before one generation-owned persistence transaction. */
@@ -605,6 +606,7 @@ async function driveSessionWithAdmission(
       await heartbeat.assertActive();
       let assistantMessage: TurnMessage | undefined;
       let stopReason = 'end_turn';
+      let turnUsage: TurnUsage | undefined;
       for await (const event of turnRuntime.streamTurn({
         system,
         messages,
@@ -629,6 +631,7 @@ async function driveSessionWithAdmission(
         } else if (event.type === 'turn_end') {
           assistantMessage = event.message;
           stopReason = event.stopReason;
+          turnUsage = event.usage;
         }
       }
       generationTurns += 1;
@@ -658,6 +661,9 @@ async function driveSessionWithAdmission(
       // between "model asked" and "rows exist" cannot strand an unanswerable tool_use.
       const askedUser = uses.some((use) => use.name === ASK_USER_TOOL);
       await persistGenerationEffect(lease, deps, 'assistant-turn', async (tx) => {
+        // Folded into the transaction that already persists the turn, so a crash cannot leave the
+        // transcript recorded and its cost unrecorded, and so accounting costs no extra round trip.
+        await addRunUsage(tx, lease.runId, turnUsage);
         await saveTranscript(
           tx,
           sessionId,

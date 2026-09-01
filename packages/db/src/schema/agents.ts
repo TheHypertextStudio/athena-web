@@ -4,8 +4,14 @@
  * @remarks
  * An Agent is an Actor (`kind='agent'`); this island carries the agent's connection,
  * approval policy, and accountable owner, plus the Docket-hosted Agent Session and
- * its visible Activity stream. Compute/cost/telemetry are NOT stored — the provider
- * owns execution; Docket owns the work model and the visible session.
+ * its visible Activity stream. The provider owns execution; Docket owns the work model and the
+ * visible session.
+ *
+ * Session *contents* remain out of scope, and telemetry in the product sense — who used what
+ * feature, how often — is still not collected. What `agent_session_run` now records is the token
+ * spend of each generation, because an operator running the service has to be able to answer what
+ * Athena costs, and nothing else in the system could answer it. That is an operator-facing
+ * accounting fact about our own bill, not a measurement of a person's behaviour.
  */
 import { sql } from 'drizzle-orm';
 import {
@@ -280,6 +286,24 @@ export const agentSessionRun = pgTable(
       .$type<AgentRunDispatchOrigin>()
       .notNull()
       .default('unclassified'),
+    /**
+     * What this generation consumed at the model provider, accumulated across its turns.
+     *
+     * @remarks
+     * Null means unmeasured, not free. A generation executed on a person's own Lattice runtime
+     * reports no counts at all — the compute is theirs and the provider is not ours to ask — so an
+     * operator reading a total has to be able to tell "nothing was spent" from "we cannot see what
+     * was spent". Zero would erase that distinction on the one screen that exists to make spend
+     * legible.
+     *
+     * Cache reads and cache writes are separate because they are priced differently.
+     */
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'),
+    cacheReadTokens: integer('cache_read_tokens'),
+    cacheCreationTokens: integer('cache_creation_tokens'),
+    /** The model that served this generation, as the provider named it. Null when unmeasured. */
+    model: text('model'),
     queuedAt: timestamp('queued_at').notNull().defaultNow(),
     startedAt: timestamp('started_at'),
     completedAt: timestamp('completed_at'),

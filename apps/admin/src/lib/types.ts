@@ -99,3 +99,9 @@ export type AdminServiceStatus = AdminStatus['services'][number];
 
 /** One internal job ledger's recent failure count. */
 export type AdminJobHealth = AdminStatus['jobs'][number];
+
+/** What Athena ran over the reported window, and what it consumed at the provider. */
+export type AdminAthenaUsage = InferResponseType<(typeof api.admin)['athena-usage']['$get']>;
+
+/** One dimension's share of that work. */
+export type AdminUsageSlice = AdminAthenaUsage['byModel'][number];

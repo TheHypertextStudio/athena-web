@@ -408,8 +408,9 @@ Two things write that row: the OAuth callback (so a sign-in takes effect immedia
 revocation real** — sessions last 30 days, so without it, removing someone from a group would not
 lock them out of the console until their session happened to expire.
 
-Setup, in order. All of it is scriptable; only the repository variables in step 4 need a
-GitHub-authenticated shell:
+`pnpm bootstrap` does all of this — it prompts for the Workspace domain, creates the groups,
+grants the IAM role, and writes the variables. The steps below are what it does, for a project
+that was bootstrapped before operator SSO existed and is being brought up to date by hand:
 
 1. `pnpm bootstrap` creates the runtime service account `docket-api@<project>.iam.gserviceaccount.com`
    and publishes it as `vars.GCP_API_RUNTIME_SERVICE_ACCOUNT`. The deploy workflow then passes
@@ -438,8 +439,16 @@ GitHub-authenticated shell:
      --role="roles/cloudidentity.groupsReader" --condition=None
    ```
 
-4. Set `GOOGLE_WORKSPACE_DOMAIN` and `ADMIN_GOOGLE_GROUP_ROLES`, then flip
-   `ADMIN_GOOGLE_SSO_ENABLED=true` **last** — the console hides the Google button until the API
+4. Set `GOOGLE_WORKSPACE_DOMAIN` and `ADMIN_GOOGLE_GROUP_ROLES` **on the `production`
+   environment**, not at repository scope — `pnpm bootstrap` writes every policy value there, and
+   an environment variable shadows a repository one of the same name, so a repo-scoped value looks
+   correct in the UI while the deploy keeps reading the environment's:
+
+   ```bash
+   gh variable set GOOGLE_WORKSPACE_DOMAIN --env production --body "<domain>" --repo <owner/repo>
+   ```
+
+   Then flip `ADMIN_GOOGLE_SSO_ENABLED=true` (also `--env production`) **last** — the console hides the Google button until the API
    reports it configured, so an operator never sees a button that cannot work. Both values are
    load-bearing: with either missing the sync grants nothing at all, which is deliberate — an
    unset domain would otherwise widen operator SSO to every Google account on earth.

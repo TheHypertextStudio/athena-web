@@ -53,6 +53,26 @@ const SA_NAME = 'docket-deploy';
  * can name when granting the *Groups Reader* admin role in the Workspace admin console.
  */
 const API_RUNTIME_SA_NAME = 'docket-api';
+
+/**
+ * The Workspace groups that grant operator access, and the tier each one carries.
+ *
+ * @remarks
+ * Deterministic names so provisioning and the `ADMIN_GOOGLE_GROUP_ROLES` mapping cannot disagree.
+ * They are created as SECURITY groups because that is the type an org-level
+ * `roles/cloudidentity.groupsReader` binding can read — the same lookup against a discussion
+ * forum answers `PERMISSION_DENIED`.
+ */
+const OPERATOR_GROUPS: readonly { readonly localPart: string; readonly role: string }[] = [
+  { localPart: 'docket-support', role: 'support' },
+  { localPart: 'docket-finance', role: 'finance' },
+  { localPart: 'docket-admins', role: 'superadmin' },
+];
+
+/** The `ADMIN_GOOGLE_GROUP_ROLES` value for a Workspace domain. */
+function operatorGroupRoles(workspaceDomain: string): string {
+  return OPERATOR_GROUPS.map((g) => `${g.localPart}@${workspaceDomain}:${g.role}`).join(',');
+}
 const AR_REPO = 'docket';
 const WIF_POOL = 'github';
 const WIF_PROVIDER = 'github-actions';
@@ -300,6 +320,8 @@ interface Config {
   apiUrl: string; // e.g. https://docket-api.example.com
   adminUrl: string; // e.g. https://docket-admin.example.com
   neonProjectId: string;
+  /** Google Workspace domain backing operator SSO, or '' when the console stays passkey-only. */
+  workspaceDomain: string;
   neonApiKey: string | null; // null = already stored in GitHub; skip upload
   databaseUrl: string;
   databaseUrlUnpooled: string;
@@ -345,6 +367,13 @@ async function gatherConfig(): Promise<Config> {
   const adminUrl = await prompt('Production admin URL', `https://admin.${domain}`);
 
   log.info('Production database — Neon (neon.tech → New project → Connection details)');
+  // Operator SSO is optional: a deployment with no Workspace keeps the console passkey-only, and
+  // an empty answer must leave every operator-SSO variable unset rather than half-configured.
+  const workspaceDomain = await prompt(
+    'Google Workspace domain for operator sign-in (blank = passkey-only console)',
+    domain,
+  );
+
   const neonProjectId = await prompt('Neon project ID', '', 'cool-darkness-12345678');
 
   // Skip the API key prompt if it's already stored as a GitHub secret.
@@ -382,6 +411,7 @@ async function gatherConfig(): Promise<Config> {
     apiUrl,
     adminUrl,
     neonProjectId,
+    workspaceDomain,
     neonApiKey,
     databaseUrl,
     databaseUrlUnpooled,
@@ -503,6 +533,7 @@ function setupGcp(cfg: Config): {
       --quiet`);
     if (bound) {
       ok(`roles/cloudidentity.groupsReader (${API_RUNTIME_SA_NAME}, org ${orgId})`);
+      provisionOperatorGroups(cfg, orgId);
     } else {
       warn(
         `could not grant roles/cloudidentity.groupsReader on organization ${orgId} — operator ` +
@@ -610,6 +641,44 @@ function setupGcp(cfg: Config): {
   return { saEmail, apiRuntimeSaEmail, wifProvider };
 }
 
+/**
+ * Create the operator groups, idempotently.
+ *
+ * @remarks
+ * Best-effort and never fatal: a Workspace the operator cannot administer, or a deployment with
+ * no Workspace at all, must still finish bootstrapping a working product. Creating a group makes
+ * the creator a member of it, so whoever runs this becomes an operator once the mapping is live —
+ * which is the intended way to get the first one.
+ */
+function provisionOperatorGroups(cfg: Config, orgId: string): void {
+  if (!cfg.workspaceDomain) {
+    note('skipped — no Workspace domain given, so the console stays passkey-only.', 'Operator SSO');
+    return;
+  }
+
+  section('Google Workspace — operator groups');
+  for (const group of OPERATOR_GROUPS) {
+    const email = `${group.localPart}@${cfg.workspaceDomain}`;
+    if (tryRun(`gcloud identity groups describe ${email} --format='value(name)'`)) {
+      ok(`group exists: ${email}`);
+      continue;
+    }
+    const created = tryRun(`gcloud identity groups create ${email} \
+      --organization=${orgId} \
+      --group-type=security \
+      --display-name="Docket operators — ${group.role}" \
+      --description="Grants Docket admin console ${group.role}-tier operator access."`);
+    if (created) {
+      ok(`created: ${email}`);
+    } else {
+      warn(
+        `could not create ${email} — create it manually as a SECURITY group, or operator SSO ` +
+          'will grant nothing for that tier.',
+      );
+    }
+  }
+}
+
 // ── github ────────────────────────────────────────────────────────────────────
 
 function setupGithub(
@@ -639,7 +708,15 @@ function setupGithub(
       new URL(cfg.adminUrl).host,
     ].join(','),
     GOOGLE_OAUTH_PUBLIC: 'false',
+    // Left off until the groups have members: enabling operator SSO before anyone is in a group
+    // would simply grant nobody, and the console would advertise a button that cannot work.
     ADMIN_GOOGLE_SSO_ENABLED: 'false',
+    ...(cfg.workspaceDomain
+      ? {
+          GOOGLE_WORKSPACE_DOMAIN: cfg.workspaceDomain,
+          ADMIN_GOOGLE_GROUP_ROLES: operatorGroupRoles(cfg.workspaceDomain),
+        }
+      : {}),
   };
 
   for (const [key, value] of Object.entries(repoVars)) {

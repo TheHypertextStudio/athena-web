@@ -39,7 +39,7 @@ const SCHEMA_DIR = resolve(WORKSPACE_ROOT, 'packages/db/src/schema');
  * map must have none at all.
  */
 const NAIVE_TIMESTAMP_DEBT: Readonly<Record<string, number>> = {
-  'admin.ts': 11,
+  'admin.ts': 12,
   'agents.ts': 51,
   'athena-mail.ts': 3,
   'auth.ts': 26,

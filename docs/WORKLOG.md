@@ -64,7 +64,13 @@ db:reset` completed. The migration changes no UI behavior, but the requested des
   - [x] Phase 2c — a probe pass on the existing cron substrate, operator-controllable at runtime
   - [x] Phase 2d — internal job health derived from the run ledgers that already record failures
   - [x] Phase 2e — the status board, with per-service disclosure and 24h/7d/30d uptime
-  - [ ] Phase 3 — Athena usage and per-session token capture
+  - [x] Phase 4 — a standardization and enforcement pass over the whole effort (see below)
+  - [ ] Phase 3 — Athena usage and per-session token capture. **Not started.** It is the only phase
+        that touches the agent turn pipeline (`domains/athena/src/turn/translate.ts`, a new field on
+        `TurnEvent.turn_end`, `apps/api/src/agent/loop.ts`) and needs a migration, and it reverses
+        the documented decision in `packages/db/src/schema/agents.ts` that compute and cost are not
+        stored. Agreed shape: per-session totals on `agent_session_run`, Anthropic-only coverage
+        because the Lattice adapter returns no token counts.
 - **Decisions**: Third-party health is **derived** from the ledgers recording real provider traffic
   (`billing_provider_sync`, `agent_session_run`, `sync_run`) rather than from synthetic pings. The
   first draft pinged each provider directly, which meant reading `STRIPE_SECRET_KEY`,
@@ -103,11 +109,42 @@ db:reset` completed. The migration changes no UI behavior, but the requested des
   Turbo filters environment variables to tasks; `ADMIN_URL` reached nothing until it was added to
   `globalEnv`, which is why the console reported itself unprobeable.
 
-- **Blockers**: Visual re-verification is blocked on the dev machine rather than the code — the web
-  app's Turbopack server began 404ing every route (including ones that had just worked) under
-  sustained `EMFILE` watcher exhaustion, and single requests reached 11 minutes of application time.
-  `dev-stack.sh` now raises the descriptor limit before starting, which is a real fix but not
-  sufficient on its own.
+- **Standardization pass**: An audit across six dimensions (cross-app duplication, enforcement
+  gaps, console consistency, API conventions, schema standards, copy) raised 52 findings; 50
+  survived adversarial verification. Several were defects rather than style, and each is worth
+  recording because none of them would have been caught by a test:
+
+  - The status board instructed operators to re-enable probing in Settings, and `service_probes` had
+    a database key and a runtime read but **no write path anywhere**. The capability described as
+    operator-controllable was not. It is a real control now.
+  - `service_probe` was insert-only with nothing pruning it — roughly 841,000 rows a year on a table
+    with no owning organization to cascade from. The pass now prunes past its horizon.
+  - A pass that found probing switched off returned an empty list, which the cron route reported as
+    `0 checked, 0 down` — indistinguishable from a healthy deployment.
+  - Neither status query could use the only index: both filter on time across every service and the
+    index led with `service_key`.
+  - `AdminPage` applied the declared width only on the non-outline path, so four of eleven screens
+    rendered at a measure they never declared.
+  - Five panels used `Surface tone="card"` inside a section that is itself a card, drawing no
+    boundary at all; three screens nested a `md` control group inside an `lg` section, so an input
+    and its button sat at different heights on one line.
+  - The attention band carried an **all-time** failed-session count as if it were queue depth, so
+    the tile could never reach zero and was permanently raised.
+
+- **Enforcement**: The console drifted originally because it sat outside the lint perimeter, so
+  applying standards without enforcing them only restarts that clock. `apps/admin` now joins
+  `DATA_LAYER_SURFACES` — it had followed the fetch-in-effect rule by convention, which its own
+  docblock admitted — and that rule's selector was widened, since it matched only a bare `useEffect`
+  callee and missed the namespaced `React.useEffect` that is the codebase's more common spelling.
+  `timestamptz-policy.test.ts` freezes the 439 naive `timestamp(...)` columns that predate the rule
+  the engineering plan calls frozen and fails on the 440th; the ledger may only shrink and cannot go
+  stale. Both were proven to fire before being relied on.
+
+- **Blockers**: Visual re-verification was blocked for a stretch by the dev machine rather than the
+  code — the web app's Turbopack server began 404ing every route under `EMFILE` watcher exhaustion,
+  with single requests reaching 11 minutes. The cause was `dev-stack.sh stop` using unqualified
+  `pkill` patterns that killed other worktrees while missing this one's own servers; the orphans it
+  left held the watchers. Fixed, and all eleven screens were captured afterwards.
 
 ---
 

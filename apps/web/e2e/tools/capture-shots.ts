@@ -49,10 +49,10 @@ interface CliArgs {
   routes: string[];
   audit: boolean;
   start: number;
-  limit?: number;
+  limit: number | undefined;
   frameStart: number;
-  frameLimit?: number;
-  records?: string;
+  frameLimit: number | undefined;
+  records: string | undefined;
 }
 
 /** The mobile remediation matrix: four viewports × two color schemes. */

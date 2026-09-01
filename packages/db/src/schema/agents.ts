@@ -91,6 +91,9 @@ export type AgentSessionExecutionSurface = 'docket' | 'lattice';
 /** Docket-owned lifecycle for one durable Lattice assignment delegation. */
 export type AgentDelegationStatus =
   'prepared' | 'submitted' | 'proposed' | 'completed' | 'failed' | 'canceled';
+/** One-use lifecycle for a Lovelace authorization attempt. */
+export type LatticeAuthorizationAttemptStatus =
+  'pending' | 'exchanging' | 'completed' | 'declined' | 'failed';
 
 /** Decrypted terminal result retained after the one-use reply key is cleared. */
 export interface AgentDelegationTerminalOutcome {
@@ -835,6 +838,64 @@ export const latticeConnection = pgTable(
     check(
       'lattice_connection_enabled_needs_device_check',
       sql`${t.enabled} = false OR ${t.deviceId} IS NOT NULL`,
+    ),
+  ],
+);
+
+/**
+ * One short-lived attempt to replace or create a Lattice grant.
+ *
+ * @remarks
+ * This row is deliberately separate from {@link latticeCredential}: opening, dismissing, denying,
+ * or failing a new Lovelace ceremony must never overwrite a working refresh token. Only a
+ * successfully exchanged attempt is installed into the active credential row.
+ */
+export const latticeAuthorizationAttempt = pgTable(
+  'lattice_authorization_attempt',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    connectionId: text('connection_id').notNull(),
+    ownerUserId: text('owner_user_id').notNull(),
+    /** SHA-256 of the signed OAuth state returned to the browser. */
+    stateHash: text('state_hash').notNull(),
+    /** AES-256-GCM envelope containing only the PKCE verifier. */
+    verifierCiphertext: text('verifier_ciphertext').notNull(),
+    /** Registered redirect URI bound into the authorization request. */
+    redirectUri: text('redirect_uri').notNull(),
+    /** Exact least-privilege scope string bound into the authorization request. */
+    scope: text('scope').notNull(),
+    /** Public S256 challenge paired with the sealed verifier. */
+    codeChallenge: text('code_challenge').notNull(),
+    status: text('status').$type<LatticeAuthorizationAttemptStatus>().notNull().default('pending'),
+    /** Stable Docket-owned failure code; never Lovelace prose. */
+    failureReason: text('failure_reason'),
+    expiresAt: timestamp('expires_at').notNull(),
+    consumedAt: timestamp('consumed_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('lattice_authorization_attempt_state_uq').on(t.stateHash),
+    index('lattice_authorization_attempt_owner_status_idx').on(t.ownerUserId, t.status),
+    index('lattice_authorization_attempt_expiry_idx').on(t.expiresAt),
+    foreignKey({
+      columns: [t.connectionId, t.ownerUserId],
+      foreignColumns: [latticeConnection.id, latticeConnection.ownerUserId],
+      name: 'lattice_authorization_attempt_connection_owner_fk',
+    }).onDelete('cascade'),
+    check(
+      'lattice_authorization_attempt_status_check',
+      sql`${t.status} in ('pending','exchanging','completed','declined','failed')`,
+    ),
+    check(
+      'lattice_authorization_attempt_outcome_check',
+      sql`(${t.status} = 'pending' AND ${t.consumedAt} IS NULL AND ${t.failureReason} IS NULL)
+        OR (${t.status} = 'exchanging' AND ${t.consumedAt} IS NOT NULL AND ${t.failureReason} IS NULL)
+        OR (${t.status} = 'completed' AND ${t.consumedAt} IS NOT NULL AND ${t.failureReason} IS NULL)
+        OR (${t.status} in ('declined','failed') AND ${t.consumedAt} IS NOT NULL AND ${t.failureReason} IS NOT NULL)`,
     ),
   ],
 );

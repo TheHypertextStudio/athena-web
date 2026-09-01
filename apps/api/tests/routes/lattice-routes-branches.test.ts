@@ -41,7 +41,10 @@ import { LATTICE_SCOPES, LatticeUnavailableError, type LatticeDevice } from '@do
 
 import { env } from '../../src/env';
 import type latticeRouter from '../../src/routes/lattice';
-import type { storeLatticeCredential as StoreLatticeCredential } from '../../src/routes/lattice-connection';
+import type {
+  loadStoredLatticeCredential as LoadStoredLatticeCredential,
+  storeLatticeCredential as StoreLatticeCredential,
+} from '../../src/routes/lattice-connection';
 import { appWithSession, fakeSession, getDb, one } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
@@ -51,16 +54,19 @@ let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let lattice!: typeof latticeRouter;
 let storeLatticeCredential!: typeof StoreLatticeCredential;
+let loadStoredLatticeCredential!: typeof LoadStoredLatticeCredential;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   lattice = (await import('../../src/routes/lattice')).default;
-  ({ storeLatticeCredential } = await import('../../src/routes/lattice-connection'));
+  ({ storeLatticeCredential, loadStoredLatticeCredential } =
+    await import('../../src/routes/lattice-connection'));
 });
 
 afterEach(() => {
   listLatticeDevices.mockReset();
+  vi.restoreAllMocks();
 });
 
 /** A device as the gateway reports it. */
@@ -237,6 +243,181 @@ describe('the Lattice routes for someone who has never connected', () => {
       deviceId: null,
     });
     expect(await readConnection(owner)).toBeUndefined();
+  });
+});
+
+describe('starting and completing a Lattice authorization attempt', () => {
+  it('keeps a working grant active while returning redirect and FedCM inputs', async () => {
+    const owner = await seedUser('lattice-relink-start');
+    const connectionId = await seedConnection(owner, {
+      deviceId: 'lat_studio',
+      deviceName: 'Studio Mac',
+      deviceStatus: 'reachable',
+      enabled: true,
+    });
+
+    const response = await call(owner, '/lattice/authorize', { method: 'POST' });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      attemptId: string;
+      expiresAt: string;
+      authorizationUrl: string;
+      fedcm: {
+        configUrl: string;
+        clientId: string;
+        params: Record<string, string>;
+      };
+    };
+    const redirect = new URL(body.authorizationUrl);
+    expect(body.attemptId).toBeTruthy();
+    expect(new Date(body.expiresAt).getTime()).toBeGreaterThan(Date.now());
+    expect(body.fedcm).toMatchObject({
+      configUrl: 'https://auth.uselovelace.com/web-identity/config.json',
+      clientId: 'client_docket_test',
+      params: {
+        purpose: 'oauth_authorization',
+        redirect_uri: expect.stringContaining('/internal/integrations/lattice/callback'),
+        scope: LATTICE_SCOPES.join(' '),
+        code_challenge_method: 'S256',
+      },
+    });
+    expect(body.fedcm.params['state']).toBe(redirect.searchParams.get('state'));
+    expect(body.fedcm.params['code_challenge']).toBe(redirect.searchParams.get('code_challenge'));
+
+    expect(await readConnection(owner)).toMatchObject({
+      id: connectionId,
+      status: 'connected',
+      enabled: true,
+      deviceId: 'lat_studio',
+    });
+    expect(await loadStoredLatticeCredential(connectionId, owner)).toMatchObject({
+      kind: 'lattice_oauth',
+      accessToken: 'at_test',
+    });
+    const attempts = await db
+      .select()
+      .from(schema.latticeAuthorizationAttempt)
+      .where(eq(schema.latticeAuthorizationAttempt.id, body.attemptId));
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]).toMatchObject({
+      connectionId,
+      ownerUserId: owner,
+      status: 'pending',
+      redirectUri: body.fedcm.params['redirect_uri'],
+      scope: LATTICE_SCOPES.join(' '),
+      codeChallenge: body.fedcm.params['code_challenge'],
+      consumedAt: null,
+    });
+    expect(attempts[0]?.verifierCiphertext).toContain('v1:gcm:');
+    expect(attempts[0]?.verifierCiphertext).not.toContain('code_verifier');
+  });
+
+  it('exchanges a FedCM code once and installs the resulting grant', async () => {
+    const owner = await seedUser('lattice-fedcm-complete');
+    const started = await call(owner, '/lattice/authorize', { method: 'POST' });
+    const { attemptId } = (await started.json()) as { attemptId: string };
+    const issuer = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          access_token: 'at_fedcm',
+          refresh_token: 'rt_fedcm',
+          expires_in: 3600,
+          scope: LATTICE_SCOPES.join(' '),
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const completed = await call(owner, '/lattice/authorize/complete', {
+      method: 'POST',
+      body: { attemptId, authorizationCode: 'code_from_fedcm' },
+    });
+    const replay = await call(owner, '/lattice/authorize/complete', {
+      method: 'POST',
+      body: { attemptId, authorizationCode: 'code_from_fedcm' },
+    });
+
+    expect(completed.status).toBe(200);
+    expect(await completed.json()).toEqual({ status: 'connected' });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({ status: 'connected' });
+    expect(issuer).toHaveBeenCalledTimes(1);
+
+    const connection = await readConnection(owner);
+    expect(connection).toMatchObject({
+      status: 'connected',
+      grantedScope: LATTICE_SCOPES.join(' '),
+      lastFailureReason: null,
+    });
+    expect(await loadStoredLatticeCredential(assertDefined(connection).id, owner)).toMatchObject({
+      kind: 'lattice_oauth',
+      accessToken: 'at_fedcm',
+      refreshToken: 'rt_fedcm',
+    });
+    const [attempt] = await db
+      .select()
+      .from(schema.latticeAuthorizationAttempt)
+      .where(eq(schema.latticeAuthorizationAttempt.id, attemptId));
+    expect(attempt).toMatchObject({ status: 'completed', failureReason: null });
+    expect(attempt?.consumedAt).toBeInstanceOf(Date);
+
+    const request = issuer.mock.calls[0]?.[1];
+    const form = new URLSearchParams(typeof request?.body === 'string' ? request.body : '');
+    expect(form.get('code')).toBe('code_from_fedcm');
+    expect(form.get('code_verifier')).toBeTruthy();
+  });
+
+  it('does not let a failed replacement attempt damage the active connection', async () => {
+    const owner = await seedUser('lattice-relink-fails');
+    const connectionId = await seedConnection(owner, {
+      deviceId: 'lat_studio',
+      deviceName: 'Studio Mac',
+      enabled: true,
+    });
+    const started = await call(owner, '/lattice/authorize', { method: 'POST' });
+    const { attemptId } = (await started.json()) as { attemptId: string };
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('issuer unavailable'));
+
+    const response = await call(owner, '/lattice/authorize/complete', {
+      method: 'POST',
+      body: { attemptId, authorizationCode: 'code_unexchangeable' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'error' });
+    expect(await readConnection(owner)).toMatchObject({
+      id: connectionId,
+      status: 'connected',
+      enabled: true,
+      deviceId: 'lat_studio',
+      lastFailureReason: null,
+    });
+    expect(await loadStoredLatticeCredential(connectionId, owner)).toMatchObject({
+      kind: 'lattice_oauth',
+      accessToken: 'at_test',
+    });
+    const [attempt] = await db
+      .select()
+      .from(schema.latticeAuthorizationAttempt)
+      .where(eq(schema.latticeAuthorizationAttempt.id, attemptId));
+    expect(attempt).toMatchObject({ status: 'failed', failureReason: 'gateway_error' });
+  });
+
+  it('refuses to complete another owner’s attempt before calling Lovelace', async () => {
+    const owner = await seedUser('lattice-attempt-owner');
+    const stranger = await seedUser('lattice-attempt-stranger');
+    const started = await call(owner, '/lattice/authorize', { method: 'POST' });
+    const { attemptId } = (await started.json()) as { attemptId: string };
+    const issuer = vi.spyOn(globalThis, 'fetch');
+
+    const response = await call(stranger, '/lattice/authorize/complete', {
+      method: 'POST',
+      body: { attemptId, authorizationCode: 'code_stolen' },
+    });
+
+    expect(response.status).toBe(404);
+    expect(issuer).not.toHaveBeenCalled();
   });
 });
 

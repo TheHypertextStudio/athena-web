@@ -32,12 +32,9 @@ import { assertDefined } from '@docket/test-utils';
 
 import type { AppEnv } from '../../src/context';
 import type { resolveOwnerBackend as ResolveOwnerBackendFn } from '../../src/routes/lattice-backend';
-import type { signConnectState as SignConnectStateFn } from '../../src/lib/oauth-state';
 
 /** The per-owner backend resolver the agent loop calls. */
 type ResolveOwnerBackend = typeof ResolveOwnerBackendFn;
-/** The signed connect-state minter. */
-type SignConnectState = typeof SignConnectStateFn;
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 // This flow must remain available in the deployed API. The owner's Lattice choice is independent
@@ -123,8 +120,7 @@ function accountsStub(): { server: Server; issuedCodes: Map<string, string> } {
             access_token: 'at_refreshed',
             refresh_token: 'rt_2',
             expires_in: 3600,
-            scope:
-              'openid profile email offline_access lattice:compute:inference lattice:compute:catalog:read',
+            scope: 'openid offline_access lattice:compute:inference lattice:compute:catalog:read',
           });
           return;
         }
@@ -139,8 +135,7 @@ function accountsStub(): { server: Server; issuedCodes: Map<string, string> } {
           access_token: 'at_1',
           refresh_token: 'rt_1',
           expires_in: 3600,
-          scope:
-            'openid profile email offline_access lattice:compute:inference lattice:compute:catalog:read',
+          scope: 'openid offline_access lattice:compute:inference lattice:compute:catalog:read',
         });
         return;
       }
@@ -263,7 +258,7 @@ let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let app!: Hono<AppEnv>;
 let resolveOwnerBackend!: ResolveOwnerBackend;
-let signConnectState!: SignConnectState;
+let startedAuthorizationUrl = '';
 
 /** Call the API as the signed-in owner. */
 async function call(
@@ -291,7 +286,6 @@ beforeAll(async () => {
 
   const lattice = (await import('../../src/routes/lattice')).default;
   ({ resolveOwnerBackend } = await import('../../src/routes/lattice-backend'));
-  ({ signConnectState } = await import('../../src/lib/oauth-state'));
   const { onError } = await import('../../src/error');
   const { fakeSession } = await import('../support/routes-harness');
   app = new Hono<AppEnv>();
@@ -325,8 +319,6 @@ describe('the bring-your-own-Lattice flow', () => {
     // The permission ask is visible before anyone clicks Connect.
     expect(body['scopes']).toEqual([
       'openid',
-      'profile',
-      'email',
       'offline_access',
       'lattice:compute:inference',
       'lattice:compute:catalog:read',
@@ -337,12 +329,13 @@ describe('the bring-your-own-Lattice flow', () => {
     const response = await call('/v1/me/athena/lattice/authorize', { method: 'POST' });
     expect(response.status).toBe(200);
     const { authorizationUrl } = (await response.json()) as { authorizationUrl: string };
+    startedAuthorizationUrl = authorizationUrl;
     const url = new URL(authorizationUrl);
 
     expect(url.pathname).toBe('/oauth/authorize');
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     expect(url.searchParams.get('scope')).toBe(
-      'openid profile email offline_access lattice:compute:inference lattice:compute:catalog:read',
+      'openid offline_access lattice:compute:inference lattice:compute:catalog:read',
     );
     expect(url.searchParams.get('client_id')).toBe('client_docket');
 
@@ -354,12 +347,7 @@ describe('the bring-your-own-Lattice flow', () => {
   it('completes the exchange through the real callback and stores a sealed grant', async () => {
     const latticeOAuth = (await import('../../src/routes/lattice-oauth')).default;
     const callbackApp = new Hono().route('/internal/integrations/lattice', latticeOAuth);
-    const [connection] = await db.select().from(schema.latticeConnection);
-    const state = signConnectState({
-      scope: 'lattice',
-      connectionId: connection?.id ?? '',
-      ownerUserId: USER_ID,
-    });
+    const state = new URL(startedAuthorizationUrl).searchParams.get('state') ?? '';
 
     const response = await callbackApp.request(
       `http://api.test/internal/integrations/lattice/callback?code=code_granted&state=${encodeURIComponent(state)}`,

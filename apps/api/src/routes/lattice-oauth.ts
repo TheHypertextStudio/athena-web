@@ -26,6 +26,10 @@ import { Hono } from 'hono';
 import { webAppOrigin } from '../lib/github-app';
 import { verifyConnectState } from '../lib/oauth-state';
 import {
+  completeLatticeAuthorizationAttempt,
+  rejectLatticeAuthorizationAttempt,
+} from './lattice-authorization';
+import {
   latticeOAuthConfig,
   loadStoredLatticeCredential,
   storeLatticeCredential,
@@ -60,66 +64,70 @@ async function markFailed(row: LatticeConnectionRow, reason: string): Promise<vo
     .where(eq(latticeConnection.id, row.id));
 }
 
-/** The Lovelace OAuth callback edge. */
-const latticeOAuth = new Hono().get('/callback', async (c) => {
-  const state = c.req.query('state');
-  const decoded = state ? verifyConnectState(state) : null;
-  const connectionId = decoded?.['connectionId'];
-  const ownerUserId = decoded?.['ownerUserId'];
-  if (
-    decoded?.['scope'] !== 'lattice' ||
-    typeof connectionId !== 'string' ||
-    typeof ownerUserId !== 'string'
-  ) {
-    // An unsigned, expired or foreign state is the one case with no row to record against.
-    return c.redirect(settingsRedirect('error'));
-  }
+/** Complete a callback backed by the new isolated authorization-attempt table. */
+async function attemptCallbackStatus(input: {
+  readonly attemptId: string;
+  readonly connectionId: string;
+  readonly ownerUserId: string;
+  readonly state: string;
+  readonly code: string | undefined;
+  readonly error: string | undefined;
+}): Promise<CallbackStatus> {
+  const status = input.code
+    ? await completeLatticeAuthorizationAttempt({
+        attemptId: input.attemptId,
+        ownerUserId: input.ownerUserId,
+        connectionId: input.connectionId,
+        authorizationCode: input.code,
+        state: input.state,
+      })
+    : await rejectLatticeAuthorizationAttempt({
+        attemptId: input.attemptId,
+        ownerUserId: input.ownerUserId,
+        connectionId: input.connectionId,
+        state: input.state,
+        declined: input.error === 'access_denied',
+      });
+  return status ?? 'error';
+}
 
+/** Complete a redirect started before isolated attempt rows were deployed. */
+async function legacyCallbackStatus(input: {
+  readonly connectionId: string;
+  readonly ownerUserId: string;
+  readonly code: string | undefined;
+  readonly error: string | undefined;
+}): Promise<CallbackStatus> {
   const [row] = await db
     .select()
     .from(latticeConnection)
-    .where(eq(latticeConnection.id, connectionId))
+    .where(eq(latticeConnection.id, input.connectionId))
     .limit(1);
-  if (row?.ownerUserId !== ownerUserId) {
-    return c.redirect(settingsRedirect('error'));
-  }
+  if (row?.ownerUserId !== input.ownerUserId) return 'error';
 
-  const code = c.req.query('code');
-  if (!code) {
-    // Lovelace sends `error=access_denied` when someone declines. That is a choice, not a fault,
-    // so it gets its own outcome and its own copy.
-    const declined = c.req.query('error') === 'access_denied';
+  if (!input.code) {
+    const declined = input.error === 'access_denied';
     await markFailed(row, declined ? 'not_connected' : 'gateway_error');
-    return c.redirect(settingsRedirect(declined ? 'declined' : 'error'));
+    return declined ? 'declined' : 'error';
   }
 
   try {
-    const pending = await loadStoredLatticeCredential(row.id, ownerUserId);
-    // An already-approved credential here means no new `/authorize` has run since this connection
-    // last completed: this is a replay (a back-button resubmit), not a new attempt. Redirect
-    // idempotently rather than re-exchanging a consumed code and flipping a healthy connection to
-    // error.
-    if (pending?.kind === 'lattice_oauth') {
-      return c.redirect(settingsRedirect('connected'));
-    }
+    const pending = await loadStoredLatticeCredential(row.id, input.ownerUserId);
+    if (pending?.kind === 'lattice_oauth') return 'connected';
     if (pending?.kind !== 'lattice_oauth_pending') {
       throw new Error('Lattice authorization is no longer active');
     }
 
     const approved = await completeLatticeAuthorization(latticeOAuthConfig(), {
-      authorizationCode: code,
+      authorizationCode: input.code,
       credential: pending,
     });
-
-    // A narrowed grant is caught here rather than at the first turn, where it would surface as a
-    // confusing mid-conversation failure.
-    const missing = missingLatticeScopes(approved.scope);
-    if (missing.length > 0) {
+    if (missingLatticeScopes(approved.scope).length > 0) {
       await markFailed(row, 'insufficient_scopes');
-      return c.redirect(settingsRedirect('scopes'));
+      return 'scopes';
     }
 
-    await storeLatticeCredential(row.id, ownerUserId, approved);
+    await storeLatticeCredential(row.id, input.ownerUserId, approved);
     await db
       .update(latticeConnection)
       .set({
@@ -130,13 +138,51 @@ const latticeOAuth = new Hono().get('/callback', async (c) => {
         lastVerifiedAt: new Date(),
       })
       .where(eq(latticeConnection.id, row.id));
-    return c.redirect(settingsRedirect('connected'));
+    return 'connected';
   } catch {
-    // The thrown value is issuer or transport text. It is deliberately not read, not logged into
-    // the row, and not put on the redirect: the row records a stable code and nothing else.
     await markFailed(row, 'gateway_error');
+    return 'error';
+  }
+}
+
+/** The Lovelace OAuth callback edge. */
+const latticeOAuth = new Hono().get('/callback', async (c) => {
+  const state = c.req.query('state');
+  const decoded = state ? verifyConnectState(state) : null;
+  const connectionId = decoded?.['connectionId'];
+  const ownerUserId = decoded?.['ownerUserId'];
+  if (
+    typeof state !== 'string' ||
+    decoded?.['scope'] !== 'lattice' ||
+    typeof connectionId !== 'string' ||
+    typeof ownerUserId !== 'string'
+  ) {
+    // An unsigned, expired or foreign state is the one case with no row to record against.
     return c.redirect(settingsRedirect('error'));
   }
+
+  const attemptId = decoded['attemptId'];
+  if (typeof attemptId === 'string') {
+    const status = await attemptCallbackStatus({
+      attemptId,
+      ownerUserId,
+      connectionId,
+      state,
+      code: c.req.query('code'),
+      error: c.req.query('error'),
+    });
+    return c.redirect(settingsRedirect(status));
+  }
+
+  // Compatibility for an authorization started by the previous deployment, where the PKCE
+  // verifier was temporarily stored in `lattice_credential` and state had no attempt id.
+  const status = await legacyCallbackStatus({
+    connectionId,
+    ownerUserId,
+    code: c.req.query('code'),
+    error: c.req.query('error'),
+  });
+  return c.redirect(settingsRedirect(status));
 });
 
 export default latticeOAuth;

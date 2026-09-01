@@ -37,8 +37,7 @@ import type {
 import { appWithSession, getDb, one, seedUserWithHub } from '../support/routes-harness';
 
 /** The scopes a full Lovelace grant comes back with. */
-const FULL_SCOPE =
-  'openid profile email offline_access lattice:compute:inference lattice:compute:catalog:read';
+const FULL_SCOPE = 'openid offline_access lattice:compute:inference lattice:compute:catalog:read';
 
 const TOKEN_ENDPOINT = 'https://lovelace-accounts.test/oauth/token';
 
@@ -335,7 +334,7 @@ describe('the Lattice OAuth callback', () => {
       access_token: 'at_narrow',
       refresh_token: 'rt_narrow',
       expires_in: 3600,
-      scope: 'openid profile email offline_access',
+      scope: 'openid offline_access',
     });
     const state = stateFor({
       scope: 'lattice',

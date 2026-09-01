@@ -21,12 +21,11 @@
  *
  * @see `docs/engineering/specs/lattice-byo-model.md`
  */
-import { db, latticeConnection, latticeCredential } from '@docket/db';
+import { db, latticeAuthorizationAttempt, latticeConnection, latticeCredential } from '@docket/db';
 import {
   LATTICE_SCOPES,
   LATTICE_UNAVAILABLE_REASONS,
   LatticeUnavailableError,
-  beginLatticeAuthorization,
   listLatticeDevices,
   type LatticeUnavailableReason,
 } from '@docket/integrations';
@@ -37,16 +36,17 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { AuthError, ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
-import { signConnectState } from '../lib/oauth-state';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson } from '../lib/validate';
 import {
+  completeLatticeAuthorizationAttempt,
+  startLatticeAuthorizationAttempt,
+} from './lattice-authorization';
+import {
   latticeConfigured,
   latticeGatewayContext,
-  latticeOAuthConfig,
   loadLatticeConnection,
   recordLatticeFailure,
-  storeLatticeCredential,
   type LatticeConnectionRow,
 } from './lattice-connection';
 
@@ -112,12 +112,46 @@ const LatticeDeviceListOut = z
   })
   .meta({ id: 'LatticeDeviceListOut', description: 'The user’s Lattice devices.' });
 
-/** Where to send the browser for consent. */
+/** One OAuth request represented for redirect and native FedCM. */
 const LatticeAuthorizeOut = z
   .object({
     authorizationUrl: z.string().describe('Lovelace’s consent screen for this authorization.'),
+    attemptId: z.string().describe('Opaque one-use Docket authorization attempt id.'),
+    expiresAt: z.string().describe('ISO-8601 expiry for this authorization attempt.'),
+    fedcm: z
+      .object({
+        configUrl: z.string().describe('Lovelace’s FedCM provider configuration URL.'),
+        clientId: z.string().describe('Docket’s registered public Lovelace client id.'),
+        params: z
+          .object({
+            purpose: z.literal('oauth_authorization'),
+            redirect_uri: z.string(),
+            scope: z.string(),
+            state: z.string(),
+            code_challenge: z.string(),
+            code_challenge_method: z.literal('S256'),
+          })
+          .describe('OAuth request values passed through FedCM’s Parameters API.'),
+      })
+      .describe('Inputs for an active native FedCM ceremony.'),
   })
-  .meta({ id: 'LatticeAuthorizeOut', description: 'A started Lattice authorization.' });
+  .meta({
+    id: 'LatticeAuthorizeOut',
+    description: 'One authorization attempt represented for redirect and native FedCM.',
+  });
+
+/** A one-time OAuth code returned by the browser's FedCM ceremony. */
+const LatticeAuthorizeComplete = z
+  .object({
+    attemptId: z.string().min(1).describe('Attempt returned by the start endpoint.'),
+    authorizationCode: z.string().min(1).describe('One-time code returned by Lovelace.'),
+  })
+  .meta({ id: 'LatticeAuthorizeComplete', description: 'Complete a FedCM authorization.' });
+
+/** Coarse completion outcome; provider text never crosses this boundary. */
+const LatticeAuthorizeResultOut = z
+  .object({ status: z.enum(['connected', 'declined', 'error', 'scopes']) })
+  .meta({ id: 'LatticeAuthorizeResultOut', description: 'Lattice authorization outcome.' });
 
 /** Choosing which device runs Athena's turns. */
 const LatticeDeviceSelect = z
@@ -237,7 +271,7 @@ const lattice = new Hono<AppEnv>()
       summary: 'Start the Lovelace authorization',
       response: LatticeAuthorizeOut,
       description:
-        'Begin the OAuth 2.1 authorization-code + PKCE flow against Lovelace accounts and return the consent URL. The PKCE verifier is sealed against a pending connection row; no secret reaches the browser.',
+        'Begin one OAuth 2.1 authorization-code + PKCE attempt and return both redirect and FedCM inputs. The verifier is sealed in a short-lived attempt; any active grant remains untouched.',
     }),
     async (c) => {
       assertLatticeAvailable();
@@ -250,16 +284,40 @@ const lattice = new Hono<AppEnv>()
         )[0];
       if (!row) throw new ConflictError('Could not start a Lattice authorization');
 
-      const state = signConnectState({ scope: 'lattice', connectionId: row.id, ownerUserId });
-      const begun = beginLatticeAuthorization(latticeOAuthConfig(), state);
-      // The pending credential (which holds only the PKCE verifier) replaces whatever was there,
-      // so a restarted flow can never complete against a stale verifier.
-      await storeLatticeCredential(row.id, ownerUserId, begun.credential);
-      await db
-        .update(latticeConnection)
-        .set({ status: 'pending', lastFailureReason: null, lastFailureAt: null })
-        .where(eq(latticeConnection.id, row.id));
-      return ok(c, LatticeAuthorizeOut, { authorizationUrl: begun.authorizationUrl });
+      if (row.status !== 'connected') {
+        await db
+          .update(latticeConnection)
+          .set({ status: 'pending', lastFailureReason: null, lastFailureAt: null })
+          .where(eq(latticeConnection.id, row.id));
+      }
+      return ok(
+        c,
+        LatticeAuthorizeOut,
+        await startLatticeAuthorizationAttempt(row.id, ownerUserId),
+      );
+    },
+  )
+  .post(
+    '/lattice/authorize/complete',
+    apiDoc({
+      tag: 'Athena',
+      summary: 'Complete the Lovelace authorization',
+      response: LatticeAuthorizeResultOut,
+      description:
+        'Exchange the one-time code returned by an active FedCM ceremony against the owner-bound PKCE attempt and install the grant only after its scopes are verified.',
+    }),
+    zJson(LatticeAuthorizeComplete),
+    async (c) => {
+      assertLatticeAvailable();
+      const ownerUserId = requestOwner(c);
+      const body = c.req.valid('json');
+      const status = await completeLatticeAuthorizationAttempt({
+        attemptId: body.attemptId,
+        ownerUserId,
+        authorizationCode: body.authorizationCode,
+      });
+      if (status === null) throw new NotFoundError('Lattice authorization attempt');
+      return ok(c, LatticeAuthorizeResultOut, { status });
     },
   )
   .get(
@@ -401,6 +459,9 @@ const lattice = new Hono<AppEnv>()
       const row = await loadLatticeConnection(ownerUserId);
       const disconnected = row
         ? await db.transaction(async (tx) => {
+            await tx
+              .delete(latticeAuthorizationAttempt)
+              .where(eq(latticeAuthorizationAttempt.connectionId, row.id));
             await tx.delete(latticeCredential).where(eq(latticeCredential.connectionId, row.id));
             const [updated] = await tx
               .update(latticeConnection)

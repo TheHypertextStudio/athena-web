@@ -17,11 +17,11 @@
  * reaches Docket; the person types it into Lovelace's own consent screen. Everything persisted is
  * sealed with AES-256-GCM by the API layer before it touches the database.
  *
- * ## PKCE is mandatory, even though Docket is a confidential client
+ * ## PKCE is mandatory
  *
- * Docket's API holds a client secret and could use a plain code exchange. It uses PKCE anyway
- * because the authorization code travels through the user's browser, and PKCE is what makes an
- * intercepted code useless to anyone who does not hold the verifier.
+ * Docket's registered browser-facing client is public so the native FedCM ceremony can identify
+ * it without exposing a secret. PKCE is what makes an intercepted authorization code useless to
+ * anyone who does not hold the server-sealed verifier.
  *
  * @see {@link ./lattice-gateway.ts} for what the resulting token is used for.
  */
@@ -43,6 +43,9 @@ export const LOVELACE_AUTHORIZE_PATH = '/oauth/authorize';
 /** Token endpoint path on the accounts issuer. */
 export const LOVELACE_TOKEN_PATH = '/oauth/token';
 
+/** FedCM provider configuration path exposed by the Lovelace accounts issuer. */
+export const LOVELACE_FEDCM_CONFIG_PATH = '/web-identity/config.json';
+
 /**
  * The exact scopes Athena requests, and nothing more.
  *
@@ -50,7 +53,8 @@ export const LOVELACE_TOKEN_PATH = '/oauth/token';
  * This list is the whole of the permission ask, and each entry is here because a specific Athena
  * behaviour cannot work without it:
  *
- * - `openid`, `profile`, and `email` — bind the Lovelace grant to the person who connected it.
+ * - `openid` — gives the grant a stable Lovelace subject without asking for profile fields Docket
+ *   does not use.
  * - `offline_access` — issue the refresh token that keeps scheduled assignments usable after the
  *   browser session ends.
  * - `lattice:compute:inference` — submit the model turn, and read the person's device records.
@@ -75,8 +79,6 @@ export const LOVELACE_TOKEN_PATH = '/oauth/token';
  */
 export const LATTICE_SCOPES: readonly string[] = [
   'openid',
-  'profile',
-  'email',
   'offline_access',
   'lattice:compute:inference',
   'lattice:compute:catalog:read',
@@ -133,6 +135,8 @@ export type StoredLatticeCredential = PendingLatticeCredential | LatticeCredenti
 export interface BegunLatticeAuthorization {
   /** Where to redirect the person's browser. */
   readonly authorizationUrl: string;
+  /** Public S256 challenge shared by the redirect and FedCM transports. */
+  readonly codeChallenge: string;
   /** The pending credential to seal and store until the callback. */
   readonly credential: PendingLatticeCredential;
 }
@@ -212,16 +216,18 @@ export function beginLatticeAuthorization(
   random: (size: number) => Buffer = randomBytes,
 ): BegunLatticeAuthorization {
   const codeVerifier = createCodeVerifier(random);
+  const codeChallenge = codeChallengeFor(codeVerifier);
   const url = new URL(`${issuerOrigin(config)}${LOVELACE_AUTHORIZE_PATH}`);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', config.clientId);
   url.searchParams.set('redirect_uri', config.redirectUri);
   url.searchParams.set('scope', LATTICE_SCOPE_PARAM);
   url.searchParams.set('state', state);
-  url.searchParams.set('code_challenge', codeChallengeFor(codeVerifier));
+  url.searchParams.set('code_challenge', codeChallenge);
   url.searchParams.set('code_challenge_method', 'S256');
   return {
     authorizationUrl: url.toString(),
+    codeChallenge,
     credential: { kind: 'lattice_oauth_pending', codeVerifier },
   };
 }

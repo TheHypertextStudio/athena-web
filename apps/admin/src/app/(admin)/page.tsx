@@ -121,22 +121,28 @@ export default function DashboardPage(): JSX.Element {
         <ServiceHealthSummary status={status.data} />
       </AdminSection>
 
-      <div className="grid items-start gap-4 @4xl:grid-cols-[1fr_1fr]">
-        <AdminSection title="Platform">
-          <PlatformCounts metrics={metrics.data} />
-        </AdminSection>
+      {/* Two columns rather than a grid: grid rows align, so a short group in one column would
+          leave a gap under it until the tallest group in its row ended. */}
+      <div className="flex flex-col gap-4 @4xl:flex-row @4xl:items-start">
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
+          <AdminSection title="Platform">
+            <PlatformCounts metrics={metrics.data} />
+          </AdminSection>
 
-        <AdminSection title="Resource usage">
-          <ResourceUsage resources={resources.data} />
-        </AdminSection>
+          <AdminSection title="Organizations by state">
+            {metrics.data ? (
+              <LifecycleDistribution buckets={metrics.data.orgsByLifecycle} />
+            ) : (
+              <Skeleton className="h-20 w-full rounded-lg" />
+            )}
+          </AdminSection>
+        </div>
 
-        <AdminSection title="Organizations by state">
-          {metrics.data ? (
-            <LifecycleDistribution buckets={metrics.data.orgsByLifecycle} />
-          ) : (
-            <Skeleton className="h-20 w-full rounded-lg" />
-          )}
-        </AdminSection>
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
+          <AdminSection title="Resource usage">
+            <ResourceUsage resources={resources.data} />
+          </AdminSection>
+        </div>
       </div>
 
       <div className="grid gap-4 empty:hidden @4xl:grid-cols-[1fr_1fr]">

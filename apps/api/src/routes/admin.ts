@@ -57,6 +57,7 @@ import {
 } from './admin-serializers';
 import { adminBillingRoutes } from './admin-billing-routes';
 import { adminDiscountRoutes } from './admin-discount-routes';
+import { adminResourceRoutes } from './admin-resource-routes';
 import { adminSettingsRoutes } from './admin-settings-routes';
 import { adminStaffRoutes } from './admin-staff-routes';
 
@@ -391,6 +392,7 @@ export function createAdminRoutes<
         },
       )
       // ---- Service controls (sub-router) -------------------------------------
+      .route('/resources', adminResourceRoutes)
       .route('/service-controls', adminSettingsRoutes)
       // ---- Staff management (sub-router) ------------------------------------
       .route('/staff', adminStaffRoutes)

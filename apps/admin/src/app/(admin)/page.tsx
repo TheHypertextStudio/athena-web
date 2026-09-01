@@ -11,14 +11,29 @@ import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-pag
 import { AdminList, AdminListRow } from '@/components/admin-table';
 import { AttentionBand } from './dashboard-attention';
 import { LifecycleDistribution } from './dashboard-lifecycle';
+import { ResourceUsage } from './dashboard-resources';
 import { LifecycleBadge } from '@/components/lifecycle-badge';
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import type { AdminMetrics, AdminOrg } from '@/lib/types';
 import { metricsDef } from '@/lib/use-admin-queues';
 
 /** How many rows a retention queue shows before it defers to the organization list. */
 const QUEUE_PREVIEW = 5;
+
+/**
+ * What the deployment is consuming.
+ *
+ * @remarks
+ * A slower tier than the queue signals beside it. These are aggregate scans rather than indexed
+ * counts, and stored bytes do not move minute to minute.
+ */
+const resourcesDef = apiQueryOptions(
+  queryKeys.resources(),
+  () => api.admin.resources.$get(),
+  'Could not load resource usage.',
+  { staleTime: STALE.static },
+);
 
 /** The organizations scheduled for deletion. */
 const pendingDeletionDef = apiQueryOptions(
@@ -60,6 +75,7 @@ export default function DashboardPage(): JSX.Element {
   const metrics = useApiQuery(metricsDef);
   const pendingDeletion = useApiQuery(pendingDeletionDef);
   const exportWindow = useApiQuery(exportWindowDef);
+  const resources = useApiQuery(resourcesDef);
 
   return (
     <AdminPage width="list">
@@ -82,9 +98,13 @@ export default function DashboardPage(): JSX.Element {
         <AttentionBand metrics={metrics.data} />
       </AsyncContent>
 
-      <div className="grid gap-4 @4xl:grid-cols-[1fr_1fr]">
+      <div className="grid items-start gap-4 @4xl:grid-cols-[1fr_1fr]">
         <AdminSection title="Platform">
           <PlatformCounts metrics={metrics.data} />
+        </AdminSection>
+
+        <AdminSection title="Resource usage">
+          <ResourceUsage resources={resources.data} />
         </AdminSection>
 
         <AdminSection title="Organizations by state">

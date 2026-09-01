@@ -87,3 +87,6 @@ export type AdminNotificationInboundPage = InferResponseType<
 export type NotificationDeliveryPage = InferResponseType<
   (typeof productApi.v1.notifications)[':id']['deliveries']['$get']
 >;
+
+/** The platform resource report: stored bytes by store, plus database size. */
+export type AdminResources = InferResponseType<typeof api.admin.resources.$get>;

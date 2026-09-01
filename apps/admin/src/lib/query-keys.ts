@@ -29,6 +29,7 @@ export const queryKeys = {
   session: () => [...queryKeys.all, 'session'] as const,
 
   /** Headline platform metrics. */
+  resources: () => [...queryKeys.all, 'resources'] as const,
   metrics: () => [...queryKeys.all, 'metrics'] as const,
 
   /** Every user-scoped read. */

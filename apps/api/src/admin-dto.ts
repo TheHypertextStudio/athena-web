@@ -516,3 +516,43 @@ export const UpdateServiceControlsBody = z
   });
 /** Validated update-service-controls body. */
 export type UpdateServiceControlsBody = z.infer<typeof UpdateServiceControlsBody>;
+
+/** One blob store's share of platform storage. */
+export const AdminStorageStore = z.object({
+  store: z
+    .enum(['attachment', 'document_image', 'discount_evidence'])
+    .describe('Which store the objects belong to.'),
+  objectCount: z.number().int().describe('Number of stored objects.'),
+  byteSize: z
+    .number()
+    .int()
+    .describe('Total bytes across those objects. Rows with no recorded size count as zero.'),
+});
+/** Validated storage-store value. */
+export type AdminStorageStore = z.infer<typeof AdminStorageStore>;
+
+/** One database relation and the space it occupies. */
+export const AdminTableSize = z.object({
+  table: z.string().describe('The relation name.'),
+  byteSize: z.number().int().describe('Total bytes including indexes and TOAST.'),
+});
+/** Validated table-size value. */
+export type AdminTableSize = z.infer<typeof AdminTableSize>;
+
+/**
+ * What the platform is currently consuming, across object storage and the database.
+ *
+ * @remarks
+ * Reported separately from the dashboard metrics because these are scans rather than counts and
+ * carry a different refresh cadence.
+ */
+export const AdminResourcesOut = z.object({
+  storage: z.array(AdminStorageStore).describe('Per-store object counts and byte totals.'),
+  storageByteSize: z.number().int().describe('Total stored bytes across every store.'),
+  databaseByteSize: z.number().int().describe('Total size of the database, including indexes.'),
+  largestTables: z
+    .array(AdminTableSize)
+    .describe('The largest relations by total size, largest first.'),
+});
+/** Validated resource-usage value. */
+export type AdminResourcesOut = z.infer<typeof AdminResourcesOut>;

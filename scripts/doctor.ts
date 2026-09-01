@@ -15,8 +15,9 @@
  * The comparison is pure and the cloud reads are injected, following `validateSecretBindings` and
  * `evaluateBillingRuntimeRollout` — so the interesting cases are provable without a project.
  */
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import process from 'node:process';
+import { promisify } from 'node:util';
 
 import {
   API_RUNTIME_ORG_ROLE,
@@ -180,19 +181,35 @@ export function diagnose(observation: Observation): DoctorReport {
 }
 
 /**
+ * `execFile` as a promise.
+ *
+ * @remarks
+ * Node has no promise-native `child_process` — there is no `child_process/promises`, and the
+ * module exposes no promises namespace (checked on 24.17). `execFile` instead ships a
+ * `util.promisify.custom` implementation, which exists precisely so this call returns the
+ * `{ stdout, stderr }` shape rather than a bare callback result. This is the supported path, not
+ * a legacy shim.
+ */
+const run = promisify(execFile);
+
+/**
  * Run a read-only command, yielding null when it fails.
  *
  * @remarks
  * Null rather than '' so a command that could not run is distinguishable from one that ran and
  * found nothing. Collapsing the two is what made an expired token report every variable as absent.
+ *
+ * Async so the reads can overlap. Every check here is an independent network round trip of a
+ * second or more, and running eleven of them in sequence made a command whose whole job is to
+ * print a table take about as long as reading the table would.
  */
-function read(args: readonly string[]): string | null {
+async function read(args: readonly string[]): Promise<string | null> {
   try {
-    return execFileSync(args[0] ?? '', args.slice(1), {
+    const { stdout } = await run(args[0] ?? '', args.slice(1), {
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
       maxBuffer: 32 * 1024 * 1024,
-    }).trim();
+    });
+    return stdout.trim();
   } catch {
     return null;
   }
@@ -214,8 +231,8 @@ function lines(output: string | null): string[] | null {
  * Three outcomes, and they are not the same: the org id, `''` for a project genuinely outside an
  * organization, and null when the ancestry could not be read at all.
  */
-function organizationOf(project: string): string | null {
-  const ancestors = read([
+async function organizationOf(project: string): Promise<string | null> {
+  const ancestors = await read([
     'gcloud',
     'projects',
     'get-ancestors',
@@ -231,113 +248,98 @@ function organizationOf(project: string): string | null {
 }
 
 /** Read every input {@link diagnose} compares. */
-function observe(project: string, region: string, repo: string): Observation {
+/** Strip a gcloud resource path down to its trailing id, preserving an unreadable null. */
+function ids(output: string | null): string[] | null {
+  return lines(output)?.map((name) => name.split('/').pop() ?? name) ?? null;
+}
+
+/**
+ * Read every input {@link diagnose} compares.
+ *
+ * @remarks
+ * The reads are independent network round trips, so they overlap rather than queue — sequentially
+ * this took about as long as a human would take to check by hand. Only the organization role
+ * depends on anything (the org id), which is why it is a second round rather than part of the fan-out.
+ */
+async function observe(project: string, region: string, repo: string): Promise<Observation> {
   const scope = [`--project=${project}`];
   const deploySa = `${SA_NAME}@${project}.iam.gserviceaccount.com`;
   const runtimeSa = `${API_RUNTIME_SA_NAME}@${project}.iam.gserviceaccount.com`;
 
-  const rolesFor = (member: string): string[] | null =>
-    lines(
-      read([
-        'gcloud',
-        'projects',
-        'get-iam-policy',
-        project,
-        '--flatten=bindings[].members',
-        `--filter=bindings.members:${member}`,
-        '--format=value(bindings.role)',
-      ]),
-    );
+  const rolesFor = (member: string): Promise<string | null> =>
+    read([
+      'gcloud',
+      'projects',
+      'get-iam-policy',
+      project,
+      '--flatten=bindings[].members',
+      `--filter=bindings.members:${member}`,
+      '--format=value(bindings.role)',
+    ]);
 
-  // `parent.id` is the immediate parent, which is a FOLDER for a project nested under one — the
-  // org role would then be looked for on the folder and reported missing though it is bound.
-  const orgId = organizationOf(project);
-
-  return {
-    project,
-    enabledApis: lines(
-      read(['gcloud', 'services', 'list', '--enabled', ...scope, '--format=value(config.name)']),
-    ),
-    serviceAccounts: lines(
-      read(['gcloud', 'iam', 'service-accounts', 'list', ...scope, '--format=value(email)']),
-    ),
-    projectRoles: { [deploySa]: rolesFor(deploySa), [runtimeSa]: rolesFor(runtimeSa) },
-    // A null orgId means the lookup FAILED; a project genuinely outside an organization is the
-    // empty-string case. Collapsing both to [] would print "missing: roles/cloudidentity.groupsReader"
-    // for what is really a credential problem — the outcome `unknown` exists to prevent.
-    orgRoles:
-      orgId === null
-        ? null
-        : orgId === ''
-          ? []
-          : lines(
-              read([
-                'gcloud',
-                'organizations',
-                'get-iam-policy',
-                orgId,
-                '--flatten=bindings[].members',
-                `--filter=bindings.members:${runtimeSa}`,
-                '--format=value(bindings.role)',
-              ]),
-            ),
-    artifactRepos:
-      lines(
-        read([
-          'gcloud',
-          'artifacts',
-          'repositories',
-          'list',
-          `--location=${region}`,
-          ...scope,
-          '--format=value(name)',
-        ]),
-      )?.map((name) => name.split('/').pop() ?? name) ?? null,
-    wifPools:
-      lines(
-        read([
-          'gcloud',
-          'iam',
-          'workload-identity-pools',
-          'list',
-          '--location=global',
-          ...scope,
-          '--format=value(name)',
-        ]),
-      )?.map((name) => name.split('/').pop() ?? name) ?? null,
-    wifProviders:
-      lines(
-        read([
-          'gcloud',
-          'iam',
-          'workload-identity-pools',
-          'providers',
-          'list',
-          '--location=global',
-          `--workload-identity-pool=${WIF_POOL}`,
-          ...scope,
-          '--format=value(name)',
-        ]),
-      )?.map((name) => name.split('/').pop() ?? name) ?? null,
-    repoVars: lines(
-      read(['gh', 'variable', 'list', '--repo', repo, '--json', 'name', '--jq', '.[].name']),
-    ),
-    environmentVars: lines(
-      read([
-        'gh',
-        'variable',
-        'list',
-        '--repo',
-        repo,
-        '--env',
-        'production',
-        '--json',
-        'name',
-        '--jq',
-        '.[].name',
-      ]),
-    ),
-    apiRuntimeServiceAccount: read([
+  const [
+    enabledApis,
+    serviceAccounts,
+    deployRoles,
+    runtimeRoles,
+    artifactRepos,
+    wifPools,
+    wifProviders,
+    repoVars,
+    environmentVars,
+    apiRuntimeServiceAccount,
+    // `parent.id` is the immediate parent, which is a FOLDER for a project nested under one — the
+    // org role would then be looked for on the folder and reported missing though it is bound.
+    orgId,
+  ] = await Promise.all([
+    read(['gcloud', 'services', 'list', '--enabled', ...scope, '--format=value(config.name)']),
+    read(['gcloud', 'iam', 'service-accounts', 'list', ...scope, '--format=value(email)']),
+    rolesFor(deploySa),
+    rolesFor(runtimeSa),
+    read([
+      'gcloud',
+      'artifacts',
+      'repositories',
+      'list',
+      `--location=${region}`,
+      ...scope,
+      '--format=value(name)',
+    ]),
+    read([
+      'gcloud',
+      'iam',
+      'workload-identity-pools',
+      'list',
+      '--location=global',
+      ...scope,
+      '--format=value(name)',
+    ]),
+    read([
+      'gcloud',
+      'iam',
+      'workload-identity-pools',
+      'providers',
+      'list',
+      '--location=global',
+      `--workload-identity-pool=${WIF_POOL}`,
+      ...scope,
+      '--format=value(name)',
+    ]),
+    read(['gh', 'variable', 'list', '--repo', repo, '--json', 'name', '--jq', '.[].name']),
+    read([
+      'gh',
+      'variable',
+      'list',
+      '--repo',
+      repo,
+      '--env',
+      'production',
+      '--json',
+      'name',
+      '--jq',
+      '.[].name',
+    ]),
+    read([
       'gcloud',
       'run',
       'services',
@@ -347,10 +349,45 @@ function observe(project: string, region: string, repo: string): Observation {
       ...scope,
       '--format=value(spec.template.spec.serviceAccountName)',
     ]),
+    organizationOf(project),
+  ]);
+
+  // A null orgId means the lookup FAILED; a project genuinely outside an organization is the
+  // empty-string case. Collapsing both to [] would print "missing: roles/cloudidentity.groupsReader"
+  // for what is really a credential problem — the outcome `unknown` exists to prevent.
+  const orgRoles =
+    orgId === null
+      ? null
+      : orgId === ''
+        ? []
+        : lines(
+            await read([
+              'gcloud',
+              'organizations',
+              'get-iam-policy',
+              orgId,
+              '--flatten=bindings[].members',
+              `--filter=bindings.members:${runtimeSa}`,
+              '--format=value(bindings.role)',
+            ]),
+          );
+
+  return {
+    project,
+    enabledApis: lines(enabledApis),
+    serviceAccounts: lines(serviceAccounts),
+    projectRoles: { [deploySa]: lines(deployRoles), [runtimeSa]: lines(runtimeRoles) },
+    orgRoles,
+    artifactRepos: ids(artifactRepos),
+    wifPools: ids(wifPools),
+    wifProviders: ids(wifProviders),
+    repoVars: lines(repoVars),
+    environmentVars: lines(environmentVars),
+    apiRuntimeServiceAccount,
   };
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const project = process.env['GCP_PROJECT_ID'] ?? '';
   const region = process.env['GCP_REGION'] ?? 'us-central1';
   const repo = process.env['GITHUB_REPOSITORY'] ?? '';
@@ -359,7 +396,7 @@ function main(): void {
     process.exit(2);
   }
 
-  const report = diagnose(observe(project, region, repo));
+  const report = diagnose(await observe(project, region, repo));
   for (const check of report.checks) {
     console.log(`${check.status.toUpperCase()}\t${check.name}\t${check.detail}`);
   }
@@ -376,4 +413,4 @@ function main(): void {
   process.exit(1);
 }
 
-if (process.argv[1]?.endsWith('doctor.ts')) main();
+if (process.argv[1]?.endsWith('doctor.ts')) await main();

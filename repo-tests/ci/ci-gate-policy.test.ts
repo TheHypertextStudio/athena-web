@@ -580,6 +580,16 @@ describe('the real workflows', () => {
 });
 
 describe('production carries every environment variable the API requires', () => {
+  it('keeps enough API memory to generate and cache the public OpenAPI document', () => {
+    const deploy = readFileSync(join(REPO_ROOT, '.github/workflows/deploy.yml'), 'utf8');
+    const apiDeploy = deploy.slice(
+      deploy.indexOf('- id: deploy-api'),
+      deploy.indexOf('- name: Show Cloud Run URL'),
+    );
+
+    expect(apiDeploy).toContain('--memory=1Gi');
+  });
+
   it('names each required, non-sensitive API var in the Cloud Run env file', () => {
     // The API validates its whole env contract at boot, so a required var missing from the deploy
     // is not a disabled feature — the container exits before it listens on $PORT and Cloud Run

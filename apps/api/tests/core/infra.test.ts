@@ -363,6 +363,9 @@ describe('openapi', () => {
     expect(doc.info.title).toBe('Docket API');
     expect(doc.externalDocs.url).toMatch(/\/problems$/);
     expect(doc.components.securitySchemes.bearerAuth.scheme).toBe('bearer');
+    expect(res.headers.get('cache-control')).toBe(
+      'public, max-age=300, stale-while-revalidate=86400',
+    );
     // Paths are generated from the route annotations — the validator-bearing routes appear,
     // and every documented path is prefixed by the app's `/v1` basePath.
     expect(typeof doc.paths).toBe('object');

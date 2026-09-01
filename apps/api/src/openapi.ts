@@ -18,6 +18,7 @@ import { Scalar } from '@scalar/hono-api-reference';
 import { openAPIRouteHandler } from 'hono-openapi';
 // A value import, not `import type`: `openapiDocument` constructs a throwaway server.
 import { Hono } from 'hono';
+import type { Input, MiddlewareHandler } from 'hono';
 
 import type { AdminInstance, AppInstance } from './app';
 import type { AppEnv } from './context';
@@ -369,14 +370,63 @@ export function registerOpenapi(
   // the `{ url }` form is the documented runtime usage, so cast past the type quirk.
   const scalar = (url: string) => Scalar({ url });
 
-  // Public reference (`/v1`).
-  server.get('/v1/openapi.json', openAPIRouteHandler(app, { documentation: buildDocumentation() }));
+  const cacheDocument = <Path extends string, RouteInput extends Input>(
+    handler: MiddlewareHandler<AppEnv, Path, RouteInput>,
+    cacheControl: string,
+  ): MiddlewareHandler<AppEnv, Path, RouteInput> => {
+    let cached:
+      | {
+          readonly body: Uint8Array;
+          readonly headers: Headers;
+          readonly status: number;
+          readonly statusText: string;
+        }
+      | undefined;
+    return async (context, next) => {
+      if (cached) {
+        return new Response(cached.body, {
+          status: cached.status,
+          statusText: cached.statusText,
+          headers: cached.headers,
+        });
+      }
+      const generated = await handler(context, next);
+      if (!generated) return generated;
+      const headers = new Headers(generated.headers);
+      headers.set('cache-control', cacheControl);
+      cached = {
+        body: new Uint8Array(await generated.arrayBuffer()),
+        headers,
+        status: generated.status,
+        statusText: generated.statusText,
+      };
+      return new Response(cached.body, {
+        status: cached.status,
+        statusText: cached.statusText,
+        headers: cached.headers,
+      });
+    };
+  };
+
+  // Public reference (`/v1`). The generated document is about 6 MB. Building it on every request
+  // exhausted the old production heap and restarted the API instance, so each instance builds it
+  // once and shared caches may reuse it for five minutes.
+  server.get(
+    '/v1/openapi.json',
+    cacheDocument(
+      openAPIRouteHandler(app, { documentation: buildDocumentation() }),
+      'public, max-age=300, stale-while-revalidate=86400',
+    ),
+  );
   server.get('/v1/docs', scalar('/v1/openapi.json'));
 
   // Internal staff reference (`/admin`) — staff-gated by fall-through past the admin router.
   server.get(
     '/admin/openapi.json',
-    openAPIRouteHandler(adminApp, { documentation: buildAdminDocumentation() }),
+    cacheDocument(
+      openAPIRouteHandler(adminApp, { documentation: buildAdminDocumentation() }),
+      'private, no-store',
+    ),
   );
   server.get('/admin/docs', scalar('/admin/openapi.json'));
 }

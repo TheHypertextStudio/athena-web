@@ -145,6 +145,23 @@ const DIALOG_HEIGHT: Readonly<Record<DialogHeight, string>> = {
   viewport: 'h-[calc(100dvh-1.5rem)]',
 };
 
+/**
+ * The same heights, scoped to `sm`, for presentations that fill the screen on phones.
+ *
+ * Those presentations set their own height for the phone layout and have to undo it when
+ * they become a centered panel. A media-qualified utility outranks an unprefixed one
+ * whatever order the two appear in the class string, so a bare {@link DIALOG_HEIGHT} entry
+ * loses to that reset at every width the panel is actually a panel — a dialog asking for
+ * `tall` rendered at its content height instead, short and wide. Only `content` still wants
+ * the reset, because it constrains a maximum rather than setting a height.
+ */
+const DIALOG_HEIGHT_SM: Readonly<Record<DialogHeight, string>> = {
+  content: 'sm:h-auto sm:max-h-[min(85dvh,48rem)]',
+  medium: 'sm:h-[min(60dvh,36rem)]',
+  tall: 'sm:h-[min(80dvh,48rem)]',
+  viewport: 'sm:h-[calc(100dvh-1.5rem)]',
+};
+
 function dialogPresentationClass(presentation: DialogPresentation): string {
   const size = DIALOG_SIZE[presentation.size ?? 'standard'];
   const height = DIALOG_HEIGHT[presentation.height ?? 'content'];
@@ -153,7 +170,7 @@ function dialogPresentationClass(presentation: DialogPresentation): string {
   if (presentation.kind === 'bottom-sheet')
     return `inset-x-0 bottom-0 ${height} w-full rounded-t-xl border-x-0 border-b-0`;
   if (presentation.kind === 'responsive-fullscreen')
-    return `inset-0 h-[100dvh] w-[100vw] rounded-none border-0 sm:top-1/2 sm:left-1/2 sm:h-auto sm:w-[calc(100%-1.5rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl sm:border ${size} ${height}`;
+    return `inset-0 h-[100dvh] w-[100vw] rounded-none border-0 sm:top-1/2 sm:left-1/2 sm:w-[calc(100%-1.5rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl sm:border ${size} ${DIALOG_HEIGHT_SM[presentation.height ?? 'content']}`;
   if (presentation.kind === 'top')
     return `top-3 left-1/2 w-[calc(100%-1.5rem)] -translate-x-1/2 ${size} ${height}`;
   if (presentation.kind === 'hosted') return `${size} ${height}`;

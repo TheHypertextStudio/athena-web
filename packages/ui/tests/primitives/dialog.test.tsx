@@ -268,7 +268,9 @@ describe('Dialog family', () => {
       kind: 'responsive-fullscreen' as const,
       size: 'wide' as const,
       height: 'tall' as const,
-      expected: ['inset-0', 'max-w-4xl', 'h-[min(80dvh,48rem)]'],
+      // Scoped to `sm`, because this presentation fills the screen below that and the
+      // requested height only applies once it becomes a centered panel.
+      expected: ['inset-0', 'max-w-4xl', 'sm:h-[min(80dvh,48rem)]'],
     },
     {
       kind: 'top' as const,

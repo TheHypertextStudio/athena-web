@@ -386,6 +386,25 @@ offline_access marketplace`, and a bare `marketplace` names nothing in Lovelace'
   and the duplicate-free round trip needs one passkey sign-in to establish the grant. See
   `docs/superpowers/plans/2026-08-30-docket-lattice-roundtrip-claude-handoff.md`, noting that its
   worktree paths, tarball paths, `gcloud` path, and Lovelace branch state are stale.
+- **Credential renewal failed for three stacked reasons, and each hid the next**: the Lovelace
+  Neon project `lovelace-platform` was still on the free plan, burned its 5 GB monthly transfer
+  allowance, and Neon paused it, so every `prisma.$queryRaw` failed with `53000`, both
+  `lattice.uselovelace.com` and `auth.uselovelace.com` reported `critical`, and a freshly deployed
+  gateway revision failed its startup probe for a reason that had nothing to do with its image.
+  Rolling that revision back made things worse, because `2a0a0fa2c5` is the commit that adds
+  `POST /v1/personal-runtimes/:id/credential-refreshes`, so the older revision answered renewal
+  with 404. That 404 stayed invisible because the daemon sent a bodyless POST, which carries no
+  `Content-Length`, and Google's front end answered 411 before the request reached the gateway at
+  all. The plan is now on Launch, traffic serves the revision that owns the route, and the daemon
+  sends a body with a regression test that fails without one.
+- **A rollback is not a diagnosis**: when a Cloud Run revision fails `/health/ready` and rolling
+  back does not restore service, the dependency is the suspect, not the image. Reading the
+  container's own log named the cause in one query after two deploys had already been spent on it.
+- **The five-minute renewal window is the fragility worth fixing next**: a relay credential lives
+  fifteen minutes and renews five minutes before expiry, with no offline recovery. Any gateway
+  outage longer than five minutes therefore strands every personal runtime permanently and forces a
+  manual, browser-authorized re-pair. That is what turned one database incident into a lost
+  pairing, and renewal working correctly does not prevent the next occurrence.
 
 ### [MCP-APPS-CHAT-001] Render MCP apps in the Athena chat and complete the optional spec surface
 
@@ -8067,6 +8086,44 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [UI-DIALOG-HEIGHT-001] Give a dialog the height it asks for
+
+- **Completed**: 2026-09-01
+- **Priority**: P2
+- **Summary**: The Settings dialog rendered wide and squat — 1152px across but roughly 556px tall,
+  short enough that its own content scrolled inside a half-empty panel. It asks for
+  `height: 'tall'`, which is `min(80dvh, 48rem)`, and never got it.
+
+#### Cause
+
+`dialogPresentationClass` built the `responsive-fullscreen` string with `sm:h-auto` in it and then
+appended the unprefixed `DialogHeight` class. Both utilities were present, so the class list looked
+correct on inspection, but a media-qualified utility outranks an unprefixed one regardless of the
+order they appear in the string. `sm:h-auto` therefore won at every width where the panel is
+actually a centered panel, and the height variant was inert. `height` was a setting that read as
+applied and did nothing.
+
+#### Change
+
+`DIALOG_HEIGHT_SM` carries the same four heights scoped to `sm`, and the `responsive-fullscreen`
+branch uses it instead of the bare class plus a blanket reset. `content` keeps `sm:h-auto`, because
+it caps a maximum rather than setting a height and still needs the phone layout's `h-[100dvh]`
+released; the other three set a height and must not be reset. The classes are literal map entries
+rather than interpolated, so Tailwind's scanner can see them.
+
+- **Files changed**: `packages/ui/src/primitives/dialog.tsx`,
+  `packages/ui/tests/primitives/dialog-presentations.test.tsx`,
+  `packages/ui/tests/primitives/dialog.test.tsx`
+- **Validation**: `pnpm typecheck` clean. Two new primitive tests cover a `tall` panel keeping its
+  height with no blanket reset, and a `content` panel still sizing to its content. One existing
+  case in `dialog.test.tsx` asserted the unprefixed class — the one that was present but inert —
+  and now asserts the scoped class.
+- **Blast radius**: `settings-shell.tsx` is the only product caller of `responsive-fullscreen` with
+  a height, so this changes exactly the dialog that was reported.
+- **Learnings**: A class being in the list is not evidence it applies. Two utilities that set the
+  same property can both be present with only one winning, and reading the class string suggests
+  neither. Assert the class that actually takes effect at the breakpoint it takes effect on.
 
 ### [WORK-ROSTER-CORRECTNESS-001] Make shared work rosters correct by construction
 

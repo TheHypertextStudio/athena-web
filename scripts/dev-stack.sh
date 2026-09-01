@@ -65,11 +65,10 @@ probe() {
 }
 
 stop_stack() {
-  pkill -f "next dev" 2>/dev/null
-  pkill -f "tsx watch" 2>/dev/null
-  pkill -f "portless run" 2>/dev/null
-  pkill -f "turbo run dev" 2>/dev/null
-  (cd "$ROOT" && pnpm exec portless proxy stop >/dev/null 2>&1)
+  pkill -f "$ROOT/apps/(web|admin)/.*next.*dev" 2>/dev/null
+  pkill -f "$ROOT/apps/api/.*tsx.*watch" 2>/dev/null
+  pkill -f "$ROOT/.*portless.*run" 2>/dev/null
+  pkill -f "$ROOT/.*turbo.*run.*dev" 2>/dev/null
   sleep 2
 }
 
@@ -81,9 +80,14 @@ case "${1:-start}" in
     stop_stack
     rm -f "$LOG"
     cd "$ROOT" || exit 1
-    # A fresh proxy drops the stale :443 aliases that point at dead upstreams.
+    # `proxy start` is idempotent and leaves a proxy already shared by other worktrees running.
     pnpm exec portless proxy start --port "$PORT" --no-tls >>"$LOG" 2>&1
-    nohup pnpm dev >>"$LOG" 2>&1 < /dev/null &
+    # Next watches the entire monorepo. macOS's default soft limit produces a partial route
+    # manifest without a useful startup error once the other workspace watchers are included.
+    ulimit -n 8192
+    # Four packages expose persistent dev tasks. Turbo needs one additional slot to run the
+    # migration tasks that precede them, regardless of the caller's bounded build concurrency.
+    TURBO_CONCURRENCY=5 nohup pnpm dev >>"$LOG" 2>&1 < /dev/null &
     disown 2>/dev/null || true
     for _ in $(seq 1 90); do
       out=$(probe) && { echo "READY $out"; print_env; exit 0; }

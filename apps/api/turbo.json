@@ -23,6 +23,7 @@
     "dev": {
       "env": [
         "WEB_URL",
+        "ADMIN_*",
         "BETTER_AUTH_*",
         "OAUTH_PROXY_*",
         "GOOGLE_*",

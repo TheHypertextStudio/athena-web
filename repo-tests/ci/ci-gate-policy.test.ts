@@ -464,6 +464,14 @@ describe('the real workflows', () => {
     expect(test?.steps.every((step) => !step.continueOnError)).toBe(true);
   });
 
+  it('gives every hosted lint shard enough time to finish the release workload', () => {
+    const ci = workflows.find((workflow) => workflow.path === '.github/workflows/ci.yml');
+    const lint = ci?.jobs.find((job) => job.id === 'lint');
+    const lintCommand = lint?.steps.find((step) => step.run?.includes('turbo run lint'))?.run;
+
+    expect(lintCommand).toContain('timeout --signal=TERM --kill-after=10s 300s');
+  });
+
   it('runs the complete release directory against PostgreSQL', () => {
     const ci = workflows.find((workflow) => workflow.path === '.github/workflows/ci.yml');
     const smoke = ci?.jobs.find((job) => job.id === 'core-screen-smoke');

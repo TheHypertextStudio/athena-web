@@ -499,6 +499,8 @@ offline_access marketplace`, and a bare `marketplace` names nothing in Lovelace'
         actionable without exposing cookies, passkey material, or provider response text.
   - [x] Remove runtime TypeScript transpilation from the production API image and prove the image
         opens its listener and runs migrations without `tsx`/`esbuild` in either runtime command.
+  - [x] Give hosted lint shards a five-minute deadline after the apps shard reached the previous
+        three-minute limit with no lint finding and exited 124, blocking an otherwise-green deploy.
   - [ ] Validate production web auth, Android tests/build, and the emulator journey.
 - **Current failure**: Production Cloud Run logs on 2026-09-01 show the API intermittently failing
   before port 8080 opens: Node's runtime `tsx` loader starts `esbuild`, then fails with `EIO`,
@@ -520,7 +522,9 @@ offline_access marketplace`, and a bare `marketplace` names nothing in Lovelace'
   builder now reads the release metadata once and substitutes it into the bundle, while source-mode
   development uses a stable fallback. The exact 49-test delivery-boundary policy and the artifact
   contract pass, and the generated server contains release version `1.3.0` without a cross-package
-  source import. Live Cloud Run cold-start and native-origin acceptance remain the deployment gates.
+  source import. The hosted lint deadline is now 300 seconds, with a repository policy test that
+  prevents restoring the observed 180-second release blocker. Live Cloud Run cold-start and
+  native-origin acceptance remain the deployment gates.
 - **Blockers**: None for implementation. Final acceptance still requires a successful production
   deployment followed by one real Credential Manager assertion and session creation on a physical
   phone; the biometric/passkey choice remains intentionally user-mediated.

@@ -181,7 +181,7 @@ export function ListPageLayout({
         className={
           fullBleedBody
             ? 'flex shrink-0 flex-col gap-4 px-3 pt-4 @2xl:gap-5 @2xl:px-6 @2xl:pt-6 @4xl:px-8 @4xl:pt-8'
-            : undefined
+            : 'flex shrink-0 flex-col gap-3 @2xl:gap-4'
         }
       >
         <PageHeader>

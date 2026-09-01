@@ -64,7 +64,7 @@ function getRowKey(row: Row): string {
 }
 
 describe('EntityTable — header band', () => {
-  it('renders a light, hairline-bordered columnheader band (not an eyebrow)', () => {
+  it('renders a quiet columnheader band without a divider', () => {
     render(<EntityTable aria-label="Items" columns={COLUMNS} rows={ROWS} getRowKey={getRowKey} />);
     const grid = screen.getByRole('grid', { name: 'Items' });
     const headers = within(grid).getAllByRole('columnheader');
@@ -72,9 +72,10 @@ describe('EntityTable — header band', () => {
     // The labelled property headers read as plain text — no uppercase / tracking eyebrow.
     const titleHeader = screen.getByRole('columnheader', { name: 'Title' });
     expect(titleHeader).not.toHaveClass('uppercase', 'tracking-wide');
-    // The header band is the light, hairline-divided variant body labels live in.
+    // The header band uses type and whitespace instead of adding a non-MD3 divider.
     const headerRow = titleHeader.parentElement;
-    expect(headerRow).toHaveClass('text-on-surface-variant', 'text-xs', 'border-b');
+    expect(headerRow).toHaveClass('text-on-surface-variant', 'text-xs');
+    expect(headerRow).not.toHaveClass('border-b', 'border-outline-variant');
   });
 
   it('omits the header band when hideHeader is set', () => {

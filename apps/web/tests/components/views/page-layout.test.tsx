@@ -38,4 +38,24 @@ describe('ListPageLayout', () => {
       'full-bleed',
     );
   });
+
+  it('separates an inset toolbar from the masthead with shared page rhythm', () => {
+    render(
+      <ListPageLayout
+        title="Initiatives"
+        fill
+        toolbar={<button type="button">All initiatives</button>}
+      >
+        <p>Initiative list</p>
+      </ListPageLayout>,
+    );
+
+    const masthead = screen.getByRole('heading', { name: 'Initiatives' }).closest('header');
+    const toolbar = screen.getByRole('button', { name: 'All initiatives' });
+    const toolbarBand = toolbar.parentElement;
+
+    expect(masthead).toBeInTheDocument();
+    expect(toolbarBand).toContainElement(masthead);
+    expect(toolbarBand).toHaveClass('flex', 'flex-col', 'gap-3', '@2xl:gap-4');
+  });
 });

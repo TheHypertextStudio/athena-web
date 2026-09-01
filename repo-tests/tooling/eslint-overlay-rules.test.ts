@@ -1,7 +1,7 @@
 /** Rule-level enforcement for shared UI ownership. */
 import { RuleTester } from 'eslint';
 import tseslint from 'typescript-eslint';
-import { afterAll, describe, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
 import plugin from '../../tooling/eslint-config/plugin.js';
 
@@ -32,17 +32,16 @@ ruleTester.run('docket-ui/no-app-owned-columnheader', plugin.rules['no-app-owned
   valid: [
     { code: '<div role="status" />;' },
     { code: '<EntityTable {...props} />;' },
-    { code: 'function Surface(props) { return <div {...props} />; }' },
-    { code: 'import props from "./props"; <div {...props} />;' },
-    { code: '<div {...getProps()} />;' },
+    {
+      code: 'function GenericPassthrough(props) { return <div {...props} />; }',
+      options: [{ allowPassthroughIn: ['GenericPassthrough'] }],
+    },
     { code: "React.createElement('div', { role: 'row' });" },
     { code: 'React.createElement(EntityTable, props);' },
-    { code: 'function Surface(props) { return React.createElement("div", props); }' },
-    { code: 'import props from "./props"; React.createElement("div", props);' },
-    { code: 'React.createElement("div", getProps());' },
-    { code: 'function Surface(props) { return createElement("div", props); }' },
-    { code: 'import props from "./props"; createElement("div", props);' },
-    { code: 'createElement("div", getProps());' },
+    {
+      code: 'const GenericPassthrough = (props) => React.createElement("div", props);',
+      options: [{ allowPassthroughIn: ['GenericPassthrough'] }],
+    },
   ],
   invalid: [
     {
@@ -70,11 +69,57 @@ ruleTester.run('docket-ui/no-app-owned-columnheader', plugin.rules['no-app-owned
       errors: [{ messageId: 'useEntityTable' }],
     },
     {
+      code: 'function Surface(props) { return <div {...props} />; }',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'import props from "./props"; <div {...props} />;',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: '<div {...getProps()} />;',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
       code: 'React.createElement("div", { role: "columnheader" });',
       errors: [{ messageId: 'useEntityTable' }],
     },
     {
       code: 'const role = "columnheader"; createElement("div", { role });',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'function Surface(props) { return React.createElement("div", props); }',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'import props from "./props"; React.createElement("div", props);',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'React.createElement("div", getProps());',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'function Surface(props) { return createElement("div", props); }',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'import props from "./props"; createElement("div", props);',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'createElement("div", getProps());',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'function GenericPassthrough(props) { return <div role="columnheader" {...props} />; }',
+      options: [{ allowPassthroughIn: ['GenericPassthrough'] }],
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'function OtherSurface(props) { return <div {...props} />; }',
+      options: [{ allowPassthroughIn: ['GenericPassthrough'] }],
       errors: [{ messageId: 'useEntityTable' }],
     },
   ],

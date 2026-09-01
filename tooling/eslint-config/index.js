@@ -213,7 +213,26 @@ export const rosterOwnershipConfig = [
   {
     files: ['apps/web/src/**/*.{ts,tsx}'],
     plugins: { 'docket-ui': uiOwnershipPlugin },
-    rules: { 'docket-ui/no-app-owned-columnheader': 'error' },
+    rules: {
+      'docket-ui/no-app-owned-columnheader': [
+        'error',
+        {
+          // These components forward typed host-element props or owned interaction bindings. The
+          // rule still rejects explicit and statically resolved columnheader roles inside them.
+          allowPassthroughIn: [
+            'CanvasSelectionFrame',
+            'EntityDetailLayout',
+            'MentionTextarea',
+            'PasskeyMark',
+            'ProjectNodeComponent',
+            'SchedulingRelationSlotLane',
+            'StatusSettingsRow',
+            'SubtaskRow',
+            'TaskNodeComponent',
+          ],
+        },
+      ],
+    },
   },
 ];
 

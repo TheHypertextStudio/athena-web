@@ -86,35 +86,70 @@ function propertyName(property) {
   return undefined;
 }
 
-/** Find a reserved role inside an object literal or a statically bound object spread. */
-function objectOwnsColumnheader(rawExpression, sourceCode, seen = new Set()) {
+/** Classify whether an object definitely, possibly, or cannot provide the reserved role. */
+function objectColumnheaderRisk(rawExpression, sourceCode, seen = new Set()) {
   const expression = unwrapExpression(rawExpression);
   if (expression.type === 'Identifier') {
-    if (expression.name === 'undefined') return false;
-    if (seen.has(expression)) return false;
+    if (expression.name === 'undefined') return 'safe';
+    if (seen.has(expression)) return 'unknown';
     const initializer = identifierInitializer(expression, sourceCode);
-    if (initializer === undefined) return false;
+    if (initializer === undefined) return 'unknown';
     seen.add(expression);
-    return objectOwnsColumnheader(initializer, sourceCode, seen);
+    return objectColumnheaderRisk(initializer, sourceCode, seen);
   }
   if (expression.type === 'ConditionalExpression') {
-    return (
-      objectOwnsColumnheader(expression.consequent, sourceCode, seen) ||
-      objectOwnsColumnheader(expression.alternate, sourceCode, seen)
-    );
+    const consequent = objectColumnheaderRisk(expression.consequent, sourceCode, seen);
+    const alternate = objectColumnheaderRisk(expression.alternate, sourceCode, seen);
+    if (consequent === 'columnheader' || alternate === 'columnheader') return 'columnheader';
+    return consequent === 'unknown' || alternate === 'unknown' ? 'unknown' : 'safe';
   }
-  if (expression.type === 'Literal') return false;
-  if (expression.type !== 'ObjectExpression') return false;
-  return expression.properties.some((property) => {
+  if (expression.type === 'Literal') return 'safe';
+  if (expression.type !== 'ObjectExpression') return 'unknown';
+  let risk = 'safe';
+  for (const property of expression.properties) {
     if (property.type === 'SpreadElement') {
-      return objectOwnsColumnheader(property.argument, sourceCode, seen);
+      const spreadRisk = objectColumnheaderRisk(property.argument, sourceCode, seen);
+      if (spreadRisk === 'columnheader') return spreadRisk;
+      if (spreadRisk === 'unknown') risk = spreadRisk;
+      continue;
     }
-    return (
+    if (
       property.kind === 'init' &&
       propertyName(property) === 'role' &&
       mayBeColumnheader(property.value, sourceCode)
-    );
-  });
+    ) {
+      return 'columnheader';
+    }
+  }
+  return risk;
+}
+
+/** Name the function that owns an intrinsic element so exemptions stay component-specific. */
+function containingFunctionName(node) {
+  let current = node.parent;
+  while (current != null) {
+    if (
+      current.type === 'FunctionDeclaration' ||
+      current.type === 'FunctionExpression' ||
+      current.type === 'ArrowFunctionExpression'
+    ) {
+      if ('id' in current && current.id?.type === 'Identifier') return current.id.name;
+      let owner = current.parent;
+      while (owner?.type === 'CallExpression') owner = owner.parent;
+      if (owner?.type === 'VariableDeclarator' && owner.id.type === 'Identifier') {
+        return owner.id.name;
+      }
+      return undefined;
+    }
+    current = current.parent;
+  }
+  return undefined;
+}
+
+/** Return whether a named generic component may forward an unresolved role prop. */
+function allowsUnknownPassthrough(node, allowedNames) {
+  const name = containingFunctionName(node);
+  return name !== undefined && allowedNames.has(name);
 }
 
 /** Identify React's two supported element-construction call shapes. */
@@ -150,19 +185,36 @@ export default {
   meta: {
     type: 'problem',
     docs: { description: 'Require EntityTable to own application roster column headers.' },
-    schema: [],
+    schema: [
+      {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          allowPassthroughIn: {
+            type: 'array',
+            items: { type: 'string', minLength: 1 },
+            uniqueItems: true,
+          },
+        },
+      },
+    ],
     messages: {
       useEntityTable: 'Use EntityTable instead of an application-owned column header.',
     },
   },
   create(context) {
     const sourceCode = context.sourceCode;
+    const allowedNames = new Set(context.options[0]?.allowPassthroughIn ?? []);
     return {
       JSXOpeningElement(node) {
         if (!isIntrinsicElementName(node.name)) return;
         const ownsHeader = node.attributes.some((attribute) => {
           if (attribute.type === 'JSXSpreadAttribute') {
-            return objectOwnsColumnheader(attribute.argument, sourceCode);
+            const risk = objectColumnheaderRisk(attribute.argument, sourceCode);
+            return (
+              risk === 'columnheader' ||
+              (risk === 'unknown' && !allowsUnknownPassthrough(node, allowedNames))
+            );
           }
           if (attribute.name.type !== 'JSXIdentifier' || attribute.name.name !== 'role') {
             return false;
@@ -180,7 +232,12 @@ export default {
       CallExpression(node) {
         if (!isCreateElementCall(node) || !createsIntrinsicElement(node)) return;
         const properties = node.arguments[1];
-        if (properties !== undefined && objectOwnsColumnheader(properties, sourceCode)) {
+        if (properties === undefined) return;
+        const risk = objectColumnheaderRisk(properties, sourceCode);
+        if (
+          risk === 'columnheader' ||
+          (risk === 'unknown' && !allowsUnknownPassthrough(node, allowedNames))
+        ) {
           context.report({ node, messageId: 'useEntityTable' });
         }
       },

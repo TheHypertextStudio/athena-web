@@ -423,6 +423,19 @@ export async function expectInitiativeIdentityGeometry(
   }
 }
 
+/** Assert that each required long Initiative title fits inside its visible text box. */
+export async function expectInitiativeTitlesFit(grid: Locator): Promise<void> {
+  for (const title of Object.values(ROSTER_LONG_TITLES)) {
+    const link = grid.getByRole('link', { name: title }).first();
+    await expect(link).toBeVisible();
+    const width = await link.evaluate((element) => ({
+      visible: element.clientWidth,
+      content: element.scrollWidth,
+    }));
+    expect(width.content, `${title} content width`).toBeLessThanOrEqual(width.visible);
+  }
+}
+
 /** Assert that roster scrolling never escapes into document-level horizontal overflow. */
 export async function expectNoDocumentOverflow(page: Page): Promise<void> {
   const sizes = await page.evaluate(() => ({

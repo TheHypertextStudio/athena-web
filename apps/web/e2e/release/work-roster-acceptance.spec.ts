@@ -7,6 +7,7 @@ import { expect, test } from '../helpers/fixtures';
 import {
   expectInitiativeDensity,
   expectInitiativeIdentityGeometry,
+  expectInitiativeTitlesFit,
   expectNoDocumentOverflow,
   expectRosterColumnGeometry,
   expectRosterScrollOwnership,
@@ -291,14 +292,17 @@ test('shared work rosters pass the release geometry and interaction contract', a
   const initiativeGrid = await openWorkRoster(page, fixture.organizationId, ROUTES[3]);
   await expectRosterColumnGeometry(initiativeGrid);
   await expectInitiativeIdentityGeometry(initiativeGrid, fixture);
+  await expectInitiativeTitlesFit(initiativeGrid);
   await expectInitiativeDensity(initiativeGrid, fixture.onlyChildId, 44);
   const collapse = page.getByRole('button', { name: 'Collapse navigation' });
-  if (await collapse.isVisible()) {
-    await collapse.click();
-    await expectRosterColumnGeometry(initiativeGrid);
-    await page.getByRole('button', { name: 'Expand navigation' }).click();
-    await expectRosterColumnGeometry(initiativeGrid);
-  }
+  await expect(collapse).toBeVisible();
+  await collapse.click();
+  await expectRosterColumnGeometry(initiativeGrid);
+  await expectInitiativeTitlesFit(initiativeGrid);
+  await page.getByRole('button', { name: 'Expand navigation' }).click();
+  await expect(collapse).toBeVisible();
+  await expectRosterColumnGeometry(initiativeGrid);
+  await expectInitiativeTitlesFit(initiativeGrid);
   await selectRosterView(page, ROSTER_VIEWS.initiativeComfortable);
   await expectInitiativeDensity(initiativeGrid, fixture.onlyChildId, 56);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -336,10 +340,16 @@ test('shared work rosters pass the release geometry and interaction contract', a
   const renamed = `${ROSTER_LONG_TITLES.child} renamed`;
   const childLink = page.getByRole('link', { name: ROSTER_LONG_TITLES.child }).first();
   await revealAtVirtualStart(initiativeGrid, childLink);
-  await childLink.click();
-  const titleEditor = page.getByRole('textbox', { name: 'Initiative name' });
+  const mountedGrid = await initiativeGrid.elementHandle();
+  if (mountedGrid === null) throw new Error('The mounted Initiative treegrid is missing.');
+  const detailPage = await page.context().newPage();
+  await detailPage.goto(orgHref(fixture.organizationId, `initiatives/${fixture.onlyChildId}`), {
+    waitUntil: 'domcontentloaded',
+    timeout: TIMEOUTS.pageReady,
+  });
+  const titleEditor = detailPage.getByRole('textbox', { name: 'Initiative name' });
   await titleEditor.fill(renamed);
-  const renamedResponse = page.waitForResponse(
+  const renamedResponse = detailPage.waitForResponse(
     (response) =>
       response.url().endsWith(`/initiatives/${fixture.onlyChildId}`) &&
       response.request().method() === 'PATCH' &&
@@ -347,9 +357,14 @@ test('shared work rosters pass the release geometry and interaction contract', a
   );
   await titleEditor.press('Enter');
   await renamedResponse;
-  await page.goBack({ waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('heading', { name: 'Initiatives' })).toBeVisible();
   await revealAtVirtualStart(initiativeGrid, page.getByRole('link', { name: renamed }).first());
+  const currentGrid = await initiativeGrid.elementHandle();
+  if (currentGrid === null) throw new Error('The Initiative treegrid unmounted during rename.');
+  expect(
+    await mountedGrid.evaluate((original, current) => original === current, currentGrid),
+    'rename must retain the original treegrid DOM node',
+  ).toBe(true);
+  await detailPage.close();
 
   const laterRow = page.locator(`[data-row-id="${fixture.laterSiblingId}"]`).first();
   const renamedRow = page.locator(`[data-row-id="${fixture.onlyChildId}"]`).first();

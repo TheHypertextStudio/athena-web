@@ -33,6 +33,7 @@ import {
   MOBILE_LAYOUT_ROUTE_CASES,
   type MobileLayoutRouteCase,
 } from '../helpers/mobile-layout-audit-cases';
+import { assertLocalCaptureBaseUrl } from './capture-policy';
 
 interface SessionMeta {
   email: string;
@@ -166,7 +167,7 @@ async function waitForSettledPage(page: Page): Promise<void> {
 }
 
 /** Navigate to a review route and fail before capture when the surface did not resolve. */
-async function openReviewRoute(page: Page, url: string): Promise<void> {
+async function openReviewRoute(page: Page, url: string, allowSignIn = false): Promise<void> {
   // Next development builds a route on its first request. Billing took 30.4 seconds on a cold
   // compile, which exceeded Playwright's default navigation timeout even though the route returned
   // 200. DOM readiness plus the explicit settled-page check below gives cold routes the same
@@ -256,6 +257,7 @@ async function main(): Promise<void> {
   const { session, outDir, routes, audit, start, limit, frameStart, frameLimit, records } =
     parseArgs(process.argv.slice(2));
   const meta = JSON.parse(readFileSync(`${session}.meta.json`, 'utf8')) as SessionMeta;
+  assertLocalCaptureBaseUrl(meta.baseURL);
   if (audit && (!Number.isInteger(start) || start < 0)) {
     throw new Error('capture-shots: --start must be a non-negative integer');
   }

@@ -1,0 +1,18 @@
+%% Sequence diagram: Docket documentation and paid-launch gates
+sequenceDiagram
+    actor Maintainer
+    participant CI as Release CI
+    participant Product as Production Docket
+    participant Docs as Mintlify docs
+    participant Stripe as Hypertext Studio Stripe
+
+    Maintainer->>CI: Submit one release candidate
+    CI-->>Maintainer: Return product and docs checks
+    Maintainer->>Product: Deploy with Checkout closed
+    Product-->>Maintainer: Return production verification evidence
+    Maintainer->>Docs: Publish the verified guide
+    Docs-->>Maintainer: Return live-site verification evidence
+    Maintainer->>Stripe: Run the approved paid canary
+    Stripe-->>Maintainer: Return billing and reconciliation evidence
+    Maintainer->>Maintainer: Observe the canary for 72 hours
+    Maintainer->>Product: Open public Checkout

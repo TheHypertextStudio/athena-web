@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { Linter, type Rule } from 'eslint';
+import {
+  Linter,
+  type AST,
+  type ESLint,
+  type Linter as LinterTypes,
+  type Rule,
+  type Scope,
+} from 'eslint';
 import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 
@@ -15,12 +22,24 @@ const rosterPaths = [
   'apps/web/src/components/work-views/work-list.tsx',
 ];
 
+interface JSXOpeningElement {
+  type: 'JSXOpeningElement';
+  name: { type: string; name?: string };
+}
+
+interface RosterRuleContext {
+  sourceCode: {
+    getScope(node: JSXOpeningElement): Scope.Scope;
+  };
+  report(descriptor: { node: AST.Program; messageId: 'missingOwner' }): void;
+}
+
 function resolvesToSharedEntityTable(
-  node: Parameters<Rule.RuleListener['JSXOpeningElement']>[0],
-  sourceCode: Readonly<Rule.RuleContext['sourceCode']>,
+  node: JSXOpeningElement,
+  sourceCode: RosterRuleContext['sourceCode'],
 ): boolean {
-  if (node.name.type !== 'JSXIdentifier') return false;
-  let scope = sourceCode.getScope(node);
+  if (node.name.type !== 'JSXIdentifier' || node.name.name === undefined) return false;
+  let scope: Scope.Scope | null = sourceCode.getScope(node);
   while (scope !== null) {
     const variable = scope.set.get(node.name.name);
     if (variable !== undefined) {
@@ -30,7 +49,6 @@ function resolvesToSharedEntityTable(
           definition.node.type === 'ImportSpecifier' &&
           definition.node.imported.type === 'Identifier' &&
           definition.node.imported.name === 'EntityTable' &&
-          definition.parent?.type === 'ImportDeclaration' &&
           definition.parent.source.value === '@docket/ui/components',
       );
     }
@@ -45,21 +63,23 @@ const requireEntityTable: Rule.RuleModule = {
     schema: [],
     messages: { missingOwner: 'Render the roster through EntityTable.' },
   },
-  create(context) {
+  create(ruleContext) {
+    const context = ruleContext as unknown as RosterRuleContext;
     let ownsRoster = false;
     const sourceCode = context.sourceCode;
-    return {
-      JSXOpeningElement(node) {
+    const listener = {
+      JSXOpeningElement(node: JSXOpeningElement) {
         if (resolvesToSharedEntityTable(node, sourceCode)) ownsRoster = true;
       },
-      'Program:exit'(node) {
+      'Program:exit'(node: AST.Program) {
         if (!ownsRoster) context.report({ node, messageId: 'missingOwner' });
       },
     };
+    return listener as unknown as Rule.RuleListener;
   },
 };
 
-function rosterOwnerMessages(code: string): ReturnType<Linter['verify']> {
+function rosterOwnerMessages(code: string): LinterTypes.LintMessage[] {
   const linter = new Linter();
   return linter.verify(code, {
     languageOptions: {
@@ -74,14 +94,14 @@ function rosterOwnerMessages(code: string): ReturnType<Linter['verify']> {
 describe('EntityTable ownership', () => {
   it('executes the AST ownership policy on application code but not its shared owner', () => {
     const linter = new Linter();
-    const policyConfig = [
+    const policyConfig: LinterTypes.Config[] = [
       {
         files: ['apps/web/src/**/*.{ts,tsx}'],
         languageOptions: {
           parser: tseslint.parser,
           parserOptions: { ecmaFeatures: { jsx: true }, projectService: false },
         },
-        plugins: { 'docket-ui': uiOwnershipPlugin },
+        plugins: { 'docket-ui': uiOwnershipPlugin as ESLint.Plugin },
         rules: { [ownershipRule]: 'error' },
       },
     ];

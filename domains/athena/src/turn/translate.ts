@@ -131,6 +131,12 @@ function usageFromStart(
   };
 }
 
+/**
+ * Translate a provider message stream into Athena's portable turn-event protocol.
+ *
+ * @param events - Raw provider events in their original stream order.
+ * @returns An asynchronous stream of normalized Athena turn events.
+ */
 export async function* translateTurnEvents(
   events: AsyncIterable<RawMessageStreamEvent>,
 ): AsyncIterable<TurnEvent> {

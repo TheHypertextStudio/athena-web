@@ -377,8 +377,14 @@ describe('production deploy tooling install', () => {
     'utf8',
   );
 
-  it('installs the environment workspace used by deploy-time validation scripts', () => {
-    expect(workflow).toContain("filter: '--filter @docket/root --filter @docket/env'");
+  it('does not filter workspaces needed through deploy-time source imports', () => {
+    const deployApi = workflow.slice(
+      workflow.indexOf('  deploy-api:'),
+      workflow.indexOf('  ensure-scheduler:'),
+    );
+
+    expect(deployApi).toContain('- uses: ./.github/actions/setup');
+    expect(deployApi).not.toContain('filter:');
   });
 });
 

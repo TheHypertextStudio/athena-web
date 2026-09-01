@@ -19,13 +19,16 @@
   before migrations with `ERR_MODULE_NOT_FOUND` for `zod`.
 - **Subtasks**:
   - [x] Add a repository contract test for the deploy-time workspace dependency.
-  - [x] Include the environment workspace in the production deploy install.
+  - [x] Remove deploy filtering after the clean runner proved the source-import graph also reaches
+        the billing domain's Stripe runtime.
   - [x] Validate the repository change.
 - **Files Changed**: `.github/workflows/deploy.yml`,
   `repo-tests/tooling/bootstrap-setup.test.ts`, and `docs/WORKLOG.md`.
 - **Validation**: The focused tooling test first failed against the root-only install, then passed
-  after the environment workspace was added. All 297 repository tooling tests pass; the CI gate
-  policy, formatting check, and `git diff --check` pass.
+  after the environment workspace was added. The hosted clean runner passed that boundary and
+  exposed the billing domain as a second undeclared source-import dependency. The strengthened
+  contract test fails while any filter remains on `deploy-api`; all repository tooling tests, the
+  CI gate policy, formatting check, and `git diff --check` pass after removing it.
 - **Learnings**: pnpm workspace filtering follows declared package dependencies, not relative
   source imports made by root scripts. A clean deploy checkout therefore needs every workspace
   whose source those scripts execute named explicitly unless the root package declares it.

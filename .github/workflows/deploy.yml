@@ -24,13 +24,11 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
-      # A filtered install, matching `deploy-runner` below. The root supplies `tsx` and the
-      # deploy-time scripts; those scripts execute `packages/env` from source, so its runtime
-      # dependencies must be present in a clean checkout too. The previous `npx -y tsx` re-resolved
-      # and downloaded tsx from the registry on every deploy, outside the root package's pin.
+      # Deploy-time validation executes bootstrap and domain modules from source through relative
+      # imports. Those relationships are intentionally outside pnpm's package graph, so filtering
+      # this install can omit runtime dependencies such as Zod or Stripe. Install the frozen
+      # workspace here; image builds remain separate and the pnpm store is cached by the action.
       - uses: ./.github/actions/setup
-        with:
-          filter: '--filter @docket/root --filter @docket/env'
 
       - name: Select active production secrets
         id: active-secrets

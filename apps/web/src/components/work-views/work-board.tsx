@@ -249,6 +249,9 @@ function WorkBoardCard<TTarget extends ViewTarget>({
       aria-label={workViewRowTitle(row)}
       data-drop-state={relation.dropState}
       data-selecting={selectionActive || selected}
+      onPointerDownCapture={() => {
+        onDragStart(sourcePath);
+      }}
       className={cn(
         'group/card border-outline-variant bg-surface text-on-surface hover:bg-surface-container-high relative rounded-lg border p-3',
         relation.dropProps.className,

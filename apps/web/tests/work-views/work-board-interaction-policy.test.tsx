@@ -411,4 +411,35 @@ describe('WorkBoard route-owned row interaction policy', () => {
       afterId: null,
     });
   });
+
+  it('records the board membership before a selection-surface drag can finish', () => {
+    const onDrop = vi.fn();
+    const selectionSource = sourceFor(local, ['todo']);
+    dnd.source = {
+      data: {
+        ...selectionSource.data,
+        sourceSurfaceId: `${ROUTE_ORGANIZATION_ID}:task:test`,
+      },
+    };
+    renderBoard(onDrop);
+
+    fireEvent.pointerDown(screen.getByRole('article', { name: 'Local task' }));
+
+    const destination = inputs('work-board-cell').find(
+      (cell) => cell.data?.path?.[0] === 'started',
+    );
+    if (destination === undefined) throw new Error('expected the Started destination');
+    const event = {
+      operation: { source: dnd.source, target: { id: destination.id, data: destination.data } },
+    };
+    for (const monitor of dnd.monitors) monitor.onDragEnd?.(event);
+
+    expect(onDrop).toHaveBeenCalledWith({
+      item: local,
+      sourcePath: ['todo'],
+      destinationPath: ['started'],
+      beforeId: null,
+      afterId: null,
+    });
+  });
 });

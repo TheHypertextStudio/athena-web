@@ -7,6 +7,35 @@
 
 ## Active Tasks
 
+### [FEDCM-LATTICE-001] Design FedCM-first Connect with Lovelace
+
+- **Status**: REVIEW
+- **Started**: 2026-09-01
+- **Priority**: P1
+- **Description**: Define how Docket can use the browser's active FedCM account chooser as the
+  preferred Connect with Lovelace experience while retaining Lovelace OAuth authorization-code
+  plus PKCE as the durable authority for Lattice scopes, access tokens, and refresh tokens.
+- **Subtasks**:
+  - [x] Map the existing Docket OAuth and Lovelace FedCM boundaries.
+  - [x] Confirm that this is connected-service authorization, not Docket account sign-in.
+  - [x] Choose active FedCM with an explicit redirect fallback.
+  - [x] Write the cross-repository design specification.
+  - [x] Self-review the specification for security, lifecycle, and fallback ambiguity.
+  - [x] Commit the design artifact and tracking entry.
+  - [ ] Obtain written-spec approval before producing the implementation plan.
+- **Files**:
+  - `docs/superpowers/specs/2026-09-01-fedcm-first-lattice-authorization-design.md`
+  - `docs/WORKLOG.md`
+- **Validation**:
+  - `pnpm exec prettier --check docs/superpowers/specs/2026-09-01-fedcm-first-lattice-authorization-design.md docs/WORKLOG.md`
+  - `pnpm docs:check`
+- **Blockers**: Written-spec approval is required before implementation planning.
+- **Notes**: The native browser dialog is preferred when supported. Dismissing that dialog must not
+  trigger a surprise redirect; Docket will offer an explicit Continue in Lovelace action instead.
+  Self-review separated pending authorization attempts from active credentials so a dismissed or
+  failed relink cannot destroy a valid connection, and removed unused `profile email` scopes from
+  both transports.
+
 ### [TYPES-DOMAIN-001] Delete the global types warehouse
 
 - **Status**: REVIEW

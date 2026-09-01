@@ -7933,9 +7933,37 @@ superadmin; highest tier wins across groups.
     the builder failed on env validation. They now live in the vite config.
   - Better Auth does not run `after` hooks when an endpoint errors, so the `/callback/google`
     branch is exercised by invoking `buildAuthOptions(...).hooks.after` directly.
-- **Unrelated fix**: `apps/api/tests/routes/admin.test.ts` hard-coded a billing period ending
-  `2026-09-01`, and the credit is the _unused_ remainder measured from now — so the test became a
-  time bomb that detonated today. The period is now relative to `now`.
+  - **A green `pnpm test:coverage` locally is weaker evidence than it looks.** Turbo replays cached
+    task results, so a coverage regression stays invisible until `--force`; and CI runs UTC while a
+    US-based machine does not, so date-dependent tests fail there and nowhere else. Reproducing a CI
+    failure means `TZ=UTC SKIP_ENV_VALIDATION=1 pnpm turbo run test:coverage <shard filters> --force`.
+    Two of this task's defects were found only that way.
+  - `SKIP_ENV_VALIDATION` (which CI sets) skips zod's transform, so `env.SOME_FLAG` is the raw
+    **string** and `'false'` is truthy. A test stubbing a boolean flag via `vi.stubEnv` therefore
+    exercises opposite branches locally and in CI; mock the env module instead.
+- **Unrelated fixes**: three tests had expired on the wall clock. `apps/api/tests/routes/admin.test.ts`
+  hard-coded a billing period ending `2026-09-01`, and the credit is the _unused_ remainder measured
+  from now. `apps/web/tests/pickers/date-picker-contract.test.ts` and
+  `packages/ui/.../timeframe-picker.test.tsx` each clicked a hard-coded August day on a calendar that
+  opens on the CURRENT month. The latter two had held main's test gate red since 2026-08-31 23:27Z,
+  which blocks deploys outright — `deploy.yml` is a `workflow_call` that only runs once every CI gate
+  is green. All three now derive their dates instead of stating them.
+
+#### Shipping
+
+Landed on `main` as five commits and deployed: migration `0119`, `docket-api`, `docket-admin`, and
+the `docket-staff-google-sync` Scheduler job. Verified against production rather than job status —
+`/v1/config` reports `adminGoogleSso: false`, `/v1/health` is ok, the console sign-in still renders
+passkey-only, and `POST /internal/cron/staff-google-sync` answers 401 unauthenticated.
+
+The first rollout attempt failed, and the cause was self-inflicted: `ADMIN_GOOGLE_SSO_ENABLED` was
+made **required**, and `deploy.yml` sourced it from a repository variable that only `pnpm bootstrap`
+creates. An already-bootstrapped project has no such variable, so the workflow wrote an empty string
+and the container refused to boot — which Cloud Run reports as a failed rollout, not a config error.
+The migration had already applied and the previous revision kept serving, so production stayed
+healthy. The workflow now defaults the flag to `false`. **A required env var whose only source is a
+bootstrap-created variable is broken for every project bootstrapped before it existed.**
+
 - **Follow-ups**:
   - **An operator-roster screen in the console.** `/admin/staff` has no UI at all, so the documented
     advice to keep a `manual` break-glass superadmin cannot be verified from the console — only by

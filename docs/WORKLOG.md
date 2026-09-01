@@ -8195,6 +8195,27 @@ superadmin; highest tier wins across groups.
   which blocks deploys outright — `deploy.yml` is a `workflow_call` that only runs once every CI gate
   is green. All three now derive their dates instead of stating them.
 
+#### What the live API changed about the design
+
+Two things only surfaced once the lookup ran against real Cloud Identity, and both had been wrong
+in a way no local test could have caught, because the fixture answered whatever it was asked.
+
+- **The query was invalid.** `searchTransitiveGroups` rejects a query carrying only
+  `member_key_id` with `INVALID_ARGUMENT`; a label clause is mandatory. Operator SSO would have
+  resolved zero groups for everyone, which the sync reads as "in no mapped group" — so the feature
+  would have been inert, and silently so. The query now filters on
+  `'cloudidentity.googleapis.com/groups.security' in labels`.
+- **The Workspace admin console step was avoidable.** That security label is exactly what an
+  ordinary org-level `roles/cloudidentity.groupsReader` IAM binding covers; the same query against
+  `groups.discussion_forum` answers `PERMISSION_DENIED`, because that label is governed by a
+  Workspace admin role instead. So the runtime service account needs no admin role and no
+  domain-wide delegation, `bootstrap.ts` grants the binding itself, and operator groups must be
+  created as **security** groups for any of it to work.
+
+The lesson generalizes past this task: a port whose fixture is the only thing the tests ever talk
+to proves the caller's logic and nothing about the contract. One live call against the real service
+was worth more than the whole fixture suite for finding this.
+
 #### Shipping
 
 Landed on `main` as five commits and deployed: migration `0119`, `docket-api`, `docket-admin`, and

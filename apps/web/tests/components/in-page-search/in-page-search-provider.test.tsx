@@ -119,6 +119,18 @@ describe('InPageSearchProvider', () => {
     expect(fireEvent.keyDown(document, { key: 'f', ctrlKey: true })).toBe(true);
   });
 
+  it('ignores a synthetic keydown that carries no key', () => {
+    render(
+      <InPageSearchProvider>
+        <main>No virtual collection</main>
+      </InPageSearchProvider>,
+    );
+    const event = new KeyboardEvent('keydown', { ctrlKey: true, bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'key', { value: undefined });
+
+    expect(document.dispatchEvent(event)).toBe(true);
+  });
+
   it('opens and focuses a temporary field instead of requiring an idle search bar', async () => {
     render(
       <InPageSearchProvider>

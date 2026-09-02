@@ -60,8 +60,16 @@ interface InPageSearchRegistry {
 
 const InPageSearchContext = createContext<InPageSearchRegistry | null>(null);
 
+/**
+ * Whether a keydown is the platform find shortcut.
+ *
+ * @remarks
+ * `event.key` is typed as a string but arrives undefined on synthetic keyboard events some
+ * extensions and password managers dispatch, so it is checked before it is read.
+ */
 function isFindCommand(event: KeyboardEvent): boolean {
   return (
+    typeof event.key === 'string' &&
     event.key.toLocaleLowerCase() === 'f' &&
     event.ctrlKey !== event.metaKey &&
     !event.altKey &&

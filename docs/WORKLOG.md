@@ -23,10 +23,11 @@
   - [x] Port the nine writing-signs audit files that still fit `main`.
   - [ ] Decide whether the evening-extension boundary loop (`cello/athena-web-1786475270`) is
         still wanted, then port or delete it.
-  - [ ] Remove the ten landed or superseded worktrees and their branches, and the credential-ux
+  - [x] Remove the ten landed or superseded worktrees and their branches, and the credential-ux
         worktree, from the host.
-- **Blockers**: The boundary-loop decision is the user's. Worktree and branch removal was refused by
-  the session's permission policy; the exact commands are in the plan's cleanup section.
+- **Blockers**: The boundary-loop decision is the user's; its branch and the superseded delegation
+  branch (`cello/athena-web-1786473845`) are the only refs left unmerged. The audit worktree's
+  thirty unported edits survive as `stash@{0}` until the user drops them.
 - **Learnings**: Six of eight Cello worktrees and every workflow branch had already landed by
   rebase, so `git branch --no-merged` alone overstates pending work; `git cherry` plus a residual
   diff against `origin/main` is the honest test. Each landed slice that adds a migration must be

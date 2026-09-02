@@ -44,7 +44,7 @@ export const LOVELACE_AUTHORIZE_PATH = '/oauth/authorize';
 export const LOVELACE_TOKEN_PATH = '/oauth/token';
 
 /** FedCM provider configuration path exposed by the Lovelace accounts issuer. */
-export const LOVELACE_FEDCM_CONFIG_PATH = '/web-identity/config.json';
+export const LOVELACE_FEDCM_CONFIG_PATH = '/web-identity/config/v1.json';
 
 /**
  * The exact scopes Athena requests, and nothing more.

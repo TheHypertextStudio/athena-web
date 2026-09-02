@@ -869,10 +869,10 @@ export const latticeAuthorizationAttempt = pgTable(
     status: text('status').$type<LatticeAuthorizationAttemptStatus>().notNull().default('pending'),
     /** Stable Docket-owned failure code; never Lovelace prose. */
     failureReason: text('failure_reason'),
-    expiresAt: timestamp('expires_at').notNull(),
-    consumedAt: timestamp('consumed_at'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at')
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),

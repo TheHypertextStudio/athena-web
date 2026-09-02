@@ -38,6 +38,7 @@ import {
   initiative,
   initiativeHierarchyLink,
   integration,
+  latticeAuthorizationAttempt,
   latticeConnection,
   latticeCredential,
   notificationIntent,
@@ -300,6 +301,23 @@ beforeAll(async () => {
     ownerUserId: ids['user'],
     ciphertext: 'v1:gcm:deadbeef',
   });
+  ids['latticeAuthorizationAttempt'] = assertDefined(
+    (
+      await db
+        .insert(latticeAuthorizationAttempt)
+        .values({
+          connectionId: ids['latticeConnection'],
+          ownerUserId: ids['user'],
+          stateHash: 'sha256:state',
+          verifierCiphertext: 'v1:gcm:verifier',
+          redirectUri: 'https://docket.test/lattice/callback',
+          scope: 'openid offline_access',
+          codeChallenge: 'challenge',
+          expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        })
+        .returning()
+    )[0],
+  ).id;
   await db.insert(athenaMailbox).values({ ownerUserId: ids['user'], key: 'grace-abc123' });
 
   // --- crosscutting extras ---
@@ -606,6 +624,18 @@ describe('agent-adjacent islands updates ($onUpdate coverage)', () => {
       .returning();
     expect(credential?.ciphertext).toBe('v1:gcm:refreshed');
     expect(credential?.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it('bumps updatedAt when a Lattice authorization attempt is consumed', async () => {
+    const consumedAt = new Date();
+    const [attempt] = await db
+      .update(latticeAuthorizationAttempt)
+      .set({ status: 'exchanging', consumedAt })
+      .where(eq(latticeAuthorizationAttempt.id, assertDefined(ids['latticeAuthorizationAttempt'])))
+      .returning();
+    expect(attempt?.status).toBe('exchanging');
+    expect(attempt?.consumedAt?.getTime()).toBe(consumedAt.getTime());
+    expect(attempt?.updatedAt).toBeInstanceOf(Date);
   });
 
   it('bumps updatedAt when an Athena mailbox is rehomed to a workspace', async () => {

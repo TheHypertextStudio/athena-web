@@ -31,13 +31,20 @@ interface ActiveFedCMRequest {
   };
 }
 
+interface FedCMModeProbeRequest {
+  readonly identity: object;
+}
+
+interface FedCMCredentials {
+  get(options: ActiveFedCMRequest | FedCMModeProbeRequest): Promise<unknown>;
+}
+
 /** Injectable browser boundary for deterministic capability and ceremony tests. */
 export interface LatticeFedCMEnvironment {
   readonly IdentityCredential?: unknown;
+  readonly activeFedCMModeSupported?: boolean;
   readonly navigator?: {
-    readonly credentials?: {
-      get(options: ActiveFedCMRequest): Promise<unknown>;
-    };
+    readonly credentials?: FedCMCredentials;
   };
 }
 
@@ -52,6 +59,31 @@ function authorizationCode(credential: unknown): string | null {
   if (typeof credential !== 'object' || credential === null) return null;
   const token: unknown = Reflect.get(credential, 'token');
   return typeof token === 'string' && token.length > 0 ? token : null;
+}
+
+/**
+ * Detect active-mode FedCM using Web IDL member-access feature detection.
+ *
+ * Browsers that understand `identity.mode` read the getter synchronously while converting the
+ * request dictionary. The probe's expected rejection is ignored because it is not a ceremony.
+ */
+export function supportsActiveFedCMMode(credentials: FedCMCredentials): boolean {
+  let supported = false;
+  const identity = Object.defineProperty({}, 'mode', {
+    configurable: true,
+    get() {
+      supported = true;
+      return undefined;
+    },
+  });
+
+  try {
+    void Promise.resolve(credentials.get({ identity })).catch(() => undefined);
+  } catch {
+    // A synchronous rejection is expected for this deliberately incomplete probe.
+  }
+
+  return supported;
 }
 
 /**
@@ -73,6 +105,12 @@ export async function requestLatticeFedCM(
 ): Promise<LatticeFedCMResult> {
   const credentials = environment.navigator?.credentials;
   if (!('IdentityCredential' in environment) || typeof credentials?.get !== 'function') {
+    return { kind: 'redirect', authorizationUrl: started.authorizationUrl };
+  }
+
+  const activeFedCMModeSupported =
+    environment.activeFedCMModeSupported ?? supportsActiveFedCMMode(credentials);
+  if (!activeFedCMModeSupported) {
     return { kind: 'redirect', authorizationUrl: started.authorizationUrl };
   }
 

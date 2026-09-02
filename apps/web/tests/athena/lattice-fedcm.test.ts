@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   requestLatticeFedCM,
+  supportsActiveFedCMMode,
   type LatticeAuthorizationStart,
 } from '../../src/app/(app)/settings/athena/lattice-fedcm';
 
@@ -10,7 +11,7 @@ const STARTED: LatticeAuthorizationStart = {
   expiresAt: '2026-09-01T21:00:00.000Z',
   authorizationUrl: 'https://auth.uselovelace.com/oauth/authorize?state=signed',
   fedcm: {
-    configUrl: 'https://auth.uselovelace.com/web-identity/config.json',
+    configUrl: 'https://auth.uselovelace.com/web-identity/config/v1.json',
     clientId: 'client_docket',
     params: {
       purpose: 'oauth_authorization',
@@ -24,6 +25,17 @@ const STARTED: LatticeAuthorizationStart = {
 };
 
 describe('requestLatticeFedCM', () => {
+  it('detects active mode only when the browser consumes the mode member', () => {
+    const supportedGet = vi.fn((options: { identity: { mode?: unknown } }) => {
+      void options.identity.mode;
+      return Promise.reject(new TypeError('probe'));
+    });
+    const unsupportedGet = vi.fn(() => Promise.reject(new TypeError('probe')));
+
+    expect(supportsActiveFedCMMode({ get: supportedGet })).toBe(true);
+    expect(supportsActiveFedCMMode({ get: unsupportedGet })).toBe(false);
+  });
+
   it('selects redirect without calling credentials when FedCM is absent', async () => {
     const get = vi.fn();
 
@@ -42,6 +54,7 @@ describe('requestLatticeFedCM', () => {
     await expect(
       requestLatticeFedCM(STARTED, {
         IdentityCredential: {},
+        activeFedCMModeSupported: true,
         navigator: { credentials: { get } },
       }),
     ).resolves.toEqual({ kind: 'code', authorizationCode: 'code_from_lovelace' });
@@ -59,12 +72,29 @@ describe('requestLatticeFedCM', () => {
     });
   });
 
+  it('selects redirect when FedCM exists but active mode is unavailable', async () => {
+    const get = vi.fn();
+
+    await expect(
+      requestLatticeFedCM(STARTED, {
+        IdentityCredential: {},
+        activeFedCMModeSupported: false,
+        navigator: { credentials: { get } },
+      }),
+    ).resolves.toEqual({
+      kind: 'redirect',
+      authorizationUrl: STARTED.authorizationUrl,
+    });
+    expect(get).not.toHaveBeenCalled();
+  });
+
   it('offers an explicit redirect after an invoked dialog is dismissed', async () => {
     const get = vi.fn().mockRejectedValue(new DOMException('Dismissed', 'AbortError'));
 
     await expect(
       requestLatticeFedCM(STARTED, {
         IdentityCredential: {},
+        activeFedCMModeSupported: true,
         navigator: { credentials: { get } },
       }),
     ).resolves.toEqual({
@@ -80,6 +110,7 @@ describe('requestLatticeFedCM', () => {
     await expect(
       requestLatticeFedCM(STARTED, {
         IdentityCredential: {},
+        activeFedCMModeSupported: true,
         navigator: { credentials: { get } },
       }),
     ).resolves.toEqual({

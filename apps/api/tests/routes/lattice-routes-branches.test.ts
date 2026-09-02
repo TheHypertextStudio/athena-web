@@ -273,7 +273,7 @@ describe('starting and completing a Lattice authorization attempt', () => {
     expect(body.attemptId).toBeTruthy();
     expect(new Date(body.expiresAt).getTime()).toBeGreaterThan(Date.now());
     expect(body.fedcm).toMatchObject({
-      configUrl: 'https://auth.uselovelace.com/web-identity/config.json',
+      configUrl: 'https://auth.uselovelace.com/web-identity/config/v1.json',
       clientId: 'client_docket_test',
       params: {
         purpose: 'oauth_authorization',

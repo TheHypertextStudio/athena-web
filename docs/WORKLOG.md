@@ -86,7 +86,7 @@
 
 ### [FEDCM-LATTICE-002] Implement FedCM-first Connect with Lovelace
 
-- **Status**: REVIEW
+- **Status**: BLOCKED
 - **Started**: 2026-09-01
 - **Priority**: P1
 - **Description**: Implement the approved FedCM-first authorization design across Lovelace and
@@ -110,15 +110,25 @@
 - **Validation**: Local FedCM helper and Settings tests cover active mode, one-time-code completion,
   unsupported-browser redirect, and dismissal-without-redirect. API tests cover owner binding,
   replay, shared redirect/FedCM completion, scope validation, and preserving an active grant after a
-  failed reconnect. All affected Docket and Lovelace tests, typechecks, focused lints,
-  documentation checks, and migration generation pass. Lovelace's repository-wide accounts-service
-  lint remains red on unrelated existing device, API-key, revocation, and test-helper files. This is
-  protocol coverage, not a claim that the native dialog ran.
-- **Blockers**: Native Chrome and production acceptance require deploying both repositories,
-  registering `docket-athena` as a public PKCE client with Docket's exact origin and callback URI,
-  applying Docket migration `0122_certain_hobgoblin.sql`, and enabling Lovelace flag
-  `feature.auth.fedcm_oauth_authorization`. Those external mutations are not authorized in this
-  task, so the last proof subtask remains open.
+  failed reconnect. Docket typecheck, lint, and production build pass. The full Docket test command
+  reaches three unrelated repository-policy failures in existing timestamp, retired-package, and
+  Athena documentation work; all affected FedCM and development-stack suites pass. Lovelace's
+  affected service, app, and package tests and typechecks pass, and each changed file is lint-clean.
+  In real Chrome, Docket invoked the active-mode request and surfaced the explicit fallback after the
+  browser rejected it before any request reached Lovelace. The redirect fallback reached Lovelace's
+  real passkey login with the canonical `docket-athena` client.
+- **Architecture**: The provider owns one versioned `/web-identity/config/v1.json` contract while
+  retaining the legacy URL. The eTLD discovery document and both shared auth adapters advertise the
+  same contract. Lovelace's login bridge, narrowly scoped FedCM session cookie, capability flag, and
+  optional OAuth client legal metadata are client-neutral; Docket-specific values remain only in
+  Docket's managed client registration and relying-party adapter.
+- **Blockers**: The current Chrome profile rejects `navigator.credentials.get()` before IdP traffic,
+  and agent browser policy prevents inspecting or clearing Chrome's third-party sign-in/FedCM site
+  state. Native-dialog acceptance therefore needs a user-cleared or fresh Chrome profile. Completing
+  the proven redirect path also requires the user's passkey. Production acceptance still requires
+  integrating and deploying both repositories and enabling the global
+  `feature.auth.fedcm_oauth_authorization` rollout flag; no deploy or production mutation is part of
+  this task.
 
 ### [FEDCM-LATTICE-001] Design FedCM-first Connect with Lovelace
 

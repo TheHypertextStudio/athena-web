@@ -68,7 +68,7 @@ const STARTED = {
   expiresAt: '2026-09-01T21:00:00.000Z',
   authorizationUrl: AUTHORIZATION_URL,
   fedcm: {
-    configUrl: 'https://auth.uselovelace.com/web-identity/config.json',
+    configUrl: 'https://auth.uselovelace.com/web-identity/config/v1.json',
     clientId: 'client_docket',
     params: {
       purpose: 'oauth_authorization' as const,
@@ -119,7 +119,32 @@ function renderSection(): void {
   render(<LatticeSection />, { wrapper: makeQueryWrapper().wrapper });
 }
 
+async function preparedConnectButton(): Promise<HTMLElement> {
+  const connect = await screen.findByRole('button', { name: 'Connect with Lovelace' });
+  await waitFor(() => {
+    expect(connect).toBeEnabled();
+  });
+  return connect;
+}
+
 describe('LatticeSection FedCM-first authorization', () => {
+  it('prepares the server attempt before enabling the click that opens FedCM', async () => {
+    requestLatticeFedCM.mockResolvedValue({
+      kind: 'fallback',
+      authorizationUrl: AUTHORIZATION_URL,
+    });
+    renderSection();
+
+    const connect = await preparedConnectButton();
+    await waitFor(() => {
+      expect(authorizePost).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(connect);
+
+    expect(requestLatticeFedCM).toHaveBeenCalledWith(STARTED);
+  });
+
   it('redirects from the original click only when FedCM is unsupported', async () => {
     requestLatticeFedCM.mockResolvedValue({
       kind: 'redirect',
@@ -127,7 +152,7 @@ describe('LatticeSection FedCM-first authorization', () => {
     });
     renderSection();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Connect with Lovelace' }));
+    fireEvent.click(await preparedConnectButton());
 
     await waitFor(() => {
       expect(assignMock).toHaveBeenCalledWith(AUTHORIZATION_URL);
@@ -143,7 +168,7 @@ describe('LatticeSection FedCM-first authorization', () => {
     });
     renderSection();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Connect with Lovelace' }));
+    fireEvent.click(await preparedConnectButton());
 
     const fallback = await screen.findByRole('button', { name: 'Continue in Lovelace' });
     expect(assignMock).not.toHaveBeenCalled();
@@ -160,7 +185,7 @@ describe('LatticeSection FedCM-first authorization', () => {
     });
     renderSection();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Connect with Lovelace' }));
+    fireEvent.click(await preparedConnectButton());
 
     await waitFor(() => {
       expect(completePost).toHaveBeenCalledWith({
@@ -169,5 +194,8 @@ describe('LatticeSection FedCM-first authorization', () => {
     });
     expect(assignMock).not.toHaveBeenCalled();
     expect(await screen.findByText(/Lattice connected/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(authorizePost).toHaveBeenCalledTimes(2);
+    });
   });
 });

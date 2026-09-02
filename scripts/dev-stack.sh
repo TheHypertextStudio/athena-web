@@ -20,24 +20,30 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG=/tmp/docket-dev.log
-PORT=1355
+PORT="${DOCKET_DEV_PORT:-1355}"
 
-# Portless namespaces each worktree's routes under a prefix derived from the git branch, and ALSO
-# registers bare `docket.localhost` aliases. Those aliases are first-come and are NOT re-pointed when
-# an older stack dies, so in a multi-worktree setup they routinely resolve to a dead upstream — the
-# exact cause of a run of opaque 502s and TLS `EPROTO` auth failures here. Addressing this worktree
-# by its own prefixed hostnames is the only mapping guaranteed to reach the processes we just spawned.
+# Portless gives the primary checkout bare routes and prefixes only linked worktrees. Mirror that
+# naming exactly so the readiness probes and every cross-service URL resolve to the routes that the
+# processes below actually register. Isolating Portless state and allowing a distinct proxy port keep
+# the primary checkout's bare routes from colliding with a separately running checkout.
 PREFIX="$(basename "$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)")"
+GIT_DIR="$(git -C "$ROOT" rev-parse --absolute-git-dir 2>/dev/null || true)"
+GIT_COMMON_DIR="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+HOST_PREFIX=""
+if [ "$GIT_DIR" != "$GIT_COMMON_DIR" ] && [ "$PREFIX" != main ] && [ "$PREFIX" != master ]; then
+  HOST_PREFIX="$PREFIX."
+fi
 
+export PORTLESS_STATE_DIR="${TMPDIR:-/tmp}/docket-portless-${UID}-${PREFIX}-${PORT}"
 export PORTLESS_PORT="$PORT"
 export PORTLESS_HTTPS=0
 export PORTLESS_SYNC_HOSTS=0
-export APP_URL="http://$PREFIX.docket.localhost:$PORT"
+export APP_URL="http://${HOST_PREFIX}docket.localhost:$PORT"
 export WEB_URL="$APP_URL"
-export API_URL="http://$PREFIX.api.docket.localhost:$PORT"
+export API_URL="http://${HOST_PREFIX}api.docket.localhost:$PORT"
 # The console's own origin, so the service probes can check it the way production does. Without
 # this the admin app reports `disabled` in dev and its health route is never exercised.
-export ADMIN_URL="http://$PREFIX.admin.docket.localhost:$PORT"
+export ADMIN_URL="http://${HOST_PREFIX}admin.docket.localhost:$PORT"
 export NEXT_PUBLIC_API_URL="$API_URL"
 export NEXT_PUBLIC_APP_URL="$APP_URL"
 export BETTER_AUTH_URL="$API_URL"

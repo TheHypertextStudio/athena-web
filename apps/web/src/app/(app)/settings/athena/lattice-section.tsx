@@ -36,7 +36,7 @@ import {
   Toolbar,
 } from '@docket/ui/primitives';
 import { useAppSearchParams } from '@/lib/app-location';
-import { type JSX, type ReactNode, useState } from 'react';
+import { type JSX, type ReactNode, useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { LoadFailure } from '@/components/settings/load-failure';
@@ -131,28 +131,50 @@ type AuthorizationAction =
   | Exclude<LatticeFedCMResult, { readonly kind: 'code' }>
   | { readonly kind: 'completed'; readonly status: 'connected' | 'declined' | 'error' | 'scopes' };
 
+/** A browser ceremony started directly by the click, paired with its pre-created server attempt. */
+interface PendingAuthorizationCeremony {
+  readonly started: LatticeAuthorizationStart;
+  readonly result: Promise<LatticeFedCMResult>;
+}
+
 /** Own the native-first ceremony and its explicit redirect-fallback state. */
-function useLatticeAuthorization(): {
-  readonly authorize: ReturnType<typeof useApiMutation<AuthorizationAction, undefined>>;
+function useLatticeAuthorization(enabled: boolean): {
+  readonly authorize: ReturnType<
+    typeof useApiMutation<AuthorizationAction, PendingAuthorizationCeremony>
+  >;
+  readonly prepare: ReturnType<typeof useApiMutation<LatticeAuthorizationStart, undefined>>;
   readonly authorizationNotice: string | null;
+  readonly authorizationReady: boolean;
   readonly fallbackUrl: string | null;
   readonly startAuthorization: () => void;
 } {
+  const [started, setStarted] = useState<LatticeAuthorizationStart | null>(null);
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const [authorizationNotice, setAuthorizationNotice] = useState<string | null>(null);
-  const authorize = useApiMutation<AuthorizationAction, undefined>({
-    mutationFn: async () => {
-      const started: LatticeAuthorizationStart = await unwrap(
+
+  const prepare = useApiMutation<LatticeAuthorizationStart, undefined>({
+    mutationFn: () =>
+      unwrap(
         () => api.v1.me.athena.lattice.authorize.$post(),
         'Could not start the Lovelace connection.',
-      );
-      const fedcm = await requestLatticeFedCM(started);
+      ),
+    onSuccess: setStarted,
+  });
+
+  useEffect(() => {
+    if (!enabled || started || prepare.isPending || prepare.isError) return;
+    prepare.mutate(undefined);
+  }, [enabled, prepare.isError, prepare.isPending, prepare.mutate, started]);
+
+  const authorize = useApiMutation<AuthorizationAction, PendingAuthorizationCeremony>({
+    mutationFn: async ({ started: prepared, result }) => {
+      const fedcm = await result;
       if (fedcm.kind !== 'code') return fedcm;
       const completed = await unwrap(
         () =>
           api.v1.me.athena.lattice.authorize.complete.$post({
             json: {
-              attemptId: started.attemptId,
+              attemptId: prepared.attemptId,
               authorizationCode: fedcm.authorizationCode,
             },
           }),
@@ -170,6 +192,9 @@ function useLatticeAuthorization(): {
         setFallbackUrl(data.authorizationUrl);
         return;
       }
+      // Authorization attempts are single-use. Prepare a fresh one for a later reconnect instead
+      // of retaining the completed PKCE state in this mounted settings section.
+      setStarted(null);
       setAuthorizationNotice(LATTICE_RETURN_COPY[data.status] ?? null);
     },
     invalidateKeys: [queryKeys.latticeConnection(), queryKeys.latticeDevices()],
@@ -177,12 +202,18 @@ function useLatticeAuthorization(): {
 
   return {
     authorize,
+    prepare,
     authorizationNotice,
+    authorizationReady: started !== null,
     fallbackUrl,
     startAuthorization: () => {
+      if (!started) return;
       setFallbackUrl(null);
       setAuthorizationNotice(null);
-      authorize.mutate(undefined);
+      // Active-mode FedCM requires transient user activation. Calling the browser boundary here,
+      // before React Query or another network round trip, keeps it on the original click stack.
+      const result = requestLatticeFedCM(started);
+      authorize.mutate({ started, result });
     },
   };
 }
@@ -192,12 +223,14 @@ function UnconnectedLatticeSection({
   actionError,
   authorizationNotice,
   authorizePending,
+  authorizationReady,
   fallbackUrl,
   startAuthorization,
 }: {
   readonly actionError: string | null;
   readonly authorizationNotice: string | null;
   readonly authorizePending: boolean;
+  readonly authorizationReady: boolean;
   readonly fallbackUrl: string | null;
   readonly startAuthorization: () => void;
 }): JSX.Element {
@@ -211,7 +244,7 @@ function UnconnectedLatticeSection({
           <Button
             controlSize="md"
             variant="outline"
-            disabled={authorizePending}
+            disabled={authorizePending || !authorizationReady}
             onClick={startAuthorization}
           >
             {authorizePending ? 'Connecting…' : 'Connect with Lovelace'}
@@ -230,10 +263,27 @@ function UnconnectedLatticeSection({
         </div>
       ) : null}
       <Text token="body-small" tone="muted" role="status" aria-live="polite" className="px-4">
-        {authorizePending ? 'Opening Lovelace…' : ''}
+        {authorizePending ? 'Opening Lovelace…' : authorizationReady ? '' : 'Preparing Lovelace…'}
       </Text>
     </SettingsGroup>
   );
+}
+
+interface LatticePendingActionState {
+  readonly preparingAuthorization: boolean;
+  readonly authorizing: boolean;
+  readonly choosingDevice: boolean;
+  readonly settingEnabled: boolean;
+  readonly disconnecting: boolean;
+}
+
+/** Return the one operation label shown in the section's polite live region. */
+function pendingActionCopy(state: LatticePendingActionState): string {
+  if (state.preparingAuthorization) return 'Preparing Lovelace…';
+  if (state.authorizing) return 'Opening Lovelace…';
+  if (state.choosingDevice) return 'Switching computers…';
+  if (state.settingEnabled || state.disconnecting) return 'Saving…';
+  return '';
 }
 
 /**
@@ -244,8 +294,6 @@ function UnconnectedLatticeSection({
 export function LatticeSection(): JSX.Element {
   const searchParams = useAppSearchParams();
   const returned = searchParams.get('lattice');
-  const { authorize, authorizationNotice, fallbackUrl, startAuthorization } =
-    useLatticeAuthorization();
   const statusQ = useApiQuery(
     apiQueryOptions(
       queryKeys.latticeConnection(),
@@ -256,6 +304,14 @@ export function LatticeSection(): JSX.Element {
   );
   const status = statusQ.data ?? null;
   const connected = status?.connected ?? false;
+  const {
+    authorize,
+    prepare,
+    authorizationNotice,
+    authorizationReady,
+    fallbackUrl,
+    startAuthorization,
+  } = useLatticeAuthorization(status?.available === true);
 
   // Devices are only asked for once a grant exists — there is nothing to list before that, and
   // asking would spend a gateway round trip to learn what the status already said.
@@ -296,11 +352,19 @@ export function LatticeSection(): JSX.Element {
   // driven by a single control) and four separate lines would reserve space for three that are
   // always empty.
   const actionError = firstWriteError([
+    [prepare, 'Could not prepare the Lovelace connection.'],
     [authorize, 'Could not start the Lovelace connection.'],
     [chooseDevice, 'Could not switch Athena to that computer.'],
     [setEnabled, 'Could not change where Athena runs.'],
     [disconnect, 'Could not disconnect Lovelace.'],
   ]);
+  const actionStatus = pendingActionCopy({
+    preparingAuthorization: prepare.isPending,
+    authorizing: authorize.isPending,
+    choosingDevice: chooseDevice.isPending,
+    settingEnabled: setEnabled.isPending,
+    disconnecting: disconnect.isPending,
+  });
 
   if (statusQ.isPending) {
     return (
@@ -344,7 +408,8 @@ export function LatticeSection(): JSX.Element {
       <UnconnectedLatticeSection
         actionError={actionError}
         authorizationNotice={authorizationNotice}
-        authorizePending={authorize.isPending}
+        authorizePending={prepare.isPending || authorize.isPending}
+        authorizationReady={authorizationReady}
         fallbackUrl={fallbackUrl}
         startAuthorization={startAuthorization}
       />
@@ -382,7 +447,11 @@ export function LatticeSection(): JSX.Element {
       capability={SETTINGS_NODES.athenaLattice}
       action={
         <ControlGroup>
-          <Button variant="ghost" onClick={startAuthorization} disabled={authorize.isPending}>
+          <Button
+            variant="ghost"
+            onClick={startAuthorization}
+            disabled={prepare.isPending || authorize.isPending || !authorizationReady}
+          >
             Reconnect Lovelace
           </Button>
           <Button
@@ -509,13 +578,7 @@ export function LatticeSection(): JSX.Element {
       {actionError ? <LoadFailure message={actionError} /> : null}
 
       <Text token="body-small" tone="muted" role="status" aria-live="polite">
-        {authorize.isPending
-          ? 'Opening Lovelace…'
-          : chooseDevice.isPending
-            ? 'Switching computers…'
-            : setEnabled.isPending || disconnect.isPending
-              ? 'Saving…'
-              : ''}
+        {actionStatus}
       </Text>
     </SettingsGroup>
   );

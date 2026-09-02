@@ -191,6 +191,14 @@ describe('LatticeSection FedCM-first authorization', () => {
       kind: 'code',
       authorizationCode: 'code_from_fedcm',
     });
+    // The connection query must report the server truth once the ceremony completes, or this
+    // test cannot tell the difference between "the connected branch actually rendered" and "the
+    // notice rendered beside the still-unconnected Connect button" — the exact contradiction this
+    // suite exists to catch.
+    connectionGet
+      .mockReset()
+      .mockResolvedValueOnce(okResponse(UNCONNECTED))
+      .mockResolvedValue(okResponse({ ...UNCONNECTED, connected: true }));
     renderSection();
 
     fireEvent.click(await preparedConnectButton());
@@ -202,6 +210,7 @@ describe('LatticeSection FedCM-first authorization', () => {
     });
     expect(assignMock).not.toHaveBeenCalled();
     expect(await screen.findByText(/Lattice connected/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Connect with Lovelace' })).not.toBeInTheDocument();
     await waitFor(() => {
       expect(authorizePost).toHaveBeenCalledTimes(2);
     });

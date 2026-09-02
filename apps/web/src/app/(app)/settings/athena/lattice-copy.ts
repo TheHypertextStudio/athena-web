@@ -94,10 +94,13 @@ export const LATTICE_DEVICE_STATUS_COPY: Readonly<
   revoked: 'Disabled',
 };
 
-/** Copy for the outcome flag the OAuth callback puts on the return URL. */
-export const LATTICE_RETURN_COPY: Readonly<Record<string, string>> = {
+/** The outcome flag the OAuth callback puts on the return URL. */
+export type LatticeAuthorizationOutcome = 'connected' | 'declined' | 'error' | 'scopes';
+
+/** Copy for each authorization outcome. Total map: a new outcome is a compile error until it has words. */
+export const LATTICE_RETURN_COPY: Readonly<Record<LatticeAuthorizationOutcome, string>> = {
   connected: 'Lattice connected. Choose which computer should run the models.',
-  declined: 'You declined the request, so nothing changed.',
+  declined: 'Nothing changed — you can connect again anytime.',
   scopes: 'Some permissions were not approved, so Athena cannot run models on your computer yet.',
   error: 'That connection attempt did not finish. You can try again.',
 };

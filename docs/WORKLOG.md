@@ -7,6 +7,34 @@
 
 ## Active Tasks
 
+### [WORKTREE-LANDING-001] Land every pending Docket worktree on main
+
+- **Status**: REVIEW
+- **Started**: 2026-09-01
+- **Priority**: P1
+- **Description**: Twelve worktrees and roughly thirty-five unmerged branches had accumulated.
+  Survey each one, land the work that still has value with linear history, and remove the rest.
+- **Plan**: `docs/superpowers/plans/2026-09-01-land-pending-worktrees.md`
+- **Subtasks**:
+  - [x] Survey every worktree and branch; classify as landed, superseded, or open.
+  - [x] Land the FedCM-first Lattice authorization slice with a timestamptz-clean migration.
+  - [x] Land the native credential contracts with its migration regenerated after `0122`.
+  - [x] Land the repository bootstrap contract spec.
+  - [x] Port the nine writing-signs audit files that still fit `main`.
+  - [ ] Decide whether the evening-extension boundary loop (`cello/athena-web-1786475270`) is
+        still wanted, then port or delete it.
+  - [ ] Remove the ten landed or superseded worktrees and their branches, and the credential-ux
+        worktree, from the host.
+- **Blockers**: The boundary-loop decision is the user's. Worktree and branch removal was refused by
+  the session's permission policy; the exact commands are in the plan's cleanup section.
+- **Learnings**: Six of eight Cello worktrees and every workflow branch had already landed by
+  rebase, so `git branch --no-merged` alone overstates pending work; `git cherry` plus a residual
+  diff against `origin/main` is the honest test. Each landed slice that adds a migration must be
+  regenerated against the journal as it stands when it lands, or two branches claim the same
+  number.
+
+---
+
 ### [CI-COST-001] Bound hosted Actions usage without weakening release gates
 
 - **Status**: COMPLETED
@@ -117,8 +145,9 @@
 
 ### [FEDCM-LATTICE-002] Implement FedCM-first Connect with Lovelace
 
-- **Status**: BLOCKED
+- **Status**: COMPLETED
 - **Started**: 2026-09-01
+- **Completed**: 2026-09-01
 - **Priority**: P1
 - **Description**: Implement the approved FedCM-first authorization design across Lovelace and
   Docket. Lovelace OAuth remains the authority for scopes, authorization codes, and durable tokens;
@@ -133,18 +162,19 @@
   - [x] Invoke active FedCM from Docket and retain explicit redirect fallback test-first.
   - [x] Run focused coverage, type, lint, documentation, and migration gates in both repositories.
   - [x] Prove native Chrome and redirect-only browser behavior or record the exact external blocker.
-- **Plan**:
-  `docs/superpowers/plans/2026-09-01-fedcm-first-lattice-authorization.md` (local execution
-  artifact; never stage or commit)
+- **Plan**: `docs/superpowers/plans/2026-09-01-fedcm-first-lattice-authorization.md`
 - **Files**: See the plan and the approved design. Unrelated existing Lattice prompt/runtime edits
   in the checkout are explicitly out of scope and must remain untouched.
 - **Validation**: Local FedCM helper and Settings tests cover active mode, one-time-code completion,
   unsupported-browser redirect, and dismissal-without-redirect. API tests cover owner binding,
   replay, shared redirect/FedCM completion, scope validation, and preserving an active grant after a
-  failed reconnect. Docket typecheck, lint, and production build pass. The full Docket test command
-  reaches three unrelated repository-policy failures in existing timestamp, retired-package, and
-  Athena documentation work; all affected FedCM and development-stack suites pass. Lovelace's
-  affected service, app, and package tests and typechecks pass, and each changed file is lint-clean.
+  failed reconnect. The three repository-policy failures the first full run reported were all this
+  slice's own: the attempt table's four timestamps were naive (now timestamptz, migration and
+  snapshot regenerated in place), the renderer TSDoc had already landed on `main` and arrived with
+  the rebase, and the retired `packages/types` directory was a stale ignored build artifact on the
+  local disk. A lifecycle test now consumes an attempt so the db package's function coverage
+  stays above its 90% floor. Lovelace's affected service, app, and package tests and typechecks
+  pass, and each changed file is lint-clean.
   In real Chrome, Docket invoked the active-mode request and surfaced the explicit fallback after the
   browser rejected it before any request reached Lovelace. The redirect fallback reached Lovelace's
   real passkey login with the canonical `docket-athena` client.
@@ -153,13 +183,15 @@
   same contract. Lovelace's login bridge, narrowly scoped FedCM session cookie, capability flag, and
   optional OAuth client legal metadata are client-neutral; Docket-specific values remain only in
   Docket's managed client registration and relying-party adapter.
-- **Blockers**: The current Chrome profile rejects `navigator.credentials.get()` before IdP traffic,
-  and agent browser policy prevents inspecting or clearing Chrome's third-party sign-in/FedCM site
-  state. Native-dialog acceptance therefore needs a user-cleared or fresh Chrome profile. Completing
-  the proven redirect path also requires the user's passkey. Production acceptance still requires
-  integrating and deploying both repositories and enabling the global
-  `feature.auth.fedcm_oauth_authorization` rollout flag; no deploy or production mutation is part of
-  this task.
+- **Blockers for launch**: The current Chrome profile rejects `navigator.credentials.get()` before
+  IdP traffic, and agent browser policy prevents inspecting or clearing Chrome's third-party
+  sign-in/FedCM site state. Native-dialog acceptance therefore needs a user-cleared or fresh Chrome
+  profile. Completing the proven redirect path also requires the user's passkey. Lovelace's slice is
+  committed and rebased on `codex/fedcm-lattice-authorization`; its pre-push validation passes
+  commit policy, typecheck, build, and docs, and stops at the Vercel environment reconciliation
+  step because the linked apps need a Vercel login only the user can perform. Production acceptance
+  still requires pushing and deploying both repositories and enabling the global
+  `feature.auth.fedcm_oauth_authorization` rollout flag.
 
 ### [FEDCM-LATTICE-001] Design FedCM-first Connect with Lovelace
 

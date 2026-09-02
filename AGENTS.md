@@ -1,6 +1,6 @@
 # AGENTS.md - Project Athena Agent Guidelines
 
-> **Version**: 2.2.0
+> **Version**: 2.2.1
 > **Last Updated**: 2026-09-01
 > **Applies To**: All AI coding agents working on Project Athena
 
@@ -54,21 +54,12 @@ DOCUMENTING → COMMITTING → RETROSPECTING → IDLE
 
 Every significant piece of work MUST include:
 
-1. **Code Comments** (TSDoc format)
-   - All exported functions, classes, and types
-   - Complex algorithms or non-obvious logic
-   - Cross-references to related code
-
-2. **WORKLOG.md Updates**
-   - Task description
-   - Approach taken
-   - Files modified
-   - Decisions made
-
-3. **README Updates** (when applicable)
-   - New features or capabilities
-   - Changed APIs or interfaces
-   - Updated setup instructions
+1. Code comments (TSDoc format) on all exported functions, classes, and types; on complex or
+   non-obvious logic; and cross-references to related code
+2. A `docs/WORKLOG.md` entry covering the task description, approach taken, files modified, and
+   decisions made
+3. README updates when the change adds a feature, changes an API or interface, or changes setup
+   instructions
 
 ### Documentation Standards
 
@@ -158,9 +149,8 @@ events from shifting when the viewer and connected Google account use different 
 
 ### Commit Frequency
 
-- **Commit atomically** - One logical change per commit
-- **Commit frequently** - Small, focused commits
-- **Never commit broken code** - All commits must pass validation
+Commit atomically: one logical change per commit, frequent and small rather than one large drop.
+Never commit code that fails validation.
 
 ### Branch Strategy
 

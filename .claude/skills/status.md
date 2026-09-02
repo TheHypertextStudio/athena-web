@@ -1,10 +1,6 @@
 # /status
 
-Display current agent state and project status.
-
-## Description
-
-Shows the current state of work, including active tasks, recent changes, and validation status.
+Answer "where are we" against AGENTS.md's workflow states and `docs/WORKLOG.md`, without re-reading either from scratch.
 
 ## Usage
 
@@ -14,38 +10,35 @@ Shows the current state of work, including active tasks, recent changes, and val
 
 ## Actions
 
-1. Determine current agent state (from AGENTS.md state machine)
-2. Read active tasks from WORKLOG.md
-3. Check git status for uncommitted changes
-4. Run quick validation checks
-5. Display summary
+1. Determine the current workflow state from AGENTS.md's state machine (`IDLE → PLANNING → RESEARCHING → … → RETROSPECTING → IDLE`) based on what's actually happened this session, not what's convenient to claim.
+2. Read `docs/WORKLOG.md` → Active Tasks for anything `IN_PROGRESS` or `BLOCKED`.
+3. Run `git status` for the current branch and uncommitted changes.
+4. Run `pnpm typecheck` and `pnpm lint`. Skip `pnpm test:coverage` unless asked for it explicitly — CI runs it as `turbo run test:coverage`, partitioned into groups (see `.github/workflows/ci.yml`), and it can take minutes; a status check isn't the place to pay that cost by default.
+5. Report the summary.
 
-## Output Format
+## Output shape
+
+The block below is illustrative — a shape to fill in, not a captured run. Substitute whatever is actually in Active Tasks and whatever the commands actually report.
 
 ```
-=== Project Athena Status ===
-
 Agent State: IMPLEMENTING
 
 Active Tasks:
-- [TASK-001] Implement authentication (IN_PROGRESS)
-- [TASK-002] Add calendar sync (BLOCKED)
+- [NOTION-UX-001] Notion connection repair flow (IN_PROGRESS)
+- [DOCKET-PRO-001] Product-based billing (BLOCKED — see Blockers note)
 
-Git Status:
-- Branch: feature/AUTH-001-google-signin
-- Uncommitted changes: 3 files modified
+Git:
+- Branch: claude/notion-connection-repair
+- Uncommitted: 3 files modified
 
 Validation:
-- Types: PASS
-- Lint: PASS
-- Tests: 42/42 passing (87% coverage)
+- typecheck: pass
+- lint: pass
+- test:coverage: not run (pass --full to include it)
 
-Next Steps:
-- Complete current implementation
-- Run full validation
-- Update documentation
+Next: finish the remaining NOTION-UX-001 subtasks, then request a /plan review before touching DOCKET-PRO-001's blocker.
 ```
 
 ## Notes
 
-Use this to quickly understand the current state of work and what needs to be done next.
+If Active Tasks is empty and there are no uncommitted changes, say so plainly — an empty status is a valid, useful answer, not a failure to report something.

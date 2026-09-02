@@ -94,8 +94,8 @@ export interface DocumentResponseShape {
  *
  * The `ok` check already covers a navigation, which the browser fetches with `redirect: 'manual'`
  * so a signed-out request arrives as an opaqueredirect. The `redirected` check covers the other
- * shape — a response that followed a redirect to a 200 — which would store the destination's HTML
- * under the requested route's key, pinning a sign-in page over a route the person can reach.
+ * shape: a response that followed a redirect to a 200. Storing that would put the destination's
+ * HTML under the requested route's key, pinning a sign-in page over a route the person can reach.
  *
  * @param response - The response returned by the network.
  * @returns Whether to store it.

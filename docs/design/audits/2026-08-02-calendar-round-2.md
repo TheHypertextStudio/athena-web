@@ -125,7 +125,7 @@ Probe scripts: `apps/web/.data/design-review/probe-r2-{sweep,gate,detail,final,d
 
 1. **The responsive cliff moved from 1024 to 1440; it was not removed.**
    `AppShell.tsx:77` now docks the rail at `(min-width: 90rem)` instead of `64rem`. That fixed the
-   1023→1024 collapse — 1024 is now 58% rather than 26.8% — but reproduced the same defect one
+   1023→1024 collapse: 1024 is now 58% rather than 26.8%. But it reproduced the same defect one
    breakpoint up. Measured: **1439 → schedule 1060px, 64.8% of viewport, four day lanes visible.
    1440 → 717px, 44.7%, two lanes.** Widening the window by one pixel costs the calendar 343px and
    half its days, and the 352px that takes it is a rail whose entire content is "Nothing planned for
@@ -179,8 +179,8 @@ Probe scripts: `apps/web/.data/design-review/probe-r2-{sweep,gate,detail,final,d
    the calendar stays visible behind it but is not interactive (sampled hit-test 0%). At 1440 the
    same panel is a flex sibling. So the drag-a-task-onto-the-grid gesture that finding 15 verifies is
    **only reachable at ≥1440**; on a 1280 laptop you cannot see your tasks and your calendar at once.
-   I am not counting this against the 10% gate — the calendar is not _bunched_, it is temporarily
-   covered by a dismissible overlay — but two interaction models for one panel, switched by a
+   I am not counting this against the 10% gate: the calendar is not _bunched_, it is temporarily
+   covered by a dismissible overlay. But two interaction models for one panel, switched by a
    breakpoint, is the same defect as finding 1 wearing a different hat.
 
 7. **Two Athena entry points are on screen simultaneously.**

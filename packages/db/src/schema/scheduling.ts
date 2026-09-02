@@ -326,6 +326,65 @@ export const dayReview = pgTable(
 );
 
 /**
+ * One bounded request for more evening, and whatever became of it.
+ *
+ * @remarks
+ * The day plan can run out of room before it runs out of work. When it does, the alternative to
+ * silently dropping something is to ask the client that owns the device's day boundary for a
+ * little more of it — bounded, once, and with the answer left entirely to the person. This table
+ * is the record of those asks, and it is what makes the loop safe to run every five minutes.
+ *
+ * **`(hubId, date, deadlineKey)` is unique, and that uniqueness is the whole idempotency story.**
+ * The key is the calendar item the overflow is attributed to, so a shortfall that persists across
+ * a dozen sweeps produces exactly one row and exactly one consent prompt — not one per sweep.
+ * A row in any resolved state is equally final: nothing re-asks about a deadline that already has
+ * an answer, so a refusal cannot become a retry storm.
+ *
+ * `state` is `pending` | `approved` | `denied` | `budget_exhausted` | `expired`, stored as text
+ * for the same reason every other vocabulary in this island is (see the module remarks).
+ * `budget_exhausted` is the one state that reaches beyond its own row: a boundary client whose
+ * shared budget is spent will refuse every later ask the same way, so its presence seals the
+ * whole Hub-day rather than just that deadline.
+ *
+ * Nothing here records or influences a morning boundary. There is no column for one, and this
+ * table is only ever written by the evening path.
+ */
+export const dayBoundaryExtensionRequest = pgTable(
+  'day_boundary_extension_request',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    hubId: text('hub_id')
+      .notNull()
+      .references(() => hub.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(),
+    /** The calendar item the overflow is attributed to — one request per deadline, per day. */
+    deadlineKey: text('deadline_key').notNull(),
+    /** The bound Docket asked within, in minutes. Never above the policy ceiling. */
+    requestedMinutes: integer('requested_minutes').notNull(),
+    /** The application-owned sentence shown on the consent prompt. */
+    reason: text('reason').notNull(),
+    state: text('state').notNull().default('pending'),
+    /** The boundary client's own identifier for the queued request; opaque here. */
+    externalRequestId: text('external_request_id'),
+    /** Whatever the client said about the outcome. Audit only — never rendered as UI copy. */
+    detail: text('detail'),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    /** How many times the answer has been asked for; observability for a stuck request. */
+    pollCount: integer('poll_count').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('day_boundary_ext_hub_date_deadline_uq').on(t.hubId, t.date, t.deadlineKey),
+    index('day_boundary_ext_hub_date_idx').on(t.hubId, t.date),
+  ],
+);
+
+/**
  * A consuming client's report of what it did with a directive.
  *
  * @remarks

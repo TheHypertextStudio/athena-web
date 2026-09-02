@@ -7,6 +7,60 @@
 
 ## Active Tasks
 
+### [BOUNDARY-001] Ask for more evening instead of weakening the day
+
+- **Completed**: 2026-08-11
+- **Duration**: 1 day
+- **Priority**: P1
+- **Summary**: Athena can now notice that the work still on today no longer fits before the working
+  window closes and ask the device-control client that owns the boundary for a bounded evening
+  extension, rather than letting the deadline silently slip or leaving the person to weaken their
+  own schedule by hand. The ask rides the existing five-minute posture sweep; it is capped at two
+  hours; it never touches a wake time; and the client's answer — including no answer at all — leaves
+  the day plan valid without it.
+- **Approach**: The signal is **derived, not invented**. Nothing in the scheduling services
+  expressed "this will not fit in the remaining window": `computeDirectivePosture` reports
+  `driftMinutes`, which is lateness measured backwards from a block that already overran and says
+  nothing about whether what remains still fits. The concept that does exist is
+  `ReorganizeResult.displaced` — the blocks `reorganizeDay` could not re-place into the availability
+  the day genuinely has left. `assessEveningShortfall` reads that set rather than modelling the same
+  question twice, and calls `reorganizeDay` purely: the moves are discarded and nothing is written,
+  so assessing a shortfall never rearranges a day behind someone's back. A lead window keeps the
+  question honest — asking at breakfast about a day that has not been worked yet is asking about a
+  prediction.
+
+  The off-box call sits behind one port with exactly two methods, because the real write surface is
+  consent-gated and **queued**: submitting returns an identifier and the answer arrives later. No
+  method on that port could return a grant, which is what stops a caller from accidentally assuming
+  a synchronous yes. A real MCP adapter and a test double satisfy the same contract; no adapter is
+  installed by default, so a deployment without one does nothing at all.
+
+  Idempotency is a unique index rather than a code path: `(hub_id, date, deadline_key)` is claimed
+  by insert _before_ the port is called, so two overlapping sweeps cannot both raise a consent
+  prompt for the same deadline, and a failed submission releases the claim rather than leaving a
+  phantom pending request behind. Any resolved state is final per deadline; `budget_exhausted` is
+  final for the whole Hub-day, since a spent shared budget refuses the next ask identically.
+
+- **Files Changed**: `apps/api/src/services/boundary/{port,registry,mcp-adapter,extension-service}.ts`,
+  `apps/api/src/services/scheduling/day-loop.ts`, `apps/api/src/routes/directive-sweep.ts`,
+  `packages/db/src/schema/scheduling.ts`, `packages/db/drizzle/0080_tense_george_stacy.sql`,
+  `docs/engineering/specs/curfew-integration.md` (§4A),
+  `apps/api/tests/services/boundary/{extension-service,boundary-sweep,mcp-adapter}.test.ts`
+- **Learnings**: The published tool registry and the shipped implementation of the boundary client
+  disagree in two ways that both drive code. The submit tool takes `{ reason }` and **nothing else**
+  — there is no duration argument on the wire — so the two-hour bound is Docket's self-imposed
+  ceiling on what it will _ask for_, recorded here and folded into the reason; claiming the other
+  side honours a number it was never sent would be inventing a wire field. And the registry declares
+  structured output while the shipped code returns prose, so the adapter reads both rather than
+  picking a winner. Relatedly, the published status vocabulary has no machine-readable budget
+  signal, so the adapter never synthesizes `budget_exhausted` from English — loop safety does not
+  depend on that distinction, because every terminal state already stops the retry.
+
+  Two guards were mutation-tested rather than assumed: removing the two-hour clamp made the
+  persisted request record 240 minutes, and replacing the per-deadline claim with an upsert made two
+  sweeps raise two consent prompts for one deadline. Both tests were watched failing and watched
+  passing again after a byte-identical restore.
+
 ### [WORKTREE-LANDING-001] Land every pending Docket worktree on main
 
 - **Status**: REVIEW
@@ -26,8 +80,8 @@
         response-name policy.
   - [x] Write `docs/engineering/specs/native-credentials.md` for the Android credential
         contracts.
-  - [ ] Decide whether the evening-extension boundary loop (`cello/athena-web-1786475270`) is
-        still wanted, then port or delete it.
+  - [x] Port the evening-extension boundary loop from `cello/athena-web-1786475270`, since the
+        request was to finish each worktree's functionality; its migration is `0124`.
   - [x] Remove the ten landed or superseded worktrees and their branches, and the credential-ux
         worktree, from the host.
 - **Validation**: Root typecheck, lint, format check, full test with coverage, and build pass on

@@ -28,6 +28,7 @@ import {
   calendarList,
   contactPoint,
   dailyDigest,
+  dayBoundaryExtensionRequest,
   dayCheckIn,
   dayDirective,
   dayReview,
@@ -133,6 +134,20 @@ beforeAll(async () => {
   ).id;
   ids['hub'] = assertDefined(
     (await db.insert(hub).values({ userId: ids['user'] }).returning())[0],
+  ).id;
+  ids['dayBoundaryExtensionRequest'] = assertDefined(
+    (
+      await db
+        .insert(dayBoundaryExtensionRequest)
+        .values({
+          hubId: ids['hub'],
+          date: '2026-09-01',
+          deadlineKey: 'calendar-item-deck',
+          requestedMinutes: 90,
+          reason: 'Finish the deck needs 90 more minutes',
+        })
+        .returning()
+    )[0],
   ).id;
   // A workspace's statuses exist before any of its work does — every kind of work points at one.
   const statuses = await seedWorkspaceStatuses(db, ids['org']);
@@ -640,6 +655,16 @@ describe('agent-adjacent islands updates ($onUpdate coverage)', () => {
       .returning();
     expect(credential?.ciphertext).toBe('v1:gcm:refreshed');
     expect(credential?.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it('bumps updatedAt when an evening extension request is answered', async () => {
+    const [row] = await db
+      .update(dayBoundaryExtensionRequest)
+      .set({ state: 'approved', resolvedAt: new Date(), pollCount: 1 })
+      .where(eq(dayBoundaryExtensionRequest.id, assertDefined(ids['dayBoundaryExtensionRequest'])))
+      .returning();
+    expect(row?.state).toBe('approved');
+    expect(row?.updatedAt).toBeInstanceOf(Date);
   });
 
   it('bumps updatedAt when a restore credential is used', async () => {

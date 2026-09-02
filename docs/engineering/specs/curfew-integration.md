@@ -463,6 +463,66 @@ scoped problem), and swapping its internals for v2 changes nothing about the API
 
 ---
 
+## 4A. The outbound half: asking for more evening
+
+Everything above is Docket **publishing** and a device-control client **reading**. This section is
+the one place the arrow reverses, and it is scoped as narrowly as it is precisely because of that.
+
+**The problem.** Athena owns the day plan and can see when the work still on it no longer fits
+before the working window closes. She does not own the boundary. Without a way to ask, the only
+two outcomes are a deadline that silently slips or a person who weakens their own schedule by
+hand — and the second is exactly the failure a device-control client exists to prevent.
+
+**Where the signal comes from — derived, not invented.** No function in this repo expressed
+"a deadline will not fit in the remaining working window" before this step. `computeDirectivePosture`
+(`apps/api/src/services/scheduling/day-loop.ts`) reports `driftMinutes`, which is lateness measured
+backwards from a block that already overran and says nothing about whether what remains still fits.
+The concept that _does_ exist is `ReorganizeResult.displaced` — the blocks `reorganizeDay` could not
+re-place into the availability the day genuinely has left. That set is the overflow, so
+`assessEveningShortfall` reads it rather than modelling the same question a second way, and calls
+`reorganizeDay` purely: the moves are discarded, nothing is written, and assessing a shortfall never
+rearranges a day behind the person's back.
+
+**The port.** One interface, two methods — `submitExtensionRequest` and `pollExtensionRequest`
+(`apps/api/src/services/boundary/port.ts`). Two, because a boundary client's write surface is
+consent-gated and _queued_: submitting returns an identifier and the person's answer arrives later,
+out of band. Nothing in this design returns a grant, because nothing on the other side can. A real
+MCP client (`mcp-adapter.ts`) and a test double satisfy the same contract. No port is installed by
+default, and a deployment without one does nothing at all — that is a configuration state, not an
+unfinished path.
+
+**Four policies, all enforced in code and covered by tests:**
+
+| Policy                          | Where it lives                                                                                                                     |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Bounded at two hours            | `MAX_EVENING_EXTENSION_MINUTES`, clamped in the pure assessment and re-asserted at the submit boundary                             |
+| Wake time never modified        | No column, no method, and no code path on this route writes an availability window, a wake time, or `agendaAcknowledgedAt`         |
+| Athena asks, the client decides | Every terminal answer — including no answer — leaves the plan untouched; there is no "apply the extension" branch                  |
+| A refusal is never a retry      | `(hub_id, date, deadline_key)` is unique; any resolved state is final per deadline, and `budget_exhausted` seals the whole Hub-day |
+
+**Where it runs.** On the **existing** posture sweep (§4), inside the same per-Hub loop, not on a
+second schedule. It is deliberately outside that sweep's change-only guard: a day whose posture has
+not moved can still have a request waiting on an answer, and skipping the poll on a quiet tick is
+how a pending request would go unresolved all evening.
+
+**Two honest deviations from what a first reading of this document would suggest:**
+
+1. **§6.1 says Docket builds no egress primitive.** This is egress — narrowly. It is not a generic
+   webhook system; it is one port with two methods, reachable only by a deployment that installs an
+   adapter, and it carries a request rather than an instruction. The §0 ceiling on _enforcement
+   vocabulary_ is untouched: Docket still never says "lock", "block", or an app name.
+2. **The bound cannot be expressed on the wire.** The real submit tool's argument schema is
+   `{ reason }` and nothing else — there is no duration argument anywhere in
+   `curfew-protocols/schemas/mcp-tools.json`, and how much an extension is worth is the boundary
+   client's own setting. So the two-hour bound is Docket's _self-imposed ceiling on what it will
+   ask for_, recorded Docket-side and folded into the human-readable reason. Claiming the other
+   side honours a number it was never sent would be inventing a wire field.
+
+Per §0 no product name appears in any of this code. Both tool names arrive as configuration, which
+is also the only way a second, unrelated boundary client could use the same adapter unchanged.
+
+---
+
 ## 5. What's realistic given Curfew's actual blocking mechanism
 
 Read against the curfew research, several parts of "literally makes it impossible for me to do

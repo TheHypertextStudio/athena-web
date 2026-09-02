@@ -428,6 +428,129 @@ export function reorganizeDay(input: {
   return { moves, displaced, driftMinutes };
 }
 
+/** The ceiling on how much evening a shortfall may ever ask for, in minutes. */
+export const MAX_EVENING_EXTENSION_MINUTES = 120;
+
+/**
+ * How close to the end of the working window a shortfall must be before it is worth asking about.
+ *
+ * @remarks
+ * Asking at breakfast about a day that has not been worked yet is asking about a prediction; the
+ * day still has every chance to absorb the overflow by itself. The ask only becomes honest once
+ * the remaining window is nearly spent and the overflow has survived it.
+ */
+export const EVENING_SHORTFALL_LEAD_MINUTES = 120;
+
+/** What the remaining working window cannot hold, and the bounded ask that would fix it. */
+export interface EveningShortfall {
+  /** Minutes of unfinished, still-movable work the rest of the day has no room for. */
+  readonly shortfallMinutes: number;
+  /** How many blocks make up that overflow. Zero when there is none. */
+  readonly overflowCount: number;
+  /**
+   * The bounded ask, in minutes — never above {@link MAX_EVENING_EXTENSION_MINUTES}, and zero
+   * whenever nothing should be asked for at all.
+   */
+  readonly requestMinutes: number;
+  /**
+   * The block the shortfall is attributed to, and the stable key at most one request is ever made
+   * per. Null when there is nothing to ask about.
+   */
+  readonly deadlineKey: string | null;
+  /** That block's title, for the application-owned sentence the request carries. */
+  readonly deadlineTitle: string | null;
+}
+
+/** Nothing to ask for — the shape returned by every ineligible branch. */
+const NO_SHORTFALL: EveningShortfall = Object.freeze({
+  shortfallMinutes: 0,
+  overflowCount: 0,
+  requestMinutes: 0,
+  deadlineKey: null,
+  deadlineTitle: null,
+});
+
+/**
+ * Decide whether today's remaining working window is too short for the work still on it.
+ *
+ * @remarks
+ * **This is derived, not invented.** Nothing in the scheduling services expressed "a deadline will
+ * not fit in the remaining working window" before this function: {@link computeDirectivePosture}
+ * reports `driftMinutes`, which is lateness measured backwards from a block that has already
+ * overrun, and says nothing about whether what is left still fits. The concept that does exist is
+ * {@link ReorganizeResult.displaced} — the blocks {@link reorganizeDay} could not re-place into
+ * the availability the day genuinely has left. That set *is* the overflow, so this function reads
+ * it rather than modelling the same question a second way, and it calls `reorganizeDay` purely:
+ * the moves are discarded and nothing is written, so assessing a shortfall never rearranges a
+ * day behind the person's back.
+ *
+ * Two bounds make the result safe to act on. The **lead window** keeps the question honest —
+ * see {@link EVENING_SHORTFALL_LEAD_MINUTES}. The **ceiling** is the policy that matters most:
+ * `requestMinutes` is clamped to {@link MAX_EVENING_EXTENSION_MINUTES} whatever the overflow, so
+ * a catastrophically overbooked day asks for two hours, not for the eleven it would need. A day
+ * that needs more evening than the ceiling allows is a day that has to lose work, and that
+ * decision belongs to the evening review, not to this function.
+ *
+ * @param input.blocks - Today's blocks.
+ * @param input.now - The instant to evaluate at.
+ * @param input.date - Today's local date.
+ * @param input.timezone - IANA timezone.
+ * @param input.windows - The person's availability windows.
+ * @param input.externalBusy - Immovable time from outside the plan.
+ * @returns the overflow, the bounded ask, and the block to attribute it to.
+ */
+export function assessEveningShortfall(input: {
+  readonly blocks: readonly DayBlock[];
+  readonly now: Date;
+  readonly date: string;
+  readonly timezone: string;
+  readonly windows: readonly AvailabilityWindow[];
+  readonly externalBusy?: readonly Interval[];
+}): EveningShortfall {
+  const nowMs = input.now.getTime();
+  const bounds = dayBounds({
+    date: input.date,
+    timezone: input.timezone,
+    windows: input.windows,
+  });
+  const endMs = bounds.end.getTime();
+  // Past the boundary there is no evening left to extend, and before the lead window the day
+  // still has room to absorb the overflow on its own.
+  if (nowMs >= endMs) return NO_SHORTFALL;
+  if (endMs - nowMs > EVENING_SHORTFALL_LEAD_MINUTES * 60_000) return NO_SHORTFALL;
+
+  const { displaced } = reorganizeDay({
+    blocks: input.blocks,
+    now: input.now,
+    date: input.date,
+    timezone: input.timezone,
+    windows: input.windows,
+    externalBusy: input.externalBusy ?? [],
+  });
+  if (displaced.length === 0) return NO_SHORTFALL;
+
+  const byKey = new Map(input.blocks.map((b) => [b.calendarItemId, b]));
+  const overflow = displaced
+    .map((d) => byKey.get(d.calendarItemId))
+    .filter((b): b is DayBlock => b !== undefined)
+    .sort((a, b) => a.start - b.start);
+  const first = overflow[0];
+  /* v8 ignore next -- @preserve defensive: every displaced id came from `blocks` moments ago */
+  if (first === undefined) return NO_SHORTFALL;
+
+  const shortfallMinutes = overflow.reduce(
+    (sum, b) => sum + Math.round((b.end - b.start) / 60_000),
+    0,
+  );
+  return {
+    shortfallMinutes,
+    overflowCount: overflow.length,
+    requestMinutes: Math.min(shortfallMinutes, MAX_EVENING_EXTENSION_MINUTES),
+    deadlineKey: first.calendarItemId,
+    deadlineTitle: first.title,
+  };
+}
+
 /**
  * The gate state for the start of a day.
  *

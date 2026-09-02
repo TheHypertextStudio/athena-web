@@ -21,6 +21,8 @@ import { dayDirective, db } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 
 import { notifyHubResourceUpdated } from '../mcp/notify';
+import { advanceEveningExtension } from '../services/boundary/extension-service';
+import { getDayBoundaryPort } from '../services/boundary/registry';
 import { computeDirective, loadDayContext } from '../services/scheduling/directive-service';
 import { hubToday, hubsWithSchedulingConfigured } from '../services/scheduling/repository';
 
@@ -35,6 +37,10 @@ export interface DirectiveSweepResult {
   readonly changed: number;
   /** How many Hubs failed to compute; each is logged and the sweep moves on. */
   readonly failed: number;
+  /** How many Hubs queued a bounded request for more evening this pass. */
+  readonly extensionsRequested: number;
+  /** How many previously-queued requests reached a terminal answer this pass. */
+  readonly extensionsResolved: number;
 }
 
 /**
@@ -45,8 +51,11 @@ export interface DirectiveSweepResult {
  */
 export async function sweepDirectivePosture(now: Date): Promise<DirectiveSweepResult> {
   const hubs = await hubsWithSchedulingConfigured(db);
+  const port = getDayBoundaryPort();
   let changed = 0;
   let failed = 0;
+  let extensionsRequested = 0;
+  let extensionsResolved = 0;
   for (const entry of hubs) {
     try {
       const date = hubToday(entry.timezone, now);
@@ -61,6 +70,17 @@ export async function sweepDirectivePosture(now: Date): Promise<DirectiveSweepRe
         date,
       });
       const directive = await computeDirective(db, context, { now });
+
+      // The boundary loop rides this pass rather than a second schedule of its own. It reads the
+      // same day the posture was just computed from, and it is deliberately *after* that
+      // computation and outside the change-only guard below: a day whose posture is unchanged can
+      // still have a request waiting on an answer, and skipping the poll on a quiet tick is how a
+      // pending request would go unresolved all evening. It writes only its own table, so an
+      // unchanged posture still publishes nothing.
+      const pass = await advanceEveningExtension(db, context, { port, now });
+      if (pass.submitted) extensionsRequested += 1;
+      extensionsResolved += pass.resolved;
+
       if (before[0]?.directiveId === directive.directiveId) continue;
       changed += 1;
       await notifyHubResourceUpdated(entry.userId, DIRECTIVE_RESOURCE_URI);
@@ -70,5 +90,5 @@ export async function sweepDirectivePosture(now: Date): Promise<DirectiveSweepRe
       console.error(`directive-posture sweep failed for hub ${entry.hubId}:`, err);
     }
   }
-  return { hubs: hubs.length, changed, failed };
+  return { hubs: hubs.length, changed, failed, extensionsRequested, extensionsResolved };
 }

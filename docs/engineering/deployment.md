@@ -286,6 +286,36 @@ Before migration, inspect for duplicate `(user_id, provider_id, account_id)` acc
 
 ## Operations
 
+### Verifying the documentation site after a release
+
+`/docs` is not a route in `apps/web`. It resolves only through the `next.config.ts` rewrites to
+`DOCS_MINTLIFY_ORIGIN` (`https://docket.mintlify.dev` — the proxy origin Mintlify publishes the
+"Host at" subpath from, not `docket.mintlify.app`, which serves from its root and 404s every
+proxied path). Whether it works is therefore a deployment fact, not a property any test can hold:
+both branches of `docsRewrites()` are covered and both stayed green through a period when the
+configured origin named a hostname with no DNS record and every `/docs` page answered
+`502 BAD_GATEWAY` on the live domain.
+
+`.github/workflows/verify-docs.yml` closes that gap by asking the running site. It runs after every
+production release (called from `deploy-main.yml`) and once a day on a schedule, and it can be
+dispatched by hand. The daily trigger is the one that catches what a release-triggered check cannot:
+that outage came from a project-configuration change rather than a commit, so nothing would have
+run until the next push to main.
+
+Only the documentation checks fail the run. The rest of the public surface — app, API health and
+config, OpenAPI, Scalar, OAuth and MCP metadata, one immutable asset — is reported alongside them as
+advisory, so an unrelated API-contract regression does not turn a release red for shipping working
+docs. Run the same thing locally:
+
+```bash
+pnpm launch:verify-docs
+```
+
+It cannot gate a release. Vercel promotes the web build only once the `deploy-api` check passes, so
+the site it verifies does not exist at gate time; a failure means a red run and a broken site to go
+fix, not a blocked deploy. `pnpm launch:verify-prod` remains the on-demand pass that gates on the
+whole surface.
+
 ### Viewing logs
 
 ```bash

@@ -51,3 +51,16 @@ jobs:
     with:
       release_sha: ${{ github.event.workflow_run.head_sha }}
     secrets: inherit
+
+  # Runs after the release rather than before it, because what it checks does not exist until then:
+  # Vercel promotes the web build only once deploy-production's API check passes, so `/docs` on the
+  # product domain is still serving the previous build while this workflow's earlier jobs run. The
+  # verifier polls for that promotion, and tolerates its absence — turbo-ignore skips the web build
+  # entirely for pushes confined to `.github/` or `scripts/`, where the already-live docs are the
+  # correct answer and the first probe passes.
+  verify-docs:
+    name: Verify docs
+    needs: deploy-production
+    permissions:
+      contents: read
+    uses: ./.github/workflows/verify-docs.yml

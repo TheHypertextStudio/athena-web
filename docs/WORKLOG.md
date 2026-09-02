@@ -7,6 +7,62 @@
 
 ## Active Tasks
 
+### [DOCS-VERIFY-001] The documentation site is checked after every release
+
+- **Completed**: 2026-09-02
+- **Priority**: P1
+- **Summary**: `/docs` had been unreachable in production for weeks with every gate green, because
+  its availability is a deployment fact rather than a property of the code: `docsRewrites()` can
+  only be asserted to _emit_ a rewrite, never that the rewrite's destination resolves. A new
+  `verify-docs` workflow asks the running site instead. It runs after every production release and
+  once a day at 14:00 UTC, and can be dispatched by hand. Documentation failures fail the run; the
+  rest of the public production surface is reported alongside them without failing it.
+- **Approach**: The check itself already existed and had never been run by anything. `checkDocs` in
+  `scripts/production-verify.ts` asserts `/docs` returns 200, lands on a canonical `/docs/` page,
+  and that `llms.txt` and `llms-full.txt` are served as plain text above a minimum size — it would
+  have caught this outage on the day it started. So the work was wiring, not detection:
+  `checkDocs` and the `Fetcher` type became exported, `DOCS_CHECK_NAMES` names the gating subset in
+  one place, and `scripts/docs-live-verify.ts` composes them into a report split by what fails the
+  run.
+
+  Two properties of the release pipeline shaped it. Vercel promotes the web build only once
+  `deploy-api`'s check passes, so a release-triggered run can arrive while the promotion is still
+  in flight and read the previous build — hence a retry loop, ten probes thirty seconds apart, which
+  never sleeps at all on a healthy site. And `turbo-ignore` skips the web build entirely for pushes
+  confined to `.github/` or `scripts/`, so a SHA-exact "is the new build live" check would wait
+  forever on those releases. The check therefore asserts reachability rather than identity, which is
+  also the property the person following the "Docs" link actually cares about.
+
+- **Decisions**: This cannot be a release gate and does not pretend to be one. What it verifies does
+  not exist until the release is already out, so it runs afterwards and reports loudly — a failure
+  is a red run and a broken site, not a blocked deploy. The daily schedule is not redundant with the
+  post-release trigger: [DOCS-ORIGIN-001] was caused by a project-configuration change rather than a
+  commit, so a release-only check would have stayed silent until the next push to main. Only the
+  documentation checks gate, because a release that shipped working docs should not go red for an
+  unrelated API-contract wobble; `pnpm launch:verify-prod` still gates on everything on demand.
+- **Files Changed**: new `.github/workflows/verify-docs.yml`, `scripts/docs-live-verify.ts`, and
+  `repo-tests/tooling/docs-live-verify.test.ts`; `.github/workflows/deploy-main.yml` (the
+  post-release job), `scripts/production-verify.ts` (exports plus the clean-exit fix below),
+  `repo-tests/ci/ci-gate-policy.test.ts` (the workflow-inventory guard), `package.json`
+  (`launch:verify-docs`), `docs/engineering/deployment.md`.
+- **Validation**: `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, and `pnpm test` (27 tasks) all
+  green; `pnpm test:tooling` covers the new suite at 315 tests. `pnpm launch:verify-docs` was run
+  against live production and returned every check green in about three seconds, settling the docs
+  probe on the first attempt.
+- **Learnings**: `pnpm launch:verify-prod` never exited. It printed every check and then hung, and
+  had done so since it was written — invisible while a human ran it and read the output, fatal the
+  moment CI runs it, where the job would have billed runner minutes until the workflow timeout.
+  Node's `fetch` holds its connection pool open, so setting `process.exitCode` and returning is not
+  enough to end the process. Both entry points now flush stdout and exit explicitly, and the
+  workflow carries a ten-minute backstop so a verifier that stops making progress dies quickly.
+
+  Second, a `Response` body can be read only once, which made the first version of the retry test
+  pass for the wrong reason: a shared fixture set meant the second probe failed on a disturbed
+  stream and looked exactly like a site that never came up. The fixture builds responses per
+  request now, and the comment says why so it does not get "simplified" back.
+
+---
+
 ### [DOCS-ORIGIN-001] Restore the documentation site under the product domain
 
 - **Completed**: 2026-09-02
@@ -48,10 +104,8 @@
   is _emitted_, never that its destination resolves. The Sensitive marking then removed the one
   remaining way to check by inspection. Worth noting the failure had been live since 2026-08-15, the
   day the variable was created and the docs site shipped: `/docs` was never reachable in production.
-- **Follow-ups**: The marketing nav shows the "Docs" link off `isDocsSitePublished()`, which is true
-  whenever the variable is non-blank — a link that promises a page the origin may not serve. A
-  reachability check against the configured origin (a smoke request in the release checks rather
-  than a build-time one) would close the gap this entry documents.
+- **Follow-ups**: Closed by [DOCS-VERIFY-001] below, which asks the running site after every
+  release and once a day.
 
 ---
 

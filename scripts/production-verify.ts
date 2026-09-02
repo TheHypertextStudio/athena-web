@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 const APP_ORIGIN = 'https://docket.hypertext.studio';
 const API_ORIGIN = 'https://docket-api.hypertext.studio';
 
-type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+/** Fetch implementation a verification pass reads production through. */
+export type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 /** One public production invariant and its result. */
 export interface ProductionCheck {
@@ -82,7 +83,30 @@ async function checkApp(fetcher: Fetcher): Promise<{ body: string; check: Produc
   };
 }
 
-async function checkDocs(fetcher: Fetcher): Promise<ProductionCheck[]> {
+/**
+ * Names of the checks {@link checkDocs} produces, in the order it returns them.
+ *
+ * @remarks
+ * `scripts/docs-live-verify.ts` splits a report into the docs checks it gates on and the rest,
+ * which it reports advisorily. Both sides read this list rather than restating the names, so a
+ * check added to {@link checkDocs} cannot quietly land on the advisory side of that split — the
+ * test in `repo-tests/tooling/production-verify.test.ts` fails until this list names it too.
+ */
+export const DOCS_CHECK_NAMES: readonly string[] = ['docs', 'llms', 'llms-full'];
+
+/**
+ * Probe the documentation site as it is served through the product domain.
+ *
+ * @remarks
+ * `/docs` is not a route in `apps/web`; it resolves only through the `next.config.ts` rewrites to
+ * `DOCS_MINTLIFY_ORIGIN`. A destination that does not resolve fails inside Vercel's proxy and never
+ * reaches Mintlify, which is why the canonical-URL assertion matters as much as the status: a
+ * gateway error page also carries no `/docs/` URL to land on.
+ *
+ * @param fetcher - Fetch implementation. Tests supply a deterministic boundary double.
+ * @returns One check for the canonical page and one for each machine-readable index.
+ */
+export async function checkDocs(fetcher: Fetcher): Promise<ProductionCheck[]> {
   const docs = await read(fetcher, `${APP_ORIGIN}/docs`);
   const docsUrl = docs.response?.url ?? '';
   const passed =
@@ -222,12 +246,34 @@ export async function verifyProduction(
   };
 }
 
+/**
+ * Write a report to stdout, then end the process with the matching exit code.
+ *
+ * @remarks
+ * Setting `process.exitCode` and returning is not enough. Node's `fetch` holds its connection pool
+ * open after the last response is read, so a pass that has already printed everything it has to say
+ * keeps the event loop alive indefinitely — an unnoticed wart at a terminal, but in CI it is a job
+ * that never finishes and bills runner minutes until the workflow timeout kills it. Exiting only
+ * once stdout has drained ends the process without truncating the report into a pipe.
+ *
+ * @param text - The full report text, already formatted.
+ * @param passed - Whether the run succeeded.
+ */
+export async function writeReportAndExit(text: string, passed: boolean): Promise<void> {
+  await new Promise<void>((flushed) => {
+    process.stdout.write(text, () => {
+      flushed();
+    });
+  });
+  process.exit(passed ? 0 : 1);
+}
+
 async function main(): Promise<void> {
   const report = await verifyProduction();
-  for (const check of report.checks) {
-    process.stdout.write(`${check.passed ? 'PASS' : 'FAIL'}\t${check.name}\t${check.detail}\n`);
-  }
-  process.exitCode = report.passed ? 0 : 1;
+  const text = report.checks
+    .map((check) => `${check.passed ? 'PASS' : 'FAIL'}\t${check.name}\t${check.detail}\n`)
+    .join('');
+  await writeReportAndExit(text, report.passed);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) await main();

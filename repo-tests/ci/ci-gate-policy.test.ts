@@ -383,6 +383,11 @@ describe('the real workflows', () => {
       // `release-ready`, so a check job in another file is not a gate that file can skip.
       '.github/workflows/e2e.yml',
       '.github/workflows/neon-branch.yml',
+      // Runs after the release, never before it: Vercel promotes the web build only once
+      // deploy.yml's API check passes, so the documentation site it probes does not exist at
+      // gate time. It carries no gating command token, so the ungated-check-job rule does not
+      // see it as a check job that skipped `release-ready.needs`.
+      '.github/workflows/verify-docs.yml',
     ]);
   });
 

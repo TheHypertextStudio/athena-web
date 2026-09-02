@@ -1,0 +1,58 @@
+# Post-deployment confirmation that the documentation site is reachable on the product domain.
+#
+# `/docs` is not a route in `apps/web`. It resolves only through the `next.config.ts` rewrites to
+# `DOCS_MINTLIFY_ORIGIN`, so its availability is a deployment fact no test in CI can hold: both
+# branches of `docsRewrites()` are covered and both stayed green for weeks while the configured
+# origin pointed at a hostname with no DNS record, and every `/docs` page answered
+# `502 BAD_GATEWAY` on the live domain. Only a request to the running site can tell the difference.
+#
+# This is NOT a release gate and cannot be one: Vercel promotes the web build only after the
+# `deploy-api` check passes (docs/engineering/deployment.md), so the thing being verified does not
+# exist until the release is already out. It runs afterwards and reports loudly instead — a
+# failure here is a red run and a broken site, not a blocked deploy.
+#
+# Billed footprint: one `ubuntu-latest` runner that makes roughly a dozen HTTP requests and exits.
+# Two triggers, both cheap. `workflow_call` adds one run per production release, which is at most
+# one per push to main. `schedule` adds exactly one run per day, and it is the trigger that earns
+# its keep: the outage above was caused by a project-configuration change rather than a commit, so
+# a release-only check would have stayed silent until whenever someone next pushed. There is no
+# `push`/`pull_request` trigger, so branch and pull-request traffic costs nothing.
+name: Verify docs
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  schedule:
+    # 14:00 UTC daily — mid-morning US Central, so a failure is seen the day it appears.
+    - cron: '0 14 * * *'
+
+# One at a time. A scheduled run overlapping a release-triggered run would probe the same origin
+# twice for no added signal, and cancelling the in-flight one could discard a real failure.
+concurrency:
+  group: verify-docs
+  cancel-in-progress: false
+
+jobs:
+  verify-docs:
+    name: Verify documentation site
+    runs-on: ubuntu-latest
+    # Backstop, not the expected duration: a healthy site settles on the first probe in seconds, and
+    # the retry loop's own ceiling is four and a half minutes. This bounds the billed cost of a
+    # verifier that stops making progress rather than letting it run to the six-hour default.
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      # The verifier reads only node builtins and `fetch`, so the root workspace carries
+      # everything it needs — `tsx` to run it and nothing else.
+      - uses: ./.github/actions/setup
+        with:
+          filter: '--filter @docket/root'
+
+      # Gates on the documentation checks and reports the rest of the public production surface
+      # advisorily. Deliberately no `continue-on-error` and no `|| true`: a documentation failure
+      # must turn this run red.
+      - name: Verify the documentation site is live
+        run: pnpm launch:verify-docs

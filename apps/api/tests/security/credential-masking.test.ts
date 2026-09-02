@@ -285,6 +285,9 @@ const CREDENTIAL_NAME_PATTERN = /token|secret|apiKey|api_key|password|credential
  *   metadata (RFC 8414 field names), all public URLs and method identifiers.
  * - `hasCredential`, `credentialStatus` — booleans/enums stating WHETHER a credential is stored,
  *   which is exactly what a masked UI needs to render and reveals nothing about the value.
+ * - `credentialId` — the WebAuthn credential identifier (`passkey.credential_id`) that
+ *   `DELETE /v1/me/passkeys/{id}` returns so a client can drop its local copy. An authenticator
+ *   advertises this handle in every assertion; it is a public name for a key, never the key.
  * - `credentialsRef` — the credential-by-reference pointer on `IntegrationConnection` and
  *   `AgentConnection`. Its own schema description states it is "an opaque reference to the stored
  *   credential … Docket never persists the raw secret, only this pointer", and
@@ -295,6 +298,7 @@ const CREDENTIAL_NAME_PATTERN = /token|secret|apiKey|api_key|password|credential
  */
 const CREDENTIAL_NAME_ALLOWLIST = new Set([
   'authMode',
+  'credentialId',
   'credentialStatus',
   'credentialsRef',
   'hasCredential',

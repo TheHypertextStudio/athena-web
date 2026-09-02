@@ -69,8 +69,10 @@ exchange the code for tokens.
 
 If the browser does not expose FedCM, Docket navigates to Lovelace immediately from the original
 click. If a native dialog was invoked and then dismissed or failed, Docket never redirects from the
-failure handler: it says that nothing changed and offers an explicit **Continue in Lovelace**
-button. The redirect callback and FedCM completion endpoint call the same attempt-completion
+failure handler: it offers the redirect as one contained region carrying a heading, a sentence
+describing what the click does, and a single **Continue on Lovelace** button. A dismissed dialog
+and a dialog that failed on its own are indistinguishable to the person, so that copy names the way
+forward instead of narrating a cause it cannot know. The redirect callback and FedCM completion endpoint call the same attempt-completion
 service, so scope validation, one-time consumption, credential sealing, and connection transitions
 cannot drift between transports.
 

@@ -61,6 +61,7 @@ vi.mock('../../src/app/(app)/settings/athena/lattice-fedcm', () => ({
 }));
 
 import { LatticeSection } from '../../src/app/(app)/settings/athena/lattice-section';
+import { LATTICE_FEDCM_FALLBACK_COPY } from '../../src/app/(app)/settings/athena/lattice-copy';
 
 const AUTHORIZATION_URL = 'https://auth.uselovelace.com/oauth/authorize?state=signed';
 const STARTED = {
@@ -170,9 +171,11 @@ describe('LatticeSection FedCM-first authorization', () => {
 
     fireEvent.click(await preparedConnectButton());
 
-    const fallback = await screen.findByRole('button', { name: 'Continue in Lovelace' });
+    const fallback = await screen.findByRole('button', {
+      name: LATTICE_FEDCM_FALLBACK_COPY.action,
+    });
     expect(assignMock).not.toHaveBeenCalled();
-    expect(screen.getByText(/nothing changed/i)).toBeInTheDocument();
+    expect(screen.getByText(LATTICE_FEDCM_FALLBACK_COPY.title)).toBeInTheDocument();
 
     // The fallback is the action that will actually work now, so it must not
     // read as a second button of the same weight as the one that just failed.

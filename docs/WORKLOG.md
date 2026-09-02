@@ -8473,6 +8473,62 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [LATTICE-FEDCM-CONTINUATION-001] Finish the Lattice connection when Lovelace asks for consent
+
+- **Completed**: 2026-09-02
+- **Priority**: P0
+- **Summary**: Connecting Lattice from Settings → Athena never completed in production. The native
+  dialog opened, the person signed in and approved, and then the dialog vanished and Docket showed
+  its redirect fallback. Lovelace's assertion endpoint answered `200` every time, so nothing on
+  either server looked wrong.
+
+#### Cause
+
+Lovelace's assertion endpoint answers a consent-requiring authorization with FedCM's
+`continue_on`, naming the consent screen in the Accounts app at `accounts.uselovelace.com`. The
+assertion endpoint itself is on `auth.uselovelace.com`. The browser checks those against each
+other before it opens the continuation: "If continueOnUrl is not same origin with tokenUrl, set
+credential to failure and return." So the browser discarded the response and rejected the pending
+`navigator.credentials.get()`, while the endpoint that produced it recorded a success. Docket's
+transport turns any rejection into the redirect fallback, which is why the failure surfaced on
+Docket with no error anywhere.
+
+#### Change
+
+The continuation now starts at a new same-origin bridge on the identity provider,
+`GET /web-identity/consent`, which forwards the browser to the Accounts app for the consent UI and
+settles the ceremony when it returns — the same shape as the sign-in bridge beside it. The consent
+screen navigates back to that bridge instead of calling `IdentityProvider`, which is exposed only
+to the provider's own origin. The approved code rides the return in the query string, as it
+already does in the ordinary redirect transport; redeeming it is bound to the requesting client
+and that client's PKCE verifier.
+
+Docket's fallback was rebuilt in the same pass. It read "The Lovelace dialog closed, so nothing
+changed" beside a second button of the same weight as the one that had just failed. A dismissed
+dialog and a dialog that failed on its own are indistinguishable here, so the copy no longer
+guesses: one contained region carries a heading, a sentence saying what the click does, and a
+single **Continue on Lovelace** button.
+
+- **Files changed**: `apps/web/src/app/(app)/settings/athena/lattice-copy.ts`,
+  `apps/web/src/app/(app)/settings/athena/lattice-section.tsx`,
+  `apps/web/tests/athena/lattice-section.test.tsx`,
+  `docs/engineering/specs/lattice-byo-model.md`. In the Lovelace repository:
+  `apps/lovelace-accounts-service/src/routes/fedcm/consent.ts` (new), `.../fedcm/index.ts`,
+  `.../fedcm/assertion.ts`, `apps/lovelace-accounts/src/app/consent/page.tsx`,
+  `apps/lovelace-accounts/src/app/consent/fedcm-consent-form.tsx`, and their tests.
+- **Validation**: `pnpm typecheck` and `pnpm lint` clean for `@docket/web`, Prettier clean, and the
+  Lattice section suite passes. In Lovelace, all 43 FedCM route tests, the 4 FedCM integration
+  tests, and the consent-form suite pass; typecheck is clean for both changed apps.
+- **Learnings**: A `200` from the endpoint the browser asked is not evidence the browser accepted
+  the answer. FedCM validates the response body against the request's own origin and then fails
+  silently on the client, so the only place the failure is visible is the relying party. When a
+  server reports success and the client reports nothing happened, read the client's spec
+  requirements on the response rather than the server's logs.
+- **Not covered**: The bridge echoes the authorization code it is handed rather than confirming
+  the code was issued for the session's user and the request's client. That check is safe to omit
+  because the token exchange is client-bound and PKCE-bound, but it would make the bridge
+  self-sufficient rather than dependent on that downstream binding.
+
 ### [API-STARTUP-DEGRADE-001] Keep the API serving when a dependency is unreachable
 
 - **Completed**: 2026-09-01

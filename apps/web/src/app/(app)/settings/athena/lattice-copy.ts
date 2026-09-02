@@ -102,6 +102,16 @@ export const LATTICE_RETURN_COPY: Readonly<Record<string, string>> = {
   error: 'That connection attempt did not finish. You can try again.',
 };
 
-/** Copy shown only after a supported browser's native FedCM ceremony did not finish. */
-export const LATTICE_FEDCM_FALLBACK_COPY =
-  'The Lovelace dialog closed, so nothing changed. You can try it again or continue on Lovelace’s page.';
+/**
+ * Copy shown only after a supported browser's native FedCM ceremony did not finish.
+ *
+ * @remarks
+ * This state is reached by a dismissed dialog and by a dialog that failed on its own, and the
+ * person cannot tell those apart. So the copy names the way forward and says what the next click
+ * does, rather than narrating a cause it cannot know.
+ */
+export const LATTICE_FEDCM_FALLBACK_COPY = {
+  title: 'Finish connecting on Lovelace',
+  body: 'Lovelace opens in this tab and brings you back here once you approve the connection.',
+  action: 'Continue on Lovelace',
+} as const;

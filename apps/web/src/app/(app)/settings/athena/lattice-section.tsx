@@ -30,8 +30,10 @@ import {
   Chip,
   ControlGroup,
   DecorativeIcon,
+  Row,
   Skeleton,
   Stack,
+  Surface,
   Text,
   Toolbar,
 } from '@docket/ui/primitives';
@@ -101,27 +103,46 @@ function ReasonNote({ reason }: { readonly reason: LatticeReason }): JSX.Element
   );
 }
 
-/** The redirect transport remains a deliberate second click after an invoked FedCM dialog. */
+/**
+ * The redirect transport, offered as a deliberate second click after an invoked FedCM dialog.
+ *
+ * @remarks
+ * Never rendered as a loose line of muted text beside the button that just failed: two
+ * same-weight buttons in one card read as two ways to do the same thing, and a muted sentence
+ * reads as an aside rather than as the way forward. The offer is one contained region with a
+ * heading, a sentence describing what the click does, and a single filled action.
+ *
+ * @param props - The redirect target for this attempt.
+ * @param props.authorizationUrl - Lovelace's authorization URL for the pending attempt.
+ * @returns The contained fallback offer.
+ */
 function AuthorizationFallback({
   authorizationUrl,
 }: {
   readonly authorizationUrl: string;
 }): JSX.Element {
   return (
-    <Stack gap={2} className="px-4 pb-4" role="status">
-      <Text token="body-small" tone="muted">
-        {LATTICE_FEDCM_FALLBACK_COPY}
-      </Text>
-      <div>
-        <Button
-          onClick={() => {
-            window.location.assign(authorizationUrl);
-          }}
-        >
-          Continue in Lovelace
-        </Button>
-      </div>
-    </Stack>
+    <div className="px-4 pb-4">
+      <Surface tone="card" pad="roomy" role="status">
+        <Stack gap={3}>
+          <Stack gap={1}>
+            <Text token="title-small">{LATTICE_FEDCM_FALLBACK_COPY.title}</Text>
+            <Text token="body-small" tone="muted">
+              {LATTICE_FEDCM_FALLBACK_COPY.body}
+            </Text>
+          </Stack>
+          <Row>
+            <Button
+              onClick={() => {
+                window.location.assign(authorizationUrl);
+              }}
+            >
+              {LATTICE_FEDCM_FALLBACK_COPY.action}
+            </Button>
+          </Row>
+        </Stack>
+      </Surface>
+    </div>
   );
 }
 

@@ -96,6 +96,7 @@ describe('identity and access contracts', () => {
       PublicConfigOut.parse({
         appMode: 'production',
         oauthProviders: ['google'],
+        googleServerClientId: null,
         connectors: ['calendar'],
         mcpUrl: null,
       }).connectors,

@@ -1,11 +1,59 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-09-01
+> **Last Updated**: 2026-09-02
 
 ---
 
 ## Active Tasks
+
+### [DOCS-ORIGIN-001] Restore the documentation site under the product domain
+
+- **Completed**: 2026-09-02
+- **Priority**: P1
+- **Summary**: Every `/docs` page on `docket.hypertext.studio` had been answering
+  `502 BAD_GATEWAY / DNS_HOSTNAME_NOT_FOUND` — a bare Vercel error page, not a Docket surface — for
+  anyone following the "Docs" link in the marketing nav. `/docs` is not a route in `apps/web`; it
+  exists only as the five `next.config.ts` rewrites that proxy to `DOCS_MINTLIFY_ORIGIN`, and the
+  value that variable held on the Vercel `docket` project pointed at a hostname with no DNS record.
+  Vercel's proxy cannot resolve such a destination, so it never reached Mintlify at all and returned
+  its own gateway error. The variable now holds `https://docket.mintlify.dev` and production has
+  been rebuilt; `/docs`, `/docs/guides/*`, `/docs/developers/*`, `/docs/llms.txt`, and the page CSS
+  all answer 200 on the product domain.
+- **Approach**: The error names the failure mode precisely — `DNS_HOSTNAME_NOT_FOUND` is emitted
+  before any request leaves Vercel — so the destination hostname was the only candidate. Three
+  Mintlify-shaped origins were probed directly: `docket.mintlify.app` resolves but serves pages from
+  its root, so every proxied `/docs/...` path 404s; `docket-docs.mintlify.app` is not this site; and
+  `docket.mintlify.dev` is the proxy origin the "Host at" subpath is published from, returning 200
+  for `/docs/developers/authentication` with the right `<title>`. The rendered page references its
+  assets exclusively under `/docs/`, so the existing `/docs/:path*` rewrite already covers the
+  bundle and search index and no rewrite needed changing.
+- **Decisions**: `DOCS_MINTLIFY_ORIGIN` was recreated as a plaintext project variable rather than a
+  Sensitive one. A public documentation hostname is not a credential, and the Sensitive marking is
+  what turned a one-line misconfiguration into an opaque one — the value cannot be read back through
+  the dashboard or the API, so no one could compare what was configured against the site that was
+  actually live. The trade is deliberate and worth stating: the origin is now visible to anyone with
+  project access, which is the same audience that can already read the rewrite in `next.config.ts`.
+- **Files Changed**: `.env.example` (the `DOCS_MINTLIFY_ORIGIN` block now names the exact
+  `https://<subdomain>.mintlify.dev` shape and both wrong-hostname failure modes by the symptom each
+  produces); `docs/WORKLOG.md`. The behavioural fix is Vercel project configuration, not code.
+- **Validation**: `pnpm format:check` and `pnpm --filter @docket/env test` (161 tests) green. The
+  production redeploy of `f1b7f69bf` was watched to `READY` and then verified over the wire:
+  `/docs` 308s to `/docs/guides/what-docket-is`, `/docs/developers/authentication` and
+  `/docs/guides/what-docket-is` and `/docs/llms.txt` return 200, and the stylesheet the page links
+  returns 200 through the same rewrite.
+- **Learnings**: A build-time rewrite target is a deployment fact that no test can hold. Both branches
+  of `docsRewrites()` were covered — five rewrites with the origin set, none without — and both still
+  passed while the configured origin pointed nowhere, because the suite can only assert the rewrite
+  is _emitted_, never that its destination resolves. The Sensitive marking then removed the one
+  remaining way to check by inspection. Worth noting the failure had been live since 2026-08-15, the
+  day the variable was created and the docs site shipped: `/docs` was never reachable in production.
+- **Follow-ups**: The marketing nav shows the "Docs" link off `isDocsSitePublished()`, which is true
+  whenever the variable is non-blank — a link that promises a page the origin may not serve. A
+  reachability check against the configured origin (a smoke request in the release checks rather
+  than a build-time one) would close the gap this entry documents.
+
+---
 
 ### [BOUNDARY-001] Ask for more evening instead of weakening the day
 

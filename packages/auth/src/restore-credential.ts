@@ -68,6 +68,9 @@ export interface RestoreWebAuthn {
   ) => Promise<AuthenticationVerification>;
 }
 
+/** The slice of the database client the plugin touches; injectable so persistence faults are testable. */
+export type RestoreDatabase = Pick<typeof db, 'insert' | 'select' | 'update' | 'delete'>;
+
 const defaultWebAuthn: RestoreWebAuthn = {
   generateRegistrationOptions,
   generateAuthenticationOptions,
@@ -143,6 +146,7 @@ async function consumeChallenge(
 export function restoreCredentialPlugin(
   authEnv: AuthEnv,
   webAuthn: RestoreWebAuthn = defaultWebAuthn,
+  database: RestoreDatabase = db,
 ): BetterAuthPlugin {
   const expectedOrigins = nativeOrigins(authEnv.BETTER_AUTH_PASSKEY_NATIVE_ORIGINS);
   return {
@@ -194,7 +198,7 @@ export function restoreCredentialPlugin(
           if (!verification.verified || !info) {
             throw new APIError('UNAUTHORIZED', { message: 'Restore credential was not verified.' });
           }
-          const [record] = await db
+          const [record] = await database
             .insert(restoreCredential)
             .values({
               userId: user.id,
@@ -233,7 +237,7 @@ export function restoreCredentialPlugin(
         { method: 'POST', body: requestBody },
         async (ctx) => {
           const challenge = await consumeChallenge(ctx, 'authenticate');
-          const [record] = await db
+          const [record] = await database
             .select()
             .from(restoreCredential)
             .where(eq(restoreCredential.credentialID, ctx.body.id))
@@ -257,7 +261,7 @@ export function restoreCredentialPlugin(
           if (!verification.verified) {
             throw new APIError('UNAUTHORIZED', { message: 'Restore credential was not verified.' });
           }
-          await db
+          await database
             .update(restoreCredential)
             .set({ counter: verification.authenticationInfo.newCounter, lastUsedAt: new Date() })
             .where(eq(restoreCredential.id, record.id));
@@ -274,7 +278,7 @@ export function restoreCredentialPlugin(
         async (ctx) => {
           const current = await getSessionFromCtx(ctx);
           if (!current) throw new APIError('UNAUTHORIZED', { message: 'Authentication required.' });
-          const deleted = await db
+          const deleted = await database
             .delete(restoreCredential)
             .where(
               and(

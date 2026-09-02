@@ -87,9 +87,11 @@
 - **Validation**: Root typecheck, lint, format check, full test with coverage, and build pass on
   the final tree. Lovelace's FedCM branch passes commit policy, typecheck, build, and docs
   validation; its Vercel reconciliation step needs the user's login.
-- **Blockers**: The boundary-loop decision is the user's; its branch and the superseded delegation
-  branch (`cello/athena-web-1786473845`) are the only refs left unmerged. The audit worktree's
-  thirty unported edits survive as `stash@{0}` until the user drops them.
+- **Blockers**: None for landing. The boundary loop is on `main` and its branch is gone; the
+  superseded delegation branch (`cello/athena-web-1786473845`) and the audit stash (`stash@{0}`,
+  thirty unported prose edits) wait only for the user to drop them. Lovelace's FedCM branch needs
+  the user's Vercel login before its pre-push passes, and native-dialog acceptance needs a fresh
+  Chrome profile and the user's passkey.
 - **Learnings**: Six of eight Cello worktrees and every workflow branch had already landed by
   rebase, so `git branch --no-merged` alone overstates pending work; `git cherry` plus a residual
   diff against `origin/main` is the honest test. Each landed slice that adds a migration must be

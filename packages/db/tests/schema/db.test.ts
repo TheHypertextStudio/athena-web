@@ -328,6 +328,7 @@ describe('schema foreign-key references (covers every `.references(() => …)` c
     account,
     verification,
     passkey,
+    restoreCredential,
     twoFactor,
     oauthClient,
     oauthAccessToken,

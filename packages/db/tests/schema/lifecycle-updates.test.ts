@@ -42,6 +42,7 @@ import {
   latticeConnection,
   latticeCredential,
   notificationIntent,
+  restoreCredential,
   notificationPreference,
   organization,
   personalMcpConnection,
@@ -319,6 +320,21 @@ beforeAll(async () => {
     )[0],
   ).id;
   await db.insert(athenaMailbox).values({ ownerUserId: ids['user'], key: 'grace-abc123' });
+  ids['restoreCredential'] = assertDefined(
+    (
+      await db
+        .insert(restoreCredential)
+        .values({
+          userId: ids['user'],
+          credentialID: 'restore-lifecycle',
+          publicKey: 'cHVibGljLWtleQ',
+          counter: 0,
+          deviceType: 'multiDevice',
+          backedUp: true,
+        })
+        .returning()
+    )[0],
+  ).id;
 
   // --- crosscutting extras ---
   ids['integration'] = assertDefined(
@@ -624,6 +640,17 @@ describe('agent-adjacent islands updates ($onUpdate coverage)', () => {
       .returning();
     expect(credential?.ciphertext).toBe('v1:gcm:refreshed');
     expect(credential?.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it('bumps updatedAt when a restore credential is used', async () => {
+    const [row] = await db
+      .update(restoreCredential)
+      .set({ counter: 1, lastUsedAt: new Date() })
+      .where(eq(restoreCredential.id, assertDefined(ids['restoreCredential'])))
+      .returning();
+    expect(row?.counter).toBe(1);
+    expect(row?.lastUsedAt).toBeInstanceOf(Date);
+    expect(row?.updatedAt).toBeInstanceOf(Date);
   });
 
   it('bumps updatedAt when a Lattice authorization attempt is consumed', async () => {

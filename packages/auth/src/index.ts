@@ -54,6 +54,7 @@ export {
   adminGoogleSsoEnabled,
   buildAuthOptions,
   canRemovePasskey,
+  LAST_PASSKEY_MESSAGE,
   canUseGoogleOAuth,
   isAdminOrigin,
   syncStaffOnGoogleCallback,

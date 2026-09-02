@@ -285,9 +285,6 @@ const CREDENTIAL_NAME_PATTERN = /token|secret|apiKey|api_key|password|credential
  *   metadata (RFC 8414 field names), all public URLs and method identifiers.
  * - `hasCredential`, `credentialStatus` — booleans/enums stating WHETHER a credential is stored,
  *   which is exactly what a masked UI needs to render and reveals nothing about the value.
- * - `credentialId` — the WebAuthn credential identifier (`passkey.credential_id`) that
- *   `DELETE /v1/me/passkeys/{id}` returns so a client can drop its local copy. An authenticator
- *   advertises this handle in every assertion; it is a public name for a key, never the key.
  * - `credentialsRef` — the credential-by-reference pointer on `IntegrationConnection` and
  *   `AgentConnection`. Its own schema description states it is "an opaque reference to the stored
  *   credential … Docket never persists the raw secret, only this pointer", and
@@ -298,7 +295,6 @@ const CREDENTIAL_NAME_PATTERN = /token|secret|apiKey|api_key|password|credential
  */
 const CREDENTIAL_NAME_ALLOWLIST = new Set([
   'authMode',
-  'credentialId',
   'credentialStatus',
   'credentialsRef',
   'hasCredential',
@@ -337,6 +333,11 @@ const MINTED_CREDENTIAL_RESPONSES: ReadonlySet<string> = new Set([
   // undo or redo that one mutation. The task route rechecks organization and actor ownership
   // before using it, so this is an operation handle rather than a provider or session credential.
   'POST /v1/orgs/{orgId}/tasks/{id}/expand 200 → undoToken',
+  // Deleting a passkey hands back its WebAuthn credential identifier (`passkey.credential_id`)
+  // so a native credential provider can drop its stale local entry. An authenticator advertises
+  // this handle in every assertion: it is the public name of a key, never the key. Pinned to the
+  // one operation so a `credentialId` on any other route still fails.
+  'DELETE /v1/me/passkeys/{id} 200 → credentialId',
   'POST /v1/orgs/{orgId}/tasks/{id}/expand/undo 200 → undoToken',
   // Starting a voice session mints an EPHEMERAL client secret (minutes, one session) so the
   // browser can hold its own audio link to the speech model. Returning it is the entire point of

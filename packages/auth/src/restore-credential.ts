@@ -14,21 +14,16 @@ import { APIError, createAuthEndpoint, getSessionFromCtx } from 'better-auth/api
 import { expireCookie, setSessionCookie } from 'better-auth/cookies';
 import * as z from 'zod';
 
-import type { AuthEnv } from './auth-builder';
+import { type AuthEnv, parseTrustedOrigins } from './auth-builder';
 
 const CHALLENGE_TTL_S = 5 * 60;
 const CHALLENGE_COOKIE_NAME = 'restore_credential_challenge';
 const requestBody = z.looseObject({ id: z.string().min(1) });
 
-/** Parse the configured comma-separated native origin allowlist. */
-function nativeOrigins(raw: string | undefined): string[] {
-  return (
-    raw
-      ?.split(',')
-      .map((value) => value.trim())
-      .filter(Boolean) ?? []
-  );
-}
+type EndpointContext = Parameters<typeof getSessionFromCtx>[0];
+
+/** The library call's input, with only the fields this plugin reads on the way back. */
+type Narrowed<F extends (input: never) => unknown, R> = (input: Parameters<F>[0]) => Promise<R>;
 
 interface RegistrationVerification {
   readonly verified: boolean;
@@ -54,18 +49,22 @@ interface AuthenticationVerification {
 
 /** Injectable WebAuthn boundary used by Restore Credentials and its deterministic tests. */
 export interface RestoreWebAuthn {
-  readonly generateRegistrationOptions: (
-    input: Parameters<typeof generateRegistrationOptions>[0],
-  ) => Promise<{ readonly challenge: string }>;
-  readonly generateAuthenticationOptions: (
-    input: Parameters<typeof generateAuthenticationOptions>[0],
-  ) => Promise<{ readonly challenge: string }>;
-  readonly verifyRegistrationResponse: (
-    input: Parameters<typeof verifyRegistrationResponse>[0],
-  ) => Promise<RegistrationVerification>;
-  readonly verifyAuthenticationResponse: (
-    input: Parameters<typeof verifyAuthenticationResponse>[0],
-  ) => Promise<AuthenticationVerification>;
+  readonly generateRegistrationOptions: Narrowed<
+    typeof generateRegistrationOptions,
+    { readonly challenge: string }
+  >;
+  readonly generateAuthenticationOptions: Narrowed<
+    typeof generateAuthenticationOptions,
+    { readonly challenge: string }
+  >;
+  readonly verifyRegistrationResponse: Narrowed<
+    typeof verifyRegistrationResponse,
+    RegistrationVerification
+  >;
+  readonly verifyAuthenticationResponse: Narrowed<
+    typeof verifyAuthenticationResponse,
+    AuthenticationVerification
+  >;
 }
 
 /** The slice of the database client the plugin touches; injectable so persistence faults are testable. */
@@ -84,15 +83,16 @@ interface ChallengePayload {
   readonly userId?: string | undefined;
 }
 
-/** Fail closed when a session is absent or older than the five-minute credential-change window. */
-async function requireFreshUser(ctx: Parameters<typeof getSessionFromCtx>[0]): Promise<{
+/** Fail closed when a session is absent or older than the configured credential-change window. */
+async function requireFreshUser(ctx: EndpointContext): Promise<{
   readonly id: string;
   readonly name: string;
   readonly email: string;
 }> {
   const current = await getSessionFromCtx(ctx);
   if (!current) throw new APIError('UNAUTHORIZED', { message: 'Authentication required.' });
-  if (Date.now() - new Date(current.session.createdAt).getTime() > CHALLENGE_TTL_S * 1000) {
+  const freshAgeMs = ctx.context.sessionConfig.freshAge * 1000;
+  if (Date.now() - new Date(current.session.createdAt).getTime() > freshAgeMs) {
     throw new APIError('UNAUTHORIZED', {
       code: 'reauth_required',
       message: 'Re-authentication required.',
@@ -101,31 +101,29 @@ async function requireFreshUser(ctx: Parameters<typeof getSessionFromCtx>[0]): P
   return current.user;
 }
 
+/** The dedicated signed cookie that names the outstanding challenge. */
+function challengeCookie(ctx: EndpointContext): ReturnType<typeof ctx.context.createAuthCookie> {
+  return ctx.context.createAuthCookie(CHALLENGE_COOKIE_NAME, { maxAge: CHALLENGE_TTL_S });
+}
+
 /** Issue a single-use database challenge and bind its opaque id to a signed cookie. */
-async function issueChallenge(
-  ctx: Parameters<typeof getSessionFromCtx>[0],
-  payload: ChallengePayload,
-): Promise<void> {
+async function issueChallenge(ctx: EndpointContext, payload: ChallengePayload): Promise<void> {
   const identifier = `restore-credential:${randomBytes(24).toString('base64url')}`;
   await ctx.context.internalAdapter.createVerificationValue({
     identifier,
     value: JSON.stringify(payload),
     expiresAt: new Date(Date.now() + CHALLENGE_TTL_S * 1000),
   });
-  const cookie = ctx.context.createAuthCookie(CHALLENGE_COOKIE_NAME, {
-    maxAge: CHALLENGE_TTL_S,
-  });
+  const cookie = challengeCookie(ctx);
   await ctx.setSignedCookie(cookie.name, identifier, ctx.context.secret, cookie.attributes);
 }
 
 /** Consume and validate the challenge named by the dedicated signed cookie. */
 async function consumeChallenge(
-  ctx: Parameters<typeof getSessionFromCtx>[0],
+  ctx: EndpointContext,
   expectedKind: ChallengePayload['kind'],
 ): Promise<ChallengePayload> {
-  const cookie = ctx.context.createAuthCookie(CHALLENGE_COOKIE_NAME, {
-    maxAge: CHALLENGE_TTL_S,
-  });
+  const cookie = challengeCookie(ctx);
   const identifier = await ctx.getSignedCookie(cookie.name, ctx.context.secret);
   if (typeof identifier !== 'string') {
     throw new APIError('BAD_REQUEST', { message: 'Restore challenge is missing or expired.' });
@@ -148,7 +146,8 @@ export function restoreCredentialPlugin(
   webAuthn: RestoreWebAuthn = defaultWebAuthn,
   database: RestoreDatabase = db,
 ): BetterAuthPlugin {
-  const expectedOrigins = nativeOrigins(authEnv.BETTER_AUTH_PASSKEY_NATIVE_ORIGINS);
+  const expectedOrigins = parseTrustedOrigins(authEnv.BETTER_AUTH_PASSKEY_NATIVE_ORIGINS);
+  const originsConfigured = expectedOrigins.length > 0;
   return {
     id: 'restore-credential',
     endpoints: {
@@ -183,8 +182,11 @@ export function restoreCredentialPlugin(
         { method: 'POST', body: requestBody },
         async (ctx) => {
           const user = await requireFreshUser(ctx);
+          if (!originsConfigured) {
+            throw new APIError('BAD_REQUEST', { message: 'Restore challenge is invalid.' });
+          }
           const challenge = await consumeChallenge(ctx, 'register');
-          if (challenge.userId !== user.id || expectedOrigins.length === 0) {
+          if (challenge.userId !== user.id) {
             throw new APIError('BAD_REQUEST', { message: 'Restore challenge is invalid.' });
           }
           const verification = await webAuthn.verifyRegistrationResponse({
@@ -237,12 +239,15 @@ export function restoreCredentialPlugin(
         { method: 'POST', body: requestBody },
         async (ctx) => {
           const challenge = await consumeChallenge(ctx, 'authenticate');
+          if (!originsConfigured) {
+            throw new APIError('UNAUTHORIZED', { message: 'Restore credential was not verified.' });
+          }
           const [record] = await database
             .select()
             .from(restoreCredential)
             .where(eq(restoreCredential.credentialID, ctx.body.id))
             .limit(1);
-          if (!record || expectedOrigins.length === 0) {
+          if (!record) {
             throw new APIError('UNAUTHORIZED', { message: 'Restore credential was not verified.' });
           }
           const verification = await webAuthn.verifyAuthenticationResponse({
@@ -261,11 +266,14 @@ export function restoreCredentialPlugin(
           if (!verification.verified) {
             throw new APIError('UNAUTHORIZED', { message: 'Restore credential was not verified.' });
           }
-          await database
-            .update(restoreCredential)
-            .set({ counter: verification.authenticationInfo.newCounter, lastUsedAt: new Date() })
-            .where(eq(restoreCredential.id, record.id));
-          const user = await ctx.context.internalAdapter.findUserById(record.userId);
+          // The counter write and the owner lookup are independent; only the session needs both.
+          const [, user] = await Promise.all([
+            database
+              .update(restoreCredential)
+              .set({ counter: verification.authenticationInfo.newCounter, lastUsedAt: new Date() })
+              .where(eq(restoreCredential.id, record.id)),
+            ctx.context.internalAdapter.findUserById(record.userId),
+          ]);
           if (!user) throw new APIError('UNAUTHORIZED', { message: 'Account not found.' });
           const session = await ctx.context.internalAdapter.createSession(user.id);
           await setSessionCookie(ctx, { session, user });
@@ -294,17 +302,10 @@ export function restoreCredentialPlugin(
         },
       ),
     },
+    // Only the two unauthenticated routes can be hammered by a stranger.
     rateLimit: [
-      {
-        pathMatcher: (path) => path === '/restore-credential/generate-authenticate-options',
-        window: 60,
-        max: 10,
-      },
-      {
-        pathMatcher: (path) => path === '/restore-credential/verify-authentication',
-        window: 60,
-        max: 10,
-      },
-    ],
+      '/restore-credential/generate-authenticate-options',
+      '/restore-credential/verify-authentication',
+    ].map((allowed) => ({ pathMatcher: (path: string) => path === allowed, window: 60, max: 10 })),
   };
 }

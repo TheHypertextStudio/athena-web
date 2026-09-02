@@ -14,10 +14,7 @@ import {
   passkeyAuthenticatorKindLabel,
   type PasskeyAuthenticatorKind,
 } from '@docket/identity-access/passkey';
-import type {
-  PasskeyDeleteOut,
-  PasskeySummary,
-} from '@docket/identity-access/passkey-management-contract';
+import type { PasskeySummary } from '@docket/identity-access/passkey-management-contract';
 import { cn } from '@docket/ui';
 import { EmptyState } from '@docket/ui/components';
 import {
@@ -50,7 +47,6 @@ import {
   Input,
   Skeleton,
 } from '@docket/ui/primitives';
-import { useMutation } from '@tanstack/react-query';
 import { type JSX, useId, useState } from 'react';
 
 import { ROW_BASE, ROW_INTERACTIVE } from '@/components/settings/setting-row';
@@ -70,18 +66,10 @@ function passkeyLabel(record: PasskeySummary): string {
   return name && name.length > 0 ? name : 'Passkey';
 }
 
-/** Render a passkey's creation date while tolerating a string or Date wire value. */
-function addedOn(record: PasskeySummary): string | null {
-  if (!record.createdAt) return null;
-  const formatted = formatCalendarDate(new Date(record.createdAt).toISOString());
-  return formatted ? `Added ${formatted}` : null;
-}
-
-/** Render the most recent successful authentication date when the credential has been used. */
-function lastUsed(record: PasskeySummary): string | null {
-  if (!record.lastUsedAt) return null;
-  const formatted = formatCalendarDate(new Date(record.lastUsedAt).toISOString());
-  return formatted ? `Last used ${formatted}` : null;
+/** Prefix a wire date with its meaning, or say nothing when the credential has no such date. */
+function dateLine(prefix: string, value: string | null): string | null {
+  const formatted = formatCalendarDate(value);
+  return formatted ? `${prefix} ${formatted}` : null;
 }
 
 /** The icon, label, and MD3 tone assigned to one inferred authenticator kind. */
@@ -91,38 +79,22 @@ interface AuthenticatorPresentation {
   readonly tone: string;
 }
 
+/** The icon and tone for each authenticator kind; the label comes from the shared vocabulary. */
+const PRESENTATIONS: Record<PasskeyAuthenticatorKind, Omit<AuthenticatorPresentation, 'label'>> = {
+  synced: { icon: CloudSync, tone: 'bg-primary-container text-on-primary-container' },
+  device: { icon: Fingerprint, tone: 'bg-tertiary-container text-on-tertiary-container' },
+  'security-key': { icon: Usb, tone: 'bg-secondary-container text-on-secondary-container' },
+  'nearby-device': {
+    icon: PhonePasskey,
+    tone: 'bg-secondary-container text-on-secondary-container',
+  },
+  unknown: { icon: Key, tone: 'bg-surface-container-high text-on-surface-variant' },
+};
+
 /** Map stored WebAuthn facts to an authenticator-kind presentation. */
 function authenticatorPresentation(record: PasskeySummary): AuthenticatorPresentation {
   const kind = passkeyAuthenticatorKind(record);
-  const label = passkeyAuthenticatorKindLabel(kind);
-  const presentations: Record<PasskeyAuthenticatorKind, AuthenticatorPresentation> = {
-    synced: {
-      icon: CloudSync,
-      label,
-      tone: 'bg-primary-container text-on-primary-container',
-    },
-    device: {
-      icon: Fingerprint,
-      label,
-      tone: 'bg-tertiary-container text-on-tertiary-container',
-    },
-    'security-key': {
-      icon: Usb,
-      label,
-      tone: 'bg-secondary-container text-on-secondary-container',
-    },
-    'nearby-device': {
-      icon: PhonePasskey,
-      label,
-      tone: 'bg-secondary-container text-on-secondary-container',
-    },
-    unknown: {
-      icon: Key,
-      label,
-      tone: 'bg-surface-container-high text-on-surface-variant',
-    },
-  };
-  return presentations[kind];
+  return { ...PRESENTATIONS[kind], label: passkeyAuthenticatorKindLabel(kind) };
 }
 
 /** The Security-tab card that lists and manages the user's passkeys. */
@@ -136,16 +108,14 @@ export function PasskeysSection(): JSX.Element {
   );
   const [removing, setRemoving] = useState<PasskeySummary | null>(null);
   const [renaming, setRenaming] = useState<PasskeySummary | null>(null);
-  const add = useMutation({
+  const add = useApiMutation({
     mutationFn: async () => {
       const result = await passkey.addPasskey();
       if (result.error) {
         throw toUserFacingError(result.error, 'Could not add the passkey.');
       }
     },
-    onSuccess: () => {
-      void listQ.refetch();
-    },
+    invalidateKeys: [queryKeys.passkeys()],
   });
 
   if (listQ.isPending) {
@@ -163,7 +133,7 @@ export function PasskeysSection(): JSX.Element {
   const passkeys = listQ.data.items;
   const addLabel = add.isPending ? 'Waiting for your device…' : 'Add passkey';
   const startEnrollment = (): void => {
-    if (!add.isPending) add.mutate();
+    if (!add.isPending) add.mutate(undefined);
   };
 
   return (
@@ -224,7 +194,6 @@ export function PasskeysSection(): JSX.Element {
           }}
           onRenamed={() => {
             setRenaming(null);
-            void listQ.refetch();
           }}
         />
       ) : null}
@@ -234,9 +203,6 @@ export function PasskeysSection(): JSX.Element {
         isLast={passkeys.length === 1}
         onOpenChange={(open) => {
           if (!open) setRemoving(null);
-        }}
-        onRemoved={() => {
-          void listQ.refetch();
         }}
       />
     </section>
@@ -355,7 +321,13 @@ function PasskeyRow({ record, onRename, onRemove }: PasskeyRowProps): JSX.Elemen
       <div className="min-w-0 flex-1">
         <p className="text-on-surface text-label-large truncate">{label}</p>
         <p className="text-on-surface-variant text-body-small truncate">
-          {[presentation.label, addedOn(record), lastUsed(record)].filter(Boolean).join(' · ')}
+          {[
+            presentation.label,
+            dateLine('Added', record.createdAt),
+            dateLine('Last used', record.lastUsedAt),
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </p>
       </div>
       <DropdownMenu>
@@ -385,7 +357,6 @@ interface RemovePasskeyDialogProps {
   readonly record: PasskeySummary | null;
   readonly isLast: boolean;
   readonly onOpenChange: (open: boolean) => void;
-  readonly onRemoved: () => void;
 }
 
 /** Confirm passkey removal and warn when the selected credential is the account's last passkey. */
@@ -393,9 +364,8 @@ function RemovePasskeyDialog({
   record,
   isLast,
   onOpenChange,
-  onRemoved,
 }: RemovePasskeyDialogProps): JSX.Element {
-  const remove = useApiMutation<PasskeyDeleteOut, string>({
+  const remove = useApiMutation({
     mutationFn: (id: string) =>
       unwrap(
         () => api.v1.me.passkeys[':id'].$delete({ param: { id } }),
@@ -403,7 +373,6 @@ function RemovePasskeyDialog({
       ),
     invalidateKeys: [queryKeys.passkeys()],
     onSuccess: () => {
-      onRemoved();
       onOpenChange(false);
     },
   });

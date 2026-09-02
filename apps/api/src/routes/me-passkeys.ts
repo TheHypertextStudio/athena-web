@@ -1,5 +1,5 @@
 /** `@docket/api` — authenticated passkey management mounted at `/v1/me/passkeys`. */
-import { canRemovePasskey } from '@docket/auth';
+import { LAST_PASSKEY_MESSAGE, canRemovePasskey } from '@docket/auth';
 import { db, passkey } from '@docket/db';
 import {
   PasskeyDeleteOut,
@@ -25,7 +25,24 @@ function requireSession(c: Context<AppEnv>): NonNullable<AuthSession> {
 }
 
 const passkeyParam = z.object({ id: z.string().min(1) });
-type PasskeyRow = typeof passkey.$inferSelect;
+
+/** The columns a management screen may see; the public key and counter never leave the row. */
+const summaryColumns = {
+  id: passkey.id,
+  name: passkey.name,
+  deviceType: passkey.deviceType,
+  backedUp: passkey.backedUp,
+  transports: passkey.transports,
+  aaguid: passkey.aaguid,
+  createdAt: passkey.createdAt,
+  lastUsedAt: passkey.lastUsedAt,
+};
+type PasskeyRow = Pick<typeof passkey.$inferSelect, keyof typeof summaryColumns>;
+
+/** One passkey scoped to its owner, so no route can reach another person's credential. */
+function ownedBy(id: string, userId: string): ReturnType<typeof and> {
+  return and(eq(passkey.id, id), eq(passkey.userId, userId));
+}
 
 /** Convert a credential into the deliberately assertion-free management DTO. */
 function toSummary(row: PasskeyRow): z.input<typeof PasskeySummary> {
@@ -54,7 +71,7 @@ const mePasskeys = new Hono<AppEnv>()
     async (c) => {
       const { user } = requireSession(c);
       const rows = await db
-        .select()
+        .select(summaryColumns)
         .from(passkey)
         .where(eq(passkey.userId, user.id))
         .orderBy(desc(passkey.createdAt));
@@ -78,8 +95,8 @@ const mePasskeys = new Hono<AppEnv>()
       const [updated] = await db
         .update(passkey)
         .set({ name })
-        .where(and(eq(passkey.id, id), eq(passkey.userId, user.id)))
-        .returning();
+        .where(ownedBy(id, user.id))
+        .returning(summaryColumns);
       if (!updated) throw new NotFoundError('Passkey not found.');
       return ok(c, PasskeySummary, toSummary(updated));
     },
@@ -98,17 +115,13 @@ const mePasskeys = new Hono<AppEnv>()
       const { user } = requireSession(c);
       const { id } = c.req.valid('param');
       const [owned] = await db
-        .select()
+        .select({ credentialID: passkey.credentialID })
         .from(passkey)
-        .where(and(eq(passkey.id, id), eq(passkey.userId, user.id)))
+        .where(ownedBy(id, user.id))
         .limit(1);
       if (!owned) throw new NotFoundError('Passkey not found.');
-      if (!(await canRemovePasskey(user.id))) {
-        throw new CapabilityError(
-          'Add a recovery code or a linked sign-in provider before removing your last passkey.',
-        );
-      }
-      await db.delete(passkey).where(and(eq(passkey.id, id), eq(passkey.userId, user.id)));
+      if (!(await canRemovePasskey(user.id))) throw new CapabilityError(LAST_PASSKEY_MESSAGE);
+      await db.delete(passkey).where(ownedBy(id, user.id));
       return ok(c, PasskeyDeleteOut, { status: true, credentialId: owned.credentialID });
     },
   );

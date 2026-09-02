@@ -42,7 +42,11 @@ import { hasRecoveryCodes } from './backup-codes';
 import { changeEmailConfirmationEmail, recoveryCodeUsedEmail } from './emails';
 import { derivePasskeyLabel } from './passkey-label';
 import { recoveryChallenge } from './recovery-challenge';
-import { restoreCredentialPlugin, type RestoreWebAuthn } from './restore-credential';
+import {
+  restoreCredentialPlugin,
+  type RestoreDatabase,
+  type RestoreWebAuthn,
+} from './restore-credential';
 import { signupChallenge } from './signup-challenge';
 import { INTENT_IDENTIFIER_PREFIX, type SignupIntent } from './signup-intent';
 
@@ -62,6 +66,8 @@ export interface AuthDeps {
   readonly googleDirectory?: GoogleDirectoryPort | undefined;
   /** Test seam for deterministic Restore Credentials ceremonies. */
   readonly restoreWebAuthn?: RestoreWebAuthn | undefined;
+  /** Test seam for Restore Credentials persistence faults; production uses the shared client. */
+  readonly restoreDatabase?: RestoreDatabase | undefined;
 }
 
 /**
@@ -124,7 +130,10 @@ export function parseTrustedOrigins(raw: string | undefined): string[] {
 }
 
 /** Whether a Docket account may start Google OAuth at the current release stage. */
-export function canUseGoogleOAuth(e: AuthEnv, email: string | null | undefined): boolean {
+export function canUseGoogleOAuth(
+  e: Pick<AuthEnv, 'APP_MODE' | 'GOOGLE_OAUTH_PUBLIC' | 'GOOGLE_OAUTH_TEST_EMAILS'>,
+  email: string | null | undefined,
+): boolean {
   if (e.APP_MODE !== 'production' || e.GOOGLE_OAUTH_PUBLIC === true) return true;
   const normalized = email?.trim().toLowerCase();
   if (!normalized) return false;
@@ -418,12 +427,17 @@ const CONNECTORS_BY_IDENTITY: Readonly<Record<string, readonly string[]>> = {
   notion: ['notion'],
 };
 
+/** What a person is told when {@link canRemovePasskey} refuses, on every surface that asks. */
+export const LAST_PASSKEY_MESSAGE =
+  'Add a recovery code or a linked sign-in provider before removing your last passkey.';
+
 /** Whether removing one passkey leaves another supported account-recovery path. */
 export async function canRemovePasskey(userId: string): Promise<boolean> {
   const remaining = await db
     .select({ id: passkeyTable.id })
     .from(passkeyTable)
-    .where(eq(passkeyTable.userId, userId));
+    .where(eq(passkeyTable.userId, userId))
+    .limit(2);
   if (remaining.length > 1) return true;
   const [hasCodes, linkedAccounts] = await Promise.all([
     hasRecoveryCodes(userId),
@@ -624,7 +638,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       mailer: deps.mailer,
       ...(deps.devEchoSignupCode ? { devEchoCode: true } : {}),
     }),
-    restoreCredentialPlugin(e, deps.restoreWebAuthn),
+    restoreCredentialPlugin(e, deps.restoreWebAuthn, deps.restoreDatabase),
   ];
 
   // A REAL OAuth 2.0 client provider (Better Auth's `genericOAuth` plugin) that performs a
@@ -796,10 +810,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
           if (!currentSession) return;
           const userId = currentSession.user.id;
           if (!(await canRemovePasskey(userId))) {
-            throw new APIError('FORBIDDEN', {
-              message:
-                'Add a recovery code or a linked sign-in provider before removing your last passkey.',
-            });
+            throw new APIError('FORBIDDEN', { message: LAST_PASSKEY_MESSAGE });
           }
           return;
         }

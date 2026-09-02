@@ -9,7 +9,12 @@
  * the grant that funds it is configured. Public (no session) — it carries nothing secret, and the
  * sign-in page needs it before anyone is authenticated.
  */
-import { configuredSocialProviders, type SocialProvider } from '@docket/auth';
+import {
+  type AuthEnv,
+  canUseGoogleOAuth,
+  configuredSocialProviders,
+  type SocialProvider,
+} from '@docket/auth';
 import {
   CONNECTOR_PROVIDER_IDS,
   connectorIdentityProvider,
@@ -51,18 +56,15 @@ function isPublicSignInProvider(provider: SocialProvider): provider is SignInPro
   );
 }
 
-/** Resolve the browser-safe Google server client ID under the existing public sign-in gate. */
+/** Resolve the browser-safe Google server client ID under the same gate that offers Google sign-in. */
 export function resolveGoogleServerClientId(
-  authEnv: {
-    readonly APP_MODE: 'local' | 'test' | 'production';
-    readonly GOOGLE_CLIENT_ID?: string | undefined;
-    readonly GOOGLE_OAUTH_PUBLIC?: boolean | undefined;
-  },
+  authEnv: Pick<
+    AuthEnv,
+    'APP_MODE' | 'GOOGLE_CLIENT_ID' | 'GOOGLE_OAUTH_PUBLIC' | 'GOOGLE_OAUTH_TEST_EMAILS'
+  >,
   oauthProviders: readonly SignInProvider[],
 ): string | null {
-  const publiclyOfferable =
-    authEnv.APP_MODE !== 'production' || authEnv.GOOGLE_OAUTH_PUBLIC === true;
-  return oauthProviders.includes('google') && publiclyOfferable
+  return oauthProviders.includes('google') && canUseGoogleOAuth(authEnv, null)
     ? (authEnv.GOOGLE_CLIENT_ID ?? null)
     : null;
 }

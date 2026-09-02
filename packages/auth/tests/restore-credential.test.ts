@@ -34,14 +34,56 @@ function responseCookies(response: Response): string {
     .join('; ');
 }
 
-describe('restore credential plugin', () => {
-  beforeAll(async () => {
-    const { db } = await import('@docket/db');
-    await migrate(db as never, {
-      migrationsFolder: resolve(import.meta.dirname, '../../db/drizzle'),
-    });
-  });
+type RequestFn = (path: string, init?: RequestInit) => Promise<Response>;
 
+/** Build the auth handler for one dependency set and address requests to it from the native origin. */
+function harness(
+  authEnv: AuthEnv,
+  restoreWebAuthn: RestoreWebAuthn,
+  restoreDatabase?: RestoreDatabase,
+): RequestFn {
+  const auth = betterAuth(buildAuthOptions(authEnv, { mailer, restoreWebAuthn, restoreDatabase }));
+  return (path, init = {}) => {
+    const headers = new Headers(init.headers);
+    headers.set('origin', ORIGIN);
+    return auth.handler(new Request(`http://localhost:4000/api/auth${path}`, { ...init, headers }));
+  };
+}
+
+/** A WebAuthn boundary that accepts everything; override one call to make it refuse. */
+const acceptingWebAuthn = (overrides: Partial<RestoreWebAuthn> = {}): RestoreWebAuthn => ({
+  generateRegistrationOptions: vi.fn(async () => ({ challenge: 'registration-challenge' })),
+  generateAuthenticationOptions: vi.fn(async () => ({ challenge: 'authentication-challenge' })),
+  verifyRegistrationResponse: vi.fn(async () => ({
+    verified: true,
+    registrationInfo: {
+      credential: { id: `guard-${Math.random()}`, publicKey: new Uint8Array([1]), counter: 0 },
+      credentialDeviceType: 'multiDevice',
+      credentialBackedUp: true,
+    },
+  })),
+  verifyAuthenticationResponse: vi.fn(async () => ({
+    verified: true,
+    authenticationInfo: { newCounter: 1 },
+  })),
+  ...overrides,
+});
+
+/** A JSON POST carrying the given cookie header. */
+const json = (cookie: string, body: unknown): RequestInit => ({
+  method: 'POST',
+  headers: { 'content-type': 'application/json', cookie },
+  body: JSON.stringify(body),
+});
+
+beforeAll(async () => {
+  const { db } = await import('@docket/db');
+  await migrate(db as never, {
+    migrationsFolder: resolve(import.meta.dirname, '../../db/drizzle'),
+  });
+});
+
+describe('restore credential plugin', () => {
   it('consumes challenges once, advances the counter, and issues a session', async () => {
     const { db, restoreCredential, user } = await import('@docket/db');
     const [owner] = await db
@@ -60,9 +102,7 @@ describe('restore credential plugin', () => {
         backedUp: true,
       })
       .returning();
-    const webAuthn: RestoreWebAuthn = {
-      generateRegistrationOptions: vi.fn(async () => ({ challenge: 'registration-challenge' })),
-      generateAuthenticationOptions: vi.fn(async () => ({ challenge: 'authentication-challenge' })),
+    const webAuthn = acceptingWebAuthn({
       verifyRegistrationResponse: vi.fn(async () => ({
         verified: true,
         registrationInfo: {
@@ -81,25 +121,17 @@ describe('restore credential plugin', () => {
         verified: true,
         authenticationInfo: { newCounter: 4 },
       })),
-    };
-    const auth = betterAuth(buildAuthOptions(env, { mailer, restoreWebAuthn: webAuthn }));
-    const request = (path: string, init: RequestInit = {}): Promise<Response> => {
-      const headers = new Headers(init.headers);
-      headers.set('origin', ORIGIN);
-      return auth.handler(
-        new Request(`http://localhost:4000/api/auth${path}`, { ...init, headers }),
-      );
-    };
+    });
+    const request = harness(env, webAuthn);
 
     const options = await request('/restore-credential/generate-authenticate-options');
     expect(options.status).toBe(200);
     const challengeCookie = responseCookies(options);
-    const body = JSON.stringify({ id: 'restore-credential-auth' });
-    const verified = await request('/restore-credential/verify-authentication', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie: challengeCookie },
-      body,
-    });
+    const body = { id: 'restore-credential-auth' };
+    const verified = await request(
+      '/restore-credential/verify-authentication',
+      json(challengeCookie, body),
+    );
     expect(verified.status).toBe(200);
     expect(await verified.json()).toEqual({ status: true, recordId: assertDefined(stored).id });
     expect(responseCookies(verified)).toContain('session_token');
@@ -110,11 +142,10 @@ describe('restore credential plugin', () => {
     expect(updated).toMatchObject({ counter: 4 });
     expect(updated?.lastUsedAt).toBeInstanceOf(Date);
 
-    const replay = await request('/restore-credential/verify-authentication', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie: challengeCookie },
-      body,
-    });
+    const replay = await request(
+      '/restore-credential/verify-authentication',
+      json(challengeCookie, body),
+    );
     expect(replay.status).not.toBe(200);
 
     const sessionCookie = responseCookies(verified);
@@ -123,14 +154,10 @@ describe('restore credential plugin', () => {
     });
     expect(registrationOptions.status).toBe(200);
     const registrationCookie = responseCookies(registrationOptions);
-    const registered = await request('/restore-credential/verify-registration', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        cookie: `${registrationCookie}; ${sessionCookie}`,
-      },
-      body: JSON.stringify({ id: 'new-restore-credential' }),
-    });
+    const registered = await request(
+      '/restore-credential/verify-registration',
+      json(`${registrationCookie}; ${sessionCookie}`, { id: 'new-restore-credential' }),
+    );
     const registrationBody = (await registered.json()) as { recordId: string; message?: string };
     expect([registered.status, registrationBody.message]).toEqual([200, undefined]);
     expect(registrationBody.recordId).toBeTruthy();
@@ -142,108 +169,48 @@ describe('restore credential plugin', () => {
       }),
     );
 
-    const deleted = await request('/restore-credential/delete', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie: sessionCookie },
-      body: JSON.stringify({ recordId: registrationBody.recordId }),
-    });
+    const deleted = await request(
+      '/restore-credential/delete',
+      json(sessionCookie, { recordId: registrationBody.recordId }),
+    );
     expect(deleted.status).toBe(200);
 
-    const unknownDelete = await request('/restore-credential/delete', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie: sessionCookie },
-      body: JSON.stringify({ recordId: 'not-owned-or-missing' }),
-    });
+    const unknownDelete = await request(
+      '/restore-credential/delete',
+      json(sessionCookie, { recordId: 'not-owned-or-missing' }),
+    );
     expect(unknownDelete.status).toBe(404);
   });
 });
 
 describe('restore credential plugin guards', () => {
-  type Request = (path: string, init?: RequestInit) => Promise<Response>;
-
-  const acceptingWebAuthn = (overrides: Partial<RestoreWebAuthn> = {}): RestoreWebAuthn => ({
-    generateRegistrationOptions: vi.fn(async () => ({ challenge: 'registration-challenge' })),
-    generateAuthenticationOptions: vi.fn(async () => ({ challenge: 'authentication-challenge' })),
-    verifyRegistrationResponse: vi.fn(async () => ({
-      verified: true,
-      registrationInfo: {
-        credential: { id: `guard-${Math.random()}`, publicKey: new Uint8Array([1]), counter: 0 },
-        credentialDeviceType: 'multiDevice',
-        credentialBackedUp: true,
-      },
-    })),
-    verifyAuthenticationResponse: vi.fn(async () => ({
-      verified: true,
-      authenticationInfo: { newCounter: 1 },
-    })),
-    ...overrides,
-  });
-
-  /** Build a handler; a `database` swaps the plugin's persistence for the given fake. */
-  function harness(
-    authEnv: AuthEnv,
-    webAuthn: RestoreWebAuthn,
-    database?: RestoreDatabase,
-  ): Request {
-    const options = buildAuthOptions(authEnv, { mailer, restoreWebAuthn: webAuthn });
-    const plugins = database
-      ? [
-          ...(options.plugins ?? []).filter((plugin) => plugin.id !== 'restore-credential'),
-          restoreCredentialPlugin(authEnv, webAuthn, database),
-        ]
-      : options.plugins;
-    const auth = betterAuth({ ...options, plugins });
-    return (path, init = {}) => {
-      const headers = new Headers(init.headers);
-      headers.set('origin', ORIGIN);
-      return auth.handler(
-        new Request(`http://localhost:4000/api/auth${path}`, { ...init, headers }),
-      );
-    };
-  }
-
-  async function seedCredential(credentialID: string): Promise<string> {
+  /** Store one restore credential for a fresh account. */
+  async function seedCredential(credentialID: string): Promise<void> {
     const { db, restoreCredential, user } = await import('@docket/db');
     const [owner] = await db
       .insert(user)
       .values({ name: 'Guard owner', email: `guard-${Math.random()}@example.com` })
       .returning();
-    const userId = assertDefined(owner).id;
     await db.insert(restoreCredential).values({
-      userId,
+      userId: assertDefined(owner).id,
       credentialID,
       publicKey: Buffer.from('public-key').toString('base64url'),
       counter: 0,
       deviceType: 'multiDevice',
       backedUp: true,
     });
-    return userId;
   }
 
   /** Complete a restore authentication and return the session cookie it issued. */
-  async function signIn(request: Request, credentialID: string): Promise<string> {
+  async function signIn(request: RequestFn, credentialID: string): Promise<string> {
     const options = await request('/restore-credential/generate-authenticate-options');
-    const verified = await request('/restore-credential/verify-authentication', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie: responseCookies(options) },
-      body: JSON.stringify({ id: credentialID }),
-    });
+    const verified = await request(
+      '/restore-credential/verify-authentication',
+      json(responseCookies(options), { id: credentialID }),
+    );
     expect(verified.status).toBe(200);
     return responseCookies(verified);
   }
-
-  const json = (cookie: string, body: unknown): RequestInit => ({
-    method: 'POST',
-    headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify(body),
-  });
-
-  beforeAll(async () => {
-    const { db } = await import('@docket/db');
-    await migrate(db as never, {
-      migrationsFolder: resolve(import.meta.dirname, '../../db/drizzle'),
-    });
-  });
 
   it('refuses credential changes without a session', async () => {
     const request = harness(env, acceptingWebAuthn());

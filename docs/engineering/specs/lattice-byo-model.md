@@ -64,7 +64,7 @@ When `IdentityCredential` and the Credential Management API are available, Docke
 `navigator.credentials.get()` with active mode from that click. Lovelace either resolves the
 native ceremony with a one-time OAuth authorization code or continues into its own consent page and
 then resolves the same ceremony. Docket posts the code to
-`POST /v1/me/athena/lattice/authorize/complete`; only the API can open the sealed verifier and
+`POST /v1/me/athena/lattice/authorize/code`; only the API can open the sealed verifier and
 exchange the code for tokens.
 
 If the browser does not expose FedCM, Docket navigates to Lovelace immediately from the original
@@ -223,7 +223,7 @@ records the outcome. The state machine is in
 ## 7. Surfaces
 
 `GET|PATCH|DELETE /v1/me/athena/lattice`, `POST /v1/me/athena/lattice/authorize`,
-`POST /v1/me/athena/lattice/authorize/complete`, `GET /v1/me/athena/lattice/devices`,
+`POST /v1/me/athena/lattice/authorize/code`, `GET /v1/me/athena/lattice/devices`,
 `POST /v1/me/athena/lattice/device`, and the browser callback at
 `/internal/integrations/lattice/callback`.
 

@@ -118,7 +118,7 @@ sequenceDiagram
         Accounts-->>Browser: IdentityProvider.resolve(code)
     end
     Browser-->>Web: identity credential containing opaque code
-    Web->>API: POST /v1/me/athena/lattice/authorize/complete
+    Web->>API: POST /v1/me/athena/lattice/authorize/code
     API->>Token: code + server-held PKCE verifier
     Token-->>API: access token + refresh token + granted scope
     API->>API: verify account binding and seal credentials
@@ -254,7 +254,7 @@ the person can understand the connection as it will exist after approval.
 Docket web will send the opaque browser result to a new authenticated endpoint:
 
 ```http
-POST /v1/me/athena/lattice/authorize/complete
+POST /v1/me/athena/lattice/authorize/code
 Content-Type: application/json
 
 {"attemptId":"opaque-random-id","authorizationCode":"opaque-one-time-code"}

@@ -172,7 +172,7 @@ function useLatticeAuthorization(enabled: boolean): {
       if (fedcm.kind !== 'code') return fedcm;
       const completed = await unwrap(
         () =>
-          api.v1.me.athena.lattice.authorize.complete.$post({
+          api.v1.me.athena.lattice.authorize.code.$post({
             json: {
               attemptId: prepared.attemptId,
               authorizationCode: fedcm.authorizationCode,

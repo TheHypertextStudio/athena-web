@@ -298,7 +298,7 @@ const lattice = new Hono<AppEnv>()
     },
   )
   .post(
-    '/lattice/authorize/complete',
+    '/lattice/authorize/code',
     apiDoc({
       tag: 'Athena',
       summary: 'Complete the Lovelace authorization',

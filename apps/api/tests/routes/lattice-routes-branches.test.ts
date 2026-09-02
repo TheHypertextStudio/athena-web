@@ -329,11 +329,11 @@ describe('starting and completing a Lattice authorization attempt', () => {
       ),
     );
 
-    const completed = await call(owner, '/lattice/authorize/complete', {
+    const completed = await call(owner, '/lattice/authorize/code', {
       method: 'POST',
       body: { attemptId, authorizationCode: 'code_from_fedcm' },
     });
-    const replay = await call(owner, '/lattice/authorize/complete', {
+    const replay = await call(owner, '/lattice/authorize/code', {
       method: 'POST',
       body: { attemptId, authorizationCode: 'code_from_fedcm' },
     });
@@ -379,7 +379,7 @@ describe('starting and completing a Lattice authorization attempt', () => {
     const { attemptId } = (await started.json()) as { attemptId: string };
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('issuer unavailable'));
 
-    const response = await call(owner, '/lattice/authorize/complete', {
+    const response = await call(owner, '/lattice/authorize/code', {
       method: 'POST',
       body: { attemptId, authorizationCode: 'code_unexchangeable' },
     });
@@ -411,7 +411,7 @@ describe('starting and completing a Lattice authorization attempt', () => {
     const { attemptId } = (await started.json()) as { attemptId: string };
     const issuer = vi.spyOn(globalThis, 'fetch');
 
-    const response = await call(stranger, '/lattice/authorize/complete', {
+    const response = await call(stranger, '/lattice/authorize/code', {
       method: 'POST',
       body: { attemptId, authorizationCode: 'code_stolen' },
     });

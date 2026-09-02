@@ -36,7 +36,7 @@ vi.mock('../../src/lib/api', () => ({
             $patch: connectionPatch,
             authorize: {
               $post: authorizePost,
-              complete: { $post: completePost },
+              code: { $post: completePost },
             },
             device: { $post: devicePost },
             devices: { $get: devicesGet },

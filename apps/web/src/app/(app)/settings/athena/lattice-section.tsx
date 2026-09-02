@@ -114,7 +114,6 @@ function AuthorizationFallback({
       </Text>
       <div>
         <Button
-          variant="outline"
           onClick={() => {
             window.location.assign(authorizationUrl);
           }}
@@ -243,7 +242,10 @@ function UnconnectedLatticeSection({
         trailing={
           <Button
             controlSize="md"
-            variant="outline"
+            // Once the fallback is offered it becomes the action that will
+            // actually work, so this one steps back rather than competing with
+            // it as a second equally-weighted button.
+            variant={fallbackUrl ? 'ghost' : 'outline'}
             disabled={authorizePending || !authorizationReady}
             onClick={startAuthorization}
           >

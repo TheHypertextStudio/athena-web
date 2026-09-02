@@ -174,6 +174,11 @@ describe('LatticeSection FedCM-first authorization', () => {
     expect(assignMock).not.toHaveBeenCalled();
     expect(screen.getByText(/nothing changed/i)).toBeInTheDocument();
 
+    // The fallback is the action that will actually work now, so it must not
+    // read as a second button of the same weight as the one that just failed.
+    const connect = await preparedConnectButton();
+    expect(fallback.className).not.toEqual(connect.className);
+
     fireEvent.click(fallback);
     expect(assignMock).toHaveBeenCalledWith(AUTHORIZATION_URL);
   });

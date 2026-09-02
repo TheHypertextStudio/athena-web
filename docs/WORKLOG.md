@@ -21,10 +21,18 @@
   - [x] Land the native credential contracts with its migration regenerated after `0122`.
   - [x] Land the repository bootstrap contract spec.
   - [x] Port the nine writing-signs audit files that still fit `main`.
+  - [x] Close the gate failures the landed slices exposed: timestamptz columns, db and auth
+        coverage floors, the public-config contract test, the URL design policy, and the
+        response-name policy.
+  - [x] Write `docs/engineering/specs/native-credentials.md` for the Android credential
+        contracts.
   - [ ] Decide whether the evening-extension boundary loop (`cello/athena-web-1786475270`) is
         still wanted, then port or delete it.
   - [x] Remove the ten landed or superseded worktrees and their branches, and the credential-ux
         worktree, from the host.
+- **Validation**: Root typecheck, lint, format check, full test with coverage, and build pass on
+  the final tree. Lovelace's FedCM branch passes commit policy, typecheck, build, and docs
+  validation; its Vercel reconciliation step needs the user's login.
 - **Blockers**: The boundary-loop decision is the user's; its branch and the superseded delegation
   branch (`cello/athena-web-1786473845`) are the only refs left unmerged. The audit worktree's
   thirty unported edits survive as `stash@{0}` until the user drops them.

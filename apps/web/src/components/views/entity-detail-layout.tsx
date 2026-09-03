@@ -29,7 +29,6 @@ import {
   type ReactNode,
   useCallback,
   useContext,
-  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -433,9 +432,28 @@ export function EntityMetadataRow({
     [recomputeVisibility],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const row = inlineRef.current?.parentElement;
-    if (!row || typeof ResizeObserver === 'undefined') return;
+    if (!row) return;
+    // `ResizeObserver` never reports synchronously, even from `useLayoutEffect` — its first
+    // callback lands a frame later. Without this, `availableWidth` stays at its initial `0` and
+    // `visiblePriority` stays at its "show everything" default through the first paint, so every
+    // pill renders inline and the row's `overflow-hidden` clips whichever ones don't fit instead
+    // of demoting them into the overflow popover. Reading the width here, before paint, closes
+    // that gap — the row commits already clamped to what actually fits.
+    //
+    // Only recompute when that read comes back positive. A real, mounted row always does (a
+    // synchronous `getBoundingClientRect` forces layout); a `0` means the row has no layout yet
+    // to measure — a detached row, or a test environment with no layout engine at all — and
+    // forcing a recompute against that non-answer is what previously collapsed the row to only
+    // its highest-priority item instead of leaving it at the "show everything" default the
+    // `availableWidth.current <= 0` guard inside `recomputeVisibility` already exists to give it.
+    const width = row.getBoundingClientRect().width;
+    if (width > 0) {
+      availableWidth.current = width;
+      recomputeVisibility();
+    }
+    if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(([entry]) => {
       if (!entry) return;
       availableWidth.current = entry.contentRect.width;

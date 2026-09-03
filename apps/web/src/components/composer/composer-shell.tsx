@@ -415,81 +415,136 @@ export function ComposerShell({
               </>
             ) : null}
 
-            {/* Properties: one compact row of Linear-style pills. */}
-            {propertyLayout === 'compact' ? (
+            {/* Freeform composers (e.g. team creation) place their own fields in the scrolling
+             *  body; compact composers keep their pills anchored in the footer below, out of the
+             *  editor's scroll — see PropertyStrip's placement there for why. */}
+            {propertyLayout === 'freeform' ? children : null}
+          </DialogBody>
+
+          {/* Action bar: pills, then error, then the single primary action — all pinned below the
+           *  scrolling body so a long AI-drafted description can never carry them out of view or
+           *  interleave them with its own text. */}
+          <DialogFooter inset="standard" className="flex-col gap-3">
+            {!confirmingDiscard && propertyLayout === 'compact' ? (
               <PropertyStrip ariaLabel={propertyAriaLabel}>{children}</PropertyStrip>
-            ) : (
-              children
-            )}
-            {error ? (
+            ) : null}
+            {!confirmingDiscard && error ? (
               <p role="alert" className="text-error text-body-medium">
                 {error}
               </p>
             ) : null}
-          </DialogBody>
-
-          {/* Action row: flat with the panel — a single primary action, or the discard confirmation. */}
-          <DialogFooter inset="standard" className="flex-row items-center gap-2">
-            {confirmingDiscard ? (
-              <>
-                <span className="text-on-surface-variant text-body-medium mr-auto">
-                  Discard this draft?
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setConfirmingDiscard(false);
-                  }}
-                >
-                  Keep editing
-                </Button>
-                <Button type="button" variant="destructive" onClick={discard}>
-                  Discard
-                </Button>
-              </>
-            ) : (
-              <>
-                {continuation ? (
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={continuation.checked}
-                    disabled={editDisabled}
-                    onClick={() => {
-                      continuation.onCheckedChange(!continuation.checked);
-                    }}
-                    className="text-on-surface-variant hover:bg-surface-container-high text-label-large mr-auto inline-flex h-8 items-center gap-2 rounded-md px-2 disabled:opacity-50"
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        'bg-outline-variant inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors',
-                        continuation.checked && 'bg-primary justify-end',
-                      )}
-                    >
-                      <span className="bg-surface h-3 w-3 rounded-full" />
-                    </span>
-                    Create more
-                  </button>
-                ) : null}
-                <Button
-                  type="submit"
-                  form={formId}
-                  // Blocked only against submitting the same draft twice; `aria-busy` is what says
-                  // the first one is under way, so the state is announced rather than merely drawn.
-                  disabled={creating || !canSubmit}
-                  aria-busy={creating}
-                  className={continuation ? undefined : 'ml-auto'}
-                >
-                  {creating ? 'Creating…' : submitLabel}
-                </Button>
-              </>
-            )}
+            <ComposerActionRow
+              confirmingDiscard={confirmingDiscard}
+              onKeepEditing={() => {
+                setConfirmingDiscard(false);
+              }}
+              onDiscard={discard}
+              continuation={continuation}
+              editDisabled={editDisabled}
+              formId={formId}
+              creating={creating}
+              canSubmit={canSubmit}
+              submitLabel={submitLabel}
+            />
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Props for {@link ComposerActionRow}. */
+interface ComposerActionRowProps {
+  /** Whether the discard confirmation should replace the ordinary actions. */
+  confirmingDiscard: boolean;
+  /** Cancel the discard confirmation and return to editing. */
+  onKeepEditing: () => void;
+  /** Confirm discarding the draft. */
+  onDiscard: () => void;
+  /** Shared create-and-continue state, when this composer offers it. */
+  continuation?: ComposerContinuation | undefined;
+  /** Whether draft content controls are disabled. */
+  editDisabled: boolean;
+  /** The id of the form the submit button targets. */
+  formId: string;
+  /** Whether a create is in flight. */
+  creating: boolean;
+  /** Whether the form may be submitted. */
+  canSubmit: boolean;
+  /** The Create button label. */
+  submitLabel: string;
+}
+
+/**
+ * The footer's single row of ordinary actions, or the discard confirmation that replaces it.
+ *
+ * @param props - The {@link ComposerActionRowProps}.
+ * @returns the rendered action row.
+ */
+function ComposerActionRow({
+  confirmingDiscard,
+  onKeepEditing,
+  onDiscard,
+  continuation,
+  editDisabled,
+  formId,
+  creating,
+  canSubmit,
+  submitLabel,
+}: ComposerActionRowProps): JSX.Element {
+  if (confirmingDiscard) {
+    return (
+      <div className="flex flex-row items-center gap-2">
+        <span className="text-on-surface-variant text-body-medium mr-auto">
+          Discard this draft?
+        </span>
+        <Button type="button" variant="ghost" onClick={onKeepEditing}>
+          Keep editing
+        </Button>
+        <Button type="button" variant="destructive" onClick={onDiscard}>
+          Discard
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-row items-center gap-2">
+      {continuation ? (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={continuation.checked}
+          disabled={editDisabled}
+          onClick={() => {
+            continuation.onCheckedChange(!continuation.checked);
+          }}
+          className="text-on-surface-variant hover:bg-surface-container-high text-label-large mr-auto inline-flex h-8 items-center gap-2 rounded-md px-2 disabled:opacity-50"
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              'bg-outline-variant inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors',
+              continuation.checked && 'bg-primary justify-end',
+            )}
+          >
+            <span className="bg-surface h-3 w-3 rounded-full" />
+          </span>
+          Create more
+        </button>
+      ) : null}
+      <Button
+        type="submit"
+        form={formId}
+        // Blocked only against submitting the same draft twice; `aria-busy` is what says the
+        // first one is under way, so the state is announced rather than merely drawn.
+        disabled={creating || !canSubmit}
+        aria-busy={creating}
+        className={continuation ? undefined : 'ml-auto'}
+      >
+        {creating ? 'Creating…' : submitLabel}
+      </Button>
+    </div>
   );
 }
 
@@ -514,7 +569,10 @@ function PropertyStrip({ ariaLabel, children }: PropertyStripProps): JSX.Element
   return (
     <EntityMetadataRow
       ariaLabel={ariaLabel}
-      className="[&_button]:bg-surface-container-highest [&_button:hover]:bg-secondary-container [&_button:hover]:text-on-secondary-container [&_button]:rounded-full"
+      // Scoped to the inline lane only: an unscoped `[&_button]` also matches the row's own
+      // ghost "More" overflow trigger, giving it the same tonal pill fill as the pickers it
+      // is meant to sit apart from.
+      className="[&_[data-entity-metadata-inline]_button]:bg-surface-container-highest [&_[data-entity-metadata-inline]_button:hover]:bg-secondary-container [&_[data-entity-metadata-inline]_button:hover]:text-on-secondary-container [&_[data-entity-metadata-inline]_button]:rounded-full"
     >
       {children}
     </EntityMetadataRow>

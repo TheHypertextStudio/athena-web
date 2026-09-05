@@ -55,7 +55,6 @@ three ownership-scoped routes typed by
 lets the Security page tell a stale enrollment from an active one. The web Security section already
 reads these routes. Better Auth's generic list, update, and delete paths now return `404`, preventing
 them from bypassing safe summaries or the transactional deletion guard.
-
 Ordinary passkey ceremonies require user verification. Athena sets registration selection and
 authentication options to `required`, then checks SimpleWebAuthn's verified `userVerified` result in
 both Better Auth success callbacks before a credential can be stored or a session can be issued.

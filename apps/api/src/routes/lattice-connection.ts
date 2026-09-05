@@ -16,6 +16,7 @@
  */
 import { db, latticeConnection, latticeCredential } from '@docket/db';
 import {
+  LATTICE_GATEWAY_BASE_URL,
   LatticeUnavailableError,
   LOVELACE_ACCOUNTS_ISSUER,
   latticeCredentialNeedsRefresh,
@@ -75,6 +76,7 @@ export function latticeOAuthConfig(): LatticeOAuthClientConfig {
     clientId,
     ...(env.LATTICE_CLIENT_SECRET ? { clientSecret: env.LATTICE_CLIENT_SECRET } : {}),
     redirectUri: latticeRedirectUri(),
+    resource: env.LATTICE_GATEWAY_URL ?? LATTICE_GATEWAY_BASE_URL,
   };
 }
 

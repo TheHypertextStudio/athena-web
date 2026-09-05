@@ -47,6 +47,7 @@ export interface StartedLatticeAuthorization {
     readonly params: {
       readonly purpose: 'oauth_authorization';
       readonly redirect_uri: string;
+      readonly resource: string;
       readonly scope: string;
       readonly state: string;
       readonly code_challenge: string;
@@ -150,6 +151,7 @@ export async function startLatticeAuthorizationAttempt(
       params: {
         purpose: 'oauth_authorization',
         redirect_uri: config.redirectUri,
+        resource: config.resource,
         scope: LATTICE_SCOPE_PARAM,
         state,
         code_challenge: begun.codeChallenge,

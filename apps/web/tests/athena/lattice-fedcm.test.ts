@@ -16,6 +16,7 @@ const STARTED: LatticeAuthorizationStart = {
     params: {
       purpose: 'oauth_authorization',
       redirect_uri: 'https://api.docket.test/internal/integrations/lattice/callback',
+      resource: 'https://lattice.test',
       scope: 'openid offline_access lattice:compute:inference lattice:compute:catalog:read',
       state: 'signed',
       code_challenge: 'challenge',

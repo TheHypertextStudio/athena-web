@@ -278,6 +278,7 @@ describe('starting and completing a Lattice authorization attempt', () => {
       params: {
         purpose: 'oauth_authorization',
         redirect_uri: expect.stringContaining('/internal/integrations/lattice/callback'),
+        resource: expect.any(String),
         scope: LATTICE_SCOPES.join(' '),
         code_challenge_method: 'S256',
       },

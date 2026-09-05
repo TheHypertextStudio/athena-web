@@ -100,6 +100,8 @@ export interface LatticeOAuthClientConfig {
   readonly clientSecret?: string | undefined;
   /** The callback Lovelace redirects the browser back to. */
   readonly redirectUri: string;
+  /** RFC 8707 resource indicator identifying the Lattice gateway that will receive the token. */
+  readonly resource: string;
   /** Injected fetch, for tests. */
   readonly fetch?: typeof globalThis.fetch | undefined;
 }
@@ -222,6 +224,7 @@ export function beginLatticeAuthorization(
   url.searchParams.set('client_id', config.clientId);
   url.searchParams.set('redirect_uri', config.redirectUri);
   url.searchParams.set('scope', LATTICE_SCOPE_PARAM);
+  url.searchParams.set('resource', config.resource);
   url.searchParams.set('state', state);
   url.searchParams.set('code_challenge', codeChallenge);
   url.searchParams.set('code_challenge_method', 'S256');
@@ -258,7 +261,11 @@ async function postToken(
   form: Record<string, string>,
 ): Promise<LatticeCredentialRecord> {
   const fetchImpl = config.fetch ?? globalThis.fetch.bind(globalThis);
-  const body = new URLSearchParams({ ...form, client_id: config.clientId });
+  const body = new URLSearchParams({
+    ...form,
+    client_id: config.clientId,
+    resource: config.resource,
+  });
   if (config.clientSecret) body.set('client_secret', config.clientSecret);
 
   let response: Response;

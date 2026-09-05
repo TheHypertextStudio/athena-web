@@ -120,6 +120,16 @@ describe('ServiceWorkerProvider', () => {
     expect(screen.getByTestId('no-update')).toBeInTheDocument();
   });
 
+  it('does not reload when the first installed worker claims an uncontrolled page', async () => {
+    container.controller = null;
+    await mount();
+    act(() => {
+      container.controller = {};
+      container.emit('controllerchange');
+    });
+    expect(reload).not.toHaveBeenCalled();
+  });
+
   it('renders the ready update title, supporting copy, and action for a waiting worker', async () => {
     container.registration.waiting = new FakeWorker();
     await mount();

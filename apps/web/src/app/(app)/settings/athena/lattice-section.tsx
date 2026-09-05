@@ -30,7 +30,7 @@ import {
   Text,
 } from '@docket/ui/primitives';
 import { useAppSearchParams } from '@/lib/app-location';
-import { type JSX, useEffect, useState } from 'react';
+import { type JSX, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
@@ -180,29 +180,33 @@ function useLatticeAuthorization(
   readonly authorize: ReturnType<
     typeof useApiMutation<AuthorizationAction, PendingAuthorizationCeremony>
   >;
-  readonly prepare: ReturnType<typeof useApiMutation<LatticeAuthorizationStart, undefined>>;
+  readonly prepare: ReturnType<typeof useApiMutation<LatticeAuthorizationStart, number>>;
   readonly authorizationOutcome: LatticeAuthorizationOutcome | null;
   readonly authorizationReady: boolean;
   readonly fallbackUrl: string | null;
+  readonly resetAuthorization: () => void;
   readonly startAuthorization: () => void;
 } {
   const [started, setStarted] = useState<LatticeAuthorizationStart | null>(null);
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const [authorizationOutcome, setAuthorizationOutcome] =
     useState<LatticeAuthorizationOutcome | null>(null);
+  const prepareGeneration = useRef(0);
 
-  const prepare = useApiMutation<LatticeAuthorizationStart, undefined>({
+  const prepare = useApiMutation<LatticeAuthorizationStart, number>({
     mutationFn: () =>
       unwrap(
         () => api.v1.me.athena.lattice.authorize.$post(),
         'Could not start the Lovelace connection.',
       ),
-    onSuccess: setStarted,
+    onSuccess: (authorization, generation) => {
+      if (generation === prepareGeneration.current) setStarted(authorization);
+    },
   });
 
   useEffect(() => {
     if (!enabled || started || prepare.isPending || prepare.isError) return;
-    prepare.mutate(undefined);
+    prepare.mutate(prepareGeneration.current);
   }, [enabled, prepare.isError, prepare.isPending, prepare.mutate, started]);
 
   const authorize = useApiMutation<AuthorizationAction, PendingAuthorizationCeremony>({
@@ -246,6 +250,13 @@ function useLatticeAuthorization(
     authorizationOutcome,
     authorizationReady: started !== null,
     fallbackUrl,
+    resetAuthorization: () => {
+      prepareGeneration.current += 1;
+      prepare.reset();
+      setStarted(null);
+      setFallbackUrl(null);
+      setAuthorizationOutcome(null);
+    },
     startAuthorization: () => {
       if (!started) return;
       setFallbackUrl(null);
@@ -389,6 +400,7 @@ export function LatticeSection(): JSX.Element {
     authorizationOutcome,
     authorizationReady,
     fallbackUrl,
+    resetAuthorization,
     startAuthorization,
   } = useLatticeAuthorization(status?.available === true, (outcome) => {
     if (outcome !== 'connected') return;
@@ -668,6 +680,9 @@ export function LatticeSection(): JSX.Element {
         onConfirm={() => {
           disconnect.mutate(undefined, {
             onSuccess: () => {
+              // Disconnect deletes all server-side authorization attempts. Discard the eagerly
+              // prepared reconnect attempt too so an immediate reconnect cannot reuse a dead ID.
+              resetAuthorization();
               setConfirmDisconnect(false);
             },
           });

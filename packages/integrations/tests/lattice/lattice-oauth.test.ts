@@ -35,6 +35,7 @@ function config(overrides: Partial<LatticeOAuthClientConfig> = {}): LatticeOAuth
     clientId: 'client_abc',
     clientSecret: 'secret_xyz',
     redirectUri: 'https://api.docket.test/internal/integrations/lattice/callback',
+    resource: 'https://lattice.test',
     ...overrides,
   };
 }
@@ -98,6 +99,7 @@ describe('beginLatticeAuthorization', () => {
     expect(url.searchParams.get('client_id')).toBe('client_abc');
     expect(url.searchParams.get('state')).toBe('signed-state');
     expect(url.searchParams.get('scope')).toBe(LATTICE_SCOPES.join(' '));
+    expect(url.searchParams.get('resource')).toBe('https://lattice.test');
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');
   });
 
@@ -115,7 +117,11 @@ describe('beginLatticeAuthorization', () => {
 
   it('defaults to the real Lovelace accounts issuer', () => {
     const begun = beginLatticeAuthorization(
-      { clientId: 'c', redirectUri: 'https://r.test/cb' },
+      {
+        clientId: 'c',
+        redirectUri: 'https://r.test/cb',
+        resource: 'https://lattice.uselovelace.com',
+      },
       'st',
       fixedRandom,
     );
@@ -144,6 +150,7 @@ describe('completeLatticeAuthorization', () => {
     expect(forms[0]?.get('code')).toBe('code_1');
     expect(forms[0]?.get('code_verifier')).toBe('verifier_1');
     expect(forms[0]?.get('client_secret')).toBe('secret_xyz');
+    expect(forms[0]?.get('resource')).toBe('https://lattice.test');
     expect(record).toMatchObject({
       kind: 'lattice_oauth',
       accessToken: 'at_1',
@@ -323,11 +330,12 @@ describe('refreshLatticeCredential', () => {
   };
 
   it('carries the previous refresh token forward when the issuer does not rotate it', async () => {
-    const { fetch } = tokenFetch(200, { access_token: 'at_new', expires_in: 3600 });
+    const { fetch, forms } = tokenFetch(200, { access_token: 'at_new', expires_in: 3600 });
 
     const refreshed = await refreshLatticeCredential(config({ fetch }), stored);
 
     expect(refreshed.accessToken).toBe('at_new');
+    expect(forms[0]?.get('resource')).toBe('https://lattice.test');
     // Without this, one refresh against a non-rotating issuer would strip Docket's ability to
     // ever refresh again.
     expect(refreshed.refreshToken).toBe('rt_old');

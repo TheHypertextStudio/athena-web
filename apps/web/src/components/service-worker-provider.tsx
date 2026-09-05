@@ -108,6 +108,11 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
     const container = (navigator as unknown as MaybeWorkerHost).serviceWorker;
     if (!container) return undefined;
 
+    // The first worker installed for this origin claims the already-open page and fires
+    // `controllerchange`, but that page is running the same build and does not need a reload. Only
+    // a page that started under an older controller can be crossing a release boundary.
+    const startedControlled = container.controller !== null;
+
     let registration: ServiceWorkerRegistration | undefined;
     let disposed = false;
     const offeredListeners: [ServiceWorker, () => void][] = [];
@@ -137,6 +142,7 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
     };
 
     const onControllerChange = (): void => {
+      if (!startedControlled) return;
       // Guarded: this can fire more than once, and a reload loop would be catastrophic.
       if (reloadingRef.current) return;
       reloadingRef.current = true;

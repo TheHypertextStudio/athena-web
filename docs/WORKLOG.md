@@ -314,7 +314,7 @@
 
 - **Status**: COMPLETED
 - **Started**: 2026-09-01
-- **Completed**: 2026-09-01
+- **Completed**: 2026-09-05
 - **Priority**: P1
 - **Description**: Implement the approved FedCM-first authorization design across Lovelace and
   Docket. Lovelace OAuth remains the authority for scopes, authorization codes, and durable tokens;
@@ -328,7 +328,7 @@
   - [x] Add separate Docket authorization attempts and shared completion semantics test-first.
   - [x] Invoke active FedCM from Docket and retain explicit redirect fallback test-first.
   - [x] Run focused coverage, type, lint, documentation, and migration gates in both repositories.
-  - [x] Prove native Chrome and redirect-only browser behavior or record the exact external blocker.
+  - [x] Prove native Chrome and redirect-only browser behavior after signing in to both local apps.
 - **Plan**: `docs/superpowers/plans/2026-09-01-fedcm-first-lattice-authorization.md`
 - **Files**: See the plan and the approved design. Unrelated existing Lattice prompt/runtime edits
   in the checkout are explicitly out of scope and must remain untouched.
@@ -342,23 +342,32 @@
   local disk. A lifecycle test now consumes an attempt so the db package's function coverage
   stays above its 90% floor. Lovelace's affected service, app, and package tests and typechecks
   pass, and each changed file is lint-clean.
-  In real Chrome, Docket invoked the active-mode request and surfaced the explicit fallback after the
-  browser rejected it before any request reached Lovelace. The redirect fallback reached Lovelace's
-  real passkey login with the canonical `docket-athena` client.
+  Real Google Chrome acceptance used signed-in Docket and Lovelace sessions on an isolated local
+  stack whose relying-party, API, Accounts UI, and IdP origins all came from environment variables.
+  Chrome emitted its native `AccountChooser` for the advertised versioned IdP config, selecting the
+  Lovelace account completed the one-time-code exchange in Docket, and dismissing that same chooser
+  kept Docket on Settings until the explicit `Continue on Lovelace` action was chosen. That redirect
+  then returned with a connected grant. Headless runtime acceptance subsequently proved the complete
+  downstream path: the grant carried Lovelace's durable `account_id`, its RFC 8707 audience matched
+  the environment-configured gateway, Docket discovered and selected the reachable personal runtime,
+  and Athena completed an inference turn through Lattice with the expected model reply. Repeating
+  the browser paths exposed and fixed two first-visit lifecycle defects: a newly claiming service
+  worker no longer reloads an uncontrolled page, and disconnect now discards its deleted pre-created
+  authorization attempt before reconnecting.
 - **Architecture**: The provider owns one versioned `/web-identity/config/v1.json` contract while
   retaining the legacy URL. The eTLD discovery document and both shared auth adapters advertise the
   same contract. Lovelace's login bridge, narrowly scoped FedCM session cookie, capability flag, and
-  optional OAuth client legal metadata are client-neutral; Docket-specific values remain only in
-  Docket's managed client registration and relying-party adapter.
-- **Blockers for launch**: The current Chrome profile rejects `navigator.credentials.get()` before
-  IdP traffic, and agent browser policy prevents inspecting or clearing Chrome's third-party
-  sign-in/FedCM site state. Native-dialog acceptance therefore needs a user-cleared or fresh Chrome
-  profile. Completing the proven redirect path also requires the user's passkey. Lovelace's slice is
-  committed and rebased on `codex/fedcm-lattice-authorization`; its pre-push validation passes
-  commit policy, typecheck, build, and docs, and stops at the Vercel environment reconciliation
-  step because the linked apps need a Vercel login only the user can perform. Production acceptance
-  still requires pushing and deploying both repositories and enabling the global
-  `feature.auth.fedcm_oauth_authorization` rollout flag.
+  optional OAuth client legal metadata are client-neutral. Approved external clients come from the
+  validated `MANAGED_THIRD_PARTY_OAUTH_CLIENTS_JSON` environment list, so adding or moving a
+  downstream app needs no provider source change. Lovelace resolves account ownership at its shared
+  OAuth issuance boundary and refuses unusable Lattice grants when no provisioned account exists.
+  Docket derives its issuer, callback, gateway resource, and relying-party origins from its own
+  deployment environment; no product path fixes them to a local hostname.
+- **Blockers for launch**: The implementation and local browser acceptance have no remaining code
+  blocker. Production still requires separately authorized remote work: configure the generic
+  Lovelace client-registration environment for each downstream app, push and deploy both current
+  repositories, and enable `feature.auth.fedcm_oauth_authorization` at the intended rollout scope.
+  Browsers without usable FedCM continue through the explicit OAuth redirect by design.
 
 ### [FEDCM-LATTICE-001] Design FedCM-first Connect with Lovelace
 

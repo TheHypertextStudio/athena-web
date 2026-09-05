@@ -290,6 +290,7 @@ async function main(): Promise<void> {
     clientId: 'client_docket_local',
     clientSecret: 'secret_local',
     redirectUri: 'http://127.0.0.1/callback',
+    resource: gatewayOrigin,
   };
 
   // 1. Real OAuth: build the consent URL, visit it, exchange the code with the PKCE verifier.

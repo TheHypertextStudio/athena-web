@@ -11,6 +11,7 @@ export interface LatticeAuthorizationStart {
     readonly params: {
       readonly purpose: 'oauth_authorization';
       readonly redirect_uri: string;
+      readonly resource: string;
       readonly scope: string;
       readonly state: string;
       readonly code_challenge: string;

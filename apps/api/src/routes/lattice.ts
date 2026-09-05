@@ -126,6 +126,7 @@ const LatticeAuthorizeOut = z
           .object({
             purpose: z.literal('oauth_authorization'),
             redirect_uri: z.string(),
+            resource: z.string(),
             scope: z.string(),
             state: z.string(),
             code_challenge: z.string(),

@@ -338,6 +338,7 @@ describe('the bring-your-own-Lattice flow', () => {
       'openid offline_access lattice:compute:inference lattice:compute:catalog:read',
     );
     expect(url.searchParams.get('client_id')).toBe('client_docket');
+    expect(url.searchParams.get('resource')).toBe(gatewayOrigin);
 
     // The issuer sees the challenge; nothing that could be replayed leaves the server.
     await fetch(authorizationUrl);

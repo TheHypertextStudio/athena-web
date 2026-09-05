@@ -74,11 +74,21 @@ const STARTED = {
     params: {
       purpose: 'oauth_authorization' as const,
       redirect_uri: 'https://api.docket.test/internal/integrations/lattice/callback',
+      resource: 'https://lattice.test',
       scope: 'openid offline_access lattice:compute:inference lattice:compute:catalog:read',
       state: 'signed',
       code_challenge: 'challenge',
       code_challenge_method: 'S256' as const,
     },
+  },
+};
+const RESTARTED = {
+  ...STARTED,
+  attemptId: 'attempt_2',
+  authorizationUrl: `${AUTHORIZATION_URL}_again`,
+  fedcm: {
+    ...STARTED.fedcm,
+    params: { ...STARTED.fedcm.params, state: 'signed_again' },
   },
 };
 
@@ -213,6 +223,37 @@ describe('LatticeSection FedCM-first authorization', () => {
     expect(screen.queryByRole('button', { name: 'Connect with Lovelace' })).not.toBeInTheDocument();
     await waitFor(() => {
       expect(authorizePost).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('prepares a fresh authorization attempt after disconnecting without a reload', async () => {
+    connectionGet
+      .mockReset()
+      .mockResolvedValueOnce(okResponse({ ...UNCONNECTED, connected: true }))
+      .mockResolvedValue(okResponse(UNCONNECTED));
+    authorizePost
+      .mockReset()
+      .mockResolvedValueOnce(okResponse(STARTED))
+      .mockResolvedValue(okResponse(RESTARTED));
+    requestLatticeFedCM.mockResolvedValue({
+      kind: 'fallback',
+      authorizationUrl: RESTARTED.authorizationUrl,
+    });
+    renderSection();
+
+    const disconnect = await screen.findByRole('button', { name: 'Disconnect' });
+    await waitFor(() => {
+      expect(authorizePost).toHaveBeenCalledTimes(1);
+    });
+    fireEvent.click(disconnect);
+    fireEvent.click(await screen.findByRole('button', { name: 'Disconnect' }));
+
+    const connect = await preparedConnectButton();
+    fireEvent.click(connect);
+
+    await waitFor(() => {
+      expect(authorizePost).toHaveBeenCalledTimes(2);
+      expect(requestLatticeFedCM).toHaveBeenCalledWith(RESTARTED);
     });
   });
 });

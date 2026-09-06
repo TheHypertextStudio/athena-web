@@ -92,7 +92,6 @@ function dateAxis(source: CalendarItemOut, lane: ScheduleLane): CalendarDateAxis
     items: [source],
     legacyWorkLocations: [],
     itemById: new Map([[source.id, source]]),
-    duplicatesByItemId: new Map(),
     layers: [],
     itemsPending: false,
     itemsError: false,

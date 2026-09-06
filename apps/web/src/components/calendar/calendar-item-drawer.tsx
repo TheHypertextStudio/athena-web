@@ -7,7 +7,6 @@
  * The dialog shell owns selection and loading only. Focused sections live under `item-drawer/` so
  * editing task links, relationships, fields, or sync actions does not grow this orchestrator.
  */
-import type { CalendarItemOut } from '@docket/planning/calendar-contract';
 import {
   Dialog,
   DialogContent,
@@ -30,14 +29,6 @@ export interface CalendarItemDrawerProps {
   displayTimezone: string;
   /** Calendar item id to show, or `null` to keep the drawer closed. */
   itemId: string | null;
-  /**
-   * Copies of an event folded into the one drawn on the grid, keyed by the drawn item's id.
-   *
-   * @remarks
-   * Comes from the range read's dedup pass. The drawer is where a collapsed duplicate becomes
-   * discoverable, which is the condition on collapsing it at all.
-   */
-  duplicatesByItemId?: ReadonlyMap<string, readonly CalendarItemOut[]>;
   /** Close the dialog. */
   onClose: () => void;
   /** Navigate to a linked task detail page. */
@@ -50,7 +41,6 @@ export interface CalendarItemDrawerProps {
 export default function CalendarItemDrawer({
   displayTimezone,
   itemId,
-  duplicatesByItemId,
   onClose,
   onOpenTask,
   onOpenItem,
@@ -94,7 +84,6 @@ export default function CalendarItemDrawer({
             key={itemId}
             displayTimezone={displayTimezone}
             initialItemId={itemId}
-            duplicatesByItemId={duplicatesByItemId}
             onClose={requestClose}
             onDirtyChange={setHasUnsavedChanges}
             onBeforeItemChange={confirmDiscard}
@@ -110,7 +99,6 @@ export default function CalendarItemDrawer({
 interface CalendarItemDrawerContentProps {
   displayTimezone: string;
   initialItemId: string;
-  duplicatesByItemId?: ReadonlyMap<string, readonly CalendarItemOut[]> | undefined;
   onClose: () => void;
   onDirtyChange: (dirty: boolean) => void;
   onBeforeItemChange: () => boolean;
@@ -121,7 +109,6 @@ interface CalendarItemDrawerContentProps {
 function CalendarItemDrawerContent({
   displayTimezone,
   initialItemId,
-  duplicatesByItemId,
   onClose,
   onDirtyChange,
   onBeforeItemChange,
@@ -173,8 +160,6 @@ function CalendarItemDrawerContent({
       displayTimezone={displayTimezone}
       item={item}
       layer={layer}
-      layers={layers}
-      duplicates={duplicatesByItemId?.get(item.id)}
       workPlaces={placesQuery.data?.items ?? []}
       onClose={onClose}
       onDirtyChange={onDirtyChange}

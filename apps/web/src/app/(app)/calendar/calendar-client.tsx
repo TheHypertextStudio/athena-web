@@ -347,7 +347,6 @@ export default function CalendarClient(): JSX.Element {
       <CalendarItemDrawer
         displayTimezone={displayTimezone}
         itemId={openEvent.detailItemId}
-        duplicatesByItemId={dateAxis.duplicatesByItemId}
         onClose={openEvent.close}
         onOpenTask={(orgId, taskId) => {
           router.push(`/orgs/${orgId}/tasks/${taskId}`);

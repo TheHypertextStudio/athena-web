@@ -38,7 +38,6 @@ import { type JSX, useState } from 'react';
 import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 import { PropertyPanelRow } from '@/components/property-pickers/property-panel';
 
-import { CalendarItemDuplicateSources } from '../calendar-item-duplicate-sources';
 import { EventArc } from './event-arc';
 import { EventCoreFields } from './event-core-fields';
 import { EventMasthead } from './event-masthead';
@@ -55,16 +54,6 @@ export interface CalendarItemWorkspaceProps {
   item: CalendarItemOut;
   /** Owning layer, used for color, title, and provider context. */
   layer?: CalendarLayerOut | undefined;
-  /** Every layer for the signed-in user, used to name the calendars a duplicate arrived on. */
-  layers?: readonly CalendarLayerOut[] | undefined;
-  /**
-   * Copies of this event folded into the single block on the grid.
-   *
-   * @remarks
-   * Empty for an ordinary event. Supplied so collapsing a cross-account duplicate stays
-   * discoverable rather than silent — see {@link CalendarItemDuplicateSources}.
-   */
-  duplicates?: readonly CalendarItemOut[] | undefined;
   /** Arbitrary canonical saved places available for binding. */
   workPlaces?: readonly WorkPlaceOut[] | undefined;
   /** Close the dialog after deletion. */
@@ -82,8 +71,6 @@ export function CalendarItemWorkspace({
   displayTimezone,
   item,
   layer,
-  layers = [],
-  duplicates = [],
   workPlaces = [],
   onClose,
   onDirtyChange,
@@ -112,7 +99,6 @@ export function CalendarItemWorkspace({
         className="flex flex-col gap-5 overscroll-contain"
       >
         <SyncStateNotice item={item} layer={layer} />
-        <CalendarItemDuplicateSources duplicates={duplicates} layers={layers} />
 
         <div className="flex flex-col">
           <EventCoreFields item={item} displayTimezone={displayTimezone} editor={editor} />

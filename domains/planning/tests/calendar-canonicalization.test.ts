@@ -84,6 +84,15 @@ describe('groupExactCalendarSources', () => {
     );
   });
 
+  it('uses the primary source when relationships are tied', () => {
+    const result = canonicalizeCalendarLayers([
+      layer('secondary'),
+      layer('primary', { primary: true }),
+    ]);
+
+    expect(result.layers.map((entry) => entry.id)).toEqual(['primary']);
+  });
+
   it('applies a confirmed group across different provider source identities', () => {
     const result = canonicalizeCalendarLayers(
       [
@@ -113,7 +122,10 @@ describe('canonicalizeCalendarItems', () => {
         }),
         item('personal-event', 'personal', {
           permissions: { canEditCore: true },
-          linkedTasks: [{ taskId: 'task-b', organizationId: 'org-a', role: 'prep' }],
+          linkedTasks: [
+            { taskId: 'task-a', organizationId: 'org-a', role: 'related' },
+            { taskId: 'task-b', organizationId: 'org-a', role: 'prep' },
+          ],
         }),
       ],
       [layer('work'), layer('personal', { sourceRelationship: 'owned' })],
@@ -147,6 +159,75 @@ describe('canonicalizeCalendarItems', () => {
     );
 
     expect(result.items.map((entry) => entry.id)).toEqual(['work-event']);
+  });
+
+  it('prefers an editable copy when the source preference is tied', () => {
+    const result = canonicalizeCalendarItems(
+      [
+        item('read-only-event', 'read-only'),
+        item('editable-event', 'editable', { permissions: { canEditCore: true } }),
+      ],
+      [
+        layer('read-only', {
+          sourceIdentity: { namespace: 'google-calendar', value: 'read-only@example.com' },
+        }),
+        layer('editable', {
+          sourceIdentity: { namespace: 'google-calendar', value: 'editable@example.com' },
+        }),
+      ],
+    );
+
+    expect(result.items.map((entry) => entry.id)).toEqual(['editable-event']);
+  });
+
+  it('prefers a direct source over a subscribed source when stronger signals are tied', () => {
+    const result = canonicalizeCalendarItems(
+      [item('subscribed-event', 'subscribed'), item('direct-event', 'direct')],
+      [
+        layer('subscribed', {
+          sourceIdentity: { namespace: 'google-calendar', value: 'subscribed@example.com' },
+        }),
+        layer('direct', {
+          sourceIdentity: { namespace: 'google-calendar', value: 'direct@example.com' },
+          sourceRelationship: 'direct',
+        }),
+      ],
+    );
+
+    expect(result.items.map((entry) => entry.id)).toEqual(['direct-event']);
+  });
+
+  it('prefers a primary source when editability and relationship are tied', () => {
+    const result = canonicalizeCalendarItems(
+      [item('secondary-event', 'secondary'), item('primary-event', 'primary')],
+      [
+        layer('secondary', {
+          sourceIdentity: { namespace: 'google-calendar', value: 'secondary@example.com' },
+        }),
+        layer('primary', {
+          sourceIdentity: { namespace: 'google-calendar', value: 'primary@example.com' },
+          primary: true,
+        }),
+      ],
+    );
+
+    expect(result.items.map((entry) => entry.id)).toEqual(['primary-event']);
+  });
+
+  it('uses the layer id as a stable final source tie-breaker', () => {
+    const result = canonicalizeCalendarItems(
+      [item('z-event', 'z-layer'), item('a-event', 'a-layer')],
+      [
+        layer('z-layer', {
+          sourceIdentity: { namespace: 'google-calendar', value: 'z@example.com' },
+        }),
+        layer('a-layer', {
+          sourceIdentity: { namespace: 'google-calendar', value: 'a@example.com' },
+        }),
+      ],
+    );
+
+    expect(result.items.map((entry) => entry.id)).toEqual(['a-event']);
   });
 
   it('keeps two occurrences in one recurring series separate', () => {

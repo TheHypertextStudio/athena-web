@@ -154,8 +154,7 @@ function candidateBeats(
   const relationship = relationshipRank(candidateLayer) - relationshipRank(heldLayer);
   if (relationship !== 0) return relationship > 0;
   if (candidateLayer?.primary !== heldLayer?.primary) return candidateLayer?.primary === true;
-  if (candidate.layerId !== held.layerId) return candidate.layerId < held.layerId;
-  return candidate.id < held.id;
+  return candidate.layerId < held.layerId;
 }
 
 function mergeLinkedTasks<TItem extends CanonicalizableCalendarItem>(
@@ -171,6 +170,12 @@ function mergeLinkedTasks<TItem extends CanonicalizableCalendarItem>(
   return [...merged.values()];
 }
 
+function createCalendarItemBucket<TItem>(buckets: TItem[][]): TItem[] {
+  const bucket: TItem[] = [];
+  buckets.push(bucket);
+  return bucket;
+}
+
 function bucketCalendarItems<TItem extends CanonicalizableCalendarItem>(
   items: readonly TItem[],
 ): readonly TItem[][] {
@@ -182,7 +187,7 @@ function bucketCalendarItems<TItem extends CanonicalizableCalendarItem>(
     const bucket =
       existing?.every((candidate) => candidate.layerId !== item.layerId) === true
         ? existing
-        : (buckets[buckets.push([]) - 1] ?? []);
+        : createCalendarItemBucket(buckets);
     bucket.push(item);
     if (key && !bucketByKey.has(key)) bucketByKey.set(key, bucket);
   }

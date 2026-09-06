@@ -20,6 +20,7 @@ import {
   type ExecutableFilterNode,
   type FilterFieldCompiler,
 } from './filter-sql';
+import { cycleDisplayNameSql } from './cycle-label-sql';
 import { compileGroupMembershipSql, type GroupFieldCompiler } from './group-sql';
 
 const facetCursorPayload = z
@@ -255,7 +256,7 @@ function relationCatalog(
   }
   if (key === 'task.cycle') {
     return sql`select option.id::text key,
-        coalesce(option.name, 'Cycle ' || option.number::text)::text label
+        ${cycleDisplayNameSql('option')}::text label
       from cycle option
       where option.organization_id=${organizationId}`;
   }

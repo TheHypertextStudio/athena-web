@@ -33,6 +33,7 @@ import {
 import type { NotionMirrorEntity } from '@docket/connections/notion/mirror-contract';
 import { personCompanionKey } from '@docket/connections/notion/mirror-schema';
 import type { MirrorSourceValue, MirrorValue } from '@docket/connections/notion/mirror-values';
+import { defaultCycleName } from '@docket/work/cycle-contract';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { setTaskState } from '../lib/task-state';
@@ -375,7 +376,8 @@ export async function loadEntityRows(
       return rows.map((row) => ({
         entityId: row.id,
         values: {
-          name: text(row.name ?? `Cycle ${String(row.number)}`),
+          // `row.number` is the auto-roll's idempotency key, not a label — see `defaultCycleName`.
+          name: text(row.name ?? defaultCycleName(row.startsAt, row.endsAt)),
           number: number(row.number),
           status: option(row.status),
           startsAt: date(row.startsAt),

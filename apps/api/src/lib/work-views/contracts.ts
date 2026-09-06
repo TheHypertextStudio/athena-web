@@ -37,6 +37,7 @@ import {
   type TenantRelationDefinition,
 } from './relation-sql';
 import type { SortCompilerMap } from './sort-sql';
+import { cycleDisplayNameSql } from './cycle-label-sql';
 import { targetTimeframeKeySql, targetTimeframeLabelSql } from './planning-timeframe-sql';
 import {
   WORK_VIEW_PROJECTIONS,
@@ -171,7 +172,7 @@ const taskGroup = {
     kind: 'scalar',
     key: sql`(select c.id from cycle c where c.id=e.cycle_id
       and c.organization_id=e.organization_id)`,
-    label: sql`(select coalesce(c.name, 'Cycle ' || c.number::text) from cycle c
+    label: sql`(select ${cycleDisplayNameSql('c')} from cycle c
       where c.id=e.cycle_id and c.organization_id=e.organization_id)`,
   },
   milestone: namedGroup('milestone_id', 'milestone'),

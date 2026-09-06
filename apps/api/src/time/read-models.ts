@@ -24,6 +24,7 @@ import {
   timeRecord,
 } from '@docket/db';
 import type { EntityRef } from '@docket/connections/event-contract';
+import { defaultCycleName } from '@docket/work/cycle-contract';
 import type {
   TimeBreakdownQuery,
   TimeCategoryOut,
@@ -76,11 +77,12 @@ export async function listPersonalTimeCycles(userId: string): Promise<TimeCycleP
     .orderBy(desc(cycle.startsAt), asc(cycle.id));
   return rows.map((row) => {
     const name = row.name?.trim() ?? '';
+    // `row.number` is the auto-roll's idempotency key, not a label — see `defaultCycleName`.
     return {
       id: row.id,
       workspaceId: row.workspaceId,
       workspaceName: row.workspaceName,
-      name: name === '' ? `Cycle ${row.number}` : name,
+      name: name === '' ? defaultCycleName(row.startsAt, row.endsAt) : name,
       startsAt: row.startsAt.toISOString(),
       endsAt: row.endsAt.toISOString(),
     };

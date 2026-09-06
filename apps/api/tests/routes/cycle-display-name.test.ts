@@ -15,17 +15,34 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import { defaultCycleName } from '@docket/work/cycle-contract';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import {
+  addMember,
+  appWithActor,
+  appWithSession,
+  fakeSession,
+  getDb,
+  one,
+  seedBaseOrg,
+  seedOrg,
+  seedStatuses,
+  seedUserWithHub,
+} from '../support/routes-harness';
 import type cyclesRouter from '../../src/routes/cycles';
+import type timeRouter from '../../src/routes/time';
+import type { loadEntityRows as LoadEntityRows } from '../../src/routes/notion-mirror-entities';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let cycles!: typeof cyclesRouter;
+let time!: typeof timeRouter;
+let loadEntityRows!: typeof LoadEntityRows;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   cycles = (await import('../../src/routes/cycles')).default;
+  time = (await import('../../src/routes/time')).default;
+  loadEntityRows = (await import('../../src/routes/notion-mirror-entities')).loadEntityRows;
 });
 
 /** The meaningless-name shape the requirement forbids anywhere in a rendered payload. */
@@ -123,5 +140,99 @@ describe('cycle displayName', () => {
       .from(schema.cycle)
       .where(and(eq(schema.cycle.id, target.id), eq(schema.cycle.organizationId, orgId)));
     expect(row?.number).toBe(target.number);
+  });
+});
+
+interface TimeCyclePeriodDto {
+  id: string;
+  name: string;
+  startsAt: string;
+  endsAt: string;
+}
+interface TimeCyclePeriodListDto {
+  items: TimeCyclePeriodDto[];
+}
+
+describe('GET /v1/time/cycles displayName', () => {
+  it('names an unnamed personal time cycle by its window, never by its auto-roll number', async () => {
+    const userId = await seedUserWithHub(db, schema, 'TimeCycleDisplayName');
+    const orgId = await seedOrg(db, schema);
+    await seedStatuses(db, schema, orgId);
+    const actorId = await addMember(db, schema, orgId, userId);
+    await db.insert(schema.grant).values({
+      organizationId: orgId,
+      subjectKind: 'actor',
+      subjectId: actorId,
+      resourceKind: 'organization',
+      resourceId: orgId,
+      capabilities: ['contribute'],
+      effect: 'allow',
+      cascades: true,
+    });
+    const teamId = one(
+      await db
+        .insert(schema.team)
+        .values({
+          organizationId: orgId,
+          name: 'Core',
+          key: `K${Math.random().toString(36).slice(2, 6)}`,
+        })
+        .returning({ id: schema.team.id }),
+    ).id;
+    const startsAt = new Date('2026-07-27T00:00:00.000Z');
+    const endsAt = new Date('2026-08-02T23:59:59.999Z');
+    await db.insert(schema.cycle).values({
+      organizationId: orgId,
+      teamId,
+      number: 1_000_140,
+      name: null,
+      startsAt,
+      endsAt,
+      source: 'native',
+    });
+
+    const app = appWithSession(time, fakeSession(userId));
+    const body = (await (await app.request('/cycles')).json()) as TimeCyclePeriodListDto;
+
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]?.name).toBe(defaultCycleName(startsAt, endsAt));
+    expect(JSON.stringify(body)).not.toMatch(RAW_NUMBER_NAME);
+  });
+});
+
+describe('Notion mirror cycle projection displayName', () => {
+  it('names an unnamed cycle by its window in the projected mirror value', async () => {
+    const base = await seedBaseOrg(db, schema);
+    const integration = one(
+      await db
+        .insert(schema.integration)
+        .values({ organizationId: base.orgId, provider: 'notion', pattern: 'connector' })
+        .returning(),
+    );
+    const startsAt = new Date('2026-12-28T00:00:00.000Z');
+    const endsAt = new Date('2027-01-03T23:59:59.999Z');
+    const cycleRow = one(
+      await db
+        .insert(schema.cycle)
+        .values({
+          organizationId: base.orgId,
+          teamId: base.teamId,
+          number: 1_000_141,
+          name: null,
+          startsAt,
+          endsAt,
+          source: 'native',
+        })
+        .returning(),
+    );
+
+    const rows = await loadEntityRows(base.orgId, integration.id, 'cycle');
+    const row = rows.find((candidate) => candidate.entityId === cycleRow.id);
+    if (!row) throw new Error('no cycle record projected for the seeded cycle');
+    const nameValue = row.values['name'];
+    if (nameValue?.kind !== 'text') throw new Error('cycle name projected as a non-text value');
+
+    expect(nameValue.value).toBe(defaultCycleName(startsAt, endsAt));
+    expect(nameValue.value).not.toMatch(RAW_NUMBER_NAME);
   });
 });

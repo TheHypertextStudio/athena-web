@@ -540,7 +540,27 @@
   debrief shows its meeting nowhere.
 
 ---
+### [REPO-BOOTSTRAP-001] Turn a fresh clone into a verified Docket environment
 
+- **Status**: IN_PROGRESS
+- **Started**: 2026-09-06
+- **Priority**: P0
+- **Description**: Adopt the shared Hypertext Bootstrap contract, repair Docket's stale local
+  configuration and sign-in prerequisites, converge version-control policy and services, and make
+  the local and production paths explicitly verifiable on macOS and Linux.
+- **Approach**: Build and black-box test the manifest-free shared engine first, then migrate Docket
+  behind its conventional repository hooks. Treat configuration as observed state reconciled from
+  the environment registry and checked-in example; preserve existing valid values and generated
+  secrets, report inconsistent manual values, and prove the second run is byte-for-byte inert.
+- **Current evidence**: The local engine repository has a clean unpublished candidate with 54 Rust
+  tests, Clippy, ShellCheck, deterministic archive coverage, and an arm64 macOS package receipt.
+  Docket's current generator still writes `PORT=3001` while `.env.example` and the working local
+  configuration use `4000`, and it omits `BETTER_AUTH_COOKIE_DOMAIN` and
+  `NEXT_PUBLIC_PASSKEY_RP_ID`; those stale host-sensitive values can break session-cookie and
+  WebAuthn sign-in even when `env:check` passes on an already repaired developer file.
+- **External boundary**: No shared-engine GitHub repository, push, tag, hosted build, or release has
+  been created. Docket cannot pin its root launcher until the four native release artifacts and
+  checksums exist.
 ### [DETAIL-INSET-001] Every edge of a detail page is measured the same way
 
 - **Completed**: 2026-09-05

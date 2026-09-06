@@ -1130,8 +1130,9 @@
 
 ### [REPO-BOOTSTRAP-SPEC-001] Define the Hypertext Studio repository bootstrap contract
 
-- **Status**: REVIEW
+- **Status**: COMPLETED
 - **Started**: 2026-09-01
+- **Completed**: 2026-09-06
 - **Priority**: P1
 - **Description**: Write a rough, human-readable specification for the mandatory `./bootstrap`
   entrypoint every Hypertext Studio repository will adopt. The contract must support macOS and
@@ -1144,9 +1145,14 @@
         black-box idempotence.
   - [x] Write and self-review the rough repository bootstrap specification.
   - [x] Prepare the rough design document and work log for atomic commit and user review.
+  - [x] Receive approval and split implementation into engine, Docket adoption, and Studio rollout
+        plans.
 - **Blockers**: None.
 - **Files changed**:
   - `docs/superpowers/specs/2026-09-01-repo-bootstrap-design.md`
+  - `docs/superpowers/plans/2026-09-06-repo-bootstrap-engine.md`
+  - `docs/superpowers/plans/2026-09-06-docket-bootstrap-adoption.md`
+  - `docs/superpowers/plans/2026-09-06-repo-bootstrap-rollout.md`
   - `docs/WORKLOG.md`
 - **Validation**:
   - `pnpm typecheck` and `pnpm lint` passed.
@@ -1155,6 +1161,11 @@
     same test passed alone in 255 ms, and a clean `CI=1 pnpm test` rerun passed it in 215 ms with the
     full suite.
   - `pnpm build` passed after the clean test rerun.
+  - The 2026-09-06 planning checkout passed `pnpm docs:check`, Prettier, and `git diff --check`.
+    Its pre-change full `CI=1 pnpm test` baseline had one 30-second timeout in
+    `tests/interactivity/drag-source-policy.test.ts` among 3,782 web tests; the exact file passed all
+    three tests in 5.56 seconds with one worker. This is recorded as suite-load contention, not a
+    green full-suite result.
 - **Learnings**: Docket is the reference example, but the contract must remain language-neutral and
   avoid a formal application-facing adapter SDK. Project-specific executable hooks are an escape
   hatch rather than the normal integration model. Version-control readiness belongs inside the

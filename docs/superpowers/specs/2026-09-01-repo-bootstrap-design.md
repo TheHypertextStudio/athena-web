@@ -1,6 +1,6 @@
 # Hypertext Studio Repo Bootstrap Spec
 
-> **Status:** Rough design for review
+> **Status:** Approved for implementation planning on 2026-09-06
 > **Scope:** The required bootstrap experience for every Hypertext Studio repository
 > **Reference project:** Docket
 
@@ -349,18 +349,20 @@ Repo Bootstrap is not:
 5. Keep improving shared recognition whenever more than a few repository hints or custom steps are
    needed.
 
-## Implementation choices still to settle
+## Implementation plan
 
-The rough spec intentionally leaves these implementation details open for the plan:
+The approved design is split into three independently shippable plans:
 
-- the portable engine's implementation language and signed release channel
-- the exact contents and update policy of the checked-in launcher
-- the smallest stable JSON event and exit-status vocabulary
-- the supported macOS and Linux distribution matrix for the first release
-- where local non-secret recovery state and locks live
-- how provider guidance is tested and refreshed as provider consoles change
-- whether product-level orchestration across multiple repositories belongs in this tool or in a
-  separate product workspace
+- `docs/superpowers/plans/2026-09-06-repo-bootstrap-engine.md` builds and releases the shared Rust
+  engine, verified POSIX launcher, state model, recognizers, Git support, and conformance harness.
+- `docs/superpowers/plans/2026-09-06-docket-bootstrap-adoption.md` makes Docket the reference adopter
+  and proves local sign-in, persistence, production planning, and public-product verification.
+- `docs/superpowers/plans/2026-09-06-repo-bootstrap-rollout.md` adopts the contract across the Node,
+  Cloudflare, Swift, and Android repositories and establishes fleet-wide upgrade and conformance
+  policy.
 
-Those choices may change without weakening the required `./bootstrap` entrypoint, convention-first
-discovery, interactive guidance, or idempotence guarantees defined above.
+The plans select a Rust engine distributed as checksummed macOS and Linux binaries, a tiny pinned
+POSIX launcher, a stable JSON/exit-status contract, Git-directory recovery state, and a separate
+cross-repository rollout workflow. These choices may evolve without weakening the required
+`./bootstrap` entrypoint, convention-first discovery, interactive guidance, or idempotence
+guarantees defined above.

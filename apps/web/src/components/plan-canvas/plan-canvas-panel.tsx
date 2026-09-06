@@ -17,7 +17,7 @@ import type { PickerOption } from '@docket/ui/components';
 import { EmptyState } from '@docket/ui/components';
 import { Plus, Search, Sparkles, Undo } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { Button, Input, Surface, surfaceToneVariable } from '@docket/ui/primitives';
+import { Button, Input, Surface } from '@docket/ui/primitives';
 import type {
   PlanCommitOut,
   PlanDraftOut,
@@ -46,7 +46,12 @@ import { describeConfirmation, subtreeRefs } from './plan-confirm';
 import { changedFieldCount, type PlanDiff } from './plan-diff';
 import PlanInitiativeNode from './plan-initiative-node';
 import PlanInspector from './plan-inspector';
-import { usePlanLayout } from './plan-layout';
+import {
+  PLAN_MAX_PER_COLUMN,
+  type PlanOrientation,
+  orientPlanEdges,
+  usePlanLayout,
+} from './plan-layout';
 import PlanLinkEdge from './plan-link-edge';
 import { PLAN_EDGE_TYPE, PLAN_NODE_TYPE, planNodeData, projectPlan } from './plan-nodes';
 import PlanProjectNode from './plan-project-node';
@@ -68,6 +73,27 @@ const EDGE_TYPES = {
 
 /** How long the "Athena updated" pill stays up. */
 const PILL_VISIBLE_MS = 4_000;
+/** Zoom floor when widening the viewport around what Athena added; below it a row is unreadable. */
+const REVEAL_MIN_ZOOM = 0.5;
+
+/**
+ * Bring every node into view after a remote revision added some, once the new nodes have been
+ * placed and measured. Returns a cancel for the pending frame.
+ */
+function revealAdditions(flowInstance: ReactFlowInstance | null): () => void {
+  if (flowInstance === null) return () => undefined;
+  const frame = window.requestAnimationFrame(() => {
+    void flowInstance.fitView({
+      duration: 450,
+      minZoom: REVEAL_MIN_ZOOM,
+      maxZoom: 1,
+      padding: 0.12,
+    });
+  });
+  return () => {
+    window.cancelAnimationFrame(frame);
+  };
+}
 
 /** Props for {@link PlanCanvasPanel}. */
 export interface PlanCanvasPanelProps {
@@ -105,11 +131,11 @@ function freshRef(kind: PlanNode['kind']): string {
   return `${kind}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Minimap colour by kind. */
+/** Minimap colour by kind: the initiative in the accent, containers and rows on the surface ramp. */
 function nodeColor(node: Node): string {
-  if (node.type === PLAN_NODE_TYPE.project) return surfaceToneVariable('card');
   if (node.type === PLAN_NODE_TYPE.initiative) return 'var(--color-primary)';
-  return surfaceToneVariable('floating');
+  if (node.type === PLAN_NODE_TYPE.project) return 'var(--color-surface-container-high)';
+  return 'var(--color-outline-variant)';
 }
 
 /** The ops that put a removed subtree back, parents first, with its edges. */
@@ -147,8 +173,8 @@ function PlanViewBar({
   readonly onAddProject: (() => void) | null;
 }): JSX.Element {
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2">
-      <div className="relative min-w-0 flex-1 basis-40">
+    <div className="@container flex min-w-0 flex-1 items-center gap-2">
+      <div className="relative min-w-24 shrink basis-56">
         <Search
           aria-hidden="true"
           className="text-on-surface-variant pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
@@ -164,20 +190,59 @@ function PlanViewBar({
         />
       </div>
       {onAddProject ? (
-        <Button type="button" variant="outline" size="sm" onClick={onAddProject}>
-          <Plus className="size-4" /> Project
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-label="Add project"
+          onClick={onAddProject}
+        >
+          <Plus className="size-4" />
+          <span className="hidden @2xl:inline">Project</span>
         </Button>
       ) : null}
       <span
         className="text-on-surface-variant text-label-medium ml-auto shrink-0 whitespace-nowrap"
         data-testid="plan-counts"
       >
-        {counts.projects} {counts.projects === 1 ? 'project' : 'projects'} · {counts.tasks}{' '}
-        {counts.tasks === 1 ? 'task' : 'tasks'} ·{' '}
+        <span className="hidden @2xl:inline">
+          {counts.projects} {counts.projects === 1 ? 'project' : 'projects'} · {counts.tasks}{' '}
+          {counts.tasks === 1 ? 'task' : 'tasks'} ·{' '}
+        </span>
         <span className={cn(counts.draft > 0 && 'text-primary')}>{counts.draft} draft</span>
       </span>
     </div>
   );
+}
+
+/** The "Athena updated" pill: a transient status above the view controls. */
+function PlanUpdatePill({ text }: { readonly text: string }): JSX.Element {
+  return (
+    <Surface
+      tone="floating"
+      shape="medium"
+      role="status"
+      className="text-primary text-label-medium pointer-events-auto flex items-center gap-1.5 px-2.5 py-1"
+      data-testid="plan-update-pill"
+    >
+      <Sparkles aria-hidden="true" className="size-3.5" />
+      {text}
+    </Surface>
+  );
+}
+
+/**
+ * What sits above the view controls: an undoable notice wins over the update pill, so the two
+ * transient surfaces never stack and neither ever collides with the selection bar up top.
+ */
+function bottomSlot(
+  notice: PlanNotice | null,
+  pill: string | null,
+  onDismiss: () => void,
+): JSX.Element | undefined {
+  if (notice !== null) return <PlanNoticeSurface notice={notice} onDismiss={onDismiss} />;
+  if (pill !== null) return <PlanUpdatePill text={pill} />;
+  return undefined;
 }
 
 /** A transient notice above the view controls, with Undo when the change can be taken back. */
@@ -254,15 +319,26 @@ export default function PlanCanvasPanel({
     () => projectPlan(plan, { orgId, diff: remoteDiff, canEdit, actorName, initiativeName }),
     [plan, orgId, remoteDiff, canEdit, actorName, initiativeName],
   );
-  const { nodes } = usePlanLayout(projected.nodes, projected.edges, aspectRatio, layoutEpoch);
-  const edges = projected.edges;
+  // A portrait host (a phone) runs the board down the page under the initiative; a landscape
+  // host stands the initiative beside it.
+  const orientation: PlanOrientation = aspectRatio < 1 ? 'column' : 'row';
+  const { nodes } = usePlanLayout(projected.nodes, layoutEpoch, orientation);
+  const edges = useMemo(
+    () => orientPlanEdges(projected.edges, orientation),
+    [projected.edges, orientation],
+  );
   const counts = useMemo(() => planCounts(plan.document), [plan.document]);
+  // A board that fits in one column is a board a person can see whole; the minimap earns its
+  // corner once the containers spill into a second column.
+  const projectCount = counts.projects;
   const byRef = useMemo(
     () => new Map(plan.document.nodes.map((node) => [node.ref, node])),
     [plan.document.nodes],
   );
 
-  // The "Athena updated" pill: shown when a remote revision changed something, then let go.
+  // The "Athena updated" pill: shown when a remote revision changed something, then let go. When
+  // the revision added nodes the viewport also widens to take them in, so what Athena just drew
+  // is never off screen.
   useEffect(() => {
     const fields = changedFieldCount(remoteDiff);
     const added = remoteDiff.added.size;
@@ -275,10 +351,12 @@ export default function PlanCanvasPanel({
     const timer = window.setTimeout(() => {
       setPill(null);
     }, PILL_VISIBLE_MS);
+    const reveal = added > 0 ? revealAdditions(flowInstance) : null;
     return () => {
       window.clearTimeout(timer);
+      reveal?.();
     };
-  }, [remoteDiff]);
+  }, [flowInstance, remoteDiff]);
 
   // Selection follows the document: a node Athena or a commit removed cannot stay selected.
   useEffect(() => {
@@ -577,7 +655,7 @@ export default function PlanCanvasPanel({
               interactive={canEdit}
               highlightChains={false}
               nodeColor={nodeColor}
-              minimap
+              minimap={projectCount > PLAN_MAX_PER_COLUMN}
               focusOn={focusOn}
               onSelectNode={setSelectedRef}
               onNavigate={(id) => {
@@ -591,16 +669,9 @@ export default function PlanCanvasPanel({
               onRelayout={() => {
                 setLayoutEpoch((current) => current + 1);
               }}
-              bottomNotice={
-                notice !== null ? (
-                  <PlanNoticeSurface
-                    notice={notice}
-                    onDismiss={() => {
-                      setNotice(null);
-                    }}
-                  />
-                ) : undefined
-              }
+              bottomNotice={bottomSlot(notice, pill, () => {
+                setNotice(null);
+              })}
             >
               <PlanSelectionBar
                 plan={plan}
@@ -611,20 +682,6 @@ export default function PlanCanvasPanel({
                 onAsk={askAbout}
                 onOpen={onOpen}
               />
-              {pill !== null ? (
-                <CanvasOverlayPanel position="top-right">
-                  <Surface
-                    tone="floating"
-                    shape="medium"
-                    role="status"
-                    className="text-primary text-label-medium flex items-center gap-1.5 px-2.5 py-1"
-                    data-testid="plan-update-pill"
-                  >
-                    <Sparkles aria-hidden="true" className="size-3.5" />
-                    {pill}
-                  </Surface>
-                </CanvasOverlayPanel>
-              ) : null}
               {isEmpty ? (
                 <CanvasOverlayPanel position="top-center" className="!top-1/2 !-translate-y-1/2">
                   <EmptyState

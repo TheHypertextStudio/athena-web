@@ -42,7 +42,7 @@ describe('describeConfirmation', () => {
   it('names a project and its tasks', () => {
     const plan = describeConfirmation(DOC, ['p1']);
     expect(plan.refs).toEqual(['init', 'p1', 't1', 't2']);
-    expect(plan.label).toBe('Confirm initiative, project, and 2 tasks');
+    expect(plan.label).toBe('Confirm project and 2 tasks and its initiative');
   });
 
   it('names a lone task with its draft ancestors, skipping confirmed ones', () => {
@@ -51,7 +51,12 @@ describe('describeConfirmation', () => {
       count: 1,
       label: 'Confirm task',
     });
-    expect(describeConfirmation(DOC, ['t1']).label).toBe('Confirm initiative, project, and task');
+    expect(describeConfirmation(DOC, ['t1']).label).toBe(
+      'Confirm task and its project and initiative',
+    );
+    expect(describeConfirmation(DOC, ['t1', 't2']).label).toBe(
+      'Confirm 2 tasks and their project and initiative',
+    );
   });
 
   it('reports nothing to confirm for a confirmed selection', () => {

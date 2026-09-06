@@ -2,8 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { Edge, Node } from '@xyflow/react';
 
-import { layoutPlan, projectContainerHeight } from '../../src/components/plan-canvas/plan-layout';
 import {
+  PLAN_LINK_HANDLE,
+  layoutPlan,
+  orientPlanEdges,
+  projectContainerHeight,
+} from '../../src/components/plan-canvas/plan-layout';
+import {
+  PLAN_EDGE_TYPE,
   PLAN_INITIATIVE_SIZE,
   PLAN_NODE_TYPE,
   PLAN_PROJECT_HEADER,
@@ -37,11 +43,25 @@ const NODES: Node[] = [
   make('t3', PLAN_NODE_TYPE.task, { parentId: 'p2' }),
 ];
 
-const EDGES: Edge[] = [
-  { id: 'link:init>p1', source: 'init', target: 'p1', type: 'planLink' },
-  { id: 'link:init>p2', source: 'init', target: 'p2', type: 'planLink' },
-  { id: 'dep:t1>t3', source: 't1', target: 't3', type: 'default' },
-];
+function rect(node: Node): { x: number; y: number; width: number; height: number } {
+  return {
+    x: node.position.x,
+    y: node.position.y,
+    width: Number(node.style?.width ?? 0),
+    height: Number(node.style?.height ?? 0),
+  };
+}
+
+function overlaps(a: Node, b: Node): boolean {
+  const ra = rect(a);
+  const rb = rect(b);
+  return (
+    ra.x < rb.x + rb.width &&
+    rb.x < ra.x + ra.width &&
+    ra.y < rb.y + rb.height &&
+    rb.y < ra.y + ra.height
+  );
+}
 
 describe('projectContainerHeight', () => {
   it('grows with its rows and the Add task footer', () => {
@@ -56,9 +76,9 @@ describe('projectContainerHeight', () => {
 
 describe('layoutPlan', () => {
   it('sizes containers to their rows and keeps every row inside its container', () => {
-    const { nodes } = layoutPlan(NODES, EDGES, 16 / 9);
-    const p1 = nodes.find((n) => n.id === 'p1');
-    expect(p1?.style).toMatchObject({
+    const { nodes } = layoutPlan(NODES);
+    const p1 = mustFind(nodes, 'p1');
+    expect(p1.style).toMatchObject({
       width: PLAN_PROJECT_WIDTH,
       height: projectContainerHeight(2, true),
     });
@@ -78,31 +98,108 @@ describe('layoutPlan', () => {
     );
   });
 
-  it('places the initiative left of the projects it links to, and keeps top-level nodes apart', () => {
-    const { nodes } = layoutPlan(NODES, EDGES, 16 / 9);
+  it('stands the initiative left of a stacked column of containers in document order', () => {
+    const { nodes, bounds } = layoutPlan(NODES);
     const init = mustFind(nodes, 'init');
     const p1 = mustFind(nodes, 'p1');
     const p2 = mustFind(nodes, 'p2');
-    expect(init.position.x + PLAN_INITIATIVE_SIZE.width).toBeLessThanOrEqual(p1.position.x);
-    expect(init.position.x + PLAN_INITIATIVE_SIZE.width).toBeLessThanOrEqual(p2.position.x);
-    const overlapY =
-      p1.position.y < p2.position.y + projectContainerHeight(1, false) &&
-      p2.position.y < p1.position.y + projectContainerHeight(2, true);
-    const overlapX =
-      p1.position.x < p2.position.x + PLAN_PROJECT_WIDTH &&
-      p2.position.x < p1.position.x + PLAN_PROJECT_WIDTH;
-    expect(overlapX && overlapY).toBe(false);
+    expect(init.position.x + PLAN_INITIATIVE_SIZE.width).toBeLessThan(p1.position.x);
+    expect(p1.position.x).toBe(p2.position.x);
+    expect(p1.position.y).toBeLessThan(p2.position.y);
+    expect(overlaps(p1, p2)).toBe(false);
+    expect(overlaps(init, p1)).toBe(false);
+    // The initiative sits at the vertical centre of the stack.
+    const stackMid = (p2.position.y + Number(p2.style?.height ?? 0)) / 2;
+    const initMid = init.position.y + PLAN_INITIATIVE_SIZE.height / 2;
+    expect(Math.abs(stackMid - initMid)).toBeLessThan(1);
+    expect(bounds.width).toBe(p1.position.x + PLAN_PROJECT_WIDTH);
+    expect(bounds.height).toBe(p2.position.y + Number(p2.style?.height ?? 0));
   });
 
-  it('projects a task dependency onto its containers so dependent projects follow', () => {
-    const { nodes } = layoutPlan(NODES, EDGES, 16 / 9);
-    const p1 = mustFind(nodes, 'p1');
-    const p2 = mustFind(nodes, 'p2');
-    expect(p1.position.x).toBeLessThan(p2.position.x);
+  it('opens a second column once a column would hold more than four containers', () => {
+    const many: Node[] = [
+      make('init', PLAN_NODE_TYPE.initiative),
+      ...Array.from({ length: 6 }, (_, index) =>
+        make(`p${String(index)}`, PLAN_NODE_TYPE.project, {}, { canAddTask: false }),
+      ),
+    ];
+    const { nodes } = layoutPlan(many);
+    const xs = new Set(
+      nodes.filter((n) => n.type === PLAN_NODE_TYPE.project).map((n) => n.position.x),
+    );
+    expect(xs.size).toBe(2);
+    const columns = [...xs].sort((a, b) => a - b);
+    const first = nodes.filter((n) => n.position.x === columns[0]).length;
+    const second = nodes.filter((n) => n.position.x === columns[1]).length;
+    expect(first).toBe(3);
+    expect(second).toBe(3);
+  });
+
+  it('points dependency handles down the stack and membership handles across it', () => {
+    const { nodes } = layoutPlan(NODES);
+    expect(mustFind(nodes, 'init').sourcePosition).toBe('right');
+    expect(mustFind(nodes, 'p1').sourcePosition).toBe('bottom');
+    expect(mustFind(nodes, 'p1').targetPosition).toBe('top');
+    expect(mustFind(nodes, 't1').sourcePosition).toBe('bottom');
   });
 
   it('lays out an empty plan without throwing', () => {
-    const { nodes } = layoutPlan([], [], 1);
+    const { nodes, bounds } = layoutPlan([]);
     expect(nodes).toEqual([]);
+    expect(bounds).toEqual({ width: 0, height: 0 });
+  });
+});
+
+describe('layoutPlan in a portrait host', () => {
+  it('runs the containers down one column beneath a centred initiative', () => {
+    const { nodes, bounds } = layoutPlan(NODES, 'column');
+    const init = mustFind(nodes, 'init');
+    const p1 = mustFind(nodes, 'p1');
+    const p2 = mustFind(nodes, 'p2');
+    expect(init.sourcePosition).toBe('bottom');
+    expect(init.position.y + PLAN_INITIATIVE_SIZE.height).toBeLessThan(p1.position.y);
+    expect(p1.position.x).toBe(p2.position.x);
+    expect(p1.position.y).toBeLessThan(p2.position.y);
+    expect(overlaps(init, p1)).toBe(false);
+    expect(overlaps(p1, p2)).toBe(false);
+    // Centred over the stack, so the whole board is only as wide as a container.
+    const initMid = init.position.x + PLAN_INITIATIVE_SIZE.width / 2;
+    expect(Math.abs(initMid - (p1.position.x + PLAN_PROJECT_WIDTH / 2))).toBeLessThan(1);
+    expect(bounds.width).toBe(PLAN_PROJECT_WIDTH);
+  });
+
+  it('keeps six containers in a single column', () => {
+    const many: Node[] = [
+      make('init', PLAN_NODE_TYPE.initiative),
+      ...Array.from({ length: 6 }, (_, index) =>
+        make(`p${String(index)}`, PLAN_NODE_TYPE.project, {}, { canAddTask: false }),
+      ),
+    ];
+    const { nodes } = layoutPlan(many, 'column');
+    const xs = new Set(
+      nodes.filter((n) => n.type === PLAN_NODE_TYPE.project).map((n) => n.position.x),
+    );
+    expect(xs.size).toBe(1);
+  });
+});
+
+describe('orientPlanEdges', () => {
+  const edges: Edge[] = [
+    { id: 'l', source: 'init', target: 'p1', type: PLAN_EDGE_TYPE.link, targetHandle: 'link' },
+    {
+      id: 'd',
+      source: 'p1',
+      target: 'p2',
+      type: PLAN_EDGE_TYPE.dependency,
+      sourceHandle: 'dep-out',
+      targetHandle: 'dep-in',
+    },
+  ];
+
+  it('lands membership links on the header top in a portrait board and leaves dependencies alone', () => {
+    const oriented = orientPlanEdges(edges, 'column');
+    expect(oriented[0]?.targetHandle).toBe(PLAN_LINK_HANDLE.column);
+    expect(oriented[1]).toEqual(edges[1]);
+    expect(orientPlanEdges(edges, 'row')[0]?.targetHandle).toBe(PLAN_LINK_HANDLE.row);
   });
 });

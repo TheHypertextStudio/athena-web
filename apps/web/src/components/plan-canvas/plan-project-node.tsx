@@ -19,13 +19,19 @@ import Link from '@/components/docket-link';
 import { formatCalendarDate } from '@/lib/format-date';
 
 import { usePlanCanvasActions } from './plan-canvas-context';
-import { PLAN_PROJECT_FOOTER, PLAN_PROJECT_HEADER, type PlanProjectNodeData } from './plan-nodes';
+import {
+  PLAN_PROJECT_FOOTER,
+  PLAN_PROJECT_HEADER,
+  PLAN_PROJECT_PADDING,
+  type PlanProjectNodeData,
+} from './plan-nodes';
 import {
   PlanCreatedMark,
   PlanDraftPill,
   PlanField,
   PlanStatusGlyph,
   planCardClasses,
+  planHandleClasses,
   planNodeTransitionName,
 } from './plan-status';
 
@@ -57,10 +63,24 @@ function PlanProjectNodeComponent({ id, data, selected }: NodeProps): JSX.Elemen
       )}
     >
       <Handle
+        id="link"
         type="target"
         position={Position.Left}
         style={{ top: PLAN_PROJECT_HEADER / 2 }}
-        className="!bg-outline-variant !size-2"
+        className={planHandleClasses('!size-2')}
+      />
+      <Handle
+        id="link-top"
+        type="target"
+        position={Position.Top}
+        style={{ left: PLAN_PROJECT_PADDING * 2 }}
+        className={planHandleClasses('!size-2')}
+      />
+      <Handle
+        id="dep-in"
+        type="target"
+        position={Position.Top}
+        className={planHandleClasses('!size-2')}
       />
       <div
         style={{ height: PLAN_PROJECT_HEADER }}
@@ -131,10 +151,10 @@ function PlanProjectNodeComponent({ id, data, selected }: NodeProps): JSX.Elemen
         </button>
       ) : null}
       <Handle
+        id="dep-out"
         type="source"
-        position={Position.Right}
-        style={{ top: PLAN_PROJECT_HEADER / 2 }}
-        className="!bg-outline-variant !size-2"
+        position={Position.Bottom}
+        className={planHandleClasses('!size-2')}
       />
     </div>
   );

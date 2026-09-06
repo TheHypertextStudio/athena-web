@@ -33,16 +33,16 @@ export const PLAN_EDGE_TYPE = {
 
 /** Card and row geometry, in canvas units. */
 export const PLAN_INITIATIVE_SIZE = { width: 268, height: 96 } as const;
-export const PLAN_TASK_SIZE = { width: 272, height: 44 } as const;
+export const PLAN_TASK_SIZE = { width: 272, height: 40 } as const;
 export const PLAN_PROJECT_WIDTH = 304;
 /** The container's header band: glyph, title, meta line. */
 export const PLAN_PROJECT_HEADER = 68;
 /** Inset between the container edge and its rows. */
-export const PLAN_PROJECT_PADDING = 12;
+export const PLAN_PROJECT_PADDING = 10;
 /** Vertical gap between task rows. */
-export const PLAN_TASK_GAP = 6;
+export const PLAN_TASK_GAP = 4;
 /** The ghost "Add task" row an editable draft container ends with. */
-export const PLAN_PROJECT_FOOTER = 36;
+export const PLAN_PROJECT_FOOTER = 32;
 
 /** What every plan node renderer receives. */
 export interface PlanNodeBaseData extends Record<string, unknown> {
@@ -274,6 +274,7 @@ function linkEdges(node: PlanNode, byRef: ReadonlyMap<string, PlanNode>): Edge[]
       source: initiativeRef,
       target: node.ref,
       type: PLAN_EDGE_TYPE.link,
+      targetHandle: 'link',
       selectable: false,
       deletable: false,
       data: { kind: 'link' },
@@ -293,6 +294,8 @@ function dependencyEdges(
       source: edge.fromRef,
       target: edge.toRef,
       type: PLAN_EDGE_TYPE.dependency,
+      sourceHandle: 'dep-out',
+      targetHandle: 'dep-in',
       deletable: canEdit,
       data: { kind: 'dependency' },
     }));

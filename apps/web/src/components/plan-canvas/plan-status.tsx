@@ -104,3 +104,16 @@ export function planCardClasses(
     selected && 'ring-primary ring-2',
   );
 }
+
+/**
+ * Connection handles rest invisible and surface when their node is hovered, focused, or selected,
+ * so a board of rows reads as rows rather than as a field of dots. Pass `size` as the Tailwind
+ * size utility the handle should take.
+ */
+export function planHandleClasses(size: '!size-1.5' | '!size-2'): string {
+  return cn(
+    '!bg-outline-variant opacity-0 transition-opacity',
+    'group-hover:opacity-100 group-focus-within:opacity-100 [.react-flow__node.selected_&]:opacity-100',
+    size,
+  );
+}

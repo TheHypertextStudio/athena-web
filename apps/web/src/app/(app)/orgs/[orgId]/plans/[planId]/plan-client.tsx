@@ -41,6 +41,9 @@ import { useOrgCapability } from '@/lib/use-org-capability';
 /** The option sources the inspector's pickers need. */
 const OPTION_KINDS = ['actors', 'initiatives'] as const;
 
+/** The width at which the shell docks the rail beside main content instead of over it. */
+const RAIL_BESIDE_CANVAS_QUERY = '(min-width: 1024px)';
+
 /** Where the back affordance leads: the root initiative when there is one, else the list. */
 function backTarget(
   orgId: string,
@@ -131,7 +134,10 @@ export default function PlanClient(): JSX.Element {
   useEffect(() => {
     if (revealed.current) return;
     revealed.current = true;
-    if (launchDraft === null) openAthena();
+    // On a compact viewport the rail covers main content, so revealing it on arrival would hide
+    // the very canvas the person came to see; there the rail stays one tap away in the shell.
+    const wide = window.matchMedia(RAIL_BESIDE_CANVAS_QUERY).matches;
+    if (launchDraft === null && wide) openAthena();
   }, [launchDraft, openAthena]);
 
   const trackedOps = useMemo(

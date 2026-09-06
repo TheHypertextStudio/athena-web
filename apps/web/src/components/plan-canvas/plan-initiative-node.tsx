@@ -24,15 +24,24 @@ import {
   PlanDraftPill,
   PlanField,
   planCardClasses,
+  planHandleClasses,
   planNodeTransitionName,
 } from './plan-status';
 
-function PlanInitiativeNodeComponent({ id, data, selected }: NodeProps): JSX.Element {
+function PlanInitiativeNodeComponent({
+  id,
+  data,
+  selected,
+  sourcePosition,
+}: NodeProps): JSX.Element {
   const node = data as PlanInitiativeNodeData;
   const actions = usePlanCanvasActions();
   const changed = new Set(node.changedFields);
   const target = formatCalendarDate(node.targetDate, { month: 'short', year: 'numeric' });
-  const meta = [node.ownerName, target].filter((part): part is string => part !== null);
+  const meta = [
+    { field: 'ownerId', value: node.ownerName, shrink: true },
+    { field: 'targetDate', value: target, shrink: false },
+  ].filter((part): part is typeof part & { value: string } => part.value !== null);
   return (
     <div
       role="treeitem"
@@ -106,17 +115,21 @@ function PlanInitiativeNodeComponent({ id, data, selected }: NodeProps): JSX.Ele
       ) : null}
       <div className="text-on-surface-variant text-label-medium flex min-w-0 items-center gap-2">
         <span className="shrink-0">Initiative</span>
-        {meta.map((part, index) => (
+        {meta.map((part) => (
           <PlanField
-            key={part}
-            changed={changed.has(index === 0 && node.ownerName !== null ? 'ownerId' : 'targetDate')}
-            className="min-w-0 truncate"
+            key={part.field}
+            changed={changed.has(part.field)}
+            className={part.shrink ? 'min-w-0 truncate' : 'shrink-0'}
           >
-            · {part}
+            · {part.value}
           </PlanField>
         ))}
       </div>
-      <Handle type="source" position={Position.Right} className="!bg-outline-variant !size-2" />
+      <Handle
+        type="source"
+        position={sourcePosition ?? Position.Right}
+        className={planHandleClasses('!size-2')}
+      />
     </div>
   );
 }

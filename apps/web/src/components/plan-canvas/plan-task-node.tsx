@@ -16,7 +16,13 @@ import { memo, type JSX } from 'react';
 import { formatCalendarDate } from '@/lib/format-date';
 
 import type { PlanTaskNodeData } from './plan-nodes';
-import { PlanField, PlanStatusGlyph, planCardClasses, planNodeTransitionName } from './plan-status';
+import {
+  PlanField,
+  PlanStatusGlyph,
+  planCardClasses,
+  planHandleClasses,
+  planNodeTransitionName,
+} from './plan-status';
 
 function PlanTaskNodeComponent({ id, data, selected }: NodeProps): JSX.Element {
   const node = data as PlanTaskNodeData;
@@ -33,11 +39,16 @@ function PlanTaskNodeComponent({ id, data, selected }: NodeProps): JSX.Element {
       style={{ viewTransitionName: planNodeTransitionName(id) }}
       className={cn(
         surfaceToneColor('floating'),
-        'relative flex size-full items-center gap-2 rounded-lg px-2.5',
+        'group relative flex size-full items-center gap-2 rounded-lg px-2.5',
         planCardClasses(node.status, node.entered, selected),
       )}
     >
-      <Handle type="target" position={Position.Left} className="!bg-outline-variant !size-1.5" />
+      <Handle
+        id="dep-in"
+        type="target"
+        position={Position.Top}
+        className={planHandleClasses('!size-1.5')}
+      />
       <PlanStatusGlyph status={node.status} className="size-3.5" />
       <PlanField
         changed={changed.has('title')}
@@ -61,7 +72,12 @@ function PlanTaskNodeComponent({ id, data, selected }: NodeProps): JSX.Element {
           {due}
         </PlanField>
       ) : null}
-      <Handle type="source" position={Position.Right} className="!bg-outline-variant !size-1.5" />
+      <Handle
+        id="dep-out"
+        type="source"
+        position={Position.Bottom}
+        className={planHandleClasses('!size-1.5')}
+      />
     </div>
   );
 }

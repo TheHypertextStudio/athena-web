@@ -15,6 +15,7 @@ import { ConflictError, NotFoundError, ValidationError } from '../error';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
+import { resolveCanonicalCalendarItemSet } from '../calendar/calendar-read';
 
 import { requireUserId } from './calendar-shared';
 
@@ -31,10 +32,13 @@ const CalendarItemRelationsOut = pageOf(CalendarItemRelationOut);
  * must not let one bad row take down every other relation in the response. Both build off this
  * shared, unvalidated shape and choose `.parse` vs `.safeParse` themselves.
  */
-function toCalendarItemRelationOutUnsafe(row: typeof calendarItemRelation.$inferSelect): unknown {
+function toCalendarItemRelationOutUnsafe(
+  row: typeof calendarItemRelation.$inferSelect,
+  ids?: { readonly sourceItemId?: string; readonly targetItemId?: string },
+): unknown {
   return {
-    sourceItemId: row.sourceItemId,
-    targetItemId: row.targetItemId,
+    sourceItemId: ids?.sourceItemId ?? row.sourceItemId,
+    targetItemId: ids?.targetItemId ?? row.targetItemId,
     role: row.role,
     createdByUserId: row.createdByUserId,
     createdAt: row.createdAt.toISOString(),
@@ -64,25 +68,19 @@ export const calendarItemRelationRoutes = new Hono<AppEnv>()
     zJson(CalendarItemRelationCreate),
     async (c) => {
       const userId = requireUserId(c);
-      const { id: sourceItemId } = c.req.valid('param');
-      const { targetItemId, role: relationRole } = c.req.valid('json');
+      const { id: requestedSourceItemId } = c.req.valid('param');
+      const { targetItemId: requestedTargetItemId, role: relationRole } = c.req.valid('json');
+      const [sourceSet, targetSet] = await Promise.all([
+        resolveCanonicalCalendarItemSet(db, { userId, itemId: requestedSourceItemId }),
+        resolveCanonicalCalendarItemSet(db, { userId, itemId: requestedTargetItemId }),
+      ]);
+      if (!sourceSet || !targetSet) throw new NotFoundError('Calendar item not found');
+      const sourceItemId = sourceSet.canonicalItemId;
+      const targetItemId = targetSet.canonicalItemId;
       if (sourceItemId === targetItemId) {
         throw new ValidationError([
           { path: ['targetItemId'], message: 'A calendar item cannot relate to itself' },
         ]);
-      }
-
-      const itemRows = await db
-        .select({ id: calendarItem.id })
-        .from(calendarItem)
-        .where(
-          and(
-            eq(calendarItem.userId, userId),
-            inArray(calendarItem.id, [sourceItemId, targetItemId]),
-          ),
-        );
-      if (new Set(itemRows.map((row) => row.id)).size !== 2) {
-        throw new NotFoundError('Calendar item not found');
       }
 
       const existing = await db
@@ -90,8 +88,8 @@ export const calendarItemRelationRoutes = new Hono<AppEnv>()
         .from(calendarItemRelation)
         .where(
           and(
-            eq(calendarItemRelation.sourceItemId, sourceItemId),
-            eq(calendarItemRelation.targetItemId, targetItemId),
+            inArray(calendarItemRelation.sourceItemId, [...sourceSet.memberItemIds]),
+            inArray(calendarItemRelation.targetItemId, [...targetSet.memberItemIds]),
           ),
         )
         .limit(1);
@@ -125,16 +123,17 @@ export const calendarItemRelationRoutes = new Hono<AppEnv>()
     async (c) => {
       const userId = requireUserId(c);
       const { id } = c.req.valid('param');
-      const owned = await db
-        .select({ id: calendarItem.id })
-        .from(calendarItem)
-        .where(and(eq(calendarItem.id, id), eq(calendarItem.userId, userId)))
-        .limit(1);
-      if (!owned[0]) throw new NotFoundError('Calendar item not found');
-      const rows = await db
+      const sourceSet = await resolveCanonicalCalendarItemSet(db, { userId, itemId: id });
+      if (!sourceSet) throw new NotFoundError('Calendar item not found');
+      const physicalRows = await db
         .select()
         .from(calendarItemRelation)
-        .where(eq(calendarItemRelation.sourceItemId, id));
+        .where(inArray(calendarItemRelation.sourceItemId, [...sourceSet.memberItemIds]));
+      const rows = [
+        ...new Map(
+          physicalRows.map((row) => [`${row.targetItemId}\0${row.role}`, row] as const),
+        ).values(),
+      ];
       const targets =
         rows.length === 0
           ? []
@@ -158,7 +157,9 @@ export const calendarItemRelationRoutes = new Hono<AppEnv>()
         // with the single-relation POST/DELETE responses below, which parse the one row they
         // return and correctly throw if it's invalid.
         items: rows.flatMap((row) => {
-          const relation = CalendarItemRelationOut.safeParse(toCalendarItemRelationOutUnsafe(row));
+          const relation = CalendarItemRelationOut.safeParse(
+            toCalendarItemRelationOutUnsafe(row, { sourceItemId: sourceSet.canonicalItemId }),
+          );
           if (!relation.success) return [];
           const target = targetById.get(row.targetItemId);
           if (!target) return [relation.data];
@@ -181,17 +182,13 @@ export const calendarItemRelationRoutes = new Hono<AppEnv>()
     zParam(itemRelationParam),
     async (c) => {
       const userId = requireUserId(c);
-      const { id: sourceItemId, relatedItemId: targetItemId } = c.req.valid('param');
-      const itemRows = await db
-        .select({ id: calendarItem.id })
-        .from(calendarItem)
-        .where(
-          and(
-            eq(calendarItem.userId, userId),
-            inArray(calendarItem.id, [sourceItemId, targetItemId]),
-          ),
-        );
-      if (new Set(itemRows.map((row) => row.id)).size !== 2) {
+      const { id: requestedSourceItemId, relatedItemId: requestedTargetItemId } =
+        c.req.valid('param');
+      const [sourceSet, targetSet] = await Promise.all([
+        resolveCanonicalCalendarItemSet(db, { userId, itemId: requestedSourceItemId }),
+        resolveCanonicalCalendarItemSet(db, { userId, itemId: requestedTargetItemId }),
+      ]);
+      if (!sourceSet || !targetSet) {
         throw new NotFoundError('Calendar item relationship not found');
       }
 
@@ -199,13 +196,22 @@ export const calendarItemRelationRoutes = new Hono<AppEnv>()
         .delete(calendarItemRelation)
         .where(
           and(
-            eq(calendarItemRelation.sourceItemId, sourceItemId),
-            eq(calendarItemRelation.targetItemId, targetItemId),
+            inArray(calendarItemRelation.sourceItemId, [...sourceSet.memberItemIds]),
+            inArray(calendarItemRelation.targetItemId, [...targetSet.memberItemIds]),
           ),
         )
         .returning();
       const deleted = rows[0];
       if (!deleted) throw new NotFoundError('Calendar item relationship not found');
-      return ok(c, CalendarItemRelationOut, toCalendarItemRelationOut(deleted));
+      return ok(
+        c,
+        CalendarItemRelationOut,
+        CalendarItemRelationOut.parse(
+          toCalendarItemRelationOutUnsafe(deleted, {
+            sourceItemId: sourceSet.canonicalItemId,
+            targetItemId: targetSet.canonicalItemId,
+          }),
+        ),
+      );
     },
   );

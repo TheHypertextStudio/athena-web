@@ -11,7 +11,9 @@ import {
   appWithSession,
   fakeSession,
   getDb,
+  one,
   seedBaseOrg,
+  seedGoogleAccount,
   seedUserWithHub,
 } from '../support/routes-harness';
 
@@ -152,6 +154,104 @@ describe('calendar item relationships', () => {
         })
       ).status,
     ).toBe(404);
+  });
+
+  it('unions relations from equivalent event copies onto the canonical item', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'CanonicalRelationOwner');
+    const externalAccountId = `canonical-${Math.random().toString(36).slice(2)}`;
+    await seedGoogleAccount(schema.db, schema, userId, externalAccountId);
+    const connection = one(
+      await schema.db
+        .insert(schema.calendarConnection)
+        .values({ userId, provider: 'google', externalAccountId })
+        .returning({ id: schema.calendarConnection.id }),
+    );
+    const [sharedLayer, ownedLayer] = await schema.db
+      .insert(schema.calendarLayer)
+      .values([
+        {
+          userId,
+          connectionId: connection.id,
+          provider: 'google',
+          sourceKind: 'provider_calendar',
+          externalLayerId: 'shared-copy',
+          sourceIdentityNamespace: 'google:calendar',
+          sourceIdentityValue: 'personal@example.test',
+          sourceRelationship: 'shared',
+          title: 'Personal from work',
+        },
+        {
+          userId,
+          connectionId: connection.id,
+          provider: 'google',
+          sourceKind: 'provider_calendar',
+          externalLayerId: 'owned-copy',
+          sourceIdentityNamespace: 'google:calendar',
+          sourceIdentityValue: 'personal@example.test',
+          sourceRelationship: 'owned',
+          title: 'Personal',
+        },
+      ])
+      .returning({ id: schema.calendarLayer.id });
+    if (!sharedLayer || !ownedLayer) throw new Error('calendar layers were not created');
+    const [sharedItem, ownedItem] = await schema.db
+      .insert(schema.calendarItem)
+      .values([
+        {
+          userId,
+          layerId: sharedLayer.id,
+          connectionId: connection.id,
+          kind: 'provider_event',
+          provider: 'google',
+          externalCalendarId: 'shared-copy',
+          externalEventId: 'shared-event',
+          eventIdentityNamespace: 'google:icaluid',
+          eventIdentityValue: 'same-event@example.test',
+          occurrenceIdentity: '2026-09-08T18:00:00.000Z',
+          title: 'Planning review',
+          startsAt: new Date('2026-09-08T18:00:00.000Z'),
+          endsAt: new Date('2026-09-08T19:00:00.000Z'),
+        },
+        {
+          userId,
+          layerId: ownedLayer.id,
+          connectionId: connection.id,
+          kind: 'provider_event',
+          provider: 'google',
+          externalCalendarId: 'owned-copy',
+          externalEventId: 'owned-event',
+          eventIdentityNamespace: 'google:icaluid',
+          eventIdentityValue: 'same-event@example.test',
+          occurrenceIdentity: '2026-09-08T18:00:00.000Z',
+          title: 'Planning review',
+          startsAt: new Date('2026-09-08T18:00:00.000Z'),
+          endsAt: new Date('2026-09-08T19:00:00.000Z'),
+        },
+      ])
+      .returning({ id: schema.calendarItem.id });
+    if (!sharedItem || !ownedItem) throw new Error('calendar items were not created');
+    const app = appWithSession(calendarRouter, fakeSession(userId));
+    const target = await createItem(app, 'Contained preparation');
+    await schema.db.insert(schema.calendarItemRelation).values({
+      sourceItemId: sharedItem.id,
+      targetItemId: target.id,
+      role: 'contained',
+      createdByUserId: userId,
+    });
+
+    const listed = await body<{ items: CalendarItemRelationOut[] }>(
+      await app.request(`/items/${ownedItem.id}/relations`),
+    );
+
+    expect(listed.items).toEqual([
+      expect.objectContaining({
+        sourceItemId: ownedItem.id,
+        targetItemId: target.id,
+        targetTitle: 'Contained preparation',
+        role: 'contained',
+      }),
+    ]);
   });
 });
 

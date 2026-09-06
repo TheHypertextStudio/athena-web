@@ -350,6 +350,40 @@ export async function readItemDetail(
   return findCanonicalItem(canonicalItems, input.itemId) ?? toCanonicalItem(row, linkedTasksByItem);
 }
 
+/** Resolve one item id to its canonical item and every equivalent active provider copy. */
+export async function resolveCanonicalCalendarItemSet(
+  db: Database,
+  input: { userId: string; itemId: string },
+): Promise<{ canonicalItemId: string; memberItemIds: readonly string[] } | null> {
+  const canonical = await readItemDetail(db, input);
+  if (!canonical) return null;
+  if (!canonical.eventIdentity) {
+    return { canonicalItemId: canonical.id, memberItemIds: [canonical.id] };
+  }
+  const occurrenceCondition =
+    canonical.occurrenceIdentity === null || canonical.occurrenceIdentity === undefined
+      ? isNull(calendarItem.occurrenceIdentity)
+      : eq(calendarItem.occurrenceIdentity, canonical.occurrenceIdentity);
+  const rows = await db
+    .select({ id: calendarItem.id })
+    .from(calendarItem)
+    .innerJoin(calendarLayer, eq(calendarLayer.id, calendarItem.layerId))
+    .where(
+      and(
+        eq(calendarItem.userId, input.userId),
+        eq(calendarItem.eventIdentityNamespace, canonical.eventIdentity.namespace),
+        eq(calendarItem.eventIdentityValue, canonical.eventIdentity.value),
+        occurrenceCondition,
+        isNull(calendarItem.archivedAt),
+        isNull(calendarLayer.removedAt),
+      ),
+    );
+  return {
+    canonicalItemId: canonical.id,
+    memberItemIds: rows.map((row) => row.id),
+  };
+}
+
 interface JoinedCalendarItemRow {
   item: CalendarItemRow;
   layer: typeof calendarLayer.$inferSelect;

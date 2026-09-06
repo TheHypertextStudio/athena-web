@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import type { VocabularySkin } from '@docket/work/vocabulary';
-import { render, renderHook, screen } from '@testing-library/react';
+import { fireEvent, render, renderHook, screen } from '@testing-library/react';
 import * as React from 'react';
 import { describe, expect, it } from 'vitest';
 
@@ -9,6 +9,7 @@ import { useVocabulary, VocabularyProvider } from '../../../src/hooks/useVocabul
 import { AppShell } from '../../../src/components/shell/AppShell';
 import { ContextProvider } from '../../../src/components/shell/ContextProvider';
 import { Sidebar } from '../../../src/components/shell/Sidebar';
+import { useShellSidebar } from '../../../src/components/shell/ShellSidebarContext';
 import type { Workspace } from '../../../src/components/shell/workspaces';
 
 const ACME: Workspace = { id: 'ORG00000000000000000000001', name: 'Acme Co' };
@@ -55,6 +56,76 @@ describe('AppShell + Sidebar', () => {
     expect(screen.getByRole('button', { name: /Workspace: Acme Co/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Retainers' })).toBeInTheDocument();
     expect(screen.getByText('Main content')).toBeInTheDocument();
+  });
+});
+
+describe('AppShell compact requests', () => {
+  function CompactWhileMounted(): React.JSX.Element {
+    const { requestCompact } = useShellSidebar();
+    React.useEffect(() => requestCompact(), [requestCompact]);
+    return <div>Canvas content</div>;
+  }
+
+  function renderShell(child: React.ReactNode): ReturnType<typeof render> {
+    return render(
+      <ContextProvider initialContext={ACME.id}>
+        <VocabularyProvider skin={AGENCY_SKIN}>
+          <AppShell
+            sidebar={
+              <Sidebar
+                workspaces={MOCK_WORKSPACES}
+                hrefForHome={(key) => `/${key}`}
+                hrefForWorkspace={(orgId, key) => `/orgs/${orgId}/${key}`}
+                renderLink={renderLink}
+                onSelectWorkspace={() => undefined}
+                onCreateWorkspace={() => undefined}
+                onOpenSearch={() => undefined}
+              />
+            }
+          >
+            {child}
+          </AppShell>
+        </VocabularyProvider>
+      </ContextProvider>,
+    );
+  }
+
+  it('shows the icon rail while a surface asks for room, without saving that choice', () => {
+    window.localStorage.setItem('docket.sidebar.collapsed', '0');
+    const view = renderShell(<CompactWhileMounted />);
+    expect(screen.getByRole('button', { name: 'Expand navigation' })).toBeInTheDocument();
+    expect(window.localStorage.getItem('docket.sidebar.collapsed')).toBe('0');
+    // Releasing the request (the surface unmounting) hands the labelled sidebar back.
+    view.rerender(
+      <ContextProvider initialContext={ACME.id}>
+        <VocabularyProvider skin={AGENCY_SKIN}>
+          <AppShell
+            sidebar={
+              <Sidebar
+                workspaces={MOCK_WORKSPACES}
+                hrefForHome={(key) => `/${key}`}
+                hrefForWorkspace={(orgId, key) => `/orgs/${orgId}/${key}`}
+                renderLink={renderLink}
+                onSelectWorkspace={() => undefined}
+                onCreateWorkspace={() => undefined}
+                onOpenSearch={() => undefined}
+              />
+            }
+          >
+            <div>Plain content</div>
+          </AppShell>
+        </VocabularyProvider>
+      </ContextProvider>,
+    );
+    expect(screen.getByRole('button', { name: 'Collapse navigation' })).toBeInTheDocument();
+  });
+
+  it('lets the viewer expand over a request, and still saves nothing', () => {
+    window.localStorage.setItem('docket.sidebar.collapsed', '0');
+    renderShell(<CompactWhileMounted />);
+    fireEvent.click(screen.getByRole('button', { name: 'Expand navigation' }));
+    expect(screen.getByRole('button', { name: 'Collapse navigation' })).toBeInTheDocument();
+    expect(window.localStorage.getItem('docket.sidebar.collapsed')).toBe('0');
   });
 });
 

@@ -294,6 +294,37 @@ function readSidebarCollapsed(): boolean {
   return window.innerWidth < SHELL_SIDEBAR_EXPAND_MIN_PX;
 }
 
+/**
+ * Surfaces that need the room (a canvas beside an open panel) ask for the icon rail while they are
+ * mounted. The count is how many are asking; the override is the viewer expanding the sidebar
+ * anyway, which stands until every request is released.
+ */
+function useSidebarCompactRequests(): {
+  readonly requested: boolean;
+  readonly request: () => () => void;
+  readonly override: () => void;
+} {
+  const [count, setCount] = React.useState(0);
+  const [overridden, setOverridden] = React.useState(false);
+  const request = React.useCallback((): (() => void) => {
+    setCount((current) => current + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      setCount((current) => {
+        const next = Math.max(0, current - 1);
+        if (next === 0) setOverridden(false);
+        return next;
+      });
+    };
+  }, []);
+  const override = React.useCallback(() => {
+    setOverridden(true);
+  }, []);
+  return { requested: count > 0 && !overridden, request, override };
+}
+
 /** Persist a rail-state value. Storage failures are absorbed by {@link writeStoredValue}. */
 function writeRailState(key: string, value: string): void {
   writeStoredValue(key, value);
@@ -435,6 +466,8 @@ export function AppShell({
   // Expanded on the server and on the first client paint, so the markup matches; the mount effect
   // below applies the viewer's choice (or the width default) once hydration is safe.
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+  const compact = useSidebarCompactRequests();
+  const compactRequested = compact.requested;
   const restoreSidebarToggleFocus = React.useRef(false);
   const railCollapsed = rail.collapsed;
   // A node that happens to render `null` cannot reserve space for its sibling rail. Hosts must
@@ -451,6 +484,12 @@ export function AppShell({
     restoreSidebarToggleFocus.current =
       document.activeElement instanceof HTMLElement &&
       document.activeElement.dataset['shellSidebarToggle'] === 'true';
+    if (compactRequested) {
+      // Expanding over a surface's request is the viewer's call for as long as that surface is
+      // open; it says nothing about what they want everywhere else, so nothing is saved.
+      startNavigationTransition(compact.override);
+      return;
+    }
     startNavigationTransition(() => {
       setSidebarCollapsed((current) => {
         const next = !current;
@@ -458,7 +497,8 @@ export function AppShell({
         return next;
       });
     });
-  }, []);
+  }, [compact.override, compactRequested]);
+  const requestCompact = compact.request;
 
   React.useLayoutEffect(() => {
     if (!restoreSidebarToggleFocus.current) return;
@@ -467,8 +507,12 @@ export function AppShell({
   }, [sidebarCollapsed]);
 
   const sidebarState = React.useMemo(
-    () => ({ collapsed: sidebarCollapsed, onToggle: toggleSidebar }),
-    [sidebarCollapsed, toggleSidebar],
+    () => ({
+      collapsed: sidebarCollapsed || compactRequested,
+      onToggle: toggleSidebar,
+      requestCompact,
+    }),
+    [compactRequested, requestCompact, sidebarCollapsed, toggleSidebar],
   );
 
   React.useEffect(() => {
@@ -704,7 +748,7 @@ export function AppShell({
               rebinding && 'animate-org-rebind',
             )}
           >
-            {children}
+            <ShellSidebarProvider value={sidebarState}>{children}</ShellSidebarProvider>
           </main>
           <div
             ref={setOverlayHost}

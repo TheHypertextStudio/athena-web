@@ -118,6 +118,12 @@ so the card shows the name as it forms. Task rows carry no xyflow `extent`: a ro
 leave its container for a drop on another container to re-home it, and a drop that changes nothing
 is undone by writing the laid-out positions back (`snapToLayout`), which Re-layout also does.
 
+The route asks the shell for its icon rail while a plan is open on any window under 1920px
+(`useShellSidebar().requestCompact`): a plan is read beside the Athena rail and, once something is
+selected, beside the docked inspector, and on a 1440px window the labelled sidebar left that board
+a 560px strip. The request is scoped to the route, never touches the viewer's saved sidebar choice,
+and yields to the viewer expanding the sidebar for as long as the plan is open.
+
 An entry point that wants the conversation open on arrival navigates with `?athena=start`; the
 route seeds the rail's composer with an opening line once the plan has loaded and drops the flag,
 because the panel provider clears any launch draft on navigation.

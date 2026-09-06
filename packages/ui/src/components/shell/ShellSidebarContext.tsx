@@ -24,11 +24,23 @@ export interface ShellSidebarState {
   readonly collapsed: boolean;
   /** Toggle between the icon rail and the labelled column. */
   readonly onToggle: () => void;
+  /**
+   * Ask for the icon rail while a surface needs the room — a canvas beside an open panel, say.
+   *
+   * @remarks
+   * The request never touches the viewer's saved choice: it holds the rail compact only while
+   * the returned release has not been called, and the toggle still wins — a viewer who expands
+   * the sidebar while a request is active keeps it expanded until the request is released.
+   *
+   * @returns a release that withdraws the request; call it when the surface unmounts.
+   */
+  readonly requestCompact: () => () => void;
 }
 
 const ShellSidebarContext = React.createContext<ShellSidebarState>({
   collapsed: false,
   onToggle: () => undefined,
+  requestCompact: () => () => undefined,
 });
 
 /** Provider wrapping the sidebar render slots with the shell's collapse state. */

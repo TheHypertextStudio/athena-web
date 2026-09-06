@@ -20,7 +20,13 @@ function renderRail(
 ): void {
   render(
     <ContextProvider initialContext={ACME.id}>
-      <ShellSidebarProvider value={{ collapsed: true, onToggle: () => undefined }}>
+      <ShellSidebarProvider
+        value={{
+          collapsed: true,
+          onToggle: () => undefined,
+          requestCompact: () => () => undefined,
+        }}
+      >
         <Sidebar
           workspaces={[ACME]}
           activeHomeKey="today"

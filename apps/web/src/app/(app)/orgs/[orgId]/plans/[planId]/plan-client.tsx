@@ -12,7 +12,7 @@
  * Which revisions are the person's own is tracked here so the panel can tell a local edit from
  * one Athena made: only the latter earns the enter motion and the "Athena updated" pill.
  */
-import { AppBar, EmptyState } from '@docket/ui/components';
+import { AppBar, EmptyState, useShellSidebar } from '@docket/ui/components';
 import { ChevronLeft, Sparkles, Workflow } from '@docket/ui/icons';
 import {
   Button,
@@ -43,6 +43,16 @@ const OPTION_KINDS = ['actors', 'initiatives'] as const;
 
 /** The width at which the shell docks the rail beside main content instead of over it. */
 const RAIL_BESIDE_CANVAS_QUERY = '(min-width: 1024px)';
+
+/**
+ * Below this window width the route asks the shell for its icon rail while the plan is open.
+ *
+ * @remarks
+ * inspector. On a 1440px window the labelled sidebar leaves that board a 560px strip; the icon
+ * rail gives it 200px back. The request is scoped to this route and never touches the viewer's
+ * saved sidebar choice.
+ */
+const COMPACT_SIDEBAR_BELOW_PX = 1920;
 
 /**
  * The query flag an entry point sets to have the rail open with an opening line on arrival.
@@ -107,6 +117,11 @@ export default function PlanClient(): JSX.Element {
     params: { orgId, planId },
   } = useTypedRoute('/orgs/[orgId]/plans/[planId]');
   const router = useAppRouter();
+  const { requestCompact } = useShellSidebar();
+  useEffect(() => {
+    if (window.innerWidth >= COMPACT_SIDEBAR_BELOW_PX) return undefined;
+    return requestCompact();
+  }, [requestCompact]);
   const { searchParams } = useAppLocation();
   const startRequested = searchParams.get(START_QUERY) === START_VALUE;
   const athena = useAthenaPanel();

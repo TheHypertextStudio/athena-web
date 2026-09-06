@@ -710,7 +710,9 @@ describe('Sidebar collapse', () => {
   function renderSidebar(collapsed: boolean, onToggle = () => undefined): void {
     render(
       <ContextProvider initialContext={ACME.id}>
-        <ShellSidebarProvider value={{ collapsed, onToggle }}>
+        <ShellSidebarProvider
+          value={{ collapsed, onToggle, requestCompact: () => () => undefined }}
+        >
           <Sidebar
             workspaces={WORKSPACES}
             {...sidebarHrefs()}
@@ -798,7 +800,13 @@ describe('Sidebar collapse', () => {
   it('ignores the collapse inside the mobile drawer', () => {
     render(
       <ContextProvider initialContext={ACME.id}>
-        <ShellSidebarProvider value={{ collapsed: true, onToggle: () => undefined }}>
+        <ShellSidebarProvider
+          value={{
+            collapsed: true,
+            onToggle: () => undefined,
+            requestCompact: () => () => undefined,
+          }}
+        >
           <ShellDrawerProvider dismiss={() => undefined}>
             <Sidebar
               workspaces={WORKSPACES}
@@ -817,7 +825,13 @@ describe('Sidebar collapse', () => {
   it('keeps the mobile navigation footer in the drawer scroll region', () => {
     render(
       <ContextProvider initialContext={ACME.id}>
-        <ShellSidebarProvider value={{ collapsed: false, onToggle: () => undefined }}>
+        <ShellSidebarProvider
+          value={{
+            collapsed: false,
+            onToggle: () => undefined,
+            requestCompact: () => () => undefined,
+          }}
+        >
           <ShellDrawerProvider dismiss={() => undefined}>
             <Sidebar
               workspaces={WORKSPACES}

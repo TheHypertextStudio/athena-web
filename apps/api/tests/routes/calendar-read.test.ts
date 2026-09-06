@@ -157,6 +157,33 @@ describe('readCalendarItemsInRange', () => {
     expect(layers.map((l) => l.id)).toEqual([selectedLayer.id]);
   });
 
+  it('excludes a provider source after soft removal', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'RemovedRangeUser');
+    const activeLayer = await seedLayer(schema, userId, { title: 'Active' });
+    const removedLayer = await seedLayer(schema, userId, {
+      title: 'Removed',
+      removedAt: new Date('2026-06-30T00:00:00.000Z'),
+    });
+    const activeItem = await seedItem(schema, userId, activeLayer.id, {
+      startsAt: new Date('2026-07-01T10:00:00.000Z'),
+      endsAt: new Date('2026-07-01T11:00:00.000Z'),
+    });
+    await seedItem(schema, userId, removedLayer.id, {
+      startsAt: new Date('2026-07-01T12:00:00.000Z'),
+      endsAt: new Date('2026-07-01T13:00:00.000Z'),
+    });
+
+    const result = await readCalendarItemsInRange(schema.db, {
+      userId,
+      start: rangeStart,
+      end: rangeEnd,
+    });
+
+    expect(result.items.map((item) => item.id)).toEqual([activeItem.id]);
+    expect(result.layers.map((layer) => layer.id)).toEqual([activeLayer.id]);
+  });
+
   it('applies the kind filter', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'RangeUser');
@@ -272,6 +299,20 @@ describe('readCalendarLayers', () => {
     const layers = await readCalendarLayers(schema.db, userId);
 
     expect(layers.map((l) => l.id).sort()).toEqual([selected.id, deselected.id].sort());
+  });
+
+  it('omits soft-removed provider layers', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'ActiveLayersUser');
+    const active = await seedLayer(schema, userId, { title: 'Active' });
+    await seedLayer(schema, userId, {
+      title: 'Removed',
+      removedAt: new Date('2026-06-30T00:00:00.000Z'),
+    });
+
+    const layers = await readCalendarLayers(schema.db, userId);
+
+    expect(layers.map((layer) => layer.id)).toEqual([active.id]);
   });
 });
 

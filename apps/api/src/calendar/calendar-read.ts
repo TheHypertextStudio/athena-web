@@ -163,7 +163,11 @@ export async function readCalendarItemsInRange(
   layers: z.input<typeof CalendarLayerOut>[];
   items: z.input<typeof CalendarItemOut>[];
 }> {
-  const layerFilters = [eq(calendarLayer.userId, input.userId), eq(calendarLayer.selected, true)];
+  const layerFilters = [
+    eq(calendarLayer.userId, input.userId),
+    eq(calendarLayer.selected, true),
+    isNull(calendarLayer.removedAt),
+  ];
   if (input.layerIds !== undefined && input.layerIds.length > 0) {
     layerFilters.push(inArray(calendarLayer.id, [...input.layerIds]));
   }
@@ -173,7 +177,11 @@ export async function readCalendarItemsInRange(
     .where(and(...layerFilters))
     .orderBy(asc(calendarLayer.title));
 
-  const itemFilters = [eq(calendarItem.userId, input.userId), eq(calendarLayer.selected, true)];
+  const itemFilters = [
+    eq(calendarItem.userId, input.userId),
+    eq(calendarLayer.selected, true),
+    isNull(calendarLayer.removedAt),
+  ];
   if (input.layerIds !== undefined && input.layerIds.length > 0) {
     itemFilters.push(inArray(calendarItem.layerId, [...input.layerIds]));
   }
@@ -247,7 +255,7 @@ export async function readCalendarLayers(
   const rows = await db
     .select()
     .from(calendarLayer)
-    .where(eq(calendarLayer.userId, userId))
+    .where(and(eq(calendarLayer.userId, userId), isNull(calendarLayer.removedAt)))
     .orderBy(asc(calendarLayer.title));
   return rows.map(toCalendarLayerOut);
 }
@@ -280,6 +288,7 @@ export async function loadOwnedCalendarItem(
         eq(calendarItem.id, itemId),
         eq(calendarItem.userId, userId),
         isNull(calendarItem.archivedAt),
+        isNull(calendarLayer.removedAt),
       ),
     )
     .limit(1);
@@ -310,6 +319,7 @@ export async function readItemDetail(
         eq(calendarItem.id, input.itemId),
         eq(calendarItem.userId, input.userId),
         isNull(calendarItem.archivedAt),
+        isNull(calendarLayer.removedAt),
       ),
     )
     .limit(1);
@@ -362,6 +372,7 @@ async function readEquivalentItemRows(
         eq(calendarItem.eventIdentityValue, item.eventIdentityValue),
         occurrenceCondition,
         isNull(calendarItem.archivedAt),
+        isNull(calendarLayer.removedAt),
       ),
     );
 }

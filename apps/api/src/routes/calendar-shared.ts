@@ -120,7 +120,7 @@ export async function readCalendarSettings(
     db
       .select()
       .from(calendarList)
-      .where(eq(calendarList.userId, userId))
+      .where(and(eq(calendarList.userId, userId), isNull(calendarList.removedAt)))
       .orderBy(asc(calendarList.title)),
     readCalendarLayers(db, userId),
   ]);

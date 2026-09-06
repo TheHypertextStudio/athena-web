@@ -508,6 +508,84 @@ async function upsertProviderLayer(
 }
 
 /**
+ * Soft-remove active provider layers absent from one complete provider list response.
+ *
+ * @remarks
+ * Provider disappearance never deletes Docket rows because items can carry task links,
+ * relations, and write history. A later list response revives the same list/layer ids in
+ * {@link upsertProviderLayer}. Watch state and the incremental cursor are cleared because
+ * neither remains valid after the provider removes the subscription.
+ */
+async function reconcileMissingProviderLayers(
+  db: Database,
+  input: {
+    readonly connectionId: string;
+    readonly credentials: CalendarProviderCredentials;
+    readonly adapter: CalendarProviderAdapter;
+    readonly reportedExternalLayerIds: ReadonlySet<string>;
+    readonly now: Date;
+  },
+): Promise<readonly string[]> {
+  const activeLayers = await db
+    .select({
+      id: calendarLayer.id,
+      externalLayerId: calendarLayer.externalLayerId,
+      watchChannelId: calendarLayer.watchChannelId,
+      watchResourceId: calendarLayer.watchResourceId,
+    })
+    .from(calendarLayer)
+    .where(
+      and(
+        eq(calendarLayer.connectionId, input.connectionId),
+        eq(calendarLayer.sourceKind, 'provider_calendar'),
+        isNull(calendarLayer.removedAt),
+      ),
+    );
+  const missing = activeLayers.filter(
+    (layer) =>
+      layer.externalLayerId !== null && !input.reportedExternalLayerIds.has(layer.externalLayerId),
+  );
+  const errors: string[] = [];
+  for (const layer of missing) {
+    const stopWatch = input.adapter.stopWatch;
+    if (
+      typeof stopWatch === 'function' &&
+      layer.watchChannelId !== null &&
+      layer.watchResourceId !== null
+    ) {
+      try {
+        await stopWatch({
+          credentials: input.credentials,
+          channelId: layer.watchChannelId,
+          resourceId: layer.watchResourceId,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Watch cleanup failed';
+        errors.push(`${layer.externalLayerId}: ${message}`);
+      }
+    }
+    await db
+      .update(calendarList)
+      .set({ removedAt: input.now })
+      .where(eq(calendarList.id, layer.id));
+    await db
+      .update(calendarLayer)
+      .set({
+        removedAt: input.now,
+        syncToken: null,
+        syncLeaseExpiresAt: null,
+        watchChannelId: null,
+        watchResourceId: null,
+        watchToken: null,
+        watchExpiresAt: null,
+        watchRegisteredAt: null,
+      })
+      .where(eq(calendarLayer.id, layer.id));
+  }
+  return errors;
+}
+
+/**
  * Archive both the legacy `calendar_event` row and the layered `calendar_item` row
  * (they share an id, per the Task 1 backfill) for one provider item — used both by an
  * inbound cancelled/tombstone pull and by the write outbox's applied delete.
@@ -845,6 +923,17 @@ export async function syncCalendarConnections(
         counts.connections += 1;
 
         const layerSnapshots = await mod.adapter.listLayers({ credentials });
+        counts.errors.push(
+          ...(await reconcileMissingProviderLayers(db, {
+            connectionId,
+            credentials,
+            adapter: mod.adapter,
+            reportedExternalLayerIds: new Set(
+              layerSnapshots.map((snapshot) => snapshot.externalLayerId),
+            ),
+            now,
+          })),
+        );
         for (const snapshot of layerSnapshots) {
           const layerRow = await upsertProviderLayer(db, {
             userId: opts.userId,
@@ -940,7 +1029,13 @@ export async function syncSingleLayer(
     .select({ layer: calendarLayer, connection: calendarConnection })
     .from(calendarLayer)
     .innerJoin(calendarConnection, eq(calendarConnection.id, calendarLayer.connectionId))
-    .where(and(eq(calendarLayer.id, opts.layerId), eq(calendarLayer.userId, opts.userId)))
+    .where(
+      and(
+        eq(calendarLayer.id, opts.layerId),
+        eq(calendarLayer.userId, opts.userId),
+        isNull(calendarLayer.removedAt),
+      ),
+    )
     .limit(1);
   const row = rows[0];
   if (row === undefined) return NOOP_LAYER_SYNC_RESULT;
@@ -1069,7 +1164,13 @@ export async function registerOrRenewWatches(
           watchRegisteredAt: calendarLayer.watchRegisteredAt,
         })
         .from(calendarLayer)
-        .where(and(eq(calendarLayer.connectionId, connectionId), eq(calendarLayer.selected, true)));
+        .where(
+          and(
+            eq(calendarLayer.connectionId, connectionId),
+            eq(calendarLayer.selected, true),
+            isNull(calendarLayer.removedAt),
+          ),
+        );
 
       for (const layer of layers) {
         if (layer.externalLayerId === null) continue;

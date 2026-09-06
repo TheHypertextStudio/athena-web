@@ -21,6 +21,7 @@ import {
   type CalendarPullResult,
   type CalendarWatchResult,
   type DiscoveredCalendarConnection,
+  type ProviderLayerSnapshot,
   type ProviderItemSnapshot,
 } from '../../src/routes/calendar-sync-engine';
 import { createDefaultCalendarSyncModules } from '../../src/routes/calendar-sync-modules';
@@ -64,6 +65,28 @@ async function seedGoogleAccount(
 /** One logged fetchJson call, for URL/param assertions. */
 interface FetchLogEntry {
   readonly url: string;
+}
+
+/** A provider-neutral layer fixture for sync lifecycle tests. */
+function fakeLayerSnapshot(overrides: Partial<ProviderLayerSnapshot> = {}): ProviderLayerSnapshot {
+  return {
+    externalLayerId: 'fake-layer',
+    sourceIdentity: { namespace: 'fake-calendar', value: 'fake-layer' },
+    sourceRelationship: 'owned',
+    sourceManagement: {
+      canRemoveSubscription: false,
+      requiresIncrementalConsent: false,
+    },
+    suggestedGroupKey: null,
+    title: 'Fake Layer',
+    description: null,
+    timezone: null,
+    color: null,
+    accessRole: 'owner',
+    primary: true,
+    editableCore: true,
+    ...overrides,
+  };
 }
 
 /** Build an injectable {@link GoogleFetchJson} dispatching on URL shape, logging every call. */
@@ -116,9 +139,13 @@ async function findLayer(
 function createFakeSyncModule(): {
   module: CalendarProviderSyncModule;
   pullCalls: { cursor: string | null }[];
+  stopWatchCalls: { channelId: string; resourceId: string }[];
   setPullImpl: (impl: (cursor: string | null) => Promise<CalendarPullResult>) => void;
+  setLayers: (layers: readonly ProviderLayerSnapshot[]) => void;
 } {
   const pullCalls: { cursor: string | null }[] = [];
+  const stopWatchCalls: { channelId: string; resourceId: string }[] = [];
+  let layers: readonly ProviderLayerSnapshot[] = [fakeLayerSnapshot()];
   let pullImpl: (cursor: string | null) => Promise<CalendarPullResult> = async (cursor) => ({
     items: [],
     nextCursor: cursor,
@@ -128,25 +155,7 @@ function createFakeSyncModule(): {
   const adapter: CalendarProviderAdapter = {
     provider: 'google',
     async listLayers() {
-      return [
-        {
-          externalLayerId: 'fake-layer',
-          sourceIdentity: { namespace: 'fake-calendar', value: 'fake-layer' },
-          sourceRelationship: 'owned',
-          sourceManagement: {
-            canRemoveSubscription: false,
-            requiresIncrementalConsent: false,
-          },
-          suggestedGroupKey: null,
-          title: 'Fake Layer',
-          description: null,
-          timezone: null,
-          color: null,
-          accessRole: 'owner',
-          primary: true,
-          editableCore: true,
-        },
-      ];
+      return [...layers];
     },
     async pullChanges(input) {
       pullCalls.push({ cursor: input.cursor });
@@ -159,6 +168,9 @@ function createFakeSyncModule(): {
     },
     deleteItem() {
       throw new Error('fake adapter: deleteItem not exercised by provider-neutrality tests');
+    },
+    async stopWatch(input) {
+      stopWatchCalls.push({ channelId: input.channelId, resourceId: input.resourceId });
     },
   };
   const discoverConnections: CalendarProviderSyncModule['discoverConnections'] = async () => [
@@ -181,7 +193,13 @@ function createFakeSyncModule(): {
       capturedAt: NOW.toISOString(),
     }),
   };
-  return { module, pullCalls, setPullImpl: (impl) => (pullImpl = impl) };
+  return {
+    module,
+    pullCalls,
+    stopWatchCalls,
+    setPullImpl: (impl) => (pullImpl = impl),
+    setLayers: (nextLayers) => (layers = nextLayers),
+  };
 }
 
 /** A fixture provider item for {@link createFakeSyncModule}'s adapter. */
@@ -802,6 +820,73 @@ describe('calendar sync engine — provider neutrality (fake adapter)', () => {
         ),
     );
     expect(item.title).toBe('Fake Event (recovered)');
+  });
+
+  it('soft-removes a missing source, stops its watch, and revives the same rows', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'SoftRemovedSourceUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
+    const { module, setLayers, setPullImpl, stopWatchCalls } = createFakeSyncModule();
+    setPullImpl(async () => ({
+      items: [fakeItem()],
+      nextCursor: 'v1',
+      cursorInvalid: false,
+      full: true,
+    }));
+    await syncCalendarConnections(schema.db, { userId, now: NOW, adapters: { google: module } });
+    const layer = await findLayer(schema, userId, 'fake-layer');
+    const item = one(
+      await schema.db
+        .select({ id: schema.calendarItem.id })
+        .from(schema.calendarItem)
+        .where(eq(schema.calendarItem.layerId, layer.id)),
+    );
+    await schema.db
+      .update(schema.calendarLayer)
+      .set({ watchChannelId: 'channel-1', watchResourceId: 'resource-1' })
+      .where(eq(schema.calendarLayer.id, layer.id));
+
+    setLayers([]);
+    await syncCalendarConnections(schema.db, {
+      userId,
+      now: new Date(NOW.getTime() + 1000),
+      adapters: { google: module },
+    });
+
+    const removedLayer = await findLayer(schema, userId, 'fake-layer');
+    const removedList = one(
+      await schema.db
+        .select()
+        .from(schema.calendarList)
+        .where(eq(schema.calendarList.id, layer.id)),
+    );
+    expect(removedLayer).toMatchObject({
+      id: layer.id,
+      removedAt: new Date(NOW.getTime() + 1000),
+      watchChannelId: null,
+      watchResourceId: null,
+    });
+    expect(removedList.removedAt).toEqual(new Date(NOW.getTime() + 1000));
+    expect(stopWatchCalls).toEqual([{ channelId: 'channel-1', resourceId: 'resource-1' }]);
+    expect(
+      one(
+        await schema.db
+          .select({ id: schema.calendarItem.id })
+          .from(schema.calendarItem)
+          .where(eq(schema.calendarItem.id, item.id)),
+      ).id,
+    ).toBe(item.id);
+
+    setLayers([fakeLayerSnapshot()]);
+    await syncCalendarConnections(schema.db, {
+      userId,
+      now: new Date(NOW.getTime() + 2000),
+      adapters: { google: module },
+    });
+    expect(await findLayer(schema, userId, 'fake-layer')).toMatchObject({
+      id: layer.id,
+      removedAt: null,
+    });
   });
 
   it('persists a Microsoft-shaped adapter identity without changing the shared engine', async () => {

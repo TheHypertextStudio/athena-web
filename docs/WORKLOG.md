@@ -1941,6 +1941,33 @@ at **zero** violations across the tree, so it enters the ratchet with no ledger 
   production migration, provider operation, or physical-device operation was performed here.
 
 ---
+### [ATHENA-PLAN-CANVAS-001] Design the interactive planning canvas
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-09-05
+- **Priority**: P1
+- **Description**: Let a person plan a large body of work by talking to Athena while the graph
+  canvas fills in beside the conversation. Athena drafts an initiative, its projects, and their
+  tasks into a durable personal plan draft; the person edits directly or through conversation and
+  confirms parts of the plan into real objects whenever the conversation settles them.
+- **Subtasks**:
+  - [x] Map the Athena rail, proposal system, `organize` tool, templates, and the shared canvas modules.
+  - [x] Settle durability, depth, confirmation semantics, direct editing, entry points, and surface form with the user.
+  - [x] Align the surface with the Task graph chrome, the swimlane container, and the ghost grammar.
+  - [x] Write the design specification.
+  - [x] Self-review the specification for placeholders, contradictions, and ambiguity.
+  - [ ] Obtain written-spec approval.
+  - [ ] Write the implementation plan.
+- **Files**:
+  - `docs/superpowers/specs/2026-09-05-athena-planning-canvas-design.md`
+  - `docs/WORKLOG.md`
+- **Blockers**: None.
+- **Notes**: The decision that shapes everything else is a private plan draft whose Athena edits
+  execute without approval, because the draft has no workspace consequence until a commit. The
+  approval engine gains one first-party annotation for that, and every workspace write, including
+  Athena's own `plan_commit`, stays gated. Initiative-to-project links are edges because the
+  relationship is many-to-many; project-to-task ownership is containment because a task has one
+  project.
 
 ### [DOCS-VERIFY-001] The documentation site is checked after every release
 

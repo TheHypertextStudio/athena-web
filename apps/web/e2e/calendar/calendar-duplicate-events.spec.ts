@@ -7,9 +7,8 @@
  * and the same shared meeting on the grid twice; the overlap machinery then correctly lays the two
  * copies side by side and the day reads as twice as busy as it is.
  *
- * This drives the real grid in a browser and asserts both halves of the fix: exactly **one** rendered
- * block for the duplicated event, and the folded-away copy still **discoverable** in that block's own
- * detail view. A collapse the reader cannot see through is not a fix, it is a lie about what synced.
+ * This drives the real grid in a browser and asserts that the web client trusts the API's canonical
+ * event projection. The UI renders one event and does not reintroduce provider-copy language.
  *
  * The negative case is asserted in the same run: two genuinely different events on the two accounts
  * stay two blocks, so a passing run cannot be explained by "the grid drew fewer things".
@@ -26,21 +25,17 @@ import {
 import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
 import { openScheduleItemDetail } from '../helpers/calendar-ui';
 import { expect, test } from '../helpers/fixtures';
-import { assertDefined } from '@docket/test-utils';
 
 const ANCHOR_DATE = '2026-07-13';
 const WORK_LAYER = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVA1');
 const PERSONAL_LAYER = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVA2');
-const WORK_COPY = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVD1');
 const PERSONAL_COPY = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVD2');
 const WORK_ONLY = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVD3');
 const PERSONAL_ONLY = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVD4');
 
 test.use({ timezoneId: 'UTC', viewport: { width: 1440, height: 900 } });
 
-test('renders one block for an event that synced from two accounts, and says where it came from', async ({
-  page,
-}) => {
+test('renders one canonical block for an event that synced from two accounts', async ({ page }) => {
   await page.clock.setFixedTime(`${ANCHOR_DATE}T17:00:00.000Z`);
   await signUpAndOnboard(page, 'DuplicateEvents');
 
@@ -63,26 +58,25 @@ test('renders one block for an event that synced from two accounts, and says whe
     color: '#b45309',
   });
 
-  /** The same meeting, invited at both addresses: one provider event id, two calendars. */
-  const sharedMeeting = (id: string, layerId: string) =>
-    makeCalendarItem({
-      id,
-      layerId,
-      kind: 'provider_event',
-      provider: 'google',
-      connectionId: CALENDAR_IDS.googleConnection,
-      externalEventId: 'evt-shared-9',
-      title: 'Quarterly planning',
-      startsAt: utcAt(ANCHOR_DATE, 10),
-      endsAt: utcAt(ANCHOR_DATE, 11),
-      permissions: { canEditCore: false, canDelete: false, readOnlyReason: 'provider_scope' },
-    });
+  const sharedMeeting = makeCalendarItem({
+    id: PERSONAL_COPY,
+    layerId: PERSONAL_LAYER,
+    kind: 'provider_event',
+    provider: 'google',
+    connectionId: CALENDAR_IDS.googleConnection,
+    externalEventId: 'evt-shared-9',
+    eventIdentity: { namespace: 'google:icaluid', value: 'quarterly-planning@example.test' },
+    occurrenceIdentity: utcAt(ANCHOR_DATE, 10),
+    title: 'Quarterly planning',
+    startsAt: utcAt(ANCHOR_DATE, 10),
+    endsAt: utcAt(ANCHOR_DATE, 11),
+    permissions: { canEditCore: false, canDelete: false, readOnlyReason: 'provider_scope' },
+  });
 
   const state = calendarRouteState({
     layers: [work, personal],
     items: [
-      sharedMeeting(WORK_COPY, WORK_LAYER),
-      sharedMeeting(PERSONAL_COPY, PERSONAL_LAYER),
+      sharedMeeting,
       // Two events that are genuinely different, one per account, so "fewer blocks" cannot pass
       // for "correct blocks".
       makeCalendarItem({
@@ -121,21 +115,7 @@ test('renders one block for an event that synced from two accounts, and says whe
   await expect(main.getByRole('button', { name: /^Standup/ })).toHaveCount(1);
   await expect(main.getByRole('button', { name: /^Dentist/ })).toHaveCount(1);
 
-  // The copy that was folded away is discoverable from the block that survived.
-  const survivor = (
-    await main
-      .locator('[data-schedule-item]')
-      .evaluateAll((nodes) =>
-        nodes
-          .map((node) => node.getAttribute('data-schedule-item'))
-          .filter((id): id is string => id !== null),
-      )
-  ).find((id) => id === WORK_COPY || id === PERSONAL_COPY);
-  expect(survivor, 'one copy of the duplicated meeting survived').toBeDefined();
-
-  const drawer = await openScheduleItemDetail(page, assertDefined(survivor));
-  await expect(drawer.getByRole('heading', { name: 'Also on' })).toBeVisible();
-  await expect(
-    drawer.getByText('This event also synced from one other calendar. It is drawn once here.'),
-  ).toBeVisible();
+  const drawer = await openScheduleItemDetail(page, PERSONAL_COPY);
+  await expect(drawer.getByRole('heading', { name: 'Quarterly planning' })).toBeVisible();
+  await expect(drawer.getByText(/also synced from|drawn once/i)).toHaveCount(0);
 });

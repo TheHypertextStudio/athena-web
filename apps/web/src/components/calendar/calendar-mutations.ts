@@ -16,7 +16,7 @@ export { useCreateNativeBlock } from './calendar-item-lifecycle-mutations';
 export { useUpdateCalendarItem, useUpdateCalendarItemById } from './calendar-item-update-mutations';
 export type { UpdateCalendarItemByIdVariables } from './calendar-item-update-mutations';
 export {
-  useUpdateLayerGroupVisibility,
+  useUpdateCalendarSourceGroupVisibility,
   useUpdateLayerVisibility,
 } from './calendar-layer-mutations';
 export {

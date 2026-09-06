@@ -11,8 +11,8 @@
  *
  * The trigger follows the same recipe as every other control in the row — leading glyph, label
  * revealed at `@2xl`, trailing chevron, and identical responsive height. The toolbar's trailing
- * slot pins its width, and the toolbar's `flex-nowrap` rule keeps the row intact. The panel body is unchanged:
- * {@link CalendarLayerPanel} still owns row anatomy, dedup, and the optimistic visibility toggle.
+ * slot pins its width, and the toolbar's `flex-nowrap` rule keeps the row intact.
+ * {@link CalendarLayerPanel} owns row anatomy and consumes the API's logical source groups.
  *
  * @see {@link CalendarLayersMenu}
  */

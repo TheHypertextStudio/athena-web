@@ -37,6 +37,8 @@ import type { SessionApprovalDecision } from '@docket/athena/agent-contract';
 import { and, asc, desc, eq } from 'drizzle-orm';
 
 import { assertProductCapability } from '../product-capability';
+import { activePlanForSession } from '../lib/plan-draft/store';
+import { planCounts } from '@docket/work/plan-draft';
 import { ConflictError, NotFoundError } from '../error';
 import { env } from '../env';
 import { internalUserContext } from '../mcp/internal-session';
@@ -51,7 +53,7 @@ import {
 import { classifyTool, decideUserOwnedToolExecution } from './approval-policy';
 import { assertHostedExecutionSurface } from './execution-surface';
 import { markProvenance } from './provenance';
-import { buildSystemPrompt } from './system-prompt';
+import { buildSystemPrompt, type ActivePlanContext } from './system-prompt';
 import {
   ASK_USER_TOOL,
   DOCKET_CONNECTION,
@@ -132,6 +134,18 @@ async function principalAthenaPreferences(session: SessionRow): Promise<{
   return {
     approvalMode: preferences.athena?.approvalMode ?? 'ask_before_acting',
     instructions: instructions && instructions.length > 0 ? instructions : null,
+  };
+}
+
+/** The plan this conversation is shaping on the canvas, as the system prompt describes it. */
+async function activePlanContext(sessionId: string): Promise<ActivePlanContext | null> {
+  const plan = await activePlanForSession(sessionId);
+  if (!plan) return null;
+  return {
+    id: plan.id,
+    title: plan.title,
+    revision: plan.revision,
+    counts: planCounts(plan.document),
   };
 }
 
@@ -524,6 +538,7 @@ async function driveSessionWithAdmission(
       personalApprovalMode: principalPreferences.approvalMode,
       personalInstructions: principalPreferences.instructions,
       guidance: agentRow.guidance,
+      activePlan: await activePlanContext(sessionId),
     });
 
     for (;;) {

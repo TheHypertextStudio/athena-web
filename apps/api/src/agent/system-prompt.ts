@@ -59,6 +59,45 @@ export interface SystemPromptInput {
   readonly personalInstructions: string | null;
   /** Operator guidance from the agent registration, when set. */
   readonly guidance: string | null;
+  /** The plan draft this conversation is shaping on the canvas, when one is open. */
+  readonly activePlan?: ActivePlanContext | null | undefined;
+}
+
+/** What the prompt says about the plan a session is currently shaping. */
+export interface ActivePlanContext {
+  readonly id: string;
+  readonly title: string;
+  readonly revision: number;
+  readonly counts: { readonly projects: number; readonly tasks: number; readonly draft: number };
+}
+
+/**
+ * How Athena plans on the canvas.
+ *
+ * @remarks
+ * Present in every session so Athena recognises initiative-sized asks and offers the canvas; the
+ * active-plan line below it is what tells her a plan is already open in this conversation.
+ */
+export const PLANNING_SYSTEM_RULE =
+  'Planning on the canvas: when the person describes initiative-sized work — a launch, a ' +
+  'campaign, a quarter’s goal, anything with several efforts inside it — call `plan_start` and ' +
+  'tell them in one sentence that you have opened a plan they can shape with you on the canvas. ' +
+  'While a plan is active: call `plan_read` at the start of every turn before you change it, ' +
+  'because they may have edited the canvas directly; write in batches through ONE `plan_draft` ' +
+  'call per turn so the canvas fills in together; when you first draft a node, pick the most ' +
+  'relevant template from the list `plan_start` returned and apply it in the same batch; ask ' +
+  'about one unit of work at a time, in plain words, and infer names and structure from what ' +
+  'they tell you rather than asking for a list; when they have settled a part, call ' +
+  '`plan_commit` for exactly that part and say what it will create.';
+
+/** The line naming the open plan, so Athena reads it before drafting. */
+export function activePlanLine(plan: ActivePlanContext): string {
+  const { projects, tasks, draft } = plan.counts;
+  return (
+    `Active plan: "${plan.title}" (id ${plan.id}, revision ${String(plan.revision)}; ` +
+    `${String(projects)} projects, ${String(tasks)} tasks, ${String(draft)} draft). ` +
+    'Read it before editing.'
+  );
 }
 
 /**
@@ -99,8 +138,13 @@ export function buildSystemPrompt(input: SystemPromptInput): string {
     '',
     PROVENANCE_SYSTEM_RULE,
     '',
+    PLANNING_SYSTEM_RULE,
+    '',
     'Finish with a short summary of what you did (or proposed) and why.',
   ];
+  if (input.activePlan) {
+    lines.push('', activePlanLine(input.activePlan));
+  }
   if (input.personalInstructions) {
     lines.push('', 'Personal instructions from the human principal:', input.personalInstructions);
   }

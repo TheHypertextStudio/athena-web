@@ -203,6 +203,17 @@ async function loadRootInitiative(input: CreatePlanInput): Promise<{ id: string;
   return row;
 }
 
+/** The newest active plan a conversation is shaping, if any, for the session's system prompt. */
+export async function activePlanForSession(sessionId: string): Promise<PlanDraftRow | null> {
+  const rows = await db
+    .select()
+    .from(planDraft)
+    .where(and(eq(planDraft.sessionId, sessionId), eq(planDraft.status, 'active')))
+    .orderBy(desc(planDraft.updatedAt))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 /** Attach the hosting Athena session to a plan that has none yet. */
 export async function attachPlanSession(
   row: PlanDraftRow,

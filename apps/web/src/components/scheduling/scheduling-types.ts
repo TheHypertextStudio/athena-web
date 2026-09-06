@@ -100,6 +100,15 @@ export interface ScheduleRegionSelection {
 export interface ScheduleItemOpen {
   readonly item: ScheduleItem;
   readonly lane: ScheduleLane;
+  /**
+   * The control the person activated, when the request came from one.
+   *
+   * @remarks
+   * An overlay that points at the block has to be told which block, and it cannot look one up: a
+   * multi-day all-day item renders a separate pill in every lane it spans, so its id matches more
+   * than one element. Absent when a consumer synthesizes the request itself.
+   */
+  readonly anchor?: HTMLElement | undefined;
 }
 
 /** A proposed item move. The consumer decides whether and how to persist it. */

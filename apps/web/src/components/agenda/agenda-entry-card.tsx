@@ -48,7 +48,7 @@ export interface AgendaEntryCardProps {
   /** How the card lays out (default `row`). */
   layout?: AgendaEntryLayout;
   /** Open a normalized calendar item in the shared workspace drawer. */
-  onOpenCalendarItem?: (itemId: string) => void;
+  onOpenCalendarItem?: (itemId: string, anchor: HTMLElement | null) => void;
 }
 
 /** The shared entry card, reshaped by `layout`, with a check-off and a link to the task. */
@@ -178,8 +178,9 @@ export default function AgendaEntryCard({
       ) : calendarItemId && onOpenCalendarItem ? (
         <button
           type="button"
-          onClick={() => {
-            onOpenCalendarItem(calendarItemId);
+          data-calendar-item-anchor={calendarItemId}
+          onClick={(event) => {
+            onOpenCalendarItem(calendarItemId, event.currentTarget);
           }}
           className={cn(
             'focus-visible:ring-ring flex min-w-0 flex-1 rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none',

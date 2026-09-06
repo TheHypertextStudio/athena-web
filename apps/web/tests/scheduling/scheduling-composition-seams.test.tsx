@@ -449,7 +449,9 @@ describe('SchedulingCanvas composition seams', () => {
 
       fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${source.title}`) }));
       expect(onOpenItem).toHaveBeenCalledOnce();
-      expect(onOpenItem).toHaveBeenCalledWith({ item: source, lane: sourceLane });
+      expect(onOpenItem).toHaveBeenCalledWith(
+        expect.objectContaining({ item: source, lane: sourceLane }),
+      );
     },
   );
 
@@ -470,6 +472,8 @@ describe('SchedulingCanvas composition seams', () => {
 
     fireEvent.click(screen.getByRole('button', { name: source.title }));
     expect(onOpenItem).toHaveBeenCalledOnce();
-    expect(onOpenItem).toHaveBeenCalledWith({ item: source, lane: sourceLane });
+    expect(onOpenItem).toHaveBeenCalledWith(
+      expect.objectContaining({ item: source, lane: sourceLane }),
+    );
   });
 });

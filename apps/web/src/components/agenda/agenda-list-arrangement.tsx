@@ -30,7 +30,7 @@ export function AgendaListArrangement({
 }: {
   readonly entries: readonly AgendaEntry[];
   readonly loading: boolean;
-  readonly onOpenCalendarItem: (itemId: string) => void;
+  readonly onOpenCalendarItem: (itemId: string, anchor: HTMLElement | null) => void;
 }): JSX.Element {
   const ordered = useMemo(() => chronological(entries), [entries]);
   return (

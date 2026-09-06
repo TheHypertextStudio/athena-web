@@ -35,7 +35,7 @@ export interface CalendarSchedulingSurfaceProps {
   }) => void;
   readonly onReachBoundary: (direction: 'previous' | 'next') => void;
   readonly onSelectRegion: (selection: CalendarCanvasRegionSelection) => void;
-  readonly onOpenItem: (itemId: string) => void;
+  readonly onOpenItem: (itemId: string, anchor: HTMLElement | null) => void;
   readonly onOpenSharedItem: (detail: SharedCalendarItemDetail) => void;
   /**
    * Receive a pinch / ctrl+wheel zoom intent as a multiplicative scale factor.

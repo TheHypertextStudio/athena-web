@@ -10,6 +10,11 @@ import { SHELL_DESKTOP_QUERY } from '@docket/ui/components';
 import { useMediaQuery } from '@docket/ui/hooks';
 
 import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
+import { CalendarItemPeekOverlay } from '@/components/calendar/item-peek/calendar-item-peek-overlay';
+import {
+  resolvePeekItem,
+  useCalendarItemSelection,
+} from '@/components/calendar/item-peek/use-calendar-item-selection';
 import CreateBlockForm, {
   type CalendarRegionSelection,
 } from '@/components/calendar/create-block-form';
@@ -38,26 +43,41 @@ const INLINE_UPDATE_FAILURE_COPY =
 
 /** Arranges the agenda for the active list/timeline view. */
 export default function AgendaCanvas(): JSX.Element {
-  const { displayTimezone, entries, loading, view } = useAgenda();
+  const { date, displayTimezone, entries, loading, view } = useAgenda();
   const router = useRouter();
-  const [openItemId, setOpenItemId] = useState<string | null>(null);
+  const openEvent = useCalendarItemSelection();
+  const { close: closeEvent } = openEvent;
+  // Both the day and the list/timeline morph destroy the element the peek is pointing at.
+  useEffect(() => {
+    closeEvent();
+  }, [date, view, closeEvent]);
+  const peekItem = resolvePeekItem(
+    openEvent.peekItemId,
+    (id) => entries.find((entry) => entry.calendarItem?.id === id)?.calendarItem,
+  );
   return (
     <>
       {view === 'list' ? (
         <AgendaListArrangement
           entries={entries}
           loading={loading}
-          onOpenCalendarItem={setOpenItemId}
+          onOpenCalendarItem={openEvent.open}
         />
       ) : (
-        <TimelineArrangement entries={entries} onOpenCalendarItem={setOpenItemId} />
+        <TimelineArrangement entries={entries} onOpenCalendarItem={openEvent.open} />
       )}
+      <CalendarItemPeekOverlay
+        item={peekItem}
+        displayTimezone={displayTimezone}
+        anchorRef={openEvent.anchorRef}
+        onOpenDetail={openEvent.escalate}
+        onClose={openEvent.close}
+        onDismissOutside={openEvent.noteDismissal}
+      />
       <CalendarItemDrawer
         displayTimezone={displayTimezone}
-        itemId={openItemId}
-        onClose={() => {
-          setOpenItemId(null);
-        }}
+        itemId={openEvent.detailItemId}
+        onClose={openEvent.close}
         onOpenTask={(organizationId, taskId) => {
           router.push(`/orgs/${organizationId}/tasks/${taskId}`);
         }}
@@ -72,7 +92,7 @@ function TimelineArrangement({
   onOpenCalendarItem,
 }: {
   readonly entries: readonly AgendaEntry[];
-  readonly onOpenCalendarItem: (itemId: string) => void;
+  readonly onOpenCalendarItem: (itemId: string, anchor: HTMLElement | null) => void;
 }): JSX.Element {
   const router = useRouter();
   const {
@@ -328,13 +348,13 @@ function TimelineArrangement({
               </Button>
             )
           }
-          onOpenItem={({ item }) => {
+          onOpenItem={({ item, anchor }) => {
             const entry = entryById.get(item.id);
             if (!entry) return;
             if (entry.taskId && entry.organizationId) {
               router.push(`/orgs/${entry.organizationId}/tasks/${entry.taskId}`);
             } else if (entry.calendarItem) {
-              onOpenCalendarItem(entry.calendarItem.id);
+              onOpenCalendarItem(entry.calendarItem.id, anchor ?? null);
             } else {
               router.push('/calendar');
             }

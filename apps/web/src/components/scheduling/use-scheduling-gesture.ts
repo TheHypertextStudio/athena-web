@@ -173,7 +173,7 @@ export function useSchedulingGesture(
       }
       suppressBodyClickRef.current = false;
       const current = optionsRef.current;
-      current.onOpenItem?.({ item: current.item, lane: current.lane });
+      current.onOpenItem?.({ item: current.item, lane: current.lane, anchor: event.currentTarget });
     },
     onMovePointerDown: (event) => {
       beginPointer('move', event);

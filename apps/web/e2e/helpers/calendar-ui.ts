@@ -23,6 +23,45 @@ export function scheduleItem(
   return { card, body: card.locator(`[data-schedule-item-body="${itemId}"]`) };
 }
 
+/** Locate an open event peek by the item it is about. */
+export function scheduleItemPeek(page: Page, itemId: string): Locator {
+  return page.locator(`[data-calendar-item-peek="${itemId}"]`);
+}
+
+/**
+ * Click a block and wait for the peek it now produces.
+ *
+ * @remarks
+ * Radix renders a popover as `role="dialog"`, so a bare `getByRole('dialog')` after a click can
+ * resolve either tier. Specs address the peek through this helper instead.
+ *
+ * @param page - The page under test.
+ * @param itemId - The calendar item to open.
+ * @returns the peek panel, once it is visible.
+ */
+export async function openScheduleItemPeek(page: Page, itemId: string): Promise<Locator> {
+  await scheduleItem(page, itemId).body.click();
+  const peek = scheduleItemPeek(page, itemId);
+  await expect(peek).toBeVisible();
+  return peek;
+}
+
+/**
+ * Walk from a block through its peek to the full event dialog.
+ *
+ * @param page - The page under test.
+ * @param itemId - The calendar item to open.
+ * @returns the event dialog, once the peek has gone.
+ */
+export async function openScheduleItemDetail(page: Page, itemId: string): Promise<Locator> {
+  const peek = await openScheduleItemPeek(page, itemId);
+  await peek.getByRole('button', { name: 'Open' }).click();
+  await expect(peek).toBeHidden();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
 /** Drag a blank wall-clock region with real browser mouse input. */
 export async function dragScheduleRegion(
   page: Page,

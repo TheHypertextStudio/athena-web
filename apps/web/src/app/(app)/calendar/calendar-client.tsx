@@ -33,6 +33,11 @@ import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
 import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
+import { CalendarItemPeekOverlay } from '@/components/calendar/item-peek/calendar-item-peek-overlay';
+import {
+  resolvePeekItem,
+  useCalendarItemSelection,
+} from '@/components/calendar/item-peek/use-calendar-item-selection';
 import CreateBlockForm from '@/components/calendar/create-block-form';
 import { resolveScheduleTimezone, useScheduleDisplayDate } from '@/components/scheduling';
 import { workLocationPlacesDef } from '@/components/work-location/work-location-data';
@@ -81,7 +86,8 @@ export default function CalendarClient(): JSX.Element {
   const [axis, setAxis] = useState<CalendarAxis>('dates');
   const [visibleLaneCount, setVisibleLaneCount] = useState(1);
   const [horizontalAnchorKey, setHorizontalAnchorKey] = useState(0);
-  const [openItemId, setOpenItemId] = useState<string | null>(null);
+  const openEvent = useCalendarItemSelection();
+  const { close: closeEvent } = openEvent;
   const [openSharedItem, setOpenSharedItem] = useState<SharedCalendarItemDetail | null>(null);
   const [selection, setSelection] = useState<CalendarCanvasRegionSelection | null>(null);
   const selectionAnchorRef = useRef<HTMLDivElement>(null);
@@ -175,7 +181,10 @@ export default function CalendarClient(): JSX.Element {
   });
   useEffect(() => {
     setOpenSharedItem(null);
-  }, [anchorDate, axis, peopleAxis.comparisonOrgId]);
+    // The peek points at a block. Changing the date, the axis, or the comparison org rebuilds every
+    // lane, so the block it was pointing at no longer exists.
+    closeEvent();
+  }, [anchorDate, axis, peopleAxis.comparisonOrgId, closeEvent]);
   useEffect(() => {
     visibleDateRangeRef.current = null;
     setVisibleDateRange(null);
@@ -316,18 +325,30 @@ export default function CalendarClient(): JSX.Element {
             commitZoomRef.current(next);
           }, ZOOM_GESTURE_COMMIT_MS);
         }}
-        onSelectRegion={setSelection}
-        onOpenItem={setOpenItemId}
+        onSelectRegion={(region) => {
+          // The same press that dismisses a peek also completes a region selection on the lane
+          // underneath, which would open the create form on top of the event you were closing.
+          if (openEvent.consumeDismissal()) return;
+          setSelection(region);
+        }}
+        onOpenItem={openEvent.open}
         onOpenSharedItem={setOpenSharedItem}
+      />
+
+      <CalendarItemPeekOverlay
+        item={resolvePeekItem(openEvent.peekItemId, (id) => dateAxis.itemById.get(id))}
+        displayTimezone={displayTimezone}
+        anchorRef={openEvent.anchorRef}
+        onOpenDetail={openEvent.escalate}
+        onClose={openEvent.close}
+        onDismissOutside={openEvent.noteDismissal}
       />
 
       <CalendarItemDrawer
         displayTimezone={displayTimezone}
-        itemId={openItemId}
+        itemId={openEvent.detailItemId}
         duplicatesByItemId={dateAxis.duplicatesByItemId}
-        onClose={() => {
-          setOpenItemId(null);
-        }}
+        onClose={openEvent.close}
         onOpenTask={(orgId, taskId) => {
           router.push(`/orgs/${orgId}/tasks/${taskId}`);
         }}

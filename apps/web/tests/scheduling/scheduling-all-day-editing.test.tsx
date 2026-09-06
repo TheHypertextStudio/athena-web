@@ -215,7 +215,7 @@ describe('SchedulingCanvas all-day direct manipulation', () => {
     expect(screen.queryByRole('button', { name: 'Move Team offsite' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Resize Team offsite/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Team offsite' }));
-    expect(onOpenItem).toHaveBeenCalledWith({ item: readOnlyItem, lane });
+    expect(onOpenItem).toHaveBeenCalledWith(expect.objectContaining({ item: readOnlyItem, lane }));
   });
 
   it('does not expose false controls for malformed all-day bounds', () => {

@@ -8,6 +8,7 @@ import { containedTaskLink } from '@/components/calendar/calendar-item-task-link
 import {
   resolveScheduleWallInstant,
   type ScheduleItem,
+  type ScheduleItemOpen,
   type ScheduleItemMove,
   type ScheduleItemResize,
   type ScheduleLane,
@@ -189,13 +190,13 @@ export function CalendarSchedulingSurface({
               });
             }
           }}
-          onOpenItem={({ item }: { item: ScheduleItem }) => {
+          onOpenItem={({ item, anchor }: ScheduleItemOpen) => {
             if (axis === 'people') {
               const detail = peopleAxis.detailByItemId.get(item.id);
               if (detail) onOpenSharedItem(detail);
               return;
             }
-            onOpenItem(item.id);
+            onOpenItem(item.id, anchor ?? null);
           }}
           {...(axis === 'dates'
             ? {

@@ -4,7 +4,7 @@ import { CalendarItemId, CalendarLayerId, DailyPlanItemId } from '@docket/planni
 import { type CalendarItemOut } from '@docket/planning/calendar-contract';
 import { OrganizationId } from '@docket/identity-access/ids';
 import { TaskId } from '@docket/work/ids';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgendaEntry } from '../../src/components/agenda/agenda-model';
@@ -91,7 +91,9 @@ vi.mock('../../src/components/scheduling', async (importOriginal) => {
                   <button
                     type="button"
                     aria-label={`Open ${item.title}`}
-                    onClick={() => props.onOpenItem?.({ item, lane })}
+                    onClick={(event) =>
+                      props.onOpenItem?.({ item, lane, anchor: event.currentTarget })
+                    }
                   >
                     {item.title}
                   </button>
@@ -122,6 +124,14 @@ vi.mock('../../src/components/calendar/calendar-mutations', () => ({
   useRelateCalendarItems: () => mutationState.relate,
 }));
 
+vi.mock('../../src/lib/api', () => ({
+  api: { v1: { me: { calendar: { layers: { $get: vi.fn() } } } } },
+}));
+
+vi.mock('../../src/components/athena/athena-panel-provider', () => ({
+  useAthenaPanel: () => ({ openAthena: vi.fn() }),
+}));
+
 vi.mock('../../src/components/calendar/calendar-item-drawer', () => ({
   default: ({ itemId }: { itemId: string | null }) =>
     itemId ? <div aria-label="Calendar item drawer">{itemId}</div> : null,
@@ -137,6 +147,8 @@ vi.mock('../../src/components/calendar/create-block-form', () => ({
 vi.mock('../../src/components/agenda/agenda-entry-card', () => ({
   default: () => <div>Agenda list item</div>,
 }));
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import AgendaCanvas from '../../src/components/agenda/agenda-canvas';
 import { assertDefined } from '@docket/test-utils';
@@ -219,9 +231,20 @@ function planTimebox(): AgendaEntry {
 }
 
 /** Render one timeline arrangement with a deterministic context. */
+function renderAgenda(): void {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <AgendaCanvas />
+    </QueryClientProvider>,
+  );
+}
+
 function renderTimeline(entries: readonly AgendaEntry[]): void {
   agendaState.entries = [...entries];
-  render(<AgendaCanvas />);
+  renderAgenda();
 }
 
 /** Return the latest props received by the callback-driven scheduling canvas mock. */
@@ -379,7 +402,7 @@ describe('Agenda scheduling interactions', () => {
 
   it('keeps the list view informative when the day has no entries', () => {
     agendaState.view = 'list';
-    render(<AgendaCanvas />);
+    renderAgenda();
 
     // The instruction became a control. `Use the calendar to plan this day` named a destination
     // and then left the reader to find it, which is a dead empty state.
@@ -391,7 +414,7 @@ describe('Agenda scheduling interactions', () => {
   });
 
   it('teaches the next action when the timeline has no entries', () => {
-    render(<AgendaCanvas />);
+    renderAgenda();
 
     // The sentence used to carry the whole instruction — `Use the calendar to plan this day` —
     // which named a destination and left the reader to go find it. The action is a control now,
@@ -402,7 +425,7 @@ describe('Agenda scheduling interactions', () => {
 
   it('passes degraded agenda reads and their recovery action to the timeline', () => {
     agendaState.error = 'Calendar updates are temporarily unavailable.';
-    render(<AgendaCanvas />);
+    renderAgenda();
 
     const props = canvasProps();
     expect(props.error).toBe('Calendar updates are temporarily unavailable.');
@@ -573,6 +596,10 @@ describe('Agenda scheduling interactions', () => {
     expect(screen.queryByRole('button', { name: `Resize ${item.title}` })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: `Open ${item.title}` }));
+    // A click answers with the peek. The full editor is an escalation from it, not the click's job.
+    expect(screen.queryByLabelText('Calendar item drawer')).not.toBeInTheDocument();
+    const peek = screen.getByRole('dialog', { name: item.title });
+    fireEvent.click(within(peek).getByRole('button', { name: 'Open' }));
     expect(screen.getByLabelText('Calendar item drawer')).toHaveTextContent(item.id);
   });
 

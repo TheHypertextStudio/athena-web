@@ -458,7 +458,13 @@ describe('SchedulingCanvas', () => {
 
     expect(onMoveItem).not.toHaveBeenCalled();
     expect(onOpenItem).toHaveBeenCalledOnce();
-    expect(onOpenItem).toHaveBeenCalledWith({ item: TIMED_ITEM, lane: sourceLane });
+    expect(onOpenItem).toHaveBeenCalledWith(
+      expect.objectContaining({ item: TIMED_ITEM, lane: sourceLane }),
+    );
+    // The peek anchors to the control that was pressed, so the request has to carry it.
+    expect(onOpenItem.mock.calls[0]?.[0]?.anchor).toBe(
+      document.querySelector(`[data-schedule-item-body="${TIMED_ITEM.id}"]`),
+    );
   });
 
   it('activates at exactly four Euclidean pixels but commits only a changed preview', () => {

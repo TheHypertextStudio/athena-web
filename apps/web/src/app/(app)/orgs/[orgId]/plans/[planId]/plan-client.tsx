@@ -123,14 +123,16 @@ export default function PlanClient(): JSX.Element {
   );
   const canEdit = canContribute && plan?.status !== 'archived';
 
-  // A plan is shaped by talking: reveal the rail once on arrival.
+  // A plan is shaped by talking: reveal the rail once on arrival. An entry point that already
+  // seeded the rail with a draft (Plan with Athena on an initiative) has revealed it itself, and
+  // revealing again would clear that draft.
   const revealed = useRef(false);
-  const { openAthena } = athena;
+  const { openAthena, launchDraft } = athena;
   useEffect(() => {
     if (revealed.current) return;
     revealed.current = true;
-    openAthena();
-  }, [openAthena]);
+    if (launchDraft === null) openAthena();
+  }, [launchDraft, openAthena]);
 
   const trackedOps = useMemo(
     () => ({

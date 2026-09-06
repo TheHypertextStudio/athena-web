@@ -24,6 +24,7 @@ import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
+import { PlanWithAthenaAction } from '@/components/initiatives/plan-with-athena-action';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
@@ -548,6 +549,13 @@ export default function InitiativeDetailPage(): JSX.Element {
         // what makes the publish icon and the overflow icon provably the same size
         // rather than the same size until someone edits one of them.
         <ControlGroup controlSize="xl">
+          <PlanWithAthenaAction
+            orgId={orgId}
+            initiativeId={initiativeId}
+            name={detail.name}
+            noun={initiativeNoun}
+            enabled={canEdit}
+          />
           <PublishAction
             orgId={orgId}
             subjectKind="initiative"

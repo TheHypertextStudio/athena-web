@@ -36,8 +36,11 @@ import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
+import { PLAN_TOOL_NAMES } from '@docket/work/plan-draft-contract';
+
 import { ProposalGroupCard } from '@/components/agents/proposal-group-card';
 import { McpAppPresentationCard } from '@/components/athena/mcp-app-presentation-card';
+import PlanStartCard, { parsePlanStart } from '@/components/plan-canvas/plan-start-card';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 import { AddMcpConnectorForm } from '@/components/settings/mcp-connectors-section';
 import { fetchOrgChatThread, sendOrgChatMessage, useOrgChatThread } from '@/lib/athena/chat-defs';
@@ -275,6 +278,21 @@ function bodyRecord(value: unknown): Readonly<Record<string, unknown>> | null {
     : null;
 }
 
+/**
+ * The plan a `plan_start` action opened, when the action was one and succeeded.
+ *
+ * @remarks
+ * Athena's offer to plan on the canvas is the tool result itself: a durable card that links to the
+ * plan route, so opening it is the yes and a reload finds it where it was.
+ */
+function startedPlanFrom(
+  action: Readonly<Record<string, unknown>> | null,
+  result: Readonly<Record<string, unknown>> | null,
+): ReturnType<typeof parsePlanStart> {
+  if (action?.['kind'] !== PLAN_TOOL_NAMES.start || result?.['isError'] === true) return null;
+  return parsePlanStart(result?.['content']);
+}
+
 /** One conversational beat: user bubble, Athena text, quiet work chip, or question. */
 function ChatEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element | null {
   const text = typeof activity.body['text'] === 'string' ? activity.body['text'] : '';
@@ -306,42 +324,49 @@ function ChatEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element |
     );
   }
   if (activity.type === 'action') {
-    const action = bodyRecord(activity.body['action']);
-    const summary = action && typeof action['summary'] === 'string' ? action['summary'] : 'worked';
-    // The chip stays the quiet record of what Athena did; when the tool captured an interactive
-    // MCP app card, it renders full-width beneath the chip — the same durable presentation the
-    // workbench shows, revalidated here because the body is an untrusted bag of JSON.
-    const result = action ? bodyRecord(action['result']) : null;
-    const presentation = parseMcpAppPresentation(result?.['presentation']);
-    const presentationUnavailable =
-      result?.['presentationUnavailable'] === true ||
-      (result?.['presentation'] !== undefined && !presentation);
-    return (
-      <div className="flex w-full flex-col gap-2">
-        <span
-          className={cn(
-            surfaceToneColor('canvas'),
-            'border-outline-variant text-on-surface-variant mr-auto inline-flex max-w-[85%] items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs',
-          )}
-        >
-          <span className="truncate">{summary}</span>
-        </span>
-        {presentation ? (
-          <McpAppPresentationCard
-            presentation={presentation}
-            activityId={activity.id}
-            onMessage={onWidgetMessage}
-          />
-        ) : presentationUnavailable ? (
-          <p className="text-on-surface-variant text-body-small" data-testid="mcp-app-view-failure">
-            Interactive view unavailable.
-          </p>
-        ) : null}
-      </div>
-    );
+    return <ActionEntry activity={activity} onWidgetMessage={onWidgetMessage} />;
   }
   // Thoughts stay out of the conversation — the work-log session view carries them.
   return null;
+}
+
+/** The quiet work chip for one tool call, with whatever durable card the call produced. */
+function ActionEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element {
+  const action = bodyRecord(activity.body['action']);
+  const summary = action && typeof action['summary'] === 'string' ? action['summary'] : 'worked';
+  // The chip stays the quiet record of what Athena did; when the tool captured an interactive
+  // MCP app card, it renders full-width beneath the chip — the same durable presentation the
+  // workbench shows, revalidated here because the body is an untrusted bag of JSON.
+  const result = action ? bodyRecord(action['result']) : null;
+  const presentation = parseMcpAppPresentation(result?.['presentation']);
+  const presentationUnavailable =
+    result?.['presentationUnavailable'] === true ||
+    (result?.['presentation'] !== undefined && !presentation);
+  const startedPlan = startedPlanFrom(action, result);
+  return (
+    <div className="flex w-full flex-col gap-2">
+      <span
+        className={cn(
+          surfaceToneColor('canvas'),
+          'border-outline-variant text-on-surface-variant mr-auto inline-flex max-w-[85%] items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs',
+        )}
+      >
+        <span className="truncate">{summary}</span>
+      </span>
+      {startedPlan ? <PlanStartCard plan={startedPlan} /> : null}
+      {presentation ? (
+        <McpAppPresentationCard
+          presentation={presentation}
+          activityId={activity.id}
+          onMessage={onWidgetMessage}
+        />
+      ) : presentationUnavailable ? (
+        <p className="text-on-surface-variant text-body-small" data-testid="mcp-app-view-failure">
+          Interactive view unavailable.
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 /** Props for {@link ChatProposals}. */

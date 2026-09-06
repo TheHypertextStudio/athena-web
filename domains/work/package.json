@@ -33,6 +33,8 @@
     "./update-contract": "./src/contracts/update.ts",
     "./saved-view-contract": "./src/contracts/saved-view.ts",
     "./template-contract": "./src/contracts/template.ts",
+    "./plan-draft-contract": "./src/contracts/plan-draft.ts",
+    "./plan-draft": "./src/plan-draft.ts",
     "./subject-ref-contract": "./src/contracts/subject-ref.ts",
     "./slug-contract": "./src/contracts/slug.ts",
     "./publish-contract": "./src/contracts/publish.ts",

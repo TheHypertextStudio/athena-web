@@ -1,11 +1,100 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-09-02
+> **Last Updated**: 2026-09-06
 
 ---
 
 ## Active Tasks
+
+### [CAL-EVENT-001] A calendar event opens as a peek, and reads as a moment
+
+- **Status**: REVIEW
+- **Started**: 2026-09-06
+- **Priority**: P1
+- **Summary**: Clicking any event threw a 1024px-wide centered modal over the calendar you were
+  reading, and the surface it opened was the only detail surface in Docket shaped like a settings
+  page. There are two tiers now. A click opens a peek anchored to the block; the workspace is what
+  Open escalates to, and it reads top to bottom as before / during / after rather than as a form.
+  Three things the API has always handed the client and no surface rendered — guests, provider
+  write state, and a recoverable conflict — are on screen.
+
+- **Approach**: The click path already funnelled through one `onOpenItem`, so the peek slotted in
+  without touching the canvas's gesture arbitration. Three problems only showed up in the building.
+
+  The anchor cannot be looked up. A multi-day all-day item renders one pill per lane it spans, so
+  `[data-schedule-item-body="{id}"]` matches several elements and none of them is identifiably the
+  one that was pressed. The open request carries the activated control instead. It is also the
+  button inside the card rather than the card, which reaches 12px past the visible block on both
+  edges to host invisible resize targets.
+
+  Dismissing a peek by clicking the grid would have created a block. `use-scheduling-region-selection`
+  arms on pointerdown and commits on pointerup regardless of what the press was for, so the click
+  that closed the peek would have opened the create form behind it. The selection state records the
+  dismissal and the lane consults it once.
+
+  The delete confirmation cannot live inside the peek. It portals outside the popover's subtree, so
+  raising one from within registers as an outside press; and the peek closes as the confirmation
+  opens, which would take a nested dialog down with it. It is a sibling holding its own reference to
+  the event.
+
+  For the detail, the arc was free. `TASK_ROLE_ORDER` has been `prep, agenda, follow_up, outcome`
+  since linked tasks landed and the UI rendered it as a `<select>` labelled "New task relationship";
+  `CalendarItemRelationRole.follow_up` is documented as a scheduler-created debrief and
+  `relations-section` filtered it out, so the week scheduler has been writing links no calendar
+  surface ever displayed. The band a person adds to now sets the role, which is what retired the
+  dropdown.
+
+  The riskiest move was the schedule editor. Its daylight-saving fold rules, range checks and
+  refetch-rebasing lived inside a React component scoring 38 on the complexity gate. The branching
+  is a pure `resolveSchedulePatch` with its own tests, the state is a hook, and the rendering is a
+  property rail. `core-field-draft.ts` — the actual hydration engine — was not touched, and the ten
+  field tests that pin fold and rebase behaviour pass unchanged.
+
+- **Decisions**: Guests are read-only and carry no RSVP control. `CalendarItemUpdate` and
+  `CalendarItemWritePatch` have no attendee field, the Google push body carries only summary,
+  description, location and bounds, and no RSVP route exists — a Yes button would be exactly the
+  dead UI the craft rubric's placeholder gate exists to catch. "Full attendee management" is out of
+  V1 scope in the layered-calendar spec.
+
+  A conflict surfaces without a diff. `CalendarItemOut` exposes only the `hasConflict` boolean; the
+  stored `{ localPatch, providerSnapshot, detectedAt }` never reaches the client, so a side-by-side
+  comparison needs a contract change. What ships is the honest half: Docket kept your version, and
+  "Keep my changes" reattempts the queued write through the retry-write route that has been
+  implemented and unused since it landed.
+
+  `PropertyPanel` was fixed rather than avoided. It was ledgered debt whose own docblock states the
+  rule the event drawer was breaking; its two violations were `text-xs font-medium`, which is
+  `text-label-medium` to the pixel.
+
+- **Files changed**: `apps/web/src/components/calendar/item-presentation/` (new),
+  `apps/web/src/components/calendar/item-peek/` (new), `apps/web/src/components/calendar/item-drawer/`
+  (rebuilt; `core-fields-form.tsx`, `linked-tasks-section.tsx` and `relations-section.tsx` are gone),
+  the two calendar mount points, the scheduling open-request contract, the agenda rail,
+  `property-panel.tsx`, `docs/core/specs/layered-calendar.md`, `docs/design/surface-inventory.md`.
+
+- **Validation**: `tsc --noEmit` clean; 3,806 web tests pass; the design-policy and error-copy gates
+  in `@docket/test-utils` pass. Eleven raw type-utility violations paid off, two files removed from
+  `design-token-debt.json` and three from `complexity-debt.json`, with no new entry in either.
+
+- **Blockers**: Screenshots. `scripts/dev-stack.sh start` is killed by the resource guard on this
+  machine — 2.8 GB of node from other agent worktrees is resident before the stack starts, and the
+  four dev servers push the shared forest total past its 40% ceiling. The e2e specs are updated for
+  the two tiers but have not been run.
+
+- **Learnings**: Two ledgers govern this code, not one. `design-token-debt.json` is the documented
+  gate; `tooling/eslint-config/complexity-debt.json` is a second ratchet that pinned three of the
+  four files this change touched, and splitting a ledgered file strands its key. Regenerate both.
+
+  Radix renders a popover as `role="dialog"`, so every existing `getByRole('dialog')` matches the
+  peek. That is the largest single source of test churn in a change like this, and the fix is an
+  e2e helper that walks the tier explicitly rather than a bare role query.
+
+- **Remaining**: Linking an existing task still asks for a task id. Doing it with a picker needs a
+  `calendar-item.task` relation definition in the work domain and a new picker request kind.
+  `GET /items/:id/relations` is outgoing-only, so a debrief shows its meeting nowhere.
+
+---
 
 ### [DETAIL-INSET-001] Every edge of a detail page is measured the same way
 

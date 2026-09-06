@@ -130,19 +130,41 @@ A calendar item is one visible time object. It can be:
 Every item has normalized time bounds, all-day support, title, optional description/location, layer
 identity, permission summary, and sync/conflict state.
 
+### Opening an item
+
+An item opens in two tiers, and a click produces the smaller one.
+
+**Peek.** A popover anchored to the block that was clicked, on the calendar grid, the all-day lane,
+the agenda timeline, and the agenda list row. It shows the layer colour, the title, the day, the
+clock range and duration, the calendar, the location, the guest count, a clamped description, and
+any sync state worth saying, plus Open, Athena, and Delete. Below 40rem it renders as a bottom
+sheet. The anchor travels with the click rather than being looked up, because a multi-day all-day
+item draws one pill per lane it spans.
+
+**Detail.** The peek's Open escalates to the workspace dialog. Nothing else opens it directly except
+the dense-overflow list, which has no block to anchor to.
+
 ### Event Workspace
 
-The item workspace is a detail drawer for a calendar item. It contains:
+The item workspace is a detail drawer for a calendar item, and it reads as the arc of a moment
+rather than a form:
 
-- Item header and core editable fields.
-- Provider/account/layer metadata.
-- Conflict or write-scope warnings.
-- A linked task stack grouped by role.
-- Actions to create, link, detach, and open tasks.
-- Contained and related calendar items, with open and detach actions.
+- Masthead: the editable title, the day, the clock range and duration, the calendar, recurrence and
+  read-only badges, the provider link, and one line naming the seam.
+- The event's own fields — when, where, and notes — as an interactive property rail. These are
+  exactly the fields a provider round-trips.
+- Guests and the organizer with their responses, read-only until an RSVP write path exists.
+- Provider write state, including a conflict that offers to send the kept local edit again.
+- The work around the event, in bands: Before (prep), During (agenda tasks and contained items),
+  After (follow-up, outcome, and the scheduler's debrief), and Related.
 
-The workspace is the richer version of a simple linked-task stack. V1 should implement the workspace
-shell even if some sections start compact.
+Two rules govern the shape. Docket's own additions — the saved place, the work, the relationships —
+are recessed onto the surface ramp so the seam with the provider is visible without a legend. And a
+band with nothing in it renders nothing: an event with no attached work offers one add affordance,
+not a heading and an empty-state sentence per section.
+
+Task roles set the band, and the band a person adds to sets the role of what they create. There is
+no separate relationship control.
 
 ## Permissions And Privacy
 
@@ -200,7 +222,9 @@ Out of scope for V1:
 - A user with multiple linked Google accounts can see selected calendars from all accounts in Docket.
 - Existing read-only calendar users are not broken by the write-scope upgrade.
 - Editable events can be changed inline and those edits are pushed to Google.
-- Provider conflicts are visible and do not silently overwrite remote changes.
+- Provider conflicts are visible and do not silently overwrite remote changes. **Met**: the event
+  detail renders `syncState`, and a conflicted item offers "Keep my changes", which reattempts the
+  queued write against the provider's newer snapshot.
 - Native blocks can be created, edited, and deleted without any external provider.
 - A calendar item can link to many tasks, and a task can be linked to many calendar items.
 - Calendar views can filter/toggle layers without blanking or fetching through ad-hoc client code.

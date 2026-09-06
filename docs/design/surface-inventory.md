@@ -102,30 +102,31 @@ GEN-10's acceptance criteria also name the published-brief templates. No publish
 
 ## Overlays
 
-| Surface id                     | URL | Source                                                                  | Scorecard(s)                                              |
-| ------------------------------ | --- | ----------------------------------------------------------------------- | --------------------------------------------------------- |
-| `calendar-shared-item-details` | —   | `apps/web/src/app/(app)/calendar/calendar-shared-item-details.tsx`      | —                                                         |
-| `athena-conversation`          | —   | `apps/web/src/components/athena/athena-conversation.tsx`                | —                                                         |
-| `athena-mcp-panel`             | —   | `apps/web/src/components/athena/athena-mcp-panel.tsx`                   | —                                                         |
-| `athena-panel-provider`        | —   | `apps/web/src/components/athena/athena-panel-provider.tsx`              | —                                                         |
-| `mail-attach-dialog`           | —   | `apps/web/src/components/athena/mail-attach-dialog.tsx`                 | —                                                         |
-| `voice-mode`                   | —   | `apps/web/src/components/athena/voice-mode.tsx`                         | —                                                         |
-| `authentication-interlock`     | —   | `apps/web/src/components/authentication-interlock.tsx`                  | —                                                         |
-| `calendar-item-drawer`         | —   | `apps/web/src/components/calendar/calendar-item-drawer.tsx`             | —                                                         |
-| `linked-tasks-section`         | —   | `apps/web/src/components/calendar/item-drawer/linked-tasks-section.tsx` | —                                                         |
-| `status-actions`               | —   | `apps/web/src/components/calendar/item-drawer/status-actions.tsx`       | —                                                         |
-| `composer-shell`               | —   | `apps/web/src/components/composer/composer-shell.tsx`                   | `docs/design/audits/2026-08-28-editor-markdown-tables.md` |
-| `template-editor`              | —   | `apps/web/src/components/templates/template-editor.tsx`                 | —                                                         |
-| `confirm-delete-dialog`        | —   | `apps/web/src/components/confirm-delete-dialog.tsx`                     | —                                                         |
-| `close-cycle-dialog`           | —   | `apps/web/src/components/cycles/close-cycle-dialog.tsx`                 | —                                                         |
-| `add-person-dialog`            | —   | `apps/web/src/components/people/add-person-dialog.tsx`                  | —                                                         |
-| `publish-action`               | —   | `apps/web/src/components/publishing/publish-action.tsx`                 | —                                                         |
-| `delete-account-dialog`        | —   | `apps/web/src/components/settings/delete-account-dialog.tsx`            | —                                                         |
-| `disconnect-confirm-dialog`    | —   | `apps/web/src/components/settings/disconnect-confirm-dialog.tsx`        | —                                                         |
-| `mcp-connectors-section`       | —   | `apps/web/src/components/settings/mcp-connectors-section.tsx`           | —                                                         |
-| `passkeys-section`             | —   | `apps/web/src/components/settings/passkeys-section.tsx`                 | —                                                         |
-| `recovery-codes-dialog`        | —   | `apps/web/src/components/settings/recovery-codes-dialog.tsx`            | —                                                         |
-| `naming-dialog`                | —   | `apps/web/src/components/time-tracking/naming-dialog.tsx`               | —                                                         |
+| Surface id                     | URL | Source                                                              | Scorecard(s)                                              |
+| ------------------------------ | --- | ------------------------------------------------------------------- | --------------------------------------------------------- |
+| `calendar-shared-item-details` | —   | `apps/web/src/app/(app)/calendar/calendar-shared-item-details.tsx`  | —                                                         |
+| `athena-conversation`          | —   | `apps/web/src/components/athena/athena-conversation.tsx`            | —                                                         |
+| `athena-mcp-panel`             | —   | `apps/web/src/components/athena/athena-mcp-panel.tsx`               | —                                                         |
+| `athena-panel-provider`        | —   | `apps/web/src/components/athena/athena-panel-provider.tsx`          | —                                                         |
+| `mail-attach-dialog`           | —   | `apps/web/src/components/athena/mail-attach-dialog.tsx`             | —                                                         |
+| `voice-mode`                   | —   | `apps/web/src/components/athena/voice-mode.tsx`                     | —                                                         |
+| `authentication-interlock`     | —   | `apps/web/src/components/authentication-interlock.tsx`              | —                                                         |
+| `calendar-item-drawer`         | —   | `apps/web/src/components/calendar/calendar-item-drawer.tsx`         | —                                                         |
+| `calendar-item-peek`           | —   | `apps/web/src/components/calendar/item-peek/calendar-item-peek.tsx` | —                                                         |
+| `event-arc`                    | —   | `apps/web/src/components/calendar/item-drawer/event-arc.tsx`        | —                                                         |
+| `status-actions`               | —   | `apps/web/src/components/calendar/item-drawer/status-actions.tsx`   | —                                                         |
+| `composer-shell`               | —   | `apps/web/src/components/composer/composer-shell.tsx`               | `docs/design/audits/2026-08-28-editor-markdown-tables.md` |
+| `template-editor`              | —   | `apps/web/src/components/templates/template-editor.tsx`             | —                                                         |
+| `confirm-delete-dialog`        | —   | `apps/web/src/components/confirm-delete-dialog.tsx`                 | —                                                         |
+| `close-cycle-dialog`           | —   | `apps/web/src/components/cycles/close-cycle-dialog.tsx`             | —                                                         |
+| `add-person-dialog`            | —   | `apps/web/src/components/people/add-person-dialog.tsx`              | —                                                         |
+| `publish-action`               | —   | `apps/web/src/components/publishing/publish-action.tsx`             | —                                                         |
+| `delete-account-dialog`        | —   | `apps/web/src/components/settings/delete-account-dialog.tsx`        | —                                                         |
+| `disconnect-confirm-dialog`    | —   | `apps/web/src/components/settings/disconnect-confirm-dialog.tsx`    | —                                                         |
+| `mcp-connectors-section`       | —   | `apps/web/src/components/settings/mcp-connectors-section.tsx`       | —                                                         |
+| `passkeys-section`             | —   | `apps/web/src/components/settings/passkeys-section.tsx`             | —                                                         |
+| `recovery-codes-dialog`        | —   | `apps/web/src/components/settings/recovery-codes-dialog.tsx`        | —                                                         |
+| `naming-dialog`                | —   | `apps/web/src/components/time-tracking/naming-dialog.tsx`           | —                                                         |
 
 ## Shell rail panels
 

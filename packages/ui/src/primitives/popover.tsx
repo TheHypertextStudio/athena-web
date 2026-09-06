@@ -17,7 +17,12 @@ import * as React from 'react';
 import { cn } from '../lib/utils';
 import { focusRing } from './focus';
 import { type MenuWidth, menuContentClass } from './menu-styles';
-import type { OverlayInset, PanelWidth, PopoverPresentation } from './overlay-contract';
+import type {
+  OverlayInset,
+  PanelMaxHeight,
+  PanelWidth,
+  PopoverPresentation,
+} from './overlay-contract';
 import { OVERLAY_COLLISION_PADDING } from './overlay-inset';
 
 /** Root controller for an open/closed popover (Radix passthrough). */
@@ -79,6 +84,11 @@ const PANEL_WIDTH: Readonly<Record<PanelWidth, string>> = {
   content: 'w-auto',
 };
 
+const PANEL_MAX_HEIGHT: Readonly<Record<PanelMaxHeight, string>> = {
+  available: 'max-h-[var(--radix-popover-content-available-height)]',
+  picker: 'max-h-[min(520px,var(--radix-popover-content-available-height))]',
+};
+
 function isMenuWidth(width: MenuWidth | PanelWidth): width is MenuWidth {
   return width === 'sm' || width === 'md' || width === 'lg' || width === 'xl';
 }
@@ -92,6 +102,8 @@ export interface PopoverContentProps extends Omit<
   readonly presentation?: PopoverPresentation | undefined;
   /** Width tier for the selected presentation. */
   readonly width?: MenuWidth | PanelWidth | undefined;
+  /** Viewport-aware maximum height for a panel presentation. */
+  readonly maxHeight?: PanelMaxHeight | undefined;
   /** Compatibility escape hatch while existing panels migrate to named slots. */
   readonly className?: string | undefined;
 }
@@ -104,6 +116,7 @@ export function PopoverContent({
   collisionPadding = OVERLAY_COLLISION_PADDING,
   presentation = 'menu',
   width = 'md',
+  maxHeight = 'available',
   ...props
 }: PopoverContentProps): React.JSX.Element {
   const isMenu = presentation === 'menu';
@@ -121,7 +134,8 @@ export function PopoverContent({
         collisionPadding={collisionPadding}
         className={cn(
           surfaceClass,
-          'pointer-events-auto z-[120] max-h-[var(--radix-popover-content-available-height)] min-h-0 origin-[var(--radix-popover-content-transform-origin)] outline-none',
+          'pointer-events-auto z-[120] min-h-0 origin-[var(--radix-popover-content-transform-origin)] outline-none',
+          PANEL_MAX_HEIGHT[maxHeight],
           isMenu && 'overflow-x-hidden overflow-y-auto',
           focusRing,
           className,
@@ -155,7 +169,7 @@ export function PopoverBody({
   ...props
 }: React.ComponentProps<'div'> & {
   readonly inset?: OverlayInset | undefined;
-  readonly scroll?: 'auto' | 'visible' | undefined;
+  readonly scroll?: 'auto' | 'hidden' | 'visible' | undefined;
 }): React.JSX.Element {
   return (
     <div
@@ -163,6 +177,7 @@ export function PopoverBody({
         'min-h-0 flex-1',
         overlayInsetClass(inset),
         scroll === 'auto' && 'overflow-y-auto overscroll-contain',
+        scroll === 'hidden' && 'overflow-hidden',
         className,
       )}
       {...(scroll === 'auto' ? { 'data-overlay-scroll-owner': '' } : {})}

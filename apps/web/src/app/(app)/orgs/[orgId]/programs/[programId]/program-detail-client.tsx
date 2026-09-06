@@ -229,6 +229,7 @@ export default function ProgramDetailPage(): JSX.Element {
       <>
         <EntityDetailSkeleton
           tabCount={4}
+
           entityName={programLabel}
           title={navigationSnapshot?.name}
           snapshotMetadata={
@@ -295,13 +296,15 @@ export default function ProgramDetailPage(): JSX.Element {
       icon={
         <EntityIconPicker
           display={entityDisplay.display}
+
+          workspaceId={orgId}
           entityName={program.name}
           editable={canCustomizeIdentity}
           pending={entityDisplay.mutation.isPending}
           loading={entityDisplay.loading}
           size={48}
-          onChange={(iconKey, colorKey, customColor) => {
-            entityDisplay.mutation.mutate({ iconKey, colorKey, customColor });
+          onChange={(glyph, colorKey, customColor) => {
+            entityDisplay.mutation.mutate({ glyph, colorKey, customColor });
           }}
         />
       }

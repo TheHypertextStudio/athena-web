@@ -37,6 +37,7 @@ function project(overrides: Partial<ProjectOverviewItem> = {}): ProjectOverviewI
     display: {
       subjectType: 'project',
       subjectId: 'p-1',
+      glyph: { kind: 'symbol', name: 'track_changes' },
       iconKey: 'target',
       colorKey: 'indigo',
       customColor: null,

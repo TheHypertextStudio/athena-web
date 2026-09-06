@@ -17,9 +17,11 @@ describe('Popover presentations', () => {
     render(
       <Popover defaultOpen>
         <PopoverTrigger>Open inspector</PopoverTrigger>
-        <PopoverContent presentation="panel" width="lg" aria-label="Inspector">
+        <PopoverContent presentation="panel" width="lg" maxHeight="picker" aria-label="Inspector">
           <PopoverHeader>Inspector</PopoverHeader>
-          <PopoverBody data-testid="body">content</PopoverBody>
+          <PopoverBody data-testid="body" scroll="hidden">
+            content
+          </PopoverBody>
           <PopoverFooter>
             <button type="button">Done</button>
           </PopoverFooter>
@@ -31,8 +33,9 @@ describe('Popover presentations', () => {
     expect(panel).toHaveAttribute('data-surface-tone', 'floating');
     expect(panel).toHaveClass('z-[120]', 'pointer-events-auto');
     expect(panel).toHaveClass('overflow-hidden', 'gap-0', 'p-0', 'w-72');
-    expect(screen.getByTestId('body')).toHaveAttribute('data-overlay-scroll-owner', '');
-    expect(screen.getByTestId('body')).toHaveClass('overflow-y-auto');
+    expect(panel).toHaveClass('max-h-[min(520px,var(--radix-popover-content-available-height))]');
+    expect(screen.getByTestId('body')).not.toHaveAttribute('data-overlay-scroll-owner');
+    expect(screen.getByTestId('body')).toHaveClass('overflow-hidden');
   });
 
   it('uses the menu surface for an action list', async () => {

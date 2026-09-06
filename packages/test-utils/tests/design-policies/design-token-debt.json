@@ -169,9 +169,8 @@
   "apps/web/src/components/entity-detail/updates-panel.tsx": {
     "raw-type-utility": 5
   },
-  "apps/web/src/components/entity-display/entity-icon-picker.tsx": {
-    "hardcoded-color": 1,
-    "raw-type-utility": 6
+  "apps/web/src/components/entity-display/entity-icon-picker-loaded.tsx": {
+    "hardcoded-color": 1
   },
   "apps/web/src/components/inbox/activity-row.tsx": {
     "raw-type-utility": 3

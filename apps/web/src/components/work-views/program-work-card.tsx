@@ -183,7 +183,8 @@ export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.
         {/* Fades under the frame's selection checkbox, which is laid over this slot. */}
         <span className={CARD_GLYPH_FADE_CLASS}>
           <EntityIconGlyph
-            iconKey={display.iconKey}
+            subjectType="program"
+            glyph={display.glyph}
             colorKey={display.colorKey}
             customColor={display.customColor}
             size={40}

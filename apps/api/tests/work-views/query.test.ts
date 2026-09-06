@@ -1161,6 +1161,48 @@ describe('queryWorkView', () => {
     });
   });
 
+  it('replaces an unknown stored work-view symbol with the subject default glyph', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
+    const [project] = await schema.db
+      .insert(schema.project)
+      .values({
+        organizationId: orgId,
+        name: 'Unknown glyph project',
+        teamId,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+        visibility: 'public',
+      })
+      .returning({ id: schema.project.id });
+    if (!project) throw new Error('unknown-glyph Project was not seeded');
+    await schema.db.insert(schema.entityDisplay).values({
+      organizationId: orgId,
+      subjectType: 'project',
+      subjectId: project.id,
+      iconKey: 'folder',
+      glyphKind: 'symbol',
+      glyphValue: 'not_in_the_pinned_catalog',
+      colorKey: 'blue',
+      createdBy: humanActorId,
+    });
+
+    const response = await queryWorkView({
+      database: schema.db,
+      organizationId: orgId,
+      actorId: humanActorId,
+      request: projectRequest(),
+    });
+
+    expect(response.rows[0]).toMatchObject({
+      display: {
+        glyph: { kind: 'symbol', name: 'folder_open' },
+        iconKey: 'folder',
+        colorKey: 'blue',
+        customized: true,
+      },
+    });
+  });
+
   it('executes Project queries in a Team context through the compatibility primary Team', async () => {
     const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
     const [project] = await schema.db

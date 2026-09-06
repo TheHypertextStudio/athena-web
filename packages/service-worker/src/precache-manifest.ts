@@ -9,26 +9,27 @@
  * cannot fix that, because there is nothing to be first about.
  *
  * The governing rule is **precache anything that will not take a surprising amount of space on the
- * device**, so this is a measured budget rather than a curated list of routes. The one deliberate
- * runtime-only exception is MapLibre: its binaries support an optional map whose tiles already
- * require a network connection, so paying for them on every offline install creates no usable
- * offline capability. The budget exists to catch any other release where the application stops
- * fitting as a whole.
+ * device**, so this is a measured budget rather than a curated list of routes. The deliberate
+ * runtime-only exceptions are MapLibre, the entity glyph catalogs, and the Material Symbol font.
+ * They support optional, network-dependent controls. Paying for them on every offline install
+ * creates no usable offline capability. The budget exists to catch any other release where the
+ * application stops fitting as a whole.
  *
  * When the budget is exceeded the build **fails**, printing the largest assets. It does not silently
  * drop them: a precache that quietly shrinks is a feature that quietly stops working, and the person
  * it stops working for is offline and cannot be told.
  */
-import { readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 /**
  * The ceiling on precached bytes, uncompressed.
  *
  * @remarks
- * Twelve megabytes against a current 8.3, so roughly 45% headroom. Uncompressed because that is the
- * honest upper bound on what the device stores, and because "space on the user's device" is the
- * thing being bounded — not what crosses the wire.
+ * Twelve megabytes remains the existing product ceiling. The optional Material Symbol font uses
+ * runtime cache-first loading so the picker does not force every offline install over this limit.
+ * Uncompressed is the honest upper bound on what the device stores, and "space on the user's
+ * device" is the thing being bounded — not what crosses the wire.
  *
  * Raising this is a decision, not a formality: it means every install and every release costs the
  * new figure, on whatever connection the person happens to be on.
@@ -43,9 +44,29 @@ export interface PrecacheAsset {
   readonly bytes: number;
 }
 
-/** Return whether an emitted asset only supports the network-dependent optional map picker. */
-function isRuntimeOnlyAsset(relativePath: string): boolean {
-  return relativePath.startsWith('media/maplibre-gl') && relativePath.endsWith('.mjs');
+/** Return whether JavaScript contains one of the generated entity glyph datasets. */
+function isEntityGlyphCatalogSource(source: string): boolean {
+  return (
+    (source.includes('grinning face') && source.includes('thumbs up')) ||
+    source.includes('"groups":[{"key":"smileys-emotion"') ||
+    (source.includes('groups:') && source.includes('key:"smileys-emotion"')) ||
+    source.includes('"2049":"exclamation_question_mark"') ||
+    (source.includes('"10k","10mp"') && source.includes('rocket_launch'))
+  );
+}
+
+/** Return whether an emitted asset only supports a network-dependent optional control. */
+function isRuntimeOnlyAsset(path: string, relativePath: string): boolean {
+  if (relativePath.startsWith('media/maplibre-gl') && relativePath.endsWith('.mjs')) {
+    return true;
+  }
+  if (
+    relativePath.startsWith('media/material-symbols-rounded.') &&
+    relativePath.endsWith('.woff2')
+  ) {
+    return true;
+  }
+  return relativePath.endsWith('.js') && isEntityGlyphCatalogSource(readFileSync(path, 'utf8'));
 }
 
 /**
@@ -55,9 +76,10 @@ function isRuntimeOnlyAsset(relativePath: string): boolean {
  * The whole of `.next/static` rather than a manifest walk from the route table's module. Both would
  * work, but the directory is the thing that is actually true: it is what the server will serve, it
  * needs no knowledge of which bundler emitted what, and it cannot fall out of step with a manifest
- * format that changes between Next releases. It also sweeps in the fonts and stylesheets, without
- * which a route that "renders" offline renders unstyled in a fallback face. MapLibre's runtime
- * modules are excluded explicitly because their network-backed map is unusable offline.
+ * format that changes between Next releases. It also sweeps in the core fonts and stylesheets,
+ * without which a route that "renders" offline renders unstyled in a fallback face. MapLibre's
+ * runtime modules, the generated entity glyph datasets, and the Material Symbol font are excluded
+ * because the optional controls they support cannot save a mutation offline.
  *
  * @param staticDir - Absolute path of `.next/static`.
  * @returns The assets, sorted by URL so the generated worker is byte-stable across builds.
@@ -76,7 +98,7 @@ export function collectPrecacheAssets(staticDir: string): readonly PrecacheAsset
         continue;
       }
       const relativePath = relative(staticDir, path).split('\\').join('/');
-      if (isRuntimeOnlyAsset(relativePath)) {
+      if (isRuntimeOnlyAsset(path, relativePath)) {
         continue;
       }
       assets.push({

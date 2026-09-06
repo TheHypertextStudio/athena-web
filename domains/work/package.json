@@ -24,6 +24,8 @@
     "./work-status-contract": "./src/contracts/work-status.ts",
     "./work-view-contract": "./src/contracts/work-view.ts",
     "./entity-display-contract": "./src/contracts/entity-display.ts",
+    "./material-symbol-catalog": "./src/generated/material-symbol-names.ts",
+    "./emoji-catalog": "./src/generated/emoji-hexcodes.ts",
     "./label-contract": "./src/contracts/label.ts",
     "./comment-contract": "./src/contracts/comment.ts",
     "./attachment-contract": "./src/contracts/attachment.ts",

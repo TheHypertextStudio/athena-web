@@ -211,6 +211,8 @@
         "./work-status-contract",
         "./work-view-contract",
         "./entity-display-contract",
+        "./material-symbol-catalog",
+        "./emoji-catalog",
         "./label-contract",
         "./comment-contract",
         "./attachment-contract",

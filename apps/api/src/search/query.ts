@@ -6,6 +6,7 @@ import { and, asc, desc, eq, gt, ilike, inArray, isNull, or, sql } from 'drizzle
 
 import { markdownToPlainText } from '../content/markdown-links';
 import { encodeListCursor, seekAfter } from '../lib/list-cursor';
+import { storedEntityDisplayOut } from '../lib/entity-display-output';
 import { resolveUsedIn, type UsedInTarget } from './used-in';
 import {
   resourceAccessKey,
@@ -1223,15 +1224,7 @@ async function withSearchDisplays(items: SearchOut['items']): Promise<SearchOut[
   const displays = new Map(
     rows.map((row) => [
       `${row.organizationId}:${row.subjectType}:${row.subjectId}`,
-      {
-        subjectType: row.subjectType,
-        subjectId: row.subjectId,
-        iconKey: row.iconKey,
-        colorKey: row.colorKey,
-        customColor: row.customColor,
-        coverImage: row.coverImage,
-        customized: true,
-      },
+      storedEntityDisplayOut(row.subjectType, row.subjectId, row),
     ]),
   );
   return items.map((item) => {

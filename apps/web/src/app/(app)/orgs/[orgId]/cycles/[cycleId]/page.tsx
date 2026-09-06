@@ -321,13 +321,15 @@ export default function CycleDetailPage(): JSX.Element {
       icon={
         <EntityIconPicker
           display={entityDisplay.display}
+
+          workspaceId={orgId}
           entityName={cycle.displayName}
           editable={canEditCycle}
           pending={entityDisplay.mutation.isPending}
           loading={entityDisplay.loading}
           size={48}
-          onChange={(iconKey, colorKey, customColor) => {
-            entityDisplay.mutation.mutate({ iconKey, colorKey, customColor });
+          onChange={(glyph, colorKey, customColor) => {
+            entityDisplay.mutation.mutate({ glyph, colorKey, customColor });
           }}
         />
       }

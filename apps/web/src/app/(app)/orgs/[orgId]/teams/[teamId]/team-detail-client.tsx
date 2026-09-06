@@ -171,12 +171,14 @@ export default function TeamDetailClient(): JSX.Element {
       icon={
         <EntityIconPicker
           display={display}
+
+          workspaceId={orgId}
           entityName={team.name}
           editable={canEdit}
           pending={entityDisplay.mutation.isPending}
           size={48}
-          onChange={(iconKey, colorKey, customColor) => {
-            entityDisplay.mutation.mutate({ iconKey, colorKey, customColor });
+          onChange={(glyph, colorKey, customColor) => {
+            entityDisplay.mutation.mutate({ glyph, colorKey, customColor });
           }}
         />
       }

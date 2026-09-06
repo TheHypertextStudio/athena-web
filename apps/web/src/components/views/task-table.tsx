@@ -462,7 +462,8 @@ function SelectableTaskTable({
               return (
                 <span className="flex items-center gap-1.5">
                   <EntityIconGlyph
-                    iconKey={display.iconKey}
+                    subjectType="task"
+                    glyph={display.glyph}
                     colorKey={display.colorKey}
                     customColor={display.customColor}
                     size={20}

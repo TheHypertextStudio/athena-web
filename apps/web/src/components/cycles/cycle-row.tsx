@@ -74,7 +74,8 @@ function CycleIdentity({ row }: { readonly row: CycleRowProps }): JSX.Element {
   return (
     <span className="flex min-w-0 items-center gap-3 py-1">
       <EntityIconGlyph
-        iconKey={identity.iconKey}
+        subjectType="cycle"
+        glyph={identity.glyph}
         colorKey={identity.colorKey}
         customColor={identity.customColor}
         size={32}

@@ -216,6 +216,159 @@ export const EntityDisplayIconKey = z.enum(ENTITY_DISPLAY_ICON_KEYS);
 /** Supported entity-display icon key. */
 export type EntityDisplayIconKey = z.infer<typeof EntityDisplayIconKey>;
 
+/** A Material Symbols ligature name such as `account_balance` or `rocket_launch`. */
+export const MaterialSymbolName = z.string().regex(/^[a-z0-9]+(?:_[a-z0-9]+)*$/);
+/** Validated Material Symbols ligature name. */
+export type MaterialSymbolName = z.infer<typeof MaterialSymbolName>;
+
+/** An uppercase, hyphen-separated fully qualified Unicode emoji sequence. */
+export const EmojiHexcode = z.string().regex(/^[0-9A-F]{2,6}(?:-[0-9A-F]{2,6})*$/);
+/** Validated fully qualified Unicode emoji sequence. */
+export type EmojiHexcode = z.infer<typeof EmojiHexcode>;
+
+/** The saved visual identity for a customizable Docket entity. */
+export const EntityDisplayGlyph = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('symbol'), name: MaterialSymbolName }),
+  z.object({ kind: z.literal('emoji'), hexcode: EmojiHexcode }),
+]);
+/** A Material symbol or a fully qualified Unicode emoji. */
+export type EntityDisplayGlyph = z.infer<typeof EntityDisplayGlyph>;
+
+/**
+ * The exact Material symbol that preserves each legacy icon's visible meaning.
+ *
+ * @remarks
+ * The database migration and compatibility parser both consume this table. Keeping one explicit
+ * entry per legacy key makes a missing backfill impossible to hide behind a generic fallback.
+ */
+export const LEGACY_ICON_SYMBOL_NAMES = {
+  target: 'track_changes',
+  flag: 'outlined_flag',
+  layers: 'layers',
+  folder: 'folder_open',
+  workflow: 'account_tree',
+  globe: 'public',
+  users: 'groups',
+  sparkles: 'auto_awesome',
+  bus: 'directions_bus',
+  train: 'train',
+  subway: 'subway',
+  route: 'route',
+  map: 'map',
+  campaign: 'campaign',
+  school: 'school',
+  book: 'menu_book',
+  event: 'event',
+  handshake: 'handshake',
+  government: 'account_balance',
+  vote: 'how_to_vote',
+  community: 'diversity_3',
+  hub: 'hub',
+  psychology: 'psychology',
+  idea: 'lightbulb',
+  launch: 'rocket_launch',
+  language: 'language',
+  park: 'park',
+  building: 'apartment',
+  engineering: 'engineering',
+  construction: 'construction',
+  timeline: 'timeline',
+  analytics: 'analytics',
+  insights: 'insights',
+  growth: 'trending_up',
+  verified: 'verified',
+  security: 'security',
+  energy: 'bolt',
+  favorite: 'favorite',
+  star: 'star',
+  explore: 'explore',
+  travel: 'travel_explore',
+  award: 'workspace_premium',
+  volunteering: 'volunteer_activism',
+  forum: 'forum',
+  voice: 'record_voice_over',
+  podcast: 'podcasts',
+  article: 'article',
+  policy: 'policy',
+  justice: 'gavel',
+  library: 'local_library',
+  pedestrian: 'emoji_people',
+  mail: 'mail',
+  chat: 'chat',
+  phone: 'phone',
+  inbox: 'inbox',
+  send: 'send',
+  camera: 'camera_alt',
+  image: 'image',
+  video: 'videocam',
+  music: 'music_note',
+  film: 'movie',
+  wallet: 'account_balance_wallet',
+  payments: 'payments',
+  receipt: 'receipt_long',
+  bank: 'account_balance',
+  savings: 'savings',
+  science: 'science',
+  biotech: 'biotech',
+  experiment: 'vaccines',
+  atom: 'bubble_chart',
+  leaf: 'energy_savings_leaf',
+  tree: 'forest',
+  flower: 'local_florist',
+  water: 'water_drop',
+  mountain: 'landscape',
+  sun: 'wb_sunny',
+  cloud: 'cloud',
+  car: 'directions_car',
+  flight: 'flight',
+  rocket: 'rocket',
+  bike: 'directions_bike',
+  boat: 'directions_boat',
+  build: 'build',
+  wrench: 'handyman',
+  settings: 'settings',
+  tune: 'tune',
+  hammer: 'hardware',
+  person: 'person',
+  group: 'group',
+  contacts: 'contacts',
+  badge: 'badge',
+  note: 'note',
+  archive: 'archive',
+  clipboard: 'content_paste',
+  lock: 'lock',
+  shield: 'shield',
+  key: 'key',
+  fingerprint: 'fingerprint',
+  code: 'code',
+  terminal: 'terminal',
+  database: 'storage',
+  bug: 'bug_report',
+} as const satisfies Record<EntityDisplayIconKey, MaterialSymbolName>;
+
+/** Convert one compatibility icon key into its canonical glyph. */
+export function glyphForLegacyIcon(iconKey: EntityDisplayIconKey): EntityDisplayGlyph {
+  return { kind: 'symbol', name: LEGACY_ICON_SYMBOL_NAMES[iconKey] };
+}
+
+/**
+ * Choose a valid compatibility key for a glyph written by a new client.
+ *
+ * @param glyph - The new canonical glyph.
+ * @param fallback - The subject's legacy default when the glyph has no exact old equivalent.
+ * @returns A valid key that an old client can render.
+ */
+export function legacyIconForGlyph(
+  glyph: EntityDisplayGlyph,
+  fallback: EntityDisplayIconKey,
+): EntityDisplayIconKey {
+  if (glyph.kind === 'emoji') return fallback;
+  const exact = ENTITY_DISPLAY_ICON_KEYS.find(
+    (key) => LEGACY_ICON_SYMBOL_NAMES[key] === glyph.name,
+  );
+  return exact ?? fallback;
+}
+
 /**
  * Stable color keys for the preset entity-display palette.
  *
@@ -255,7 +408,9 @@ export type EntityDisplayColorKey = z.infer<typeof EntityDisplayColorKey>;
 /** One stable default presentation before a person customizes an entity. */
 export interface EntityDisplaySubjectDefinition {
   /** The glyph shown until the entity has a stored display row. */
-  readonly iconKey: EntityDisplayIconKey;
+  readonly glyph: EntityDisplayGlyph;
+  /** The old catalog key retained only for compatibility responses and dual writes. */
+  readonly legacyIconKey: EntityDisplayIconKey;
   /** The default decorative color, derived from the stable subject identifier when required. */
   readonly colorKey: EntityDisplayColorKey | ((subjectId: string) => EntityDisplayColorKey);
 }
@@ -269,15 +424,51 @@ export interface EntityDisplaySubjectDefinition {
  * need a default without importing persistence.
  */
 export const ENTITY_DISPLAY_SUBJECTS = {
-  initiative: { iconKey: 'target', colorKey: 'neutral' },
-  program: { iconKey: 'layers', colorKey: 'primary' },
-  project: { iconKey: 'folder', colorKey: 'neutral' },
-  task: { iconKey: 'clipboard', colorKey: 'neutral' },
-  cycle: { iconKey: 'timeline', colorKey: 'primary' },
-  milestone: { iconKey: 'flag', colorKey: 'neutral' },
-  team: { iconKey: 'users', colorKey: hashTeamColorKey },
-  label: { iconKey: 'badge', colorKey: 'neutral' },
-  workStatus: { iconKey: 'workflow', colorKey: 'neutral' },
+  initiative: {
+    glyph: { kind: 'symbol', name: 'track_changes' },
+    legacyIconKey: 'target',
+    colorKey: 'neutral',
+  },
+  program: {
+    glyph: { kind: 'symbol', name: 'layers' },
+    legacyIconKey: 'layers',
+    colorKey: 'primary',
+  },
+  project: {
+    glyph: { kind: 'symbol', name: 'folder_open' },
+    legacyIconKey: 'folder',
+    colorKey: 'neutral',
+  },
+  task: {
+    glyph: { kind: 'symbol', name: 'content_paste' },
+    legacyIconKey: 'clipboard',
+    colorKey: 'neutral',
+  },
+  cycle: {
+    glyph: { kind: 'symbol', name: 'timeline' },
+    legacyIconKey: 'timeline',
+    colorKey: 'primary',
+  },
+  milestone: {
+    glyph: { kind: 'symbol', name: 'outlined_flag' },
+    legacyIconKey: 'flag',
+    colorKey: 'neutral',
+  },
+  team: {
+    glyph: { kind: 'symbol', name: 'groups' },
+    legacyIconKey: 'users',
+    colorKey: hashTeamColorKey,
+  },
+  label: {
+    glyph: { kind: 'symbol', name: 'badge' },
+    legacyIconKey: 'badge',
+    colorKey: 'neutral',
+  },
+  workStatus: {
+    glyph: { kind: 'symbol', name: 'account_tree' },
+    legacyIconKey: 'workflow',
+    colorKey: 'neutral',
+  },
 } as const satisfies Record<EntityDisplaySubjectType, EntityDisplaySubjectDefinition>;
 
 /**
@@ -296,6 +487,8 @@ export type EntityDisplayCustomColor = z.infer<typeof EntityDisplayCustomColor>;
 export const EntityDisplayOut = z.object({
   subjectType: EntityDisplaySubjectType,
   subjectId: z.string().min(1),
+  glyph: EntityDisplayGlyph,
+  /** Compatibility response field. Remove after the 30-day client window. */
   iconKey: EntityDisplayIconKey,
   colorKey: EntityDisplayColorKey,
   customColor: EntityDisplayCustomColor.nullable(),
@@ -303,7 +496,7 @@ export const EntityDisplayOut = z.object({
     .string()
     .nullable()
     .describe(
-      'Managed public URL of an uploaded cover image, or null when the cover is derived from `iconKey` + `colorKey`. Null is the ordinary state, not a missing value — a derived cover always renders.',
+      'Managed public URL of an uploaded cover image, or null when the cover is derived from `glyph` + `colorKey`. Null is the ordinary state, not a missing value — a derived cover always renders.',
     ),
   customized: z.boolean(),
 });
@@ -311,18 +504,24 @@ export const EntityDisplayOut = z.object({
 export type EntityDisplayOut = z.infer<typeof EntityDisplayOut>;
 
 /** Complete replacement body for an entity's optional display customization. */
-export const EntityDisplayUpdate = z.object({
-  iconKey: EntityDisplayIconKey,
-  colorKey: EntityDisplayColorKey,
-  customColor: EntityDisplayCustomColor.nullable(),
-  coverImage: z
-    .string()
-    .nullable()
-    .optional()
-    .describe(
-      "A `data:` image URL to store as this entity's cover, or null to clear it and fall back to the derived cover. Omit to leave the current cover unchanged.",
-    ),
-});
+export const EntityDisplayUpdate = z
+  .object({
+    glyph: EntityDisplayGlyph.optional(),
+    /** Compatibility update field. Remove after the 30-day client window. */
+    iconKey: EntityDisplayIconKey.optional(),
+    colorKey: EntityDisplayColorKey,
+    customColor: EntityDisplayCustomColor.nullable(),
+    coverImage: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        "A `data:` image URL to store as this entity's cover, or null to clear it and fall back to the derived cover. Omit to leave the current cover unchanged.",
+      ),
+  })
+  .refine((update) => update.glyph !== undefined || update.iconKey !== undefined, {
+    message: 'A glyph or compatibility icon key is required',
+  });
 /** Validated entity-display update. */
 export type EntityDisplayUpdate = z.infer<typeof EntityDisplayUpdate>;
 
@@ -331,14 +530,16 @@ export function defaultEntityDisplay(
   subjectType: EntityDisplaySubjectType,
   subjectId: string,
 ): EntityDisplayOut {
+  const definition = ENTITY_DISPLAY_SUBJECTS[subjectType];
   return {
     subjectType,
     subjectId,
-    iconKey: ENTITY_DISPLAY_SUBJECTS[subjectType].iconKey,
+    glyph: definition.glyph,
+    iconKey: definition.legacyIconKey,
     colorKey:
-      typeof ENTITY_DISPLAY_SUBJECTS[subjectType].colorKey === 'function'
-        ? ENTITY_DISPLAY_SUBJECTS[subjectType].colorKey(subjectId)
-        : ENTITY_DISPLAY_SUBJECTS[subjectType].colorKey,
+      typeof definition.colorKey === 'function'
+        ? definition.colorKey(subjectId)
+        : definition.colorKey,
     customColor: null,
     coverImage: null,
     customized: false,

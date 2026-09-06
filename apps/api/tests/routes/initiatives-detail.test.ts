@@ -247,6 +247,7 @@ describe('initiatives detail roll-up', () => {
       items: {
         id: string;
         display: {
+          glyph: { kind: 'symbol'; name: string } | { kind: 'emoji'; hexcode: string };
           iconKey: string;
           colorKey: string;
           customColor: string | null;
@@ -257,6 +258,7 @@ describe('initiatives detail roll-up', () => {
     expect(body.items.find((item) => item.id === id)?.display).toEqual({
       subjectType: 'initiative',
       subjectId: id,
+      glyph: { kind: 'symbol', name: 'outlined_flag' },
       iconKey: 'flag',
       colorKey: 'primary',
       customColor: null,

@@ -13,6 +13,7 @@ import {
   ENTITY_DISPLAY_ICON_KEYS,
   ENTITY_DISPLAY_SUBJECT_TYPES,
   type EntityDisplayColorKey,
+  type EntityDisplayGlyph,
   type EntityDisplayIconKey,
   type EntityDisplaySubjectType,
 } from '@docket/work/entity-display-contract';
@@ -194,6 +195,10 @@ export const entityDisplay = pgTable(
     subjectType: text('subject_type').$type<EntityDisplaySubjectType>().notNull(),
     subjectId: text('subject_id').notNull(),
     iconKey: text('icon_key').$type<EntityDisplayIconKey>().notNull(),
+    /** Canonical glyph kind. Null only exists during the compatibility migration window. */
+    glyphKind: text('glyph_kind').$type<EntityDisplayGlyph['kind']>(),
+    /** Canonical Material ligature name or fully qualified emoji hexcode. */
+    glyphValue: text('glyph_value'),
     colorKey: text('color_key').$type<EntityDisplayColorKey>().notNull(),
     customColor: text('custom_color'),
     /**
@@ -219,6 +224,14 @@ export const entityDisplay = pgTable(
       sql`${t.subjectType} in (${entityDisplaySubjectTypeList})`,
     ),
     check('entity_display_icon_key_check', sql`${t.iconKey} in (${entityDisplayIconKeyList})`),
+    check(
+      'entity_display_glyph_pair_check',
+      sql`(${t.glyphKind} is null and ${t.glyphValue} is null) or (${t.glyphKind} is not null and ${t.glyphValue} is not null)`,
+    ),
+    check(
+      'entity_display_glyph_shape_check',
+      sql`${t.glyphKind} is null or (${t.glyphKind} = 'symbol' and ${t.glyphValue} ~ '^[a-z0-9]+(_[a-z0-9]+)*$') or (${t.glyphKind} = 'emoji' and ${t.glyphValue} ~ '^[0-9A-F]{2,6}(-[0-9A-F]{2,6})*$')`,
+    ),
     check('entity_display_color_key_check', sql`${t.colorKey} in (${entityDisplayColorKeyList})`),
     check(
       'entity_display_custom_color_check',

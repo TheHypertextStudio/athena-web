@@ -327,13 +327,15 @@ export default function TaskDetailPage(): JSX.Element {
         <div className="flex min-w-0 items-start gap-3">
           <EntityIconPicker
             display={entityDisplay.display}
+
+            workspaceId={orgId}
             entityName={task.title}
             editable={canEdit}
             pending={entityDisplay.mutation.isPending}
             loading={entityDisplay.loading}
             size={40}
-            onChange={(iconKey, colorKey, customColor) => {
-              entityDisplay.mutation.mutate({ iconKey, colorKey, customColor });
+            onChange={(glyph, colorKey, customColor) => {
+              entityDisplay.mutation.mutate({ glyph, colorKey, customColor });
             }}
           />
           <h1 className="min-w-0 leading-tight">

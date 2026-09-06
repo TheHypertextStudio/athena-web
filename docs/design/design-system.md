@@ -870,7 +870,42 @@ writable, `pnpm typecheck` fails.
 
 ---
 
-## 10. Migration checklist for a screen
+## 10. Entity identity glyphs
+
+`EntityIconGlyph` and `EntityIconPicker` own the visual identity for Initiatives, Programs,
+Projects, Tasks, Cycles, Milestones, Teams, Labels, and Work Statuses. Every detail header, list,
+card, relation picker, search result, command result, and generated Team cover renders the saved
+`glyph`. A product surface must not map the saved identity back to an icon from its own library.
+
+The saved glyph is either a validated Material Symbol Rounded name or a fully qualified Unicode 17
+emoji hexcode. The pinned Material catalog currently contains 3,905 names. The generated emoji
+validation catalog currently contains 3,953 base and skin-tone sequences. Symbols render through
+the self-hosted Rounded weight-400 font with fill disabled. Emoji render through the platform's
+native color font. The selected foreground color applies to symbols. It applies only to the tinted
+circle around emoji.
+
+The picker uses the `xl` panel width at 352px and the shared `picker` maximum-height tier at 520px.
+Every choice uses a 40px target. The catalog grid has seven columns and virtualizes rows. Search
+receives focus when the panel opens. Empty search shows at most 12 deterministic name suggestions,
+then at most 24 workspace-scoped recent choices, then the active catalog. Non-empty search groups
+ranked results from both catalogs even when one browse tab is selected. Exact names and shortcodes
+rank before prefixes, label tokens, reviewed Docket aliases, and substrings.
+
+Arrow keys move by cell or row. `Home`, `End`, `PageUp`, and `PageDown` move within the current
+grid. `Enter` and `Space` select. `Escape` closes the panel and restores trigger focus. Symbol,
+emoji, and preset-color choices save once when selected. The custom-color input previews locally
+and saves once when the person commits the value.
+
+The emoji dataset is not part of an initial route chunk. The Emoji tab or a non-empty combined
+search loads only the English compact data, English category messages, and CLDR shortcodes from
+`emojibase-data`. The build must keep the emitted Rounded font below 750KB. The service worker keeps
+its existing 12MB precache limit.
+
+Label and Work Status colors remain semantic. A decorative glyph never replaces the workflow
+meaning conveyed by those colors. The engineering ownership and compatibility flow are documented
+in [Entity display glyph architecture](../engineering/entity-display-glyphs.md).
+
+## 11. Migration checklist for a screen
 
 1. Wrap every toolbar in `Toolbar` with explicit `leading` and `trailing` groups. Delete the bare
    `<div className="flex items-center gap-2">`.

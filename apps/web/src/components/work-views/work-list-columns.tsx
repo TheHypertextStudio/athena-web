@@ -147,7 +147,8 @@ function IdentityGlyph({ row }: { readonly row: WorkViewRowFor<ViewTarget> }): J
   const display = row.display ?? defaultEntityDisplay(row.target, row.id);
   return (
     <EntityIconGlyph
-      iconKey={display.iconKey}
+      subjectType={row.target}
+      glyph={display.glyph}
       colorKey={display.colorKey}
       customColor={display.customColor}
       size={INITIATIVE_LEADING_SLOT_PX}

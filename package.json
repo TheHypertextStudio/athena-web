@@ -41,6 +41,8 @@
     "placeholders:inventory": "tsx scripts/placeholder-inventory.ts",
     "placeholders:check": "tsx scripts/placeholder-inventory.ts --check",
     "icons": "pnpm --filter @docket/brand icons",
+    "glyphs:generate": "node scripts/generate-entity-glyph-catalog.mjs",
+    "glyphs:verify-bundle": "node scripts/verify-entity-glyph-bundle.mjs",
     "bootstrap": "tsx scripts/bootstrap.ts",
     "integrations": "tsx scripts/integrations-setup.ts",
     "linear-agent:sandbox-check": "tsx scripts/linear-agent-sandbox-check.ts",

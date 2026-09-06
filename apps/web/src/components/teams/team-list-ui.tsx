@@ -100,7 +100,8 @@ function teamColumns({
         return (
           <span className="flex min-w-0 items-center gap-3 py-1">
             <EntityIconGlyph
-              iconKey={identity.iconKey}
+              subjectType="team"
+              glyph={identity.glyph}
               colorKey={identity.colorKey}
               customColor={identity.customColor}
               size={40}

@@ -99,7 +99,8 @@ function CardIdentity({ row }: { row: WorkViewRowFor<ViewTarget> }): JSX.Element
   const display = row.display ?? defaultEntityDisplay(row.target, row.id);
   return (
     <EntityIconGlyph
-      iconKey={display.iconKey}
+      subjectType={row.target}
+      glyph={display.glyph}
       colorKey={display.colorKey}
       customColor={display.customColor}
       size={24}

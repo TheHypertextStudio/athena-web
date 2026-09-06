@@ -13,7 +13,7 @@
  */
 import type {
   EntityDisplayColorKey,
-  EntityDisplayIconKey,
+  EntityDisplayGlyph,
   EntityDisplayOut,
 } from '@docket/work/entity-display-contract';
 import type { TeamOut } from '../../../../../../lib/contracts/team';
@@ -126,7 +126,7 @@ export default function StatusesSettingsPage(): JSX.Element {
     EntityDisplayOut,
     {
       readonly id: string;
-      readonly iconKey: EntityDisplayIconKey;
+      readonly glyph: EntityDisplayGlyph;
       readonly colorKey: EntityDisplayColorKey;
       readonly customColor: string | null;
     }
@@ -271,13 +271,15 @@ export default function StatusesSettingsPage(): JSX.Element {
                   display={
                     displayById.get(status.id) ?? defaultEntityDisplay('workStatus', status.id)
                   }
+
+                  workspaceId={orgId}
                   entityName={status.name}
                   editable={canManage && status.id !== ''}
                   pending={updateDisplay.isPending}
                   loading={displaysQ.isPending}
                   size={32}
-                  onChange={(iconKey, colorKey, customColor) => {
-                    updateDisplay.mutate({ id: status.id, iconKey, colorKey, customColor });
+                  onChange={(glyph, colorKey, customColor) => {
+                    updateDisplay.mutate({ id: status.id, glyph, colorKey, customColor });
                   }}
                 />
               )}

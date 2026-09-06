@@ -358,6 +358,8 @@ export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkView
         display.subject_type as _display_subject_type,
         display.subject_id as _display_subject_id,
         display.icon_key as _display_icon_key,
+        display.glyph_kind as _display_glyph_kind,
+        display.glyph_value as _display_glyph_value,
         display.color_key as _display_color_key,
         display.custom_color as _display_custom_color,
         display.cover_image as _display_cover_image

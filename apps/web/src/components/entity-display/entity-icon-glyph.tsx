@@ -16,9 +16,10 @@
  */
 import type {
   EntityDisplayColorKey,
-  EntityDisplayIconKey,
+  EntityDisplayGlyph,
+  EntityDisplaySubjectType,
 } from '@docket/work/entity-display-contract';
-import { STRATEGIC_WORK_ROUNDED_ICON_BY_KEY } from '@docket/ui/icons';
+import { MaterialSymbol } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';
 
@@ -159,10 +160,17 @@ export const ENTITY_DISPLAY_COLOR_BY_KEY = Object.fromEntries(
   ENTITY_DISPLAY_COLORS.map((option) => [option.key, option]),
 ) as Record<EntityDisplayColorKey, EntityDisplayColor>;
 
+/** Convert a validated emoji hexcode into its canonical Unicode string. */
+export function emojiFromHexcode(hexcode: string): string {
+  return String.fromCodePoint(...hexcode.split('-').map((part) => Number.parseInt(part, 16)));
+}
+
 /** Props for {@link EntityIconGlyph}. */
 export interface EntityIconGlyphProps {
-  /** The strategic-work icon to render. */
-  iconKey: EntityDisplayIconKey;
+  /** The owning entity type, used to recover from an unknown stored symbol. */
+  subjectType: EntityDisplaySubjectType;
+  /** The canonical symbol or emoji to render. */
+  glyph: EntityDisplayGlyph;
   /** The preset color key (ignored when {@link customColor} is set). */
   colorKey: EntityDisplayColorKey;
   /** A custom hex color that overrides the preset, or `null` to use the preset. */
@@ -183,19 +191,21 @@ export interface EntityIconGlyphProps {
  * @returns the rendered glyph.
  */
 export function EntityIconGlyph({
-  iconKey,
+  subjectType,
+  glyph,
   colorKey,
   customColor,
   size = 32,
 }: EntityIconGlyphProps): JSX.Element {
-  const Icon = STRATEGIC_WORK_ROUNDED_ICON_BY_KEY[iconKey];
   const color = ENTITY_DISPLAY_COLOR_BY_KEY[colorKey];
   const hasCustomColor = customColor !== null;
   const iconSize = Math.round(size * 0.5);
   return (
     <span
       data-testid="initiative-icon-circle"
-      data-icon-key={iconKey}
+      data-subject-type={subjectType}
+      data-glyph-kind={glyph.kind}
+      data-glyph-value={glyph.kind === 'symbol' ? glyph.name : glyph.hexcode}
       className={cn(
         'flex shrink-0 items-center justify-center rounded-full',
         !hasCustomColor && color.circleClass,
@@ -206,16 +216,20 @@ export function EntityIconGlyph({
         ...(hasCustomColor ? { backgroundColor: `${customColor}26` } : {}),
       }}
     >
-      <Icon
-        aria-hidden
-        data-testid="initiative-icon"
-        className={cn(!hasCustomColor && color.iconClass)}
-        style={{
-          width: iconSize,
-          height: iconSize,
-          ...(hasCustomColor ? { color: customColor } : {}),
-        }}
-      />
+      {glyph.kind === 'symbol' ? (
+        <MaterialSymbol
+          name={glyph.name}
+          className={cn(!hasCustomColor && color.iconClass)}
+          style={{
+            fontSize: iconSize,
+            ...(hasCustomColor ? { color: customColor } : {}),
+          }}
+        />
+      ) : (
+        <span aria-hidden style={{ fontSize: iconSize, lineHeight: 1 }}>
+          {emojiFromHexcode(glyph.hexcode)}
+        </span>
+      )}
     </span>
   );
 }

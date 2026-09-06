@@ -121,7 +121,8 @@ function TeamPickerControl({
         >
           {selectedDisplay === null ? null : (
             <EntityIconGlyph
-              iconKey={selectedDisplay.iconKey}
+              subjectType="team"
+              glyph={selectedDisplay.glyph}
               colorKey={selectedDisplay.colorKey}
               customColor={selectedDisplay.customColor}
               size={16}
@@ -145,7 +146,8 @@ function TeamPickerControl({
             return (
               <DropdownMenuRadioItem key={team.id} value={team.id}>
                 <EntityIconGlyph
-                  iconKey={display.iconKey}
+                  subjectType="team"
+                  glyph={display.glyph}
                   colorKey={display.colorKey}
                   customColor={display.customColor}
                   size={16}

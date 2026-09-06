@@ -1,6 +1,12 @@
 import { sql, type SQL } from 'drizzle-orm';
 
 import type { ViewTarget } from '@docket/work/view-contract';
+import {
+  defaultEntityDisplay,
+  LEGACY_ICON_SYMBOL_NAMES,
+} from '@docket/work/entity-display-contract';
+import { isKnownEmojiHexcode } from '@docket/work/emoji-catalog';
+import { isKnownMaterialSymbolName } from '@docket/work/material-symbol-catalog';
 
 import { compileProgramActivitySql } from './program-activity-sql';
 import { compileProjectTeamMembershipSql } from './project-team-sql';
@@ -66,9 +72,21 @@ function actorIdentity(columnName: string): SQL {
 
 /** Read optional customized display metadata joined onto the bounded page once. */
 function entityDisplay(): SQL {
+  const legacySymbol = sql.raw(
+    `case e._display_icon_key ${Object.entries(LEGACY_ICON_SYMBOL_NAMES)
+      .map(([key, name]) => `when '${key}' then '${name}'`)
+      .join(' ')} else 'track_changes' end`,
+  );
   return sql`case when e._display_subject_id is null then null else json_build_object(
       'subjectType', e._display_subject_type,
       'subjectId', e._display_subject_id,
+      'glyph', case
+        when e._display_glyph_kind = 'emoji' then json_build_object(
+          'kind', 'emoji', 'hexcode', e._display_glyph_value)
+        when e._display_glyph_kind = 'symbol' then json_build_object(
+          'kind', 'symbol', 'name', e._display_glyph_value)
+        else json_build_object('kind', 'symbol', 'name', ${legacySymbol})
+      end,
       'iconKey', e._display_icon_key,
       'colorKey', e._display_color_key,
       'customColor', e._display_custom_color,
@@ -223,6 +241,29 @@ function timestampValue(value: unknown): unknown {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
 }
 
+function normalizeDisplayGlyph(target: ViewTarget, id: unknown, display: unknown): unknown {
+  if (display === null || typeof display !== 'object') return display;
+  const record = display as Record<string, unknown>;
+  const glyph = record['glyph'];
+  if (glyph !== null && typeof glyph === 'object') {
+    const glyphRecord = glyph as Record<string, unknown>;
+    if (
+      (glyphRecord['kind'] === 'symbol' &&
+        typeof glyphRecord['name'] === 'string' &&
+        isKnownMaterialSymbolName(glyphRecord['name'])) ||
+      (glyphRecord['kind'] === 'emoji' &&
+        typeof glyphRecord['hexcode'] === 'string' &&
+        isKnownEmojiHexcode(glyphRecord['hexcode']))
+    ) {
+      return display;
+    }
+  }
+  return {
+    ...record,
+    glyph: defaultEntityDisplay(target, typeof id === 'string' ? id : '').glyph,
+  };
+}
+
 /**
  * Convert a database projection into camel-case transport scalars.
  *
@@ -253,5 +294,6 @@ export function transportWorkViewRow(
       result[camel] = value;
     }
   }
+  result['display'] = normalizeDisplayGlyph(target, result['id'], result['display']);
   return result;
 }

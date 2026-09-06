@@ -620,7 +620,8 @@ function SavedRecentEntityIdentity({
 
   return (
     <EntityIconGlyph
-      iconKey={display.iconKey}
+      subjectType={display.subjectType}
+      glyph={display.glyph}
       colorKey={display.colorKey}
       customColor={display.customColor}
       size={32}
@@ -640,7 +641,15 @@ export function RecentDocumentIdentity({ document }: { readonly document: OpenTa
     );
   }
   if (document.type === 'program') {
-    return <EntityIconGlyph iconKey="layers" colorKey="primary" customColor={null} size={32} />;
+    return (
+      <EntityIconGlyph
+        subjectType="program"
+        glyph={{ kind: 'symbol', name: 'layers' }}
+        colorKey="primary"
+        customColor={null}
+        size={32}
+      />
+    );
   }
 
   const Icon = FIXED_RECENT_DOCUMENT_ICON[document.type];

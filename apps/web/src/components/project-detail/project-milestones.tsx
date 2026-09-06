@@ -18,7 +18,7 @@
 import {
   defaultEntityDisplay,
   type EntityDisplayColorKey,
-  type EntityDisplayIconKey,
+  type EntityDisplayGlyph,
   type EntityDisplayOut,
 } from '@docket/work/entity-display-contract';
 import { type MilestoneOut } from '@docket/work/milestone-contract';
@@ -89,7 +89,7 @@ export function ProjectMilestonesPanel({
     EntityDisplayOut,
     {
       readonly id: string;
-      readonly iconKey: EntityDisplayIconKey;
+      readonly glyph: EntityDisplayGlyph;
       readonly colorKey: EntityDisplayColorKey;
       readonly customColor: string | null;
     }
@@ -147,15 +147,17 @@ export function ProjectMilestonesPanel({
                         displayById.get(milestone.id) ??
                         defaultEntityDisplay('milestone', milestone.id)
                       }
+
+                      workspaceId={orgId}
                       entityName={milestone.name}
                       editable={canEdit}
                       pending={updateDisplay.isPending}
                       loading={displaysQ.isPending}
                       size={32}
-                      onChange={(iconKey, colorKey, customColor) => {
+                      onChange={(glyph, colorKey, customColor) => {
                         updateDisplay.mutate({
                           id: milestone.id,
-                          iconKey,
+                          glyph,
                           colorKey,
                           customColor,
                         });

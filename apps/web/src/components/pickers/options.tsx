@@ -242,7 +242,8 @@ export function projectOptions(
       label: project.name,
       icon: (
         <EntityIconGlyph
-          iconKey={display.iconKey}
+          subjectType="project"
+          glyph={display.glyph}
           colorKey={display.colorKey}
           customColor={display.customColor}
           size={20}
@@ -265,7 +266,8 @@ export function programOptions(
       label: program.name,
       icon: (
         <EntityIconGlyph
-          iconKey={display.iconKey}
+          subjectType="program"
+          glyph={display.glyph}
           colorKey={display.colorKey}
           customColor={display.customColor}
           size={20}
@@ -289,7 +291,8 @@ export function initiativeOptions(
       label: initiative.name,
       icon: (
         <EntityIconGlyph
-          iconKey={display.iconKey}
+          subjectType="initiative"
+          glyph={display.glyph}
           colorKey={display.colorKey}
           customColor={display.customColor}
           size={20}
@@ -333,7 +336,8 @@ export function cycleOptions(
       label: cycle.displayName,
       icon: (
         <EntityIconGlyph
-          iconKey={display.iconKey}
+          subjectType="cycle"
+          glyph={display.glyph}
           colorKey={display.colorKey}
           customColor={display.customColor}
           size={20}
@@ -358,7 +362,8 @@ export function milestoneOptions(
       label: milestone.name,
       icon: (
         <EntityIconGlyph
-          iconKey={display.iconKey}
+          subjectType="milestone"
+          glyph={display.glyph}
           colorKey={display.colorKey}
           customColor={display.customColor}
           size={20}
@@ -381,7 +386,8 @@ export function teamOptions(
       label: team.name,
       icon: (
         <EntityIconGlyph
-          iconKey={display.iconKey}
+          subjectType="team"
+          glyph={display.glyph}
           colorKey={display.colorKey}
           customColor={display.customColor}
           size={20}

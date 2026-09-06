@@ -44,3 +44,6 @@ export type PopoverPresentation = 'menu' | 'panel';
 
 /** Fixed width tiers for a non-menu Popover panel. */
 export type PanelWidth = 'sm' | 'md' | 'lg' | 'xl' | 'wide' | 'content';
+
+/** Viewport-aware maximum-height tiers for a Popover panel. */
+export type PanelMaxHeight = 'available' | 'picker';

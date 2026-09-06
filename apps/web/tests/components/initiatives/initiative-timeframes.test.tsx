@@ -40,6 +40,7 @@ function initiative(
     display: {
       subjectType: 'initiative',
       subjectId: '1N1T1AT1VE0000000000000001',
+      glyph: { kind: 'symbol', name: 'track_changes' },
       iconKey: 'target',
       colorKey: 'neutral',
       customColor: null,

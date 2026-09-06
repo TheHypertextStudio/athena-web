@@ -121,12 +121,17 @@ route carries its own server-prefetched data and hydrates against its own tree.
 **Precache anything that will not take a surprising amount of space on the device.** That is a
 measured byte budget checked at build time, not a curated route list.
 
-Measured against a real production build, the whole of `.next/static` is **239 assets, 7.8 MB on
-disk, 2.0 MB gzipped over the wire** — every route's code, every stylesheet, every font. At that
-size there is nothing to choose between, so everything ships. `PRECACHE_BUDGET_BYTES` is 12 MB, and
-exceeding it **fails the build** with the ten largest assets named. It never drops them quietly: a
-precache that silently shrinks is a feature that silently stops working, for someone who is offline
-and cannot be told.
+Measured against the 2026-09-05 production build, the worker precaches **294 assets and 11.6 MB on
+disk**. That set contains every route's code, every stylesheet, and the ordinary application fonts.
+`PRECACHE_BUDGET_BYTES` remains 12 MB. Exceeding it **fails the build** with the ten largest assets
+named. The collector never drops an asset based on its size.
+
+There are two named runtime-only exceptions. MapLibre supports a map whose tiles already require a
+network connection. The generated Material and emoji picker datasets support a mutation that cannot
+save offline. Those assets load on first use and then enter the ordinary cache-first static cache.
+The self-hosted Material Symbols font follows the same runtime-only path and becomes available
+offline after its first request. Tests identify each exception by its generated path or content and
+prove that an ordinary application chunk which mentions one icon name remains in the precache.
 
 Route **code** is precached because it is identical for every user and it is the difference between
 a page rendering and not. Per-object **data** never is — a workspace's objects run to megabytes — so

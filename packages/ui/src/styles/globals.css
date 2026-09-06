@@ -26,6 +26,7 @@
  */
 @layer mui;
 
+@import '@material-symbols/font-400/rounded.css';
 @import 'tailwindcss';
 @import 'tw-animate-css';
 

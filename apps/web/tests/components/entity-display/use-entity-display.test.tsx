@@ -37,6 +37,7 @@ describe('useEntityDisplay', () => {
       okResponse({
         subjectType: 'task',
         subjectId: TASK_ID,
+        glyph: { kind: 'symbol', name: 'content_paste' },
         iconKey: 'clipboard',
         colorKey: 'blue',
         customColor: null,
@@ -56,7 +57,7 @@ describe('useEntityDisplay', () => {
       { wrapper },
     );
 
-    expect(result.current.display.iconKey).toBe('clipboard');
+    expect(result.current.display.glyph).toEqual({ kind: 'symbol', name: 'content_paste' });
     await waitFor(() => {
       expect(result.current.display.colorKey).toBe('blue');
     });
@@ -67,6 +68,7 @@ describe('useEntityDisplay', () => {
       okResponse({
         subjectType: 'task',
         subjectId: TASK_ID,
+        glyph: { kind: 'symbol', name: 'content_paste' },
         iconKey: 'clipboard',
         colorKey: 'neutral',
         customColor: null,
@@ -99,14 +101,14 @@ describe('useEntityDisplay', () => {
 
     act(() => {
       result.current.mutation.mutate({
-        iconKey: 'target',
+        glyph: { kind: 'symbol', name: 'track_changes' },
         colorKey: 'purple',
         customColor: '#112233',
       });
     });
     await waitFor(() => {
       expect(client.getQueryData(queryKeys.entityDisplay(ORG_ID, 'task', TASK_ID))).toMatchObject({
-        iconKey: 'target',
+        glyph: { kind: 'symbol', name: 'track_changes' },
         customColor: '#112233',
       });
     });
@@ -118,6 +120,7 @@ describe('useEntityDisplay', () => {
         okResponse({
           subjectType: 'task',
           subjectId: TASK_ID,
+          glyph: { kind: 'symbol', name: 'track_changes' },
           iconKey: 'target',
           colorKey: 'purple',
           customColor: '#112233',

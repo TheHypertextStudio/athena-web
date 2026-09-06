@@ -218,6 +218,7 @@ describe('work-view contracts', () => {
       display: {
         subjectType: 'project',
         subjectId: '01ARZ3NDEKTSV4RRFFQ69G5FBV',
+        glyph: { kind: 'symbol', name: 'folder_open' },
         iconKey: 'folder',
         colorKey: 'blue',
         customColor: null,
@@ -248,7 +249,7 @@ describe('work-view contracts', () => {
     expect(row).toMatchObject({
       summary: 'A typed work-view row can still render a designed identity.',
       leadActor: { displayName: 'Ada Lovelace' },
-      display: { iconKey: 'folder', colorKey: 'blue' },
+      display: { glyph: { kind: 'symbol', name: 'folder_open' }, colorKey: 'blue' },
     });
   });
 

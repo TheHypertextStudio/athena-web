@@ -71,6 +71,7 @@ describe('cycleOptions (task detail picker)', () => {
     const display = EntityDisplayOut.parse({
       subjectType: 'cycle',
       subjectId: IDS.named,
+      glyph: { kind: 'symbol', name: 'rocket' },
       iconKey: 'rocket',
       colorKey: 'purple',
       customColor: '#6d28d9',
@@ -80,7 +81,7 @@ describe('cycleOptions (task detail picker)', () => {
 
     const [option] = cycleOptions([named], formatWindow, [display]);
     expect((option?.icon as { props?: unknown }).props).toMatchObject({
-      iconKey: 'rocket',
+      glyph: { kind: 'symbol', name: 'rocket' },
       colorKey: 'purple',
       customColor: '#6d28d9',
       size: 20,

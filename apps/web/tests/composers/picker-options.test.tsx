@@ -216,6 +216,7 @@ describe('picker option mappers', () => {
     const projectDisplay = EntityDisplayOut.parse({
       subjectType: 'project',
       subjectId: IDS.project,
+      glyph: { kind: 'symbol', name: 'rocket' },
       iconKey: 'rocket',
       colorKey: 'orange',
       customColor: null,
@@ -225,6 +226,7 @@ describe('picker option mappers', () => {
     const initiativeDisplay = EntityDisplayOut.parse({
       subjectType: 'initiative',
       subjectId: IDS.initiative,
+      glyph: { kind: 'symbol', name: 'campaign' },
       iconKey: 'campaign',
       colorKey: 'teal',
       customColor: '#0f766e',
@@ -233,19 +235,19 @@ describe('picker option mappers', () => {
     });
 
     const projectIcon = projectOptions([project], [projectDisplay])[0]?.icon as {
-      props?: { iconKey?: string; colorKey?: string; customColor?: string | null; size?: number };
+      props?: { glyph?: unknown; colorKey?: string; customColor?: string | null; size?: number };
     };
     const initiativeIcon = initiativeOptions([initiative], [initiativeDisplay])[0]?.icon as {
-      props?: { iconKey?: string; colorKey?: string; customColor?: string | null; size?: number };
+      props?: { glyph?: unknown; colorKey?: string; customColor?: string | null; size?: number };
     };
     expect(projectIcon.props).toMatchObject({
-      iconKey: 'rocket',
+      glyph: { kind: 'symbol', name: 'rocket' },
       colorKey: 'orange',
       customColor: null,
       size: 20,
     });
     expect(initiativeIcon.props).toMatchObject({
-      iconKey: 'campaign',
+      glyph: { kind: 'symbol', name: 'campaign' },
       colorKey: 'teal',
       customColor: '#0f766e',
       size: 20,

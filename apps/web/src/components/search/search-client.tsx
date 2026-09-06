@@ -550,7 +550,8 @@ export function SearchResultRow({ result, orgName }: SearchResultRowProps): JSX.
     <div className="border-outline-variant hover:bg-surface-container-low focus-visible:ring-ring flex min-w-0 gap-3 rounded-lg border px-3 py-3 transition-colors focus-visible:ring-2 focus-visible:outline-none">
       {display ? (
         <EntityIconGlyph
-          iconKey={display.iconKey}
+          subjectType={display.subjectType}
+          glyph={display.glyph}
           colorKey={display.colorKey}
           customColor={display.customColor}
           size={20}

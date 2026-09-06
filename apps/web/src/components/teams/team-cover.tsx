@@ -15,11 +15,14 @@
  * reload. Nothing here is random, because a cover that shuffled on reload would read as a bug.
  */
 import type { EntityDisplayOut } from '@docket/work/entity-display-contract';
-import { STRATEGIC_WORK_ROUNDED_ICON_BY_KEY } from '@docket/ui/icons';
+import { MaterialSymbol } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';
 
-import { ENTITY_DISPLAY_COLOR_BY_KEY } from '@/components/entity-display/entity-icon-glyph';
+import {
+  emojiFromHexcode,
+  ENTITY_DISPLAY_COLOR_BY_KEY,
+} from '@/components/entity-display/entity-icon-glyph';
 
 /** Props for {@link TeamCover}. */
 export interface TeamCoverProps {
@@ -51,7 +54,6 @@ export function TeamCover({ display, teamName, className }: TeamCoverProps): JSX
   }
 
   const color = ENTITY_DISPLAY_COLOR_BY_KEY[display.colorKey];
-  const Icon = STRATEGIC_WORK_ROUNDED_ICON_BY_KEY[display.iconKey];
   const hasCustomColor = display.customColor !== null;
 
   return (
@@ -74,14 +76,26 @@ export function TeamCover({ display, teamName, className }: TeamCoverProps): JSX
           texture rather than as a second, competing copy of the glyph. At 20% it was recognizable
           enough to look like a mistake; the point is a silhouette that makes the grid scannable by
           shape and color before any text is read. */}
-      <Icon
-        aria-hidden="true"
-        className={cn(
-          'absolute -top-8 -right-10 size-44 opacity-[0.12]',
-          !hasCustomColor && color.iconClass,
-        )}
-        style={hasCustomColor ? { color: display.customColor ?? undefined } : undefined}
-      />
+      {display.glyph.kind === 'symbol' ? (
+        <MaterialSymbol
+          name={display.glyph.name}
+          className={cn(
+            'absolute -top-8 -right-10 opacity-[0.12]',
+            !hasCustomColor && color.iconClass,
+          )}
+          style={{
+            fontSize: 176,
+            ...(hasCustomColor ? { color: display.customColor ?? undefined } : {}),
+          }}
+        />
+      ) : (
+        <span
+          className="absolute -top-8 -right-10 opacity-[0.12]"
+          style={{ fontSize: 176, lineHeight: 1 }}
+        >
+          {emojiFromHexcode(display.glyph.hexcode)}
+        </span>
+      )}
     </div>
   );
 }

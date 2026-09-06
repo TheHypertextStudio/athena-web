@@ -105,7 +105,8 @@ export function TeamCard({
         <div className="relative z-10 -mt-9 flex items-end">
           <span className="ring-surface-container-low group-hover:ring-surface rounded-full ring-4 transition-[--tw-ring-color] motion-reduce:transition-none">
             <EntityIconGlyph
-              iconKey={display.iconKey}
+              subjectType="team"
+              glyph={display.glyph}
               colorKey={display.colorKey}
               customColor={display.customColor}
               size={40}

@@ -90,6 +90,7 @@ describe('Project planning timeframe catalog', () => {
       display: {
         subjectType: 'project' as const,
         subjectId: MONTH_PROJECT.id,
+        glyph: { kind: 'symbol' as const, name: 'folder_open' },
         iconKey: 'folder' as const,
         colorKey: 'neutral' as const,
         customColor: null,

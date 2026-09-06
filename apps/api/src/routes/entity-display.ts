@@ -17,7 +17,11 @@ import {
   EntityDisplayOut,
   EntityDisplaySubjectType,
   EntityDisplayUpdate,
+  glyphForLegacyIcon,
+  legacyIconForGlyph,
 } from '@docket/work/entity-display-contract';
+import { isKnownEmojiHexcode } from '@docket/work/emoji-catalog';
+import { isKnownMaterialSymbolName } from '@docket/work/material-symbol-catalog';
 import { pageOf } from '../contracts/pagination';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -26,6 +30,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { ok } from '../lib/ok';
+import { storedEntityDisplayOut } from '../lib/entity-display-output';
 import { apiDoc } from '../lib/openapi-route';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { zJson, zParam } from '../lib/validate';
@@ -33,6 +38,15 @@ import { zJson, zParam } from '../lib/validate';
 const displayParam = z.object({
   subjectType: EntityDisplaySubjectType,
   subjectId: z.string(),
+});
+
+const entityDisplayWrite = EntityDisplayUpdate.superRefine((update, context) => {
+  if (update.glyph?.kind === 'symbol' && !isKnownMaterialSymbolName(update.glyph.name)) {
+    context.addIssue({ code: 'custom', path: ['glyph', 'name'], message: 'Unknown symbol' });
+  }
+  if (update.glyph?.kind === 'emoji' && !isKnownEmojiHexcode(update.glyph.hexcode)) {
+    context.addIssue({ code: 'custom', path: ['glyph', 'hexcode'], message: 'Unknown emoji' });
+  }
 });
 
 /**
@@ -113,15 +127,7 @@ const entityDisplayRouter = new Hono<AppEnv>()
         c,
         EntityDisplayOut,
         row
-          ? {
-              subjectType,
-              subjectId,
-              iconKey: row.iconKey,
-              colorKey: row.colorKey,
-              customColor: row.customColor,
-              coverImage: row.coverImage,
-              customized: true,
-            }
+          ? storedEntityDisplayOut(subjectType, subjectId, row)
           : defaultEntityDisplay(subjectType, subjectId),
       );
     },
@@ -138,19 +144,24 @@ const entityDisplayRouter = new Hono<AppEnv>()
       response: EntityDisplayOut,
     }),
     zParam(displayParam),
-    zJson(EntityDisplayUpdate),
+    zJson(entityDisplayWrite),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { subjectType, subjectId } = c.req.valid('param');
       const body = c.req.valid('json');
       await assertSubjectInWorkspace(orgId, subjectType, subjectId);
+      const subjectDefault = defaultEntityDisplay(subjectType, subjectId);
+      const glyph = body.glyph ?? glyphForLegacyIcon(body.iconKey ?? subjectDefault.iconKey);
+      const iconKey = legacyIconForGlyph(glyph, subjectDefault.iconKey);
       const [row] = await db
         .insert(entityDisplay)
         .values({
           organizationId: orgId,
           subjectType,
           subjectId,
-          iconKey: body.iconKey,
+          iconKey,
+          glyphKind: glyph.kind,
+          glyphValue: glyph.kind === 'symbol' ? glyph.name : glyph.hexcode,
           colorKey: body.colorKey,
           customColor: body.customColor,
           ...(body.coverImage === undefined ? {} : { coverImage: body.coverImage }),
@@ -163,7 +174,9 @@ const entityDisplayRouter = new Hono<AppEnv>()
             entityDisplay.subjectId,
           ],
           set: {
-            iconKey: body.iconKey,
+            iconKey,
+            glyphKind: glyph.kind,
+            glyphValue: glyph.kind === 'symbol' ? glyph.name : glyph.hexcode,
             colorKey: body.colorKey,
             customColor: body.customColor,
             // Omitted means "leave the cover alone", which is what lets the icon/color picker save
@@ -175,15 +188,7 @@ const entityDisplayRouter = new Hono<AppEnv>()
         .returning();
       /* v8 ignore next -- @preserve insert/upsert always returns one row */
       if (!row) throw new Error('entity display upsert returned no row');
-      return ok(c, EntityDisplayOut, {
-        subjectType,
-        subjectId,
-        iconKey: row.iconKey,
-        colorKey: row.colorKey,
-        customColor: row.customColor,
-        coverImage: row.coverImage,
-        customized: true,
-      });
+      return ok(c, EntityDisplayOut, storedEntityDisplayOut(subjectType, subjectId, row));
     },
   )
   .get(
@@ -206,15 +211,7 @@ const entityDisplayRouter = new Hono<AppEnv>()
           and(eq(entityDisplay.organizationId, orgId), eq(entityDisplay.subjectType, subjectType)),
         );
       return ok(c, pageOf(EntityDisplayOut), {
-        items: rows.map((row) => ({
-          subjectType,
-          subjectId: row.subjectId,
-          iconKey: row.iconKey,
-          colorKey: row.colorKey,
-          customColor: row.customColor,
-          coverImage: row.coverImage,
-          customized: true,
-        })),
+        items: rows.map((row) => storedEntityDisplayOut(subjectType, row.subjectId, row)),
       });
     },
   )

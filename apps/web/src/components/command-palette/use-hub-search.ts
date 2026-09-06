@@ -151,7 +151,8 @@ function searchResultIcon(hit: SearchResult) {
   if (!subjectType || !hit.organizationId) return SEARCH_KIND_ICON[hit.kind];
   const display = hit.display ?? defaultEntityDisplay(subjectType, hit.entityId);
   return createElement(EntityIconGlyph, {
-    iconKey: display.iconKey,
+    subjectType,
+    glyph: display.glyph,
     colorKey: display.colorKey,
     customColor: display.customColor,
     size: 20,

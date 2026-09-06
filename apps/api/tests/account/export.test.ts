@@ -259,6 +259,26 @@ describe('collectAccountExport', () => {
         })
         .returning({ id: schema.task.id }),
     ).id;
+    await db.insert(schema.entityDisplay).values([
+      {
+        organizationId: orgId,
+        subjectType: 'task',
+        subjectId: directlyGrantedTaskId,
+        iconKey: 'rocket',
+        glyphKind: 'emoji',
+        glyphValue: '1F680',
+        colorKey: 'purple',
+      },
+      {
+        organizationId: orgId,
+        subjectType: 'task',
+        subjectId: hiddenTaskId,
+        iconKey: 'clipboard',
+        glyphKind: 'emoji',
+        glyphValue: '1F512',
+        colorKey: 'neutral',
+      },
+    ]);
     await db.insert(schema.grant).values({
       organizationId: orgId,
       subjectKind: 'actor',
@@ -342,6 +362,9 @@ describe('collectAccountExport', () => {
     expect(workspace?.work['team']).toEqual([]);
     expect(workspace?.work['project']).toEqual([]);
     expect(workspace?.work['update']).toEqual([]);
+    expect(workspace?.work['entityDisplay']).toEqual([
+      expect.objectContaining({ subjectId: directlyGrantedTaskId, glyphValue: '1F680' }),
+    ]);
     expect(
       (document.personal?.['dailyPlan'] as { refTaskId: string }[]).map((item) => item.refTaskId),
     ).toEqual([directlyGrantedTaskId]);

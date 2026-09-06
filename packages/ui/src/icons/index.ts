@@ -154,6 +154,8 @@ export { default as XCircle } from '@mui/icons-material/Cancel';
  */
 export type LucideIcon = typeof SvgIcon;
 
+export { MaterialSymbol, type MaterialSymbolProps } from './material-symbol';
+
 export {
   STRATEGIC_WORK_ROUNDED_ICON_BY_KEY,
   STRATEGIC_WORK_ROUNDED_ICON_OPTIONS,

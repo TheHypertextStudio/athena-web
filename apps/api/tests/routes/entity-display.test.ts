@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 
 import type * as DbModule from '@docket/db';
 
@@ -89,6 +90,122 @@ describe('entity display routes', () => {
       body: JSON.stringify({ iconKey: 'flag', colorKey: 'danger', customColor: null }),
     });
     expect(hidden.status).toBe(404);
+  });
+
+  it('round-trips catalog symbols and emoji while dual-writing a legacy fallback', async () => {
+    const owner = await seedBaseOrg(db, schema);
+    const [project] = await db
+      .insert(schema.project)
+      .values({
+        organizationId: owner.orgId,
+        name: 'Launch service',
+        createdBy: owner.humanActorId,
+        status: 'planned',
+        statusId: owner.statusId('project', 'planned'),
+      })
+      .returning();
+    const projectId = assertDefined(project).id;
+    const app = appWithActor(entityDisplay, owner.orgId, ['contribute'], owner.humanActorId);
+
+    const symbol = await app.request(`/project/${projectId}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        glyph: { kind: 'symbol', name: 'rocket_launch' },
+        colorKey: 'purple',
+        customColor: null,
+      }),
+    });
+    expect(symbol.status).toBe(200);
+    expect(await symbol.json()).toMatchObject({
+      glyph: { kind: 'symbol', name: 'rocket_launch' },
+      iconKey: 'launch',
+    });
+
+    const emoji = await app.request(`/project/${projectId}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        glyph: { kind: 'emoji', hexcode: '1F44D-1F3FD' },
+        colorKey: 'purple',
+        customColor: null,
+      }),
+    });
+    expect(emoji.status).toBe(200);
+    expect(await emoji.json()).toMatchObject({
+      glyph: { kind: 'emoji', hexcode: '1F44D-1F3FD' },
+      iconKey: 'folder',
+    });
+
+    const [stored] = await db
+      .select()
+      .from(schema.entityDisplay)
+      .where(eq(schema.entityDisplay.subjectId, projectId));
+    expect(stored).toMatchObject({
+      glyphKind: 'emoji',
+      glyphValue: '1F44D-1F3FD',
+      iconKey: 'folder',
+    });
+  });
+
+  it('rejects symbols and emoji sequences outside the pinned catalogs', async () => {
+    const owner = await seedBaseOrg(db, schema);
+    const [project] = await db
+      .insert(schema.project)
+      .values({
+        organizationId: owner.orgId,
+        name: 'Validation',
+        createdBy: owner.humanActorId,
+        status: 'planned',
+        statusId: owner.statusId('project', 'planned'),
+      })
+      .returning();
+    const projectId = assertDefined(project).id;
+    const app = appWithActor(entityDisplay, owner.orgId, ['contribute'], owner.humanActorId);
+
+    for (const glyph of [
+      { kind: 'symbol', name: 'not_a_real_material_symbol' },
+      { kind: 'emoji', hexcode: '1F600-1F680' },
+    ]) {
+      const response = await app.request(`/project/${projectId}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ glyph, colorKey: 'neutral', customColor: null }),
+      });
+      expect(response.status).toBe(422);
+    }
+  });
+
+  it('uses the subject default when a stored symbol is no longer in the pinned catalog', async () => {
+    const owner = await seedBaseOrg(db, schema);
+    const [project] = await db
+      .insert(schema.project)
+      .values({
+        organizationId: owner.orgId,
+        name: 'Fallback',
+        createdBy: owner.humanActorId,
+        status: 'planned',
+        statusId: owner.statusId('project', 'planned'),
+      })
+      .returning();
+    const projectId = assertDefined(project).id;
+    await db.insert(schema.entityDisplay).values({
+      organizationId: owner.orgId,
+      subjectType: 'project',
+      subjectId: projectId,
+      iconKey: 'rocket',
+      glyphKind: 'symbol',
+      glyphValue: 'retired_symbol_name',
+      colorKey: 'purple',
+    });
+
+    const app = appWithActor(entityDisplay, owner.orgId, ['view'], owner.humanActorId);
+    const response = await app.request(`/project/${projectId}`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      glyph: { kind: 'symbol', name: 'folder_open' },
+      iconKey: 'rocket',
+    });
   });
 
   it('round-trips defaults, customization, bulk reads, and reset through every native entity table', async () => {
@@ -184,14 +301,18 @@ describe('entity display routes', () => {
       const updated = await app.request(`/${subjectType}/${subjectId}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ iconKey: 'layers', colorKey: 'indigo', customColor: '#4f46e5' }),
+        body: JSON.stringify({
+          glyph: { kind: 'emoji', hexcode: '1F680' },
+          colorKey: 'indigo',
+          customColor: '#4f46e5',
+        }),
       });
 
       expect(updated.status).toBe(200);
       expect(await updated.json()).toMatchObject({
         subjectType,
         subjectId,
-        iconKey: 'layers',
+        glyph: { kind: 'emoji', hexcode: '1F680' },
         colorKey: 'indigo',
         customColor: '#4f46e5',
         customized: true,
@@ -204,7 +325,7 @@ describe('entity display routes', () => {
           expect.objectContaining({
             subjectType,
             subjectId,
-            iconKey: 'layers',
+            glyph: { kind: 'emoji', hexcode: '1F680' },
             colorKey: 'indigo',
             customColor: '#4f46e5',
             customized: true,

@@ -1,193 +1,76 @@
 'use client';
 
-import type {
-  EntityDisplayColorKey,
-  EntityDisplayIconKey,
-  EntityDisplayOut,
-} from '@docket/work/entity-display-contract';
-import { SearchRounded, STRATEGIC_WORK_ROUNDED_ICON_OPTIONS } from '@docket/ui/icons';
-import { Popover, PopoverBody, PopoverContent, PopoverTrigger } from '@docket/ui/primitives';
+import { lazy, Suspense, type JSX, useState } from 'react';
 
-import {
-  ENTITY_DISPLAY_COLORS as COLOR_OPTIONS,
-  EntityIconGlyph,
-} from '@/components/entity-display/entity-icon-glyph';
-import { cn } from '@docket/ui/lib/utils';
-import { type JSX, useMemo, useState } from 'react';
+import { EntityIconGlyph } from './entity-icon-glyph';
+import type { EntityIconPickerProps } from './entity-icon-picker-loaded';
 
-/** Props for the anchored entity icon and color picker. */
-export interface EntityIconPickerProps {
-  display: EntityDisplayOut;
-  /** The entity's name, used for the trigger's accessible label and read-only title. */
-  entityName: string;
-  editable: boolean;
-  pending: boolean;
-  /** True while the host is reading the persisted display after this editor opens. */
-  loading?: boolean;
-  /** Visual glyph diameter; detail mastheads use 48dp while list surfaces keep 32dp. */
-  size?: number;
-  onChange: (
-    iconKey: EntityDisplayIconKey,
-    colorKey: EntityDisplayColorKey,
-    customColor: string | null,
-  ) => void;
-  /** Observe popover visibility so hosts can defer loading a custom display until editing starts. */
-  onOpenChange?: (open: boolean) => void;
-}
+const LoadedEntityIconPicker = lazy(() => import('./entity-icon-picker-loaded'));
 
-/** Render a stable entity glyph and, when editable, its anchored customization popover. */
-export function EntityIconPicker({
-  display,
-  entityName,
-  editable,
-  pending,
-  loading = false,
-  size = 32,
-  onChange,
-  onOpenChange,
-}: EntityIconPickerProps): JSX.Element {
-  const [search, setSearch] = useState('');
-  const filteredOptions = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return STRATEGIC_WORK_ROUNDED_ICON_OPTIONS;
-    return STRATEGIC_WORK_ROUNDED_ICON_OPTIONS.filter((option) =>
-      [option.label, ...option.keywords].some((value) => value.toLowerCase().includes(query)),
-    );
-  }, [search]);
-  const hasCustomColor = display.customColor !== null;
+export type { EntityIconPickerProps } from './entity-icon-picker-loaded';
+
+/** Render the stable identity now and load its editable catalog only after the first click. */
+export function EntityIconPicker(props: EntityIconPickerProps): JSX.Element {
+  const [editorRequested, setEditorRequested] = useState(false);
+  const size = props.size ?? 32;
+  const targetSize = Math.max(40, size);
   const glyph = (
     <EntityIconGlyph
-      iconKey={display.iconKey}
-      colorKey={display.colorKey}
-      customColor={display.customColor}
+      subjectType={props.display.subjectType}
+      glyph={props.display.glyph}
+      colorKey={props.display.colorKey}
+      customColor={props.display.customColor}
       size={size}
     />
   );
 
-  if (!editable) {
+  if (!props.editable) {
     return (
       <span
         className="flex shrink-0 items-center justify-center"
-        style={{ width: Math.max(40, size), height: Math.max(40, size) }}
-        title={entityName}
+        style={{ width: targetSize, height: targetSize }}
+        title={props.entityName}
       >
         {glyph}
       </span>
     );
   }
 
+  if (!editorRequested) {
+    return (
+      <button
+        type="button"
+        className="hover:bg-surface-container-high focus-visible:ring-ring flex shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        style={{ width: targetSize, height: targetSize }}
+        aria-label={`Customize ${props.entityName} icon`}
+        disabled={props.pending}
+        onClick={() => {
+          setEditorRequested(true);
+          props.onOpenChange?.(true);
+        }}
+      >
+        {glyph}
+      </button>
+    );
+  }
+
   return (
-    <Popover {...(onOpenChange ? { onOpenChange } : {})}>
-      <PopoverTrigger asChild>
+    <Suspense
+      fallback={
         <button
           type="button"
-          className="hover:bg-surface-container-high focus-visible:ring-ring flex shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
-          style={{ width: Math.max(40, size), height: Math.max(40, size) }}
-          aria-label={`Customize ${entityName} icon`}
-          disabled={pending}
+          className="flex shrink-0 items-center justify-center rounded-full"
+          style={{ width: targetSize, height: targetSize }}
+          aria-label={`Loading ${props.entityName} icon picker`}
+          disabled
         >
           {glyph}
         </button>
-      </PopoverTrigger>
-      <PopoverContent presentation="panel" width="xl" align="start" sideOffset={6}>
-        <PopoverBody className="flex flex-col gap-3">
-          <p className="text-on-surface text-sm font-medium">Icon</p>
-          <label className="relative block">
-            <SearchRounded
-              aria-hidden
-              className="text-on-surface-variant pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
-            />
-            <input
-              type="search"
-              aria-label="Search icons"
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-              }}
-              placeholder="Search icons"
-              className="border-outline bg-surface focus-visible:ring-ring h-10 w-full rounded-md border pr-3 pl-8 text-sm outline-none focus-visible:ring-2"
-            />
-          </label>
-          <div aria-label="Entity icon" className="grid grid-cols-7 gap-0.5">
-            {filteredOptions.map((option) => {
-              const OptionIcon = option.icon;
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  data-testid="initiative-icon-option"
-                  aria-label={option.label}
-                  aria-pressed={display.iconKey === option.key}
-                  disabled={pending || loading}
-                  className={cn(
-                    'hover:bg-surface-container-high focus-visible:ring-ring flex size-10 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:outline-none',
-                    display.iconKey === option.key && 'bg-surface-container-highest',
-                  )}
-                  onClick={() => {
-                    onChange(option.key, display.colorKey, display.customColor);
-                  }}
-                >
-                  <OptionIcon aria-hidden className="size-4" />
-                </button>
-              );
-            })}
-          </div>
-          {filteredOptions.length === 0 ? (
-            <p className="text-on-surface-variant py-4 text-center text-sm">No matching icons</p>
-          ) : null}
-          <p className="text-on-surface text-sm font-medium">Color</p>
-          <div aria-label="Entity color" className="flex flex-wrap gap-1">
-            {COLOR_OPTIONS.map((option) => {
-              const selected = display.customColor === null && display.colorKey === option.key;
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  aria-label={option.label}
-                  aria-pressed={selected}
-                  disabled={pending || loading}
-                  className={cn(
-                    'hover:bg-surface-container-high focus-visible:ring-ring flex size-10 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:outline-none',
-                    selected && 'bg-surface-container-highest',
-                  )}
-                  onClick={() => {
-                    onChange(display.iconKey, option.key, null);
-                  }}
-                >
-                  <span aria-hidden className={cn('size-4 rounded-full', option.swatchClass)} />
-                </button>
-              );
-            })}
-            <label
-              className={cn(
-                'hover:bg-surface-container-high focus-within:ring-ring relative flex size-10 cursor-pointer items-center justify-center rounded-md focus-within:ring-2',
-                hasCustomColor && 'bg-surface-container-highest',
-              )}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  'size-4 rounded-full',
-                  !hasCustomColor && 'border-on-surface-variant border border-dashed',
-                )}
-                style={
-                  hasCustomColor ? { backgroundColor: display.customColor ?? undefined } : undefined
-                }
-              />
-              <input
-                type="color"
-                aria-label="Custom color"
-                value={display.customColor ?? '#3b82f6'}
-                disabled={pending || loading}
-                onChange={(event) => {
-                  onChange(display.iconKey, display.colorKey, event.target.value);
-                }}
-                className="absolute inset-0 cursor-pointer opacity-0"
-              />
-            </label>
-          </div>
-        </PopoverBody>
-      </PopoverContent>
-    </Popover>
+      }
+    >
+      <LoadedEntityIconPicker {...props} initiallyOpen />
+    </Suspense>
   );
 }
+
+export default EntityIconPicker;

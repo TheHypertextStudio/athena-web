@@ -521,6 +521,7 @@ describe('RecentDocumentIdentity', () => {
     queryClient.setQueryData(queryKeys.entityDisplay(document.orgId, document.type, document.id), {
       subjectType: 'project',
       subjectId: document.id,
+      glyph: { kind: 'symbol', name: 'directions_bus' },
       iconKey: 'bus',
       colorKey: 'blue',
       customColor: '#123456',
@@ -535,9 +536,10 @@ describe('RecentDocumentIdentity', () => {
     );
 
     const circle = screen.getByTestId('initiative-icon-circle');
-    const icon = screen.getByTestId('initiative-icon');
-    expect(circle).toHaveAttribute('data-icon-key', 'bus');
+    const icon = screen.getByText('directions_bus');
+    expect(circle).toHaveAttribute('data-glyph-kind', 'symbol');
+    expect(circle).toHaveAttribute('data-glyph-value', 'directions_bus');
     expect(circle).toHaveStyle({ width: '32px', height: '32px', backgroundColor: '#12345626' });
-    expect(icon).toHaveStyle({ width: '16px', height: '16px', color: '#123456' });
+    expect(icon).toHaveStyle({ fontSize: '16px', color: '#123456' });
   });
 });

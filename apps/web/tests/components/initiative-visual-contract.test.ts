@@ -19,6 +19,10 @@ const buttonPath = join(root, 'packages/ui/src/primitives/button.tsx');
 const dialogPath = join(root, 'packages/ui/src/primitives/dialog.tsx');
 const controlPath = join(root, 'packages/ui/src/primitives/control.tsx');
 const iconPickerPath = join(root, 'apps/web/src/components/entity-display/entity-icon-picker.tsx');
+const loadedIconPickerPath = join(
+  root,
+  'apps/web/src/components/entity-display/entity-icon-picker-loaded.tsx',
+);
 const pageLayoutPath = join(root, 'apps/web/src/components/views/page-layout.tsx');
 const entityDetailLayoutPath = join(root, 'apps/web/src/components/views/entity-detail-layout.tsx');
 
@@ -202,7 +206,7 @@ describe('Initiative visual contract', () => {
     expect(control).toMatch(/xl:\s*\{[^}]*width: 'w-10'/);
     expect(dialog).toContain('h-10 w-10');
     expect(workPage).toContain('icon: Target');
-    expect(picker).toContain('size = 32');
+    expect(picker).toContain('props.size ?? 32');
     expect(picker).toContain('Math.max(40, size)');
     expect(detail).toContain('size={48}');
     expect(workPage).not.toContain('@2xl:size-6');
@@ -210,13 +214,13 @@ describe('Initiative visual contract', () => {
 
   it('uses Material icon components instead of Unicode control glyphs', () => {
     const workPage = source(workPagePath);
-    const picker = source(iconPickerPath);
+    const picker = source(loadedIconPickerPath);
     expect(workPage).toContain('icon: Target');
     expect(workPage).toContain('<Plus');
     expect(picker).toContain('<PopoverContent');
     expect(picker).toContain('Rounded');
     expect(picker).toContain('type="search"');
-    expect(picker).toContain('aria-label="Entity icon"');
+    expect(picker).toContain('aria-label="Glyph catalog"');
     expect(picker).toContain('aria-label="Entity color"');
     expect(workPage).not.toMatch(/[←→›⌄]/u);
   });

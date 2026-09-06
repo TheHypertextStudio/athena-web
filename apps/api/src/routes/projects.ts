@@ -40,6 +40,7 @@ import { NotFoundError } from '../error';
 import { deferAfterResponse } from '../lib/after-response';
 import { clearableTextPatch } from '../lib/clearable-text';
 import { detailCapabilities } from '../lib/detail-capabilities';
+import { storedEntityDisplayOut } from '../lib/entity-display-output';
 import { guardsInOrder } from '../lib/guards-in-order';
 import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
 import {
@@ -571,15 +572,7 @@ const projects = new Hono<AppEnv>()
             labelIds: labelIdsByProject.get(row.id) ?? [],
             initiativeIds: initiativeIdsByProject.get(row.id) ?? [],
             display: display
-              ? {
-                  subjectType: 'project' as const,
-                  subjectId: row.id,
-                  iconKey: display.iconKey,
-                  colorKey: display.colorKey,
-                  customColor: display.customColor,
-                  coverImage: display.coverImage,
-                  customized: true,
-                }
+              ? storedEntityDisplayOut('project', row.id, display)
               : defaultEntityDisplay('project', row.id),
             milestones: milestonesByProject.get(row.id) ?? [],
             taskCount: counts.total,

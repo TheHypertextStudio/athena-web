@@ -30,6 +30,7 @@ import { z } from 'zod';
 import type { AppEnv, AuthSession } from '../context';
 import { NotFoundError } from '../error';
 import { detailCapabilities } from '../lib/detail-capabilities';
+import { storedEntityDisplayOut } from '../lib/entity-display-output';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zParam } from '../lib/validate';
@@ -763,15 +764,7 @@ const initiativeAggregates = new Hono<AppEnv>()
           return {
             ...toOut(row),
             display: display
-              ? {
-                  subjectType: 'initiative' as const,
-                  subjectId: row.id,
-                  iconKey: display.iconKey,
-                  colorKey: display.colorKey,
-                  customColor: display.customColor,
-                  coverImage: display.coverImage,
-                  customized: true,
-                }
+              ? storedEntityDisplayOut('initiative', row.id, display)
               : defaultEntityDisplay('initiative', row.id),
             // Same org-id invariant as the attention list above.
             /* v8 ignore next -- @preserve defensive: see the invariant note above */

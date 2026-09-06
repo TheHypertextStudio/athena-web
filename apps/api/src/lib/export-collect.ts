@@ -14,6 +14,7 @@ import {
   comment,
   cycle,
   db as defaultDb,
+  entityDisplay,
   initiative,
   label,
   milestone,
@@ -51,6 +52,7 @@ export async function collectWorkLayer(
     comments,
     updates,
     savedViews,
+    entityDisplays,
   ] = await Promise.all([
     db.select().from(team).where(eq(team.organizationId, orgId)),
     db.select().from(initiative).where(eq(initiative.organizationId, orgId)),
@@ -63,6 +65,7 @@ export async function collectWorkLayer(
     db.select().from(comment).where(eq(comment.organizationId, orgId)),
     db.select().from(update).where(eq(update.organizationId, orgId)),
     db.select().from(savedView).where(eq(savedView.organizationId, orgId)),
+    db.select().from(entityDisplay).where(eq(entityDisplay.organizationId, orgId)),
   ]);
   return {
     team: teams,
@@ -76,6 +79,7 @@ export async function collectWorkLayer(
     comment: comments,
     update: updates,
     savedView: savedViews,
+    entityDisplay: entityDisplays,
   };
 }
 
@@ -133,6 +137,19 @@ export async function collectVisibleWorkLayerForActor(
               inArray(comment.subjectId, [...visibleTaskIds]),
             ),
           );
+  const visibleEntityDisplays =
+    visibleTaskIds.size === 0
+      ? []
+      : await db
+          .select()
+          .from(entityDisplay)
+          .where(
+            and(
+              eq(entityDisplay.organizationId, orgId),
+              eq(entityDisplay.subjectType, 'task'),
+              inArray(entityDisplay.subjectId, [...visibleTaskIds]),
+            ),
+          );
 
   return {
     work: {
@@ -147,6 +164,7 @@ export async function collectVisibleWorkLayerForActor(
       comment: visibleComments,
       update: [],
       savedView: [],
+      entityDisplay: visibleEntityDisplays,
     },
     visibleTaskIds,
   };

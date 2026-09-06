@@ -2,7 +2,7 @@
 
 > **Area:** `design-system` · **Owner package:** `@docket/ui` (+ `tooling/tailwind-config`)
 > **Source of truth:** `docs/core/mvp-plan.md` (product), `docs/engineering/docket-engineering-plan.md` (model/stack). This spec must not contradict them.
-> **Verified against current docs (2026‑06‑05):** Tailwind CSS v4 `@theme` / `@theme inline` / `@custom-variant`, OKLCH color space, shadcn/ui `new-york` style + `components.json` for Tailwind v4 (no `tailwind.config`, `cssVariables: true`, `tw-animate-css` plugin), lucide icons. Next.js 16 / React 19 (React Compiler on).
+> **Verified against the implementation (2026-09-05):** Tailwind CSS v4, shadcn/ui `new-york`, React 19, the curated MUI control-icon exports, and the separate self-hosted Material Symbols Rounded entity-identity catalog.
 >
 > **Design north star:** Linear‑grade — calm, dense, fast, keyboard‑first, monochrome surfaces with restrained accent + semantic color. **Domain‑neutral**: nothing in the visual language reads as a "developer tool." Org context is conveyed by a single org chip/tint, never by chrome that screams "engineering."
 
@@ -19,7 +19,8 @@
 | Primitive shadcn components (vendored)            | `@docket/ui/src/primitives/*` (the shadcn `ui/` output)                                                                | JIT, `transpilePackages` |
 | Docket custom components (view primitives, shell) | `@docket/ui/src/components/*`                                                                                          | JIT, `transpilePackages` |
 | Hooks (keyboard, density, vocab)                  | `@docket/ui/src/hooks/*`                                                                                               | JIT                      |
-| Icon set                                          | `lucide-react` (re‑exported via `@docket/ui/icons`)                                                                    | JIT                      |
+| Control icon set                                  | Curated MUI icons re-exported through `@docket/ui/icons`                                                               | JIT                      |
+| Entity identity set                               | Self-hosted Material Symbols Rounded plus lazy Unicode 17 Emojibase data                                               | Generated + JIT          |
 
 Per the engineering plan §1, `@docket/ui` is **Just‑in‑Time** (raw TS + `transpilePackages` in each Next app), never compiled to `dist`. Keep the Tailwind content globs pointed at `@docket/ui/src/**`.
 

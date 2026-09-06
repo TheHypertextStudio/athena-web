@@ -69,6 +69,7 @@ describe('searchResultToPaletteItem', () => {
         display: {
           subjectType: 'task',
           subjectId: 'task_real_id',
+          glyph: { kind: 'symbol', name: 'rocket' },
           iconKey: 'rocket',
           colorKey: 'purple',
           customColor: '#6d28d9',
@@ -82,7 +83,7 @@ describe('searchResultToPaletteItem', () => {
     expect(isValidElement(item.icon)).toBe(true);
     if (!isValidElement(item.icon)) throw new Error('Expected a rendered entity identity glyph.');
     expect(item.icon.props).toMatchObject({
-      iconKey: 'rocket',
+      glyph: { kind: 'symbol', name: 'rocket' },
       colorKey: 'purple',
       customColor: '#6d28d9',
     });

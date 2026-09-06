@@ -372,6 +372,7 @@ describe('entity display DTOs', () => {
       EntityDisplayOut.parse({
         subjectType: 'initiative',
         subjectId: ID,
+        glyph: { kind: 'symbol', name: 'track_changes' },
         iconKey: 'target',
         colorKey: 'neutral',
         customColor: null,
@@ -384,6 +385,7 @@ describe('entity display DTOs', () => {
     expect(defaultEntityDisplay('initiative', ID)).toEqual({
       subjectType: 'initiative',
       subjectId: ID,
+      glyph: { kind: 'symbol', name: 'track_changes' },
       iconKey: 'target',
       colorKey: 'neutral',
       customColor: null,
@@ -393,6 +395,7 @@ describe('entity display DTOs', () => {
     expect(defaultEntityDisplay('project', ID)).toEqual({
       subjectType: 'project',
       subjectId: ID,
+      glyph: { kind: 'symbol', name: 'folder_open' },
       iconKey: 'folder',
       colorKey: 'neutral',
       customColor: null,
@@ -404,6 +407,7 @@ describe('entity display DTOs', () => {
     expect(defaultEntityDisplay('team', ID)).toEqual({
       subjectType: 'team',
       subjectId: ID,
+      glyph: { kind: 'symbol', name: 'groups' },
       iconKey: 'users',
       colorKey: 'rose',
       customColor: null,

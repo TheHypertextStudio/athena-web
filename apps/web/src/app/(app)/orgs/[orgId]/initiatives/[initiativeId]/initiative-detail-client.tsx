@@ -293,6 +293,7 @@ export default function InitiativeDetailPage(): JSX.Element {
       <>
         <EntityDetailSkeleton
           tabCount={5}
+
           entityName={initiativeNoun}
           title={navigationSnapshot?.name}
           snapshotMetadata={
@@ -397,13 +398,15 @@ export default function InitiativeDetailPage(): JSX.Element {
       icon={
         <EntityIconPicker
           display={display}
+
+          workspaceId={orgId}
           entityName={detail.name}
           editable={canEdit}
           pending={entityDisplay.mutation.isPending}
           loading={entityDisplay.loading}
           size={48}
-          onChange={(iconKey, colorKey, customColor) => {
-            entityDisplay.mutation.mutate({ iconKey, colorKey, customColor });
+          onChange={(glyph, colorKey, customColor) => {
+            entityDisplay.mutation.mutate({ glyph, colorKey, customColor });
           }}
         />
       }

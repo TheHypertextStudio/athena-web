@@ -225,6 +225,7 @@ describe('TaskTable', () => {
           {
             subjectType: 'task',
             subjectId: TASK_1,
+            glyph: { kind: 'symbol', name: 'track_changes' },
             iconKey: 'target',
             colorKey: 'purple',
             customColor: '#6d28d9',

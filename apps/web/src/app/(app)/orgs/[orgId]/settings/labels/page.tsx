@@ -22,7 +22,7 @@
 import {
   defaultEntityDisplay,
   type EntityDisplayColorKey,
-  type EntityDisplayIconKey,
+  type EntityDisplayGlyph,
   type EntityDisplayOut,
 } from '@docket/work/entity-display-contract';
 import { type LabelGroupOut, type LabelOut, type LabelUpdate } from '@docket/work/label-contract';
@@ -116,7 +116,7 @@ export default function LabelsSettingsPage(): JSX.Element {
     EntityDisplayOut,
     {
       readonly id: string;
-      readonly iconKey: EntityDisplayIconKey;
+      readonly glyph: EntityDisplayGlyph;
       readonly colorKey: EntityDisplayColorKey;
       readonly customColor: string | null;
     }
@@ -184,13 +184,15 @@ export default function LabelsSettingsPage(): JSX.Element {
     identity: (
       <EntityIconPicker
         display={displayById.get(label.id) ?? defaultEntityDisplay('label', label.id)}
+
+        workspaceId={orgId}
         entityName={label.name}
         editable={canManage}
         pending={updateDisplay.isPending}
         loading={displaysQ.isPending}
         size={32}
-        onChange={(iconKey, colorKey, customColor) => {
-          updateDisplay.mutate({ id: label.id, iconKey, colorKey, customColor });
+        onChange={(glyph, colorKey, customColor) => {
+          updateDisplay.mutate({ id: label.id, glyph, colorKey, customColor });
         }}
       />
     ),

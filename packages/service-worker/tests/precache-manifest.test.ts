@@ -18,12 +18,12 @@ import {
  */
 
 /** A throwaway `.next/static` with the given files, sized by content length. */
-function fakeStatic(files: Readonly<Record<string, number>>): string {
+function fakeStatic(files: Readonly<Record<string, number | string>>): string {
   const root = mkdtempSync(join(tmpdir(), 'docket-precache-'));
   for (const [path, bytes] of Object.entries(files)) {
     const full = join(root, path);
     mkdirSync(join(full, '..'), { recursive: true });
-    writeFileSync(full, 'x'.repeat(bytes));
+    writeFileSync(full, typeof bytes === 'number' ? 'x'.repeat(bytes) : bytes);
   }
   return root;
 }
@@ -67,6 +67,32 @@ describe('collectPrecacheAssets', () => {
 
     expect(collectPrecacheAssets(root)).toEqual([
       { url: '/_next/static/chunks/settings.js', bytes: 1 },
+      { url: '/_next/static/media/plex.woff2', bytes: 1 },
+    ]);
+  });
+
+  it('leaves lazy entity glyph catalogs out without dropping ordinary chunks', () => {
+    const root = fakeStatic({
+      'chunks/app.js': 'const label = "rocket_launch";',
+      'chunks/emoji-compact.js': '"grinning face"; "thumbs up";',
+      'chunks/emoji-groups.js': '"groups":[{"key":"smileys-emotion"',
+      'chunks/emoji-groups-minified.js': 'groups:[{key:"smileys-emotion"',
+      'chunks/emoji-shortcodes.js': '"2049":"exclamation_question_mark"',
+      'chunks/material-symbols.js': '"10k","10mp"; "rocket_launch";',
+    });
+
+    expect(collectPrecacheAssets(root).map((asset) => asset.url)).toEqual([
+      '/_next/static/chunks/app.js',
+    ]);
+  });
+
+  it('leaves the optional Material Symbol font out of the offline install', () => {
+    const root = fakeStatic({
+      'media/plex.woff2': 1,
+      'media/material-symbols-rounded.a1b2c3.woff2': 20,
+    });
+
+    expect(collectPrecacheAssets(root)).toEqual([
       { url: '/_next/static/media/plex.woff2', bytes: 1 },
     ]);
   });
@@ -137,8 +163,6 @@ describe('totalBytes and formatBytes', () => {
   });
 
   it('keeps the budget where a whole application still fits', () => {
-    // The measured build is ~8.3 MB of chunks, styles and fonts. If this ever needs raising, that is
-    // a decision about what every install costs, not a formality.
-    expect(PRECACHE_BUDGET_BYTES).toBeGreaterThan(8.3 * 1024 * 1024);
+    expect(PRECACHE_BUDGET_BYTES).toBe(12 * 1024 * 1024);
   });
 });

@@ -10,7 +10,7 @@
  */
 import type {
   EntityDisplayColorKey,
-  EntityDisplayIconKey,
+  EntityDisplayGlyph,
   EntityDisplayOut,
   EntityDisplaySubjectType,
 } from '@docket/work/entity-display-contract';
@@ -22,7 +22,7 @@ import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from 
 
 /** The persisted values the icon/color picker can change. */
 export interface EntityDisplayChange {
-  readonly iconKey: EntityDisplayIconKey;
+  readonly glyph: EntityDisplayGlyph;
   readonly colorKey: EntityDisplayColorKey;
   readonly customColor: string | null;
 }
@@ -76,12 +76,12 @@ export function useEntityDisplay({
           }),
         errorMessage,
       ),
-    onMutate: async ({ iconKey, colorKey, customColor }) => {
+    onMutate: async ({ glyph, colorKey, customColor }) => {
       await queryClient.cancelQueries({ queryKey: displayKey });
       const previous = queryClient.getQueryData<EntityDisplayOut>(displayKey);
       queryClient.setQueryData<EntityDisplayOut>(displayKey, {
         ...(previous ?? defaultEntityDisplay(subjectType, subjectId)),
-        iconKey,
+        glyph,
         colorKey,
         customColor,
         customized: true,

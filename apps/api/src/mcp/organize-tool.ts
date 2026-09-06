@@ -124,6 +124,21 @@ interface Placed {
   readonly ref: string;
   readonly kind: Kind;
   readonly id: string;
+  /** What it is called. The widget renders this; `ref` is a handle, not a name. */
+  readonly title: string;
+  /**
+   * The `ref` this was placed under, echoed back.
+   *
+   * @remarks
+   * The caller sent it, so returning it looks redundant — until the change-report card has to draw
+   * what was made. A flat list of five equal rows throws away the one thing a caller of this tool
+   * needs to check, which is whether the tree nested the way they described it.
+   *
+   * Explicitly `| undefined` so it can be assigned straight through rather than spread behind a
+   * ternary: `placeItem` sits on the complexity ceiling, and a branch for a value that does not
+   * depend on which branch runs is the wrong place to spend one. `JSON.stringify` drops the key.
+   */
+  readonly parent?: string | undefined;
   /** False when an existing item of the same name in the same place was used instead. */
   readonly created: boolean;
 }
@@ -253,6 +268,11 @@ export function registerOrganizeTool(
               ref: z.string().describe('The handle you gave it.'),
               kind: z.enum(KINDS),
               id: z.string().describe('Its real id.'),
+              title: z.string().describe('What it is called.'),
+              parent: z
+                .string()
+                .optional()
+                .describe('The `ref` of the item in this call it was placed under, when any.'),
               created: z
                 .boolean()
                 .describe('False when an existing item of that name was matched instead.'),
@@ -469,6 +489,9 @@ async function placeItem(
   input: PlaceInput,
 ): Promise<{ placed: Placed; change?: ChangeRecord }> {
   const { item, at, orgId } = input;
+  // What every branch below reports identically, resolved once rather than restated at each of the
+  // six return sites.
+  const identity = { ref: item.ref, title: item.title, parent: item.parent };
 
   if (item.kind === 'initiative') {
     const existing = await tx
@@ -483,7 +506,7 @@ async function placeItem(
       )
       .limit(1);
     if (existing[0]) {
-      return { placed: { ref: item.ref, kind: 'initiative', id: existing[0].id, created: false } };
+      return { placed: { ...identity, kind: 'initiative', id: existing[0].id, created: false } };
     }
     const initiativeStatus = await resolveContainerStatus(
       orgId,
@@ -509,7 +532,7 @@ async function placeItem(
     /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!row) throw new Error('initiative insert returned no row');
     return {
-      placed: { ref: item.ref, kind: 'initiative', id: row.id, created: true },
+      placed: { ...identity, kind: 'initiative', id: row.id, created: true },
       change: {
         kind: 'initiative',
         id: row.id,
@@ -568,7 +591,7 @@ async function placeItem(
       ? (await tx.select().from(program).where(eq(program.id, id)).limit(1))[0]
       : undefined;
     return {
-      placed: { ref: item.ref, kind: 'program', id, created },
+      placed: { ...identity, kind: 'program', id, created },
       ...(row
         ? {
             change: {
@@ -633,7 +656,7 @@ async function placeItem(
       ? (await tx.select().from(project).where(eq(project.id, id)).limit(1))[0]
       : undefined;
     return {
-      placed: { ref: item.ref, kind: 'project', id, created },
+      placed: { ...identity, kind: 'project', id, created },
       ...(row
         ? {
             change: {
@@ -669,7 +692,7 @@ async function placeItem(
     )
     .limit(1);
   if (existing[0]) {
-    return { placed: { ref: item.ref, kind: 'task', id: existing[0].id, created: false } };
+    return { placed: { ...identity, kind: 'task', id: existing[0].id, created: false } };
   }
 
   const inserted = await tx
@@ -697,7 +720,7 @@ async function placeItem(
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!row) throw new Error('task insert returned no row');
   return {
-    placed: { ref: item.ref, kind: 'task', id: row.id, created: true },
+    placed: { ...identity, kind: 'task', id: row.id, created: true },
     change: { kind: 'task', id: row.id, op: 'create', after: trackedFields('task', row) },
   };
 }

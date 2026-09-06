@@ -224,6 +224,37 @@ export const RUNTIME_JS = String.raw`
     return 'Untitled ' + (kind || 'item');
   }
 
+  // A due date is the one fact on a row that says whether to act now, and 'Sep 12' does not say
+  // it — the reader has to know today's date and do the subtraction. This does the subtraction.
+  // Calendar days on both sides, in the host's timezone, because a due date is a day and not an
+  // instant: comparing it against a UTC 'now' puts a task due today into yesterday for anyone west
+  // of Greenwich after 4pm.
+  function due(iso) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ''))) {
+      return null;
+    }
+    const day = new Date(iso + 'T00:00:00');
+    if (isNaN(day.getTime())) {
+      return null;
+    }
+    const today = new Date(new Date().toLocaleDateString('en-CA', withZone({})) + 'T00:00:00');
+    const days = Math.round((day.getTime() - today.getTime()) / 86400000);
+    if (days < 0) {
+      const late = -days;
+      return { late: true, text: late === 1 ? 'a day late' : String(late) + ' days late' };
+    }
+    if (days === 0) return { late: false, text: 'due today' };
+    if (days === 1) return { late: false, text: 'due tomorrow' };
+    // Inside a week the weekday is what a person plans against; past that it is a date.
+    if (days < 7) {
+      return { late: false, text: 'due ' + day.toLocaleDateString(locales(), { weekday: 'long' }) };
+    }
+    return {
+      late: false,
+      text: 'due ' + day.toLocaleDateString(locales(), { month: 'short', day: 'numeric' }),
+    };
+  }
+
   function stateGlyph(type) {
     // own(), not STATE_GLYPHS[type]: the key comes off the wire, and a plain property read finds
     // inherited members — STATE_GLYPHS['constructor'] is a function, which passes a truthy guard
@@ -465,6 +496,8 @@ export const RUNTIME_JS = String.raw`
     label,
     /** A placeholder title for a row with none, naming its kind ('Untitled task') rather than its id. */
     untitled,
+    /** A due date said the way a person reads one — 'due Tuesday', '3 days late' — or null. */
+    due,
     /** Read a table keyed by an untrusted value without reaching Object.prototype. */
     own,
     /** Format an instant in the host's locale and timezone, never the browser's. */
@@ -517,7 +550,13 @@ export const RUNTIME_JS = String.raw`
       return request('tools/call', { name, arguments: args });
     },
     link(url) {
-      return request('ui/open-link', { url });
+      // ui/open-link takes a URL, and a host refuses anything that is not one — which is why
+      // every "Open in Docket" was silently inert. Every href this server puts in a payload is a
+      // path, so the origin is joined on here rather than at six call sites.
+      const origin = window.__docketWebOrigin || '';
+      return request('ui/open-link', {
+        url: /^[a-z][a-z0-9+.-]*:/i.test(url) ? url : origin + url,
+      });
     },
     say(text) {
       // The spec requires a role, and only 'user' is permitted.
@@ -643,6 +682,14 @@ body[data-state='error'] .skeleton { display: none; }
   font-weight: var(--font-weight-semibold);
 }
 .muted { color: var(--color-text-secondary); }
+/* A restatement of the query, not a title. It sits above the list to be checked and then ignored,
+   so it takes the caption weight rather than competing with the rows for first read. */
+.headline.scope {
+  color: var(--color-text-secondary);
+  font-size: var(--font-text-sm-size);
+  line-height: var(--font-text-sm-line-height);
+  font-weight: var(--font-weight-medium);
+}
 
 /* Entity documents have their own rhythm. Facts, prose, related work, and batch results are
    different kinds of information; the generic row utility below is deliberately not their
@@ -720,17 +767,70 @@ body[data-state='error'] .skeleton { display: none; }
   background: var(--color-background-secondary);
 }
 .batch-action { min-height: 2rem; }
-.rows { display: flex; flex-direction: column; gap: 6px; }
+/* A list, not a stack of chips. Every row used to be a filled rounded rectangle, which gave five
+   rows five competing edges and no reading order — and left no room for anything under the title,
+   so a row could only ever be a title and one word. Hairlines cost nothing, so the ink is spent on
+   the content instead: title on top, the facts that separate this row from its neighbours under
+   it. */
+.rows { display: flex; flex-direction: column; }
 .row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: var(--border-radius-md);
-  background: var(--color-background-secondary);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 2px 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--color-border-primary);
 }
-.row .name { font-weight: var(--font-weight-medium); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rows .row:first-of-type { border-top: 0; }
+.rows.tree .row { border-top: 0; padding: 4px 0; }
+.row .glyph { grid-row: 1 / span 2; margin-top: 1px; }
+.row .name {
+  grid-column: 2;
+  font-weight: var(--font-weight-medium);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The second line: where it lives, who owns it, when it lands. Wraps rather than truncates,
+   because the fact that gets cut is the one the reader needed. */
+.row .facts {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-text-sm-size);
+  line-height: var(--font-text-sm-line-height);
+  font-variant-numeric: tabular-nums;
+}
+.row .facts .sep { opacity: 0.5; }
+/* Late is the one thing on a card worth colour. */
+.row .facts .late { color: var(--color-text-danger); font-weight: var(--font-weight-medium); }
+/* Sized to the line it sits beside, not to the button metrics: it is invisible until hover, and a
+   26px control in a 20px row silently set the height of every row on the card. */
+.row .open {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  align-self: center;
+  padding: 0 6px;
+  font-size: var(--font-text-sm-size);
+  line-height: var(--font-text-md-line-height);
+  opacity: 0;
+}
+.row:hover .open,
+.row .open:focus-visible { opacity: 1; }
+/* Touch has no hover, so the affordance cannot hide behind one. */
+@media (hover: none) {
+  .row .open { opacity: 1; }
+}
 .diff {
+  /* The change report's own second line, in the same slot the work list's facts occupy. */
+  grid-column: 2;
+  color: var(--color-text-secondary);
+  font-size: var(--font-text-sm-size);
+  line-height: var(--font-text-sm-line-height);
   font-variant-numeric: tabular-nums;
   /* A diff line summarises what moved. Two lines is the most it can take before it stops being a
      line and starts being the document it is describing. */
@@ -745,6 +845,9 @@ body[data-state='error'] .skeleton { display: none; }
 .diff .from { color: var(--color-text-secondary); text-decoration: line-through; }
 .diff .to { color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+/* The remainder, when the host cannot expand the card. Aligned with the rows above it rather than
+   with the card edge, because it is the last entry in the list and not a footer. */
+.rest { align-self: flex-start; padding: 5px 0; text-align: left; }
 
 /* Fullscreen is the one place a card may scroll: it is no longer sitting in the transcript flow,
    so a scroll region here traps nothing. The card loses its own frame because the host is now
@@ -762,7 +865,15 @@ body[data-display-mode='fullscreen'] .rows {
 }
 
 .skipped .name { color: var(--color-text-secondary); }
-.reason { color: var(--color-text-danger); font-size: var(--font-text-sm-size); }
+/* Reconciled, not created. Present because it is the proof the call did not duplicate anything,
+   and dimmed because it is not what changed. */
+.row.matched .name { color: var(--color-text-secondary); font-weight: var(--font-weight-normal); }
+.reason {
+  grid-column: 2;
+  color: var(--color-text-danger);
+  font-size: var(--font-text-sm-size);
+  line-height: var(--font-text-sm-line-height);
+}
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 button {
   font: inherit;
@@ -893,6 +1004,20 @@ input[type='date']:disabled { opacity: 0.5; }
  *   usual density so the card does not jump size when the real content lands.
  * @returns a self-contained HTML document.
  */
+/**
+ * The product origin every widget link resolves against, with no trailing slash.
+ *
+ * @remarks
+ * Read from `process.env` rather than through `@docket/env/api`, which is the one place in this
+ * app that is worth doing. These documents are pure strings with no server behind them, and
+ * `apps/web/e2e/mcp/widget-shots.spec.ts` imports them with no API environment at all to
+ * photograph every widget — the validated env module throws on import there.
+ *
+ * Empty when unset, which leaves a link relative and therefore refused by the host. That is the
+ * same outcome as before this existed, and it is confined to a deploy that configured no web URL.
+ */
+const WEB_ORIGIN = (process.env['WEB_URL'] ?? '').replace(/\/$/, '');
+
 export function appDocument(
   title: string,
   body: string,
@@ -913,7 +1038,7 @@ export function appDocument(
 <style>${RUNTIME_CSS}</style>
 </head>
 <body data-state="loading" data-display-mode="inline">
-<script>window.__docketDisplayModes = ${JSON.stringify(displayModes)};</script>
+<script>window.__docketDisplayModes = ${JSON.stringify(displayModes)};window.__docketWebOrigin = ${JSON.stringify(WEB_ORIGIN)};</script>
 <section class="card" aria-label="${title}">
   <div class="skeleton" aria-hidden="true">
     <div class="sk sk-headline"></div>

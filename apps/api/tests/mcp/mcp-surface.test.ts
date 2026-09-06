@@ -809,6 +809,76 @@ describe('list_work / find tools', () => {
     );
   });
 
+  it('names a row’s assignee, project, parent, cycle and due date, not just their ids', async () => {
+    // Ids are what the model needs to act; names are what a person needs to tell two rows apart.
+    // The row carried only ids, so the work-list card could render a title and nothing else — and
+    // fell back to printing the workflow state on every row, which is the same word every time.
+    const s = await seedOrg(['view', 'contribute']);
+    const [project] = await db
+      .insert(schema.project)
+      .values({
+        organizationId: s.orgId,
+        name: 'Campus tabling',
+        createdBy: s.actorId,
+        status: 'planned',
+        statusId: s.statusId('project', 'planned'),
+      })
+      .returning({ id: schema.project.id });
+    const [cycle] = await db
+      .insert(schema.cycle)
+      .values({
+        organizationId: s.orgId,
+        teamId: s.teamId,
+        number: 12,
+        startsAt: new Date('2199-01-01'),
+        endsAt: new Date('2199-02-01'),
+      })
+      .returning({ id: schema.cycle.id });
+    const [parent] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: s.orgId,
+        title: 'RTC quarterly review',
+        teamId: s.teamId,
+        state: 'todo',
+        statusId: s.statusId('task', 'todo'),
+        createdBy: s.actorId,
+      })
+      .returning({ id: schema.task.id });
+    const [child] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: s.orgId,
+        title: 'Send the follow-up',
+        teamId: s.teamId,
+        state: 'todo',
+        statusId: s.statusId('task', 'todo'),
+        assigneeId: s.actorId,
+        projectId: assertDefined(project).id,
+        parentTaskId: assertDefined(parent).id,
+        cycleId: assertDefined(cycle).id,
+        dueDate: new Date('2199-01-15'),
+        createdBy: s.actorId,
+      })
+      .returning({ id: schema.task.id });
+
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'list_work',
+      arguments: { orgId: s.orgId, entity: 'task' },
+    })) as CallToolResult;
+    const items = payload(res)['items'] as Record<string, unknown>[];
+    const row = assertDefined(items.find((item) => item['id'] === assertDefined(child).id));
+    expect(row['assignee']).toBe('Ada');
+    expect(row['project']).toBe('Campus tabling');
+    expect(row['parent']).toBe('RTC quarterly review');
+    // A cycle with no name is said the way a team says it, rather than as a bare number.
+    expect(row['cycle']).toBe('Cycle 12');
+    expect(row['dueDate']).toBe('2199-01-15');
+    // The ids stay: they are what `update` takes back.
+    expect(row['projectId']).toBe(assertDefined(project).id);
+  });
+
   it('gets several entities at once and reports the unreadable ones separately', async () => {
     const s = await seedOrg(['view']);
     const client = await connect(s.ctx);

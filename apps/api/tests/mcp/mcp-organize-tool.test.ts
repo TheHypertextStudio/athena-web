@@ -137,7 +137,7 @@ function payload(res: CallToolResult): Record<string, unknown> {
 }
 
 interface OrganizeResult {
-  placed: { ref: string; kind: string; id: string; created: boolean }[];
+  placed: { ref: string; kind: string; title: string; id: string; created: boolean }[];
   created: number;
   matched: number;
   changeSetId: string | null;
@@ -166,6 +166,11 @@ describe('organize', () => {
     expect(out.matched).toBe(0);
 
     const byRef = new Map(out.placed.map((row) => [row.ref, row]));
+    // Every row carries its name. `ref` is a handle the caller invented so children could point at
+    // a parent inside one call, and the change-report widget rendered it as the row's title until
+    // there was a title to render — cards read "t-date" where they should have read a task name.
+    expect(assertDefined(byRef.get('proj')).title).toBe('Auth Rewrite');
+    expect(assertDefined(byRef.get('t1')).title).toBe('Audit the session store');
     const projectId = assertDefined(byRef.get('proj')).id;
     const initiativeId = assertDefined(byRef.get('init')).id;
 

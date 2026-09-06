@@ -15,6 +15,8 @@
  * The MCP surface must never disclose a private task merely because its caller can open the org.
  */
 import {
+  actor,
+  cycle,
   db,
   initiative,
   initiativeLabel,
@@ -197,6 +199,14 @@ export const WorkRow = z.object({
   status: z.string().optional().describe("A project, program, or initiative's status."),
   assigneeId: z.string().optional().describe('Who is accountable, when set.'),
   projectId: z.string().optional().describe('The project it belongs to, when set.'),
+  assignee: z.string().optional().describe("The assignee's name."),
+  project: z.string().optional().describe('The name of the project it belongs to.'),
+  parent: z.string().optional().describe('The title of the task it hangs under, when it has one.'),
+  cycle: z
+    .string()
+    .optional()
+    .describe('The cycle it is committed to, named the way a team says it.'),
+  dueDate: z.string().optional().describe("A task's due date, as an ISO day."),
   startDate: z.string().nullable().optional().describe("A project's planned start date."),
   startDateResolution: DateResolution.nullable()
     .optional()
@@ -347,6 +357,88 @@ function anyValue(column: AnyPgColumn, values: readonly string[]): SQL | undefin
   return values.length > 0 ? inArray(sql`${column}::text`, [...values]) : undefined;
 }
 
+/** A task row's foreign keys, before they are resolved to anything a person can read. */
+interface TaskRowRefs {
+  readonly assigneeId: string | null;
+  readonly projectId: string | null;
+  readonly parentTaskId: string | null;
+  readonly cycleId: string | null;
+}
+
+/** The names behind one page of task rows, keyed by id. */
+interface TaskRowNames {
+  readonly actors: Map<string, string>;
+  readonly projects: Map<string, string>;
+  readonly parents: Map<string, string>;
+  readonly cycles: Map<string, string>;
+}
+
+/** The ISO day of a stored date, which is what a due date means and all a reader needs. */
+function isoDay(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+/** A cycle the way a team says it: its name when it has one, otherwise its number. */
+function cycleLabel(row: { name: string | null; number: number }): string {
+  return row.name ?? `Cycle ${String(row.number)}`;
+}
+
+/**
+ * Resolve one page's assignee, project, parent, and cycle ids to names.
+ *
+ * @remarks
+ * Ids are what the model needs to act; names are what a person needs to recognise a row. The row
+ * contract carries both because the same payload feeds a tool call and a card, and a card that
+ * renders `act_01H...` where a name belongs is why the work-list widget could only ever show a
+ * title and the word "Backlog".
+ *
+ * Four queries per page, not four per row, on the same reasoning as {@link teamWorkflows} above: a
+ * 50-row page spanning every project in the org still costs four round trips.
+ *
+ * @param rows - The visible rows for one page.
+ * @returns Each id space resolved to display names; ids with no row are simply absent.
+ */
+async function taskRowNames(rows: readonly TaskRowRefs[]): Promise<TaskRowNames> {
+  const ids = (pick: (row: TaskRowRefs) => string | null): string[] => [
+    ...new Set(rows.map(pick).filter((id): id is string => id !== null)),
+  ];
+  const actorIds = ids((row) => row.assigneeId);
+  const projectIds = ids((row) => row.projectId);
+  const parentIds = ids((row) => row.parentTaskId);
+  const cycleIds = ids((row) => row.cycleId);
+
+  const [actors, projects, parents, cycles] = await Promise.all([
+    actorIds.length === 0
+      ? []
+      : db
+          .select({ id: actor.id, name: actor.displayName })
+          .from(actor)
+          .where(inArray(actor.id, actorIds)),
+    projectIds.length === 0
+      ? []
+      : db
+          .select({ id: project.id, name: project.name })
+          .from(project)
+          .where(inArray(project.id, projectIds)),
+    parentIds.length === 0
+      ? []
+      : db.select({ id: task.id, name: task.title }).from(task).where(inArray(task.id, parentIds)),
+    cycleIds.length === 0
+      ? []
+      : db
+          .select({ id: cycle.id, name: cycle.name, number: cycle.number })
+          .from(cycle)
+          .where(inArray(cycle.id, cycleIds)),
+  ]);
+
+  return {
+    actors: new Map(actors.map((row) => [row.id, row.name])),
+    projects: new Map(projects.map((row) => [row.id, row.name])),
+    parents: new Map(parents.map((row) => [row.id, row.name])),
+    cycles: new Map(cycles.map((row) => [row.id, cycleLabel(row)])),
+  };
+}
+
 /**
  * Build and run the task query.
  *
@@ -435,6 +527,9 @@ async function listTasks(
     assigneeId: string | null;
     projectId: string | null;
     programId: string | null;
+    parentTaskId: string | null;
+    cycleId: string | null;
+    dueDate: Date | null;
     visibility: 'public' | 'private';
     createdAt: Date;
   }[] = [];
@@ -453,6 +548,9 @@ async function listTasks(
         assigneeId: task.assigneeId,
         projectId: task.projectId,
         programId: task.programId,
+        parentTaskId: task.parentTaskId,
+        cycleId: task.cycleId,
+        dueDate: task.dueDate,
         visibility: task.visibility,
         createdAt: task.createdAt,
       })
@@ -480,10 +578,16 @@ async function listTasks(
     visibleRows.map((row) => row.teamId),
   );
 
+  const names = await taskRowNames(visibleRows);
+
   // `teamId` is read to resolve the state type and then dropped. It is not part of the row
   // contract, and adding it here would widen the wire on the way past rather than on purpose.
   return visibleRows.map((row) => {
     const stateType = stateTypeOf(workflows, row.teamId, row.state);
+    const assignee = row.assigneeId ? names.actors.get(row.assigneeId) : undefined;
+    const projectName = row.projectId ? names.projects.get(row.projectId) : undefined;
+    const parent = row.parentTaskId ? names.parents.get(row.parentTaskId) : undefined;
+    const cycleName = row.cycleId ? names.cycles.get(row.cycleId) : undefined;
     return {
       id: row.id,
       title: row.title,
@@ -491,6 +595,11 @@ async function listTasks(
       ...(stateType ? { stateType } : {}),
       ...(row.assigneeId ? { assigneeId: row.assigneeId } : {}),
       ...(row.projectId ? { projectId: row.projectId } : {}),
+      ...(assignee ? { assignee } : {}),
+      ...(projectName ? { project: projectName } : {}),
+      ...(parent ? { parent } : {}),
+      ...(cycleName ? { cycle: cycleName } : {}),
+      ...(row.dueDate ? { dueDate: isoDay(row.dueDate) } : {}),
       createdAt: row.createdAt,
     };
   });

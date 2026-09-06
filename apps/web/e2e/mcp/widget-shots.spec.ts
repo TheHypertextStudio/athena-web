@@ -35,6 +35,23 @@ const SHOT_DIR = join(
   '../../../../docs/design/audits/screenshots/mcp-apps',
 );
 
+/**
+ * A calendar day `offset` days from today, as the ISO day a due date is sent as.
+ *
+ * @remarks
+ * Relative rather than fixed so "3 days late" stays three days late. A literal date in a fixture
+ * quietly becomes an overdue row a month later, and the shot stops photographing the case it was
+ * written for.
+ *
+ * @param offset - Days from today; negative is in the past.
+ * @returns The day in `YYYY-MM-DD`.
+ */
+function day(offset: number): string {
+  const when = new Date();
+  when.setDate(when.getDate() + offset);
+  return `${String(when.getFullYear())}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')}`;
+}
+
 /** The description edit from the original bug report, verbatim in length and shape. */
 const LONG_DESCRIPTION =
   '# Executive Summary The LVBT Campus Engagement Program is our dedicated program for staying ' +
@@ -180,6 +197,58 @@ const CASES: readonly WidgetCase[] = [
     },
   },
   {
+    // The one case nothing photographed, and the one that shipped wrong: `organize` returns
+    // `placed` rather than `changes`, and the card rendered each row's `ref` — the handle the model
+    // invented so children could name a parent in one call — as its title. Four kinds in one call,
+    // none of them carrying a diff, so this is also the case where a row is only a name.
+    name: 'change-report-organized',
+    tool: 'organize',
+    html: CHANGE_REPORT_HTML,
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        created: 4,
+        matched: 1,
+        changeSetId: 'cs_5',
+        placed: [
+          { ref: 'init', kind: 'initiative', title: 'Q3 transit access', id: 'i_1', created: true },
+          {
+            ref: 'proj',
+            kind: 'project',
+            title: 'Campus tabling',
+            parent: 'init',
+            id: 'p_1',
+            created: true,
+          },
+          {
+            ref: 't-date',
+            kind: 'task',
+            title: 'Pick the NSU date',
+            parent: 'proj',
+            id: 't_1',
+            created: true,
+          },
+          {
+            ref: 't-rules',
+            kind: 'task',
+            title: 'Read the tabling rules',
+            parent: 'proj',
+            id: 't_2',
+            created: true,
+          },
+          {
+            ref: 'ppt',
+            kind: 'task',
+            title: 'Build the deck',
+            parent: 'proj',
+            id: 't_3',
+            created: false,
+          },
+        ],
+      },
+    },
+  },
+  {
     name: 'change-report-captured',
     tool: 'capture',
     html: CHANGE_REPORT_HTML,
@@ -211,10 +280,13 @@ const CASES: readonly WidgetCase[] = [
     cancelled: true,
   },
   {
+    // The real shape of a "what am I working on" answer: one person, mixed states, and the facts
+    // that separate one row from another. Due dates are relative to the run so the card is
+    // photographed with a genuine overdue row rather than a date that ages into one.
     name: 'work-list-populated',
     tool: 'list_work',
     html: WORK_LIST_HTML,
-    input: { orgId: 'org_1' },
+    input: { orgId: 'org_1', assignee: 'Sarah Okafor', state: ['in_progress', 'todo'] },
     result: {
       structuredContent: {
         entity: 'task',
@@ -224,21 +296,45 @@ const CASES: readonly WidgetCase[] = [
             title: 'Draft the Q3 service change memo',
             state: 'in_progress',
             stateType: 'started',
+            project: 'Campus tabling',
+            assignee: 'Sarah Okafor',
+            dueDate: day(-3),
           },
           {
             id: 't_2',
             title: 'Review campus outreach budget',
             state: 'todo',
             stateType: 'unstarted',
+            project: 'Bus Buddies',
+            assignee: 'Sarah Okafor',
+            cycle: 'Cycle 12',
+            dueDate: day(0),
           },
           {
             id: 't_3',
             title: 'Send the RTC coordination follow-up',
             state: 'todo',
             stateType: 'unstarted',
+            parent: 'RTC quarterly review',
+            assignee: 'Sarah Okafor',
+            dueDate: day(3),
           },
-          { id: 't_4', title: 'Book the NSU tabling slot', state: 'backlog', stateType: 'backlog' },
-          { id: 't_5', title: 'Reconcile the UNLV headcount', state: 'todo' },
+          {
+            id: 't_4',
+            title: 'Book the NSU tabling slot',
+            state: 'backlog',
+            stateType: 'backlog',
+            project: 'Campus tabling',
+            assignee: 'Sarah Okafor',
+            dueDate: day(19),
+          },
+          {
+            id: 't_5',
+            title: 'Reconcile the UNLV headcount',
+            state: 'todo',
+            project: 'Campus tabling',
+            assignee: 'Sarah Okafor',
+          },
         ],
       },
     },

@@ -61,6 +61,7 @@ function runRuntime() {
   let nextTimer = 1;
   const windowStub = {
     __docketDisplayModes: ['inline', 'fullscreen'],
+    __docketWebOrigin: 'https://docket.test',
     parent: { postMessage: (message: WireMessage) => posted.push(message) },
     addEventListener: (type: string, listener: (event: { data: WireMessage }) => void) => {
       if (type === 'message') listeners.push(listener);
@@ -114,9 +115,30 @@ function runRuntime() {
       onData(handler: (data: unknown) => void): void;
       canDisplay(mode: string): boolean;
       requestDisplayMode(mode: string): Promise<string>;
+      link(url: string): Promise<unknown>;
     },
   };
 }
+
+describe('opening Docket from a widget', () => {
+  it('sends an absolute URL for the paths every card hands it', () => {
+    const runtime = runRuntime();
+    void runtime.docket.link('/orgs/org_1/tasks/task_2');
+    // Every href this server puts in a payload is a path, and `ui/open-link` takes a URL. A host
+    // refuses the difference, which is why "Open in Docket" did nothing at all.
+    expect(runtime.request('ui/open-link').params).toEqual({
+      url: 'https://docket.test/orgs/org_1/tasks/task_2',
+    });
+  });
+
+  it('leaves a URL that already has a scheme alone', () => {
+    const runtime = runRuntime();
+    void runtime.docket.link('https://elsewhere.test/thing');
+    expect(runtime.request('ui/open-link').params).toEqual({
+      url: 'https://elsewhere.test/thing',
+    });
+  });
+});
 
 describe('Athena MCP App production runtime', () => {
   let runtime: ReturnType<typeof runRuntime>;

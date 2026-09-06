@@ -1942,6 +1942,7 @@ at **zero** violations across the tree, so it enters the ratchet with no ledger 
 
 ---
 ### [ATHENA-PLAN-CANVAS-001] Design the interactive planning canvas
+### [ATHENA-PLAN-CANVAS-001] Plan initiatives on the canvas with Athena
 
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-05
@@ -1954,13 +1955,26 @@ at **zero** violations across the tree, so it enters the ratchet with no ledger 
   - [x] Map the Athena rail, proposal system, `organize` tool, templates, and the shared canvas modules.
   - [x] Settle durability, depth, confirmation semantics, direct editing, entry points, and surface form with the user.
   - [x] Align the surface with the Task graph chrome, the swimlane container, and the ghost grammar.
-  - [x] Write the design specification.
-  - [x] Self-review the specification for placeholders, contradictions, and ambiguity.
-  - [ ] Obtain written-spec approval.
-  - [ ] Write the implementation plan.
+  - [x] Write and approve the design specification and the implementation plan.
+  - [x] Plan document contract and reducer (`@docket/work/plan-draft`).
+  - [x] `plan_draft` table, store, `/v1/me/plans` routes, and the commit over the shared organize placement.
+  - [x] Athena's `plan_start`, `plan_read`, `plan_draft`, `plan_commit` tools with the private-draft approval exemption and prompt guidance.
+  - [x] Web data layer, projection, layout, diff, and the canvas surface with its inspector and selection bar.
+  - [x] Entry points: the thread's plan card and Plan with Athena on an initiative.
+  - [x] Screenshot verification and design critique on a seeded plan (`docs/design/audits/2026-09-06-planning-canvas.md`).
+  - [x] End-to-end journey (`apps/web/e2e/athena/plan-canvas.spec.ts`) and engineering spec.
+  - [ ] Release gates: `pnpm db:reset`, `typecheck`, `lint`, `format:check`, `test:coverage`, `build`.
 - **Files**:
   - `docs/superpowers/specs/2026-09-05-athena-planning-canvas-design.md`
-  - `docs/WORKLOG.md`
+  - `docs/superpowers/plans/2026-09-05-athena-planning-canvas.md`
+  - `docs/engineering/specs/planning-canvas.md`
+  - `domains/work/src/{contracts/plan-draft.ts,plan-draft.ts}`
+  - `packages/db/src/schema/plan-draft.ts`, `packages/db/drizzle/0125_plan_draft.sql`
+  - `apps/api/src/lib/plan-draft/`, `apps/api/src/lib/organize/place.ts`, `apps/api/src/routes/me-plans.ts`
+  - `apps/api/src/mcp/plan-draft-tools.ts`, `apps/api/src/agent/{approval-policy,toolbox,system-prompt,loop}.ts`
+  - `apps/web/src/lib/plan-draft/defs.ts`, `apps/web/src/components/plan-canvas/`
+  - `apps/web/src/app/(app)/orgs/[orgId]/plans/[planId]/`
+  - `apps/web/src/components/athena/athena-conversation.tsx`, `apps/web/src/components/initiatives/plan-with-athena-action.tsx`
 - **Blockers**: None.
 - **Notes**: The decision that shapes everything else is a private plan draft whose Athena edits
   execute without approval, because the draft has no workspace consequence until a commit. The

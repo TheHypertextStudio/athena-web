@@ -22,9 +22,47 @@ import { TaskId } from '@docket/work/ids';
 import { TaskOut } from '@docket/work/task-model';
 
 /** Calendar providers supported by the layered-calendar domain. */
-export const CalendarProvider = z.enum(['docket', 'google']);
+export const CalendarProvider = z.enum(['docket', 'google', 'microsoft']);
 /** Calendar provider value. */
 export type CalendarProvider = z.infer<typeof CalendarProvider>;
+
+/** An opaque provider-issued identity whose normalization belongs to its adapter. */
+export const CalendarProviderIdentity = z
+  .object({
+    namespace: z.string().min(1).describe('Adapter-owned identity namespace.'),
+    value: z.string().min(1).describe('Opaque identity value normalized by the provider adapter.'),
+  })
+  .meta({
+    id: 'CalendarProviderIdentity',
+    description: 'An opaque provider-issued calendar source or event identity.',
+  });
+/** Provider-issued calendar identity value. */
+export type CalendarProviderIdentity = z.infer<typeof CalendarProviderIdentity>;
+
+/** How the linked account relates to an external calendar source. */
+export const CalendarSourceRelationship = z.enum(['owned', 'direct', 'shared', 'subscribed']).meta({
+  id: 'CalendarSourceRelationship',
+  description: 'How the linked account relates to an external calendar source.',
+});
+/** Calendar-source relationship value. */
+export type CalendarSourceRelationship = z.infer<typeof CalendarSourceRelationship>;
+
+/** Provider-neutral source-management capabilities for one calendar layer. */
+export const CalendarSourceManagement = z
+  .object({
+    canRemoveSubscription: z
+      .boolean()
+      .describe('Whether the provider lets this account remove the source subscription.'),
+    requiresIncrementalConsent: z
+      .boolean()
+      .describe('Whether removal needs a wider grant than normal calendar access.'),
+  })
+  .meta({
+    id: 'CalendarSourceManagement',
+    description: 'Provider-neutral management capabilities for one calendar source.',
+  });
+/** Calendar-source management capability value. */
+export type CalendarSourceManagement = z.infer<typeof CalendarSourceManagement>;
 
 /** Connection lifecycle for one linked external calendar account. */
 export const CalendarConnectionStatus = z.enum([
@@ -53,6 +91,10 @@ export const CalendarScopeState = z
     calendarWrite: z
       .boolean()
       .describe('Whether the granted scopes include calendar write access.'),
+    sourceManagement: z
+      .boolean()
+      .optional()
+      .describe('Whether the grant can change the provider calendar-list membership.'),
     capturedAt: z.string().describe('When this scope snapshot was captured (ISO 8601).'),
   })
   .meta({
@@ -310,6 +352,20 @@ export const CalendarLayerOut = z
       .string()
       .nullable()
       .describe('Provider calendar id backing this layer; null for native layers.'),
+    sourceIdentity: CalendarProviderIdentity.nullable()
+      .optional()
+      .describe('Opaque logical-source identity; null for native or unmigrated layers.'),
+    sourceRelationship: CalendarSourceRelationship.nullable()
+      .optional()
+      .describe('How this account relates to the provider calendar source.'),
+    sourceManagement: CalendarSourceManagement.optional().describe(
+      'Provider-neutral source-management capabilities.',
+    ),
+    suggestedGroupKey: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('Adapter-issued key for a likely logical-source group that needs confirmation.'),
     title: z.string().describe('Layer display title.'),
     description: z.string().nullable().describe('Layer description, if any.'),
     timezone: z.string().nullable().describe('Layer timezone id, when known.'),
@@ -397,6 +453,14 @@ export const CalendarItemOut = z
       .nullable()
       .describe('Provider calendar id; null for native items.'),
     externalEventId: z.string().nullable().describe('Provider event id; null for native items.'),
+    eventIdentity: CalendarProviderIdentity.nullable()
+      .optional()
+      .describe('Opaque provider identity shared by equivalent event copies.'),
+    occurrenceIdentity: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('Provider occurrence discriminator when event identity represents a series.'),
     recurringEventId: z
       .string()
       .nullable()

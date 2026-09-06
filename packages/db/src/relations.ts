@@ -15,6 +15,8 @@ import {
   calendarItemTaskLink,
   calendarLayer,
   calendarLayerShare,
+  calendarSourceGroup,
+  calendarSourceGroupMember,
 } from './schema/calendar';
 import { role } from './schema/crosscutting';
 import { actor, organization, team, teamMember } from './schema/identity';
@@ -178,7 +180,33 @@ export const calendarLayerRelations = relations(calendarLayer, ({ one, many }) =
   owner: one(user, { fields: [calendarLayer.userId], references: [user.id] }),
   items: many(calendarItem),
   shares: many(calendarLayerShare),
+  sourceGroupMemberships: many(calendarSourceGroupMember),
 }));
+
+/** Confirmed logical calendar source group → owner, preference, and provider layers. */
+export const calendarSourceGroupRelations = relations(calendarSourceGroup, ({ one, many }) => ({
+  owner: one(user, { fields: [calendarSourceGroup.userId], references: [user.id] }),
+  preferredLayer: one(calendarLayer, {
+    fields: [calendarSourceGroup.preferredLayerId],
+    references: [calendarLayer.id],
+  }),
+  members: many(calendarSourceGroupMember),
+}));
+
+/** Confirmed logical calendar membership → group and provider layer. */
+export const calendarSourceGroupMemberRelations = relations(
+  calendarSourceGroupMember,
+  ({ one }) => ({
+    group: one(calendarSourceGroup, {
+      fields: [calendarSourceGroupMember.groupId],
+      references: [calendarSourceGroup.id],
+    }),
+    layer: one(calendarLayer, {
+      fields: [calendarSourceGroupMember.layerId],
+      references: [calendarLayer.id],
+    }),
+  }),
+);
 
 /** Calendar item → its layer, task links, and directed item relationships. */
 export const calendarItemRelations = relations(calendarItem, ({ one, many }) => ({

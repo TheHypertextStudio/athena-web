@@ -33,6 +33,12 @@ export const CalendarLayerId = ownedId
   .describe('ULID id of a CalendarLayer — one renderable stream of calendar items.');
 /** Calendar layer identifier value. */
 export type CalendarLayerId = z.infer<typeof CalendarLayerId>;
+/** Confirmed logical calendar-source group identifier. */
+export const CalendarSourceGroupId = ownedId
+  .brand<'CalendarSourceGroupId'>()
+  .describe('ULID id of a confirmed logical CalendarSourceGroup.');
+/** Confirmed calendar-source group identifier value. */
+export type CalendarSourceGroupId = z.infer<typeof CalendarSourceGroupId>;
 /** Calendar item identifier. */
 export const CalendarItemId = ownedId
   .brand<'CalendarItemId'>()

@@ -13,9 +13,10 @@
  * availability) and a `CalendarItem` is one visible time object on a layer, optionally
  * bound to a provider via `connectionId`/`externalEventId` and optionally linked to
  * tasks. `calendar_item_write` is the provider-write outbox for provider-bound edits.
- * The legacy tables are kept and untouched; a one-time backfill (appended to the
- * generated migration) reuses their row ids as the new tables' ids so the old rows are
- * visible through both models without a second write path.
+ * The legacy tables remain for compatibility. A one-time backfill reuses their row ids as
+ * the new tables' ids so the old rows are visible through both models without a second write
+ * path. Both source models retain a soft-removal marker so provider cleanup cannot cascade
+ * through Docket-owned event metadata.
  */
 import { sql } from 'drizzle-orm';
 import {
@@ -29,6 +30,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
@@ -40,6 +42,7 @@ import type {
   CalendarItemPermission,
   CalendarItemWritePatch,
   CalendarScopeState,
+  CalendarSourceManagement,
 } from '../types';
 import { account, user } from './auth';
 import { actor, organization } from './identity';
@@ -111,6 +114,7 @@ export const calendarList = pgTable(
     watchResourceId: text('watch_resource_id'),
     watchToken: text('watch_token'),
     watchExpiresAt: timestamp('watch_expires_at'),
+    removedAt: timestamp('removed_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at')
       .notNull()
@@ -189,6 +193,11 @@ export const calendarLayer = pgTable(
     provider: text('provider'),
     sourceKind: text('source_kind').notNull(),
     externalLayerId: text('external_layer_id'),
+    sourceIdentityNamespace: text('source_identity_namespace'),
+    sourceIdentityValue: text('source_identity_value'),
+    sourceRelationship: text('source_relationship'),
+    sourceManagement: jsonb('source_management').$type<CalendarSourceManagement>(),
+    suggestedGroupKey: text('suggested_group_key'),
     title: text('title').notNull(),
     description: text('description'),
     timezone: text('timezone'),
@@ -214,6 +223,7 @@ export const calendarLayer = pgTable(
     watchRegisteredAt: timestamp('watch_registered_at'),
     lastSyncedAt: timestamp('last_synced_at'),
     lastError: text('last_error'),
+    removedAt: timestamp('removed_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at')
       .notNull()
@@ -223,7 +233,49 @@ export const calendarLayer = pgTable(
   (t) => [
     index('calendar_layer_user_idx').on(t.userId),
     index('calendar_layer_user_selected_idx').on(t.userId, t.selected),
+    index('calendar_layer_user_source_identity_idx').on(
+      t.userId,
+      t.sourceIdentityNamespace,
+      t.sourceIdentityValue,
+    ),
     uniqueIndex('calendar_layer_connection_external_uq').on(t.connectionId, t.externalLayerId),
+  ],
+);
+
+/** A user-confirmed logical calendar whose provider sources should render as one. */
+export const calendarSourceGroup = pgTable(
+  'calendar_source_group',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    preferredLayerId: text('preferred_layer_id').references(() => calendarLayer.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [index('calendar_source_group_user_idx').on(t.userId)],
+);
+
+/** One provider layer assigned to one user-confirmed logical calendar group. */
+export const calendarSourceGroupMember = pgTable(
+  'calendar_source_group_member',
+  {
+    groupId: text('group_id')
+      .notNull()
+      .references(() => calendarSourceGroup.id, { onDelete: 'cascade' }),
+    layerId: text('layer_id')
+      .notNull()
+      .references(() => calendarLayer.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.groupId, t.layerId] }),
+    unique('calendar_source_group_member_layer_uq').on(t.layerId),
   ],
 );
 
@@ -250,6 +302,9 @@ export const calendarItem = pgTable(
     provider: text('provider'),
     externalCalendarId: text('external_calendar_id'),
     externalEventId: text('external_event_id'),
+    eventIdentityNamespace: text('event_identity_namespace'),
+    eventIdentityValue: text('event_identity_value'),
+    occurrenceIdentity: text('occurrence_identity'),
     recurringEventId: text('recurring_event_id'),
     recurrenceInstanceKey: text('recurrence_instance_key'),
     status: text('status').notNull().default('confirmed'),
@@ -317,6 +372,12 @@ export const calendarItem = pgTable(
     index('calendar_item_layer_idx').on(t.layerId),
     index('calendar_item_work_place_idx').on(t.workPlaceId),
     index('calendar_item_user_sync_state_idx').on(t.userId, t.syncState),
+    index('calendar_item_user_event_identity_idx').on(
+      t.userId,
+      t.eventIdentityNamespace,
+      t.eventIdentityValue,
+      t.occurrenceIdentity,
+    ),
     uniqueIndex('calendar_item_layer_external_uq').on(t.layerId, t.externalEventId),
   ],
 );

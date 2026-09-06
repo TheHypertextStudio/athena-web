@@ -52,6 +52,8 @@ import {
   calendarLayer,
   calendarLayerShare,
   calendarList,
+  calendarSourceGroup,
+  calendarSourceGroupMember,
   calendarProcessBinding,
   changeSet,
   changeSetEntry,
@@ -215,6 +217,8 @@ import {
   calendarItemRelations,
   calendarLayerRelations,
   calendarLayerShareRelations,
+  calendarSourceGroupMemberRelations,
+  calendarSourceGroupRelations,
   organizationRelations,
 } from '../../src/relations';
 import { assertDefined } from '@docket/test-utils';
@@ -256,6 +260,8 @@ describe('types + enums + relations', () => {
     expect(calendarItemRelations).toBeDefined();
     expect(calendarItemRelationRelations).toBeDefined();
     expect(calendarLayerShareRelations).toBeDefined();
+    expect(calendarSourceGroupRelations).toBeDefined();
+    expect(calendarSourceGroupMemberRelations).toBeDefined();
   });
 
   it('defines calendar item relations and per-workspace layer sharing structurally', () => {
@@ -384,6 +390,8 @@ describe('schema foreign-key references (covers every `.references(() => …)` c
     calendarItemTaskLink,
     calendarItemRelation,
     calendarLayerShare,
+    calendarSourceGroup,
+    calendarSourceGroupMember,
     calendarItemWrite,
     calendarProcessBinding,
     label,

@@ -245,6 +245,7 @@ export type {
   CalendarItemPermission,
   CalendarItemConflict,
   CalendarItemWritePatch,
+  CalendarSourceManagement,
 } from '@docket/planning/calendar-contract';
 
 // The durable transcript message shape is likewise owned by `domain packages` — the

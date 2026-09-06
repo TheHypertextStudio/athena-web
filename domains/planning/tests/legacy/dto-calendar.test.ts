@@ -105,6 +105,43 @@ describe('CalendarLayerOut', () => {
     expect(CalendarLayerOut.shape).not.toHaveProperty('watchResourceId');
     expect(CalendarLayerOut.shape).not.toHaveProperty('watchToken');
   });
+
+  it('parses opaque source identity and provider-neutral management capabilities', () => {
+    const parsed = CalendarLayerOut.parse({
+      id: LAYER_ID,
+      connectionId: CONNECTION_ID,
+      provider: 'microsoft',
+      sourceKind: 'provider_calendar',
+      externalLayerId: 'calendar-AAMkAGI2',
+      sourceIdentity: { namespace: 'microsoft-calendar', value: 'AAMkAGI2' },
+      sourceRelationship: 'subscribed',
+      sourceManagement: {
+        canRemoveSubscription: true,
+        requiresIncrementalConsent: false,
+      },
+      suggestedGroupKey: null,
+      title: 'Personal',
+      description: null,
+      timezone: 'Pacific Standard Time',
+      color: '#3b82f6',
+      accessRole: 'read',
+      primary: false,
+      selected: true,
+      visibleByDefault: true,
+      editableCore: false,
+      lastSyncedAt: null,
+      lastError: null,
+      watchExpiresAt: null,
+      createdAt: '2026-09-05T12:00:00.000Z',
+      updatedAt: '2026-09-05T12:00:00.000Z',
+    });
+
+    expect(parsed.sourceIdentity).toEqual({
+      namespace: 'microsoft-calendar',
+      value: 'AAMkAGI2',
+    });
+    expect(parsed.sourceManagement?.canRemoveSubscription).toBe(true);
+  });
 });
 
 const basePermissions = { canEditCore: true, canDelete: true, readOnlyReason: null };
@@ -174,6 +211,20 @@ describe('CalendarItemOut', () => {
     });
     expect(parsed.startsAt).toContain('T16:00');
     expect(parsed.endTimezone).toBe('America/New_York');
+  });
+
+  it('keeps an event identity separate from its recurring occurrence identity', () => {
+    const parsed = CalendarItemOut.parse({
+      ...baseItem(),
+      provider: 'microsoft',
+      eventIdentity: { namespace: 'ical', value: 'series@example.com' },
+      occurrenceIdentity: '2026-09-05T16:00:00.000Z',
+      startsAt: '2026-09-05T16:00:00.000Z',
+      endsAt: '2026-09-05T17:00:00.000Z',
+    });
+
+    expect(parsed.eventIdentity).toEqual({ namespace: 'ical', value: 'series@example.com' });
+    expect(parsed.occurrenceIdentity).toBe('2026-09-05T16:00:00.000Z');
   });
 
   it('parses an all-day item', () => {

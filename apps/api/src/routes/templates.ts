@@ -21,7 +21,7 @@ import {
   TemplateTargetType,
   TemplateUpdate,
 } from '@docket/work/template-contract';
-import { and, eq, exists, or, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -29,6 +29,7 @@ import type { AppEnv } from '../context';
 import { getDocumentImageReferenceReconciler } from '../content/document-image-reference-registry';
 import { NotFoundError, ValidationError } from '../error';
 import { seedDefaultTemplates } from '../lib/templates/defaults';
+import { visibleTemplateWhere } from '../lib/templates/visibility';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
@@ -82,40 +83,6 @@ const listQuery = z.object({
     'Limit the list to templates that create this kind. Omit for every template in the org.',
   ),
 });
-
-function visibleTemplateWhere(
-  orgId: string,
-  actorId: string,
-  filters: {
-    readonly id?: string | undefined;
-    readonly targetType?: z.infer<typeof TemplateTargetType> | undefined;
-  },
-) {
-  return and(
-    eq(template.organizationId, orgId),
-    filters.id === undefined ? undefined : eq(template.id, filters.id),
-    filters.targetType === undefined ? undefined : eq(template.targetType, filters.targetType),
-    or(
-      eq(template.scope, 'organization'),
-      and(eq(template.scope, 'personal'), eq(template.ownerActorId, actorId)),
-      and(
-        eq(template.scope, 'team'),
-        exists(
-          db
-            .select({ one: sql`1` })
-            .from(teamMember)
-            .where(
-              and(
-                eq(teamMember.organizationId, orgId),
-                eq(teamMember.actorId, actorId),
-                eq(teamMember.teamId, template.teamId),
-              ),
-            ),
-        ),
-      ),
-    ),
-  );
-}
 
 async function requireAssignableScope(
   orgId: string,

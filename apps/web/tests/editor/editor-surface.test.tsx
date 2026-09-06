@@ -409,6 +409,58 @@ describe('description edit sessions', () => {
   });
 });
 
+describe('the document contents rail', () => {
+  const DOC = [
+    '# Objectives',
+    '',
+    'Why we are here.',
+    '',
+    '# Approach',
+    '',
+    'How we get there.',
+  ].join('\n');
+
+  it('scrolls to the heading an entry names', async () => {
+    // jsdom implements no scrolling at all, so the method has to be installed before it can be
+    // observed. Recording the receiver is what proves the rail resolved a real heading.
+    const scrolled: Element[] = [];
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      writable: true,
+      value(this: Element) {
+        scrolled.push(this);
+      },
+    });
+    renderEditor(<EntityDocument value={DOC} canEdit={false} onSave={vi.fn()} />);
+
+    const entries = await screen.findAllByRole('link', { name: 'Approach' });
+    const surface = await screen.findByRole('document');
+    const headings = [...surface.querySelectorAll('h1, h2, h3')];
+    await waitFor(() => {
+      expect(headings.length).toBe(2);
+    });
+
+    await userEvent.click(assertDefined(entries[0]));
+
+    // Navigating by element rather than by `getElementById` is the whole point: ProseMirror owns
+    // these nodes and strips an imperatively assigned `id` on its next redraw, so a rail that
+    // resolved its target through the document would find nothing and silently do nothing.
+    expect(scrolled).toEqual([headings[1]]);
+    Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
+  });
+
+  it('binds to headings that appear after the first render', async () => {
+    renderEditor(<EntityDocument value={DOC} canEdit={false} onSave={vi.fn()} />);
+    // The body mounts asynchronously. The rail's binding effect used to run once, against an empty
+    // subtree, and never again — so every entry pointed at nothing for the life of the page.
+    const surface = await screen.findByRole('document');
+    await waitFor(() => {
+      expect(surface.querySelectorAll('h1, h2, h3').length).toBe(2);
+    });
+    expect(await screen.findAllByRole('link', { name: 'Objectives' })).not.toHaveLength(0);
+  });
+});
+
 describe('editor insets are symmetric', () => {
   /** Repository root, derived from this file rather than the process CWD. */
   const REPO_ROOT = resolve(import.meta.dirname, '../../../..');

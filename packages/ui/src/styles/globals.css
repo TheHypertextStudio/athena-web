@@ -1048,21 +1048,37 @@
  * before while letting the cover fill `.masthead-band` all the way to its actual top.
  */
 .masthead-content {
-  padding-block-start: 1.5rem;
+  /*
+   * The page's top inset, and the same measurement as its left and right ones. `--page-gutter` is
+   * the grid track that insets every section horizontally, and it steps 12 → 24 → 32px with the
+   * pane; reading it here is what keeps the four edges one decision rather than four.
+   *
+   * It used to be a flat 1.5rem that a keyframe drove down to 0.25rem as the header collapsed, so
+   * a scrolled page sat 4px from its top edge and 32px from its sides. The collapse does not need
+   * that room: `detail-primary-collapse` (48px → 40px identity row), `detail-title-collapse`,
+   * `detail-secondary-collapse`, and `detail-masthead-collapse` (12px → 0 row gap) already carry
+   * the full `--detail-collapse-range` between them. Paying for header height out of the page's
+   * top margin only ever bought the collapse a few pixels it already had.
+   */
+  padding-block-start: var(--page-gutter);
   /*
    * Constant, not animated: `.detail-identity`'s compact height (2.5rem) is tuned to exactly match
    * the collapsed glyph's scaled size, so at full collapse the glyph fills that row edge to edge —
    * and since `.masthead-band` (and the cover with it) ends exactly where this content does, the
    * glyph landed flush against the cover's own boundary with nothing between them. This is the
-   * buffer that boundary needs, in every collapse state, not just the ones this animation interpolates.
+   * buffer that boundary needs, in every collapse state.
    *
-   * 0.75rem, matching `.detail-tabs`'s own collapsed `margin-block-start` exactly: the cover/white
-   * boundary sits between them, and the two gaps that straddle it read as one visual rhythm — the
-   * moment they're different amounts, the boundary looks like it landed in the wrong place instead
-   * of like a deliberate line.
+   * Fixed, and deliberately *not* derived from `--page-gutter`. This is the gap between two rows
+   * of one header band, not an inset from the pane's edge, and the two are different measurements
+   * that happen to be adjacent. Tying it to the gutter put a full 32px between the title row and
+   * its own tab bar at a normal width, which reads as the header having come apart.
+   *
+   * `.detail-tabs`'s `margin-block-start` is the matching half: the cover/white boundary sits
+   * between them, and the two gaps that straddle it read as one visual rhythm — the moment they're
+   * different amounts, the boundary looks like it landed in the wrong place instead of like a
+   * deliberate line.
    */
-  padding-block-end: 0.75rem;
-  animation-name: detail-masthead-content-collapse;
+  padding-block-end: 0.5rem;
 }
 
 .detail-primary {
@@ -1126,9 +1142,62 @@
   white-space: inherit;
 }
 
+/*
+ * The other half of the band above the tab bar; `.masthead-content`'s `padding-block-end` is the
+ * first half. Equal in every collapse state so the boundary they straddle stays centred.
+ */
 .detail-tabs {
-  margin-block-start: 1rem;
-  animation-name: detail-tabs-collapse;
+  margin-block-start: 0.5rem;
+}
+
+/*
+ * The scrolled top app bar, M3's on-scroll behaviour.
+ *
+ * The header is sticky and opaque, so body content passes behind it and terminates at its bottom
+ * edge. At rest that edge has nothing behind it and needs no expression at all — the header is
+ * flush with the page and shares its colour. Once content is underneath, the bar lifts one step,
+ * and the tone step *is* the boundary. That is how M3 separates an app bar from the content
+ * scrolling under it: tonal elevation, not a rule and not a shadow.
+ *
+ * Neither endpoint is named here. Both arrive as custom properties that `EntityDetailLayout` sets
+ * from `surfaceToneVariable`, so the roles — `page` at rest, `floating` lifted — are chosen in the
+ * component against the documented ramp rather than picked out of the token list by eye in a
+ * stylesheet nothing lints. Why `floating` and not the `card` `AppBar` takes is recorded there,
+ * next to the roles: it is a property of what this particular bar covers.
+ *
+ * Driven by the same paused-keyframe progress as the collapse, so the bar lifting and the masthead
+ * compacting are one motion rather than two effects that happen to fire together.
+ */
+.detail-header {
+  background-color: var(--detail-bar-resting);
+  animation-name: detail-header-lift;
+}
+
+@keyframes detail-header-lift {
+  to {
+    background-color: var(--detail-bar-lifted);
+  }
+}
+
+/*
+ * An anchor target has to clear the sticky header, which is opaque and paints over the top of the
+ * scrollport. Without this every in-page jump — the contents rail's own links included — lands its
+ * heading underneath the tab bar, so the one thing you asked to read is the one thing hidden.
+ * `--detail-header-height` is published by `useDetailHeaderCollapse` alongside the collapse
+ * progress; the fallback keeps this inert before the first measurement.
+ */
+[data-detail-panel-scroll] {
+  scroll-padding-block-start: calc(var(--detail-header-height, 0px) + 1rem);
+}
+
+/*
+ * The page's bottom inset, matching the side ones. It lives on the body rather than on the scroller
+ * because the scroller cannot resolve its own `--page-gutter`: it declares `container-type:
+ * inline-size`, and an element is never its own query container, so the two `@container` steps that
+ * take the gutter to 24 and 32px only ever match on its descendants. `.detail-body` is one of them.
+ */
+.detail-body {
+  padding-block-end: max(var(--page-gutter), env(safe-area-inset-bottom));
 }
 
 [data-entity-metadata-overflow] [data-entity-metadata-item] {
@@ -1152,13 +1221,12 @@
 }
 
 .detail-backdrop-space,
-.masthead-content,
+.detail-header,
 .detail-masthead,
 .detail-primary,
 .detail-glyph,
 .detail-title,
-.detail-secondary,
-.detail-tabs {
+.detail-secondary {
   animation-delay: var(--detail-collapse-delay);
   animation-duration: 1s;
   animation-fill-mode: both;
@@ -1222,21 +1290,9 @@
   }
 }
 
-@keyframes detail-masthead-content-collapse {
-  to {
-    padding-block-start: 0.25rem;
-  }
-}
-
 @keyframes detail-glyph-collapse {
   to {
     transform: scale(0.833333);
-  }
-}
-
-@keyframes detail-tabs-collapse {
-  to {
-    margin-block-start: 0.75rem;
   }
 }
 
@@ -1273,6 +1329,18 @@
   }
 }
 
+/*
+ * The generated document contents rail. One step per heading level, declared once here rather than
+ * multiplied out into an inline `padding-left` on every row.
+ */
+.entity-contents [data-contents-level='2'] {
+  padding-inline-start: 0.75rem;
+}
+
+.entity-contents [data-contents-level='3'] {
+  padding-inline-start: 1.5rem;
+}
+
 .detail-print-summary {
   display: none;
 }
@@ -1294,6 +1362,7 @@
 
   [data-detail-print] .detail-body {
     display: block !important;
+    padding-block-end: 0 !important;
   }
 
   [data-detail-print] .detail-print-summary {

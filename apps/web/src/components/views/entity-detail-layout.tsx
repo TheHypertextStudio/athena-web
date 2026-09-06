@@ -8,7 +8,7 @@
  * and the title size drifted between surfaces. {@link EntityDetailLayout} fixes the *arrangement*
  * once — the icon sits above the title + subtitle pair, and the title fills the available width
  * instead of being clipped to a fixed measure — a metadata slot for the full inline property row,
- * then the tab bar with a separator beneath it and the active panel — so a page only supplies
+ * then the tab bar, and the active panel — so a page only supplies
  * content through slots. The canonical title token (`text-headline-medium font-medium`) is owned
  * here so no page can diverge from it.
  */
@@ -22,9 +22,11 @@ import {
   PopoverBody,
   PopoverContent,
   PopoverTrigger,
+  surfaceToneVariable,
 } from '@docket/ui/primitives';
 import {
   createContext,
+  type CSSProperties,
   type JSX,
   type ReactNode,
   useCallback,
@@ -63,7 +65,7 @@ export interface EntityDetailLayoutProps {
   metadata?: ReactNode;
   /** Masthead actions (e.g. publish and ⋯), aligned with the icon/title identity row. */
   actions?: ReactNode;
-  /** The tab bar (a `Tabs` element). A {@link Separator} is rendered directly beneath it. */
+  /** The tab bar (a `Tabs` element). It ends the sticky header, which lifts tonally on scroll. */
   tabs: ReactNode;
   /** The active tab panel's content. */
   children: ReactNode;
@@ -108,13 +110,32 @@ export function EntityDetailLayout({
   // can reach the pane's edge. Owning the scroll additionally gives the header something to pin to
   // and a timeline to collapse against, which every detail page benefits from equally.
   useOwnPageScroll();
-  const scrollRef = useDetailHeaderCollapse({ hasCover: Boolean(cover) });
+  const { scrollRef, headerRef } = useDetailHeaderCollapse({ hasCover: Boolean(cover) });
 
   const header = (
     <header
+      ref={headerRef}
       {...(object ? objectTargetProps(object) : {})}
+      // The two ends of M3's on-scroll app bar, as roles from the documented ramp rather than as
+      // tokens. A static `Surface` cannot express this: the bar interpolates between two tones as
+      // the page scrolls, so the tone is an animation rather than a resting class. Naming both
+      // ends through `surfaceToneVariable` keeps the *choice* in the component and leaves the
+      // stylesheet holding no colour of its own.
+      //
+      // `floating`, not the `card` that `AppBar` takes, and the difference is what this bar
+      // occludes rather than a preference. `AppBar` sits above route content on the `page` step.
+      // This bar sits above a detail page whose document body is `EntityDocument` — itself `card`
+      // — so a `card` bar and the panel scrolling beneath it are the same tone, and a half-covered
+      // heading dissolves into a field with no edge. A bar has to out-rank the furniture it
+      // covers, and `floating` is the first step that does.
+      style={
+        {
+          '--detail-bar-resting': `var(${surfaceToneVariable('page')})`,
+          '--detail-bar-lifted': `var(${surfaceToneVariable('floating')})`,
+        } as CSSProperties
+      }
       className={cn(
-        'detail-header page-bleed page-grid bg-surface sticky top-0 isolate z-10 gap-y-0',
+        'detail-header page-bleed page-grid sticky top-0 isolate z-10 gap-y-0',
         printSummary ? 'detail-print-hidden' : undefined,
       )}
     >
@@ -197,8 +218,10 @@ export function EntityDetailLayout({
       data-detail-print={printSummary ? '' : undefined}
       className={cn(
         // Sections are rows of this grid, so the rhythm between them is declared once here rather
-        // than by each section spacing itself against its neighbours.
-        'page-grid h-full min-h-0 w-full gap-y-4 overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))] lg:pb-6 @2xl:gap-y-5',
+        // than by each section spacing itself against its neighbours. The bottom inset is not one
+        // of them: it belongs to `.detail-body`, because this element declares its own container
+        // and so can never resolve the `--page-gutter` step its own descendants see.
+        'page-grid h-full min-h-0 w-full gap-y-4 overflow-y-auto @2xl:gap-y-5',
         className,
       )}
     >

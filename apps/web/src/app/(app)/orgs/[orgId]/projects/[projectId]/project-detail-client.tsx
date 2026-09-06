@@ -755,6 +755,7 @@ export default function ProjectDetailPage(): JSX.Element {
       }
       tabs={
         <Tabs
+          variant="underline"
           value={tab}
           onValueChange={(value) => {
             setTab(value as TabId);

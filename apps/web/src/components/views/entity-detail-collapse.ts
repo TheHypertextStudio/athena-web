@@ -27,22 +27,53 @@ export function resolveDetailCollapseProgress(
   return Math.min(Math.max(scrollTop / rangePixels, 0), 1);
 }
 
+/** The scroller ref plus the header ref whose measured height it publishes. */
+export interface DetailHeaderCollapse {
+  /** Attach to the element that owns detail-page scrolling. */
+  readonly scrollRef: RefObject<HTMLDivElement | null>;
+  /** Attach to the sticky header, so its height can be published to the scroller. */
+  readonly headerRef: RefObject<HTMLElement | null>;
+}
+
 /**
- * Connects a detail scroller to the shared paused collapse keyframes without React rerenders.
+ * Connects a detail scroller to the shared paused collapse keyframes without React rerenders, and
+ * publishes the sticky header's measured height as `--detail-header-height`.
+ *
+ * @remarks
+ * The header is opaque and pinned, so anything that needs to sit clear of it — scroll padding for
+ * anchor jumps, a second sticky such as the document contents rail — needs its height. That height
+ * changes as the header collapses, so it is measured rather than assumed, and written straight to
+ * the scroller's style alongside the collapse progress: same element, same no-rerender path.
  *
  * @param options - Header geometry selected by the presence of a cover.
- * @returns the ref to attach to the element that owns detail-page scrolling.
+ * @returns the scroller and header refs to attach.
  */
-export function useDetailHeaderCollapse({
-  hasCover,
-}: {
-  hasCover: boolean;
-}): RefObject<HTMLDivElement | null> {
+export function useDetailHeaderCollapse({ hasCover }: { hasCover: boolean }): DetailHeaderCollapse {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const scroller = scrollRef.current;
-    if (!scroller) return;
+    const header = headerRef.current;
+    if (!scroller || !header) return;
+
+    // `border-box` rather than `getBoundingClientRect`: the collapse animates a `scale` transform
+    // on the glyph, and a bounding rect reports the transformed box. The occluding surface is the
+    // layout box, which is what the header actually reserves at the top of the scrollport.
+    const publishHeaderHeight = (height: number): void => {
+      scroller.style.setProperty('--detail-header-height', `${height}px`);
+    };
+    publishHeaderHeight(header.offsetHeight);
+
+    const headerObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(([entry]) => {
+            if (!entry) return;
+            const [box] = entry.borderBoxSize;
+            publishHeaderHeight(box ? box.blockSize : header.offsetHeight);
+          });
+    headerObserver?.observe(header);
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const rootFontSize = Number.parseFloat(
@@ -73,11 +104,12 @@ export function useDetailHeaderCollapse({
     reducedMotion.addEventListener('change', queueProgress);
 
     return () => {
+      headerObserver?.disconnect();
       scroller.removeEventListener('scroll', queueProgress);
       reducedMotion.removeEventListener('change', queueProgress);
       if (frame !== null) window.cancelAnimationFrame(frame);
     };
   }, [hasCover]);
 
-  return scrollRef;
+  return { scrollRef, headerRef };
 }

@@ -78,15 +78,76 @@ describe('entity detail collapse contract', () => {
     // cover rather than an ancestor of it, so the cover's `inset-0` against `.masthead-band` isn't
     // pushed down by the same padding that indents the eyebrow/title text.
     expect(layout).toMatch(literalClassToken('masthead-content'));
-    expect(css).toMatch(/\.masthead-content\s*\{[\s\S]*padding-block-start:\s*1\.5rem/);
     expect(css).not.toMatch(/\.detail-header\s*\{[^}]*padding-block-start/);
-    expect(css).toMatch(/\.detail-tabs\s*\{[\s\S]*margin-block-start:\s*1rem/);
-    expect(css).toMatch(
-      /@keyframes detail-masthead-content-collapse[\s\S]*padding-block-start:\s*0\.25rem/,
-    );
-    expect(css).toMatch(/@keyframes detail-tabs-collapse[\s\S]*margin-block-start:\s*0\.75rem/);
     expect(css).toMatch(
       /@keyframes detail-title-collapse\s*\{[\s\S]*from\s*\{[\s\S]*white-space:\s*normal/,
+    );
+  });
+
+  it('measures the page inset once, so the top edge matches the sides at every gutter step', () => {
+    // The horizontal inset is the `.page-grid` gutter track, which steps 12 → 24 → 32px with the
+    // pane. Every vertical inset used to be a separate frozen literal, so the top of a collapsed
+    // page sat 4px from its own edge and 32px from its sides. They read the gutter now.
+    expect(css).toMatch(
+      /\.masthead-content\s*\{[\s\S]*padding-block-start:\s*var\(--page-gutter\)/,
+    );
+    // The gap between the title row and its own tab bar is deliberately NOT gutter-derived. It is
+    // rhythm inside one band, not an inset from the pane's edge; deriving it put a full 32px there
+    // at a normal width, which read as the header having come apart. Equal halves either side of
+    // the cover boundary so that boundary stays centred.
+    expect(css).toMatch(/\.masthead-content\s*\{[\s\S]*padding-block-end:\s*0\.5rem/);
+    expect(css).toMatch(/\.detail-tabs\s*\{[^}]*margin-block-start:\s*0\.5rem/);
+    expect(css).toMatch(
+      /\.detail-body\s*\{[^}]*padding-block-end:\s*max\(var\(--page-gutter\), env\(safe-area-inset-bottom\)\)/,
+    );
+    // The bottom inset cannot live on the scroller: it declares its own `container-type`, and an
+    // element is never its own query container, so it only ever sees the unstepped 12px gutter.
+    expect(layout).toContain(
+      "'page-grid h-full min-h-0 w-full gap-y-4 overflow-y-auto @2xl:gap-y-5'",
+    );
+  });
+
+  it('spends no page inset on collapsing the header', () => {
+    expect(css).not.toContain('detail-masthead-content-collapse');
+    expect(css).not.toContain('detail-tabs-collapse');
+    expect(css).not.toMatch(/\.masthead-content\s*\{[^}]*animation-name/);
+    expect(css).not.toMatch(/\.detail-tabs\s*\{[^}]*animation-name/);
+    // The range those two used to cover is still carried by the rows that should carry it.
+    expect(css).toContain('animation-name: detail-primary-collapse');
+    expect(css).toContain('animation-name: detail-secondary-collapse');
+    expect(css).toContain('animation-name: detail-masthead-collapse');
+  });
+
+  it('separates the header from the content behind it by tone, not by a rule or a shadow', () => {
+    // M3's scrolled top app bar: flush with the page at rest, lifted once content is underneath it,
+    // interpolated on the same progress as the collapse so the two read as one motion. A hairline
+    // is not the house style and a shadow is reserved for overlay primitives.
+    //
+    // Neither endpoint is a token here. The stylesheet consumes two custom properties, and the
+    // layout sets them from `surfaceToneVariable` — so the ramp step is chosen by role next to the
+    // other role names rather than typed into a stylesheet that no lint rule reads. The
+    // design-token policy holds the CSS side of that line.
+    expect(css).toMatch(/\.detail-header\s*\{[^}]*background-color:\s*var\(--detail-bar-resting\)/);
+    expect(css).toMatch(/\.detail-header\s*\{[^}]*animation-name:\s*detail-header-lift/);
+    expect(css).toMatch(
+      /@keyframes detail-header-lift[\s\S]*background-color:\s*var\(--detail-bar-lifted\)/,
+    );
+    // `page` at rest, `floating` lifted. Not the `card` `AppBar` takes: this bar occludes an
+    // `EntityDocument` body, which is itself `card`, so a `card` bar and the panel sliding under it
+    // are one tone and the boundary disappears. A bar out-ranks the furniture it covers.
+    expect(layout).toContain("surfaceToneVariable('page')");
+    expect(layout).toContain("surfaceToneVariable('floating')");
+    // The fill belongs to that rule alone; a `bg-*` utility on the element would win by source
+    // order and freeze the bar at one tone.
+    expect(layout).not.toMatch(/detail-header[^"]*\bbg-/);
+    expect(layout).not.toContain('<Separator');
+  });
+
+  it('keeps anchor targets clear of the sticky header', () => {
+    expect(collapseBehavior).toContain('--detail-header-height');
+    expect(collapseBehavior).toContain('new ResizeObserver');
+    expect(css).toMatch(
+      /\[data-detail-panel-scroll\]\s*\{[^}]*scroll-padding-block-start:\s*calc\(var\(--detail-header-height, 0px\) \+ 1rem\)/,
     );
   });
 

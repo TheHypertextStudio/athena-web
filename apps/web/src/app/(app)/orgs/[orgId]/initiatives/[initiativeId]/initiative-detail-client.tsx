@@ -33,7 +33,6 @@ import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker
 import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
 import { LatestUpdateSummary } from '@/components/entity-detail/latest-update-summary';
 import { useWorkStatus } from '@/components/entity-display/use-work-status';
-import { InitiativeOverviewSummary } from '@/components/initiatives/initiative-overview-summary';
 import { InitiativeRelationshipPanels } from '@/components/initiatives/initiative-relationship-panels';
 import {
   INITIATIVE_CADENCE_LABEL,
@@ -588,6 +587,7 @@ export default function InitiativeDetailPage(): JSX.Element {
       }
       tabs={
         <Tabs
+          variant="underline"
           className="no-print"
           value={tab}
           onValueChange={(value) => {
@@ -731,6 +731,7 @@ export default function InitiativeDetailPage(): JSX.Element {
             routeOrganizationId={orgId}
             children={relationships?.children ?? []}
             connectedWork={relationships?.connectedWork ?? []}
+            distribution={detail.distribution}
             loading={relationshipsQ.isPending}
             initiativeNoun={initiativeNoun}
             programNoun={programNoun}
@@ -763,11 +764,6 @@ export default function InitiativeDetailPage(): JSX.Element {
             mutations.patchInitiative({ description });
           }}
           placeholder="Describe this initiative…"
-        />
-        <InitiativeOverviewSummary
-          initiative={detail}
-          programNoun={programNoun}
-          projectNoun={projectNoun}
         />
         <LatestUpdateSummary
           updates={updates}

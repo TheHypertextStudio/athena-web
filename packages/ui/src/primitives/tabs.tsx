@@ -17,10 +17,11 @@
  * first/last; activation follows focus, so arrowing also selects. Only the tablist lives here —
  * the matching `role="tabpanel"` is rendered by the caller so panels stay owned by the screen.
  *
- * Visual treatment (mirrors the agenda view-switcher track + the settings section-nav active row):
- * a resting `bg-surface-container` track with an inactive tab that tones up on hover and a
- * selected tab that fills to `bg-surface-container-highest`. Colors come from the semantic MD3
- * surface tokens in `@docket/ui/styles/globals.css`.
+ * Two visual treatments, because a tablist does two different jobs and they are different
+ * components in M3. See {@link TabsVariant}: `segmented` is the filled, content-sized track for a
+ * compact choice (the agenda view switcher, a composer toggle); `underline` is M3 primary tabs for
+ * a page's section navigation, with no track and an active indicator under the selected label.
+ * Colours come from the semantic MD3 tokens in `@docket/ui/styles/globals.css`.
  *
  * Two ergonomics are supported so migration off the hand-rolled bars is clean:
  *
@@ -79,6 +80,25 @@ import { typeClass } from './text';
  */
 export type TabsTone = 'neutral' | 'accent';
 
+/**
+ * Which of the two jobs this tablist is doing.
+ *
+ * @remarks
+ * They were one treatment for a while, and the seam showed on the detail pages: a segmented
+ * control is sized to its own content, and a page's section navigation is stretched across the
+ * measure, so five labels ended up huddled at the left of a wide empty track with the rest of the
+ * pill reading as dead space. They are different components in M3 and they are different here now.
+ *
+ * - `segmented` (default) — a compact, mutually-exclusive **choice**: a composer's two-position
+ *   toggle, an agenda view switcher. A filled track with a raised selected segment, sized to its
+ *   content. This is M3's segmented button.
+ * - `underline` — a page's **section navigation**: Overview / Updates / Resources across an entity
+ *   detail page. M3 primary tabs — no track, labels in a row, and an active indicator under the
+ *   selected label. Nothing is drawn under the row itself; the header's own scrolled tone is what
+ *   separates the bar from the content passing beneath it.
+ */
+export type TabsVariant = 'segmented' | 'underline';
+
 /** The shared selection state threaded from {@link Tabs} down to each {@link Tab}. */
 interface TabsContextValue {
   /** The currently selected tab value. */
@@ -87,6 +107,8 @@ interface TabsContextValue {
   readonly onValueChange: (value: string) => void;
   /** How the selected segment is coloured. */
   readonly tone: TabsTone;
+  /** Which of the two tablist jobs this is. */
+  readonly variant: TabsVariant;
 }
 
 const TabsContext = React.createContext<TabsContextValue | null>(null);
@@ -149,6 +171,8 @@ export interface TabsProps {
   readonly overflow?: TabsOverflow;
   /** How the selected segment is coloured. Defaults to `neutral`. */
   readonly tone?: TabsTone;
+  /** Which of the two tablist jobs this is. Defaults to `segmented`. */
+  readonly variant?: TabsVariant;
 }
 
 /**
@@ -163,13 +187,14 @@ export function Tabs({
   label,
   items,
   tone = 'neutral',
+  variant = 'segmented',
   children,
   className,
   overflow,
 }: TabsProps): React.JSX.Element {
   const context = React.useMemo<TabsContextValue>(
-    () => ({ value, onValueChange, tone }),
-    [value, onValueChange, tone],
+    () => ({ value, onValueChange, tone, variant }),
+    [value, onValueChange, tone, variant],
   );
 
   return (
@@ -249,7 +274,7 @@ function moveTabFocus(
  * @returns the rendered `role="tablist"` track.
  */
 export function TabList({ label, className, children }: TabListProps): React.JSX.Element {
-  const { onValueChange } = useTabsContext();
+  const { onValueChange, variant } = useTabsContext();
   const ref = React.useRef<HTMLDivElement>(null);
   // A standalone tab bar keeps its 40px touch-target floor; only an enclosing `ControlGroup`
   // shrinks it, which is what lets a composer carry a compact two-position toggle without every
@@ -267,8 +292,15 @@ export function TabList({ label, className, children }: TabListProps): React.JSX
       aria-label={label}
       onKeyDown={onKeyDown}
       className={cn(
-        'bg-surface-container inline-flex items-center gap-0.5 p-0.5',
-        CONTROL[size].heightPx <= 32 ? 'rounded-md' : 'rounded-lg',
+        'inline-flex items-center',
+        variant === 'underline'
+          ? // No track and no fill: the row is labels, and the selected one carries an indicator.
+            // `gap-1` rather than the segmented `gap-0.5` because nothing separates these but air.
+            'gap-1'
+          : cn(
+              'bg-surface-container gap-0.5 p-0.5',
+              CONTROL[size].heightPx <= 32 ? 'rounded-md' : 'rounded-lg',
+            ),
         className,
       )}
     >
@@ -450,6 +482,45 @@ function TabMeasurement({
   );
 }
 
+/**
+ * The colour treatment for one tab, by variant and selection state.
+ *
+ * @remarks
+ * An unselected tab is one treatment in both variants, and it is the same hover the `ghost` button
+ * uses: a step on the surface ramp. It was briefly an `on-surface/8` tint here instead, on the
+ * theory that a foreground tint survives the bar changing tone underneath it — which was inventing
+ * a value to solve a problem the ramp already solves, and is how two controls that should look
+ * identical drift apart.
+ *
+ * @param variant - Which tablist job this is.
+ * @param tone - How a selected segment is coloured.
+ * @param selected - Whether this tab is the selected one.
+ * @returns the colour classes for that combination.
+ */
+function tabStateClass(variant: TabsVariant, tone: TabsTone, selected: boolean): string {
+  if (!selected)
+    return 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface';
+  // Section navigation says "selected" with the indicator under the label, so the label itself
+  // takes no fill; a segmented control has no indicator and says it with one.
+  if (variant === 'underline') return 'text-on-surface';
+  if (tone === 'accent') return 'bg-secondary-container text-on-secondary-container';
+  return 'bg-surface-container-highest text-on-surface';
+}
+
+/**
+ * The colour treatment for a tab's trailing count pill.
+ *
+ * @param tone - How a selected segment is coloured.
+ * @param selected - Whether the owning tab is the selected one.
+ * @returns the colour classes for that combination.
+ */
+function tabCountClass(tone: TabsTone, selected: boolean): string {
+  if (selected && tone === 'accent')
+    return 'bg-on-secondary-container/12 text-on-secondary-container';
+  if (selected) return 'bg-surface-container text-on-surface';
+  return 'bg-surface-container-high text-on-surface-variant';
+}
+
 /** Props for {@link Tab}. */
 export interface TabProps {
   /** Stable tab value (also the `aria-controls`/`id` stem). */
@@ -471,9 +542,10 @@ export interface TabProps {
  * @returns the rendered `role="tab"` button.
  */
 export function Tab({ value, count, disabled, className, children }: TabProps): React.JSX.Element {
-  const { value: selectedValue, onValueChange, tone } = useTabsContext();
+  const { value: selectedValue, onValueChange, tone, variant } = useTabsContext();
   const selected = value === selectedValue;
   const metrics = CONTROL[useControlSize(undefined, 'xl')];
+  const underline = variant === 'underline';
 
   return (
     <button
@@ -498,26 +570,27 @@ export function Tab({ value, count, disabled, className, children }: TabProps): 
         metrics.gap,
         metrics.iconApply,
         typeClass(metrics.labelToken),
-        CONTROL_RADIUS,
-        selected
-          ? tone === 'accent'
-            ? 'bg-secondary-container text-on-secondary-container'
-            : 'bg-surface-container-highest text-on-surface'
-          : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',
+        underline ? 'rounded-t-lg' : CONTROL_RADIUS,
+        tabStateClass(variant, tone, selected),
         focusRing,
         className,
       )}
     >
       <span className="min-w-0 truncate">{children}</span>
+      {underline && selected ? (
+        // M3's active indicator. Inset from the tab's own padding so it sizes to the label rather
+        // than to the hit target, and rounded at the top so it reads as a mark under the word and
+        // not as a rule someone drew along the bottom of the bar.
+        <span
+          aria-hidden="true"
+          className="bg-primary absolute inset-x-2.5 bottom-0 h-[3px] rounded-t-full"
+        />
+      ) : null}
       {count !== undefined ? (
         <span
           className={cn(
             'text-label-small inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 tabular-nums',
-            selected && tone === 'accent'
-              ? 'bg-on-secondary-container/12 text-on-secondary-container'
-              : selected
-                ? 'bg-surface-container text-on-surface'
-                : 'bg-surface-container-high text-on-surface-variant',
+            tabCountClass(tone, selected),
           )}
         >
           {count}

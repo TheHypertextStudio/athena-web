@@ -53,7 +53,10 @@ export function PageContainer({
   return (
     <Element
       className={cn(
-        'mx-auto flex w-full flex-col px-3 py-4',
+        // `p-3`, not `px-3 py-4`: the two steps above it (`p-6`, `p-8`) are symmetric, so a base
+        // step that insets 12px at the sides and 16px at the top was the one rung where the page's
+        // four edges disagreed. 12 → 24 → 32 is the same ladder `--page-gutter` climbs.
+        'mx-auto flex w-full flex-col p-3',
         // Roster and canvas surfaces use the viewport as working space. Their own rows and cards
         // provide the inner rhythm, so a second 24-32px page inset only wastes width.
         fill
@@ -180,7 +183,7 @@ export function ListPageLayout({
       <div
         className={
           fullBleedBody
-            ? 'flex shrink-0 flex-col gap-4 px-3 pt-4 @2xl:gap-5 @2xl:px-6 @2xl:pt-6 @4xl:px-8 @4xl:pt-8'
+            ? 'flex shrink-0 flex-col gap-4 px-3 pt-3 @2xl:gap-5 @2xl:px-6 @2xl:pt-6 @4xl:px-8 @4xl:pt-8'
             : 'flex shrink-0 flex-col gap-3 @2xl:gap-4'
         }
       >

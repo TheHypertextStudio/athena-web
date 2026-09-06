@@ -373,6 +373,47 @@ describe('design token policy', () => {
     ).toEqual([]);
   });
 
+  /**
+   * The stylesheet is the one place a tonal decision can be made with no owner.
+   *
+   * @remarks
+   * `docket-ui/no-raw-surface-role` makes a component name a role — `Surface`, `surfaceToneColor`,
+   * `surfaceToneVariable` — instead of reaching for `bg-surface-container-high`. It is an ESLint
+   * rule over JSX, so it sees none of `globals.css`, and a component rule that sets a background
+   * straight from `--surface-container-high` gets the same un-owned decision in through the back
+   * door. That is not hypothetical: the entity-detail app bar was written that way, and the token
+   * it picked by eye was `floating` — the role reserved for dialogs — for a bar that `Surface`
+   * already documents as `card`.
+   *
+   * A component rule that needs a tone takes it from a custom property its component sets, which
+   * is what keeps the *choice* next to the role names. The theme blocks that define the ramp are
+   * exempt, because defining `--surface-container: …` is what they are for.
+   */
+  it('keeps tonal choices out of the stylesheet, where no component owns them', () => {
+    const css = readFileSync(resolve(WORKSPACE_ROOT, 'packages/ui/src/styles/globals.css'), 'utf8');
+    const offenders = css
+      .split('\n')
+      .map((line, index) => ({ line: line.trim(), number: index + 1 }))
+      // A *definition* (`--surface-container: oklch(…)`) declares the ramp; a *use* as a paint
+      // value is the decision this bans.
+      .filter(({ line }) =>
+        /^(?:background|background-color|border-color|color)\s*:\s*var\(--(?:color-)?surface/u.test(
+          line,
+        ),
+      )
+      .map(({ line, number }) => `globals.css:${number} — ${line}`);
+
+    expect(
+      offenders,
+      [
+        'A stylesheet rule paints from a raw surface token.',
+        'Name the role in the component instead: set a custom property from surfaceToneVariable()',
+        'and have the CSS consume that property, so the ramp step is chosen where Surface is.',
+        offenders.join('\n'),
+      ].join('\n'),
+    ).toEqual([]);
+  });
+
   it('records only rules the scanner implements', () => {
     const known = new Set<string>(DESIGN_TOKEN_RULES);
     const unknown = Object.entries(readLedger()).flatMap(([file, rules]) =>

@@ -24,6 +24,47 @@ const ITEMS: TabsItem[] = [
   { value: 'settings', label: 'Settings', disabled: true },
 ];
 
+describe('Tabs variants', () => {
+  /**
+   * A segmented control and a page's section navigation are different components in M3, and were
+   * one treatment here until the seam showed: section nav is stretched across the measure, so a
+   * filled track left five labels huddled at the left of a wide empty pill.
+   */
+  it('gives a segmented control a filled track and a filled selected segment', () => {
+    render(<Tabs value="overview" onValueChange={vi.fn()} label="Sections" items={ITEMS} />);
+    const tablist = screen.getByRole('tablist', { name: 'Sections' });
+    expect(tablist.className).toContain('bg-surface-container');
+    const selected = within(tablist).getByRole('tab', { selected: true });
+    expect(selected.className).toContain('bg-surface-container-highest');
+    expect(selected.querySelector('span[aria-hidden="true"]')).toBeNull();
+  });
+
+  it('gives section navigation no track and marks the selected tab with an indicator', () => {
+    render(
+      <Tabs
+        value="overview"
+        onValueChange={vi.fn()}
+        label="Sections"
+        items={ITEMS}
+        variant="underline"
+      />,
+    );
+    const tablist = screen.getByRole('tablist', { name: 'Sections' });
+    expect(tablist.className).not.toContain('bg-surface-container');
+    expect(tablist.className).not.toContain('p-0.5');
+
+    const selected = within(tablist).getByRole('tab', { selected: true });
+    // No fill in either state — the indicator is what says "selected", so the label row stays flat.
+    expect(selected.className).not.toContain('bg-surface-container-highest');
+    const indicator = selected.querySelector('span[aria-hidden="true"]');
+    expect(indicator).not.toBeNull();
+    expect(indicator?.className).toContain('bg-primary');
+
+    const unselected = within(tablist).getByRole('tab', { name: /^Tasks/ });
+    expect(unselected.querySelector('span[aria-hidden="true"]')).toBeNull();
+  });
+});
+
 describe('Tabs (data-driven)', () => {
   it('renders a tablist with the accessible label and one tab per item', () => {
     render(<DataDrivenTabs items={ITEMS} initial="overview" />);

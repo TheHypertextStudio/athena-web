@@ -405,6 +405,7 @@ export default function CycleDetailPage(): JSX.Element {
       }
       tabs={
         <Tabs
+          variant="underline"
           value={tab}
           onValueChange={(value) => {
             setTab(value as TabId);

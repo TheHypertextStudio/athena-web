@@ -2,10 +2,12 @@ import '@testing-library/jest-dom/vitest';
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { JSX } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InitiativeHierarchyLinkId, InitiativeId } from '@docket/work/ids';
 import { OrganizationId } from '@docket/identity-access/ids';
 
+import { HEALTH_LABEL } from '../../../src/components/entity-display/health';
 import { InitiativeRelationshipPanels } from '../../../src/components/initiatives/initiative-relationship-panels';
 import { InteractionProvider } from '../../../src/lib/actions/interaction-provider';
 import { createActionRegistry, defineActionDomain } from '../../../src/lib/actions/registry';
@@ -27,6 +29,8 @@ const child = {
   parentInitiativeId,
   parentLinkId,
 };
+
+const distribution = { onTrack: 2, atRisk: 1, offTrack: 0, unknown: 1 };
 
 const project = {
   kind: 'project' as const,
@@ -50,6 +54,7 @@ describe('InitiativeRelationshipPanels', () => {
         routeOrganizationId={organizationId}
         children={[child]}
         connectedWork={[project]}
+        distribution={distribution}
         initiativeNoun="Initiative"
         programNoun="Program"
         projectNoun="Project"
@@ -80,6 +85,7 @@ describe('InitiativeRelationshipPanels', () => {
         routeOrganizationId={organizationId}
         children={[child]}
         connectedWork={[project]}
+        distribution={distribution}
         initiativeNoun="Initiative"
         programNoun="Program"
         projectNoun="Project"
@@ -95,6 +101,31 @@ describe('InitiativeRelationshipPanels', () => {
     );
     expect(screen.getByText('Project · inherited')).toBeVisible();
     expect(screen.queryByText('Membership portal')).not.toBeInTheDocument();
+  });
+
+  it('summarises connected-work health beside the rows, and draws nothing over an absence', () => {
+    const panel = (connectedWork: readonly (typeof project)[]): JSX.Element => (
+      <InitiativeRelationshipPanels
+        tab="work"
+        routeOrganizationId={organizationId}
+        children={[]}
+        connectedWork={connectedWork}
+        distribution={distribution}
+        initiativeNoun="Initiative"
+        programNoun="Program"
+        projectNoun="Project"
+        onAddSubinitiative={vi.fn()}
+      />
+    );
+
+    render(panel([project]));
+    // `onTrack` is the one bucket with a count of its own, so the number identifies the segment.
+    expect(screen.getByText(HEALTH_LABEL.on_track)).toBeVisible();
+    expect(screen.getByText(String(distribution.onTrack))).toBeVisible();
+
+    cleanup();
+    render(panel([]));
+    expect(screen.queryByText(HEALTH_LABEL.on_track)).toBeNull();
   });
 
   it('keeps a foreign hierarchy row owner-scoped and reference-only through the context-menu provider', async () => {
@@ -141,6 +172,7 @@ describe('InitiativeRelationshipPanels', () => {
             },
           ]}
           connectedWork={[]}
+          distribution={distribution}
           initiativeNoun="Initiative"
           programNoun="Program"
           projectNoun="Project"
@@ -204,6 +236,7 @@ describe('InitiativeRelationshipPanels', () => {
           routeOrganizationId={organizationId}
           children={[]}
           connectedWork={[{ ...project, organizationId: foreignOrganizationId }]}
+          distribution={distribution}
           initiativeNoun="Initiative"
           programNoun="Program"
           projectNoun="Project"

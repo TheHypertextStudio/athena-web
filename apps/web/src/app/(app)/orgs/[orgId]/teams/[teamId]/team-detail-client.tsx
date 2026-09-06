@@ -191,6 +191,7 @@ export default function TeamDetailClient(): JSX.Element {
       {...(team.summary ? { subtitle: team.summary } : {})}
       tabs={
         <Tabs
+          variant="underline"
           value={tab}
           onValueChange={(value) => {
             setTab(value as TabId);

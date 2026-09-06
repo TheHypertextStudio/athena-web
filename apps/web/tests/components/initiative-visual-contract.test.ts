@@ -67,14 +67,29 @@ describe('Initiative visual contract', () => {
     expect(detail).not.toContain('variant="secondary"');
   });
 
-  it('keeps Initiative overview document-first with connected work and a latest update', () => {
+  it('keeps Initiative overview document-first: the document and a latest update, nothing else', () => {
     const detail = source(detailPath);
-    expect(detail).toContain('<InitiativeOverviewSummary');
+    expect(detail).toContain('<TemplateAwareEntityDocument');
     expect(detail).toContain('<LatestUpdateSummary');
     expect(detail.indexOf('<TemplateAwareEntityDocument')).toBeLessThan(
-      detail.indexOf('<InitiativeOverviewSummary'),
+      detail.indexOf('<LatestUpdateSummary'),
     );
     expect(detail).toContain("tab === 'overview' || tab === 'updates'");
+    // The connected-work rollup card used to sit between them: two headline-sized zeros counting
+    // work you could not see, under a heading that repeated a tab's name, above a sentence telling
+    // you to go to that tab. The counts are the rows on that tab, and the health spread now sits
+    // beside them.
+    expect(detail).not.toContain('<InitiativeOverviewSummary');
+  });
+
+  it('summarises connected-work health beside the work it summarises', () => {
+    const panels = source(
+      join(root, 'apps/web/src/components/initiatives/initiative-relationship-panels.tsx'),
+    );
+    expect(panels).toContain('<DistributionBar');
+    expect(panels).toContain('distribution={distribution}');
+    // Only alongside rows — a distribution over nothing is chrome drawn on an absence.
+    expect(panels).toMatch(/!loading && connectedWork\.length \? \(/);
   });
 
   it('gives the Initiative overview a restrained canonical MD3 headline scale', () => {
@@ -159,7 +174,9 @@ describe('Initiative visual contract', () => {
     // since: the rhythm is a container-query step (a phone gives up gutter and gap so the surface's
     // own content keeps the width), and the reading measure applies only to *document* pages — a
     // canvas surface fills instead. Both are still declared exactly once, here.
-    expect(source(pageLayoutPath)).toContain('mx-auto flex w-full flex-col px-3 py-4');
+    // Symmetric at every step: the base rung used to inset 12px at the sides and 16px at the top,
+    // which is the same disagreement the detail shell had between its gutter and its literals.
+    expect(source(pageLayoutPath)).toContain('mx-auto flex w-full flex-col p-3');
     expect(source(pageLayoutPath)).toContain('@2xl:gap-5');
     expect(source(pageLayoutPath)).toContain("'h-full min-h-0 gap-3 @2xl:gap-4 @2xl:p-4 @4xl:p-4'");
     expect(source(pageLayoutPath)).toContain("'max-w-7xl gap-4");

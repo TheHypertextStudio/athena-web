@@ -85,7 +85,11 @@ export function AppBar({
       as="header"
       tone="card"
       shape="none"
-      className={cn('flex flex-col gap-2 px-4 pt-3 pb-2.5 @2xl:px-6', className)}
+      // `pt-3 pb-2.5` was 12px over 10px for no reason anyone could name, and the block padding
+      // was the only inset here that did not step with the pane while the inline one did. Both are
+      // symmetric and stepped now. They stay smaller than the inline inset on purpose: this is a
+      // band, not a page — a single row given a page's 24px on every side would be a 90px bar.
+      className={cn('flex flex-col gap-2 px-4 py-3 @2xl:px-6 @2xl:py-4', className)}
     >
       <div className="flex min-w-0 flex-nowrap items-center gap-2">
         {navigation}

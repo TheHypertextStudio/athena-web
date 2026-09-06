@@ -7,6 +7,157 @@
 
 ## Active Tasks
 
+### [DETAIL-INSET-001] Every edge of a detail page is measured the same way
+
+- **Completed**: 2026-09-05
+- **Priority**: P1
+- **Summary**: A screenshot of an Initiative showed 4px above the collapsed header and 32px at its
+  sides, the document body sliding under the tab bar and terminating mid-glyph against nothing, and
+  a contents rail with no padding parked behind that bar. All three come from the same thing: the
+  page's horizontal inset is a container-query ladder and every vertical inset was a hand-written
+  literal. They read the ladder now. The connected-work rollup card is gone from the Overview.
+- **Approach**: `--page-gutter` is the `.page-grid` track that insets every section horizontally,
+  stepping 12 → 24 → 32px with the pane. `.masthead-content`'s `padding-block-start` reads it
+  directly. The page foot moved to `.detail-body` for a reason worth remembering: the scroller
+  declares `container-type: inline-size`, and an element is never its own query container, so it
+  only ever resolves the unstepped 12px base — the stepped value is visible to its descendants
+  alone.
+
+  What is _not_ gutter-derived is the gap between the title row and its own tab bar. It was, for
+  one revision, on the theory that the band above the tab bar should track the pane like the side
+  insets do — and that was a category error caught by looking at it. An inset from the pane's edge
+  and the rhythm between two rows of one band are different measurements that happen to be
+  adjacent; a full 32px between a masthead and its tabs reads as the header having come apart.
+  8px either side of the cover boundary, fixed.
+
+  `useDetailHeaderCollapse` now also observes the header and publishes `--detail-header-height` to
+  the scroller, alongside the collapse progress it already wrote there. Two things consume it: a
+  `scroll-padding-block-start` on the scroller, so an anchor jump clears the header instead of
+  landing beneath it, and the contents rail's sticky offset, which was `top-4` — 16px into a
+  scrollport whose first ~90px are covered by an opaque `z-10` header.
+
+  Verifying that offset in a browser turned up something bigger: **every entry in the contents rail
+  was a dead link, on every document surface in the app.** Seven headings rendered, seven entries
+  rendered, and not one `id` existed to navigate to. Two independent causes. The effect that
+  assigned ids ran once, before the body had mounted, against an empty subtree — and keyed on
+  `headings`, which only changes when the saved Markdown does, it never ran again. Fixing the timing
+  alone does not work either: the headings live inside ProseMirror's managed DOM, which recreates
+  nodes from its schema and drops foreign attributes, so a correctly timed `id` is gone by the next
+  redraw. Writing it back on every mutation is worse than useless — ProseMirror redraws nodes it did
+  not change itself, so the write loops the page into a spin (observed, live, while measuring). The
+  rail now holds the heading elements in a `Map` and scrolls to the element, which needs no
+  attribute on ProseMirror's nodes at all. The active-entry highlight had the same root cause: the
+  IntersectionObserver was watching an empty set, so no entry ever highlighted.
+
+- **Decisions**: The header's top inset no longer collapses at all. The keyframe that drove it from
+  24px to 4px was spending the page's own margin to buy header height the collapse already had:
+  `detail-primary-collapse`, `detail-title-collapse`, `detail-secondary-collapse` and
+  `detail-masthead-collapse` cover the full `--detail-collapse-range` between them.
+
+  The sticky header's boundary is M3's scrolled top app bar, not a rule. The header had no drawn
+  edge at all, which is why content passing behind it read as a rendering fault; a hairline is not
+  the house style and a shadow is reserved for overlay primitives, so the bar takes a tonal step
+  instead — flush with the page at rest, lifted once content is underneath, interpolated on the
+  same paused-keyframe progress as the collapse so the two are one motion.
+
+  Neither endpoint is written in the stylesheet. Both arrive as custom properties that
+  `EntityDetailLayout` sets from `surfaceToneVariable`, so the ramp step is chosen by role next to
+  the other role names — `page` at rest, `floating` lifted. The first pass typed
+  `var(--color-surface-container-high)` straight into `globals.css`, which is a tonal decision with
+  no owner: `docket-ui/no-raw-surface-role` is an ESLint rule over JSX and reads no CSS at all, so
+  nothing caught it, and the step it picked by eye was `floating` for a bar the ramp documents as
+  `card`.
+
+  It is still `floating` — but now for a stated reason rather than by eye, and the reason is what
+  this bar covers. `AppBar` is `card` because it floats above route content on the `page` step.
+  This bar occludes an `EntityDocument` body, which is _itself_ `card`, so a `card` bar and the
+  panel sliding beneath it are one tone and the boundary vanishes — verified in the browser before
+  the switch. A bar out-ranks the furniture it covers; `floating` is the first step that does.
+  Measured: 0.995 → 0.950 light, 0.265 → 0.305 dark.
+
+  The tab bar is a second component now, not a restyle. `Tabs` had one treatment for two jobs: a
+  segmented control, which is sized to its own content, and a page's section navigation, which is
+  stretched across the measure. Stretching the filled track is what put five labels at the left of
+  a wide empty pill with the rest reading as dead space. `TabsVariant` splits them — `segmented`
+  keeps the filled track and is unchanged for the composer toggle, the agenda switcher, and the
+  admin console; `underline` is M3 primary tabs, a flat label row with a 3px rounded indicator
+  under the selected label, and it is what the five entity detail pages pass. Nothing is drawn
+  under the row itself: the header's own scrolled tone is the boundary.
+
+  Two ad-hoc values went in with the tab work and came back out. The unselected tab's hover was an
+  `on-surface/8` tint, invented to survive the bar changing tone underneath it — a value solving a
+  problem the surface ramp already solves, and the same file's segmented tab (and `Button`'s
+  `ghost`) were two lines away using `hover:bg-surface-container-high`. Both variants share that
+  one treatment now. The underline count pill had the same tint and now reuses the segmented
+  neutral pair, which deleted its whole branch.
+
+  `InitiativeOverviewSummary` is deleted rather than shrunk. Its counts are the rows on the
+  Connected work tab, its health duplicated the masthead property `EntityDetailLayout` owns, and its
+  empty copy told you to visit a tab that has no linking control either. It also chose that empty
+  state from the health distribution while its tiles read `childMix`, so real counts above "nothing
+  is linked" was reachable. The distribution was the one thing with no other home, and
+  `DistributionBar` — already written, already token-correct, mounted nowhere — now renders it above
+  the rows it describes, only when there are rows.
+
+  `AppBar`'s block padding stays smaller than its inline padding on purpose. A band is not a page: a
+  single 40px row given a page's 24px on every side is a 90px bar. What was fixed there is that it
+  was asymmetric top-to-bottom (12 over 10) and the only inset in the file that did not step.
+
+- **Files Changed**: `packages/ui/src/styles/globals.css` (gutter-derived insets, the two deleted
+  collapse keyframes, `detail-header-lift`, `scroll-padding-block-start`, `.detail-body`, the
+  contents-level indent), `packages/ui/src/primitives/tabs.tsx` (the `TabsVariant` split) and the
+  five detail call sites that pass it, `apps/web/src/components/views/entity-detail-layout.tsx`,
+  `apps/web/src/components/views/entity-detail-collapse.ts`,
+  `apps/web/src/components/editor/entity-document.tsx`,
+  `apps/web/src/components/views/page-layout.tsx`, `packages/ui/src/components/shell/AppBar.tsx`,
+  `apps/web/src/components/initiatives/initiative-relationship-panels.tsx`, the Initiative detail
+  client; deleted `apps/web/src/components/initiatives/initiative-overview-summary.tsx` and its
+  test; updated `entity-detail-collapse-contract`, `initiative-visual-contract`,
+  `projects-experience-contract`, and `initiative-relationship-panels` tests.
+- **Validation**: `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm build`, and `pnpm test`
+  all green — 482 web suites / 3781 tests, 460 API suites / 5824 tests, admin 50, tooling 315.
+
+  Measured in a real browser through `docs/engineering/ui-verification.md`, against a seeded
+  Initiative with a seven-heading description, a Program and four Projects at mixed health. At a
+  32px gutter: top inset 32px against 32px sides, page foot 32px, and the rail's first row landing
+  on the document's first line exactly. Scrolled, the collapse still runs to completion
+  (`--detail-collapse-progress` 1, header 303px → 165px), the bar takes its lifted tone with no
+  border and no shadow on the element in either theme, a contents entry scrolls its heading clear of
+  the header, and the active entry tracks the scroll. `pnpm db:reset` afterwards.
+
+- **Learnings**: A container-query custom property is invisible to the element that declares the
+  container. `.page-grid` sets `--page-gutter` and two `@container` rules step it, but the detail
+  scroller is itself the container, so on that one element the value stays at the 12px base while
+  every descendant sees 24 or 32. Anything gutter-derived has to live on a child.
+
+  Second: two orphans turned up in one small area — `DistributionBar` and `AssociationsPanel`, both
+  complete, both imported by nothing, the second one alongside live unused link/unlink mutations. A
+  component the codebase already has is not the same as a component the product has.
+
+  Third, and the reason the browser step was worth the hour it cost: the contents rail was fully
+  rendered, correctly labelled, correctly ordered, and completely non-functional. Nothing in the
+  source reads as broken, no test failed, and a screenshot shows a perfectly good rail. It took
+  clicking one entry and finding that its target did not exist. A surface that renders is not a
+  surface that works, and only the running app tells you which one you have.
+
+  Enforcement moved with it. `docket-ui/no-raw-surface-role` already makes JSX name a role instead
+  of reaching for `bg-surface-container-high`, and `packages/ui/src/primitives/**` is exempt
+  because the primitives are where the tokens live. The hole was the stylesheet: an ESLint rule
+  over JSX reads no CSS, so a component rule can paint straight from `--surface-container-high`
+  and no gate says a word. The design-token policy now fails on any `globals.css` rule that paints
+  from a raw surface token — theme blocks that _define_ the ramp are exempt, because that is what
+  they are for. Confirmed by putting the original line back and watching it fail.
+
+- **Follow-ups**: The `CONTROL` metrics record in `packages/ui/src/primitives/control.tsx` carries
+  `paddingX`, `gap`, `height`, `minHeight`, `width` and `icon` — and no vertical padding field at
+  all, so no control step can express vertical rhythm and every such value is written by hand where
+  it is used. That is the general cure for this class of bug and it touches every control-sized
+  surface in the app. Separately, `AssociationsPanel` and the initiative link/unlink mutations are
+  built and unmounted, so linking a Project or Program to an Initiative is only reachable from the
+  other side of the relationship.
+
+---
+
 ### [DOCS-VERIFY-001] The documentation site is checked after every release
 
 - **Completed**: 2026-09-02

@@ -3,6 +3,7 @@
 /** Dedicated Initiative relationship tabs composed from first-class object rows. */
 import type {
   InitiativeConnectedWork,
+  InitiativeHealthDistribution,
   InitiativeHierarchyReference,
 } from '@docket/work/initiative-contract';
 import { Plus } from '@docket/ui/icons';
@@ -10,6 +11,7 @@ import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
+import { DistributionBar } from '@/components/initiatives/distribution-bar';
 import { ObjectListRow } from '@/components/objects/object-list-row';
 
 /** Relationship tabs this component owns. Other tabs render nothing here. */
@@ -22,6 +24,14 @@ export interface InitiativeRelationshipPanelsProps {
   readonly routeOrganizationId: string;
   readonly children: readonly InitiativeHierarchyReference[];
   readonly connectedWork: readonly InitiativeConnectedWork[];
+  /**
+   * How the connected work is spread across the health buckets.
+   *
+   * @remarks
+   * Summarised beside the rows it summarises. This used to be a card on the Overview tab, where it
+   * counted work the reader could not see and told them to come here.
+   */
+  readonly distribution: InitiativeHealthDistribution;
   /** True while the selected relationship section is loading. */
   readonly loading?: boolean;
   readonly initiativeNoun: string;
@@ -36,6 +46,7 @@ export function InitiativeRelationshipPanels({
   routeOrganizationId,
   children,
   connectedWork,
+  distribution,
   loading = false,
   initiativeNoun,
   programNoun,
@@ -103,6 +114,16 @@ export function InitiativeRelationshipPanels({
         aria-labelledby="tab-work"
         className="no-print flex min-w-0 flex-col gap-2"
       >
+        {/* Only alongside rows. With nothing linked the panel's own empty sentence is the whole
+            answer, and a bar of one neutral run would be chrome drawn over an absence. */}
+        {!loading && connectedWork.length ? (
+          <div className="pb-1">
+            <DistributionBar
+              distribution={distribution}
+              childNounPlural={`${projectNoun.toLowerCase()}s and ${programNoun.toLowerCase()}s`}
+            />
+          </div>
+        ) : null}
         {loading ? (
           <p className="text-on-surface-variant text-body-small rounded-xl px-4 py-8 text-center">
             Loading connected work…

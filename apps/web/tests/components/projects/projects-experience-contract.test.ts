@@ -163,7 +163,10 @@ describe('Projects experience contract', () => {
     // Every chip reads as the same calm pill, wired once through the shell's shared chip class.
     expect(layout).toContain('bg-surface-container-low hover:bg-surface-container-high');
     // The tab bar adopts the shared Tabs primitive (which owns the 40px touch-target floor and its
-    // own track styling), so the shell doesn't also draw a Separator beneath it.
+    // own track styling), so the shell draws no rule beneath it. The header still needs a boundary
+    // — it is sticky and opaque, and content passes behind it — and M3 expresses that with the
+    // scrolled app bar's tonal step rather than a hairline or a shadow. `.detail-header` takes
+    // `surface-container` as the collapse progresses; see `detail-header-lift` in globals.css.
     expect(detail).toContain('<Tabs');
     expect(layout).not.toContain('<Separator');
     // The floor is the control scale's `xl` step, not a literal class. Tabs resolve their height

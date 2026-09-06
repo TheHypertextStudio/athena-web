@@ -49,12 +49,14 @@ import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
 import { WorkflowStateType } from '../contracts/team';
+import { defaultCycleName } from '@docket/work/cycle-contract';
 import { Priority } from '@docket/work/task-contract';
 import { DateResolution } from '@docket/work/planning-timeframe';
 
 import { ValidationError } from '../error';
 import { buildTaskViewFilter, type ViewableTaskParts } from '../routes/task-helpers';
 import { DESCRIPTOR_HINT, resolveDescriptor, resolveOptional } from './descriptors';
+import { entityHref } from './entity-href';
 import type { WorkCursor } from './tools-shared-queries';
 import { stateTypeOf, teamWorkflows } from './workflow-states';
 
@@ -192,6 +194,7 @@ export const listWorkFilters = {
 export const WorkRow = z.object({
   id: z.string().describe('The entity id.'),
   title: z.string().describe('Its name or title.'),
+  href: z.string().describe('Where it lives in the product app.'),
   state: z.string().optional().describe("A task's workflow state."),
   stateType: WorkflowStateType.optional().describe(
     'The canonical category `state` maps onto. Workflow states are per-team and renameable, so this — not `state` — is what compares across teams and what a status glyph is keyed off. Absent when the owning team no longer lists that state key.',
@@ -378,9 +381,18 @@ function isoDay(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
 
-/** A cycle the way a team says it: its name when it has one, otherwise its number. */
-function cycleLabel(row: { name: string | null; number: number }): string {
-  return row.name ?? `Cycle ${String(row.number)}`;
+/**
+ * A cycle's display name.
+ *
+ * @remarks
+ * `number` is an epoch-anchored idempotency key, not an ordinal, so an unnamed cycle is labelled by
+ * its window. See `defaultCycleName` in `@docket/work/cycle-contract`.
+ *
+ * @param row - The cycle's name and window.
+ * @returns the name a team would say.
+ */
+function cycleLabel(row: { name: string | null; startsAt: Date; endsAt: Date }): string {
+  return row.name ?? defaultCycleName(row.startsAt, row.endsAt);
 }
 
 /**
@@ -399,44 +411,65 @@ function cycleLabel(row: { name: string | null; number: number }): string {
  * @returns Each id space resolved to display names; ids with no row are simply absent.
  */
 async function taskRowNames(rows: readonly TaskRowRefs[]): Promise<TaskRowNames> {
-  const ids = (pick: (row: TaskRowRefs) => string | null): string[] => [
-    ...new Set(rows.map(pick).filter((id): id is string => id !== null)),
-  ];
-  const actorIds = ids((row) => row.assigneeId);
-  const projectIds = ids((row) => row.projectId);
-  const parentIds = ids((row) => row.parentTaskId);
-  const cycleIds = ids((row) => row.cycleId);
+  /**
+   * Resolve one id space to a name map, skipping the query when the page references none.
+   *
+   * @param pick - The foreign key to collect off each row.
+   * @param fetch - Runs the lookup for the distinct ids.
+   * @param name - Reduces a fetched row to its display name.
+   * @returns id-to-name, empty when the page referenced nothing.
+   */
+  async function lookup<T extends { id: string }>(
+    pick: (row: TaskRowRefs) => string | null,
+    fetch: (ids: string[]) => Promise<T[]>,
+    name: (row: T) => string,
+  ): Promise<Map<string, string>> {
+    const ids = [...new Set(rows.map(pick).filter((id): id is string => id !== null))];
+    if (ids.length === 0) return new Map();
+    return new Map((await fetch(ids)).map((row) => [row.id, name(row)]));
+  }
 
   const [actors, projects, parents, cycles] = await Promise.all([
-    actorIds.length === 0
-      ? []
-      : db
+    lookup(
+      (row) => row.assigneeId,
+      (ids) =>
+        db
           .select({ id: actor.id, name: actor.displayName })
           .from(actor)
-          .where(inArray(actor.id, actorIds)),
-    projectIds.length === 0
-      ? []
-      : db
+          .where(inArray(actor.id, ids)),
+      (row) => row.name,
+    ),
+    lookup(
+      (row) => row.projectId,
+      (ids) =>
+        db
           .select({ id: project.id, name: project.name })
           .from(project)
-          .where(inArray(project.id, projectIds)),
-    parentIds.length === 0
-      ? []
-      : db.select({ id: task.id, name: task.title }).from(task).where(inArray(task.id, parentIds)),
-    cycleIds.length === 0
-      ? []
-      : db
-          .select({ id: cycle.id, name: cycle.name, number: cycle.number })
+          .where(inArray(project.id, ids)),
+      (row) => row.name,
+    ),
+    lookup(
+      (row) => row.parentTaskId,
+      (ids) => db.select({ id: task.id, name: task.title }).from(task).where(inArray(task.id, ids)),
+      (row) => row.name,
+    ),
+    lookup(
+      (row) => row.cycleId,
+      (ids) =>
+        db
+          .select({
+            id: cycle.id,
+            name: cycle.name,
+            startsAt: cycle.startsAt,
+            endsAt: cycle.endsAt,
+          })
           .from(cycle)
-          .where(inArray(cycle.id, cycleIds)),
+          .where(inArray(cycle.id, ids)),
+      (row) => cycleLabel(row),
+    ),
   ]);
 
-  return {
-    actors: new Map(actors.map((row) => [row.id, row.name])),
-    projects: new Map(projects.map((row) => [row.id, row.name])),
-    parents: new Map(parents.map((row) => [row.id, row.name])),
-    cycles: new Map(cycles.map((row) => [row.id, cycleLabel(row)])),
-  };
+  return { actors, projects, parents, cycles };
 }
 
 /**
@@ -572,13 +605,15 @@ async function listTasks(
   }
 
   // One lookup for the whole page, not one per row: a page can span every team in the org, and
-  // resolving each row separately would make a 50-row read cost 51 queries.
-  const workflows = await teamWorkflows(
-    orgId,
-    visibleRows.map((row) => row.teamId),
-  );
-
-  const names = await taskRowNames(visibleRows);
+  // resolving each row separately would make a 50-row read cost 51 queries. Both depend only on
+  // the page, so they go out together rather than in two round-trip phases.
+  const [workflows, names] = await Promise.all([
+    teamWorkflows(
+      orgId,
+      visibleRows.map((row) => row.teamId),
+    ),
+    taskRowNames(visibleRows),
+  ]);
 
   // `teamId` is read to resolve the state type and then dropped. It is not part of the row
   // contract, and adding it here would widen the wire on the way past rather than on purpose.
@@ -591,6 +626,7 @@ async function listTasks(
     return {
       id: row.id,
       title: row.title,
+      href: entityHref(orgId, 'task', row.id),
       state: row.state,
       ...(stateType ? { stateType } : {}),
       ...(row.assigneeId ? { assigneeId: row.assigneeId } : {}),
@@ -736,6 +772,7 @@ async function listContainers(
   return rows.map((row) => ({
     id: row.id,
     title: row.title,
+    href: entityHref(orgId, entity, row.id),
     status: row.status,
     createdAt: row.createdAt,
     ...('startDate' in row

@@ -24,6 +24,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 
+import { shiftDate, todayDate } from '../helpers/calendar-fixtures';
+
 import { CHANGE_REPORT_HTML } from '../../../api/src/mcp/apps/change-report';
 import { entityDocument, ENTITY_HTML } from '../../../api/src/mcp/apps/entity';
 import { PLAN_HTML } from '../../../api/src/mcp/apps/plan';
@@ -35,21 +37,9 @@ const SHOT_DIR = join(
   '../../../../docs/design/audits/screenshots/mcp-apps',
 );
 
-/**
- * A calendar day `offset` days from today, as the ISO day a due date is sent as.
- *
- * @remarks
- * Relative rather than fixed so "3 days late" stays three days late. A literal date in a fixture
- * quietly becomes an overdue row a month later, and the shot stops photographing the case it was
- * written for.
- *
- * @param offset - Days from today; negative is in the past.
- * @returns The day in `YYYY-MM-DD`.
- */
+/** Relative rather than fixed, so "3 days late" stays three days late as the fixture ages. */
 function day(offset: number): string {
-  const when = new Date();
-  when.setDate(when.getDate() + offset);
-  return `${String(when.getFullYear())}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')}`;
+  return shiftDate(todayDate(), offset);
 }
 
 /** The description edit from the original bug report, verbatim in length and shape. */
@@ -144,21 +134,25 @@ const CASES: readonly WidgetCase[] = [
         changes: [
           {
             id: 't_1',
+            href: '/orgs/org_1/tasks/t_1',
             title: 'Draft the Q3 service change memo',
             fields: [{ field: 'state', from: 'todo', to: 'in_progress' }],
           },
           {
             id: 't_2',
+            href: '/orgs/org_1/tasks/t_2',
             title: 'Review campus outreach budget',
             fields: [{ field: 'priority', from: 'none', to: 'high' }],
           },
           {
             id: 't_3',
+            href: '/orgs/org_1/tasks/t_3',
             title: 'Send the RTC coordination follow-up',
             fields: [{ field: 'dueDate', from: 'none', to: '2026-08-14' }],
           },
           {
             id: 't_4',
+            href: '/orgs/org_1/tasks/t_4',
             title: 'Book the NSU tabling slot',
             fields: [{ field: 'state', from: 'todo', to: 'done' }],
           },
@@ -186,6 +180,7 @@ const CASES: readonly WidgetCase[] = [
         changes: [
           {
             id: 't_1',
+            href: '/orgs/org_1/tasks/t_1',
             title: 'Write down what to change for Dallas',
             fields: [
               {
@@ -242,13 +237,21 @@ const CASES: readonly WidgetCase[] = [
         matched: 1,
         changeSetId: 'cs_5',
         placed: [
-          { ref: 'init', kind: 'initiative', title: 'Q3 transit access', id: 'i_1', created: true },
+          {
+            ref: 'init',
+            kind: 'initiative',
+            title: 'Q3 transit access',
+            id: 'i_1',
+            href: '/orgs/org_1/initiatives/i_1',
+            created: true,
+          },
           {
             ref: 'proj',
             kind: 'project',
             title: 'Campus tabling',
             parent: 'init',
             id: 'p_1',
+            href: '/orgs/org_1/projects/p_1',
             created: true,
           },
           {
@@ -257,6 +260,7 @@ const CASES: readonly WidgetCase[] = [
             title: 'Pick the NSU date',
             parent: 'proj',
             id: 't_1',
+            href: '/orgs/org_1/tasks/t_1',
             created: true,
           },
           {
@@ -265,6 +269,7 @@ const CASES: readonly WidgetCase[] = [
             title: 'Read the tabling rules',
             parent: 'proj',
             id: 't_2',
+            href: '/orgs/org_1/tasks/t_2',
             created: true,
           },
           {
@@ -273,6 +278,7 @@ const CASES: readonly WidgetCase[] = [
             title: 'Build the deck',
             parent: 'proj',
             id: 't_3',
+            href: '/orgs/org_1/tasks/t_3',
             created: false,
           },
         ],
@@ -324,6 +330,7 @@ const CASES: readonly WidgetCase[] = [
         items: [
           {
             id: 't_1',
+            href: '/orgs/org_1/tasks/t_1',
             title: 'Draft the Q3 service change memo',
             state: 'in_progress',
             stateType: 'started',
@@ -333,6 +340,7 @@ const CASES: readonly WidgetCase[] = [
           },
           {
             id: 't_2',
+            href: '/orgs/org_1/tasks/t_2',
             title: 'Review campus outreach budget',
             state: 'todo',
             stateType: 'unstarted',
@@ -343,6 +351,7 @@ const CASES: readonly WidgetCase[] = [
           },
           {
             id: 't_3',
+            href: '/orgs/org_1/tasks/t_3',
             title: 'Send the RTC coordination follow-up',
             state: 'todo',
             stateType: 'unstarted',
@@ -352,6 +361,7 @@ const CASES: readonly WidgetCase[] = [
           },
           {
             id: 't_4',
+            href: '/orgs/org_1/tasks/t_4',
             title: 'Book the NSU tabling slot',
             state: 'backlog',
             stateType: 'backlog',
@@ -361,6 +371,7 @@ const CASES: readonly WidgetCase[] = [
           },
           {
             id: 't_5',
+            href: '/orgs/org_1/tasks/t_5',
             title: 'Reconcile the UNLV headcount',
             state: 'todo',
             project: 'Campus tabling',
@@ -422,6 +433,7 @@ const CASES: readonly WidgetCase[] = [
         items: [
           {
             id: 't_1',
+            href: '/orgs/org_1/tasks/t_1',
             title: 'Draft the Q3 service change memo',
             state: 'doing',
             stateType: 'started',
@@ -474,6 +486,7 @@ const CASES: readonly WidgetCase[] = [
         items: [
           {
             id: 't_1',
+            href: '/orgs/org_1/tasks/t_1',
             title: 'Draft the Q3 service change memo',
             href: '/orgs/org_1/tasks/t_1',
             state: 'doing',

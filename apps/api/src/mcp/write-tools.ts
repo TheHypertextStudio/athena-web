@@ -25,6 +25,7 @@ import { recordChangeSet, trackedFields, undoChangeSet } from './change-set';
 import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
+import { entityHref } from './entity-href';
 
 /**
  * The most tasks one capture call may create.
@@ -34,6 +35,15 @@ import { orgIdParam } from './tools-shared';
  * place items under a parent instead of landing them all loose on one team.
  */
 const MAX_CAPTURES = 100;
+
+/**
+ * How many search publishes run at once after a capture.
+ *
+ * @remarks
+ * Each one opens its own transaction. The pool holds ten connections and the dev/test database is a
+ * single PGlite connection, so the fan-out stays well inside both.
+ */
+const SEARCH_PUBLISH_BATCH = 8;
 
 /** Register capture and undo on `server`. */
 export function registerWriteTools(
@@ -68,6 +78,7 @@ export function registerWriteTools(
             z.object({
               id: TaskId,
               title: z.string(),
+              href: z.string().describe('Where it lives in the product app.'),
               state: z.string().describe("The workflow state it landed in — the team's first."),
               teamId: z.string().describe('The team it landed on.'),
             }),
@@ -115,13 +126,22 @@ export function registerWriteTools(
             })),
           )
           .returning();
-        /* v8 ignore next -- @preserve defensive: insert always returns a row per value */
-        if (rows.length === 0) throw new Error('capture insert returned no row');
-        for (const row of rows) await enqueueSearchUpsert(input.orgId, 'task', row.id);
-
         const first = rows[0];
-        /* v8 ignore next -- @preserve defensive: length is checked above */
+        /* v8 ignore next -- @preserve defensive: insert always returns a row per value */
         if (!first) throw new Error('capture insert returned no row');
+
+        // Concurrently, in bounded batches, the way `content/unfurl-sweep.ts` publishes. Each
+        // publish fans out to four subscribers and costs several round trips, so awaiting them one
+        // at a time made a 100-task capture wait on ~500 sequential queries. The batch is narrower
+        // than the sweep's because these run against one pooled connection mid-request.
+        for (let start = 0; start < rows.length; start += SEARCH_PUBLISH_BATCH) {
+          await Promise.all(
+            rows
+              .slice(start, start + SEARCH_PUBLISH_BATCH)
+              .map((row) => enqueueSearchUpsert(input.orgId, 'task', row.id)),
+          );
+        }
+
         const changeSetId = await recordChangeSet({
           orgId: input.orgId,
           actorId: actorCtx.actorId,
@@ -143,6 +163,7 @@ export function registerWriteTools(
           items: rows.map((row) => ({
             id: row.id,
             title: row.title,
+            href: entityHref(input.orgId, 'task', row.id),
             state: row.state,
             teamId: row.teamId,
           })),

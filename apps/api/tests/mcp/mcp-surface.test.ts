@@ -19,6 +19,7 @@ import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
 import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
+import { defaultCycleName } from '@docket/work/cycle-contract';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -873,8 +874,10 @@ describe('list_work / find tools', () => {
     expect(row['assignee']).toBe('Ada');
     expect(row['project']).toBe('Campus tabling');
     expect(row['parent']).toBe('RTC quarterly review');
-    // A cycle with no name is said the way a team says it, rather than as a bare number.
-    expect(row['cycle']).toBe('Cycle 12');
+    // An unnamed cycle is labelled by its window. `number` is an epoch-anchored idempotency key,
+    // and putting it in a label is what `repo-tests/architecture/cycle-number-label.test.ts` bans.
+    expect(row['cycle']).toBe(defaultCycleName(new Date('2199-01-01'), new Date('2199-02-01')));
+    expect(row['cycle']).not.toContain('Cycle 12');
     expect(row['dueDate']).toBe('2199-01-15');
     // The ids stay: they are what `update` takes back.
     expect(row['projectId']).toBe(assertDefined(project).id);

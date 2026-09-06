@@ -107,71 +107,55 @@ const SCRIPT = String.raw`
     return window.docket.untitled(item.kind);
   }
 
-  /** A rename shows only the old title; the row already shows the new one. */
+  /** A rename shows only the old title; the row above already shows the new one. */
+  function changeValue(field) {
+    const value = document.createElement('dd');
+    const from = document.createElement('span');
+    from.textContent = valueLabel(field.from);
+    if (field.field === 'title' || field.field === 'name') {
+      from.className = 'was';
+      value.append('was ', from);
+      return value;
+    }
+    const to = document.createElement('span');
+    to.className = 'to';
+    to.textContent = valueLabel(field.to);
+    // A field that was unset has nothing to strike through, and an arrow with no left-hand side
+    // reads as a rendering fault.
+    if (from.textContent === '') {
+      value.appendChild(to);
+      return value;
+    }
+    from.className = 'from';
+    value.append(from, ' → ', to);
+    return value;
+  }
+
+  /** One line per changed field, with both values. */
   function diffLine(fields) {
-    const line = document.createElement('div');
-    line.className = 'facts';
-    const first = fields[0];
-    const renamed = first.field === 'title' || first.field === 'name';
-
-    if (renamed) {
-      const was = document.createElement('span');
-      was.textContent = 'was ';
-      const from = document.createElement('span');
-      from.className = 'from';
-      from.textContent = valueLabel(first.from);
-      line.append(was, from);
-    } else {
-      const label = document.createElement('span');
-      label.textContent = fieldLabel(first.field);
-      const from = document.createElement('span');
-      from.className = 'from';
-      from.textContent = valueLabel(first.from);
-      const to = document.createElement('span');
-      to.className = 'to';
-      to.textContent = valueLabel(first.to);
-      line.append(label, from, document.createTextNode('→'), to);
+    const list = document.createElement('dl');
+    list.className = 'changes';
+    for (const field of fields) {
+      const label = document.createElement('dt');
+      label.textContent = fieldLabel(field.field);
+      list.append(label, changeValue(field));
     }
-
-    if (fields.length > 1) {
-      // Separated rather than joined into prose: "was X and priority and due" has two "and"s doing
-      // different jobs. The dot is the same separator the work list uses between a row's facts.
-      const sep = document.createElement('span');
-      sep.className = 'sep';
-      sep.textContent = '·';
-      const named = document.createElement('span');
-      named.textContent =
-        'also ' +
-        fields
-          .slice(1)
-          .map((f) => fieldLabel(f.field).toLowerCase())
-          .join(', ');
-      line.append(sep, named);
-    }
-    line.title = fields
-      .map((f) => fieldLabel(f.field) + ': ' + valueLabel(f.from) + ' → ' + valueLabel(f.to))
-      .join('\n');
-    return line;
+    return list;
   }
 
   function diffRow(item) {
     const row = document.createElement('div');
-    row.className = 'row';
-    // Depth, when the payload carries a tree. The indent is what makes "a project under this
-    // initiative, three tasks under that project" checkable at a glance, which is the only reason
-    // a caller reaches for a tool that writes a whole plan in one call.
+    row.className = item.matched ? 'row matched' : 'row';
+    // The indent is what makes "a project under this initiative, three tasks under that project"
+    // checkable at a glance.
     if (item.depth) {
       row.style.paddingLeft = String(item.depth * 16) + 'px';
-    }
-    if (item.matched) {
-      row.className = 'row matched';
     }
     const name = document.createElement('span');
     name.className = 'name';
     name.textContent = item.title || untitled(item);
     name.title = item.title || untitled(item);
     row.appendChild(name);
-    const fields = item.fields || [];
     if (item.matched) {
       // Shows that a repeat run reconciled instead of duplicating.
       const already = document.createElement('div');
@@ -179,32 +163,14 @@ const SCRIPT = String.raw`
       already.textContent = 'already there';
       row.appendChild(already);
     }
-    if (item.id && item.kind) {
-      const open = document.createElement('button');
-      open.className = 'quiet open';
-      open.textContent = 'Open';
-      open.setAttribute('aria-label', 'Open ' + (item.title || untitled(item)) + ' in Docket');
-      open.addEventListener('click', () => openItem(item));
+    const open = window.docket.openButton(item);
+    if (open) {
       row.appendChild(open);
     }
-    if (fields.length > 0) {
-      row.appendChild(diffLine(fields));
+    if (item.fields && item.fields.length > 0) {
+      row.appendChild(diffLine(item.fields));
     }
     return row;
-  }
-
-  function openItem(item) {
-    // The org comes from the arguments the tool was called with, over ui/notifications/tool-input.
-    // A host that sends none leaves nothing to build a URL from, and a button that answers a click
-    // with silence is worse than one that says why.
-    const orgId = window.docket.input.orgId;
-    if (!orgId || !item.id) {
-      window.docket.notice('This host did not pass the workspace through, so there is nowhere to open.', 'error');
-      return;
-    }
-    // Organize places four kinds in one call, so the row's own kind picks the section rather than
-    // every link landing on /tasks/ and 404ing for a project.
-    window.docket.link('/orgs/' + orgId + '/' + (item.kind || 'task') + 's/' + item.id);
   }
 
   function skippedRow(item) {
@@ -244,24 +210,18 @@ const SCRIPT = String.raw`
       // The single row names the item, so the verb alone is enough.
       return n === 1 ? verb : verb + ' ' + n + ' items';
     }
-    if (typeof data.created === 'number') {
+    if (Array.isArray(data.placed)) {
       // Name what the plan built rather than counting its nodes.
-      const roots = (data.placed || []).filter((p) => !p.parent);
-      if (roots.length === 1 && roots[0] && roots[0].title) {
-        return verb + ' “' + roots[0].title + '”';
+      const roots = data.placed.filter((p) => !p.parent);
+      if (roots.length === 0) {
+        return window.docket.own(NOTHING, tool) || 'Nothing to do';
       }
-      if (roots.length > 1) {
-        return verb + ' ' + roots.map((r) => '“' + (r.title || r.ref) + '”').join(', ');
-      }
-      return window.docket.own(NOTHING, tool) || 'Nothing to do';
+      return verb + ' ' + roots.map((r) => '“' + (r.title || r.ref) + '”').join(', ');
     }
     if (Array.isArray(data.items)) {
       // The count matters only once the card folds and some rows are off screen.
       if (data.items.length === 0) return window.docket.own(NOTHING, tool) || 'Nothing captured';
       return data.items.length === 1 ? verb : verb + ' ' + data.items.length + ' items';
-    }
-    if (data.title) {
-      return verb + ' “' + data.title + '”';
     }
     return 'Done';
   }
@@ -300,7 +260,6 @@ const SCRIPT = String.raw`
           kind: node.kind,
           matched: node.created === false,
           depth: Math.min(depth, 3),
-          fields: [],
         });
         walk(node.ref, depth + 1);
       }
@@ -330,27 +289,27 @@ const SCRIPT = String.raw`
     if (Array.isArray(data.placed)) {
       return treeOf(data.placed);
     }
-    if (data.id) {
-      return [{ id: data.id, title: data.title, fields: [], kind: 'task' }];
-    }
     return [];
   }
 
   function render(data) {
     state = data;
-    text(el('headline'), headlineFor(data));
+    const isPlan = Array.isArray(data.placed);
+
+    const headline = el('headline');
+    text(headline, headlineFor(data));
+    // A headline that names what was made is the card's title. A bare verb is context for the rows
+    // below, so it takes the caption weight instead of the loudest type on the card.
+    headline.className = isPlan ? 'headline' : 'headline scope';
 
     const rows = el('rows');
     rows.replaceChildren();
-    // Indentation is the structure in a plan, and a full-width rule across every level fights it —
-    // five separated rows rather than one tree. A flat change list has no structure of its own, so
-    // it keeps the rules.
-    rows.className = Array.isArray(data.placed) ? 'rows tree' : 'rows';
+    // Indentation is a plan's structure, so its rows sit closer than a flat list's.
+    rows.className = isPlan ? 'rows tree' : 'rows';
     const items = itemsOf(data);
-    // A tree truncated mid-branch is a lie about the shape, so a plan is shown whole. A flat
-    // change list still folds, because row five of a bulk edit says nothing rows one to four did
-    // not.
-    const shown = Array.isArray(data.placed) ? items : items.slice(0, INLINE_ROWS);
+    // A tree truncated mid-branch misstates the shape, so a plan is shown whole. A flat change list
+    // still folds.
+    const shown = isPlan ? items : items.slice(0, INLINE_ROWS);
     for (const item of shown) {
       rows.appendChild(diffRow(item));
     }
@@ -404,7 +363,7 @@ const SCRIPT = String.raw`
 
   el('rest').addEventListener('click', () => {
     const first = (state ? itemsOf(state) : [])[0];
-    if (first) openItem(first);
+    if (first && first.href) window.docket.link(first.href);
   });
 
   window.docket.onData(render);

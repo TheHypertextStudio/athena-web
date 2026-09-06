@@ -35,6 +35,7 @@ import {
 import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
+import { entityHref } from './entity-href';
 
 /** The table each archivable entity lives in. */
 const TABLES = { task, project, program, initiative } as const;
@@ -91,7 +92,13 @@ export function registerArchiveTool(
           .enum(WORK_ENTITIES)
           .describe('The kind every row in `items`/`skipped` is — the call scope, echoed back.'),
         items: z
-          .array(z.object({ id: z.string(), title: z.string() }))
+          .array(
+            z.object({
+              id: z.string(),
+              title: z.string(),
+              href: z.string().describe('Where it lives in the product app.'),
+            }),
+          )
           .describe('What moved, so the caller can see it was the right set.'),
         skipped: z
           .array(z.object({ id: z.string(), title: z.string(), reason: z.string() }))
@@ -169,7 +176,7 @@ export function registerArchiveTool(
           : rows;
 
         const changes: ChangeRecord[] = [];
-        const items: { id: string; title: string }[] = [];
+        const items: { id: string; title: string; href: string }[] = [];
         const skipped: { id: string; title: string; reason: string }[] = [];
 
         for (const row of visibleRows) {
@@ -199,7 +206,7 @@ export function registerArchiveTool(
           /* v8 ignore next -- @preserve defensive: the row was just read in this call */
           if (!next) continue;
 
-          items.push({ id, title });
+          items.push({ id, title, href: entityHref(input.orgId, entity, id) });
           // Recorded as `update` rather than `archive`, because reversing either direction means
           // restoring the previous `archivedAt` — and the `archive` op only knows one of them.
           changes.push({

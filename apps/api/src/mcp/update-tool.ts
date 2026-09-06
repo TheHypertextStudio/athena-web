@@ -54,6 +54,7 @@ import {
 import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam, resolveStateTransition } from './tools-shared';
+import { entityHref } from './entity-href';
 
 /**
  * The most rows one call will touch.
@@ -519,6 +520,7 @@ export function registerUpdateTool(
             z.object({
               id: z.string(),
               title: z.string(),
+              href: z.string().describe('Where it lives in the product app.'),
               fields: z.array(z.object({ field: z.string(), from: z.string(), to: z.string() })),
             }),
           )
@@ -635,7 +637,12 @@ export function registerUpdateTool(
           entity === 'task' && (set.assignee !== undefined || set.delegate !== undefined);
 
         const changes: ChangeRecord[] = [];
-        const report: { id: string; title: string; fields: ReturnType<typeof diff> }[] = [];
+        const report: {
+          id: string;
+          title: string;
+          href: string;
+          fields: ReturnType<typeof diff>;
+        }[] = [];
         const skipped: { id: string; title: string; reason: string }[] = [];
 
         for (const row of visibleRows) {
@@ -719,7 +726,12 @@ export function registerUpdateTool(
           const after = trackedFields(entity, next);
 
           const fields = diff(before, after);
-          report.push({ id, title: titleOf(next, id), fields });
+          report.push({
+            id,
+            title: titleOf(next, id),
+            href: entityHref(input.orgId, entity, id),
+            fields,
+          });
           if (fields.length > 0) {
             changes.push({ kind: entity, id, op: 'update', before, after });
             await enqueueSearchUpsert(input.orgId, entity, id);

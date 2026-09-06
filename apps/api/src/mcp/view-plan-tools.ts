@@ -9,6 +9,7 @@ import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { createTaskToolHandler } from './task-tools';
 import { ApiError } from '../error';
 import { DESCRIPTOR_HINT, type DescriptorKind, resolveDescriptor } from './descriptors';
+import { entityHref, type ReadableType } from './entity-href';
 import { READABLE_TYPES, readEntity } from './resources';
 
 /**
@@ -25,8 +26,6 @@ const NAMEABLE: Partial<Record<(typeof READABLE_TYPES)[number], DescriptorKind>>
   team: 'team',
   cycle: 'cycle',
 };
-
-type ReadableType = (typeof READABLE_TYPES)[number];
 
 const entityRefsSchema = z
   .array(z.string().min(1))
@@ -55,35 +54,6 @@ const SEMANTIC_READ_TOOLS = [
   ['view', 'get_views', 'Views', WIDGET.views],
   ['org', 'get_organizations', 'Organizations', WIDGET.organizations],
 ] as const satisfies readonly [ReadableType, string, string, string][];
-
-/** Build the first-party route once on the trusted server, never in a widget. */
-function entityHref(orgId: string, type: ReadableType, id: string): string {
-  switch (type) {
-    case 'task':
-      return `/orgs/${orgId}/tasks/${id}`;
-    case 'project':
-      return `/orgs/${orgId}/projects/${id}`;
-    case 'program':
-      return `/orgs/${orgId}/programs/${id}`;
-    case 'initiative':
-      return `/orgs/${orgId}/initiatives/${id}`;
-    case 'cycle':
-      return `/orgs/${orgId}/cycles/${id}`;
-    case 'session':
-      return `/orgs/${orgId}/sessions/${id}`;
-    case 'team':
-      return `/orgs/${orgId}/teams`;
-    case 'agent':
-      return `/orgs/${orgId}/agents`;
-    case 'view':
-      return `/orgs/${orgId}/views?viewId=${id}`;
-    case 'update':
-    case 'comment':
-      return `/orgs/${orgId}/search?kind=${type}&id=${id}`;
-    case 'org':
-      return `/orgs/${orgId}`;
-  }
-}
 
 /** Add presentation-safe navigation to an otherwise unchanged hydrated read DTO. */
 function withEntityHref(

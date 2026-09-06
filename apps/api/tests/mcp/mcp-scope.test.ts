@@ -269,7 +269,8 @@ describe('tool scope gating (layer 1, before the grant check)', () => {
       arguments: { orgId: s.orgId, text: 'Allowed' },
     })) as CallToolResult;
     expect(res.isError).toBeFalsy();
-    expect(payload(res)['id']).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
+    const captured = payload(res)['items'] as { id: string }[];
+    expect(assertDefined(captured[0]).id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
   });
 
   it('denies agent + connector tools for a work:write-only token', async () => {

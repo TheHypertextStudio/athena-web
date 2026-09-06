@@ -44,6 +44,7 @@ import { DESCRIPTOR_HINT, resolveOptional } from './descriptors';
 import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam, resolveStateTransition } from './tools-shared';
+import { entityHref } from './entity-href';
 import { resolveContainerStatus } from '../lib/work-status';
 
 /** The kinds `organize` can place, outermost first — also the order they must be walked in. */
@@ -126,6 +127,8 @@ interface Placed {
   readonly id: string;
   /** What it is called. The widget renders this; `ref` is a handle, not a name. */
   readonly title: string;
+  /** Where it lives in the product app, built server-side so no widget assembles a route. */
+  readonly href: string;
   /**
    * The `ref` this was placed under, echoed back.
    *
@@ -269,6 +272,7 @@ export function registerOrganizeTool(
               kind: z.enum(KINDS),
               id: z.string().describe('Its real id.'),
               title: z.string().describe('What it is called.'),
+              href: z.string().describe('Where it lives in the product app.'),
               parent: z
                 .string()
                 .optional()
@@ -492,6 +496,7 @@ async function placeItem(
   // What every branch below reports identically, resolved once rather than restated at each of the
   // six return sites.
   const identity = { ref: item.ref, title: item.title, parent: item.parent };
+  const href = (id: string): string => entityHref(orgId, item.kind, id);
 
   if (item.kind === 'initiative') {
     const existing = await tx
@@ -506,7 +511,15 @@ async function placeItem(
       )
       .limit(1);
     if (existing[0]) {
-      return { placed: { ...identity, kind: 'initiative', id: existing[0].id, created: false } };
+      return {
+        placed: {
+          ...identity,
+          kind: 'initiative',
+          id: existing[0].id,
+          href: href(existing[0].id),
+          created: false,
+        },
+      };
     }
     const initiativeStatus = await resolveContainerStatus(
       orgId,
@@ -532,7 +545,7 @@ async function placeItem(
     /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!row) throw new Error('initiative insert returned no row');
     return {
-      placed: { ...identity, kind: 'initiative', id: row.id, created: true },
+      placed: { ...identity, kind: 'initiative', id: row.id, href: href(row.id), created: true },
       change: {
         kind: 'initiative',
         id: row.id,
@@ -591,7 +604,7 @@ async function placeItem(
       ? (await tx.select().from(program).where(eq(program.id, id)).limit(1))[0]
       : undefined;
     return {
-      placed: { ...identity, kind: 'program', id, created },
+      placed: { ...identity, kind: 'program', id, href: href(id), created },
       ...(row
         ? {
             change: {
@@ -656,7 +669,7 @@ async function placeItem(
       ? (await tx.select().from(project).where(eq(project.id, id)).limit(1))[0]
       : undefined;
     return {
-      placed: { ...identity, kind: 'project', id, created },
+      placed: { ...identity, kind: 'project', id, href: href(id), created },
       ...(row
         ? {
             change: {
@@ -692,7 +705,15 @@ async function placeItem(
     )
     .limit(1);
   if (existing[0]) {
-    return { placed: { ...identity, kind: 'task', id: existing[0].id, created: false } };
+    return {
+      placed: {
+        ...identity,
+        kind: 'task',
+        id: existing[0].id,
+        href: href(existing[0].id),
+        created: false,
+      },
+    };
   }
 
   const inserted = await tx
@@ -720,7 +741,7 @@ async function placeItem(
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!row) throw new Error('task insert returned no row');
   return {
-    placed: { ...identity, kind: 'task', id: row.id, created: true },
+    placed: { ...identity, kind: 'task', id: row.id, href: href(row.id), created: true },
     change: { kind: 'task', id: row.id, op: 'create', after: trackedFields('task', row) },
   };
 }

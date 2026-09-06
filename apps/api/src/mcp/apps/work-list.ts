@@ -117,29 +117,13 @@ const SCRIPT = String.raw`
       node.appendChild(line);
     }
 
-    // One link per row, not one per card. A card-level "Open in Docket" that lands on the whole
-    // list makes the reader find the row again in a second place; this opens the thing they were
-    // already looking at.
-    const open = document.createElement('button');
-    open.className = 'quiet open';
-    open.textContent = 'Open';
-    open.setAttribute('aria-label', 'Open ' + (item.title || untitled) + ' in Docket');
-    open.addEventListener('click', () => openItem(item));
-    node.appendChild(open);
-    return node;
-  }
-
-  function openItem(item) {
-    // The org comes from the arguments the tool was called with, over ui/notifications/tool-input.
-    // A host that sends none leaves nothing to build a URL from, and a button that answers a click
-    // with silence is worse than one that says why.
-    const orgId = window.docket.input.orgId;
-    if (!orgId) {
-      window.docket.notice('This host did not pass the workspace through, so there is nowhere to open.', 'error');
-      return;
+    // One link per row, not one per card. A card-level action that lands on the whole list makes
+    // the reader find the row again in a second place.
+    const open = window.docket.openButton(item);
+    if (open) {
+      node.appendChild(open);
     }
-    const kind = (state && state.entity) || 'task';
-    window.docket.link('/orgs/' + orgId + '/' + kind + 's/' + item.id);
+    return node;
   }
 
   // Board order, so an expanded list reads the way the team's board does rather than alphabetically
@@ -298,13 +282,11 @@ const SCRIPT = String.raw`
     render();
   });
 
+  // The remainder lives one level up from any single row, and only a row carries an href — so this
+  // opens the first one, which is the same list in the app.
   el('rest').addEventListener('click', () => {
-    const orgId = window.docket.input.orgId;
-    if (!orgId) {
-      window.docket.notice('This host did not pass the workspace through, so there is nowhere to open.', 'error');
-      return;
-    }
-    window.docket.link('/orgs/' + orgId + '/' + ((state && state.entity) || 'task') + 's');
+    const first = (state && state.items) || [];
+    if (first[0] && first[0].href) window.docket.link(first[0].href);
   });
 })();
 `;

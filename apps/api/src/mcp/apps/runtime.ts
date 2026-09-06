@@ -200,13 +200,11 @@ export const RUNTIME_JS = String.raw`
 
   function label(value) {
     const raw = String(value === null || value === undefined ? '' : value);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-      // Parsed as local midnight rather than UTC so the day never slips backwards, and formatted
-      // without a timeZone for the same reason — this is a calendar day, not an instant.
-      const when = new Date(raw + 'T00:00:00');
-      return isNaN(when.getTime())
-        ? raw
-        : when.toLocaleDateString(locales(), { month: 'short', day: 'numeric', year: 'numeric' });
+    const day = asDay(raw);
+    if (day) {
+      // Formatted without a timeZone for the same reason it is parsed at local midnight: this is a
+      // calendar day, not an instant.
+      return day.toLocaleDateString(locales(), { month: 'short', day: 'numeric', year: 'numeric' });
     }
     // Only lower_snake wire enums get rewritten. A title, an id, a sentence, or anything a person
     // typed has to survive untouched, so the test is on the shape rather than on a list of keys.
@@ -224,35 +222,38 @@ export const RUNTIME_JS = String.raw`
     return 'Untitled ' + (kind || 'item');
   }
 
-  // A due date is the one fact on a row that says whether to act now, and 'Sep 12' does not say
-  // it — the reader has to know today's date and do the subtraction. This does the subtraction.
-  // Calendar days on both sides, in the host's timezone, because a due date is a day and not an
-  // instant: comparing it against a UTC 'now' puts a task due today into yesterday for anyone west
-  // of Greenwich after 4pm.
-  function due(iso) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ''))) {
+  // Parsed at local midnight rather than as UTC, so a calendar day never slips backwards.
+  function asDay(raw) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(raw))) {
       return null;
     }
-    const day = new Date(iso + 'T00:00:00');
-    if (isNaN(day.getTime())) {
+    const day = new Date(raw + 'T00:00:00');
+    return isNaN(day.getTime()) ? null : day;
+  }
+
+  // 'Sep 12' makes the reader work out today's date and subtract. This subtracts. Calendar days on
+  // both sides, in the host's timezone: measured against a UTC 'now', a task due today reads as
+  // yesterday for anyone west of Greenwich after 4pm.
+  function due(iso) {
+    const day = asDay(iso || '');
+    if (!day) {
       return null;
     }
     const today = new Date(new Date().toLocaleDateString('en-CA', withZone({})) + 'T00:00:00');
     const days = Math.round((day.getTime() - today.getTime()) / 86400000);
     if (days < 0) {
-      const late = -days;
-      return { late: true, text: late === 1 ? 'a day late' : String(late) + ' days late' };
+      return { late: true, text: days === -1 ? 'a day late' : String(-days) + ' days late' };
     }
-    if (days === 0) return { late: false, text: 'due today' };
-    if (days === 1) return { late: false, text: 'due tomorrow' };
     // Inside a week the weekday is what a person plans against; past that it is a date.
-    if (days < 7) {
-      return { late: false, text: 'due ' + day.toLocaleDateString(locales(), { weekday: 'long' }) };
-    }
-    return {
-      late: false,
-      text: 'due ' + day.toLocaleDateString(locales(), { month: 'short', day: 'numeric' }),
-    };
+    const when =
+      days === 0
+        ? 'today'
+        : days === 1
+          ? 'tomorrow'
+          : days < 7
+            ? day.toLocaleDateString(locales(), { weekday: 'long' })
+            : day.toLocaleDateString(locales(), { month: 'short', day: 'numeric' });
+    return { late: false, text: 'due ' + when };
   }
 
   function stateGlyph(type) {
@@ -562,6 +563,19 @@ export const RUNTIME_JS = String.raw`
       // The spec requires a role, and only 'user' is permitted.
       return request('ui/message', { role: 'user', content: [{ type: 'text', text }] });
     },
+    openButton(item) {
+      // Every list tool puts an href on its rows, so a card never assembles a route or needs the
+      // workspace id. Rows that predate that just get no button.
+      if (!item.href) {
+        return null;
+      }
+      const button = document.createElement('button');
+      button.className = 'quiet open';
+      button.textContent = 'Open';
+      button.setAttribute('aria-label', 'Open ' + (item.title || 'this') + ' in Docket');
+      button.addEventListener('click', () => window.docket.link(item.href));
+      return button;
+    },
     resize: reportSize,
     get hostContext() {
       return lastHostContext || {};
@@ -654,6 +668,11 @@ body[data-state='stalled'] .content,
 body[data-state='error'] .content { display: none; }
 body[data-state='ready'] .skeleton,
 body[data-state='error'] .skeleton { display: none; }
+
+/* Every widget's own markup renders in here, so this is what has to space it. The card's gap only
+   ever separated the skeleton, the status line and this wrapper — a widget's own children got
+   nothing, which is why an action bar sat against the text above it. */
+.content { display: flex; flex-direction: column; gap: 12px; }
 
 .skeleton { display: flex; flex-direction: column; gap: 8px; }
 .sk { background: var(--color-background-secondary); border-radius: var(--border-radius-md); }
@@ -805,18 +824,22 @@ body[data-state='error'] .skeleton { display: none; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The second line: where it lives, who owns it, when it lands. Wraps rather than truncates,
-   because the fact that gets cut is the one the reader needed. */
-.row .facts {
+/* The second line under a title: where it lives, who owns it, when it lands, or what changed.
+   Wraps rather than truncates, because the fact that gets cut is the one the reader needed. */
+.row .facts,
+.row .changes {
   grid-column: 2;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 4px;
   color: var(--color-text-secondary);
   font-size: var(--font-text-sm-size);
   line-height: var(--font-text-sm-line-height);
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.row .facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 4px;
 }
 .row .facts .sep { opacity: 0.5; }
 /* Late is the one thing on a card worth colour. */
@@ -841,12 +864,18 @@ body[data-state='error'] .skeleton { display: none; }
 @media (hover: none) {
   .row .open { opacity: 1; }
 }
-/* What a value moved from and to, on the same second line the work list puts its facts on. The
-   change report used to draw this as its own column beside the title, which squeezed the title to
-   half the card and wrapped the diff under it anyway. */
-.row .facts .from { text-decoration: line-through; }
-.row .facts .to { color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
-.row .facts { overflow-wrap: anywhere; }
+/* Changed fields, one per line. Packing them onto one line meant only the first could show its
+   values and the rest were named without them. */
+.row .changes {
+  display: grid;
+  grid-template-columns: minmax(4rem, auto) minmax(0, 1fr);
+  gap: 0 12px;
+  margin: 0;
+}
+.row .changes dd { margin: 0; }
+.row .changes .from,
+.row .changes .was { text-decoration: line-through; }
+.row .changes .to { color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 /* The remainder, when the host cannot expand the card. Aligned with the rows above it rather than
    with the card edge, because it is the last entry in the list and not a footer. */

@@ -237,6 +237,7 @@ describe('update by scope', () => {
       {
         id: expect.any(String),
         title: 'Migrate',
+        href: expect.stringContaining('/tasks/'),
         fields: [{ field: 'priority', from: 'high', to: 'low' }],
       },
     ]);

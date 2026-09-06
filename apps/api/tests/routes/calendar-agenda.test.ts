@@ -394,6 +394,47 @@ describe('first-party Google Calendar routes', () => {
     expect(separated.sourceGroupSuggestions).toHaveLength(1);
   });
 
+  it('returns stable source-removal errors before any provider operation', async () => {
+    const fixture = await seedCalendarFixture();
+    const app = appWithSession(calendarRouter, fakeSession(fixture.userId));
+    await fixture.schema.db
+      .update(fixture.schema.calendarLayer)
+      .set({
+        primary: true,
+        sourceRelationship: 'owned',
+        sourceManagement: { canRemoveSubscription: false, requiresIncrementalConsent: false },
+      })
+      .where(eq(fixture.schema.calendarLayer.id, fixture.selectedCalendar.id));
+
+    const protectedResponse = await app.request(
+      `/sources/${fixture.selectedCalendar.id}/subscription`,
+      { method: 'DELETE' },
+    );
+    expect(protectedResponse.status).toBe(409);
+    expect(((await protectedResponse.json()) as { code: string }).code).toBe(
+      'calendar_source_protected',
+    );
+
+    await fixture.schema.db
+      .update(fixture.schema.calendarLayer)
+      .set({
+        primary: false,
+        sourceRelationship: 'subscribed',
+        sourceManagement: { canRemoveSubscription: true, requiresIncrementalConsent: true },
+      })
+      .where(eq(fixture.schema.calendarLayer.id, fixture.selectedCalendar.id));
+    const scopeResponse = await app.request(
+      `/sources/${fixture.selectedCalendar.id}/subscription`,
+      {
+        method: 'DELETE',
+      },
+    );
+    expect(scopeResponse.status).toBe(409);
+    expect(((await scopeResponse.json()) as { code: string }).code).toBe(
+      'calendar_source_scope_required',
+    );
+  });
+
   it('updates calendar visibility and agenda filtering respects the selected set', async () => {
     const fixture = await seedCalendarFixture();
     const settings = appWithSession(calendarRouter, fakeSession(fixture.userId));

@@ -34,6 +34,8 @@ import {
   type CalendarPullResult,
   type CalendarPushInput,
   type CalendarPushResult,
+  type CalendarSourceRemovalInput,
+  type CalendarSourceRemovalResult,
   type CalendarWatchInput,
   type CalendarWatchResult,
   type DiscoveredCalendarConnection,
@@ -50,6 +52,8 @@ const GOOGLE_SCOPE_CALENDAR_READONLY = 'https://www.googleapis.com/auth/calendar
 const GOOGLE_SCOPE_CALENDAR = 'https://www.googleapis.com/auth/calendar';
 /** Full OAuth scope URL granting Calendar events read/write access (no calendar-list management). */
 const GOOGLE_SCOPE_CALENDAR_EVENTS = 'https://www.googleapis.com/auth/calendar.events';
+/** Narrow scope that allows CalendarList subscription removal. */
+const GOOGLE_SCOPE_CALENDAR_LIST = 'https://www.googleapis.com/auth/calendar.calendarlist';
 
 /**
  * Thrown by {@link defaultFetchJson} when the Google Calendar API responds with a
@@ -632,6 +636,23 @@ async function stopWatch(
   });
 }
 
+/** Remove one non-owned Google calendar from the connected account's CalendarList. */
+async function removeSourceSubscription(
+  fetchJson: GoogleFetchJson,
+  input: CalendarSourceRemovalInput,
+): Promise<CalendarSourceRemovalResult> {
+  const url = `${GOOGLE_CALENDAR_BASE}/users/me/calendarList/${encodeURIComponent(input.externalLayerId)}`;
+  try {
+    await fetchJson<unknown>(url, input.credentials.accessToken, { method: 'DELETE' });
+    return { outcome: 'applied' };
+  } catch (error) {
+    if (error instanceof GoogleCalendarApiError && (error.status === 404 || error.status === 410)) {
+      return { outcome: 'applied' };
+    }
+    return mapPushError(error);
+  }
+}
+
 /** Build the {@link CalendarProviderAdapter} half of the Google sync module. */
 export function createGoogleCalendarAdapter(
   fetchJson: GoogleFetchJson = defaultFetchJson,
@@ -674,6 +695,7 @@ export function createGoogleCalendarAdapter(
     deleteItem: (input) => deleteItem(fetchJson, input),
     startWatch: (input) => startWatch(fetchJson, input),
     stopWatch: (input) => stopWatch(fetchJson, input),
+    removeSourceSubscription: (input) => removeSourceSubscription(fetchJson, input),
   };
 }
 
@@ -772,6 +794,9 @@ export function captureGoogleScopeState(
     calendarWrite:
       hasGoogleScope(grantedScopes, GOOGLE_SCOPE_CALENDAR) ||
       hasGoogleScope(grantedScopes, GOOGLE_SCOPE_CALENDAR_EVENTS),
+    sourceManagement:
+      hasGoogleScope(grantedScopes, GOOGLE_SCOPE_CALENDAR) ||
+      hasGoogleScope(grantedScopes, GOOGLE_SCOPE_CALENDAR_LIST),
     capturedAt: now.toISOString(),
   };
 }

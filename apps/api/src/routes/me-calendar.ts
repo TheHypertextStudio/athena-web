@@ -60,6 +60,7 @@ import {
   deleteCalendarSourceGroup,
   updateCalendarSourceGroup,
 } from '../calendar/calendar-source-groups';
+import { removeCalendarSourceSubscription } from '../calendar/calendar-source-removal';
 import {
   toCalendarItemOut,
   toCalendarItemTaskLinkOut,
@@ -280,6 +281,26 @@ const meCalendar = new Hono<AppEnv>()
     async (c) => {
       const userId = requireUserId(c);
       await deleteCalendarSourceGroup(db, userId, c.req.valid('param').id);
+      return ok(c, CalendarSettingsOut, await readCalendarSettings(userId));
+    },
+  )
+  .delete(
+    '/sources/:id/subscription',
+    apiDoc({
+      tag: 'Me',
+      summary: 'Remove a calendar source subscription',
+      response: CalendarSettingsOut,
+      description:
+        "Remove one non-owned provider calendar from a linked account's source list. The provider must confirm removal before Docket soft-removes the local source and preserves its event metadata.",
+    }),
+    zParam(idParam),
+    async (c) => {
+      const userId = requireUserId(c);
+      await removeCalendarSourceSubscription(db, {
+        userId,
+        layerId: c.req.valid('param').id,
+        modules: createDefaultCalendarSyncModules(),
+      });
       return ok(c, CalendarSettingsOut, await readCalendarSettings(userId));
     },
   )

@@ -122,6 +122,8 @@ interface LogicalCalendarRowProps {
     patch: { selected?: boolean; visibleByDefault?: boolean; preferredLayerId?: string },
   ) => void;
   readonly onSeparate: (groupId: string) => void;
+  readonly onRemoveSource: (source: CalendarSourceGroupOut['sources'][number]) => void;
+  readonly expandedSourceId: string | null;
 }
 
 /** One settings row for a logical calendar, with physical account sources on disclosure. */
@@ -131,9 +133,16 @@ function LogicalCalendarRow({
   disabled,
   onUpdate,
   onSeparate,
+  onRemoveSource,
+  expandedSourceId,
 }: LogicalCalendarRowProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const confirmedGroupId = group.persistedGroupId;
+  useEffect(() => {
+    if (expandedSourceId && group.sources.some((source) => source.layerId === expandedSourceId)) {
+      setOpen(true);
+    }
+  }, [expandedSourceId, group.sources]);
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <div className="hover:bg-surface-container flex min-w-0 items-center gap-3 px-4 py-3 transition-colors">
@@ -200,6 +209,19 @@ function LogicalCalendarRow({
                     Use as preferred
                   </Button>
                 )}
+                {source.management.canRemoveSubscription ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={disabled}
+                    onClick={() => {
+                      onRemoveSource(source);
+                    }}
+                  >
+                    Remove from account
+                  </Button>
+                ) : null}
               </div>
             );
           })}
@@ -299,6 +321,8 @@ interface CalendarGroupsProps {
   readonly onCombine: (layerIds: readonly string[]) => void;
   readonly onUpdate: LogicalCalendarRowProps['onUpdate'];
   readonly onSeparate: LogicalCalendarRowProps['onSeparate'];
+  readonly onRemoveSource: LogicalCalendarRowProps['onRemoveSource'];
+  readonly expandedSourceId: string | null;
 }
 
 /** Logical calendar rows and the confirmation prompts that can create them. */
@@ -310,6 +334,8 @@ function CalendarGroups({
   onCombine,
   onUpdate,
   onSeparate,
+  onRemoveSource,
+  expandedSourceId,
 }: CalendarGroupsProps): JSX.Element | null {
   if (groups.length === 0 && suggestions.length === 0) return null;
   return (
@@ -351,6 +377,8 @@ function CalendarGroups({
               disabled={disabled}
               onUpdate={onUpdate}
               onSeparate={onSeparate}
+              onRemoveSource={onRemoveSource}
+              expandedSourceId={expandedSourceId}
             />
           ))}
         </SettingsGroup>
@@ -365,6 +393,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
   const handledOAuthReturn = useRef(false);
   const [oauthPending, setOauthPending] = useState(false);
   const [oauthError, setOauthError] = useState<string | null>(null);
+  const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
   const query = useApiQuery(calendarSettingsDef());
   const identitiesQuery = useApiQuery(
     apiQueryOptions(
@@ -412,6 +441,22 @@ export default function GoogleCalendarSettings(): JSX.Element {
     invalidateKeys: [queryKeys.calendarSettings(), queryKeys.calendarLayers()],
   });
 
+  const removeSource = useApiMutation({
+    mutationFn: (id: string) =>
+      unwrap(
+        () =>
+          api.v1.me.calendar.sources[':id'].subscription.$delete({
+            param: { id },
+          }),
+        'Could not remove this calendar from the linked account.',
+      ),
+    invalidateKeys: [
+      queryKeys.calendarSettings(),
+      queryKeys.calendarLayers(),
+      CALENDAR_ITEMS_PREFIX,
+    ],
+  });
+
   const sync = useApiMutation({
     mutationFn: () =>
       unwrap(() => api.v1.me.calendar.sync.$post({}), 'Could not sync Google Calendar.'),
@@ -439,11 +484,32 @@ export default function GoogleCalendarSettings(): JSX.Element {
     }
   }, []);
 
+  const startSourceManagementConsent = useCallback(async (layerId: string): Promise<void> => {
+    setOauthError(null);
+    setOauthPending(true);
+    setExpandedSourceId(layerId);
+    try {
+      const source = encodeURIComponent(layerId);
+      const callbackURL = `${window.location.pathname}?google=source-management&source=${source}`;
+      await authClient.linkSocial({
+        provider: 'google',
+        scopes: [...GOOGLE_CONNECTOR_SCOPES.calendarSourceManagement],
+        callbackURL,
+        errorCallbackURL: `${window.location.pathname}?google=error&source=${source}`,
+      });
+    } catch (error: unknown) {
+      setOauthError(userErrorMessage(error, 'Could not request calendar-list access.'));
+      setOauthPending(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const result = new URLSearchParams(window.location.search).get('google');
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('google');
     if (!result || handledOAuthReturn.current) return;
     handledOAuthReturn.current = true;
-    if (result === 'connected') {
+    if (result === 'connected' || result === 'source-management') {
+      if (result === 'source-management') setExpandedSourceId(params.get('source'));
       sync.mutate(undefined, {
         onSettled: () => {
           router.replace(window.location.pathname);
@@ -460,6 +526,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
     updateGroup.isPending,
     combineGroup.isPending,
     separateGroup.isPending,
+    removeSource.isPending,
     sync.isPending,
   ].some(Boolean);
   const syncFeedback = sync.data ? syncSummary(sync.data, data?.calendars ?? []) : null;
@@ -469,6 +536,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
     [updateGroup, 'Could not update calendar visibility.'],
     [combineGroup, 'Could not combine these calendars.'],
     [separateGroup, 'Could not separate these calendars.'],
+    [removeSource, 'Could not remove this calendar from the linked account.'],
     [sync, 'Could not sync Google Calendar.'],
   ]);
   const googleAvailable = identitiesQuery.data?.googleOAuth?.available === true;
@@ -598,6 +666,32 @@ export default function GoogleCalendarSettings(): JSX.Element {
         onSeparate={(groupId) => {
           separateGroup.mutate(groupId);
         }}
+        onRemoveSource={(source) => {
+          const connection = (data?.connections ?? []).find(
+            (candidate) => candidate.id === source.connectionId,
+          );
+          if (connection?.scopeState?.sourceManagement !== true) {
+            if (connection?.provider === 'google') {
+              void startSourceManagementConsent(source.layerId);
+            } else {
+              setOauthError('Reconnect this calendar account before removing the source.');
+            }
+            return;
+          }
+          if (
+            !window.confirm(
+              'Remove this calendar from the linked account? Docket will keep its task links and saved metadata.',
+            )
+          ) {
+            return;
+          }
+          removeSource.mutate(source.layerId, {
+            onSuccess: () => {
+              setExpandedSourceId(null);
+            },
+          });
+        }}
+        expandedSourceId={expandedSourceId}
       />
     </div>
   );

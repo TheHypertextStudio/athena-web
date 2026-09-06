@@ -4,6 +4,7 @@ export const GOOGLE_CONNECTOR_SCOPES = {
     'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
     'https://www.googleapis.com/auth/calendar.events',
   ],
+  calendarSourceManagement: ['https://www.googleapis.com/auth/calendar.calendarlist'],
   gtasks: ['https://www.googleapis.com/auth/tasks'],
   /**
    * Metadata only, and deliberately not `drive.readonly`.

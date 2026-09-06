@@ -15,23 +15,36 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { calendarGet, identitiesGet, layersGet, groupPatch, groupPost, groupDelete, replace } =
-  vi.hoisted(() => ({
-    calendarGet: vi.fn(),
-    identitiesGet: vi.fn(),
-    layersGet: vi.fn(),
-    groupPatch: vi.fn(),
-    groupPost: vi.fn(),
-    groupDelete: vi.fn(),
-    replace: vi.fn(),
-  }));
+const {
+  calendarGet,
+  identitiesGet,
+  layersGet,
+  groupPatch,
+  groupPost,
+  groupDelete,
+  sourceDelete,
+  syncPost,
+  linkSocial,
+  replace,
+} = vi.hoisted(() => ({
+  calendarGet: vi.fn(),
+  identitiesGet: vi.fn(),
+  layersGet: vi.fn(),
+  groupPatch: vi.fn(),
+  groupPost: vi.fn(),
+  groupDelete: vi.fn(),
+  sourceDelete: vi.fn(),
+  syncPost: vi.fn(),
+  linkSocial: vi.fn(),
+  replace: vi.fn(),
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
 }));
 
 vi.mock('../../../src/lib/auth-client', () => ({
-  authClient: { linkSocial: vi.fn() },
+  authClient: { linkSocial },
 }));
 
 vi.mock('../../../src/lib/api', () => ({
@@ -47,7 +60,8 @@ vi.mock('../../../src/lib/api', () => ({
             $post: groupPost,
             ':id': { $patch: groupPatch, $delete: groupDelete },
           },
-          sync: { $post: vi.fn() },
+          sources: { ':id': { subscription: { $delete: sourceDelete } } },
+          sync: { $post: syncPost },
         },
       },
     },
@@ -64,7 +78,7 @@ function okResponse<T>(body: T) {
 const WRITE_CONNECTION_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const READ_ONLY_CONNECTION_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAW';
 
-function calendarSettingsFixture() {
+function calendarSettingsFixture(readOnlySourceManagement = false) {
   return {
     connections: [
       {
@@ -83,6 +97,7 @@ function calendarSettingsFixture() {
           grantedScopes: ['https://www.googleapis.com/auth/calendar'],
           calendarRead: true,
           calendarWrite: true,
+          sourceManagement: true,
           capturedAt: '2026-07-01T00:00:00.000Z',
         },
         createdAt: '2026-07-01T00:00:00.000Z',
@@ -104,6 +119,7 @@ function calendarSettingsFixture() {
           grantedScopes: ['https://www.googleapis.com/auth/calendar.readonly'],
           calendarRead: true,
           calendarWrite: false,
+          sourceManagement: readOnlySourceManagement,
           capturedAt: '2026-07-01T00:00:00.000Z',
         },
         createdAt: '2026-07-01T00:00:00.000Z',
@@ -196,7 +212,15 @@ beforeEach(() => {
   groupPatch.mockReset().mockResolvedValue(okResponse(calendarSettingsFixture()));
   groupPost.mockReset().mockResolvedValue(okResponse(calendarSettingsFixture()));
   groupDelete.mockReset().mockResolvedValue(okResponse(calendarSettingsFixture()));
+  sourceDelete.mockReset().mockResolvedValue(okResponse(calendarSettingsFixture()));
+  syncPost
+    .mockReset()
+    .mockResolvedValue(
+      okResponse({ eventsCreated: 0, eventsUpdated: 0, eventsDeleted: 0, errors: [] }),
+    );
+  linkSocial.mockReset().mockResolvedValue(undefined);
   replace.mockReset();
+  window.history.replaceState({}, '', window.location.pathname);
 });
 
 afterEach(() => {
@@ -236,5 +260,70 @@ describe('GoogleCalendarSettings', () => {
     expect(screen.getByRole('button', { name: 'Use as preferred' })).toBeInTheDocument();
     expect(screen.getAllByText('writer@example.com')).toHaveLength(2);
     expect(screen.getAllByText('reader@example.com')).toHaveLength(2);
+  });
+
+  it('requests only calendar-list consent before offering source removal', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    render(<GoogleCalendarSettings />, { wrapper });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show sources for Personal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from account' }));
+
+    await waitFor(() => {
+      expect(linkSocial).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: 'google',
+          scopes: ['https://www.googleapis.com/auth/calendar.calendarlist'],
+          callbackURL: expect.stringContaining(
+            'google=source-management&source=01BX5ZZKBKACTAV9WEVGEMMVL2',
+          ),
+        }),
+      );
+    });
+    expect(sourceDelete).not.toHaveBeenCalled();
+  });
+
+  it('asks for final confirmation and removes a source after consent exists', async () => {
+    const fixture = calendarSettingsFixture(true);
+    calendarGet.mockResolvedValue(okResponse(fixture));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    render(<GoogleCalendarSettings />, { wrapper });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show sources for Personal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from account' }));
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(sourceDelete).toHaveBeenCalledWith({
+        param: { id: '01BX5ZZKBKACTAV9WEVGEMMVL2' },
+      });
+    });
+    confirm.mockRestore();
+  });
+
+  it('reopens the source after OAuth without deleting it automatically', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      `${window.location.pathname}?google=source-management&source=01BX5ZZKBKACTAV9WEVGEMMVL2`,
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    render(<GoogleCalendarSettings />, { wrapper });
+
+    await waitFor(() => {
+      expect(syncPost).toHaveBeenCalledTimes(1);
+    });
+    expect(await screen.findByText('Preferred')).toBeInTheDocument();
+    expect(sourceDelete).not.toHaveBeenCalled();
   });
 });

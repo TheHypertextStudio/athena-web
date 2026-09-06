@@ -179,6 +179,19 @@ export type CalendarDeleteResult =
   | { readonly outcome: 'permanent'; readonly message: string }
   | { readonly outcome: 'reauth'; readonly message: string };
 
+/** Input for removing one provider calendar subscription from an account's source list. */
+export interface CalendarSourceRemovalInput {
+  readonly credentials: CalendarProviderCredentials;
+  readonly externalLayerId: string;
+}
+
+/** Provider-neutral outcome for one source-subscription removal request. */
+export type CalendarSourceRemovalResult =
+  | { readonly outcome: 'applied' }
+  | { readonly outcome: 'retryable'; readonly message: string }
+  | { readonly outcome: 'permanent'; readonly message: string }
+  | { readonly outcome: 'reauth'; readonly message: string };
+
 /** Input to {@link CalendarProviderAdapter.startWatch}: subscribe one layer to push notifications. */
 export interface CalendarWatchInput {
   readonly credentials: CalendarProviderCredentials;
@@ -230,6 +243,10 @@ export interface CalendarProviderAdapter {
   pushItem(input: CalendarPushInput): Promise<CalendarPushResult>;
   /** Delete one provider event; see {@link CalendarDeleteResult} for outcomes. */
   deleteItem(input: CalendarDeleteInput): Promise<CalendarDeleteResult>;
+  /** Remove a non-owned calendar from this account's source list, when supported. */
+  removeSourceSubscription?: (
+    input: CalendarSourceRemovalInput,
+  ) => Promise<CalendarSourceRemovalResult>;
   /**
    * Subscribe one layer to provider push notifications. Absent when the provider has no
    * push model. Declared as a property (not method-shorthand) type so callers can safely
@@ -508,6 +525,72 @@ async function upsertProviderLayer(
 }
 
 /**
+ * Stop one source watch and soft-remove its legacy and layered rows atomically.
+ *
+ * @returns A provider watch-cleanup error for diagnostics, or null. Local removal still
+ *   succeeds when best-effort watch shutdown fails.
+ */
+export async function softRemoveProviderLayer(
+  db: Database,
+  input: {
+    readonly layerId: string;
+    readonly credentials: CalendarProviderCredentials;
+    readonly adapter: CalendarProviderAdapter;
+    readonly now: Date;
+  },
+): Promise<string | null> {
+  const rows = await db
+    .select({
+      id: calendarLayer.id,
+      externalLayerId: calendarLayer.externalLayerId,
+      watchChannelId: calendarLayer.watchChannelId,
+      watchResourceId: calendarLayer.watchResourceId,
+    })
+    .from(calendarLayer)
+    .where(and(eq(calendarLayer.id, input.layerId), isNull(calendarLayer.removedAt)))
+    .limit(1);
+  const layer = rows[0];
+  if (!layer) return null;
+  let cleanupError: string | null = null;
+  const stopWatch = input.adapter.stopWatch;
+  if (
+    typeof stopWatch === 'function' &&
+    layer.watchChannelId !== null &&
+    layer.watchResourceId !== null
+  ) {
+    try {
+      await stopWatch({
+        credentials: input.credentials,
+        channelId: layer.watchChannelId,
+        resourceId: layer.watchResourceId,
+      });
+    } catch (error) {
+      cleanupError = error instanceof Error ? error.message : 'Watch cleanup failed';
+    }
+  }
+  await db.transaction(async (tx) => {
+    await tx
+      .update(calendarList)
+      .set({ removedAt: input.now })
+      .where(eq(calendarList.id, layer.id));
+    await tx
+      .update(calendarLayer)
+      .set({
+        removedAt: input.now,
+        syncToken: null,
+        syncLeaseExpiresAt: null,
+        watchChannelId: null,
+        watchResourceId: null,
+        watchToken: null,
+        watchExpiresAt: null,
+        watchRegisteredAt: null,
+      })
+      .where(eq(calendarLayer.id, layer.id));
+  });
+  return cleanupError;
+}
+
+/**
  * Soft-remove active provider layers absent from one complete provider list response.
  *
  * @remarks
@@ -527,12 +610,7 @@ async function reconcileMissingProviderLayers(
   },
 ): Promise<readonly string[]> {
   const activeLayers = await db
-    .select({
-      id: calendarLayer.id,
-      externalLayerId: calendarLayer.externalLayerId,
-      watchChannelId: calendarLayer.watchChannelId,
-      watchResourceId: calendarLayer.watchResourceId,
-    })
+    .select({ id: calendarLayer.id, externalLayerId: calendarLayer.externalLayerId })
     .from(calendarLayer)
     .where(
       and(
@@ -547,40 +625,15 @@ async function reconcileMissingProviderLayers(
   );
   const errors: string[] = [];
   for (const layer of missing) {
-    const stopWatch = input.adapter.stopWatch;
-    if (
-      typeof stopWatch === 'function' &&
-      layer.watchChannelId !== null &&
-      layer.watchResourceId !== null
-    ) {
-      try {
-        await stopWatch({
-          credentials: input.credentials,
-          channelId: layer.watchChannelId,
-          resourceId: layer.watchResourceId,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Watch cleanup failed';
-        errors.push(`${layer.externalLayerId}: ${message}`);
-      }
+    const cleanupError = await softRemoveProviderLayer(db, {
+      layerId: layer.id,
+      credentials: input.credentials,
+      adapter: input.adapter,
+      now: input.now,
+    });
+    if (cleanupError && layer.externalLayerId) {
+      errors.push(`${layer.externalLayerId}: ${cleanupError}`);
     }
-    await db
-      .update(calendarList)
-      .set({ removedAt: input.now })
-      .where(eq(calendarList.id, layer.id));
-    await db
-      .update(calendarLayer)
-      .set({
-        removedAt: input.now,
-        syncToken: null,
-        syncLeaseExpiresAt: null,
-        watchChannelId: null,
-        watchResourceId: null,
-        watchToken: null,
-        watchExpiresAt: null,
-        watchRegisteredAt: null,
-      })
-      .where(eq(calendarLayer.id, layer.id));
   }
   return errors;
 }

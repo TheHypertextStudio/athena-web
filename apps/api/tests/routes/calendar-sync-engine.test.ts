@@ -684,7 +684,59 @@ describe('calendar sync engine — Google adapter (fake fetchJson)', () => {
     );
     expect(scopeState.calendarRead).toBe(true);
     expect(scopeState.calendarWrite).toBe(false);
+    expect(scopeState.sourceManagement).toBe(false);
     expect(scopeState.capturedAt).toBe(NOW.toISOString());
+  });
+
+  it('captures the narrow CalendarList management grant independently', () => {
+    const scopeState = captureGoogleScopeState(
+      {
+        externalAccountId: 'acct',
+        accountEmail: null,
+        accountName: null,
+        accountPictureUrl: null,
+        raw: {
+          userId: 'u',
+          accountId: 'acct',
+          scope: 'calendar.events calendar.calendarlist',
+        },
+      },
+      NOW,
+    );
+    expect(scopeState).toMatchObject({ calendarWrite: true, sourceManagement: true });
+  });
+
+  it('removes a Google CalendarList subscription and treats provider absence as success', async () => {
+    const calls: { method: string; url: string }[] = [];
+    let status: number | null = null;
+    const fetchJson: GoogleFetchJson = async <T>(
+      url: string,
+      _token: string,
+      init?: GoogleFetchJsonInit,
+    ) => {
+      calls.push({ method: init?.method ?? 'GET', url });
+      if (status !== null) throw new GoogleCalendarApiError(status, 'gone');
+      return undefined as T;
+    };
+    const adapter = createGoogleCalendarAdapter(fetchJson);
+    const remove = adapter.removeSourceSubscription;
+    if (!remove) throw new Error('Google adapter missing source removal');
+
+    await expect(
+      remove({ credentials: { accessToken: 'token' }, externalLayerId: 'shared@example.com' }),
+    ).resolves.toEqual({ outcome: 'applied' });
+    status = 404;
+    await expect(
+      remove({ credentials: { accessToken: 'token' }, externalLayerId: 'shared@example.com' }),
+    ).resolves.toEqual({ outcome: 'applied' });
+    status = 410;
+    await expect(
+      remove({ credentials: { accessToken: 'token' }, externalLayerId: 'shared@example.com' }),
+    ).resolves.toEqual({ outcome: 'applied' });
+    expect(calls[0]).toEqual({
+      method: 'DELETE',
+      url: expect.stringContaining('/users/me/calendarList/shared%40example.com'),
+    });
   });
 
   it('the Google adapter throws (not silently no-ops) on a non-410 HTTP error', async () => {

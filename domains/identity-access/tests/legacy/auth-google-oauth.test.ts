@@ -20,6 +20,9 @@ describe('Google OAuth scope helpers', () => {
 
   it('returns only the scopes owned by the selected connector', () => {
     expect(googleScopesForConnector('calendar')).toEqual(GOOGLE_CONNECTOR_SCOPES.calendar);
+    expect(googleScopesForConnector('calendarSourceManagement')).toEqual([
+      'https://www.googleapis.com/auth/calendar.calendarlist',
+    ]);
     expect(googleScopesForConnector('gmail')).toEqual([
       'https://www.googleapis.com/auth/gmail.modify',
     ]);

@@ -1,0 +1,10 @@
+flowchart LR
+    A[Google Calendar adapter] --> S[Calendar sync engine]
+    B[Future Outlook adapter] --> S
+    S --> D[(Calendar source and item store)]
+    D --> C[Canonical calendar read service]
+    C --> W[Calendar and Agenda surfaces]
+    C --> G[Google Calendar settings]
+    G --> M[Provider source management]
+    M --> A
+    M --> B

@@ -536,9 +536,7 @@ describe('CalendarItemDrawer', () => {
   it('opens the global Task composer and awaits a selected-role link', async () => {
     renderDrawer(ITEM_ID);
 
-    await waitFor(() => {
-      expect(screen.getByText('Design review')).toBeInTheDocument();
-    });
+    await screen.findByRole('dialog', { name: 'Design review' });
 
     // The band a person adds to decides the role, which is what retired the relationship select.
     await userEvent.click(screen.getByRole('button', { name: 'Add follow-up' }));
@@ -573,7 +571,7 @@ describe('CalendarItemDrawer', () => {
   it('treats an offline-queued link as accepted instead of a hard failure', async () => {
     itemTasksPost.mockRejectedValueOnce(new QueuedOfflineWriteError('queued-calendar-link'));
     renderDrawer(ITEM_ID);
-    await screen.findByText('Design review');
+    await screen.findByRole('dialog', { name: 'Design review' });
 
     await userEvent.click(screen.getByRole('button', { name: 'Add prep' }));
     await userEvent.click(screen.getByRole('menuitem', { name: 'New task' }));
@@ -702,7 +700,7 @@ describe('CalendarItemDrawer', () => {
 
     await screen.findByRole('dialog', { name: 'Design review' });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Add prep' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Add work to this event' })).toBeInTheDocument();
     });
     expect(screen.queryByRole('heading', { name: 'Before' })).not.toBeInTheDocument();
     expect(screen.queryByText(/No tasks are linked/)).not.toBeInTheDocument();
@@ -765,9 +763,7 @@ describe('CalendarItemDrawer', () => {
     );
     renderDrawer(ITEM_ID);
 
-    await waitFor(() => {
-      expect(screen.getByText('Design review')).toBeInTheDocument();
-    });
+    await screen.findByRole('dialog', { name: 'Design review' });
 
     // No stale "edited from the full calendar view" placeholder — real date inputs instead.
     expect(

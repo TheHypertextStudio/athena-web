@@ -27,6 +27,7 @@ import { DatePicker } from '@/components/date-picker';
 import { PropertyPanelRow } from '@/components/property-pickers/property-panel';
 
 import { CalendarTimeField } from '../calendar-time-field';
+import { useAutoGrow } from './auto-grow';
 import type { CoreFieldEditor } from './use-core-field-drafts';
 
 /** Props for {@link EventCoreFields}. */
@@ -45,16 +46,22 @@ export function EventCoreFields({
   displayTimezone,
   editor,
 }: EventCoreFieldsProps): JSX.Element {
+  const notesRef = useAutoGrow(editor.description.value);
   return (
     <div className="flex flex-col">
-      <PropertyPanelRow icon={<Schedule />} label="When">
-        <EventSchedule item={item} displayTimezone={displayTimezone} editor={editor} />
-        {editor.timeError ? (
-          <p id={editor.timeErrorId} role="alert" className="text-error text-body-small">
-            {editor.timeError}
-          </p>
-        ) : null}
-      </PropertyPanelRow>
+      <div className="flex items-start gap-3 py-2.5">
+        <span aria-hidden="true" className="text-on-surface-variant mt-6 flex size-4 shrink-0">
+          <Schedule />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <EventSchedule item={item} displayTimezone={displayTimezone} editor={editor} />
+          {editor.timeError ? (
+            <p id={editor.timeErrorId} role="alert" className="text-error text-body-small">
+              {editor.timeError}
+            </p>
+          ) : null}
+        </div>
+      </div>
 
       <PropertyPanelRow icon={<MapPin />} label="Where">
         <Input
@@ -75,10 +82,11 @@ export function EventCoreFields({
           variant="plain"
           aria-label="Description"
           placeholder="Add notes"
+          ref={notesRef}
           value={editor.description.value}
           disabled={!editor.canEdit}
-          rows={3}
-          className="resize-none"
+          rows={2}
+          className="resize-none overflow-hidden"
           onChange={(event) => {
             editor.description.onChange(event.target.value);
           }}

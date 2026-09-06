@@ -84,7 +84,9 @@ export function providerSeamLabel(
   item: CalendarItemOut,
   layer: CalendarLayerOut | undefined,
 ): string | null {
-  if (item.provider === null) return null;
+  // `provider` is 'docket' on a native event, so it cannot answer this. Only an item that came
+  // from a connected account has a seam to describe.
+  if (item.kind !== 'provider_event') return null;
   const provider = providerLabel(layer);
   return item.permissions.canEditCore
     ? `Synced from ${provider} · your edits push back`

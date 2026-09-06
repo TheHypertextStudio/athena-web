@@ -120,7 +120,7 @@ describe('calendar event process setup', () => {
       </QueryClientProvider>,
     );
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Add prep' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Add work to this event' }));
     await userEvent.click(
       await screen.findByRole('menuitem', { name: 'Add tasks for each event' }),
     );
@@ -163,7 +163,7 @@ describe('calendar event process setup', () => {
       </QueryClientProvider>,
     );
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Add prep' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Add work to this event' }));
     expect(
       await screen.findByRole('menuitem', { name: 'Plan work around this event' }),
     ).toBeTruthy();

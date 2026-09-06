@@ -79,6 +79,7 @@ export function EventArc({ item, onOpenTask, onOpenItem }: EventArcProps): JSX.E
         <AddWorkMenu
           item={item}
           band="before"
+          label="Add work to this event"
           onLinkExisting={() => {
             setOpenForm('link');
           }}

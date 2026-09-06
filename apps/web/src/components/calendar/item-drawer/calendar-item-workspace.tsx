@@ -38,7 +38,6 @@ import { type JSX, useState } from 'react';
 import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 import { PropertyPanelRow } from '@/components/property-pickers/property-panel';
 
-import { CalendarDrawerClose } from '../calendar-drawer-close';
 import { CalendarItemDuplicateSources } from '../calendar-item-duplicate-sources';
 import { EventArc } from './event-arc';
 import { EventCoreFields } from './event-core-fields';
@@ -101,11 +100,11 @@ export function CalendarItemWorkspace({
           layer={layer}
           displayTimezone={displayTimezone}
           editor={editor}
+          onClose={onClose}
         />
         <DialogDescription className="sr-only">
           Edit this event and the work around it.
         </DialogDescription>
-        <CalendarDrawerClose label="Close calendar item" onClick={onClose} />
       </DialogHeader>
 
       <DialogBody

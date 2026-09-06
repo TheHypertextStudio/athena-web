@@ -15,7 +15,7 @@
  */
 import type { CalendarItemOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
 import { OpenInNew } from '@docket/ui/icons';
-import { Badge, Button, DialogTitle, Input } from '@docket/ui/primitives';
+import { Badge, Button, DialogTitle, Textarea } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import {
@@ -27,6 +27,8 @@ import {
   READ_ONLY_REASON_LABEL,
 } from '../item-presentation/event-identity';
 import { providerLabel, providerSeamLabel } from '../item-presentation/sync-presentation';
+import { useAutoGrow } from './auto-grow';
+import { CalendarDrawerClose } from '../calendar-drawer-close';
 import type { CoreFieldEditor } from './use-core-field-drafts';
 
 /** Props for {@link EventMasthead}. */
@@ -39,6 +41,8 @@ export interface EventMastheadProps {
   displayTimezone: string;
   /** The title draft and its save state. */
   editor: CoreFieldEditor;
+  /** Dismiss the dialog. */
+  onClose: () => void;
 }
 
 /** The event's name, when it runs, and which calendar it belongs to. */
@@ -47,18 +51,20 @@ export function EventMasthead({
   layer,
   displayTimezone,
   editor,
+  onClose,
 }: EventMastheadProps): JSX.Element {
   const KindIcon = CALENDAR_ITEM_KIND_ICON[item.kind];
   const day = itemDayLabel(item, displayTimezone);
   const clock = itemClockRangeLabel(item, displayTimezone);
   const duration = itemDurationLabel(item);
   const seam = providerSeamLabel(item, layer);
+  const titleRef = useAutoGrow(editor.title.value);
 
   return (
     <>
       {/* The visible title is an editable field, so the dialog takes its accessible name here. */}
       <DialogTitle className="sr-only">{item.title}</DialogTitle>
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-start gap-2.5">
         <span
           aria-hidden="true"
           className="shrink-0 [&_svg]:size-6"
@@ -66,10 +72,12 @@ export function EventMasthead({
         >
           <KindIcon />
         </span>
-        <Input
+        <Textarea
+          ref={titleRef}
+          rows={1}
           variant="plain"
           aria-label="Title"
-          className="text-headline-small min-w-0 flex-1"
+          className="text-headline-small min-w-0 flex-1 resize-none overflow-hidden"
           value={editor.title.value}
           disabled={!editor.canEdit}
           aria-invalid={Boolean(editor.titleError)}
@@ -79,6 +87,7 @@ export function EventMasthead({
           }}
           onBlur={editor.title.onBlur}
         />
+        <CalendarDrawerClose label="Close calendar item" onClick={onClose} />
       </div>
       {editor.titleError ? (
         <p id={editor.titleErrorId} role="alert" className="text-error text-body-small">

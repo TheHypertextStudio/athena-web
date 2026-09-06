@@ -33,6 +33,8 @@ export interface AddWorkMenuProps {
   item: CalendarItemOut;
   /** Which band is asking, which is what sets the new task's role. */
   band: ArcBandId;
+  /** Override the label when the affordance stands for the whole arc rather than one band. */
+  label?: string | undefined;
   /** Open the link-an-existing-task form. */
   onLinkExisting: () => void;
   /** Open the plan-work form. */
@@ -43,6 +45,7 @@ export interface AddWorkMenuProps {
 export function AddWorkMenu({
   item,
   band,
+  label,
   onLinkExisting,
   onPlanWork,
 }: AddWorkMenuProps): JSX.Element {
@@ -63,7 +66,7 @@ export function AddWorkMenu({
             disabled={link.isPending}
           >
             <Plus aria-hidden="true" />
-            {ARC_BAND_ADD_LABEL[band]}
+            {label ?? ARC_BAND_ADD_LABEL[band]}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" width="md">

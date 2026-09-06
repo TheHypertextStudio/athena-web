@@ -95,7 +95,7 @@ describe('projectPlan', () => {
     const t1 = nodes.find((n) => n.id === 't1');
     expect(t1?.type).toBe(PLAN_NODE_TYPE.task);
     expect(t1?.parentId).toBe('p1');
-    expect(t1?.extent).toBe('parent');
+    expect(t1?.extent).toBeUndefined();
   });
 
   it('draws initiative membership as link edges and dependencies as dependency edges', () => {

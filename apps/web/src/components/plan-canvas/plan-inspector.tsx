@@ -17,7 +17,7 @@ import { ActorPicker, DatePicker, EnumPicker } from '@docket/ui/components';
 import { CheckCircle2, OpenInNew, Sparkles, Trash2, X } from '@docket/ui/icons';
 import { Button, Input, Textarea } from '@docket/ui/primitives';
 import type { PlanDraftOut, PlanNode, PlanOp } from '@docket/work/plan-draft-contract';
-import { type JSX, useEffect, useMemo, useState } from 'react';
+import { type JSX, useEffect, useMemo, useRef, useState } from 'react';
 
 import { CanvasInspector } from '@/components/canvas/canvas-inspector';
 import Link from '@/components/docket-link';
@@ -36,6 +36,8 @@ export interface PlanInspectorProps {
   readonly orgId: string;
   readonly canEdit: boolean;
   readonly committing: boolean;
+  /** Focus the title with its text selected: set for a node the person just added. */
+  readonly focusTitle?: boolean | undefined;
   /** Human members, for owner, lead, and assignee. */
   readonly memberOptions: readonly PickerOption[];
   /** Existing initiatives a project may also join. */
@@ -55,6 +57,9 @@ const KIND_LABEL: Record<PlanNode['kind'], string> = {
 };
 
 /** A text field that commits on blur or Enter and resets on Escape. */
+/** How long typing pauses before a live field commits what it holds so far. */
+const LIVE_COMMIT_MS = 400;
+
 function CommitText({
   id,
   label,
@@ -62,6 +67,8 @@ function CommitText({
   multiline = false,
   placeholder,
   disabled,
+  autoFocus = false,
+  live = false,
   onCommit,
 }: {
   readonly id: string;
@@ -70,22 +77,52 @@ function CommitText({
   readonly multiline?: boolean;
   readonly placeholder: string;
   readonly disabled: boolean;
+  /** Take focus on mount with the text selected, so typing replaces it. */
+  readonly autoFocus?: boolean;
+  /** Also commit while typing, after a short pause, so the canvas shows the new text as it forms. */
+  readonly live?: boolean;
   readonly onCommit: (next: string) => void;
 }): JSX.Element {
   const [draft, setDraft] = useState(value);
+  const focused = useRef(false);
   useEffect(() => {
-    setDraft(value);
+    // A value that changed underneath a field being typed in would erase the keystrokes; the
+    // field's own draft wins until it blurs.
+    if (!focused.current) setDraft(value);
   }, [value]);
+  const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    if (!autoFocus || disabled) return;
+    fieldRef.current?.focus();
+    fieldRef.current?.select();
+  }, [autoFocus, disabled, id]);
   const commit = (): void => {
     const trimmed = draft.trim();
     if (trimmed !== value) onCommit(trimmed);
   };
+  useEffect(() => {
+    if (!live || !focused.current) return undefined;
+    const trimmed = draft.trim();
+    if (trimmed.length === 0 || trimmed === value) return undefined;
+    const timer = window.setTimeout(() => {
+      onCommit(trimmed);
+    }, LIVE_COMMIT_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [draft, live, onCommit, value]);
   const shared = {
     id,
     value: draft,
     disabled,
     placeholder,
-    onBlur: commit,
+    onFocus: () => {
+      focused.current = true;
+    },
+    onBlur: () => {
+      focused.current = false;
+      commit();
+    },
     onKeyDown: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       if (event.key === 'Escape') {
         setDraft(value);
@@ -104,6 +141,7 @@ function CommitText({
       {multiline ? (
         <Textarea
           {...shared}
+          ref={fieldRef as React.Ref<HTMLTextAreaElement>}
           rows={3}
           onChange={(event) => {
             setDraft(event.target.value);
@@ -112,6 +150,7 @@ function CommitText({
       ) : (
         <Input
           {...shared}
+          ref={fieldRef as React.Ref<HTMLInputElement>}
           onChange={(event) => {
             setDraft(event.target.value);
           }}
@@ -342,6 +381,7 @@ function DraftBody({
   orgId,
   canEdit,
   committing,
+  focusTitle = false,
   memberOptions,
   initiativeOptions,
   onApply,
@@ -364,6 +404,8 @@ function DraftBody({
     <div className="flex flex-col gap-4">
       <CommitText
         id={`plan-title-${node.ref}`}
+        autoFocus={focusTitle}
+        live
         label="Title"
         value={node.fields.title}
         placeholder={`${KIND_LABEL[node.kind]} name`}

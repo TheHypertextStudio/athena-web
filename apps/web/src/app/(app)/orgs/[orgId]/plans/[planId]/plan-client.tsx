@@ -31,7 +31,7 @@ import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import PlanCanvasPanel from '@/components/plan-canvas/plan-canvas-panel';
 import { EMPTY_PLAN_DIFF, planDiff, type PlanDiff } from '@/components/plan-canvas/plan-diff';
 import { api } from '@/lib/api';
-import { useTypedRoute } from '@/lib/app-location';
+import { useAppLocation, useTypedRoute } from '@/lib/app-location';
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { useCommitPlan, usePlan, usePlanAthenaSync, usePlanOps } from '@/lib/plan-draft/defs';
 import { userErrorMessage } from '@/lib/problem';
@@ -43,6 +43,17 @@ const OPTION_KINDS = ['actors', 'initiatives'] as const;
 
 /** The width at which the shell docks the rail beside main content instead of over it. */
 const RAIL_BESIDE_CANVAS_QUERY = '(min-width: 1024px)';
+
+/**
+ * The query flag an entry point sets to have the rail open with an opening line on arrival.
+ *
+ * @remarks
+ * The panel provider clears any launch draft on every navigation, so an entry point cannot seed
+ * the composer and then navigate; it navigates here with this flag and the route seeds the
+ * composer itself once the plan has loaded, then drops the flag from the URL.
+ */
+const START_QUERY = 'athena';
+const START_VALUE = 'start';
 
 /** Where the back affordance leads: the root initiative when there is one, else the list. */
 function backTarget(
@@ -96,6 +107,8 @@ export default function PlanClient(): JSX.Element {
     params: { orgId, planId },
   } = useTypedRoute('/orgs/[orgId]/plans/[planId]');
   const router = useAppRouter();
+  const { searchParams } = useAppLocation();
+  const startRequested = searchParams.get(START_QUERY) === START_VALUE;
   const athena = useAthenaPanel();
   const { working } = usePlanAthenaSync(orgId, planId);
   const planQuery = usePlan(planId, working);
@@ -132,13 +145,30 @@ export default function PlanClient(): JSX.Element {
   const revealed = useRef(false);
   const { openAthena, launchDraft } = athena;
   useEffect(() => {
-    if (revealed.current) return;
+    if (revealed.current || startRequested) return;
     revealed.current = true;
     // On a compact viewport the rail covers main content, so revealing it on arrival would hide
     // the very canvas the person came to see; there the rail stays one tap away in the shell.
     const wide = window.matchMedia(RAIL_BESIDE_CANVAS_QUERY).matches;
     if (launchDraft === null && wide) openAthena();
-  }, [launchDraft, openAthena]);
+  }, [launchDraft, openAthena, startRequested]);
+
+  // An entry point asked for the conversation to open with the plan: seed the composer with an
+  // opening line once the plan is known, then drop the flag so a reload does not repeat it.
+  useEffect(() => {
+    if (!startRequested || !plan) return;
+    revealed.current = true;
+    openAthena(
+      {
+        workspaceId: orgId,
+        ...(plan.rootInitiativeId
+          ? { source: { type: 'initiative', id: plan.rootInitiativeId, label: plan.title } }
+          : {}),
+      },
+      `Help me plan "${plan.title}". `,
+    );
+    router.replace(`/orgs/${orgId}/plans/${planId}`);
+  }, [openAthena, orgId, plan, planId, router, startRequested]);
 
   const trackedOps = useMemo(
     () => ({

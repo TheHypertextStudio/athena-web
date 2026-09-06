@@ -552,7 +552,6 @@ export default function InitiativeDetailPage(): JSX.Element {
           <PlanWithAthenaAction
             orgId={orgId}
             initiativeId={initiativeId}
-            name={detail.name}
             noun={initiativeNoun}
             enabled={canEdit}
           />

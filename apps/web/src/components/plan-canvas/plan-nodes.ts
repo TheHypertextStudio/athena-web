@@ -194,7 +194,8 @@ function taskNode(
     type: PLAN_NODE_TYPE.task,
     position: { x: 0, y: 0 },
     ...(node.parentRef === null ? {} : { parentId: node.parentRef }),
-    extent: 'parent',
+    // No `extent`: a row must be able to leave its container, because dragging it into another
+    // container is how a person moves a task; the drop handler re-homes it or snaps it back.
     draggable: options.canEdit && node.status === 'draft',
     data: {
       ...baseData(node, plan, options),

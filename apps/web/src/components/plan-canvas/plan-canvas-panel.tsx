@@ -71,6 +71,50 @@ const EDGE_TYPES = {
   [PLAN_EDGE_TYPE.link]: PlanLinkEdge,
 };
 
+/**
+ * Put every node back where the layout placed it.
+ *
+ * @remarks
+ * xyflow keeps a dragged node where it was dropped, and the controlled flow re-syncs only when
+ * the laid-out geometry changes. A drop that changes nothing (a row dragged and released outside
+ * any other container) therefore has to be undone here, by writing the laid-out positions back.
+ */
+function snapToLayout(flowInstance: ReactFlowInstance | null, laidOut: readonly Node[]): void {
+  if (flowInstance === null) return;
+  const byId = new Map(laidOut.map((node) => [node.id, node]));
+  flowInstance.setNodes((current) =>
+    current.map((node) => {
+      const placed = byId.get(node.id);
+      return placed ? { ...node, position: placed.position } : node;
+    }),
+  );
+}
+
+/**
+ * Say what a commit did. Placement matches an existing record by name rather than creating a
+ * twin, so a confirm can create everything, match everything, or a mix; each reads differently.
+ */
+function commitNotice(placed: PlanCommitOut['placed']): PlanNotice {
+  const created = placed.filter((item) => item.created).length;
+  const matched = placed.length - created;
+  const items = (count: number): string => (count === 1 ? '1 item' : `${String(count)} items`);
+  if (created === 0) {
+    return {
+      title: `Matched ${items(matched)} already in the workspace`,
+      detail: 'Nothing new was created; the plan now points at the existing records.',
+      tone: 'status',
+    };
+  }
+  return {
+    title: `Created ${items(created)}`,
+    detail:
+      matched > 0
+        ? `${items(matched)} already existed and ${matched === 1 ? 'was' : 'were'} matched instead.`
+        : 'They are in the workspace now.',
+    tone: 'status',
+  };
+}
+
 /** How long the "Athena updated" pill stays up. */
 const PILL_VISIBLE_MS = 4_000;
 /** Zoom floor when widening the viewport around what Athena added; below it a row is unreadable. */
@@ -215,6 +259,84 @@ function PlanViewBar({
   );
 }
 
+/** How much of a start the plan has: nothing, an initiative alone, or work under it. */
+type PlanStartState = 'empty' | 'initiative-only' | 'underway';
+
+function planStartState(
+  plan: PlanDraftOut,
+  projectCount: number,
+  rootInitiativeRef: string | null,
+): PlanStartState {
+  if (plan.document.nodes.length === 0) return 'empty';
+  if (projectCount === 0 && rootInitiativeRef !== null) return 'initiative-only';
+  return 'underway';
+}
+
+/**
+ * What the canvas shows before there is a board to read: an empty state when nothing is drafted,
+ * a hint beside the lone initiative card once a plan is rooted but nothing sits under it.
+ */
+function PlanStartOverlay({
+  state,
+  onAddProject,
+}: {
+  readonly state: PlanStartState;
+  readonly onAddProject: (() => void) | null;
+}): JSX.Element | null {
+  if (state === 'underway') return null;
+  if (state === 'initiative-only') {
+    return (
+      <CanvasOverlayPanel position="top-center">
+        <PlanStartHint onAddProject={onAddProject} />
+      </CanvasOverlayPanel>
+    );
+  }
+  return (
+    <CanvasOverlayPanel position="top-center" className="!top-1/2 !-translate-y-1/2">
+      <EmptyState
+        icon={Sparkles}
+        title="Nothing on the canvas yet"
+        body="Tell Athena what you are planning, or add a project to start by hand."
+        {...(onAddProject
+          ? {
+              action: (
+                <Button type="button" onClick={onAddProject}>
+                  <Plus className="size-4" /> Add project
+                </Button>
+              ),
+            }
+          : {})}
+      />
+    </CanvasOverlayPanel>
+  );
+}
+
+/** What a rooted plan shows while nothing is planned under its initiative yet. */
+function PlanStartHint({
+  onAddProject,
+}: {
+  readonly onAddProject: (() => void) | null;
+}): JSX.Element {
+  return (
+    <Surface
+      tone="floating"
+      shape="medium"
+      className="text-on-surface-variant text-body-small pointer-events-auto flex max-w-[calc(100vw-1rem)] items-center gap-3 px-3 py-2"
+      data-testid="plan-start-hint"
+    >
+      <Sparkles aria-hidden="true" className="text-primary size-4 shrink-0" />
+      <span className="min-w-0">
+        Tell Athena what this initiative involves and she will draft the projects here.
+      </span>
+      {onAddProject ? (
+        <Button type="button" size="sm" variant="outline" onClick={onAddProject}>
+          <Plus className="size-4" /> Add project
+        </Button>
+      ) : null}
+    </Surface>
+  );
+}
+
 /** The "Athena updated" pill: a transient status above the view controls. */
 function PlanUpdatePill({ text }: { readonly text: string }): JSX.Element {
   return (
@@ -298,6 +420,8 @@ export default function PlanCanvasPanel({
 }: PlanCanvasPanelProps): JSX.Element {
   const { containerRef, aspectRatio, ready: aspectReady } = useCanvasAspectRatio();
   const [selectedRef, setSelectedRef] = useState<string | null>(null);
+  // The node the person just added by hand: its title takes focus so typing renames it at once.
+  const [focusRef, setFocusRef] = useState<string | null>(null);
   const [layoutEpoch, setLayoutEpoch] = useState(0);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [notice, setNotice] = useState<PlanNotice | null>(null);
@@ -396,10 +520,13 @@ export default function PlanCanvasPanel({
         node: { ref, kind: 'project', parentRef, fields: { title: 'New project' } },
       });
       void apply(batch).then((result) => {
-        if (result) setSelectedRef(ref);
+        if (!result) return;
+        setSelectedRef(ref);
+        setFocusRef(ref);
+        revealAdditions(flowInstance);
       });
     },
-    [apply, plan.title],
+    [apply, flowInstance, plan.title],
   );
 
   const addTask = useCallback(
@@ -411,10 +538,13 @@ export default function PlanCanvasPanel({
           node: { ref, kind: 'task', parentRef: projectRef, fields: { title: 'New task' } },
         },
       ]).then((result) => {
-        if (result) setSelectedRef(ref);
+        if (!result) return;
+        setSelectedRef(ref);
+        setFocusRef(ref);
+        revealAdditions(flowInstance);
       });
     },
-    [apply],
+    [apply, flowInstance],
   );
 
   const removeRefs = useCallback(
@@ -455,16 +585,7 @@ export default function PlanCanvasPanel({
           });
           return;
         }
-        const created = result.placed.filter((item) => item.created).length;
-        const matched = result.placed.length - created;
-        setNotice({
-          title: created === 1 ? 'Created 1 item' : `Created ${String(created)} items`,
-          detail:
-            matched > 0
-              ? `${String(matched)} already existed and ${matched === 1 ? 'was' : 'were'} matched instead.`
-              : 'They are in the workspace now.',
-          tone: 'status',
-        });
+        setNotice(commitNotice(result.placed));
       });
     },
     [onCommit, plan.document],
@@ -514,14 +635,14 @@ export default function PlanCanvasPanel({
             candidate.type === PLAN_NODE_TYPE.project && candidate.id !== node.parentId,
         );
       if (target === undefined) {
-        setLayoutEpoch((current) => current + 1);
+        snapToLayout(flowInstance, nodes);
         return;
       }
       void apply([{ op: 'move_node', ref: node.id, parentRef: target.id }]).then((result) => {
-        if (!result) setLayoutEpoch((current) => current + 1);
+        if (!result) snapToLayout(flowInstance, nodes);
       });
     },
-    [apply, flowInstance],
+    [apply, flowInstance, nodes],
   );
 
   const askAbout = useCallback(
@@ -563,6 +684,7 @@ export default function PlanCanvasPanel({
             .map((node) => node.id),
     [needle, nodes],
   );
+  const highlightIds = useMemo(() => (focusOn === undefined ? null : new Set(focusOn)), [focusOn]);
 
   const selectedNode = useMemo(
     () => (selectedRef === null ? null : (nodes.find((node) => node.id === selectedRef) ?? null)),
@@ -572,8 +694,10 @@ export default function PlanCanvasPanel({
     (visibleWidth: number) => {
       if (!flowInstance || selectedNode === null) return;
       const viewport = flowInstance.getViewport();
+      // A task row's position is relative to its container; the viewport needs the absolute one.
+      const internal = flowInstance.getInternalNode(selectedNode.id);
       const delta = keepNodeInViewDeltaX({
-        nodeX: selectedNode.position.x,
+        nodeX: internal?.internals.positionAbsolute.x ?? selectedNode.position.x,
         nodeWidth: selectedNode.measured?.width ?? Number(selectedNode.style?.width ?? 0),
         zoom: viewport.zoom,
         viewportX: viewport.x,
@@ -587,6 +711,19 @@ export default function PlanCanvasPanel({
       );
     },
     [flowInstance, selectedNode],
+  );
+
+  // When the inspector docks for a node the person just added, the pane has just narrowed; take
+  // the whole board in rather than nudging one node into the strip that is left.
+  const onInspectorDock = useCallback(
+    (visibleWidth: number) => {
+      if (focusRef !== null && focusRef === selectedRef) {
+        revealAdditions(flowInstance);
+        return;
+      }
+      keepSelectionInView(visibleWidth);
+    },
+    [flowInstance, focusRef, keepSelectionInView, selectedRef],
   );
 
   const bar = (
@@ -612,6 +749,7 @@ export default function PlanCanvasPanel({
         orgId={orgId}
         canEdit={canEdit}
         committing={committing}
+        focusTitle={focusRef === selectedRef}
         memberOptions={memberOptions}
         initiativeOptions={initiativeOptions}
         onApply={apply}
@@ -628,7 +766,7 @@ export default function PlanCanvasPanel({
       />
     ) : null;
 
-  const isEmpty = plan.document.nodes.length === 0;
+  const startState = planStartState(plan, counts.projects, rootInitiativeRef);
 
   return (
     <div className={cn('flex h-full min-h-0 w-full flex-col', className)}>
@@ -640,7 +778,7 @@ export default function PlanCanvasPanel({
         onClose={() => {
           setSelectedRef(null);
         }}
-        onDock={keepSelectionInView}
+        onDock={onInspectorDock}
       >
         <PlanCanvasActionsProvider value={planActions}>
           <CanvasActionsProvider value={canvasActions}>
@@ -654,6 +792,7 @@ export default function PlanCanvasPanel({
               layoutReady={aspectReady}
               interactive={canEdit}
               highlightChains={false}
+              highlightIds={highlightIds}
               nodeColor={nodeColor}
               minimap={projectCount > PLAN_MAX_PER_COLUMN}
               focusOn={focusOn}
@@ -668,6 +807,7 @@ export default function PlanCanvasPanel({
               onInit={setFlowInstance}
               onRelayout={() => {
                 setLayoutEpoch((current) => current + 1);
+                snapToLayout(flowInstance, nodes);
               }}
               bottomNotice={bottomSlot(notice, pill, () => {
                 setNotice(null);
@@ -682,29 +822,16 @@ export default function PlanCanvasPanel({
                 onAsk={askAbout}
                 onOpen={onOpen}
               />
-              {isEmpty ? (
-                <CanvasOverlayPanel position="top-center" className="!top-1/2 !-translate-y-1/2">
-                  <EmptyState
-                    icon={Sparkles}
-                    title="Nothing on the canvas yet"
-                    body="Tell Athena what you are planning, or add a project to start by hand."
-                    {...(canEdit
-                      ? {
-                          action: (
-                            <Button
-                              type="button"
-                              onClick={() => {
-                                addProject(rootInitiativeRef);
-                              }}
-                            >
-                              <Plus className="size-4" /> Add project
-                            </Button>
-                          ),
-                        }
-                      : {})}
-                  />
-                </CanvasOverlayPanel>
-              ) : null}
+              <PlanStartOverlay
+                state={startState}
+                onAddProject={
+                  canEdit
+                    ? () => {
+                        addProject(rootInitiativeRef);
+                      }
+                    : null
+                }
+              />
             </Canvas>
           </CanvasActionsProvider>
         </PlanCanvasActionsProvider>

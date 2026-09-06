@@ -50,9 +50,12 @@ export function startNavigationTransition(update: () => void): void {
     const transition = document.startViewTransition(() => {
       flushSync(update);
     });
-    void transition.finished.finally(() => {
+    // A transition the browser skips (a second one started, the tab was hidden) rejects
+    // `finished`; that is routine, so clean up on both paths without surfacing a rejection.
+    const clear = (): void => {
       delete root.dataset['shellNavigationTransition'];
-    });
+    };
+    void transition.finished.then(clear, clear);
   } catch {
     delete root.dataset['shellNavigationTransition'];
     update();

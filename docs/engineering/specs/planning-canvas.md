@@ -112,7 +112,15 @@ a link to its record.
 Direct gestures map one-to-one onto ops: rename or field edit → `set_fields`; drag a task into
 another container → `move_node`; draw an edge → `add_edge` (like kinds only); delete an edge →
 `remove_edge`; Add project or Add task → `upsert_node`; Remove → `remove_node`, with Undo replaying
-the removed subtree.
+the removed subtree. A node the person adds by hand is selected with its title focused and its
+text selected, so typing renames it at once, and the title commits while typing after a short pause
+so the card shows the name as it forms. Task rows carry no xyflow `extent`: a row must be able to
+leave its container for a drop on another container to re-home it, and a drop that changes nothing
+is undone by writing the laid-out positions back (`snapToLayout`), which Re-layout also does.
+
+An entry point that wants the conversation open on arrival navigates with `?athena=start`; the
+route seeds the rail's composer with an opening line once the plan has loaded and drops the flag,
+because the panel provider clears any launch draft on navigation.
 
 Motion lives in `apps/web/src/app/globals.css` (`plan-node-enter`, `plan-field-changed`) and is
 disabled under reduced motion. The canvas moves the viewport the person chose in one case only:

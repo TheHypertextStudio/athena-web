@@ -217,7 +217,6 @@ export function layoutPlan(
       positioned.push({
         ...row,
         parentId: projectId,
-        extent: 'parent',
         position: {
           x: (PLAN_PROJECT_WIDTH - PLAN_TASK_SIZE.width) / 2,
           y:

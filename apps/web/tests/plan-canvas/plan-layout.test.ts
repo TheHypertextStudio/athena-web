@@ -85,7 +85,7 @@ describe('layoutPlan', () => {
     const rows = nodes.filter((n) => n.parentId === 'p1');
     expect(rows.map((n) => n.id)).toEqual(['t1', 't2']);
     for (const row of rows) {
-      expect(row.extent).toBe('parent');
+      expect(row.parentId).toBe('p1');
       expect(row.position.x).toBeGreaterThanOrEqual(0);
       expect(row.position.x + PLAN_TASK_SIZE.width).toBeLessThanOrEqual(PLAN_PROJECT_WIDTH);
       expect(row.position.y).toBeGreaterThanOrEqual(PLAN_PROJECT_HEADER);

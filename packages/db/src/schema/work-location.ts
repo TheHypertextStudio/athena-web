@@ -9,6 +9,8 @@
 import type {
   WorkLocationOccurrenceException,
   WorkLocationSchedule,
+  WorkScheduleCycleDay,
+  WorkScheduleSegment,
 } from '@docket/planning/work-location-contract';
 import { sql } from 'drizzle-orm';
 import {
@@ -106,6 +108,8 @@ export const workLocationAssertion = pgTable(
     origin: text('origin').notNull().default('docket'),
     originProvider: text('origin_provider'),
     originConnectionId: text('origin_connection_id'),
+    sourcePlanVersionId: text('source_plan_version_id'),
+    sourcePlanKey: text('source_plan_key'),
     revision: integer('revision').notNull().default(1),
     sourceUpdatedAt: timestamp('source_updated_at'),
     archivedAt: timestamp('archived_at'),
@@ -118,6 +122,7 @@ export const workLocationAssertion = pgTable(
   (t) => [
     index('work_location_assertion_hub_idx').on(t.hubId),
     index('work_location_assertion_hub_updated_idx').on(t.hubId, t.updatedAt),
+    uniqueIndex('work_location_assertion_hub_plan_key_uq').on(t.hubId, t.sourcePlanKey),
     uniqueIndex('work_location_assertion_hub_id_uq').on(t.hubId, t.id),
     foreignKey({
       columns: [t.hubId, t.placeId],
@@ -170,6 +175,76 @@ export const workLocationException = pgTable(
         ${t.action} = 'replace' AND ${t.replacementPlaceId} IS NOT NULL AND ${t.replacementSchedule} IS NOT NULL
       )`,
     ),
+  ],
+);
+
+/** One immutable effective-dated version of a person's default work schedule. */
+export const workSchedulePlan = pgTable(
+  'work_schedule_plan',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    hubId: text('hub_id')
+      .notNull()
+      .references(() => hub.id, { onDelete: 'cascade' }),
+    anchorDate: date('anchor_date').notNull(),
+    timezone: text('timezone').notNull(),
+    effectiveFrom: date('effective_from').notNull(),
+    effectiveUntil: date('effective_until'),
+    cycleDays: jsonb('cycle_days').$type<WorkScheduleCycleDay[]>().notNull(),
+    revision: integer('revision').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('work_schedule_plan_hub_start_uq').on(t.hubId, t.effectiveFrom),
+    unique('work_schedule_plan_hub_id_uq').on(t.hubId, t.id),
+    index('work_schedule_plan_hub_dates_idx').on(t.hubId, t.effectiveFrom, t.effectiveUntil),
+    check(
+      'work_schedule_plan_dates_check',
+      sql`${t.effectiveUntil} IS NULL OR ${t.effectiveUntil} >= ${t.effectiveFrom}`,
+    ),
+    check('work_schedule_plan_timezone_nonempty', sql`length(trim(${t.timezone})) > 0`),
+    check('work_schedule_plan_revision_positive', sql`${t.revision} > 0`),
+    check(
+      'work_schedule_plan_cycle_length_check',
+      sql`jsonb_array_length(${t.cycleDays}) BETWEEN 1 AND 28`,
+    ),
+  ],
+);
+
+/** A complete replacement for the generated work segments on one plan-local civil date. */
+export const workScheduleException = pgTable(
+  'work_schedule_exception',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    hubId: text('hub_id')
+      .notNull()
+      .references(() => hub.id, { onDelete: 'cascade' }),
+    planVersionId: text('plan_version_id').notNull(),
+    date: date('date').notNull(),
+    segments: jsonb('segments').$type<WorkScheduleSegment[]>().notNull(),
+    origin: text('origin').notNull().default('docket'),
+    originProvider: text('origin_provider'),
+    originConnectionId: text('origin_connection_id'),
+    sourceUpdatedAt: timestamp('source_updated_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('work_schedule_exception_plan_date_uq').on(t.planVersionId, t.date),
+    index('work_schedule_exception_hub_date_idx').on(t.hubId, t.date),
+    foreignKey({
+      columns: [t.hubId, t.planVersionId],
+      foreignColumns: [workSchedulePlan.hubId, workSchedulePlan.id],
+      name: 'work_schedule_exception_plan_fk',
+    }).onDelete('cascade'),
+    check('work_schedule_exception_origin_check', sql`${t.origin} IN ('docket', 'provider')`),
   ],
 );
 

@@ -1,6 +1,6 @@
 # Work Location Settings Simplification
 
-> **Status**: Approved for implementation
+> **Status**: Superseded by `docs/core/work-schedule.md`
 > **Date**: 2026-08-14
 > **Area**: Personal settings, saved places, expected-location schedules, device detection
 

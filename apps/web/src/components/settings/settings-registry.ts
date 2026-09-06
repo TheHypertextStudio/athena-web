@@ -127,11 +127,18 @@ export const PERSONAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     href: 'calendar',
   },
   {
-    key: 'work-locations',
-    label: 'Work locations',
-    description: 'Manage regular places, location schedules, and account sync.',
+    key: 'work-schedule',
+    label: 'Work schedule',
+    description: 'Set when and where you normally work, then change individual dates.',
+    icon: Calendar,
+    href: 'work-schedule',
+  },
+  {
+    key: 'places',
+    label: 'Places',
+    description: 'Manage saved places, connected-account names, and automatic location.',
     icon: MapPin,
-    href: 'work-locations',
+    href: 'places',
   },
   {
     key: 'security',

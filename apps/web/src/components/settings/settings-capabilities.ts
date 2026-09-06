@@ -131,6 +131,13 @@ export const SETTINGS_NODES = {
     ),
     nestedPath: 'connections/google-calendar',
   },
+  connectedAccountsWorkSchedule: personalNode(
+    'connected-accounts-work-schedule',
+    'connected-accounts',
+    'Work schedule access',
+    'See whether each connected account can exchange working-location changes with Docket.',
+    ['Google working location'],
+  ),
   connectionsNotionSetup: {
     ...workspaceNode(
       'connections-notion-setup',
@@ -206,35 +213,41 @@ export const SETTINGS_NODES = {
     'Choose which calendar details coworkers can see.',
     ['privacy', 'busy'],
   ),
-  workLocationsPlaces: personalNode(
-    'work-locations-places',
-    'work-locations',
+  placesSaved: personalNode(
+    'places-saved',
+    'places',
     'Saved places',
     'Manage the places where you work.',
   ),
-  workLocationsSchedule: personalNode(
-    'work-locations-schedule',
-    'work-locations',
-    'Schedule',
-    'Set the places where you usually work each day.',
+  placesUnmatchedNames: personalNode(
+    'places-unmatched-names',
+    'places',
+    'Unmatched names',
+    'Resolve place names from connected accounts that do not match a saved place.',
   ),
-  workLocationsPlanned: personalNode(
-    'work-locations-planned',
-    'work-locations',
-    'Planned work',
-    'Review work that has an explicit planned location.',
-  ),
-  workLocationsAutomatic: personalNode(
-    'work-locations-automatic',
-    'work-locations',
+  placesAutomatic: personalNode(
+    'places-automatic',
+    'places',
     'Automatic location',
     'Control how Docket determines your current work location.',
   ),
-  workLocationsCalendarSync: personalNode(
-    'work-locations-calendar-sync',
-    'work-locations',
-    'Calendar sync',
-    'Publish Google work locations as calendar events.',
+  workScheduleDefault: personalNode(
+    'work-schedule-default',
+    'work-schedule',
+    'Default schedule',
+    'Set the default times and places in your repeating work cycle.',
+  ),
+  workScheduleDateChanges: personalNode(
+    'work-schedule-date-changes',
+    'work-schedule',
+    'Date changes',
+    'Replace the default schedule for individual dates.',
+  ),
+  workScheduleIncomingChanges: personalNode(
+    'work-schedule-incoming-changes',
+    'work-schedule',
+    'Incoming changes',
+    'Resolve connected-account edits that overlap a newer Docket change.',
   ),
   securitySessions: personalNode(
     'security-sessions',

@@ -8,8 +8,14 @@ import {
   hub,
   user,
   workLocationAssertion,
+  workLocationExternalBinding,
   workLocationSyncAccount,
   workLocationWrite,
+  workPlace,
+  workPlaceAlias,
+  workScheduleChange,
+  workScheduleException,
+  workSchedulePlan,
   type Database,
 } from '@docket/db';
 import { eq } from 'drizzle-orm';
@@ -26,6 +32,12 @@ import {
   setWorkLocationOccurrence,
 } from '../../../src/services/work-location/repository';
 import {
+  linkWorkPlaceAlias,
+  replaceWorkSchedulePlan,
+  setWorkScheduleException,
+} from '../../../src/services/work-location/schedule-repository';
+import { refreshWorkScheduleProjectionAssertions } from '../../../src/services/work-location/schedule-projection';
+import {
   drainWorkLocationWrites,
   registerWorkLocationWatches,
   syncUserWorkLocations,
@@ -37,6 +49,24 @@ import { GoogleWorkLocationApiError } from '../../../src/services/work-location/
 function requireValue<T>(value: T | null | undefined, description: string): T {
   if (value == null) throw new Error(`Expected ${description}`);
   return value;
+}
+
+async function approveGoogleLabel(
+  connectionId: string,
+  label: string,
+  placeId: string,
+): Promise<void> {
+  await database.insert(workPlaceAlias).values({
+    hubId,
+    connectionId,
+    provider: 'google',
+    normalizedLabel: label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim(),
+    displayLabel: label,
+    placeId,
+  });
 }
 
 class FakeGoogleWorkLocationTransport implements GoogleWorkLocationTransport {
@@ -226,8 +256,15 @@ describe('two-account work-location convergence', () => {
     await client.close();
   });
 
-  it('imports A, projects B, adopts an edit/delete in B, and converges A', async () => {
+  it('maps A, projects B, adopts an edit/delete in B, and converges A', async () => {
     const transport = new FakeGoogleWorkLocationTransport();
+    const mainLibrary = await createWorkPlace(database, hubId, {
+      name: 'Main library',
+      geofence: null,
+      providerMappings: [],
+      sort: 0,
+    });
+    await approveGoogleLabel(connectionA, 'Main library', mainLibrary.id);
     transport.seed(connectionA, {
       id: 'event-a',
       eventType: 'workingLocation',
@@ -252,6 +289,14 @@ describe('two-account work-location convergence', () => {
     expect(projectedToB.workingLocationProperties).toMatchObject({
       customLocation: { label: 'Main library' },
     });
+
+    const editingStudio = await createWorkPlace(database, hubId, {
+      name: 'Editing studio',
+      geofence: null,
+      providerMappings: [],
+      sort: 1,
+    });
+    await approveGoogleLabel(connectionB, 'Editing studio', editingStudio.id);
 
     transport.edit(connectionB, requireValue(projectedToB.id, 'projected event id'), {
       workingLocationProperties: {
@@ -419,6 +464,13 @@ describe('two-account work-location convergence', () => {
       .set({ state: 'pending', reason: null, syncToken: null, bootstrapCompletedAt: null })
       .where(eq(workLocationSyncAccount.hubId, hubId));
     const transport = new FakeGoogleWorkLocationTransport();
+    const northCampus = await createWorkPlace(database, hubId, {
+      name: 'North campus',
+      geofence: null,
+      providerMappings: [],
+      sort: 0,
+    });
+    await approveGoogleLabel(connectionA, 'North campus', northCampus.id);
     transport.seed(connectionA, {
       id: 'bootstrap-master-a',
       eventType: 'workingLocation',
@@ -561,11 +613,641 @@ describe('two-account work-location convergence', () => {
       .where(eq(workLocationSyncAccount.hubId, hubId));
   });
 
+  it('requires approval before linking a punctuation-normalized provider label', async () => {
+    await database
+      .update(workLocationSyncAccount)
+      .set({ state: 'healthy', reason: null, bootstrapCompletedAt: new Date() })
+      .where(eq(workLocationSyncAccount.hubId, hubId));
+    const existing = await createWorkPlace(database, hubId, {
+      name: 'Starbucks - N Decatur & 215',
+      geofence: null,
+      providerMappings: [],
+      sort: 0,
+    });
+    const transport = new FakeGoogleWorkLocationTransport();
+    transport.seed(connectionA, {
+      id: 'decatur-punctuation-variant',
+      eventType: 'workingLocation',
+      updated: '2026-09-05T18:00:00.000Z',
+      etag: 'decatur-punctuation-etag',
+      start: { date: '2026-09-22' },
+      end: { date: '2026-09-23' },
+      workingLocationProperties: {
+        type: 'customLocation',
+        customLocation: { label: 'Starbucks N Decatur 215' },
+      },
+    });
+
+    await syncUserWorkLocations(database, { userId, transport });
+
+    const matchingPlaces = (await database.select().from(workPlace)).filter((place) =>
+      place.name.startsWith('Starbucks'),
+    );
+    expect(matchingPlaces).toEqual([expect.objectContaining({ id: existing.id })]);
+    expect(
+      await database
+        .select()
+        .from(workScheduleChange)
+        .where(eq(workScheduleChange.dedupeKey, 'google:event:decatur-punctuation-variant')),
+    ).toEqual([expect.objectContaining({ kind: 'unmatched_place', state: 'pending' })]);
+    expect(
+      await database
+        .select()
+        .from(workPlaceAlias)
+        .where(eq(workPlaceAlias.normalizedLabel, 'starbucks n decatur 215')),
+    ).toEqual([]);
+  });
+
+  it('queues an unmatched provider label without creating a saved place', async () => {
+    await database
+      .update(workLocationSyncAccount)
+      .set({ state: 'healthy', reason: null, bootstrapCompletedAt: new Date() })
+      .where(eq(workLocationSyncAccount.hubId, hubId));
+    const before = await database
+      .select({ id: workPlace.id })
+      .from(workPlace)
+      .where(eq(workPlace.hubId, hubId));
+    const plan = await replaceWorkSchedulePlan(database, hubId, {
+      anchorDate: '2026-09-21',
+      timezone: 'America/Los_Angeles',
+      effectiveFrom: '2026-09-21',
+      effectiveUntil: null,
+      cycleDays: [{ segments: [] }],
+    });
+    const transport = new FakeGoogleWorkLocationTransport();
+    transport.seed(connectionA, {
+      id: 'unknown-client-annex',
+      eventType: 'workingLocation',
+      updated: '2026-09-05T18:05:00.000Z',
+      etag: 'unknown-client-annex-etag',
+      start: { date: '2026-09-23' },
+      end: { date: '2026-09-24' },
+      workingLocationProperties: {
+        type: 'customLocation',
+        customLocation: { label: 'Unmapped client annex 742' },
+      },
+    });
+
+    const tally = await syncUserWorkLocations(database, { userId, transport });
+
+    expect(tally.imported).toBe(0);
+    expect(
+      await database.select({ id: workPlace.id }).from(workPlace).where(eq(workPlace.hubId, hubId)),
+    ).toHaveLength(before.length);
+    const queued = await database
+      .select()
+      .from(workScheduleChange)
+      .where(eq(workScheduleChange.dedupeKey, 'google:event:unknown-client-annex'));
+    expect(queued).toEqual([
+      expect.objectContaining({
+        connectionId: connectionA,
+        kind: 'unmatched_place',
+        state: 'pending',
+        payload: expect.objectContaining({
+          label: 'Unmapped client annex 742',
+          normalizedLabel: 'unmapped client annex 742',
+        }),
+      }),
+    ]);
+    const change = requireValue(queued[0], 'unmatched provider change');
+    const target = requireValue(before[0], 'saved place for alias resolution');
+    await linkWorkPlaceAlias(database, hubId, change.id, target.id);
+    expect(
+      await database
+        .select({
+          state: workLocationSyncAccount.state,
+          syncToken: workLocationSyncAccount.syncToken,
+        })
+        .from(workLocationSyncAccount)
+        .where(eq(workLocationSyncAccount.connectionId, connectionA)),
+    ).toEqual([{ state: 'pending', syncToken: null }]);
+
+    await syncUserWorkLocations(database, { userId, transport });
+
+    expect(
+      await database
+        .select()
+        .from(workScheduleException)
+        .where(eq(workScheduleException.planVersionId, plan.id)),
+    ).toEqual([
+      expect.objectContaining({
+        date: '2026-09-23',
+        segments: [
+          expect.objectContaining({ location: { type: 'saved_place', placeId: target.id } }),
+        ],
+      }),
+    ]);
+  });
+
+  it('applies a recognized dated provider edit to the canonical plan', async () => {
+    await database
+      .update(workLocationSyncAccount)
+      .set({ state: 'healthy', reason: null, bootstrapCompletedAt: new Date() })
+      .where(eq(workLocationSyncAccount.hubId, hubId));
+    const regular = await createWorkPlace(database, hubId, {
+      name: 'Provider plan office',
+      geofence: null,
+      providerMappings: [],
+      sort: 0,
+    });
+    const alternate = await createWorkPlace(database, hubId, {
+      name: 'Provider changed site',
+      geofence: null,
+      providerMappings: [],
+      sort: 1,
+    });
+    await approveGoogleLabel(connectionA, 'Provider changed site', alternate.id);
+    const plan = await replaceWorkSchedulePlan(database, hubId, {
+      anchorDate: '2027-01-01',
+      timezone: 'America/Los_Angeles',
+      effectiveFrom: '2027-01-01',
+      effectiveUntil: null,
+      cycleDays: [
+        {
+          segments: [
+            {
+              startMinute: 0,
+              durationMinutes: 1_440,
+              location: { type: 'saved_place', placeId: regular.id },
+            },
+          ],
+        },
+      ],
+    });
+    const transport = new FakeGoogleWorkLocationTransport();
+    transport.seed(connectionA, {
+      id: 'recognized-provider-plan-edit',
+      eventType: 'workingLocation',
+      updated: '2026-09-05T19:00:00.000Z',
+      etag: 'recognized-provider-plan-etag',
+      start: { date: '2027-01-05' },
+      end: { date: '2027-01-06' },
+      workingLocationProperties: {
+        type: 'customLocation',
+        customLocation: { label: 'Provider changed site' },
+      },
+    });
+
+    await syncUserWorkLocations(database, { userId, transport });
+
+    expect(
+      await database
+        .select()
+        .from(workScheduleException)
+        .where(eq(workScheduleException.planVersionId, plan.id)),
+    ).toEqual([
+      expect.objectContaining({
+        date: '2027-01-05',
+        origin: 'provider',
+        originConnectionId: connectionA,
+        segments: [
+          expect.objectContaining({ location: { type: 'saved_place', placeId: alternate.id } }),
+        ],
+      }),
+    ]);
+    expect(
+      await database
+        .select()
+        .from(workLocationExternalBinding)
+        .where(eq(workLocationExternalBinding.externalEventId, 'recognized-provider-plan-edit')),
+    ).toEqual([
+      expect.objectContaining({
+        connectionId: connectionA,
+        exceptionDate: null,
+      }),
+    ]);
+  });
+
+  it('materializes a bounded plan window and delivers it through the provider outbox', async () => {
+    await database
+      .update(workLocationSyncAccount)
+      .set({ state: 'healthy', reason: null, bootstrapCompletedAt: new Date() })
+      .where(eq(workLocationSyncAccount.hubId, hubId));
+    const transport = new FakeGoogleWorkLocationTransport();
+    const alternate = await createWorkPlace(database, hubId, {
+      name: 'Projected provider alternate',
+      geofence: null,
+      providerMappings: [],
+      sort: 0,
+    });
+    await approveGoogleLabel(connectionA, 'Projected provider alternate', alternate.id);
+    const localChoice = await createWorkPlace(database, hubId, {
+      name: 'Projected local choice',
+      geofence: null,
+      providerMappings: [],
+      sort: 1,
+    });
+    const existingPlan = await database
+      .select({ id: workSchedulePlan.id })
+      .from(workSchedulePlan)
+      .where(eq(workSchedulePlan.hubId, hubId));
+    if (existingPlan.length === 0) {
+      const place = await createWorkPlace(database, hubId, {
+        name: 'Projection office',
+        geofence: null,
+        providerMappings: [],
+        sort: 0,
+      });
+      await replaceWorkSchedulePlan(database, hubId, {
+        anchorDate: '2027-01-01',
+        timezone: 'America/Los_Angeles',
+        effectiveFrom: '2027-01-01',
+        effectiveUntil: null,
+        cycleDays: [
+          {
+            segments: [
+              {
+                startMinute: 0,
+                durationMinutes: 1_440,
+                location: { type: 'saved_place', placeId: place.id },
+              },
+            ],
+          },
+        ],
+      });
+    }
+
+    const queued = await refreshWorkScheduleProjectionAssertions(database, hubId, {
+      startDate: '2027-01-01',
+      endDate: '2027-01-07',
+    });
+    const generated = await database
+      .select()
+      .from(workLocationAssertion)
+      .where(eq(workLocationAssertion.originProvider, 'schedule_plan'));
+
+    expect(queued).toBeGreaterThan(0);
+    expect(generated).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourcePlanKey: expect.stringContaining(':2027-01-01:') }),
+      ]),
+    );
+    const restorable = requireValue(
+      generated.find((assertion) => assertion.sourcePlanKey?.includes(':2027-01-01:')),
+      'restorable generated assertion',
+    );
+    await database
+      .update(workLocationAssertion)
+      .set({ archivedAt: new Date('2027-01-02T00:00:00.000Z') })
+      .where(eq(workLocationAssertion.id, restorable.id));
+    await expect(
+      refreshWorkScheduleProjectionAssertions(database, hubId, {
+        startDate: '2027-01-01',
+        endDate: '2027-01-07',
+      }),
+    ).resolves.toBeGreaterThan(0);
+    expect(
+      await database
+        .select({ archivedAt: workLocationAssertion.archivedAt })
+        .from(workLocationAssertion)
+        .where(eq(workLocationAssertion.id, restorable.id)),
+    ).toEqual([{ archivedAt: null }]);
+    await drainWorkLocationWrites(database, { userId, transport });
+    const projected = [
+      ...requireValue(transport.events.get(connectionA), 'Google A projected plan').values(),
+    ].find(
+      (event) =>
+        event.eventType === 'workingLocation' &&
+        (event.start?.date ?? event.start?.dateTime?.slice(0, 10)) === '2027-01-01',
+    );
+    expect(projected).toBeDefined();
+
+    transport.edit(connectionA, requireValue(projected?.id, 'projected event id'), {
+      workingLocationProperties: {
+        type: 'customLocation',
+        customLocation: { label: alternate.name },
+      },
+    });
+    await syncUserWorkLocations(database, { userId, transport });
+
+    expect(
+      await database
+        .select()
+        .from(workScheduleException)
+        .where(eq(workScheduleException.date, '2027-01-01')),
+    ).toEqual([
+      expect.objectContaining({
+        origin: 'provider',
+        originConnectionId: connectionA,
+        segments: [
+          expect.objectContaining({
+            location: { type: 'saved_place', placeId: alternate.id },
+          }),
+        ],
+      }),
+    ]);
+
+    await setWorkScheduleException(database, hubId, {
+      date: '2027-01-01',
+      segments: [
+        {
+          startMinute: 0,
+          durationMinutes: 1_440,
+          location: { type: 'saved_place', placeId: localChoice.id },
+        },
+      ],
+    });
+    transport.edit(connectionA, requireValue(projected?.id, 'projected event id'), {
+      workingLocationProperties: {
+        type: 'customLocation',
+        customLocation: { label: alternate.name },
+      },
+    });
+    await syncUserWorkLocations(database, { userId, transport });
+
+    expect(
+      await database
+        .select()
+        .from(workScheduleException)
+        .where(eq(workScheduleException.date, '2027-01-01')),
+    ).toEqual([
+      expect.objectContaining({
+        origin: 'docket',
+        segments: [
+          expect.objectContaining({
+            location: { type: 'saved_place', placeId: localChoice.id },
+          }),
+        ],
+      }),
+    ]);
+    expect(
+      await database
+        .select()
+        .from(workScheduleChange)
+        .where(eq(workScheduleChange.kind, 'schedule_conflict')),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          connectionId: connectionA,
+          state: 'pending',
+          payload: expect.objectContaining({
+            kind: 'schedule_conflict',
+            date: '2027-01-01',
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it('applies first recurring-instance edits and deletions to the canonical plan', async () => {
+    await database.update(workLocationWrite).set({ status: 'applied' });
+    const transport = new FakeGoogleWorkLocationTransport();
+    const regular = await createWorkPlace(database, hubId, {
+      name: 'Recurring plan office',
+      geofence: null,
+      providerMappings: [],
+      sort: 0,
+    });
+    const alternate = await createWorkPlace(database, hubId, {
+      name: 'Recurring plan alternate',
+      geofence: null,
+      providerMappings: [],
+      sort: 1,
+    });
+    await approveGoogleLabel(connectionA, alternate.name, alternate.id);
+    const plan = await replaceWorkSchedulePlan(database, hubId, {
+      anchorDate: '2028-01-03',
+      timezone: 'America/Los_Angeles',
+      effectiveFrom: '2028-01-03',
+      effectiveUntil: null,
+      cycleDays: Array.from({ length: 7 }, (_, index) => ({
+        segments:
+          index === 0
+            ? [
+                {
+                  startMinute: 0,
+                  durationMinutes: 1_440,
+                  location: { type: 'saved_place' as const, placeId: regular.id },
+                },
+              ]
+            : [],
+      })),
+    });
+    await refreshWorkScheduleProjectionAssertions(database, hubId, {
+      startDate: '2028-01-03',
+      endDate: '2028-02-01',
+    });
+    await drainWorkLocationWrites(database, { userId, transport });
+    const master = requireValue(
+      [
+        ...requireValue(transport.events.get(connectionA), 'recurring provider events').values(),
+      ].find((event) => event.recurrence?.some((rule) => rule.includes('FREQ=WEEKLY'))),
+      'projected recurring master',
+    );
+    const editedInstance = requireValue(
+      await transport.findInstance({
+        connectionId: connectionA,
+        masterExternalEventId: requireValue(master.id, 'recurring master id'),
+        occurrenceDate: '2028-01-10',
+      }),
+      'editable recurring instance',
+    );
+    transport.edit(connectionA, requireValue(editedInstance.id, 'editable instance id'), {
+      workingLocationProperties: {
+        type: 'customLocation',
+        customLocation: { label: alternate.name },
+      },
+    });
+
+    await syncUserWorkLocations(database, { userId, transport });
+
+    expect(
+      await database
+        .select()
+        .from(workScheduleException)
+        .where(eq(workScheduleException.planVersionId, plan.id)),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          date: '2028-01-10',
+          origin: 'provider',
+          segments: [
+            expect.objectContaining({ location: { type: 'saved_place', placeId: alternate.id } }),
+          ],
+        }),
+      ]),
+    );
+
+    const deletedInstance = requireValue(
+      await transport.findInstance({
+        connectionId: connectionA,
+        masterExternalEventId: requireValue(master.id, 'recurring master id'),
+        occurrenceDate: '2028-01-17',
+      }),
+      'deletable recurring instance',
+    );
+    await transport.delete({
+      connectionId: connectionA,
+      externalEventId: requireValue(deletedInstance.id, 'deletable instance id'),
+    });
+    expect(
+      requireValue(transport.events.get(connectionA), 'deleted provider events').get(
+        requireValue(deletedInstance.id, 'deleted instance id'),
+      ),
+    ).toMatchObject({
+      status: 'cancelled',
+      recurringEventId: master.id,
+      originalStartTime: { date: '2028-01-17' },
+    });
+    const masterBinding = requireValue(
+      await database
+        .select()
+        .from(workLocationExternalBinding)
+        .where(eq(workLocationExternalBinding.externalEventId, master.id ?? ''))
+        .then((rows) => rows[0]),
+      'recurring master binding',
+    );
+    expect(
+      await database
+        .select()
+        .from(workLocationExternalBinding)
+        .where(eq(workLocationExternalBinding.externalEventId, deletedInstance.id ?? '')),
+    ).toEqual([]);
+    expect(
+      await database
+        .select({ sourcePlanVersionId: workLocationAssertion.sourcePlanVersionId })
+        .from(workLocationAssertion)
+        .where(eq(workLocationAssertion.id, masterBinding.assertionId)),
+    ).toEqual([{ sourcePlanVersionId: plan.id }]);
+    expect(
+      await database
+        .select({ state: workLocationSyncAccount.state })
+        .from(workLocationSyncAccount)
+        .where(eq(workLocationSyncAccount.connectionId, connectionA)),
+    ).toEqual([{ state: 'healthy' }]);
+
+    const deletion = await syncUserWorkLocations(database, { userId, transport });
+    expect(deletion.deleted).toBeGreaterThan(0);
+
+    expect(
+      await database
+        .select()
+        .from(workScheduleException)
+        .where(eq(workScheduleException.planVersionId, plan.id)),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ date: '2028-01-17', origin: 'provider', segments: [] }),
+      ]),
+    );
+  });
+
+  it('checks a provider edit against the plan that governs the changed date', async () => {
+    await database.update(workLocationWrite).set({ status: 'applied' });
+    const transport = new FakeGoogleWorkLocationTransport();
+    const regular = await createWorkPlace(database, hubId, {
+      name: 'Versioned schedule office',
+      geofence: null,
+      providerMappings: [],
+      sort: 0,
+    });
+    const providerChoice = await createWorkPlace(database, hubId, {
+      name: 'Versioned provider choice',
+      geofence: null,
+      providerMappings: [],
+      sort: 1,
+    });
+    const docketChoice = await createWorkPlace(database, hubId, {
+      name: 'Versioned Docket choice',
+      geofence: null,
+      providerMappings: [],
+      sort: 2,
+    });
+    await approveGoogleLabel(connectionA, providerChoice.name, providerChoice.id);
+    await replaceWorkSchedulePlan(database, hubId, {
+      anchorDate: '2029-01-01',
+      timezone: 'America/Los_Angeles',
+      effectiveFrom: '2029-01-01',
+      effectiveUntil: null,
+      cycleDays: Array.from({ length: 7 }, () => ({
+        segments: [
+          {
+            startMinute: 0,
+            durationMinutes: 1_440,
+            location: { type: 'saved_place' as const, placeId: regular.id },
+          },
+        ],
+      })),
+    });
+    await refreshWorkScheduleProjectionAssertions(database, hubId, {
+      startDate: '2029-01-01',
+      endDate: '2029-01-20',
+    });
+    await drainWorkLocationWrites(database, { userId, transport });
+    const oldMaster = requireValue(
+      [
+        ...requireValue(transport.events.get(connectionA), 'versioned provider events').values(),
+      ].find((event) => event.recurrence?.some((rule) => rule.includes('FREQ=WEEKLY'))),
+      'old plan recurring master',
+    );
+    const currentPlan = await replaceWorkSchedulePlan(database, hubId, {
+      anchorDate: '2029-01-05',
+      timezone: 'America/Los_Angeles',
+      effectiveFrom: '2029-01-05',
+      effectiveUntil: null,
+      cycleDays: Array.from({ length: 7 }, () => ({ segments: [] })),
+    });
+    await setWorkScheduleException(database, hubId, {
+      date: '2029-01-08',
+      segments: [
+        {
+          startMinute: 0,
+          durationMinutes: 1_440,
+          location: { type: 'saved_place', placeId: docketChoice.id },
+        },
+      ],
+    });
+    const editedInstance = requireValue(
+      await transport.findInstance({
+        connectionId: connectionA,
+        masterExternalEventId: requireValue(oldMaster.id, 'old recurring master id'),
+        occurrenceDate: '2029-01-08',
+      }),
+      'old plan provider instance',
+    );
+    transport.edit(connectionA, requireValue(editedInstance.id, 'old plan instance id'), {
+      workingLocationProperties: {
+        type: 'customLocation',
+        customLocation: { label: providerChoice.name },
+      },
+    });
+
+    await syncUserWorkLocations(database, { userId, transport });
+
+    expect(
+      await database
+        .select()
+        .from(workScheduleException)
+        .where(eq(workScheduleException.planVersionId, currentPlan.id)),
+    ).toEqual([
+      expect.objectContaining({
+        date: '2029-01-08',
+        origin: 'docket',
+        segments: [
+          expect.objectContaining({ location: { type: 'saved_place', placeId: docketChoice.id } }),
+        ],
+      }),
+    ]);
+    expect(
+      await database
+        .select()
+        .from(workScheduleChange)
+        .where(eq(workScheduleChange.kind, 'schedule_conflict')),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          state: 'pending',
+          payload: expect.objectContaining({ date: '2029-01-08' }),
+        }),
+      ]),
+    );
+  });
+
   it('retries failed individual writes and heals the account after delivery succeeds', async () => {
     await database
       .update(workLocationSyncAccount)
       .set({ state: 'healthy', reason: null, bootstrapCompletedAt: new Date() })
       .where(eq(workLocationSyncAccount.hubId, hubId));
+    await database.update(workLocationWrite).set({ status: 'applied' });
     const transport = new FakeGoogleWorkLocationTransport();
     transport.failUpserts = 1;
     const place = await createWorkPlace(database, hubId, {
@@ -623,6 +1305,7 @@ describe('two-account work-location convergence', () => {
       .update(workLocationSyncAccount)
       .set({ state: 'healthy', reason: null, bootstrapCompletedAt: new Date() })
       .where(eq(workLocationSyncAccount.hubId, hubId));
+    await database.update(workLocationWrite).set({ status: 'applied' });
     const transport = new FakeGoogleWorkLocationTransport();
     transport.failUpserts = Number.MAX_SAFE_INTEGER;
     const place = await createWorkPlace(database, hubId, {

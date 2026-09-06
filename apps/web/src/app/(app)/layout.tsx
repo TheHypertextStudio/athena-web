@@ -5,6 +5,7 @@ import { type JSX, type ReactNode } from 'react';
 
 import { AppShellFrame } from '@/components/app-shell-frame';
 import RouteSlot from '@/components/pwa/route-slot';
+import { AutomaticLocationProvider } from '@/components/work-location/automatic-location-provider';
 import { AppLocationProvider } from '@/lib/app-location';
 import { unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
@@ -85,11 +86,13 @@ export default async function AppGroupLayout({
           replayed for some other route still resolves the *requested* route, not the one the
           document was rendered for. */}
       <AppLocationProvider serverPath={serverPath}>
-        <AppShellFrame initialSession={session.state === 'authenticated' ? session.user : null}>
-          {/* Renders `children` untouched whenever this document is being used for its own route,
-              which is every online load. It only diverges when the worker replayed it elsewhere. */}
-          <RouteSlot serverPath={serverPath}>{children}</RouteSlot>
-        </AppShellFrame>
+        <AutomaticLocationProvider>
+          <AppShellFrame initialSession={session.state === 'authenticated' ? session.user : null}>
+            {/* Renders `children` untouched whenever this document is being used for its own route,
+                which is every online load. It only diverges when the worker replayed it elsewhere. */}
+            <RouteSlot serverPath={serverPath}>{children}</RouteSlot>
+          </AppShellFrame>
+        </AutomaticLocationProvider>
       </AppLocationProvider>
     </HydrationBoundary>
   );

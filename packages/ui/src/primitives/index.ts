@@ -201,6 +201,7 @@ export {
 } from './surface';
 export { Skeleton, SkeletonChip, SkeletonGlyph, SkeletonText } from './skeleton';
 export type { SkeletonTextProps, SkeletonTextScale } from './skeleton';
+export { Switch, type SwitchProps } from './switch';
 export {
   Tab,
   TabList,

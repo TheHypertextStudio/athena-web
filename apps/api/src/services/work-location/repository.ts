@@ -15,6 +15,8 @@ import {
   workLocationWrite,
   workPlace,
   workPlaceProviderMapping,
+  workScheduleException,
+  workSchedulePlan,
   type Database,
 } from '@docket/db';
 import {
@@ -27,12 +29,15 @@ import {
   WorkPlaceCreate,
   WorkPlaceListOut,
   WorkPlaceOut,
+  WorkScheduleExceptionOut,
+  WorkSchedulePlanOut,
   type WorkLocationAssertionCreate,
   type WorkLocationCurrentUpdate,
   type WorkLocationObservationCreate,
   type WorkLocationProfileUpdate,
   type WorkLocationSchedule,
   type WorkPlaceUpdate,
+  type WorkScheduleSegment,
 } from '@docket/planning/work-location-contract';
 import { and, asc, desc, eq, inArray, isNull, lte, ne } from 'drizzle-orm';
 
@@ -314,7 +319,68 @@ function scheduleHasCurrentOrFuture(schedule: WorkLocationSchedule, now: Date): 
   }
 }
 
-/** Soft-retire a place unless designations or active/future assertions still refer to it. */
+/** Whether a segment list assigns any work to one saved place. */
+function segmentsReferencePlace(
+  segments: readonly WorkScheduleSegment[],
+  placeId: string,
+): boolean {
+  return segments.some(
+    (segment) => segment.location.type === 'saved_place' && segment.location.placeId === placeId,
+  );
+}
+
+/** Reject retirement while a canonical plan or dated replacement still uses one place. */
+async function requireNoCanonicalScheduleReference(
+  database: Database,
+  hubId: string,
+  placeId: string,
+  now: Date,
+): Promise<void> {
+  const [plans, exceptions] = await Promise.all([
+    database
+      .select({
+        id: workSchedulePlan.id,
+        timezone: workSchedulePlan.timezone,
+        effectiveUntil: workSchedulePlan.effectiveUntil,
+        cycleDays: workSchedulePlan.cycleDays,
+      })
+      .from(workSchedulePlan)
+      .where(eq(workSchedulePlan.hubId, hubId)),
+    database
+      .select({
+        planVersionId: workScheduleException.planVersionId,
+        date: workScheduleException.date,
+        segments: workScheduleException.segments,
+      })
+      .from(workScheduleException)
+      .where(eq(workScheduleException.hubId, hubId)),
+  ]);
+  const currentOrFuturePlans = new Map(
+    plans
+      .filter(
+        (plan) =>
+          plan.effectiveUntil === null ||
+          plan.effectiveUntil >= localDateString(now, plan.timezone),
+      )
+      .map((plan) => [plan.id, plan] as const),
+  );
+  const planUsesPlace = [...currentOrFuturePlans.values()].some((plan) =>
+    plan.cycleDays.some((day) => segmentsReferencePlace(day.segments, placeId)),
+  );
+  const datedChangeUsesPlace = exceptions.some((exception) => {
+    const plan = currentOrFuturePlans.get(exception.planVersionId);
+    return (
+      plan !== undefined &&
+      exception.date >= localDateString(now, plan.timezone) &&
+      segmentsReferencePlace(exception.segments, placeId)
+    );
+  });
+  if (planUsesPlace || datedChangeUsesPlace) {
+    throw new ConflictError('Move this place out of the current and future work schedule first');
+  }
+}
+
+/** Soft-retire a place unless designations or current/future schedule data still refer to it. */
 export async function archiveWorkPlace(
   database: Database,
   hubId: string,
@@ -332,6 +398,7 @@ export async function archiveWorkPlace(
   if (profile?.homePlaceId === placeId) {
     throw new ConflictError('Remove the home designation before retiring this place');
   }
+  await requireNoCanonicalScheduleReference(database, hubId, placeId, now);
   const assertions = await database
     .select({
       id: workLocationAssertion.id,
@@ -700,56 +767,67 @@ export async function loadWorkLocationResolutionState(
 ): Promise<WorkLocationResolutionState> {
   const { userId, timezone } = await ownedHub(database, hubId);
   await database.delete(workLocationObservation).where(lte(workLocationObservation.expiresAt, now));
-  const [placeRows, assertionList, observations, itemRows, timeRows] = await Promise.all([
-    database
-      .select({ id: workPlace.id, name: workPlace.name })
-      .from(workPlace)
-      .where(and(eq(workPlace.hubId, hubId), isNull(workPlace.archivedAt))),
-    listWorkLocationAssertions(database, hubId),
-    database
-      .select()
-      .from(workLocationObservation)
-      .where(eq(workLocationObservation.hubId, hubId))
-      .orderBy(desc(workLocationObservation.observedAt)),
-    database
-      .select({
-        id: calendarItem.id,
-        placeId: calendarItem.workPlaceId,
-        startsAt: calendarItem.startsAt,
-        endsAt: calendarItem.endsAt,
-        allDayStartDate: calendarItem.allDayStartDate,
-        allDayEndDate: calendarItem.allDayEndDate,
-        timezone: calendarItem.timezone,
-      })
-      .from(calendarItem)
-      .where(
-        and(
-          eq(calendarItem.userId, userId),
-          isNull(calendarItem.archivedAt),
-          ne(calendarItem.status, 'cancelled'),
+  const [placeRows, assertionList, observations, itemRows, timeRows, planRows, scheduleExceptions] =
+    await Promise.all([
+      database
+        .select({ id: workPlace.id, name: workPlace.name })
+        .from(workPlace)
+        .where(and(eq(workPlace.hubId, hubId), isNull(workPlace.archivedAt))),
+      listWorkLocationAssertions(database, hubId),
+      database
+        .select()
+        .from(workLocationObservation)
+        .where(eq(workLocationObservation.hubId, hubId))
+        .orderBy(desc(workLocationObservation.observedAt)),
+      database
+        .select({
+          id: calendarItem.id,
+          placeId: calendarItem.workPlaceId,
+          startsAt: calendarItem.startsAt,
+          endsAt: calendarItem.endsAt,
+          allDayStartDate: calendarItem.allDayStartDate,
+          allDayEndDate: calendarItem.allDayEndDate,
+          timezone: calendarItem.timezone,
+        })
+        .from(calendarItem)
+        .where(
+          and(
+            eq(calendarItem.userId, userId),
+            isNull(calendarItem.archivedAt),
+            ne(calendarItem.status, 'cancelled'),
+          ),
         ),
-      ),
-    database
-      .select({
-        placeId: calendarItem.workPlaceId,
-        startsAt: timeInterval.startedAt,
-        endsAt: timeInterval.endedAt,
-      })
-      .from(timeInterval)
-      .innerJoin(timeRecord, eq(timeRecord.id, timeInterval.timeRecordId))
-      .innerJoin(timeContext, eq(timeContext.timeRecordId, timeRecord.id))
-      .innerJoin(calendarItem, eq(calendarItem.id, timeContext.docketEntityId))
-      .where(
-        and(
-          eq(timeInterval.hubId, hubId),
-          eq(timeInterval.mode, 'human_active'),
-          isNull(timeInterval.endedAt),
-          isNull(timeInterval.supersededById),
-          eq(timeContext.role, 'planning_context'),
-          eq(calendarItem.userId, userId),
+      database
+        .select({
+          placeId: calendarItem.workPlaceId,
+          startsAt: timeInterval.startedAt,
+          endsAt: timeInterval.endedAt,
+        })
+        .from(timeInterval)
+        .innerJoin(timeRecord, eq(timeRecord.id, timeInterval.timeRecordId))
+        .innerJoin(timeContext, eq(timeContext.timeRecordId, timeRecord.id))
+        .innerJoin(calendarItem, eq(calendarItem.id, timeContext.docketEntityId))
+        .where(
+          and(
+            eq(timeInterval.hubId, hubId),
+            eq(timeInterval.mode, 'human_active'),
+            isNull(timeInterval.endedAt),
+            isNull(timeInterval.supersededById),
+            eq(timeContext.role, 'planning_context'),
+            eq(calendarItem.userId, userId),
+          ),
         ),
-      ),
-  ]);
+      database
+        .select()
+        .from(workSchedulePlan)
+        .where(eq(workSchedulePlan.hubId, hubId))
+        .orderBy(asc(workSchedulePlan.effectiveFrom)),
+      database
+        .select()
+        .from(workScheduleException)
+        .where(eq(workScheduleException.hubId, hubId))
+        .orderBy(asc(workScheduleException.date)),
+    ]);
 
   return {
     timezone,
@@ -793,6 +871,32 @@ export async function loadWorkLocationResolutionState(
     activeTimeContexts: timeRows.flatMap((row) =>
       row.placeId ? [{ placeId: row.placeId, startsAt: row.startsAt, endsAt: row.endsAt }] : [],
     ),
+    plans: planRows.map((plan) => ({
+      plan: WorkSchedulePlanOut.parse({
+        id: plan.id,
+        anchorDate: plan.anchorDate,
+        timezone: plan.timezone,
+        effectiveFrom: plan.effectiveFrom,
+        effectiveUntil: plan.effectiveUntil,
+        cycleDays: plan.cycleDays,
+        revision: plan.revision,
+        createdAt: plan.createdAt.toISOString(),
+        updatedAt: plan.updatedAt.toISOString(),
+      }),
+      exceptions: scheduleExceptions
+        .filter((exception) => exception.planVersionId === plan.id)
+        .map((exception) =>
+          WorkScheduleExceptionOut.parse({
+            id: exception.id,
+            planVersionId: exception.planVersionId,
+            date: exception.date,
+            segments: exception.segments,
+            origin: exception.origin as 'docket' | 'provider',
+            createdAt: exception.createdAt.toISOString(),
+            updatedAt: exception.updatedAt.toISOString(),
+          }),
+        ),
+    })),
   };
 }
 

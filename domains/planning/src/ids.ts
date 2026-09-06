@@ -125,6 +125,24 @@ export const WorkLocationAssertionId = ownedId
   .describe('ULID id of a user-owned explicit work-location assertion or weekly series.');
 /** Work-location assertion identifier value. */
 export type WorkLocationAssertionId = z.infer<typeof WorkLocationAssertionId>;
+/** Work-schedule plan-version identifier. */
+export const WorkSchedulePlanId = ownedId
+  .brand<'WorkSchedulePlanId'>()
+  .describe('ULID id of one effective-dated user-owned work-schedule plan version.');
+/** Work-schedule plan-version identifier value. */
+export type WorkSchedulePlanId = z.infer<typeof WorkSchedulePlanId>;
+/** Work-schedule dated-exception identifier. */
+export const WorkScheduleExceptionId = ownedId
+  .brand<'WorkScheduleExceptionId'>()
+  .describe('ULID id of one user-owned full-day work-schedule replacement.');
+/** Work-schedule dated-exception identifier value. */
+export type WorkScheduleExceptionId = z.infer<typeof WorkScheduleExceptionId>;
+/** Work-schedule reconciliation-change identifier. */
+export const WorkScheduleChangeId = ownedId
+  .brand<'WorkScheduleChangeId'>()
+  .describe('ULID id of one provider or migration schedule change that still needs a decision.');
+/** Work-schedule reconciliation-change identifier value. */
+export type WorkScheduleChangeId = z.infer<typeof WorkScheduleChangeId>;
 /** Work-location observation identifier. */
 export const WorkLocationObservationId = ownedId
   .brand<'WorkLocationObservationId'>()

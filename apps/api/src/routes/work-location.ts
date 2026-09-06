@@ -16,17 +16,24 @@ import {
   WorkLocationRangeOut,
   WorkLocationRangeQuery,
   WorkLocationSyncOut,
+  WorkScheduleChangeListOut,
+  WorkScheduleChangeResolution,
+  WorkScheduleExceptionCreate,
+  WorkScheduleExceptionOut,
+  WorkScheduleOut,
+  WorkSchedulePlanCreate,
+  WorkSchedulePlanOut,
   WorkPlaceCreate,
   WorkPlaceListOut,
   WorkPlaceMutationOut,
   WorkPlaceUpdate,
 } from '@docket/planning/work-location-contract';
-import { WorkLocationAssertionId, WorkPlaceId } from '@docket/planning/ids';
+import { WorkLocationAssertionId, WorkPlaceId, WorkScheduleChangeId } from '@docket/planning/ids';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv, AuthSession } from '../context';
-import { AuthError } from '../error';
+import { AuthError, ConflictError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
@@ -54,6 +61,15 @@ import {
   workLocationProjectionStates,
 } from '../services/work-location/repository';
 import {
+  ignoreWorkScheduleChange,
+  listWorkSchedule,
+  listWorkScheduleChanges,
+  linkWorkPlaceAlias,
+  replaceWorkSchedulePlan,
+  resolveWorkScheduleConflict,
+  setWorkScheduleException,
+} from '../services/work-location/schedule-repository';
+import {
   resolveExpectedWorkLocationRange,
   resolveWorkLocationPoint,
 } from '@docket/planning/work-location-resolution';
@@ -68,6 +84,8 @@ function requireSession(c: { get: (key: 'session') => AuthSession }): NonNullabl
 const placeParam = z.object({ id: WorkPlaceId }).strict();
 const assertionParam = z.object({ id: WorkLocationAssertionId }).strict();
 const occurrenceParam = z.object({ id: WorkLocationAssertionId, date: DateString }).strict();
+const scheduleDateParam = z.object({ date: DateString }).strict();
+const scheduleChangeParam = z.object({ id: WorkScheduleChangeId }).strict();
 
 /** Resolve the caller-owned Hub without accepting a Hub id from the request. */
 async function callerHub(c: { get: (key: 'session') => AuthSession }): Promise<string> {
@@ -180,7 +198,7 @@ const workLocation = new Hono<AppEnv>()
       summary: 'Retire a saved work place',
       status: 204,
       description:
-        'Retire an owned place. Active/future assertions and the independent home designation must be moved or cleared first.',
+        'Retire an owned place. Current and future schedule references and the independent home designation must be moved or cleared first.',
     }),
     zParam(placeParam),
     async (c) => {
@@ -206,6 +224,93 @@ const workLocation = new Hono<AppEnv>()
         profile,
         projections: await enqueueProfileWorkLocationProjections(db, hubId),
       });
+    },
+  )
+  .get(
+    '/changes',
+    apiDoc({
+      tag: 'Work location',
+      summary: 'List unresolved work-schedule changes',
+      response: WorkScheduleChangeListOut,
+      description:
+        'Return provider and migration changes that still need an owner decision. Recognized provider changes never appear here.',
+    }),
+    async (c) =>
+      ok(c, WorkScheduleChangeListOut, await listWorkScheduleChanges(db, await callerHub(c))),
+  )
+  .post(
+    '/changes/:id/resolve',
+    apiDoc({
+      tag: 'Work location',
+      summary: 'Resolve one work-schedule change',
+      status: 204,
+      description:
+        'Link or ignore an unmatched provider label, preserve a newer Docket date, or accept the connected-account version of that date.',
+    }),
+    zParam(scheduleChangeParam),
+    zJson(WorkScheduleChangeResolution),
+    async (c) => {
+      const hubId = await callerHub(c);
+      const { id } = c.req.valid('param');
+      const resolution = c.req.valid('json');
+      if (resolution.action === 'link_place') {
+        await linkWorkPlaceAlias(db, hubId, id, resolution.placeId);
+      } else if (resolution.action === 'keep_docket' || resolution.action === 'use_provider') {
+        await resolveWorkScheduleConflict(db, hubId, id, resolution.action);
+      } else {
+        await ignoreWorkScheduleChange(db, hubId, id);
+      }
+      return c.body(null, 204);
+    },
+  )
+  .get(
+    '/schedule',
+    apiDoc({
+      tag: 'Work location',
+      summary: 'List the default work schedule',
+      response: WorkScheduleOut,
+      description:
+        'Return effective-dated default plan versions and complete dated replacements for the caller-owned personal Hub.',
+    }),
+    async (c) => ok(c, WorkScheduleOut, await listWorkSchedule(db, await callerHub(c))),
+  )
+  .put(
+    '/schedule',
+    apiDoc({
+      tag: 'Work location',
+      summary: 'Start a new default work-schedule version',
+      response: WorkSchedulePlanOut,
+      description:
+        'Create a complete plan version from its effective date and close the preceding version without changing historical dates.',
+    }),
+    zJson(WorkSchedulePlanCreate),
+    async (c) =>
+      ok(
+        c,
+        WorkSchedulePlanOut,
+        await replaceWorkSchedulePlan(db, await callerHub(c), c.req.valid('json')),
+      ),
+  )
+  .put(
+    '/schedule/dates/:date',
+    apiDoc({
+      tag: 'Work location',
+      summary: 'Replace one date in the default work schedule',
+      response: WorkScheduleExceptionOut,
+      description:
+        'Replace every generated work segment on one civil date, including an empty replacement for a day off.',
+    }),
+    zParam(scheduleDateParam),
+    zJson(WorkScheduleExceptionCreate),
+    async (c) => {
+      const date = c.req.valid('param').date;
+      const input = c.req.valid('json');
+      if (input.date !== date) throw new ConflictError('Schedule date does not match the route');
+      return ok(
+        c,
+        WorkScheduleExceptionOut,
+        await setWorkScheduleException(db, await callerHub(c), input),
+      );
     },
   )
   .get(

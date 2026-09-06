@@ -36,8 +36,12 @@ export interface PlaceEditorDialogProps {
   readonly onOpenChange: (open: boolean) => void;
   /** Place being edited, or null for creation. */
   readonly place: WorkPlaceOut | null;
+  /** Proposed name used when a connected account introduced an unmatched place. */
+  readonly initialName?: string;
   /** Disable dismissal and submission while the canonical mutation is pending. */
   readonly pending: boolean;
+  /** Application-owned failure copy that remains visible beside the form. */
+  readonly error?: string | null;
   /** Save the normalized editor value. */
   readonly onSave: (value: PlaceEditorValue) => void;
 }
@@ -47,7 +51,9 @@ export function PlaceEditorDialog({
   open,
   onOpenChange,
   place,
+  initialName,
   pending,
+  error,
   onSave,
 }: PlaceEditorDialogProps): JSX.Element {
   const [name, setName] = useState('');
@@ -57,7 +63,7 @@ export function PlaceEditorDialog({
 
   useEffect(() => {
     if (!open) return;
-    setName(place?.name ?? '');
+    setName(place?.name ?? initialName ?? '');
     setAddress(place?.address ?? '');
     setMapOpen(false);
     setPoint(
@@ -65,7 +71,7 @@ export function PlaceEditorDialog({
         ? { latitude: place.geofence.latitude, longitude: place.geofence.longitude }
         : null,
     );
-  }, [open, place]);
+  }, [initialName, open, place]);
 
   const submit: SubmitEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
@@ -131,6 +137,11 @@ export function PlaceEditorDialog({
               </Button>
               {mapOpen ? <PlaceMapPicker value={point} onChange={setPoint} /> : null}
             </div>
+            {error ? (
+              <p role="alert" className="text-error text-body-small">
+                {error}
+              </p>
+            ) : null}
           </DialogBody>
           <DialogFooter>
             <DialogClose asChild>

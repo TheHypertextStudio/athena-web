@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { type JSX, type ReactNode } from 'react';
 
+import { AutomaticLocationProvider } from '@/components/work-location/automatic-location-provider';
 import { unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
@@ -28,5 +29,9 @@ export default async function FocusGroupLayout({
     queryFn: () => unwrap(() => api.v1.orgs.$get(), 'Could not load your organizations.'),
   });
 
-  return <HydrationBoundary state={dehydrate(queryClient)}>{children}</HydrationBoundary>;
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <AutomaticLocationProvider>{children}</AutomaticLocationProvider>
+    </HydrationBoundary>
+  );
 }

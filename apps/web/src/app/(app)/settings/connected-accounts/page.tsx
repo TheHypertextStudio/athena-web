@@ -16,6 +16,7 @@
 import type { JSX } from 'react';
 
 import { ConnectedAccountsTab } from '@/components/settings/connected-accounts-tab';
+import { WorkLocationAccountSyncSection } from '@/components/settings/work-location-account-sync-section';
 import { usePersonalWorkspaceId } from '@/components/settings/use-personal-workspace-id';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
@@ -28,11 +29,9 @@ export default function GlobalConnectedAccountsSettingsPage(): JSX.Element {
   }
 
   return (
-    <SettingsSectionPage
-      title="Connected accounts"
-      description="External accounts linked to your Docket identity. Connections sync resources from these."
-    >
+    <SettingsSectionPage sectionKey="connected-accounts">
       <ConnectedAccountsTab orgId={orgId} />
+      <WorkLocationAccountSyncSection />
     </SettingsSectionPage>
   );
 }

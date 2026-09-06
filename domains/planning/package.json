@@ -14,6 +14,7 @@
     "./exact-resize": "./src/exact-resize.ts",
     "./intervals": "./src/intervals.ts",
     "./zoned-time": "./src/zoned-time.ts",
+    "./work-schedule": "./src/work-schedule.ts",
     "./work-location-resolution": "./src/work-location-resolution.ts",
     "./hub-preferences-contract": "./src/contracts/hub-preferences.ts",
     "./daily-plan-contract": "./src/contracts/daily-plan.ts",

@@ -8,7 +8,14 @@
  */
 import { z } from 'zod';
 
-import { CalendarConnectionId, WorkLocationAssertionId, WorkPlaceId } from '../ids';
+import {
+  CalendarConnectionId,
+  WorkLocationAssertionId,
+  WorkPlaceId,
+  WorkScheduleChangeId,
+  WorkScheduleExceptionId,
+  WorkSchedulePlanId,
+} from '../ids';
 import { DateString } from '../date-time';
 
 /** A user-authorized geofence stored as part of a saved-place definition. */
@@ -255,6 +262,312 @@ export const WorkLocationOccurrenceException = z
 /** Work-location occurrence-exception value. */
 export type WorkLocationOccurrenceException = z.infer<typeof WorkLocationOccurrenceException>;
 
+/** A location decision attached to one default-schedule work segment. */
+export const WorkScheduleSegmentLocation = z
+  .discriminatedUnion('type', [
+    z.object({ type: z.literal('saved_place'), placeId: WorkPlaceId }).strict(),
+    z.object({ type: z.literal('mobile') }).strict(),
+    z.object({ type: z.literal('undecided') }).strict(),
+  ])
+  .meta({
+    id: 'WorkScheduleSegmentLocation',
+    description: 'A saved place, mobile-work state, or undecided work location.',
+  });
+/** Work-schedule segment-location value. */
+export type WorkScheduleSegmentLocation = z.infer<typeof WorkScheduleSegmentLocation>;
+
+/** One continuous piece of work measured from a cycle-day local midnight. */
+export const WorkScheduleSegment = z
+  .object({
+    startMinute: z.number().int().min(0).max(1_439),
+    durationMinutes: z.number().int().min(1).max(10_080),
+    location: WorkScheduleSegmentLocation,
+  })
+  .strict()
+  .meta({
+    id: 'WorkScheduleSegment',
+    description: 'One timed work segment that may continue into later civil days.',
+  });
+/** Work-schedule segment value. */
+export type WorkScheduleSegment = z.infer<typeof WorkScheduleSegment>;
+
+/** One position in a repeating schedule cycle. */
+export const WorkScheduleCycleDay = z
+  .object({ segments: z.array(WorkScheduleSegment).max(24) })
+  .strict()
+  .meta({ id: 'WorkScheduleCycleDay', description: 'One day in a repeating work cycle.' });
+/** Work-schedule cycle-day value. */
+export type WorkScheduleCycleDay = z.infer<typeof WorkScheduleCycleDay>;
+
+/** Whether any two segments overlap when the complete cycle repeats forever. */
+function cycleHasOverlappingSegments(cycleDays: readonly WorkScheduleCycleDay[]): boolean {
+  const periodMinutes = cycleDays.length * 1_440;
+  const intervals = cycleDays.flatMap((day, dayIndex) =>
+    day.segments.map((segment, segmentIndex) => ({
+      key: `${String(dayIndex)}:${String(segmentIndex)}`,
+      start: dayIndex * 1_440 + segment.startMinute,
+      end: dayIndex * 1_440 + segment.startMinute + segment.durationMinutes,
+    })),
+  );
+  return intervals.some((left) =>
+    intervals.some((right) =>
+      [-periodMinutes, 0, periodMinutes].some((offset) => {
+        if (left.key === right.key && offset === 0) return false;
+        const shiftedStart = right.start + offset;
+        const shiftedEnd = right.end + offset;
+        return left.start < shiftedEnd && shiftedStart < left.end;
+      }),
+    ),
+  );
+}
+
+/** Whether any two non-repeating segments overlap from one civil-date origin. */
+function datedSegmentsOverlap(segments: readonly WorkScheduleSegment[]): boolean {
+  return segments.some((left, leftIndex) =>
+    segments.some((right, rightIndex) => {
+      if (leftIndex === rightIndex) return false;
+      const leftEnd = left.startMinute + left.durationMinutes;
+      const rightEnd = right.startMinute + right.durationMinutes;
+      return left.startMinute < rightEnd && right.startMinute < leftEnd;
+    }),
+  );
+}
+
+/** Whether the current runtime recognizes one IANA timezone identifier. */
+function isIanaTimezone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const WorkSchedulePlanFields = {
+  anchorDate: DateString.describe('Civil date that begins cycle day one.'),
+  timezone: z
+    .string()
+    .min(1)
+    .refine(isIanaTimezone, 'Work schedule requires a recognized IANA timezone')
+    .describe('IANA timezone used for every wall-clock segment.'),
+  effectiveFrom: DateString.describe('First civil date governed by this plan version.'),
+  effectiveUntil: DateString.nullable().describe(
+    'Inclusive final civil date, or null while the version remains open.',
+  ),
+  cycleDays: z
+    .array(WorkScheduleCycleDay)
+    .min(1)
+    .max(28)
+    .describe('The complete one-through-twenty-eight-day repeating work cycle.'),
+};
+
+/** Add cross-field validity rules shared by plan inputs and outputs. */
+function validateWorkSchedulePlan(
+  value: {
+    readonly effectiveFrom: string;
+    readonly effectiveUntil: string | null;
+    readonly cycleDays: readonly WorkScheduleCycleDay[];
+  },
+  ctx: z.RefinementCtx,
+): void {
+  if (value.effectiveUntil !== null && value.effectiveUntil < value.effectiveFrom) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['effectiveUntil'],
+      message: 'Work schedule cannot end before it starts',
+    });
+  }
+  if (cycleHasOverlappingSegments(value.cycleDays)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['cycleDays'],
+      message: 'Work-schedule segments cannot overlap when the cycle repeats',
+    });
+  }
+}
+
+/** Input for creating a new effective-dated work-schedule plan version. */
+export const WorkSchedulePlanCreate = z
+  .object(WorkSchedulePlanFields)
+  .strict()
+  .superRefine(validateWorkSchedulePlan)
+  .meta({ id: 'WorkSchedulePlanCreate', description: 'A complete default work-schedule version.' });
+/** Work-schedule plan-version creation value. */
+export type WorkSchedulePlanCreate = z.infer<typeof WorkSchedulePlanCreate>;
+
+/** Complete owner-visible work-schedule plan version. */
+export const WorkSchedulePlanOut = z
+  .object({
+    id: WorkSchedulePlanId,
+    ...WorkSchedulePlanFields,
+    revision: z.number().int().positive(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict()
+  .superRefine(validateWorkSchedulePlan)
+  .meta({ id: 'WorkSchedulePlanOut', description: 'One persisted work-schedule plan version.' });
+/** Work-schedule plan-version output value. */
+export type WorkSchedulePlanOut = z.infer<typeof WorkSchedulePlanOut>;
+
+/** Source that created the current form of a dated schedule replacement. */
+export const WorkScheduleExceptionOrigin = z.enum(['docket', 'provider']);
+/** Work-schedule exception-origin value. */
+export type WorkScheduleExceptionOrigin = z.infer<typeof WorkScheduleExceptionOrigin>;
+
+/** Input that replaces every generated segment on one civil date. */
+export const WorkScheduleExceptionCreate = z
+  .object({ date: DateString, segments: z.array(WorkScheduleSegment).max(24) })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (datedSegmentsOverlap(value.segments)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['segments'],
+        message: 'Dated work-schedule segments cannot overlap',
+      });
+    }
+  })
+  .meta({
+    id: 'WorkScheduleExceptionCreate',
+    description: 'A complete replacement for one generated schedule date.',
+  });
+/** Work-schedule dated-exception creation value. */
+export type WorkScheduleExceptionCreate = z.infer<typeof WorkScheduleExceptionCreate>;
+
+/** Complete owner-visible dated schedule replacement. */
+export const WorkScheduleExceptionOut = z
+  .object({
+    id: WorkScheduleExceptionId,
+    planVersionId: WorkSchedulePlanId,
+    date: DateString,
+    segments: z.array(WorkScheduleSegment).max(24),
+    origin: WorkScheduleExceptionOrigin,
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict()
+  .meta({
+    id: 'WorkScheduleExceptionOut',
+    description: 'One persisted complete replacement for a generated schedule date.',
+  });
+/** Work-schedule dated-exception output value. */
+export type WorkScheduleExceptionOut = z.infer<typeof WorkScheduleExceptionOut>;
+
+/** List of effective-dated plan versions and their dated replacements. */
+export const WorkScheduleOut = z
+  .object({
+    plans: z.array(WorkSchedulePlanOut),
+    exceptions: z.array(WorkScheduleExceptionOut),
+  })
+  .strict()
+  .meta({ id: 'WorkScheduleOut', description: 'The complete owner-visible work schedule.' });
+/** Complete work-schedule output value. */
+export type WorkScheduleOut = z.infer<typeof WorkScheduleOut>;
+
+/** Reconciliation issue type shown in the Work schedule settings queue. */
+export const WorkScheduleChangeKind = z.enum([
+  'unmatched_place',
+  'schedule_conflict',
+  'legacy_conflict',
+]);
+/** Work-schedule reconciliation-issue type. */
+export type WorkScheduleChangeKind = z.infer<typeof WorkScheduleChangeKind>;
+
+/** Provider label that Docket could not map to one saved place. */
+export const WorkScheduleUnmatchedPlacePayload = z
+  .object({
+    kind: z.literal('unmatched_place'),
+    label: z.string().min(1),
+    normalizedLabel: z.string().min(1),
+    externalEventId: z.string().min(1),
+  })
+  .strict()
+  .meta({
+    id: 'WorkScheduleUnmatchedPlacePayload',
+    description: 'One provider place label that needs an owner-selected saved-place meaning.',
+  });
+/** Unmatched provider-place payload. */
+export type WorkScheduleUnmatchedPlacePayload = z.infer<typeof WorkScheduleUnmatchedPlacePayload>;
+
+/** Provider edit that overlaps a newer Docket-owned replacement for the same plan date. */
+export const WorkScheduleConflictPayload = z
+  .object({
+    kind: z.literal('schedule_conflict'),
+    date: DateString,
+    externalEventId: z.string().min(1),
+    docketSegments: z.array(WorkScheduleSegment).max(24),
+    providerSegments: z.array(WorkScheduleSegment).max(24),
+  })
+  .strict()
+  .meta({
+    id: 'WorkScheduleConflictPayload',
+    description: 'A provider edit and newer Docket edit that target the same work-schedule date.',
+  });
+/** Conflicting provider schedule-edit payload. */
+export type WorkScheduleConflictPayload = z.infer<typeof WorkScheduleConflictPayload>;
+
+/** Legacy assertions that Docket cannot combine without discarding schedule intent. */
+export const WorkScheduleLegacyConflictPayload = z
+  .object({
+    kind: z.literal('legacy_conflict'),
+    reason: z.enum([
+      'mixed_timezones',
+      'incompatible_ranges',
+      'orphaned_exception',
+      'overlapping_segments',
+    ]),
+    assertionIds: z.array(WorkLocationAssertionId).min(1),
+  })
+  .strict()
+  .meta({
+    id: 'WorkScheduleLegacyConflictPayload',
+    description: 'Legacy work-location rows that require a new owner-defined default schedule.',
+  });
+/** Unmigrated legacy schedule-conflict payload. */
+export type WorkScheduleLegacyConflictPayload = z.infer<typeof WorkScheduleLegacyConflictPayload>;
+
+/** One unresolved provider or migration change. */
+export const WorkScheduleChangeOut = z
+  .object({
+    id: WorkScheduleChangeId,
+    connectionId: CalendarConnectionId.nullable(),
+    provider: z.string().min(1).nullable(),
+    accountLabel: z.string().min(1).nullable(),
+    kind: WorkScheduleChangeKind,
+    payload: z.record(z.string(), z.unknown()),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict()
+  .meta({
+    id: 'WorkScheduleChangeOut',
+    description: 'One work-schedule change awaiting a decision.',
+  });
+/** Work-schedule reconciliation change value. */
+export type WorkScheduleChangeOut = z.infer<typeof WorkScheduleChangeOut>;
+
+/** Pending work-schedule reconciliation queue. */
+export const WorkScheduleChangeListOut = z
+  .object({ items: z.array(WorkScheduleChangeOut) })
+  .strict()
+  .meta({
+    id: 'WorkScheduleChangeListOut',
+    description: 'All unresolved work-schedule changes in oldest-first order.',
+  });
+/** Pending work-schedule reconciliation queue value. */
+export type WorkScheduleChangeListOut = z.infer<typeof WorkScheduleChangeListOut>;
+
+/** Owner decision that resolves one queued schedule change. */
+export const WorkScheduleChangeResolution = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('link_place'), placeId: WorkPlaceId }).strict(),
+  z.object({ action: z.literal('ignore') }).strict(),
+  z.object({ action: z.literal('keep_docket') }).strict(),
+  z.object({ action: z.literal('use_provider') }).strict(),
+]);
+/** Work-schedule reconciliation decision value. */
+export type WorkScheduleChangeResolution = z.infer<typeof WorkScheduleChangeResolution>;
+
 /** Origin of a persisted canonical explicit assertion. */
 export const WorkLocationAssertionOrigin = z.enum(['docket', 'provider']);
 /** Work-location assertion-origin value. */
@@ -315,6 +628,7 @@ export type WorkLocationConfidence = z.infer<typeof WorkLocationConfidence>;
 
 /** Provenance for expected-location resolution. */
 export const ExpectedWorkLocationSource = z.enum([
+  'schedule_plan',
   'assertion',
   'work_block',
   'bridged_work_blocks',
@@ -322,6 +636,17 @@ export const ExpectedWorkLocationSource = z.enum([
 ]);
 /** Expected-location source value. */
 export type ExpectedWorkLocationSource = z.infer<typeof ExpectedWorkLocationSource>;
+
+/** Whether the default schedule says the person is working and how its location is defined. */
+export const ExpectedWorkState = z.enum([
+  'scheduled',
+  'mobile',
+  'undecided',
+  'not_working',
+  'unknown',
+]);
+/** Expected-work state value. */
+export type ExpectedWorkState = z.infer<typeof ExpectedWorkState>;
 
 /** Provenance for current-location resolution. */
 export const CurrentWorkLocationSource = z.enum([
@@ -345,7 +670,11 @@ const ResolvedLocationFields = {
 
 /** Resolved expected location at one instant. */
 export const ResolvedExpectedWorkLocation = z
-  .object({ ...ResolvedLocationFields, source: ExpectedWorkLocationSource })
+  .object({
+    ...ResolvedLocationFields,
+    source: ExpectedWorkLocationSource,
+    workState: ExpectedWorkState,
+  })
   .strict();
 /** Resolved expected-location value. */
 export type ResolvedExpectedWorkLocation = z.infer<typeof ResolvedExpectedWorkLocation>;
@@ -377,6 +706,7 @@ export const WorkLocationExpectedSegment = z
   .object({
     ...ResolvedLocationFields,
     source: ExpectedWorkLocationSource,
+    workState: ExpectedWorkState,
     effectiveStart: z.iso.datetime(),
     effectiveEnd: z.iso.datetime(),
     assertionId: WorkLocationAssertionId.nullable().describe(
@@ -384,6 +714,12 @@ export const WorkLocationExpectedSegment = z
     ),
     occurrenceDate: DateString.nullable().describe(
       'Civil date of the winning assertion occurrence, or null for non-assertion evidence.',
+    ),
+    planVersionId: WorkSchedulePlanId.nullable().describe(
+      'Winning default-plan version, or null when the segment came from legacy evidence.',
+    ),
+    scheduleExceptionId: WorkScheduleExceptionId.nullable().describe(
+      'Winning dated replacement, or null when the repeating plan generated the segment.',
     ),
   })
   .strict();

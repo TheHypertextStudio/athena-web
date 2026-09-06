@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import { getTableColumns } from 'drizzle-orm';
+import { getTableConfig } from 'drizzle-orm/pg-core';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -17,9 +18,13 @@ import {
   workLocationAssertion,
   workLocationObservation,
   workLocationProfile,
+  workPlaceAlias,
   workLocationSyncAccount,
   workPlace,
   workPlaceProviderMapping,
+  workScheduleChange,
+  workScheduleException,
+  workSchedulePlan,
 } from '../../src/schema';
 
 let client!: PGlite;
@@ -206,5 +211,109 @@ describe('work-location schema', () => {
 
     expect(row.connectionId).toBe(connectionId);
     expect(getTableColumns(workLocationSyncAccount)).not.toHaveProperty('calendarLayerId');
+  });
+
+  it('stores one non-overlapping sequence of work-schedule plan versions per Hub', async () => {
+    await db.insert(workSchedulePlan).values({
+      hubId,
+      anchorDate: '2026-09-07',
+      timezone: 'America/Los_Angeles',
+      effectiveFrom: '2026-09-07',
+      effectiveUntil: '2026-09-20',
+      cycleDays: [{ segments: [] }],
+    });
+
+    await expect(
+      db.insert(workSchedulePlan).values({
+        hubId,
+        anchorDate: '2026-09-14',
+        timezone: 'America/Los_Angeles',
+        effectiveFrom: '2026-09-14',
+        effectiveUntil: null,
+        cycleDays: [{ segments: [] }],
+      }),
+    ).rejects.toMatchObject({
+      cause: { constraint: 'work_schedule_plan_hub_effective_range_excl' },
+    });
+  });
+
+  it('stores only one complete replacement for a plan date', async () => {
+    const plan = firstRow(
+      await db
+        .insert(workSchedulePlan)
+        .values({
+          hubId,
+          anchorDate: '2026-10-01',
+          timezone: 'America/Los_Angeles',
+          effectiveFrom: '2026-10-01',
+          effectiveUntil: '2026-10-31',
+          cycleDays: [{ segments: [] }],
+        })
+        .returning(),
+      'plan insertion',
+    );
+    const replacement = {
+      hubId,
+      planVersionId: plan.id,
+      date: '2026-10-12',
+      segments: [],
+      origin: 'docket' as const,
+    };
+
+    await db.insert(workScheduleException).values(replacement);
+    await expect(db.insert(workScheduleException).values(replacement)).rejects.toMatchObject({
+      cause: { constraint: 'work_schedule_exception_plan_date_uq' },
+    });
+  });
+
+  it('scopes normalized provider labels to one connected account', async () => {
+    const place = firstRow(
+      await db.insert(workPlace).values({ hubId, name: 'Decatur cafe' }).returning(),
+      'alias place insertion',
+    );
+    const alias = {
+      hubId,
+      connectionId,
+      provider: 'google',
+      normalizedLabel: 'starbucks n decatur 215',
+      displayLabel: 'Starbucks - N Decatur & 215',
+      placeId: place.id,
+    } as const;
+
+    await db.insert(workPlaceAlias).values(alias);
+    await expect(db.insert(workPlaceAlias).values(alias)).rejects.toMatchObject({
+      cause: { constraint: 'work_place_alias_connection_label_uq' },
+    });
+  });
+
+  it('deduplicates incoming schedule changes by connected account and provider key', async () => {
+    const change = {
+      hubId,
+      connectionId,
+      provider: 'google',
+      kind: 'unmatched_place',
+      state: 'pending',
+      dedupeKey: 'event:provider-event-42',
+      payload: { label: 'Client office' },
+    } as const;
+
+    await db.insert(workScheduleChange).values(change);
+    await expect(db.insert(workScheduleChange).values(change)).rejects.toMatchObject({
+      cause: { constraint: 'work_schedule_change_connection_key_uq' },
+    });
+  });
+
+  it('updates timestamps when mutable schedule records change', () => {
+    for (const table of [
+      workSchedulePlan,
+      workScheduleException,
+      workPlaceAlias,
+      workScheduleChange,
+    ]) {
+      const updatedAt = getTableConfig(table).columns.find(
+        (column) => column.name === 'updated_at',
+      );
+      expect(updatedAt?.onUpdateFn?.()).toBeInstanceOf(Date);
+    }
   });
 });

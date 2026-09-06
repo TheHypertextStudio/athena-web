@@ -1,6 +1,6 @@
 # Unified Work Location Source Of Truth
 
-> **Status**: Approved for implementation
+> **Status**: Superseded by `docs/core/work-schedule.md`
 > **Date**: 2026-08-13
 > **Area**: Personal Hub, scheduling, Time Ledger, calendar providers, Agenda, Calendar
 

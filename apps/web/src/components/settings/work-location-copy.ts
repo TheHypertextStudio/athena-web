@@ -2,7 +2,7 @@
  * `settings` — how work-location delivery states read.
  *
  * @remarks
- * The API distinguishes five causes for an account that cannot publish a work location, and the
+ * The API distinguishes five causes for an account that cannot sync a work location, and the
  * settings surface collapsed four of them into "Account action is required" — which names no
  * account, no action, and no requirement. A missing scope and an unsupported account call for
  * opposite responses: one is two clicks away, the other cannot be fixed at all.
@@ -16,13 +16,13 @@
  */
 import type { WorkLocationSyncReason } from '@docket/planning/work-location-contract';
 
-/** Why one linked account cannot publish your work location, and what ends it. */
+/** Why one linked account cannot sync your work location, and what ends it. */
 export const SYNC_REASON: Record<WorkLocationSyncReason, string> = {
-  unsupported_account: 'This account type cannot publish a work location.',
+  unsupported_account: 'This account type cannot sync working locations.',
   missing_scope: 'Docket needs permission to edit this calendar.',
   unsupported_recurrence: 'Change the Google recurrence to daily or weekly to continue.',
   provider_unavailable: 'Google is not responding. Retrying automatically.',
-  reauth_required: 'Sign in to this account again to resume publishing.',
+  reauth_required: 'Sign in to this account again to resume syncing.',
 };
 
 /**
@@ -38,7 +38,7 @@ export function syncStateCopy(state: string, reason: WorkLocationSyncReason | nu
   if (state === 'pending') return 'Preparing location sync';
   if (state === 'retrying') return 'Retrying safely';
   if (state === 'unsupported') return 'Work-location sync is not supported for this account.';
-  return 'This account needs attention before it can publish your location.';
+  return 'This account needs attention before it can sync working locations.';
 }
 
 /**

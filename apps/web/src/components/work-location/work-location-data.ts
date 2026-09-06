@@ -34,6 +34,26 @@ export function workLocationPlacesDef() {
   );
 }
 
+/** Load the versioned default work schedule and complete dated replacements. */
+export function workScheduleDef() {
+  return apiQueryOptions(
+    queryKeys.workSchedule(),
+    () => api.v1.me['work-location'].schedule.$get(),
+    'Could not load your work schedule.',
+    { staleTime: STALE.standard },
+  );
+}
+
+/** Load provider and migration changes that still need an owner decision. */
+export function workScheduleChangesDef() {
+  return apiQueryOptions(
+    queryKeys.workScheduleChanges(),
+    () => api.v1.me['work-location'].changes.$get(),
+    'Could not load unmatched place names.',
+    { staleTime: STALE.standard },
+  );
+}
+
 /** Load active canonical one-off and weekly assertions. */
 export function workLocationAssertionsDef() {
   return apiQueryOptions(

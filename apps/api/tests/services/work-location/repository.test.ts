@@ -8,6 +8,8 @@ import {
   hub,
   user,
   workLocationObservation,
+  workPlaceAlias,
+  workScheduleChange,
   type Database,
 } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
@@ -30,6 +32,12 @@ import {
   setWorkLocationOccurrence,
   updateWorkLocationProfile,
 } from '../../../src/services/work-location/repository';
+import {
+  linkWorkPlaceAlias,
+  listWorkSchedule,
+  replaceWorkSchedulePlan,
+  setWorkScheduleException,
+} from '../../../src/services/work-location/schedule-repository';
 
 let client!: PGlite;
 let database!: Database;
@@ -282,5 +290,214 @@ describe('work-location repository', () => {
     expect((await listWorkLocationAssertions(database, hubId)).items).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ placeId: place.id })]),
     );
+  });
+
+  it('replaces the current default plan from an effective date without changing history', async () => {
+    const place = await createWorkPlace(database, hubId, {
+      name: 'Schedule office',
+      geofence: null,
+      providerMappings: [],
+      sort: 0,
+    });
+    const first = await replaceWorkSchedulePlan(database, hubId, {
+      anchorDate: '2026-09-07',
+      timezone: 'America/Los_Angeles',
+      effectiveFrom: '2026-09-07',
+      effectiveUntil: null,
+      cycleDays: [
+        {
+          segments: [
+            {
+              startMinute: 1_080,
+              durationMinutes: 120,
+              location: { type: 'saved_place', placeId: place.id },
+            },
+            {
+              startMinute: 540,
+              durationMinutes: 480,
+              location: { type: 'saved_place', placeId: place.id },
+            },
+          ],
+        },
+      ],
+    });
+    const futureChange = await setWorkScheduleException(database, hubId, {
+      date: '2026-09-20',
+      segments: [],
+    });
+    const second = await replaceWorkSchedulePlan(database, hubId, {
+      anchorDate: '2026-09-14',
+      timezone: 'America/Los_Angeles',
+      effectiveFrom: '2026-09-14',
+      effectiveUntil: null,
+      cycleDays: [{ segments: [] }],
+    });
+
+    const schedule = await listWorkSchedule(database, hubId);
+    expect(schedule.plans).toEqual([
+      expect.objectContaining({
+        id: first.id,
+        effectiveUntil: '2026-09-13',
+        cycleDays: [
+          {
+            segments: [
+              expect.objectContaining({ startMinute: 540 }),
+              expect.objectContaining({ startMinute: 1_080 }),
+            ],
+          },
+        ],
+      }),
+      expect.objectContaining({ id: second.id, effectiveUntil: null }),
+    ]);
+    expect(schedule.exceptions).toContainEqual(
+      expect.objectContaining({ id: futureChange.id, planVersionId: second.id }),
+    );
+  });
+
+  it('blocks retirement from canonical plans and dated changes but ignores history', async () => {
+    const [defaultPlace, changedPlace] = await Promise.all([
+      createWorkPlace(database, hubId, {
+        name: 'Future schedule office',
+        geofence: null,
+        providerMappings: [],
+        sort: 0,
+      }),
+      createWorkPlace(database, hubId, {
+        name: 'Future schedule alternate',
+        geofence: null,
+        providerMappings: [],
+        sort: 1,
+      }),
+    ]);
+    await replaceWorkSchedulePlan(database, hubId, {
+      anchorDate: '2036-01-01',
+      timezone: 'America/Los_Angeles',
+      effectiveFrom: '2036-01-01',
+      effectiveUntil: null,
+      cycleDays: [
+        {
+          segments: [
+            {
+              startMinute: 540,
+              durationMinutes: 480,
+              location: { type: 'saved_place', placeId: defaultPlace.id },
+            },
+          ],
+        },
+      ],
+    });
+
+    await expect(
+      archiveWorkPlace(database, hubId, defaultPlace.id, new Date('2036-01-02T18:00:00.000Z')),
+    ).rejects.toThrow('Move this place out of the current and future work schedule first');
+
+    await replaceWorkSchedulePlan(database, hubId, {
+      anchorDate: '2036-01-03',
+      timezone: 'America/Los_Angeles',
+      effectiveFrom: '2036-01-03',
+      effectiveUntil: null,
+      cycleDays: [{ segments: [] }],
+    });
+    await setWorkScheduleException(database, hubId, {
+      date: '2036-01-10',
+      segments: [
+        {
+          startMinute: 600,
+          durationMinutes: 180,
+          location: { type: 'saved_place', placeId: changedPlace.id },
+        },
+      ],
+    });
+
+    await expect(
+      archiveWorkPlace(database, hubId, changedPlace.id, new Date('2036-01-04T18:00:00.000Z')),
+    ).rejects.toThrow('Move this place out of the current and future work schedule first');
+    await expect(
+      archiveWorkPlace(database, hubId, defaultPlace.id, new Date('2036-01-04T18:00:00.000Z')),
+    ).resolves.toBeUndefined();
+  });
+
+  it('upserts a complete dated replacement on the plan that governs the date', async () => {
+    const schedule = await listWorkSchedule(database, hubId);
+    const governing = schedule.plans.find(
+      (plan) =>
+        plan.effectiveFrom <= '2026-09-15' &&
+        (plan.effectiveUntil === null || plan.effectiveUntil >= '2026-09-15'),
+    );
+    expect(governing).toBeDefined();
+
+    const first = await setWorkScheduleException(database, hubId, {
+      date: '2026-09-15',
+      segments: [],
+    });
+    const replaced = await setWorkScheduleException(database, hubId, {
+      date: '2026-09-15',
+      segments: [
+        {
+          startMinute: 900,
+          durationMinutes: 60,
+          location: { type: 'undecided' },
+        },
+        {
+          startMinute: 600,
+          durationMinutes: 120,
+          location: { type: 'mobile' },
+        },
+      ],
+    });
+
+    expect(replaced.id).toBe(first.id);
+    expect(replaced.planVersionId).toBe(governing?.id);
+    expect(replaced.segments).toEqual([
+      expect.objectContaining({ startMinute: 600, location: { type: 'mobile' } }),
+      expect.objectContaining({ startMinute: 900, location: { type: 'undecided' } }),
+    ]);
+  });
+
+  it('links one unmatched provider label to an owned place and resolves the item', async () => {
+    const place = await createWorkPlace(database, hubId, {
+      name: 'Decatur cafe',
+      geofence: null,
+      providerMappings: [],
+      sort: 0,
+    });
+    const change = firstRow(
+      await database
+        .insert(workScheduleChange)
+        .values({
+          hubId,
+          connectionId,
+          provider: 'google',
+          kind: 'unmatched_place',
+          state: 'pending',
+          dedupeKey: 'event:unmatched-decatur',
+          payload: {
+            kind: 'unmatched_place',
+            label: 'Starbucks - N Decatur & 215',
+            normalizedLabel: 'starbucks n decatur 215',
+            externalEventId: 'provider-event-decatur',
+          },
+        })
+        .returning(),
+      'unmatched change insertion',
+    );
+
+    await linkWorkPlaceAlias(database, hubId, change.id, place.id);
+
+    expect(
+      await database.select().from(workPlaceAlias).where(eq(workPlaceAlias.placeId, place.id)),
+    ).toEqual([
+      expect.objectContaining({
+        connectionId,
+        displayLabel: 'Starbucks - N Decatur & 215',
+        normalizedLabel: 'starbucks n decatur 215',
+      }),
+    ]);
+    expect(
+      await database.select().from(workScheduleChange).where(eq(workScheduleChange.id, change.id)),
+    ).toEqual([expect.objectContaining({ state: 'resolved' })]);
+    await expect(
+      linkWorkPlaceAlias(database, otherHubId, change.id, place.id),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 });

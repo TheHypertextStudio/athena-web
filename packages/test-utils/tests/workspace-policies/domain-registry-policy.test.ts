@@ -395,6 +395,7 @@ describe('domain registry policy', () => {
       './exact-resize',
       './intervals',
       './zoned-time',
+      './work-schedule',
       './work-location-resolution',
       './hub-preferences-contract',
       './daily-plan-contract',

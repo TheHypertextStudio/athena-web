@@ -270,6 +270,7 @@ describe('resolved work location and sync state', () => {
         {
           place: { id: PLACE_ID, name: 'Downtown office' },
           source: 'assertion',
+          workState: 'scheduled',
           confidence: 'declared',
           effectiveStart: '2026-08-13T16:00:00.000Z',
           effectiveEnd: '2026-08-13T20:00:00.000Z',
@@ -277,6 +278,8 @@ describe('resolved work location and sync state', () => {
           expiresAt: null,
           assertionId: ASSERTION_ID,
           occurrenceDate: '2026-08-13',
+          planVersionId: null,
+          scheduleExceptionId: null,
         },
       ],
     });
@@ -295,6 +298,7 @@ describe('resolved work location and sync state', () => {
         {
           place: null,
           source: 'unknown',
+          workState: 'unknown',
           confidence: 'unknown',
           effectiveStart: '2026-08-13T16:00:00.000Z',
           effectiveEnd: '2026-08-13T20:00:00.000Z',
@@ -302,6 +306,8 @@ describe('resolved work location and sync state', () => {
           expiresAt: null,
           assertionId: null,
           occurrenceDate: null,
+          planVersionId: null,
+          scheduleExceptionId: null,
         },
       ],
     });
@@ -324,6 +330,7 @@ describe('resolved work location and sync state', () => {
       expected: {
         place: { id: PLACE_ID, name: 'Downtown office' },
         source: 'assertion',
+        workState: 'scheduled',
         confidence: 'declared',
         effectiveStart: '2026-08-13T16:00:00.000Z',
         effectiveEnd: '2026-08-13T20:00:00.000Z',

@@ -14,10 +14,13 @@ import type {
   WorkLocationRangeOut,
   WorkLocationSchedule,
   WorkPlaceSummary,
+  WorkScheduleExceptionOut,
+  WorkSchedulePlanOut,
 } from './contracts/work-location';
 
 import { addCalendarDays, compareCalendarDates, mondayWeekdayIndex } from './calendar-date';
 import { instantAt, localDateString } from './zoned-time';
+import { expandWorkSchedulePlan, type ExpandedWorkScheduleDay } from './work-schedule';
 
 /** Minimal saved-place identity required by the resolver. */
 export interface ResolutionPlace {
@@ -61,6 +64,14 @@ export interface ResolutionTimeContext {
   readonly endsAt: Date | null;
 }
 
+/** One canonical default-plan version and its full-day dated replacements. */
+export interface ResolutionWorkSchedulePlan {
+  /** Effective-dated plan version. */
+  readonly plan: WorkSchedulePlanOut;
+  /** Replacements that belong to this version. */
+  readonly exceptions: readonly WorkScheduleExceptionOut[];
+}
+
 /** All evidence available for one user's point/range resolution. */
 export interface WorkLocationResolutionState {
   readonly timezone: string;
@@ -69,6 +80,7 @@ export interface WorkLocationResolutionState {
   readonly workBlocks: readonly ResolutionWorkBlock[];
   readonly observations: readonly ResolutionObservation[];
   readonly activeTimeContexts: readonly ResolutionTimeContext[];
+  readonly plans: readonly ResolutionWorkSchedulePlan[];
 }
 
 interface AssertionInterval {
@@ -240,6 +252,114 @@ function assertionIntervals(
 interface ExpectedResolution extends ResolvedExpectedWorkLocation {
   readonly assertionId: string | null;
   readonly occurrenceDate: string | null;
+  readonly planVersionId: string | null;
+  readonly scheduleExceptionId: string | null;
+}
+
+/** Expand every plan far enough to include long segments that began before the requested window. */
+function planDaysForWindow(
+  state: WorkLocationResolutionState,
+  windowStart: Date,
+  windowEnd: Date,
+): ExpandedWorkScheduleDay[] {
+  return state.plans.flatMap(({ plan, exceptions }) =>
+    expandWorkSchedulePlan({
+      plan,
+      exceptions,
+      startDate: addCalendarDays(localDateString(windowStart, plan.timezone), -7),
+      endDate: addCalendarDays(localDateString(windowEnd, plan.timezone), 1),
+    }),
+  );
+}
+
+/** Resolve a default-plan segment or an explicit non-working gap before legacy evidence. */
+function resolvePlan(at: Date, state: WorkLocationResolutionState): ExpectedResolution | null {
+  const pointEnd = new Date(at.getTime() + 1);
+  const active = planDaysForWindow(state, at, pointEnd)
+    .flatMap((day) =>
+      day.segments.map((segment) => ({
+        ...segment,
+        date: day.date,
+        planVersionId: day.planVersionId,
+        exceptionId: day.exceptionId,
+      })),
+    )
+    .filter((segment) => contains(at, new Date(segment.startsAt), new Date(segment.endsAt)))
+    .sort((left, right) => {
+      const leftPlan = state.plans.find((candidate) => candidate.plan.id === left.planVersionId);
+      const rightPlan = state.plans.find((candidate) => candidate.plan.id === right.planVersionId);
+      return (rightPlan?.plan.effectiveFrom ?? '').localeCompare(
+        leftPlan?.plan.effectiveFrom ?? '',
+      );
+    });
+  const winner = active[0];
+  if (winner) {
+    const place =
+      winner.location.type === 'saved_place' ? placeSummary(state, winner.location.placeId) : null;
+    if (winner.location.type === 'saved_place' && !place) {
+      return {
+        place: null,
+        source: 'schedule_plan',
+        workState: 'scheduled',
+        confidence: 'unknown',
+        effectiveStart: winner.startsAt,
+        effectiveEnd: winner.endsAt,
+        observedAt: null,
+        expiresAt: null,
+        assertionId: null,
+        occurrenceDate: winner.date,
+        planVersionId: winner.planVersionId,
+        scheduleExceptionId: winner.exceptionId,
+      };
+    }
+    return {
+      place,
+      source: 'schedule_plan',
+      workState: winner.location.type === 'saved_place' ? 'scheduled' : winner.location.type,
+      confidence: winner.location.type === 'undecided' ? 'unknown' : 'declared',
+      effectiveStart: winner.startsAt,
+      effectiveEnd: winner.endsAt,
+      observedAt: null,
+      expiresAt: null,
+      assertionId: null,
+      occurrenceDate: winner.date,
+      planVersionId: winner.planVersionId,
+      scheduleExceptionId: winner.exceptionId,
+    };
+  }
+
+  const governing = [...state.plans]
+    .sort((left, right) => right.plan.effectiveFrom.localeCompare(left.plan.effectiveFrom))
+    .find(({ plan }) => {
+      const date = localDateString(at, plan.timezone);
+      return (
+        compareCalendarDates(date, plan.effectiveFrom) >= 0 &&
+        (plan.effectiveUntil === null || compareCalendarDates(date, plan.effectiveUntil) <= 0)
+      );
+    });
+  if (!governing) return null;
+  const date = localDateString(at, governing.plan.timezone);
+  const day = expandWorkSchedulePlan({
+    plan: governing.plan,
+    exceptions: governing.exceptions,
+    startDate: date,
+    endDate: date,
+  })[0];
+  if (!day) return null;
+  return {
+    place: null,
+    source: 'schedule_plan',
+    workState: 'not_working',
+    confidence: 'declared',
+    effectiveStart: instantAt(date, 0, governing.plan.timezone).toISOString(),
+    effectiveEnd: instantAt(addCalendarDays(date, 1), 0, governing.plan.timezone).toISOString(),
+    observedAt: null,
+    expiresAt: null,
+    assertionId: null,
+    occurrenceDate: date,
+    planVersionId: governing.plan.id,
+    scheduleExceptionId: day.exceptionId,
+  };
 }
 
 /** Resolve explicit assertions, including timed/all-day and equal-scope precedence. */
@@ -263,6 +383,7 @@ function resolveAssertion(at: Date, state: WorkLocationResolutionState): Expecte
   return {
     place,
     source: 'assertion',
+    workState: 'scheduled',
     confidence: 'declared',
     effectiveStart: winner.start.toISOString(),
     effectiveEnd: winner.end.toISOString(),
@@ -270,6 +391,8 @@ function resolveAssertion(at: Date, state: WorkLocationResolutionState): Expecte
     expiresAt: null,
     assertionId: winner.assertionId,
     occurrenceDate: winner.occurrenceDate,
+    planVersionId: null,
+    scheduleExceptionId: null,
   };
 }
 
@@ -284,6 +407,7 @@ function locatedBlockResolution(
   return {
     place,
     source: 'work_block',
+    workState: 'scheduled',
     confidence: 'declared',
     effectiveStart: block.startsAt.toISOString(),
     effectiveEnd: block.endsAt.toISOString(),
@@ -291,6 +415,8 @@ function locatedBlockResolution(
     expiresAt: null,
     assertionId: null,
     occurrenceDate: null,
+    planVersionId: null,
+    scheduleExceptionId: null,
   };
 }
 
@@ -314,6 +440,7 @@ function bridgedBlockResolution(
   return {
     place,
     source: 'bridged_work_blocks',
+    workState: 'scheduled',
     confidence: 'inferred',
     effectiveStart: before.endsAt.toISOString(),
     effectiveEnd: after.startsAt.toISOString(),
@@ -321,6 +448,8 @@ function bridgedBlockResolution(
     expiresAt: null,
     assertionId: null,
     occurrenceDate: null,
+    planVersionId: null,
+    scheduleExceptionId: null,
   };
 }
 
@@ -343,6 +472,7 @@ function unknownExpected(): ExpectedResolution {
   return {
     place: null,
     source: 'unknown',
+    workState: 'unknown',
     confidence: 'unknown',
     effectiveStart: null,
     effectiveEnd: null,
@@ -350,6 +480,8 @@ function unknownExpected(): ExpectedResolution {
     expiresAt: null,
     assertionId: null,
     occurrenceDate: null,
+    planVersionId: null,
+    scheduleExceptionId: null,
   };
 }
 
@@ -358,7 +490,12 @@ function resolveExpectedWithProvenance(
   at: Date,
   state: WorkLocationResolutionState,
 ): ExpectedResolution {
-  return resolveAssertion(at, state) ?? resolveWorkBlock(at, state) ?? unknownExpected();
+  return (
+    resolvePlan(at, state) ??
+    resolveAssertion(at, state) ??
+    resolveWorkBlock(at, state) ??
+    unknownExpected()
+  );
 }
 
 /** Resolve expected location at one instant using the documented domain precedence. */
@@ -369,6 +506,8 @@ export function resolveExpectedWorkLocation(
   const {
     assertionId: _assertionId,
     occurrenceDate: _occurrenceDate,
+    planVersionId: _planVersionId,
+    scheduleExceptionId: _scheduleExceptionId,
     ...resolution
   } = resolveExpectedWithProvenance(at, state);
   return resolution;
@@ -424,8 +563,9 @@ export function resolveCurrentWorkLocation(
   }
 
   if (expected.place) {
+    const { workState: _workState, ...current } = expected;
     return {
-      ...expected,
+      ...current,
       source: 'inferred_from_expected',
       confidence: 'inferred',
     };
@@ -466,28 +606,71 @@ function sameResolution(
     left.observedAt === right.observedAt &&
     left.expiresAt === right.expiresAt &&
     left.assertionId === right.assertionId &&
-    left.occurrenceDate === right.occurrenceDate
+    left.occurrenceDate === right.occurrenceDate &&
+    left.planVersionId === right.planVersionId &&
+    left.scheduleExceptionId === right.scheduleExceptionId &&
+    left.workState === right.workState
   );
 }
 
-/** Collect every assertion and work-block boundary inside one requested range. */
-function resolutionBoundaries(input: {
+interface ResolutionWindow {
   readonly start: Date;
   readonly end: Date;
   readonly state: WorkLocationResolutionState;
-}): number[] {
-  const boundaries = new Set<number>([input.start.getTime(), input.end.getTime()]);
+}
+
+/** Add both ends of an interval after clipping it to the requested range. */
+function addClippedBoundaries(
+  boundaries: Set<number>,
+  start: number,
+  end: number,
+  window: ResolutionWindow,
+): void {
+  if (end <= window.start.getTime() || start >= window.end.getTime()) return;
+  boundaries.add(Math.max(start, window.start.getTime()));
+  boundaries.add(Math.min(end, window.end.getTime()));
+}
+
+/** Add every explicit assertion occurrence boundary. */
+function addAssertionBoundaries(boundaries: Set<number>, input: ResolutionWindow): void {
   for (const assertion of input.state.assertions) {
     for (const interval of assertionIntervals(assertion, input.start, input.end)) {
-      boundaries.add(Math.max(interval.start.getTime(), input.start.getTime()));
-      boundaries.add(Math.min(interval.end.getTime(), input.end.getTime()));
+      addClippedBoundaries(boundaries, interval.start.getTime(), interval.end.getTime(), input);
     }
   }
-  for (const block of input.state.workBlocks) {
-    if (block.endsAt <= input.start || block.startsAt >= input.end) continue;
-    boundaries.add(Math.max(block.startsAt.getTime(), input.start.getTime()));
-    boundaries.add(Math.min(block.endsAt.getTime(), input.end.getTime()));
+}
+
+/** Add plan-day and plan-segment boundaries. */
+function addPlanBoundaries(boundaries: Set<number>, input: ResolutionWindow): void {
+  for (const day of planDaysForWindow(input.state, input.start, input.end)) {
+    const plan = input.state.plans.find(
+      (candidate) => candidate.plan.id === day.planVersionId,
+    )?.plan;
+    if (!plan) continue;
+    const dayStart = instantAt(day.date, 0, plan.timezone).getTime();
+    const dayEnd = instantAt(addCalendarDays(day.date, 1), 0, plan.timezone).getTime();
+    addClippedBoundaries(boundaries, dayStart, dayEnd, input);
+    for (const segment of day.segments) {
+      const segmentStart = new Date(segment.startsAt).getTime();
+      const segmentEnd = new Date(segment.endsAt).getTime();
+      addClippedBoundaries(boundaries, segmentStart, segmentEnd, input);
+    }
   }
+}
+
+/** Add every location-bound work-block boundary. */
+function addWorkBlockBoundaries(boundaries: Set<number>, input: ResolutionWindow): void {
+  for (const block of input.state.workBlocks) {
+    addClippedBoundaries(boundaries, block.startsAt.getTime(), block.endsAt.getTime(), input);
+  }
+}
+
+/** Collect every assertion, plan, and work-block boundary inside one requested range. */
+function resolutionBoundaries(input: ResolutionWindow): number[] {
+  const boundaries = new Set<number>([input.start.getTime(), input.end.getTime()]);
+  addAssertionBoundaries(boundaries, input);
+  addPlanBoundaries(boundaries, input);
+  addWorkBlockBoundaries(boundaries, input);
   return [...boundaries].sort((left, right) => left - right);
 }
 
@@ -510,6 +693,10 @@ function appendResolutionSegment(
     ...resolution,
     assertionId: resolution.assertionId as WorkLocationRangeOut['segments'][number]['assertionId'],
     occurrenceDate: resolution.occurrenceDate,
+    planVersionId:
+      resolution.planVersionId as WorkLocationRangeOut['segments'][number]['planVersionId'],
+    scheduleExceptionId:
+      resolution.scheduleExceptionId as WorkLocationRangeOut['segments'][number]['scheduleExceptionId'],
     effectiveStart: start,
     effectiveEnd: end,
   });

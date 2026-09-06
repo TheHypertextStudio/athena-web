@@ -48,6 +48,7 @@ function range(segment: Partial<WorkLocationRangeOut['segments'][number]>): Work
       {
         place: { id: PLACE_ID, name: place.name },
         source: 'assertion',
+        workState: 'scheduled',
         confidence: 'declared',
         effectiveStart: '2026-03-08T08:00:00.000Z',
         effectiveEnd: '2026-03-09T07:00:00.000Z',
@@ -55,6 +56,8 @@ function range(segment: Partial<WorkLocationRangeOut['segments'][number]>): Work
         expiresAt: null,
         assertionId: ASSERTION_ID,
         occurrenceDate: '2026-03-08',
+        planVersionId: null,
+        scheduleExceptionId: null,
         ...segment,
       },
     ],

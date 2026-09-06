@@ -19,6 +19,83 @@ import { calendarConnection } from './calendar';
 import { hub } from './identity';
 import { workLocationAssertion, workPlace } from './work-location';
 
+/** An account-scoped provider label that a person linked to one saved place. */
+export const workPlaceAlias = pgTable(
+  'work_place_alias',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    hubId: text('hub_id')
+      .notNull()
+      .references(() => hub.id, { onDelete: 'cascade' }),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => calendarConnection.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    normalizedLabel: text('normalized_label').notNull(),
+    displayLabel: text('display_label').notNull(),
+    placeId: text('place_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('work_place_alias_connection_label_uq').on(t.connectionId, t.normalizedLabel),
+    index('work_place_alias_place_idx').on(t.placeId),
+    foreignKey({
+      columns: [t.hubId, t.placeId],
+      foreignColumns: [workPlace.hubId, workPlace.id],
+      name: 'work_place_alias_place_fk',
+    }).onDelete('cascade'),
+    check('work_place_alias_label_nonempty', sql`length(trim(${t.normalizedLabel})) > 0`),
+    check('work_place_alias_display_nonempty', sql`length(trim(${t.displayLabel})) > 0`),
+  ],
+);
+
+/** One provider or migration change that still needs a person-owned schedule decision. */
+export const workScheduleChange = pgTable(
+  'work_schedule_change',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    hubId: text('hub_id')
+      .notNull()
+      .references(() => hub.id, { onDelete: 'cascade' }),
+    connectionId: text('connection_id').references(() => calendarConnection.id, {
+      onDelete: 'cascade',
+    }),
+    provider: text('provider'),
+    kind: text('kind').notNull(),
+    state: text('state').notNull().default('pending'),
+    dedupeKey: text('dedupe_key').notNull(),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    providerUpdatedAt: timestamp('provider_updated_at', { withTimezone: true }),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('work_schedule_change_connection_key_uq').on(t.connectionId, t.dedupeKey),
+    index('work_schedule_change_hub_state_idx').on(t.hubId, t.state, t.createdAt),
+    check(
+      'work_schedule_change_kind_check',
+      sql`${t.kind} IN ('unmatched_place', 'schedule_conflict', 'legacy_conflict')`,
+    ),
+    check(
+      'work_schedule_change_state_check',
+      sql`${t.state} IN ('pending', 'resolved', 'ignored')`,
+    ),
+    check('work_schedule_change_key_nonempty', sql`length(trim(${t.dedupeKey})) > 0`),
+    check(
+      'work_schedule_change_provider_shape_check',
+      sql`(${t.connectionId} IS NULL AND ${t.provider} IS NULL) OR (${t.connectionId} IS NOT NULL AND ${t.provider} IS NOT NULL)`,
+    ),
+  ],
+);
+
 /** Account-aware provider vocabulary and native place identifiers for one saved place. */
 export const workPlaceProviderMapping = pgTable(
   'work_place_provider_mapping',

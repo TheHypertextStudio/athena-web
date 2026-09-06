@@ -10,16 +10,28 @@ import {
   workLocationSyncAccount,
   workLocationWrite,
   workPlace,
+  workPlaceAlias,
   workPlaceProviderMapping,
+  workScheduleChange,
+  workScheduleException,
+  workSchedulePlan,
   type Database,
 } from '@docket/db';
-import type {
-  WorkLocationAssertionOut,
-  WorkLocationSchedule,
+import {
+  WorkScheduleConflictPayload,
+  WorkScheduleExceptionCreate,
+  type WorkLocationAssertionOut,
+  type WorkLocationSchedule,
 } from '@docket/planning/work-location-contract';
-import { and, asc, eq, isNull, lte, ne, or } from 'drizzle-orm';
+import { WorkPlaceId } from '@docket/planning/ids';
+import {
+  instantAt,
+  localDateString,
+  localMinuteOfDay,
+  minutesBetween,
+} from '@docket/planning/zoned-time';
+import { and, asc, desc, eq, gte, isNull, lte, ne, or } from 'drizzle-orm';
 
-import { instantAt } from '@docket/planning/zoned-time';
 import {
   archiveWorkLocationAssertion,
   enqueueWorkLocationProjection,
@@ -27,6 +39,8 @@ import {
   listWorkLocationSync,
   resolveWorkLocationHubId,
 } from './repository';
+import { setProviderWorkScheduleException } from './schedule-repository';
+import { refreshWorkScheduleProjectionAssertions } from './schedule-projection';
 import {
   mapGoogleWorkingLocationAssertion,
   normalizeGoogleWorkingLocationEvent,
@@ -159,6 +173,39 @@ function scheduleForOccurrence(
   return null;
 }
 
+/** Convert one dated provider schedule into the complete plan-day replacement it represents. */
+function providerDatedReplacement(
+  schedule: WorkLocationSchedule,
+  placeId: string,
+): WorkScheduleExceptionCreate | null {
+  const parsedPlaceId = WorkPlaceId.parse(placeId);
+  if (schedule.type === 'one_off_all_day') {
+    return {
+      date: schedule.date,
+      segments: [
+        {
+          startMinute: 0,
+          durationMinutes: 1_440,
+          location: { type: 'saved_place', placeId: parsedPlaceId },
+        },
+      ],
+    };
+  }
+  if (schedule.type !== 'one_off_timed') return null;
+  const start = new Date(schedule.startsAt);
+  const end = new Date(schedule.endsAt);
+  return {
+    date: localDateString(start, schedule.timezone),
+    segments: [
+      {
+        startMinute: localMinuteOfDay(start, schedule.timezone),
+        durationMinutes: minutesBetween(start, end),
+        location: { type: 'saved_place', placeId: parsedPlaceId },
+      },
+    ],
+  };
+}
+
 /** Provider-safe deterministic event id for idempotent individual creates. */
 function googleEventId(assertionId: string, exceptionDate: string | null): string {
   return `dkt${createHash('sha256')
@@ -167,16 +214,30 @@ function googleEventId(assertionId: string, exceptionDate: string | null): strin
     .slice(0, 32)}`;
 }
 
-/** Find or create the arbitrary canonical place represented by one account's Google payload. */
-async function ensureImportedPlace(
+/** Normalize provider labels for conservative punctuation-insensitive place matching. */
+export function normalizeProviderPlaceLabel(value: string): string {
+  return value
+    .normalize('NFKD')
+    .toLocaleLowerCase('en-US')
+    .replace(/&/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+/** Resolve one provider place without turning an untrusted free-form label into saved-place data. */
+async function resolveImportedPlace(
   database: Database,
   input: {
     readonly hubId: string;
     readonly connectionId: string;
     readonly place: GoogleImportedPlace;
+    readonly externalEventId: string;
+    readonly trustedPlaceId?: string;
   },
-): Promise<string> {
-  const [mappings, places, profileRows] = await Promise.all([
+): Promise<string | null> {
+  const normalizedLabel = normalizeProviderPlaceLabel(input.place.suggestedName);
+  const [mappings, places, profileRows, aliases] = await Promise.all([
     database
       .select()
       .from(workPlaceProviderMapping)
@@ -189,6 +250,16 @@ async function ensureImportedPlace(
       .select()
       .from(workLocationProfile)
       .where(eq(workLocationProfile.hubId, input.hubId))
+      .limit(1),
+    database
+      .select()
+      .from(workPlaceAlias)
+      .where(
+        and(
+          eq(workPlaceAlias.connectionId, input.connectionId),
+          eq(workPlaceAlias.normalizedLabel, normalizedLabel),
+        ),
+      )
       .limit(1),
   ]);
   const profile = profileRows[0];
@@ -209,16 +280,60 @@ async function ensureImportedPlace(
       place?.name === input.place.suggestedName
     );
   });
-  let placeId =
-    mapped?.placeId ?? places.find((place) => place.name === input.place.suggestedName)?.id;
-  placeId ??= persisted(
+  const trusted = input.trustedPlaceId
+    ? places.find(
+        (place) =>
+          place.id === input.trustedPlaceId &&
+          normalizeProviderPlaceLabel(place.name) === normalizedLabel,
+      )
+    : undefined;
+  const placeId = mapped?.placeId ?? aliases[0]?.placeId ?? trusted?.id ?? null;
+  if (!placeId) {
     await database
-      .insert(workPlace)
-      .values({ hubId: input.hubId, name: input.place.suggestedName })
-      .returning({ id: workPlace.id })
-      .then((rows) => rows[0]),
-    'create imported place',
-  ).id;
+      .insert(workScheduleChange)
+      .values({
+        hubId: input.hubId,
+        connectionId: input.connectionId,
+        provider: 'google',
+        kind: 'unmatched_place',
+        state: 'pending',
+        dedupeKey: `google:event:${input.externalEventId}`,
+        payload: {
+          kind: 'unmatched_place',
+          label: input.place.suggestedName,
+          normalizedLabel,
+          externalEventId: input.externalEventId,
+        },
+      })
+      .onConflictDoUpdate({
+        target: [workScheduleChange.connectionId, workScheduleChange.dedupeKey],
+        set: {
+          payload: {
+            kind: 'unmatched_place',
+            label: input.place.suggestedName,
+            normalizedLabel,
+            externalEventId: input.externalEventId,
+          },
+          updatedAt: new Date(),
+        },
+      });
+    return null;
+  }
+  if (!aliases[0]) {
+    await database
+      .insert(workPlaceAlias)
+      .values({
+        hubId: input.hubId,
+        connectionId: input.connectionId,
+        provider: 'google',
+        normalizedLabel,
+        displayLabel: input.place.suggestedName,
+        placeId,
+      })
+      .onConflictDoNothing({
+        target: [workPlaceAlias.connectionId, workPlaceAlias.normalizedLabel],
+      });
+  }
   await database
     .insert(workPlaceProviderMapping)
     .values({
@@ -317,165 +432,408 @@ async function saveBinding(
     });
 }
 
-/** Adopt one supported master/exception, or acknowledge it as our own projected echo. */
-async function adoptRemoteEvent(
+/** Queue a decision when a provider edit targets a newer Docket-owned dated replacement. */
+async function queueScheduleConflict(
+  database: Database,
+  input: {
+    readonly hubId: string;
+    readonly connectionId: string;
+    readonly event: Extract<
+      NormalizedGoogleWorkingLocation,
+      { kind: 'assertion' | 'delete' | 'exception' }
+    >;
+    readonly binding: NonNullable<Awaited<ReturnType<typeof bindingForRemote>>>;
+    readonly replacement: WorkScheduleExceptionCreate;
+  },
+): Promise<string | null> {
+  const plan = (
+    await database
+      .select({ id: workSchedulePlan.id })
+      .from(workSchedulePlan)
+      .where(
+        and(
+          eq(workSchedulePlan.hubId, input.hubId),
+          lte(workSchedulePlan.effectiveFrom, input.replacement.date),
+          or(
+            isNull(workSchedulePlan.effectiveUntil),
+            gte(workSchedulePlan.effectiveUntil, input.replacement.date),
+          ),
+        ),
+      )
+      .orderBy(desc(workSchedulePlan.effectiveFrom))
+      .limit(1)
+  )[0];
+  if (!plan) return null;
+  const current = (
+    await database
+      .select()
+      .from(workScheduleException)
+      .where(
+        and(
+          eq(workScheduleException.planVersionId, plan.id),
+          eq(workScheduleException.date, input.replacement.date),
+        ),
+      )
+      .limit(1)
+  )[0];
+  const providerBaseline = input.binding.remoteUpdatedAt;
+  const conflicts =
+    current?.origin === 'docket' &&
+    JSON.stringify(current.segments) !== JSON.stringify(input.replacement.segments) &&
+    (providerBaseline === null || current.updatedAt > providerBaseline);
+  if (!conflicts) return null;
+  const payload = WorkScheduleConflictPayload.parse({
+    kind: 'schedule_conflict',
+    date: input.replacement.date,
+    externalEventId: input.event.externalEventId,
+    docketSegments: current.segments,
+    providerSegments: input.replacement.segments,
+  });
+  await database
+    .insert(workScheduleChange)
+    .values({
+      hubId: input.hubId,
+      connectionId: input.connectionId,
+      provider: 'google',
+      kind: 'schedule_conflict',
+      state: 'pending',
+      dedupeKey: `google:schedule-conflict:${input.event.externalEventId}:${input.replacement.date}`,
+      payload,
+      providerUpdatedAt: input.event.updatedAt,
+    })
+    .onConflictDoUpdate({
+      target: [workScheduleChange.connectionId, workScheduleChange.dedupeKey],
+      set: {
+        state: 'pending',
+        payload,
+        providerUpdatedAt: input.event.updatedAt,
+        resolvedAt: null,
+        updatedAt: new Date(),
+      },
+    });
+  return plan.id;
+}
+
+/** Materialize and return the first active generated assertion for one canonical plan date. */
+async function materializedAssertionForDate(
+  database: Database,
+  hubId: string,
+  planVersionId: string,
+  date: string,
+): Promise<typeof workLocationAssertion.$inferSelect | null> {
+  await refreshWorkScheduleProjectionAssertions(database, hubId, {
+    startDate: date,
+    endDate: date,
+  });
+  const rows = await database
+    .select()
+    .from(workLocationAssertion)
+    .where(
+      and(
+        eq(workLocationAssertion.hubId, hubId),
+        eq(workLocationAssertion.originProvider, 'schedule_plan'),
+        eq(workLocationAssertion.sourcePlanVersionId, planVersionId),
+        isNull(workLocationAssertion.archivedAt),
+      ),
+    )
+    .orderBy(asc(workLocationAssertion.sourcePlanKey));
+  return rows.find((row) => row.sourcePlanKey?.startsWith(`${planVersionId}:${date}:`)) ?? null;
+}
+
+/** Apply a remote edit to a generated dated assertion back to its canonical plan date. */
+async function adoptProjectedPlanEdit(
   database: Database,
   input: {
     readonly hubId: string;
     readonly connectionId: string;
     readonly event: Extract<NormalizedGoogleWorkingLocation, { kind: 'assertion' | 'exception' }>;
+    readonly binding: NonNullable<Awaited<ReturnType<typeof bindingForRemote>>>;
+    readonly assertion: typeof workLocationAssertion.$inferSelect;
+    readonly placeId: string;
+    readonly payloadHash: string;
   },
-): Promise<'imported' | 'adopted' | 'acknowledged'> {
-  const binding = await bindingForRemote(database, input.connectionId, input.event.externalEventId);
-  const placeId = await ensureImportedPlace(database, {
+): Promise<'adopted' | 'acknowledged' | null> {
+  if (!input.assertion.sourcePlanVersionId) return null;
+  const replacement = providerDatedReplacement(input.event.schedule, input.placeId);
+  const conflictPlanId = replacement
+    ? await queueScheduleConflict(database, {
+        ...input,
+        replacement,
+      })
+    : null;
+  if (replacement && conflictPlanId) {
+    const projected = await materializedAssertionForDate(
+      database,
+      input.hubId,
+      conflictPlanId,
+      replacement.date,
+    );
+    await saveBinding(database, {
+      ...input,
+      assertionId: projected?.id ?? input.assertion.id,
+      exceptionDate: projected ? null : input.binding.exceptionDate,
+      payloadHash: input.payloadHash,
+      lastProjectedRevision: null,
+    });
+    return 'acknowledged';
+  }
+  const applied = replacement
+    ? await setProviderWorkScheduleException(database, {
+        hubId: input.hubId,
+        connectionId: input.connectionId,
+        provider: 'google',
+        input: replacement,
+        sourceUpdatedAt: input.event.updatedAt,
+      })
+    : null;
+  if (!applied) return 'acknowledged';
+  const projected = await materializedAssertionForDate(
+    database,
+    input.hubId,
+    applied.planVersionId,
+    applied.date,
+  );
+  await saveBinding(database, {
     hubId: input.hubId,
     connectionId: input.connectionId,
-    place: input.event.place,
+    event: input.event,
+    assertionId: projected?.id ?? input.assertion.id,
+    exceptionDate: projected ? null : input.binding.exceptionDate,
+    payloadHash: input.payloadHash,
+    lastProjectedRevision: null,
   });
-  const payloadHash = canonicalHash({ schedule: input.event.schedule, place: input.event.place });
-  if (binding) {
-    const assertion = (
-      await database
-        .select()
-        .from(workLocationAssertion)
-        .where(eq(workLocationAssertion.id, binding.assertionId))
-        .limit(1)
-    )[0];
-    if (assertion?.hubId !== input.hubId) return 'acknowledged';
-    const stale =
-      binding.remoteUpdatedAt !== null &&
-      input.event.updatedAt !== null &&
-      input.event.updatedAt <= binding.remoteUpdatedAt;
-    const projectedEcho =
-      binding.payloadHash === payloadHash && binding.lastProjectedRevision === assertion.revision;
-    if (stale || projectedEcho) {
-      await saveBinding(database, {
-        ...input,
-        assertionId: assertion.id,
-        exceptionDate: binding.exceptionDate,
-        payloadHash,
-        lastProjectedRevision: binding.lastProjectedRevision,
-      });
-      return 'acknowledged';
-    }
+  return 'adopted';
+}
 
-    if (input.event.kind === 'exception' && binding.exceptionDate) {
-      const replacementSchedule = oneOffExceptionSchedule(input.event.schedule);
-      if (!replacementSchedule) return 'acknowledged';
-      await database
-        .insert(workLocationException)
-        .values({
-          hubId: input.hubId,
-          assertionId: assertion.id,
-          date: binding.exceptionDate,
-          action: 'replace',
-          replacementPlaceId: placeId,
-          replacementSchedule,
-        })
-        .onConflictDoUpdate({
-          target: [workLocationException.assertionId, workLocationException.date],
-          set: {
-            action: 'replace',
-            replacementPlaceId: placeId,
-            replacementSchedule,
-            updatedAt: new Date(),
-          },
-        });
-    } else {
-      await database
-        .update(workLocationAssertion)
-        .set({
-          placeId,
-          schedule: input.event.schedule,
-          revision: assertion.revision + 1,
-          sourceUpdatedAt: input.event.updatedAt,
-          updatedAt: input.event.updatedAt ?? new Date(),
-          archivedAt: null,
-        })
-        .where(eq(workLocationAssertion.id, assertion.id));
-    }
-    const current = persisted(
-      (await listWorkLocationAssertions(database, input.hubId)).items.find(
-        (candidate) => candidate.id === assertion.id,
-      ),
-      'read adopted assertion',
-    );
+type RemoteScheduleEvent = Extract<
+  NormalizedGoogleWorkingLocation,
+  { kind: 'assertion' | 'exception' }
+>;
+type RemoteBinding = NonNullable<Awaited<ReturnType<typeof bindingForRemote>>>;
+type RemoteAdoptionOutcome = 'imported' | 'adopted' | 'acknowledged' | 'unmatched';
+
+/** Load the assertion that gives one provider binding its canonical identity. */
+async function assertionForBinding(
+  database: Database,
+  binding: RemoteBinding | null,
+): Promise<typeof workLocationAssertion.$inferSelect | undefined> {
+  if (!binding) return undefined;
+  return (
+    await database
+      .select()
+      .from(workLocationAssertion)
+      .where(eq(workLocationAssertion.id, binding.assertionId))
+      .limit(1)
+  )[0];
+}
+
+/** Adopt a recognized standalone provider date into the governing canonical plan. */
+async function adoptUnboundDatedPlanEvent(
+  database: Database,
+  input: {
+    readonly hubId: string;
+    readonly connectionId: string;
+    readonly event: RemoteScheduleEvent;
+    readonly placeId: string;
+    readonly payloadHash: string;
+  },
+): Promise<'adopted' | null> {
+  if (input.event.kind !== 'assertion') return null;
+  const replacement = providerDatedReplacement(input.event.schedule, input.placeId);
+  if (!replacement) return null;
+  const applied = await setProviderWorkScheduleException(database, {
+    hubId: input.hubId,
+    connectionId: input.connectionId,
+    provider: 'google',
+    input: replacement,
+    sourceUpdatedAt: input.event.updatedAt,
+  });
+  if (!applied) return null;
+  const assertion = await materializedAssertionForDate(
+    database,
+    input.hubId,
+    applied.planVersionId,
+    applied.date,
+  );
+  if (!assertion) throw new Error('Canonical provider date projection was not materialized');
+  await saveBinding(database, {
+    ...input,
+    assertionId: assertion.id,
+    exceptionDate: null,
+    lastProjectedRevision: null,
+  });
+  return 'adopted';
+}
+
+/** Adopt a provider edit whose event already has a stable local binding. */
+async function adoptBoundRemoteEvent(
+  database: Database,
+  input: {
+    readonly hubId: string;
+    readonly connectionId: string;
+    readonly event: RemoteScheduleEvent;
+    readonly binding: RemoteBinding;
+    readonly assertion: typeof workLocationAssertion.$inferSelect | undefined;
+    readonly placeId: string;
+    readonly payloadHash: string;
+  },
+): Promise<'adopted' | 'acknowledged'> {
+  if (input.assertion?.hubId !== input.hubId) return 'acknowledged';
+  const assertion = input.assertion;
+  const stale =
+    input.binding.remoteUpdatedAt !== null &&
+    input.event.updatedAt !== null &&
+    input.event.updatedAt <= input.binding.remoteUpdatedAt;
+  const projectedEcho =
+    input.binding.payloadHash === input.payloadHash &&
+    input.binding.lastProjectedRevision === assertion.revision;
+  if (stale || projectedEcho) {
     await saveBinding(database, {
       ...input,
       assertionId: assertion.id,
-      exceptionDate: binding.exceptionDate,
-      payloadHash,
-      lastProjectedRevision: null,
+      exceptionDate: input.binding.exceptionDate,
+      lastProjectedRevision: input.binding.lastProjectedRevision,
     });
-    await enqueueWorkLocationProjection(
-      database,
-      input.hubId,
-      current,
-      'update',
-      binding.exceptionDate,
-      input.connectionId,
-    );
-    return 'adopted';
+    return 'acknowledged';
   }
 
-  if (input.event.kind === 'exception' && input.event.parentExternalEventId) {
-    const parent = await bindingForRemote(
-      database,
-      input.connectionId,
-      input.event.parentExternalEventId,
-    );
-    if (!parent) return 'acknowledged';
-    const date = input.event.occurrenceKey?.slice(0, 10);
-    if (!date) return 'acknowledged';
+  const planEdit = await adoptProjectedPlanEdit(database, { ...input, assertion });
+  if (planEdit) return planEdit;
+
+  if (input.event.kind === 'exception' && input.binding.exceptionDate) {
     const replacementSchedule = oneOffExceptionSchedule(input.event.schedule);
     if (!replacementSchedule) return 'acknowledged';
-    const assertion = (
-      await database
-        .select()
-        .from(workLocationAssertion)
-        .where(eq(workLocationAssertion.id, parent.assertionId))
-        .limit(1)
-    )[0];
-    if (!assertion || assertion.archivedAt) return 'acknowledged';
-    await database.insert(workLocationException).values({
-      hubId: input.hubId,
-      assertionId: assertion.id,
-      date,
-      action: 'replace',
-      replacementPlaceId: placeId,
-      replacementSchedule,
-    });
+    await database
+      .insert(workLocationException)
+      .values({
+        hubId: input.hubId,
+        assertionId: assertion.id,
+        date: input.binding.exceptionDate,
+        action: 'replace',
+        replacementPlaceId: input.placeId,
+        replacementSchedule,
+      })
+      .onConflictDoUpdate({
+        target: [workLocationException.assertionId, workLocationException.date],
+        set: {
+          action: 'replace',
+          replacementPlaceId: input.placeId,
+          replacementSchedule,
+          updatedAt: new Date(),
+        },
+      });
+  } else {
     await database
       .update(workLocationAssertion)
-      .set({ revision: assertion.revision + 1, updatedAt: input.event.updatedAt ?? new Date() })
+      .set({
+        placeId: input.placeId,
+        schedule: input.event.schedule,
+        revision: assertion.revision + 1,
+        sourceUpdatedAt: input.event.updatedAt,
+        updatedAt: input.event.updatedAt ?? new Date(),
+        archivedAt: null,
+      })
       .where(eq(workLocationAssertion.id, assertion.id));
-    await saveBinding(database, {
-      ...input,
-      assertionId: assertion.id,
-      exceptionDate: date,
-      payloadHash,
-      lastProjectedRevision: null,
-    });
-    const current = persisted(
-      (await listWorkLocationAssertions(database, input.hubId)).items.find(
-        (candidate) => candidate.id === assertion.id,
-      ),
-      'read imported exception',
-    );
-    await enqueueWorkLocationProjection(
-      database,
-      input.hubId,
-      current,
-      'update',
-      date,
-      input.connectionId,
-    );
-    return 'imported';
   }
+  const current = persisted(
+    (await listWorkLocationAssertions(database, input.hubId)).items.find(
+      (candidate) => candidate.id === assertion.id,
+    ),
+    'read adopted assertion',
+  );
+  await saveBinding(database, {
+    ...input,
+    assertionId: assertion.id,
+    exceptionDate: input.binding.exceptionDate,
+    lastProjectedRevision: null,
+  });
+  await enqueueWorkLocationProjection(
+    database,
+    input.hubId,
+    current,
+    'update',
+    input.binding.exceptionDate,
+    input.connectionId,
+  );
+  return 'adopted';
+}
 
+/** Adopt the first provider edit to one recurring instance through its master binding. */
+async function adoptUnboundRecurringInstance(
+  database: Database,
+  input: {
+    readonly hubId: string;
+    readonly connectionId: string;
+    readonly event: RemoteScheduleEvent;
+    readonly parentBinding: RemoteBinding | null;
+    readonly assertion: typeof workLocationAssertion.$inferSelect | undefined;
+    readonly placeId: string;
+    readonly payloadHash: string;
+  },
+): Promise<'imported' | 'adopted' | 'acknowledged' | null> {
+  if (input.event.kind !== 'exception' || !input.event.parentExternalEventId) return null;
+  if (!input.parentBinding) return 'acknowledged';
+  const date = input.event.occurrenceKey?.slice(0, 10);
+  const replacementSchedule = oneOffExceptionSchedule(input.event.schedule);
+  if (!date || !replacementSchedule || !input.assertion || input.assertion.archivedAt) {
+    return 'acknowledged';
+  }
+  const assertion = input.assertion;
+  const planEdit = await adoptProjectedPlanEdit(database, {
+    ...input,
+    binding: input.parentBinding,
+    assertion,
+  });
+  if (planEdit) return planEdit;
+  await database.insert(workLocationException).values({
+    hubId: input.hubId,
+    assertionId: assertion.id,
+    date,
+    action: 'replace',
+    replacementPlaceId: input.placeId,
+    replacementSchedule,
+  });
+  await database
+    .update(workLocationAssertion)
+    .set({ revision: assertion.revision + 1, updatedAt: input.event.updatedAt ?? new Date() })
+    .where(eq(workLocationAssertion.id, assertion.id));
+  await saveBinding(database, {
+    ...input,
+    assertionId: assertion.id,
+    exceptionDate: date,
+    lastProjectedRevision: null,
+  });
+  const current = persisted(
+    (await listWorkLocationAssertions(database, input.hubId)).items.find(
+      (candidate) => candidate.id === assertion.id,
+    ),
+    'read imported exception',
+  );
+  await enqueueWorkLocationProjection(
+    database,
+    input.hubId,
+    current,
+    'update',
+    date,
+    input.connectionId,
+  );
+  return 'imported';
+}
+
+/** Import a provider schedule through the compatibility assertion model. */
+async function importLegacyRemoteEvent(
+  database: Database,
+  input: {
+    readonly hubId: string;
+    readonly connectionId: string;
+    readonly event: RemoteScheduleEvent;
+    readonly placeId: string;
+    readonly payloadHash: string;
+  },
+): Promise<'imported'> {
   const existing = (await listWorkLocationAssertions(database, input.hubId)).items.find(
     (assertion) =>
-      assertion.placeId === placeId &&
+      assertion.placeId === input.placeId &&
       JSON.stringify(assertion.schedule) === JSON.stringify(input.event.schedule),
   );
   let assertionId: string | undefined = existing?.id;
@@ -486,7 +844,7 @@ async function adoptRemoteEvent(
         .insert(workLocationAssertion)
         .values({
           hubId: input.hubId,
-          placeId,
+          placeId: input.placeId,
           schedule: input.event.schedule,
           origin: 'provider',
           originProvider: 'google',
@@ -506,7 +864,6 @@ async function adoptRemoteEvent(
     ...input,
     assertionId,
     exceptionDate: null,
-    payloadHash,
     lastProjectedRevision: null,
   });
   const current = persisted(
@@ -524,6 +881,52 @@ async function adoptRemoteEvent(
     input.connectionId,
   );
   return 'imported';
+}
+
+/** Adopt one supported master/exception, or acknowledge it as our own projected echo. */
+async function adoptRemoteEvent(
+  database: Database,
+  input: {
+    readonly hubId: string;
+    readonly connectionId: string;
+    readonly event: Extract<NormalizedGoogleWorkingLocation, { kind: 'assertion' | 'exception' }>;
+  },
+): Promise<RemoteAdoptionOutcome> {
+  const binding = await bindingForRemote(database, input.connectionId, input.event.externalEventId);
+  const parentBinding =
+    !binding && input.event.parentExternalEventId
+      ? await bindingForRemote(database, input.connectionId, input.event.parentExternalEventId)
+      : null;
+  const boundAssertion = binding ?? parentBinding;
+  const trustedAssertion = await assertionForBinding(database, boundAssertion);
+  const placeId = await resolveImportedPlace(database, {
+    hubId: input.hubId,
+    connectionId: input.connectionId,
+    place: input.event.place,
+    externalEventId: input.event.externalEventId,
+    ...(trustedAssertion?.hubId === input.hubId
+      ? { trustedPlaceId: trustedAssertion.placeId }
+      : {}),
+  });
+  if (!placeId) return 'unmatched';
+  const payloadHash = canonicalHash({ schedule: input.event.schedule, place: input.event.place });
+  const branchInput = { ...input, placeId, payloadHash };
+  const datedPlan = binding ? null : await adoptUnboundDatedPlanEvent(database, branchInput);
+  if (datedPlan) return datedPlan;
+  if (binding) {
+    return adoptBoundRemoteEvent(database, {
+      ...branchInput,
+      binding,
+      assertion: trustedAssertion,
+    });
+  }
+  const recurring = await adoptUnboundRecurringInstance(database, {
+    ...branchInput,
+    parentBinding,
+    assertion: trustedAssertion,
+  });
+  if (recurring) return recurring;
+  return importLegacyRemoteEvent(database, branchInput);
 }
 
 /** Insert or refresh the minimal binding carried by one provider tombstone. */
@@ -572,6 +975,52 @@ async function saveDeletedBinding(
     });
 }
 
+/** Apply a provider occurrence deletion to the canonical dated schedule model. */
+async function adoptProjectedPlanDelete(
+  database: Database,
+  input: {
+    readonly hubId: string;
+    readonly connectionId: string;
+    readonly event: Extract<NormalizedGoogleWorkingLocation, { kind: 'delete' }>;
+    readonly binding: NonNullable<Awaited<ReturnType<typeof bindingForRemote>>>;
+    readonly assertion: typeof workLocationAssertion.$inferSelect;
+    readonly date: string;
+  },
+): Promise<boolean | null> {
+  if (!input.assertion.sourcePlanVersionId) return null;
+  const replacement = WorkScheduleExceptionCreate.parse({ date: input.date, segments: [] });
+  const conflictPlanId = await queueScheduleConflict(database, { ...input, replacement });
+  if (conflictPlanId) {
+    const projected = await materializedAssertionForDate(
+      database,
+      input.hubId,
+      conflictPlanId,
+      input.date,
+    );
+    await saveDeletedBinding(database, {
+      ...input,
+      assertionId: projected?.id ?? input.assertion.id,
+      exceptionDate: projected ? null : input.date,
+    });
+    return true;
+  }
+  const applied = await setProviderWorkScheduleException(database, {
+    hubId: input.hubId,
+    connectionId: input.connectionId,
+    provider: 'google',
+    input: replacement,
+    sourceUpdatedAt: input.event.updatedAt,
+  });
+  if (!applied) return false;
+  await materializedAssertionForDate(database, input.hubId, applied.planVersionId, applied.date);
+  await saveDeletedBinding(database, {
+    ...input,
+    assertionId: input.assertion.id,
+    exceptionDate: input.date,
+  });
+  return true;
+}
+
 /** Apply a provider tombstone to its canonical master or recurring occurrence. */
 async function adoptRemoteDelete(
   database: Database,
@@ -602,9 +1051,17 @@ async function adoptRemoteDelete(
       .where(eq(workLocationAssertion.id, assertionId))
       .limit(1)
   )[0];
-  if (assertion?.hubId !== input.hubId || assertion.archivedAt) return false;
+  if (assertion?.hubId !== input.hubId) return false;
   const exceptionDate = binding?.exceptionDate ?? input.event.occurrenceKey?.slice(0, 10) ?? null;
+  if (assertion.archivedAt && (!assertion.sourcePlanVersionId || !exceptionDate)) return false;
   if (exceptionDate) {
+    const projected = await adoptProjectedPlanDelete(database, {
+      ...input,
+      binding: binding ?? persisted(parentBinding ?? undefined, 'read provider parent binding'),
+      assertion,
+      date: exceptionDate,
+    });
+    if (projected !== null) return projected;
     const existing = (
       await database
         .select({ action: workLocationException.action })

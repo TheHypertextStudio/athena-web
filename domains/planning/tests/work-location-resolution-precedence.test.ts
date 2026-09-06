@@ -40,6 +40,7 @@ function state(overrides: Partial<WorkLocationResolutionState> = {}): WorkLocati
     workBlocks: [],
     observations: [],
     activeTimeContexts: [],
+    plans: [],
     ...overrides,
   };
 }

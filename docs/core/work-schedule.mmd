@@ -1,0 +1,17 @@
+flowchart LR
+  WorkSchedule[Work schedule settings] --> ScheduleAPI[Schedule API]
+  Places[Places settings] --> PlaceAPI[Place and alias API]
+  Accounts[Connected accounts] --> ConnectionAPI[Connection API]
+  ScheduleAPI --> ScheduleStore[(Plan versions and dated changes)]
+  PlaceAPI --> PlaceStore[(Places and account aliases)]
+  ScheduleStore --> Resolver[Expected-location resolver]
+  PlaceStore --> Resolver
+  ScheduleStore --> Projector[Provider projector]
+  PlaceStore --> Projector
+  Projector --> Provider[Connected calendar]
+  Provider --> Reconciler[Inbound reconciler]
+  Reconciler --> ScheduleStore
+  Reconciler --> PlaceStore
+  Reconciler --> ChangeStore[(Incoming changes)]
+  ChangeStore --> WorkSchedule
+  ChangeStore --> Places

@@ -7,6 +7,41 @@
 
 ## Active Tasks
 
+### [WORK-SCHEDULE-001] Replace imported location rows with one owned schedule
+
+- **Completed**: 2026-09-07
+- **Priority**: P1
+- **Summary**: Personal settings now separate Work schedule from Places. A person defines the
+  default times and places where they work in one effective-dated schedule. Docket projects that
+  schedule to connected calendars and asks for input only when a provider value cannot be matched.
+- **Approach**: The planning domain owns a rotating 1-to-28-day schedule with split periods,
+  overnight periods, open-ended mobile work, undecided places, and dated replacements. The API
+  stores immutable plan versions and dated exceptions. It projects stable provider events from the
+  active plan and records unmatched labels or schedule conflicts in a reconciliation queue. A
+  serialized legacy migration converts the old imported rows without making them the editing
+  model. Personal settings expose Work schedule, Places, and account sync as separate concerns.
+- **Decisions**: Docket owns the canonical schedule. Google Calendar is a projection target and an
+  input source, not the place where someone must maintain their defaults. The UI uses one Resolve
+  verb for reconciliation. It does not use Publish or Compare. Automatic location uses an MD3
+  switch and names its missing prerequisite when the switch cannot start. Account permission
+  repair remains in Connected accounts.
+- **Files changed**: The planning contracts, work-location API, sync engine, persistence schema,
+  personal settings pages, shared switch, browser coverage, product specification, and design
+  audit now use the canonical schedule model. Migration `0127_crazy_tyger_tiger` follows the
+  existing inline-image migration and prevents overlapping plan ranges inside Postgres.
+- **Validation**: Drizzle reports no schema drift after `0126_large_midnight` and
+  `0127_crazy_tyger_tiger`. The final-tree migration and work-schedule suites pass 185 tests. The
+  full typecheck passes 27 tasks. The full lint graph passes 26 tasks. The production build passes
+  all four deployable packages and generates 91 web routes, including `/settings/work-schedule`
+  and `/settings/places`. The design audit includes dark and light screenshots at 1440 by 900 and
+  390 by 844, plus empty and loading states at 320 and 390 pixels wide.
+- **Learnings**: Provider work-location rows cannot carry the product's full schedule model. Stable
+  projection keys and account-scoped place aliases let Docket preserve one schedule while it still
+  accepts provider changes. Drizzle does not generate the non-overlap trigger, so the migration
+  keeps that database invariant as explicit SQL after generated schema changes.
+
+---
+
 ### [INLINE-IMAGES-001] Add semantic figures to shared entity content
 
 - **Status**: REVIEW

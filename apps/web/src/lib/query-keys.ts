@@ -258,6 +258,8 @@ export const queryKeys = {
   workLocationRange: (start: string, end: string) =>
     ['me', 'work-location', 'range', start, end] as const,
   workLocationPlaces: () => ['me', 'work-location', 'places'] as const,
+  workSchedule: () => ['me', 'work-location', 'schedule'] as const,
+  workScheduleChanges: () => ['me', 'work-location', 'changes'] as const,
   workLocationAssertions: () => ['me', 'work-location', 'assertions'] as const,
   workLocationSync: () => ['me', 'work-location', 'sync-state'] as const,
   hubPreferences: () => ['me', 'hub-preferences'] as const,

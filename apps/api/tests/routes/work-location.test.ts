@@ -110,6 +110,199 @@ describe('/v1/me/work-location routes', () => {
     });
   });
 
+  it('lists unresolved provider names and resolves each one with a single action', async () => {
+    const { app, hubId, connectionId } = await seedWorkLocationUser('WorkScheduleChanges');
+    const { place } = await createPlace(app, 'Decatur cafe');
+    const scheduleResponse = await app.request('/schedule', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        anchorDate: '2026-09-07',
+        timezone: 'America/Los_Angeles',
+        effectiveFrom: '2026-09-07',
+        effectiveUntil: null,
+        cycleDays: [{ segments: [] }],
+      }),
+    });
+    expect(scheduleResponse.status).toBe(200);
+    const plan = (await scheduleResponse.json()) as { id: string };
+    const generatedAssertion = one(
+      await db
+        .insert(schema.workLocationAssertion)
+        .values({
+          hubId,
+          placeId: place.id,
+          schedule: {
+            type: 'one_off_all_day',
+            date: '2026-09-11',
+            timezone: 'America/Los_Angeles',
+          },
+          origin: 'docket',
+          originProvider: 'schedule_plan',
+          sourcePlanVersionId: plan.id,
+          sourcePlanKey: `${plan.id}:2026-09-11:0`,
+        })
+        .returning({ id: schema.workLocationAssertion.id }),
+    );
+    await db.insert(schema.workLocationExternalBinding).values({
+      hubId,
+      assertionId: generatedAssertion.id,
+      connectionId,
+      provider: 'google',
+      externalEventId: 'provider-keep',
+      payloadHash: 'provider-version',
+    });
+    const changes = await db
+      .insert(schema.workScheduleChange)
+      .values([
+        {
+          hubId,
+          connectionId,
+          provider: 'google',
+          kind: 'unmatched_place',
+          dedupeKey: 'google:event:decatur-cafe',
+          payload: {
+            kind: 'unmatched_place',
+            label: 'Decatur Café',
+            normalizedLabel: 'decatur cafe',
+            externalEventId: 'decatur-cafe',
+          },
+        },
+        {
+          hubId,
+          connectionId,
+          provider: 'google',
+          kind: 'unmatched_place',
+          dedupeKey: 'google:event:ignore-me',
+          payload: {
+            kind: 'unmatched_place',
+            label: 'Ignore me',
+            normalizedLabel: 'ignore me',
+            externalEventId: 'ignore-me',
+          },
+        },
+        {
+          hubId,
+          connectionId,
+          provider: 'google',
+          kind: 'schedule_conflict',
+          dedupeKey: 'google:schedule-conflict:provider-change:2026-09-10',
+          providerUpdatedAt: new Date('2026-09-05T18:00:00.000Z'),
+          payload: {
+            kind: 'schedule_conflict',
+            date: '2026-09-10',
+            externalEventId: 'provider-change',
+            docketSegments: [],
+            providerSegments: [
+              {
+                startMinute: 540,
+                durationMinutes: 480,
+                location: { type: 'saved_place', placeId: place.id },
+              },
+            ],
+          },
+        },
+        {
+          hubId,
+          connectionId,
+          provider: 'google',
+          kind: 'schedule_conflict',
+          dedupeKey: 'google:schedule-conflict:provider-keep:2026-09-11',
+          providerUpdatedAt: new Date('2026-09-05T18:00:00.000Z'),
+          payload: {
+            kind: 'schedule_conflict',
+            date: '2026-09-11',
+            externalEventId: 'provider-keep',
+            docketSegments: [],
+            providerSegments: [
+              {
+                startMinute: 540,
+                durationMinutes: 480,
+                location: { type: 'saved_place', placeId: place.id },
+              },
+            ],
+          },
+        },
+      ])
+      .returning({ id: schema.workScheduleChange.id });
+
+    const listed = await app.request('/changes');
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({
+      items: [
+        expect.objectContaining({
+          id: changes[0]?.id,
+          provider: 'google',
+          accountLabel: 'WorkScheduleChanges@example.com',
+          payload: expect.objectContaining({ label: 'Decatur Café' }),
+        }),
+        expect.objectContaining({ id: changes[1]?.id }),
+        expect.objectContaining({ id: changes[2]?.id, kind: 'schedule_conflict' }),
+        expect.objectContaining({ id: changes[3]?.id, kind: 'schedule_conflict' }),
+      ],
+    });
+
+    const linked = await app.request(`/changes/${changes[0]?.id}/resolve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'link_place', placeId: place.id }),
+    });
+    expect(linked.status).toBe(204);
+    expect(
+      await db
+        .select()
+        .from(schema.workPlaceAlias)
+        .where(eq(schema.workPlaceAlias.normalizedLabel, 'decatur cafe')),
+    ).toEqual([expect.objectContaining({ placeId: place.id, connectionId })]);
+
+    const ignored = await app.request(`/changes/${changes[1]?.id}/resolve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'ignore' }),
+    });
+    expect(ignored.status).toBe(204);
+
+    const keptDocket = await app.request(`/changes/${changes[3]?.id}/resolve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'keep_docket' }),
+    });
+    expect(keptDocket.status).toBe(204);
+    expect(
+      await db
+        .select()
+        .from(schema.workLocationWrite)
+        .where(eq(schema.workLocationWrite.assertionId, generatedAssertion.id)),
+    ).toEqual([
+      expect.objectContaining({
+        connectionId,
+        operation: 'update',
+        status: 'pending',
+      }),
+    ]);
+
+    const usedProvider = await app.request(`/changes/${changes[2]?.id}/resolve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'use_provider' }),
+    });
+    expect(usedProvider.status).toBe(204);
+    expect(
+      await db
+        .select()
+        .from(schema.workScheduleException)
+        .where(eq(schema.workScheduleException.date, '2026-09-10')),
+    ).toEqual([
+      expect.objectContaining({
+        origin: 'provider',
+        segments: [
+          expect.objectContaining({ location: expect.objectContaining({ placeId: place.id }) }),
+        ],
+      }),
+    ]);
+    expect(await (await app.request('/changes')).json()).toEqual({ items: [] });
+  });
+
   it('resolves a canonical assertion and prevents retiring its referenced place', async () => {
     const { app } = await seedWorkLocationUser('WorkLocationAssertion');
     const { place } = await createPlace(app, 'Editing studio');
@@ -313,5 +506,77 @@ describe('/v1/me/work-location routes', () => {
     const override = one(manualRows.filter((row) => row.source === 'manual'));
     expect(override.expiresAt.getTime()).toBeGreaterThan(Date.now());
     expect((await app.request('/current', { method: 'DELETE' })).status).toBe(204);
+  });
+
+  it('creates and lists one canonical default work schedule', async () => {
+    const { app } = await seedWorkLocationUser('WorkScheduleRoutes');
+    const { place } = await createPlace(app, 'Downtown office');
+    const saved = await app.request('/schedule', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        anchorDate: '2026-09-07',
+        timezone: 'America/Los_Angeles',
+        effectiveFrom: '2026-09-07',
+        effectiveUntil: null,
+        cycleDays: [
+          {
+            segments: [
+              {
+                startMinute: 540,
+                durationMinutes: 480,
+                location: { type: 'saved_place', placeId: place.id },
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    expect(saved.status).toBe(200);
+    expect(await saved.json()).toMatchObject({
+      effectiveFrom: '2026-09-07',
+      cycleDays: [
+        {
+          segments: [
+            expect.objectContaining({ location: { type: 'saved_place', placeId: place.id } }),
+          ],
+        },
+      ],
+    });
+    expect(await (await app.request('/schedule')).json()).toMatchObject({
+      plans: [expect.objectContaining({ effectiveFrom: '2026-09-07' })],
+      exceptions: [],
+    });
+  });
+
+  it('stores a complete dated schedule change and rejects a date outside every plan', async () => {
+    const { app } = await seedWorkLocationUser('WorkScheduleDateRoute');
+    await app.request('/schedule', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        anchorDate: '2026-09-07',
+        timezone: 'America/Los_Angeles',
+        effectiveFrom: '2026-09-07',
+        effectiveUntil: null,
+        cycleDays: [{ segments: [] }],
+      }),
+    });
+
+    const saved = await app.request('/schedule/dates/2026-09-08', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ date: '2026-09-08', segments: [] }),
+    });
+    expect(saved.status).toBe(200);
+    expect(await saved.json()).toMatchObject({ date: '2026-09-08', segments: [] });
+
+    const missing = await app.request('/schedule/dates/2026-09-01', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ date: '2026-09-01', segments: [] }),
+    });
+    expect(missing.status).toBe(409);
   });
 });

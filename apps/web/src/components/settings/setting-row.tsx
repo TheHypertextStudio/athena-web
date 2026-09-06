@@ -44,6 +44,8 @@ export interface SettingRowProps {
   readonly description?: ReactNode;
   /** Controls aligned to the row's trailing edge (a switch, a button, an overflow menu). */
   readonly trailing?: ReactNode;
+  /** Place a wide trailing action below the row copy until the row's container has room. */
+  readonly trailingLayout?: 'inline' | 'stacked-on-narrow';
   /** Navigates. Renders the row as a link. Mutually exclusive with `onActivate`. */
   readonly href?: string;
   /**
@@ -90,10 +92,13 @@ export function SettingRow({
   label,
   description,
   trailing,
+  trailingLayout = 'inline',
   href,
   as: Element = 'div',
   className,
 }: SettingRowProps): JSX.Element {
+  const responsiveRowLayout =
+    trailingLayout === 'stacked-on-narrow' ? 'flex-wrap @lg:flex-nowrap' : undefined;
   const line = (
     <>
       {leading ? (
@@ -117,7 +122,13 @@ export function SettingRow({
         ) : null}
       </span>
       {trailing ? (
-        <span className="flex shrink-0 items-center gap-2" data-slot="setting-row-trailing">
+        <span
+          className={cn(
+            'flex shrink-0 items-center gap-2',
+            trailingLayout === 'stacked-on-narrow' && 'basis-full pl-12 @lg:basis-auto @lg:pl-0',
+          )}
+          data-slot="setting-row-trailing"
+        >
           {trailing}
         </span>
       ) : null}
@@ -126,12 +137,15 @@ export function SettingRow({
 
   if (href) {
     const link = (
-      <NextLink href={href} className={cn(ROW_BASE, ROW_INTERACTIVE, className)}>
+      <NextLink
+        href={href}
+        className={cn(ROW_BASE, ROW_INTERACTIVE, responsiveRowLayout, className)}
+      >
         {line}
       </NextLink>
     );
     return Element === 'li' ? <li>{link}</li> : link;
   }
 
-  return <Element className={cn(ROW_BASE, className)}>{line}</Element>;
+  return <Element className={cn(ROW_BASE, responsiveRowLayout, className)}>{line}</Element>;
 }

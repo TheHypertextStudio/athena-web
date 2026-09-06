@@ -1,5 +1,8 @@
 /** Scheduled work-location bootstrap, convergence, projection, and watch renewal. */
 import { calendarConnection, type Database } from '@docket/db';
+import { addCalendarDays } from '@docket/planning/calendar-date';
+import { selectCurrentOrNextWorkSchedulePlan } from '@docket/planning/work-schedule';
+import { localDateString } from '@docket/planning/zoned-time';
 import { ne } from 'drizzle-orm';
 
 import {
@@ -8,6 +11,9 @@ import {
   syncUserWorkLocations,
   type GoogleWorkLocationTransport,
 } from './sync-engine';
+import { refreshWorkScheduleProjectionAssertions } from './schedule-projection';
+import { listWorkSchedule } from './schedule-repository';
+import { resolveWorkLocationHubId } from './repository';
 
 /** Aggregate operational counters that deliberately contain no place labels or coordinates. */
 export interface WorkLocationSweepTally {
@@ -59,6 +65,15 @@ export async function sweepWorkLocations(
       tally.unsupportedRecurrences += synced.unsupported;
       tally.errors += synced.errors;
       if (input.outboundProjectionEnabled) {
+        const locationHubId = await resolveWorkLocationHubId(user.userId, database);
+        const schedule = await listWorkSchedule(database, locationHubId);
+        const timezone =
+          selectCurrentOrNextWorkSchedulePlan(schedule.plans, input.now)?.timezone ?? 'UTC';
+        const startDate = localDateString(input.now, timezone);
+        await refreshWorkScheduleProjectionAssertions(database, locationHubId, {
+          startDate,
+          endDate: addCalendarDays(startDate, 89),
+        });
         const drained = await drainWorkLocationWrites(database, {
           userId: user.userId,
           transport: input.transport,

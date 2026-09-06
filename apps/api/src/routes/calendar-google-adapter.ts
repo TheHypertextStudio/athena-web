@@ -155,6 +155,7 @@ interface GoogleEventPerson {
 
 type GoogleCalendarEventResource = Record<string, unknown> & {
   id?: string;
+  iCalUID?: string;
   status?: string;
   summary?: string;
   description?: string;
@@ -167,6 +168,7 @@ type GoogleCalendarEventResource = Record<string, unknown> & {
   updated?: string;
   etag?: string;
   recurringEventId?: string;
+  originalStartTime?: GoogleEventDate;
   /** Whether non-organizer guests may modify the event (Google Calendar event field). */
   guestsCanModify?: boolean;
 };
@@ -207,28 +209,59 @@ export function normalizeGoogleEventPermissions(input: {
   return { canEditCore, canDelete, readOnlyReason };
 }
 
+/** Return Google's original-series occurrence anchor when this item belongs to a series. */
+function googleOccurrenceIdentity(event: GoogleCalendarEventResource): string | null {
+  if (!event.recurringEventId) return null;
+  return event.originalStartTime?.dateTime ?? event.originalStartTime?.date ?? null;
+}
+
+/** Return an exact cross-calendar identity, or a source-local fallback when Google omits one. */
+function googleEventIdentity(
+  event: GoogleCalendarEventResource & { id: string },
+  externalLayerId: string,
+  occurrenceIdentity: string | null,
+): { namespace: string; value: string } {
+  const iCalUID = event.iCalUID;
+  if (iCalUID && (!event.recurringEventId || occurrenceIdentity !== null)) {
+    return { namespace: 'ical', value: iCalUID };
+  }
+  return { namespace: `google-event:${externalLayerId}`, value: event.id };
+}
+
+/** Map optional Google organizer fields without retaining the provider wire object. */
+function googleOrganizer(event: GoogleCalendarEventResource): CalendarEventOrganizer | null {
+  if (!event.organizer) return null;
+  return {
+    email: event.organizer.email ?? null,
+    displayName: event.organizer.displayName ?? null,
+    self: event.organizer.self,
+  };
+}
+
+/** Map Google attendees to the provider-neutral attendee snapshot. */
+function googleAttendees(event: GoogleCalendarEventResource): CalendarEventAttendee[] {
+  return (event.attendees ?? []).map((attendee) => ({
+    email: attendee.email ?? null,
+    displayName: attendee.displayName ?? null,
+    responseStatus: attendee.responseStatus ?? null,
+    optional: attendee.optional,
+    self: attendee.self,
+  }));
+}
+
 /** Map one raw Google event resource to the provider-neutral {@link ProviderItemSnapshot}. */
 function toItemSnapshot(
   event: GoogleCalendarEventResource,
+  externalLayerId: string,
   layerEditableCore: boolean,
 ): ProviderItemSnapshot | null {
   if (!event.id) return null;
-  const organizer: CalendarEventOrganizer | null = event.organizer
-    ? {
-        email: event.organizer.email ?? null,
-        displayName: event.organizer.displayName ?? null,
-        self: event.organizer.self,
-      }
-    : null;
-  const attendees: CalendarEventAttendee[] = (event.attendees ?? []).map((a) => ({
-    email: a.email ?? null,
-    displayName: a.displayName ?? null,
-    responseStatus: a.responseStatus ?? null,
-    optional: a.optional,
-    self: a.self,
-  }));
+  const identifiedEvent = { ...event, id: event.id };
+  const occurrenceIdentity = googleOccurrenceIdentity(identifiedEvent);
   return {
     externalEventId: event.id,
+    eventIdentity: googleEventIdentity(identifiedEvent, externalLayerId, occurrenceIdentity),
+    occurrenceIdentity,
     recurringEventId: event.recurringEventId ?? null,
     status: event.status ?? 'confirmed',
     // Cancelled tombstones may omit `summary` entirely; the engine never overwrites an
@@ -246,13 +279,49 @@ function toItemSnapshot(
       event.end?.timeZone && event.end.timeZone !== event.start?.timeZone
         ? event.end.timeZone
         : null,
-    organizer,
-    attendees,
+    organizer: googleOrganizer(event),
+    attendees: googleAttendees(event),
     updatedExternalAt: event.updated ? new Date(event.updated) : null,
     externalEtag: event.etag ?? null,
     permissions: normalizeGoogleEventPermissions({ layerEditableCore, event }),
     cancelled: event.status === 'cancelled',
     raw: event,
+  };
+}
+
+/** Return a narrow, user-confirmed suggestion key for Google-owned holiday feeds. */
+function googleSuggestedGroupKey(item: GoogleCalendarListItem & { id: string }): string | null {
+  if (!item.id.toLowerCase().includes('#holiday@group.v.calendar.google.com')) return null;
+  if (!item.summary) return null;
+  return `google-holiday:${item.summary.trim().toLocaleLowerCase()}`;
+}
+
+/** Map one Google CalendarList resource to the provider-neutral source snapshot. */
+function toLayerSnapshot(item: GoogleCalendarListItem): ProviderLayerSnapshot | null {
+  if (!item.id) return null;
+  const identifiedItem = { ...item, id: item.id };
+  const owned = item.primary === true || item.accessRole === 'owner';
+  return {
+    externalLayerId: item.id,
+    sourceIdentity: { namespace: 'google-calendar', value: item.id },
+    sourceRelationship: owned ? 'owned' : 'subscribed',
+    sourceManagement: {
+      canRemoveSubscription: !owned,
+      requiresIncrementalConsent: true,
+    },
+    suggestedGroupKey: googleSuggestedGroupKey(identifiedItem),
+    // Every sync tick overwrites the stored title unconditionally (see
+    // `upsertProviderLayer`), so falling back to the opaque Google calendar id here would
+    // persist it as the visible name until the next tick happens to see a `summary`. The
+    // short id tail keeps two summary-less calendars distinguishable in a picker without
+    // going back to showing the raw id as the name.
+    title: item.summary ?? `Untitled calendar ${item.id.slice(0, 6)}`,
+    description: item.description ?? null,
+    timezone: item.timeZone ?? null,
+    color: item.backgroundColor ?? null,
+    accessRole: item.accessRole ?? null,
+    primary: item.primary ?? false,
+    editableCore: item.accessRole === 'owner' || item.accessRole === 'writer',
   };
 }
 
@@ -288,7 +357,7 @@ async function fullPull(args: {
       args.credentials.accessToken,
     );
     for (const event of res.items ?? []) {
-      const snapshot = toItemSnapshot(event, args.layerEditableCore);
+      const snapshot = toItemSnapshot(event, args.externalLayerId, args.layerEditableCore);
       if (snapshot) items.push(snapshot);
     }
     if (res.nextSyncToken) nextSyncToken = res.nextSyncToken;
@@ -324,7 +393,7 @@ async function incrementalPull(args: {
         args.credentials.accessToken,
       );
       for (const event of res.items ?? []) {
-        const snapshot = toItemSnapshot(event, args.layerEditableCore);
+        const snapshot = toItemSnapshot(event, args.externalLayerId, args.layerEditableCore);
         if (snapshot) items.push(snapshot);
       }
       if (res.nextSyncToken) nextSyncToken = res.nextSyncToken;
@@ -394,10 +463,11 @@ async function fetchConflictSnapshot(
   fetchJson: GoogleFetchJson,
   url: string,
   accessToken: string,
+  externalLayerId: string,
 ): Promise<ProviderItemSnapshot | null> {
   try {
     const event = await fetchJson<GoogleCalendarEventResource>(url, accessToken);
-    return toItemSnapshot(event, true);
+    return toItemSnapshot(event, externalLayerId, true);
   } catch {
     return null;
   }
@@ -424,13 +494,18 @@ async function pushItem(
       headers: ifMatchHeaders(input.baseEtag),
       body: toEventPatchBody(input.patch),
     });
-    const snapshot = toItemSnapshot(event, true);
+    const snapshot = toItemSnapshot(event, input.externalLayerId, true);
     /* v8 ignore next -- @preserve defensive: a successful PATCH response always echoes the event id */
     if (snapshot === null) throw new Error('Google event PATCH response missing an id');
     return { outcome: 'applied', item: snapshot };
   } catch (err) {
     if (err instanceof GoogleCalendarApiError && err.status === 412) {
-      const current = await fetchConflictSnapshot(fetchJson, url, input.credentials.accessToken);
+      const current = await fetchConflictSnapshot(
+        fetchJson,
+        url,
+        input.credentials.accessToken,
+        input.externalLayerId,
+      );
       return { outcome: 'conflict', current };
     }
     return mapPushError(err);
@@ -460,7 +535,7 @@ async function createItem(
         body: { id: input.externalEventId, ...toEventPatchBody(input.patch) },
       },
     );
-    const snapshot = toItemSnapshot(event, true);
+    const snapshot = toItemSnapshot(event, input.externalLayerId, true);
     /* v8 ignore next -- @preserve defensive: a successful insert echoes the event id */
     if (snapshot === null) throw new Error('Google event create response missing an id');
     return { outcome: 'applied', item: snapshot };
@@ -470,6 +545,7 @@ async function createItem(
         fetchJson,
         itemUrl,
         input.credentials.accessToken,
+        input.externalLayerId,
       );
       return existing === null
         ? { outcome: 'retryable', message: 'Created event could not yet be read back' }
@@ -496,7 +572,12 @@ async function deleteItem(
       return { outcome: 'applied' };
     }
     if (err instanceof GoogleCalendarApiError && err.status === 412) {
-      const current = await fetchConflictSnapshot(fetchJson, url, input.credentials.accessToken);
+      const current = await fetchConflictSnapshot(
+        fetchJson,
+        url,
+        input.credentials.accessToken,
+        input.externalLayerId,
+      );
       return { outcome: 'conflict', current };
     }
     return mapPushError(err);
@@ -569,22 +650,8 @@ export function createGoogleCalendarAdapter(
           credentials.accessToken,
         );
         for (const item of res.items ?? []) {
-          if (!item.id) continue;
-          layers.push({
-            externalLayerId: item.id,
-            // Every sync tick overwrites the stored title unconditionally (see
-            // `upsertProviderLayer`), so falling back to the opaque Google calendar id here would
-            // persist it as the visible name until the next tick happens to see a `summary`. The
-            // short id tail keeps two summary-less calendars distinguishable in a picker without
-            // going back to showing the raw id as the name.
-            title: item.summary ?? `Untitled calendar ${item.id.slice(0, 6)}`,
-            description: item.description ?? null,
-            timezone: item.timeZone ?? null,
-            color: item.backgroundColor ?? null,
-            accessRole: item.accessRole ?? null,
-            primary: item.primary ?? false,
-            editableCore: item.accessRole === 'owner' || item.accessRole === 'writer',
-          });
+          const snapshot = toLayerSnapshot(item);
+          if (snapshot) layers.push(snapshot);
         }
         pageToken = res.nextPageToken;
       } while (pageToken);

@@ -184,6 +184,32 @@ describe('listLayers — pagination + a malformed item without an id', () => {
     ]);
     expect(call).toBe(2);
   });
+
+  it('maps source identity, relationship, and removal capability without title inference', async () => {
+    const fetchJson = fakeFetchJson(() => ({
+      items: [
+        {
+          id: 'personal@example.com',
+          summary: 'Personal calendar',
+          accessRole: 'reader',
+          primary: false,
+        },
+      ],
+    }));
+    const adapter = createGoogleCalendarAdapter(fetchJson);
+
+    await expect(adapter.listLayers({ credentials })).resolves.toEqual([
+      expect.objectContaining({
+        sourceIdentity: { namespace: 'google-calendar', value: 'personal@example.com' },
+        sourceRelationship: 'subscribed',
+        sourceManagement: {
+          canRemoveSubscription: true,
+          requiresIncrementalConsent: true,
+        },
+        suggestedGroupKey: null,
+      }),
+    ]);
+  });
 });
 
 describe('pullChanges — events missing an id, and attendee mapping', () => {
@@ -257,6 +283,62 @@ describe('pullChanges — events missing an id, and attendee mapping', () => {
         self: undefined,
       },
     ]);
+  });
+
+  it('maps iCalUID and originalStartTime as separate series and occurrence identities', async () => {
+    const fetchJson = fakeFetchJson(() => ({
+      items: [
+        {
+          id: 'copy-specific-id',
+          iCalUID: 'series@example.com',
+          recurringEventId: 'series-google-id',
+          originalStartTime: { dateTime: '2026-07-01T09:00:00-07:00' },
+          start: { dateTime: '2026-07-01T09:00:00-07:00' },
+          end: { dateTime: '2026-07-01T10:00:00-07:00' },
+        },
+      ],
+    }));
+    const adapter = createGoogleCalendarAdapter(fetchJson);
+    const result = await adapter.pullChanges({
+      credentials,
+      externalLayerId: 'personal@example.com',
+      cursor: null,
+      window: { timeMin: NOW, timeMax: NOW },
+      layerEditableCore: false,
+    });
+
+    expect(result.items[0]).toMatchObject({
+      eventIdentity: { namespace: 'ical', value: 'series@example.com' },
+      occurrenceIdentity: '2026-07-01T09:00:00-07:00',
+    });
+  });
+
+  it('keeps an event source-local when Google omits a safe cross-calendar identity', async () => {
+    const fetchJson = fakeFetchJson(() => ({
+      items: [
+        {
+          id: 'event-without-ical-uid',
+          start: { dateTime: '2026-07-01T09:00:00-07:00' },
+          end: { dateTime: '2026-07-01T10:00:00-07:00' },
+        },
+      ],
+    }));
+    const adapter = createGoogleCalendarAdapter(fetchJson);
+    const result = await adapter.pullChanges({
+      credentials,
+      externalLayerId: 'personal@example.com',
+      cursor: null,
+      window: { timeMin: NOW, timeMax: NOW },
+      layerEditableCore: false,
+    });
+
+    expect(result.items[0]).toMatchObject({
+      eventIdentity: {
+        namespace: 'google-event:personal@example.com',
+        value: 'event-without-ical-uid',
+      },
+      occurrenceIdentity: null,
+    });
   });
 
   it('paginates a full pull, tolerating a page with no items key and no nextSyncToken on the first page', async () => {

@@ -131,6 +131,13 @@ function createFakeSyncModule(): {
       return [
         {
           externalLayerId: 'fake-layer',
+          sourceIdentity: { namespace: 'fake-calendar', value: 'fake-layer' },
+          sourceRelationship: 'owned',
+          sourceManagement: {
+            canRemoveSubscription: false,
+            requiresIncrementalConsent: false,
+          },
+          suggestedGroupKey: null,
           title: 'Fake Layer',
           description: null,
           timezone: null,
@@ -181,6 +188,8 @@ function createFakeSyncModule(): {
 function fakeItem(overrides: Partial<ProviderItemSnapshot> = {}): ProviderItemSnapshot {
   return {
     externalEventId: 'fake-evt',
+    eventIdentity: { namespace: 'fake-event:fake-layer', value: 'fake-evt' },
+    occurrenceIdentity: null,
     recurringEventId: null,
     status: 'confirmed',
     title: 'Fake Event',
@@ -795,6 +804,102 @@ describe('calendar sync engine — provider neutrality (fake adapter)', () => {
     expect(item.title).toBe('Fake Event (recovered)');
   });
 
+  it('persists a Microsoft-shaped adapter identity without changing the shared engine', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'MicrosoftIdentityUser');
+    await schema.db.insert(schema.account).values({
+      userId,
+      providerId: 'microsoft',
+      accountId: 'microsoft-account',
+    });
+    const adapter: CalendarProviderAdapter = {
+      provider: 'microsoft',
+      async listLayers() {
+        return [
+          {
+            externalLayerId: 'AAMk-calendar',
+            sourceIdentity: { namespace: 'microsoft-calendar', value: 'AAMk-calendar' },
+            sourceRelationship: 'owned',
+            sourceManagement: {
+              canRemoveSubscription: false,
+              requiresIncrementalConsent: false,
+            },
+            suggestedGroupKey: null,
+            title: 'Outlook',
+            description: null,
+            timezone: 'Pacific Standard Time',
+            color: null,
+            accessRole: 'owner',
+            primary: true,
+            editableCore: true,
+          },
+        ];
+      },
+      async pullChanges() {
+        return {
+          items: [
+            fakeItem({
+              externalEventId: 'AAMk-event',
+              eventIdentity: { namespace: 'ical', value: 'series@example.com' },
+              occurrenceIdentity: '2026-07-01T10:00:00.000Z',
+            }),
+          ],
+          nextCursor: 'delta-link',
+          cursorInvalid: false,
+          full: true,
+        };
+      },
+      async pushItem() {
+        return { outcome: 'permanent', message: 'not exercised' };
+      },
+      async deleteItem() {
+        return { outcome: 'permanent', message: 'not exercised' };
+      },
+    };
+    const module: CalendarProviderSyncModule = {
+      adapter,
+      discoverConnections: async () => [
+        {
+          externalAccountId: 'microsoft-account',
+          accountEmail: 'ada@example.com',
+          accountName: 'Ada',
+          accountPictureUrl: null,
+          raw: null,
+        },
+      ],
+      resolveCredentials: async () => ({ accessToken: 'microsoft-token' }),
+      captureScopeState: () => ({
+        grantedScopes: ['Calendars.Read'],
+        calendarRead: true,
+        calendarWrite: false,
+        sourceManagement: false,
+        capturedAt: NOW.toISOString(),
+      }),
+    };
+
+    await syncCalendarConnections(schema.db, {
+      userId,
+      now: NOW,
+      adapters: { microsoft: module },
+    });
+
+    const layer = await findLayer(schema, userId, 'AAMk-calendar');
+    expect(layer).toMatchObject({
+      sourceIdentityNamespace: 'microsoft-calendar',
+      sourceIdentityValue: 'AAMk-calendar',
+      sourceRelationship: 'owned',
+    });
+    const [item] = await schema.db
+      .select()
+      .from(schema.calendarItem)
+      .where(eq(schema.calendarItem.layerId, layer.id));
+    expect(item).toMatchObject({
+      eventIdentityNamespace: 'ical',
+      eventIdentityValue: 'series@example.com',
+      occurrenceIdentity: '2026-07-01T10:00:00.000Z',
+    });
+  });
+
   it('skips a layer whose lease is already held, without calling the adapter', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'NeutralLeaseHeldUser');
@@ -1260,6 +1365,13 @@ describe('registerOrRenewWatches — push-notification watch registration', () =
         return [
           {
             externalLayerId: 'watch-layer',
+            sourceIdentity: { namespace: 'fake-calendar', value: 'watch-layer' },
+            sourceRelationship: 'owned',
+            sourceManagement: {
+              canRemoveSubscription: false,
+              requiresIncrementalConsent: false,
+            },
+            suggestedGroupKey: null,
             title: 'Watchable Layer',
             description: null,
             timezone: null,

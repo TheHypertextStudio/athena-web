@@ -45,7 +45,10 @@ import {
   type CalendarItemPermission,
   type CalendarItemWritePatch,
   CalendarProvider,
+  type CalendarProviderIdentity,
   type CalendarScopeState,
+  type CalendarSourceManagement,
+  type CalendarSourceRelationship,
   type CalendarSyncResultOut,
 } from '@docket/planning/calendar-contract';
 import { and, eq, isNull, lt, or } from 'drizzle-orm';
@@ -64,6 +67,10 @@ export interface CalendarProviderCredentials {
 /** One provider calendar, as reported by {@link CalendarProviderAdapter.listLayers}. */
 export interface ProviderLayerSnapshot {
   readonly externalLayerId: string;
+  readonly sourceIdentity: CalendarProviderIdentity;
+  readonly sourceRelationship: CalendarSourceRelationship;
+  readonly sourceManagement: CalendarSourceManagement;
+  readonly suggestedGroupKey: string | null;
   readonly title: string;
   readonly description: string | null;
   readonly timezone: string | null;
@@ -76,6 +83,8 @@ export interface ProviderLayerSnapshot {
 /** One provider event/item, as reported by {@link CalendarProviderAdapter.pullChanges}. */
 export interface ProviderItemSnapshot {
   readonly externalEventId: string;
+  readonly eventIdentity: CalendarProviderIdentity;
+  readonly occurrenceIdentity: string | null;
   readonly recurringEventId: string | null;
   readonly status: string;
   readonly title: string;
@@ -418,6 +427,7 @@ async function upsertProviderLayer(
     primary: snapshot.primary,
     lastSyncedAt: input.now,
     lastError: null,
+    removedAt: null,
   };
 
   const existingList = await db
@@ -454,6 +464,11 @@ async function upsertProviderLayer(
   }
 
   const layerValues = {
+    sourceIdentityNamespace: snapshot.sourceIdentity.namespace,
+    sourceIdentityValue: snapshot.sourceIdentity.value,
+    sourceRelationship: snapshot.sourceRelationship,
+    sourceManagement: snapshot.sourceManagement,
+    suggestedGroupKey: snapshot.suggestedGroupKey,
     title: listValues.title,
     description: listValues.description,
     timezone: listValues.timezone,
@@ -463,6 +478,7 @@ async function upsertProviderLayer(
     editableCore: snapshot.editableCore,
     lastSyncedAt: input.now,
     lastError: null,
+    removedAt: null,
   };
   const existingLayer = await db
     .select({ id: calendarLayer.id, syncToken: calendarLayer.syncToken })
@@ -605,8 +621,11 @@ async function upsertProviderItem(
     provider: input.provider,
     externalCalendarId: input.externalCalendarId,
     externalEventId: snapshot.externalEventId,
+    eventIdentityNamespace: snapshot.eventIdentity.namespace,
+    eventIdentityValue: snapshot.eventIdentity.value,
+    occurrenceIdentity: snapshot.occurrenceIdentity,
     recurringEventId: snapshot.recurringEventId,
-    recurrenceInstanceKey: snapshot.externalEventId,
+    recurrenceInstanceKey: snapshot.occurrenceIdentity,
     status: snapshot.status,
     title,
     description: snapshot.description,

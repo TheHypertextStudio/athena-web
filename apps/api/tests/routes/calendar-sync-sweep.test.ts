@@ -427,6 +427,13 @@ describe('sweepCalendarSync', () => {
         return [
           {
             externalLayerId,
+            sourceIdentity: { namespace: 'fake-calendar', value: externalLayerId },
+            sourceRelationship: 'owned',
+            sourceManagement: {
+              canRemoveSubscription: false,
+              requiresIncrementalConsent: false,
+            },
+            suggestedGroupKey: null,
             title: 'Layer',
             description: null,
             timezone: null,
@@ -542,6 +549,13 @@ describe('sweepCalendarSync', () => {
         return [
           {
             externalLayerId,
+            sourceIdentity: { namespace: 'fake-calendar', value: externalLayerId },
+            sourceRelationship: 'owned',
+            sourceManagement: {
+              canRemoveSubscription: false,
+              requiresIncrementalConsent: false,
+            },
+            suggestedGroupKey: null,
             title: 'Layer',
             description: null,
             timezone: null,

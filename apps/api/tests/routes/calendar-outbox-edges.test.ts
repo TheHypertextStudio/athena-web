@@ -359,6 +359,8 @@ describe('attemptCalendarItemWrite', () => {
       outcome: 'applied',
       item: {
         externalEventId: 'evt-1',
+        eventIdentity: { namespace: 'google-event:cal-1', value: 'evt-1' },
+        occurrenceIdentity: null,
         recurringEventId: null,
         status: 'confirmed',
         title: 'Created',
@@ -450,6 +452,8 @@ describe('attemptCalendarItemWrite', () => {
           outcome: 'conflict' as const,
           current: {
             externalEventId: 'evt-1',
+            eventIdentity: { namespace: 'google-event:cal-1', value: 'evt-1' },
+            occurrenceIdentity: null,
             recurringEventId: null,
             status: 'confirmed',
             title: 'All-day now',
@@ -658,6 +662,8 @@ describe('retryCalendarItemWrite', () => {
           outcome: 'applied' as const,
           item: {
             externalEventId: 'evt-1',
+            eventIdentity: { namespace: 'google-event:cal-1', value: 'evt-1' },
+            occurrenceIdentity: null,
             recurringEventId: null,
             status: 'confirmed',
             title: 'Fixture event',

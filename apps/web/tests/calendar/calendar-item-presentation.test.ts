@@ -1,7 +1,7 @@
 import type { CalendarItemOut } from '@docket/planning/calendar-contract';
 import { describe, expect, it } from 'vitest';
 
-import { itemTimeLabel } from '../../src/components/calendar/item-drawer/presentation';
+import { itemTimeLabel } from '../../src/components/calendar/item-presentation/event-identity';
 
 describe('calendar item presentation', () => {
   it('renders instant ranges in the selected display timezone', () => {

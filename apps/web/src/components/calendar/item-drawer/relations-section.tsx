@@ -6,7 +6,7 @@ import { type JSX } from 'react';
 
 import { useApiListQuery } from '@/lib/query';
 
-import { CALENDAR_ITEM_KIND_LABEL } from '../calendar-item-card';
+import { CALENDAR_ITEM_KIND_LABEL } from '../item-presentation/event-identity';
 import { calendarItemRelationsDef } from '../calendar-data';
 import { useDetachCalendarItemRelation } from '../calendar-mutations';
 

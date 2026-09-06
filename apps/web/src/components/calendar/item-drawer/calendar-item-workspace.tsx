@@ -12,12 +12,12 @@ import {
   CALENDAR_ITEM_KIND_ICON,
   CALENDAR_ITEM_KIND_LABEL,
   READ_ONLY_REASON_LABEL,
-} from '../calendar-item-card';
+  itemTimeLabel,
+} from '../item-presentation/event-identity';
 import { CalendarDrawerClose } from '../calendar-drawer-close';
 import { CalendarItemDuplicateSources } from '../calendar-item-duplicate-sources';
 import { CoreFieldsForm } from './core-fields-form';
 import { LinkedTasksSection } from './linked-tasks-section';
-import { itemTimeLabel } from './presentation';
 import { CalendarItemRelationsSection } from './relations-section';
 import { DeleteCalendarItemAction } from './status-actions';
 

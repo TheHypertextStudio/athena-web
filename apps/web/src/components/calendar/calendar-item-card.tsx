@@ -24,21 +24,8 @@
  * a sibling of the `onOpen` button, not nested inside it, so it never needs to fight the card's
  * own click-to-open handler.
  */
-import type {
-  CalendarItemKind,
-  CalendarItemOut,
-  CalendarItemPermission,
-  CalendarLayerOut,
-} from '@docket/planning/calendar-contract';
-import {
-  Calendar,
-  Layers,
-  type LucideIcon,
-  MoreHorizontal,
-  Schedule,
-  Shield,
-  TaskAlt,
-} from '@docket/ui/icons';
+import type { CalendarItemOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
+import { MoreHorizontal, Shield } from '@docket/ui/icons';
 import { DRAGGABLE } from '@docket/ui/lib/draggable';
 import { cn } from '@docket/ui/lib/utils';
 import { surfaceToneColor } from '@docket/ui/primitives';
@@ -48,6 +35,11 @@ import { TaskTimerButton } from '@/components/time-tracking';
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
 
+import {
+  CALENDAR_ITEM_KIND_ICON,
+  CALENDAR_ITEM_KIND_LABEL,
+  READ_ONLY_REASON_LABEL,
+} from './item-presentation/event-identity';
 import { containedTaskLink } from './calendar-item-task-link';
 
 /** How the card lays out: a compact list `row`, or a fill-height timeline `block`. */
@@ -57,39 +49,6 @@ export type CalendarItemCardLayout = 'row' | 'block';
 export function calendarItemTransitionName(itemId: string): string {
   return `calendar-item-${itemId}`;
 }
-
-/** The icon glyph for each layered-calendar item kind. Reused by the item workspace drawer. */
-export const CALENDAR_ITEM_KIND_ICON: Record<CalendarItemKind, LucideIcon> = {
-  provider_event: Calendar,
-  native_event: Calendar,
-  native_block: Layers,
-  timebox: Layers,
-  task_timebox: TaskAlt,
-  availability_block: Schedule,
-};
-
-/** The compact kind label shown in the card's metadata line. Reused by the item workspace drawer. */
-export const CALENDAR_ITEM_KIND_LABEL: Record<CalendarItemKind, string> = {
-  provider_event: 'Event',
-  native_event: 'Event',
-  native_block: 'Block',
-  timebox: 'Timebox',
-  task_timebox: 'Timebox',
-  availability_block: 'Availability',
-};
-
-/** Human labels for {@link CalendarItemPermission.readOnlyReason}. Reused by the item workspace drawer. */
-export const READ_ONLY_REASON_LABEL: Record<
-  NonNullable<CalendarItemPermission['readOnlyReason']>,
-  string
-> = {
-  provider_scope: 'Read-only — editing access was not granted',
-  layer_access_role: 'Read-only — your role on this layer cannot edit',
-  event_capability: 'Read-only — this event cannot be edited',
-  recurrence_unsupported: 'Read-only — recurring event editing is not yet supported',
-  conflict: 'Read-only',
-  kind: 'Read-only',
-};
 
 const KIND_ICON = CALENDAR_ITEM_KIND_ICON;
 const KIND_LABEL = CALENDAR_ITEM_KIND_LABEL;

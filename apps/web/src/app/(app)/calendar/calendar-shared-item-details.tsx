@@ -13,7 +13,7 @@ import {
 import { type JSX } from 'react';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
-import { CALENDAR_ITEM_KIND_LABEL } from '@/components/calendar/calendar-item-card';
+import { CALENDAR_ITEM_KIND_LABEL } from '@/components/calendar/item-presentation/event-identity';
 import { CalendarDrawerClose } from '@/components/calendar/calendar-drawer-close';
 import { formatScheduleInstantRange } from '@/components/scheduling/scheduling-time-label';
 import { formatCalendarDate } from '@/lib/format-date';

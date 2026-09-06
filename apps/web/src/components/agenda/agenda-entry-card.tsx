@@ -13,16 +13,7 @@
  * The card carries the check-off control (when the entry is on the plan) as a sibling of the
  * navigating content, so neither nests inside the other.
  */
-import type { CalendarItemKind } from '@docket/planning/calendar-contract';
-import {
-  Calendar,
-  CheckCircle2,
-  Circle,
-  Layers,
-  type LucideIcon,
-  Schedule,
-  TaskAlt,
-} from '@docket/ui/icons';
+import { Calendar, CheckCircle2, Circle } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import { surfaceToneColor } from '@docket/ui/primitives';
@@ -30,6 +21,10 @@ import Link from '@/components/docket-link';
 import { type JSX, useRef } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
+import {
+  CALENDAR_ITEM_KIND_ICON,
+  CALENDAR_ITEM_KIND_LABEL,
+} from '@/components/calendar/item-presentation/event-identity';
 import { OrgChip } from '@/components/org-chip';
 import { formatScheduleInstantRange, formatScheduleInstantTime } from '@/components/scheduling';
 import { formatClock } from '@/lib/format-time';
@@ -45,26 +40,6 @@ import {
 
 /** How the card lays out: a compact list `row`, or a fill-height timeline `block`. */
 export type AgendaEntryLayout = 'row' | 'block';
-
-/** The icon glyph for a layered-calendar item's kind, mirroring `calendar-item-card.tsx`'s mapping. */
-const CALENDAR_ITEM_KIND_ICON: Record<CalendarItemKind, LucideIcon> = {
-  provider_event: Calendar,
-  native_event: Calendar,
-  native_block: Layers,
-  timebox: Layers,
-  task_timebox: TaskAlt,
-  availability_block: Schedule,
-};
-
-/** The compact context label for a layered-calendar item's kind. */
-const CALENDAR_ITEM_KIND_LABEL: Record<CalendarItemKind, string> = {
-  provider_event: 'Calendar',
-  native_event: 'Event',
-  native_block: 'Block',
-  timebox: 'Timebox',
-  task_timebox: 'Timebox',
-  availability_block: 'Availability',
-};
 
 /** Props for {@link AgendaEntryCard}. */
 export interface AgendaEntryCardProps {

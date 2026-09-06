@@ -110,7 +110,7 @@ export function registerPlanDraftTools(
     {
       title: 'Start a plan',
       description:
-        'Open a planning draft on the canvas, or reopen the one already rooted on an initiative. Use this the moment the person describes initiative-sized work — a launch, a campaign, a quarter’s goal, anything with several efforts inside it — and tell them in one sentence that the plan is open on the canvas. The result carries the document, the canvas link, and the templates available for each kind; apply the most relevant one when you first draft a node. Nothing is created in the workspace until `plan_commit`.',
+        'Open a planning draft on the canvas, or reopen the one rooted on an initiative. Use it the moment the person describes initiative-sized work, and tell them in one sentence the plan is open. Returns the document, the canvas link, and the templates each kind may apply. Nothing reaches the workspace until `plan_commit`.',
       inputSchema: {
         orgId: orgIdParam,
         initiative: z
@@ -163,7 +163,7 @@ export function registerPlanDraftTools(
     {
       title: 'Read a plan',
       description:
-        'The current plan document and its revision. Call this at the start of every turn while a plan is active — the person may have edited the canvas directly since you last looked — and pass the revision you read to `plan_draft`.',
+        'The plan document and its revision. Call it at the start of every turn while a plan is active, since the person may have edited the canvas, and pass the revision to `plan_draft`.',
       inputSchema: { planId: planIdParam },
       outputSchema: {
         planId: z.string(),
@@ -193,7 +193,7 @@ export function registerPlanDraftTools(
     {
       title: 'Draft on the canvas',
       description:
-        'Change the plan document in one batch: add or update nodes (invent a short `ref` for each and name parents by ref; order does not matter), set fields, move a task to another project, remove a draft node, add or remove a dependency, or apply a template to a node. Write everything a turn produced in ONE call so it lands on the canvas together. The batch applies whole or not at all; a rejection names the operation and path. Nothing here reaches the workspace — nodes stay drafts until `plan_commit`. A node that has already been created cannot be edited here; use `update` on the real object instead.',
+        'Edit the plan in one batch: add or update nodes (invent a short `ref`, name parents by ref), set fields, move a task, remove a draft node, add or remove a dependency, or apply a template. Write a whole turn in ONE call so it lands together; the batch applies whole or not at all. Created nodes cannot be edited here; use `update` on the real object.',
       inputSchema: {
         planId: planIdParam,
         revision: z
@@ -238,7 +238,7 @@ export function registerPlanDraftTools(
     {
       title: 'Confirm part of a plan',
       description:
-        'Create the named draft nodes as real work in the workspace, in one transaction. Ancestors that are still drafts are included automatically, so naming a task also creates its project and initiative when those are drafts. Anything already there by that name in that place is matched instead of duplicated. Call this only for a part the person has settled in conversation, and say what it will create.',
+        'Create the named draft nodes as real work, in one transaction; draft ancestors come along, and anything already there by that name is matched rather than duplicated. Call it only for a part the person has settled, and say what it will create.',
       inputSchema: {
         planId: planIdParam,
         refs: z.array(z.string()).min(1).max(200).describe('The refs to confirm.'),

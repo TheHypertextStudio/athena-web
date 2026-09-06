@@ -209,6 +209,9 @@ function assertUpsertAllowed(
   if (existing && existing.kind !== op.node.kind) {
     throw new PlanOpError(index, `ops.${index}.node.kind`, 'A node cannot change kind.');
   }
+  if (!existing && (op.node.fields.title ?? '').trim().length === 0) {
+    throw new PlanOpError(index, `ops.${index}.node.fields.title`, 'A new node needs a title.');
+  }
   assertFieldsForKind(index, op.node.kind, op.node.fields);
 }
 
@@ -235,7 +238,8 @@ function mergeUpsert(
     parentRef: null,
     initiativeRefs: [],
     initiativeIds: [],
-    fields: node.fields,
+    // A new node always has a title: `assertUpsertAllowed` refused it otherwise.
+    fields: { ...node.fields, title: node.fields.title ?? '' },
     templateId: null,
     status: 'draft',
     objectId: null,
@@ -246,7 +250,7 @@ function mergeUpsert(
     parentRef: supplied(node.parentRef, base.parentRef),
     initiativeRefs: supplied(node.initiativeRefs, base.initiativeRefs),
     initiativeIds: supplied(node.initiativeIds, base.initiativeIds),
-    fields: { ...base.fields, ...node.fields },
+    fields: { ...base.fields, ...node.fields, title: node.fields.title ?? base.fields.title },
     templateId: supplied(node.templateId, base.templateId),
     status: 'draft',
     objectId: null,

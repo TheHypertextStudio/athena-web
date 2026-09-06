@@ -107,6 +107,17 @@ export const PlanDocument = z
 /** Plan document value. */
 export type PlanDocument = z.infer<typeof PlanDocument>;
 
+/**
+ * The fields an edit may carry: every field optional, so one schema serves both a new node and a
+ * change to one. A new node must still arrive with a title; the reducer enforces that.
+ */
+export const PlanNodeFieldsPatch = PlanNodeFields.partial().meta({
+  id: 'PlanNodeFieldsPatch',
+  description: 'Fields to set on a plan node; omitted fields keep their values.',
+});
+/** Plan node fields patch value. */
+export type PlanNodeFieldsPatch = z.infer<typeof PlanNodeFieldsPatch>;
+
 /** The node shape an `upsert_node` op carries; omitted keys keep their current values. */
 export const PlanUpsertNode = z.object({
   ref: z.string().min(1).max(64),
@@ -114,7 +125,7 @@ export const PlanUpsertNode = z.object({
   parentRef: z.string().nullable().optional(),
   initiativeRefs: z.array(z.string()).optional(),
   initiativeIds: z.array(InitiativeId).optional(),
-  fields: PlanNodeFields,
+  fields: PlanNodeFieldsPatch,
   templateId: TemplateId.nullable().optional(),
 });
 /** Upsert payload value. */
@@ -128,7 +139,7 @@ export const PlanOp = z
       title: z.string().min(1).max(200).describe('Rename the plan itself.'),
     }),
     z.object({ op: z.literal('upsert_node'), node: PlanUpsertNode }),
-    z.object({ op: z.literal('set_fields'), ref: z.string(), fields: PlanNodeFields.partial() }),
+    z.object({ op: z.literal('set_fields'), ref: z.string(), fields: PlanNodeFieldsPatch }),
     z.object({ op: z.literal('move_node'), ref: z.string(), parentRef: z.string().nullable() }),
     z.object({ op: z.literal('remove_node'), ref: z.string() }),
     z.object({ op: z.literal('add_edge'), fromRef: z.string(), toRef: z.string() }),

@@ -62,6 +62,25 @@ describe('applyPlanOps', () => {
     expect(doc.nodes.map((node) => node.ref)).toEqual(['init', 'p1', 't1']);
   });
 
+  it('rejects a new node without a title but lets an existing one keep its own', () => {
+    expect(() =>
+      applyPlanOps(
+        EMPTY_PLAN_DOCUMENT,
+        [{ op: 'upsert_node', node: { ref: 'init', kind: 'initiative', fields: {} } }],
+        env,
+      ),
+    ).toThrow(PlanOpError);
+    const doc = applyPlanOps(
+      EMPTY_PLAN_DOCUMENT,
+      [
+        { op: 'upsert_node', node: { ref: 'init', kind: 'initiative', fields: { title: 'I' } } },
+        { op: 'upsert_node', node: { ref: 'init', kind: 'initiative', fields: { summary: 'S' } } },
+      ],
+      env,
+    );
+    expect(doc.nodes[0]?.fields).toMatchObject({ title: 'I', summary: 'S' });
+  });
+
   it('rejects a task under an initiative', () => {
     expect(() =>
       applyPlanOps(

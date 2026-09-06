@@ -15,6 +15,7 @@ import {
   CalendarItemId,
   CalendarLayerId,
   CalendarListId,
+  CalendarSourceGroupId,
   WorkPlaceId,
 } from '../ids';
 import { DateString } from '../date-time';
@@ -1091,6 +1092,92 @@ export const CalendarListUpdate = z
 /** Calendar visibility update body value. */
 export type CalendarListUpdate = z.infer<typeof CalendarListUpdate>;
 
+/** One physical provider source represented by a logical calendar settings row. */
+export const CalendarLogicalSourceOut = z
+  .object({
+    layerId: CalendarLayerId.describe('Physical provider layer id.'),
+    connectionId: CalendarConnectionId.nullable().describe('Linked account supplying the source.'),
+    relationship: CalendarSourceRelationship.nullable().describe(
+      'How the linked account relates to this source.',
+    ),
+    management: CalendarSourceManagement.describe('Provider-supported source actions.'),
+  })
+  .meta({ id: 'CalendarLogicalSourceOut', description: 'One source of a logical calendar.' });
+/** Logical calendar source value. */
+export type CalendarLogicalSourceOut = z.infer<typeof CalendarLogicalSourceOut>;
+
+/** One logical calendar shown in settings. */
+export const CalendarSourceGroupOut = z
+  .object({
+    id: z.string().min(1).describe('Stable derived or persisted logical calendar group id.'),
+    persistedGroupId: CalendarSourceGroupId.nullable().describe(
+      'Stored confirmed group id, or null for an exact derived group.',
+    ),
+    provenance: z
+      .enum(['single', 'exact', 'confirmed'])
+      .describe('Why these physical sources form one logical calendar.'),
+    title: z.string().describe('Display title from the preferred source.'),
+    color: z.string().nullable().describe('Display color from the preferred source.'),
+    selected: z.boolean().describe('Effective visibility shared by every active source.'),
+    visibleByDefault: z.boolean().describe('Default visibility shared by every active source.'),
+    preferredLayerId: CalendarLayerId.describe(
+      'Physical source used for reads and provider writes.',
+    ),
+    sources: z
+      .array(CalendarLogicalSourceOut)
+      .min(1)
+      .describe('Active physical sources in the group.'),
+  })
+  .meta({ id: 'CalendarSourceGroupOut', description: 'One logical calendar settings row.' });
+/** Logical calendar settings row value. */
+export type CalendarSourceGroupOut = z.infer<typeof CalendarSourceGroupOut>;
+
+/** A provider-supported likely source group that still needs user confirmation. */
+export const CalendarSourceGroupSuggestionOut = z
+  .object({
+    key: z.string().min(1).describe('Adapter-issued suggestion key.'),
+    title: z.string().describe('Suggested logical calendar title.'),
+    layerIds: z.array(CalendarLayerId).min(2).describe('Sources proposed for combination.'),
+  })
+  .meta({
+    id: 'CalendarSourceGroupSuggestionOut',
+    description: 'A likely logical calendar group awaiting confirmation.',
+  });
+/** Calendar source-group suggestion value. */
+export type CalendarSourceGroupSuggestionOut = z.infer<typeof CalendarSourceGroupSuggestionOut>;
+
+/** Confirm a logical calendar group. */
+export const CalendarSourceGroupCreate = z
+  .object({
+    layerIds: z.array(CalendarLayerId).min(2).describe('Sources to combine.'),
+    preferredLayerId: CalendarLayerId.describe('Source to use for reads and writes.'),
+  })
+  .refine((value) => value.layerIds.includes(value.preferredLayerId), {
+    path: ['preferredLayerId'],
+    message: 'The preferred source must belong to the group',
+  })
+  .meta({ id: 'CalendarSourceGroupCreate', description: 'Confirm a logical calendar group.' });
+/** Calendar source-group creation value. */
+export type CalendarSourceGroupCreate = z.infer<typeof CalendarSourceGroupCreate>;
+
+/** Update one logical calendar atomically. */
+export const CalendarSourceGroupUpdate = z
+  .object({
+    preferredLayerId: CalendarLayerId.optional().describe('Source to use for reads and writes.'),
+    selected: z.boolean().optional().describe('Visibility for every group source.'),
+    visibleByDefault: z.boolean().optional().describe('Default visibility for every group source.'),
+  })
+  .refine(
+    (value) =>
+      value.preferredLayerId !== undefined ||
+      value.selected !== undefined ||
+      value.visibleByDefault !== undefined,
+    { path: ['selected'], message: 'At least one logical calendar field is required' },
+  )
+  .meta({ id: 'CalendarSourceGroupUpdate', description: 'Update one logical calendar.' });
+/** Calendar source-group update value. */
+export type CalendarSourceGroupUpdate = z.infer<typeof CalendarSourceGroupUpdate>;
+
 /** Response containing all linked calendar accounts and calendars. */
 export const CalendarSettingsOut = z
   .object({
@@ -1101,6 +1188,10 @@ export const CalendarSettingsOut = z
       .describe(
         'Every calendar layer for the signed-in user (provider-backed and Docket-native), selected or not.',
       ),
+    sourceGroups: z.array(CalendarSourceGroupOut).describe('Logical calendars shown in settings.'),
+    sourceGroupSuggestions: z
+      .array(CalendarSourceGroupSuggestionOut)
+      .describe('Likely groups that remain separate until confirmed.'),
   })
   .meta({ id: 'CalendarSettingsOut', description: 'User-scoped Google Calendar settings.' });
 /** Calendar settings value. */

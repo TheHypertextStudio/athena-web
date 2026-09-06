@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { AgendaOut } from '@docket/planning/agenda-contract';
@@ -243,6 +243,155 @@ describe('first-party Google Calendar routes', () => {
     expect(out.connections[0]?.calendarsTotal).toBe(2);
     expect(out.connections[0]?.calendarsEnabled).toBe(1);
     expect(out.calendars.map((cal) => cal.title)).toEqual(['Ada', 'Team']);
+  });
+
+  it('returns one exact logical calendar and updates every source visibility atomically', async () => {
+    const fixture = await seedCalendarFixture();
+    await fixture.schema.db
+      .update(fixture.schema.calendarLayer)
+      .set({
+        sourceIdentityNamespace: 'google-calendar',
+        sourceIdentityValue: 'ada@example.com',
+        sourceRelationship: 'subscribed',
+      })
+      .where(eq(fixture.schema.calendarLayer.id, fixture.selectedCalendar.id));
+    await seedGoogleAccount(fixture.schema.db, fixture.schema, fixture.userId, 'google-sub-2');
+    const personalConnection = one(
+      await fixture.schema.db
+        .insert(fixture.schema.calendarConnection)
+        .values({
+          userId: fixture.userId,
+          externalAccountId: 'google-sub-2',
+          accountEmail: 'ada@example.com',
+          status: 'connected',
+        })
+        .returning({ id: fixture.schema.calendarConnection.id }),
+    );
+    const personalList = one(
+      await fixture.schema.db
+        .insert(fixture.schema.calendarList)
+        .values({
+          userId: fixture.userId,
+          connectionId: personalConnection.id,
+          externalCalendarId: 'ada@example.com',
+          title: 'Personal',
+          selected: true,
+          visibleByDefault: true,
+        })
+        .returning({ id: fixture.schema.calendarList.id }),
+    );
+    await fixture.schema.db.insert(fixture.schema.calendarLayer).values({
+      id: personalList.id,
+      userId: fixture.userId,
+      connectionId: personalConnection.id,
+      provider: 'google',
+      sourceKind: 'provider_calendar',
+      externalLayerId: 'ada@example.com',
+      sourceIdentityNamespace: 'google-calendar',
+      sourceIdentityValue: 'ada@example.com',
+      sourceRelationship: 'owned',
+      title: 'Personal',
+      selected: true,
+      visibleByDefault: true,
+    });
+    const app = appWithSession(calendarRouter, fakeSession(fixture.userId));
+
+    const settings = await body<CalendarSettingsOut>(await app.request('/'));
+    const logical = settings.sourceGroups.find((group) => group.sources.length === 2);
+    expect(logical).toMatchObject({
+      provenance: 'exact',
+      preferredLayerId: personalList.id,
+      sources: expect.arrayContaining([
+        expect.objectContaining({ layerId: fixture.selectedCalendar.id }),
+        expect.objectContaining({ layerId: personalList.id }),
+      ]),
+    });
+    if (!logical) throw new Error('Exact logical calendar group was not returned');
+
+    const updated = await body<CalendarSettingsOut>(
+      await app.request(`/source-groups/${encodeURIComponent(logical.id)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ selected: false, visibleByDefault: false }),
+      }),
+    );
+    expect(updated.sourceGroups.find((group) => group.id === logical.id)).toMatchObject({
+      selected: false,
+      visibleByDefault: false,
+    });
+    const layers = await fixture.schema.db
+      .select({
+        id: fixture.schema.calendarLayer.id,
+        selected: fixture.schema.calendarLayer.selected,
+      })
+      .from(fixture.schema.calendarLayer)
+      .where(
+        inArray(fixture.schema.calendarLayer.id, [fixture.selectedCalendar.id, personalList.id]),
+      );
+    expect(layers).toEqual(
+      expect.arrayContaining([
+        { id: fixture.selectedCalendar.id, selected: false },
+        { id: personalList.id, selected: false },
+      ]),
+    );
+  });
+
+  it('keeps a likely match separate until confirmation and allows separation', async () => {
+    const fixture = await seedCalendarFixture();
+    await fixture.schema.db
+      .update(fixture.schema.calendarLayer)
+      .set({
+        sourceIdentityNamespace: 'google-calendar',
+        suggestedGroupKey: 'holidays:united-states',
+      })
+      .where(eq(fixture.schema.calendarLayer.userId, fixture.userId));
+    await fixture.schema.db
+      .update(fixture.schema.calendarLayer)
+      .set({ sourceIdentityValue: 'holidays-en-us', title: 'US holidays' })
+      .where(eq(fixture.schema.calendarLayer.id, fixture.selectedCalendar.id));
+    await fixture.schema.db
+      .update(fixture.schema.calendarLayer)
+      .set({ sourceIdentityValue: 'holidays-en-gb', title: 'US holidays' })
+      .where(eq(fixture.schema.calendarLayer.id, fixture.hiddenCalendar.id));
+    const app = appWithSession(calendarRouter, fakeSession(fixture.userId));
+
+    const before = await body<CalendarSettingsOut>(await app.request('/'));
+    expect(before.sourceGroups.filter((group) => group.title === 'US holidays')).toHaveLength(2);
+    expect(before.sourceGroupSuggestions).toEqual([
+      {
+        key: 'holidays:united-states',
+        title: 'US holidays',
+        layerIds: expect.arrayContaining([fixture.selectedCalendar.id, fixture.hiddenCalendar.id]),
+      },
+    ]);
+
+    const combined = await body<CalendarSettingsOut>(
+      await app.request('/source-groups', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          layerIds: [fixture.selectedCalendar.id, fixture.hiddenCalendar.id],
+          preferredLayerId: fixture.selectedCalendar.id,
+        }),
+      }),
+    );
+    const confirmed = combined.sourceGroups.find((group) => group.provenance === 'confirmed');
+    expect(confirmed).toMatchObject({
+      preferredLayerId: fixture.selectedCalendar.id,
+      sources: expect.arrayContaining([
+        expect.objectContaining({ layerId: fixture.selectedCalendar.id }),
+        expect.objectContaining({ layerId: fixture.hiddenCalendar.id }),
+      ]),
+    });
+    expect(combined.sourceGroupSuggestions).toEqual([]);
+    if (!confirmed?.persistedGroupId)
+      throw new Error('Confirmed logical calendar was not returned');
+
+    const separated = await body<CalendarSettingsOut>(
+      await app.request(`/source-groups/${confirmed.persistedGroupId}`, { method: 'DELETE' }),
+    );
+    expect(separated.sourceGroups.filter((group) => group.title === 'US holidays')).toHaveLength(2);
+    expect(separated.sourceGroupSuggestions).toHaveLength(1);
   });
 
   it('updates calendar visibility and agenda filtering respects the selected set', async () => {

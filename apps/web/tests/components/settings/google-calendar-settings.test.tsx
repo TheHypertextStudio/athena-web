@@ -11,16 +11,20 @@
 import '@testing-library/jest-dom/vitest';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { calendarGet, identitiesGet, layersGet, replace } = vi.hoisted(() => ({
-  calendarGet: vi.fn(),
-  identitiesGet: vi.fn(),
-  layersGet: vi.fn(),
-  replace: vi.fn(),
-}));
+const { calendarGet, identitiesGet, layersGet, groupPatch, groupPost, groupDelete, replace } =
+  vi.hoisted(() => ({
+    calendarGet: vi.fn(),
+    identitiesGet: vi.fn(),
+    layersGet: vi.fn(),
+    groupPatch: vi.fn(),
+    groupPost: vi.fn(),
+    groupDelete: vi.fn(),
+    replace: vi.fn(),
+  }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
@@ -39,6 +43,10 @@ vi.mock('../../../src/lib/api', () => ({
           $get: calendarGet,
           layers: { $get: layersGet },
           calendars: { ':id': { $patch: vi.fn() } },
+          'source-groups': {
+            $post: groupPost,
+            ':id': { $patch: groupPatch, $delete: groupDelete },
+          },
           sync: { $post: vi.fn() },
         },
       },
@@ -147,6 +155,33 @@ function calendarSettingsFixture() {
         updatedAt: '2026-07-01T00:00:00.000Z',
       },
     ],
+    sourceGroups: [
+      {
+        id: 'exact_personal',
+        persistedGroupId: null,
+        provenance: 'exact',
+        title: 'Personal',
+        color: '#16a34a',
+        selected: true,
+        visibleByDefault: true,
+        preferredLayerId: '01BX5ZZKBKACTAV9WEVGEMMVL1',
+        sources: [
+          {
+            layerId: '01BX5ZZKBKACTAV9WEVGEMMVL1',
+            connectionId: WRITE_CONNECTION_ID,
+            relationship: 'owned',
+            management: { canRemoveSubscription: false, requiresIncrementalConsent: false },
+          },
+          {
+            layerId: '01BX5ZZKBKACTAV9WEVGEMMVL2',
+            connectionId: READ_ONLY_CONNECTION_ID,
+            relationship: 'shared',
+            management: { canRemoveSubscription: true, requiresIncrementalConsent: true },
+          },
+        ],
+      },
+    ],
+    sourceGroupSuggestions: [],
   };
 }
 
@@ -158,6 +193,9 @@ beforeEach(() => {
       okResponse({ items: [], googleOAuth: { available: true, stage: 'testing' } }),
     );
   layersGet.mockReset().mockResolvedValue(okResponse({ items: calendarSettingsFixture().layers }));
+  groupPatch.mockReset().mockResolvedValue(okResponse(calendarSettingsFixture()));
+  groupPost.mockReset().mockResolvedValue(okResponse(calendarSettingsFixture()));
+  groupDelete.mockReset().mockResolvedValue(okResponse(calendarSettingsFixture()));
   replace.mockReset();
 });
 
@@ -166,7 +204,7 @@ afterEach(() => {
 });
 
 describe('GoogleCalendarSettings', () => {
-  it('renders write-scope status per account and each account layer beneath it', async () => {
+  it('renders one logical calendar row with expandable account sources', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -187,8 +225,16 @@ describe('GoogleCalendarSettings', () => {
       expect(enableButton).toBeEnabled();
     });
 
-    // Each account's layer renders underneath it.
-    expect(screen.getByText('Writer primary')).toBeInTheDocument();
-    expect(screen.getByText('Reader primary')).toBeInTheDocument();
+    const calendarsSection = screen.getByRole('heading', { name: 'Calendars' }).closest('section');
+    if (!calendarsSection) throw new Error('Calendars settings group was not rendered');
+    expect(within(calendarsSection).getByText('Personal')).toBeInTheDocument();
+    expect(within(calendarsSection).getByText('2 accounts')).toBeInTheDocument();
+    expect(screen.queryByText('Preferred')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show sources for Personal' }));
+    expect(screen.getByText('Preferred')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Use as preferred' })).toBeInTheDocument();
+    expect(screen.getAllByText('writer@example.com')).toHaveLength(2);
+    expect(screen.getAllByText('reader@example.com')).toHaveLength(2);
   });
 });

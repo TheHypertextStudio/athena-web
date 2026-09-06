@@ -21,6 +21,7 @@ import type { Context } from 'hono';
 import type { z } from 'zod';
 
 import { readCalendarItemsInRange, readCalendarLayers } from '../calendar/calendar-read';
+import { readCalendarSourceGroups } from '../calendar/calendar-source-groups';
 import type { AppEnv } from '../context';
 import { AuthError } from '../error';
 import { buildTaskViewFilter } from './task-helpers';
@@ -111,7 +112,7 @@ export function toCalendarEventOut(row: CalendarEventRow): z.input<typeof Calend
 export async function readCalendarSettings(
   userId: string,
 ): Promise<z.input<typeof CalendarSettingsOut>> {
-  const [connections, calendars, layers] = await Promise.all([
+  const [connections, calendars, layers, logicalSources] = await Promise.all([
     db
       .select()
       .from(calendarConnection)
@@ -123,6 +124,7 @@ export async function readCalendarSettings(
       .where(and(eq(calendarList.userId, userId), isNull(calendarList.removedAt)))
       .orderBy(asc(calendarList.title)),
     readCalendarLayers(db, userId),
+    readCalendarSourceGroups(db, userId),
   ]);
 
   const counts = new Map<string, { total: number; enabled: number }>();
@@ -139,6 +141,7 @@ export async function readCalendarSettings(
     ),
     calendars: calendars.map(toCalendarListOut),
     layers,
+    ...logicalSources,
   };
 }
 

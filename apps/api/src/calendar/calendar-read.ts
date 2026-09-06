@@ -40,6 +40,7 @@ import {
   resolveItemPermissions,
 } from './calendar-permissions';
 import { toCalendarItemOut, toCalendarLayerOut } from './calendar-serializers';
+import { readPreferredCalendarLayerMap } from './calendar-source-groups';
 
 type CalendarItemRow = typeof calendarItem.$inferSelect;
 
@@ -217,7 +218,10 @@ export async function readCalendarItemsInRange(
       eventIdentity: item.eventIdentity ?? null,
       occurrenceIdentity: item.occurrenceIdentity ?? null,
     }));
-  const canonicalLayers = canonicalizeCalendarLayers(layers);
+  const storedPreferences = await readPreferredCalendarLayerMap(db, input.userId);
+  const canonicalLayers = canonicalizeCalendarLayers(layers, {
+    preferredLayerIdByLayerId: storedPreferences,
+  });
   const canonicalItems = canonicalizeCalendarItems(items, layers, {
     preferredLayerIdByLayerId: canonicalLayers.preferredLayerIdByLayerId,
   });
@@ -336,7 +340,10 @@ export async function readItemDetail(
     equivalentRows.map((candidate) => [candidate.layer.id, toCanonicalLayer(candidate.layer)]),
   );
   const items = equivalentRows.map((candidate) => toCanonicalItem(candidate, linkedTasksByItem));
-  const canonicalLayers = canonicalizeCalendarLayers([...layersById.values()]);
+  const storedPreferences = await readPreferredCalendarLayerMap(db, input.userId);
+  const canonicalLayers = canonicalizeCalendarLayers([...layersById.values()], {
+    preferredLayerIdByLayerId: storedPreferences,
+  });
   const canonicalItems = canonicalizeCalendarItems(items, [...layersById.values()], {
     preferredLayerIdByLayerId: canonicalLayers.preferredLayerIdByLayerId,
   });

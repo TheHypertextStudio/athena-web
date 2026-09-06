@@ -33,6 +33,8 @@ import {
   CalendarLayerOut,
   CalendarLayersOut,
   CalendarLayerUpdate,
+  CalendarSourceGroupCreate,
+  CalendarSourceGroupUpdate,
   CalendarRangeQuery,
   CalendarSettingsOut,
   CalendarListUpdate,
@@ -53,6 +55,11 @@ import {
   readCalendarLayers,
   readItemDetail,
 } from '../calendar/calendar-read';
+import {
+  createCalendarSourceGroup,
+  deleteCalendarSourceGroup,
+  updateCalendarSourceGroup,
+} from '../calendar/calendar-source-groups';
 import {
   toCalendarItemOut,
   toCalendarItemTaskLinkOut,
@@ -219,6 +226,60 @@ const meCalendar = new Hono<AppEnv>()
         .set(visibilityPatch)
         .where(and(eq(calendarLayer.id, id), eq(calendarLayer.userId, userId)));
 
+      return ok(c, CalendarSettingsOut, await readCalendarSettings(userId));
+    },
+  )
+  .post(
+    '/source-groups',
+    apiDoc({
+      status: 201,
+      tag: 'Me',
+      summary: 'Combine calendar sources',
+      response: CalendarSettingsOut,
+      description:
+        'Confirm that two or more active calendar sources represent one logical calendar and choose the preferred source for reads and writes.',
+    }),
+    zJson(CalendarSourceGroupCreate),
+    async (c) => {
+      const userId = requireUserId(c);
+      const body = c.req.valid('json');
+      await createCalendarSourceGroup(db, { userId, ...body });
+      return created(c, CalendarSettingsOut, await readCalendarSettings(userId));
+    },
+  )
+  .patch(
+    '/source-groups/:id',
+    apiDoc({
+      tag: 'Me',
+      summary: 'Update a logical calendar',
+      response: CalendarSettingsOut,
+      description:
+        'Update the preferred source or visibility for every active source in one logical calendar transaction.',
+    }),
+    zParam(idParam),
+    zJson(CalendarSourceGroupUpdate),
+    async (c) => {
+      const userId = requireUserId(c);
+      await updateCalendarSourceGroup(db, {
+        userId,
+        groupId: c.req.valid('param').id,
+        patch: c.req.valid('json'),
+      });
+      return ok(c, CalendarSettingsOut, await readCalendarSettings(userId));
+    },
+  )
+  .delete(
+    '/source-groups/:id',
+    apiDoc({
+      tag: 'Me',
+      summary: 'Separate calendar sources',
+      response: CalendarSettingsOut,
+      description: 'Remove one confirmed logical grouping without deleting any calendar source.',
+    }),
+    zParam(idParam),
+    async (c) => {
+      const userId = requireUserId(c);
+      await deleteCalendarSourceGroup(db, userId, c.req.valid('param').id);
       return ok(c, CalendarSettingsOut, await readCalendarSettings(userId));
     },
   )

@@ -287,6 +287,53 @@ describe('readCalendarItemsInRange', () => {
       eventIdentity: { namespace: 'ical', value: 'planning@example.com' },
     });
   });
+
+  it('uses a stored source-group preference across different calendar identities', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'PreferredSourceUser');
+    const preferredLayer = await seedLayer(schema, userId, {
+      sourceIdentityNamespace: 'google-calendar',
+      sourceIdentityValue: 'holiday-a',
+      sourceRelationship: 'subscribed',
+    });
+    const editableLayer = await seedLayer(schema, userId, {
+      sourceIdentityNamespace: 'google-calendar',
+      sourceIdentityValue: 'holiday-b',
+      sourceRelationship: 'owned',
+      editableCore: true,
+    });
+    const preferredItem = await seedItem(schema, userId, preferredLayer.id, {
+      eventIdentityNamespace: 'ical',
+      eventIdentityValue: 'holiday@example.com',
+      startsAt: new Date('2026-07-01T10:00:00.000Z'),
+      endsAt: new Date('2026-07-01T11:00:00.000Z'),
+    });
+    await seedItem(schema, userId, editableLayer.id, {
+      eventIdentityNamespace: 'ical',
+      eventIdentityValue: 'holiday@example.com',
+      startsAt: new Date('2026-07-01T10:00:00.000Z'),
+      endsAt: new Date('2026-07-01T11:00:00.000Z'),
+    });
+    const group = one(
+      await schema.db
+        .insert(schema.calendarSourceGroup)
+        .values({ userId, preferredLayerId: preferredLayer.id })
+        .returning({ id: schema.calendarSourceGroup.id }),
+    );
+    await schema.db.insert(schema.calendarSourceGroupMember).values([
+      { groupId: group.id, layerId: preferredLayer.id },
+      { groupId: group.id, layerId: editableLayer.id },
+    ]);
+
+    const result = await readCalendarItemsInRange(schema.db, {
+      userId,
+      start: rangeStart,
+      end: rangeEnd,
+    });
+
+    expect(result.items.map((item) => item.id)).toEqual([preferredItem.id]);
+    expect(result.layers.map((layer) => layer.id)).toEqual([preferredLayer.id]);
+  });
 });
 
 describe('readCalendarLayers', () => {

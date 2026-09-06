@@ -17,33 +17,33 @@ import {
   type CalendarConnectionOut,
   type CalendarConnectionStatus,
   type CalendarListOut,
+  type CalendarSourceGroupOut,
 } from '@docket/planning/calendar-contract';
-import { Calendar, RefreshCw } from '@docket/ui/icons';
+import { Calendar, ChevronDown, Layers, RefreshCw } from '@docket/ui/icons';
 import { firstWriteError, WriteError } from './write-error';
-import { Checkbox, Badge, Button } from '@docket/ui/primitives';
+import {
+  Badge,
+  Button,
+  Checkbox,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@docket/ui/primitives';
 import NextLink from '@/components/docket-link';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import CalendarLayerPanel from '@/components/calendar/calendar-layer-panel';
-import { calendarLayersDef, calendarSettingsDef } from '@/components/calendar/calendar-data';
+import { calendarSettingsDef } from '@/components/calendar/calendar-data';
+import { CALENDAR_ITEMS_PREFIX } from '@/components/calendar/calendar-mutation-cache';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { userErrorMessage } from '@/lib/problem';
-import {
-  apiQueryOptions,
-  queryKeys,
-  unwrap,
-  useApiListQuery,
-  useApiMutation,
-  useApiQuery,
-} from '@/lib/query';
+import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 import { EmptyState, RelativeTime } from '@docket/ui/components';
 import { relativeTime } from './format-time';
 import { SettingsGroup } from './settings-group';
-import { SETTINGS_NODES } from './settings-capabilities';
 
 const STATUS_LABEL: Record<
   CalendarConnectionStatus,
@@ -104,6 +104,261 @@ function syncSummary(
   return `Updated ${changed} event${changed === 1 ? '' : 's'}.`;
 }
 
+function connectionLabel(
+  connectionId: string | null,
+  connections: readonly CalendarConnectionOut[],
+): string {
+  if (connectionId === null) return 'Docket';
+  const connection = connections.find((candidate) => candidate.id === connectionId);
+  return connection?.accountEmail ?? connection?.accountName ?? 'Linked account';
+}
+
+interface LogicalCalendarRowProps {
+  readonly group: CalendarSourceGroupOut;
+  readonly connections: readonly CalendarConnectionOut[];
+  readonly disabled: boolean;
+  readonly onUpdate: (
+    groupId: string,
+    patch: { selected?: boolean; visibleByDefault?: boolean; preferredLayerId?: string },
+  ) => void;
+  readonly onSeparate: (groupId: string) => void;
+}
+
+/** One settings row for a logical calendar, with physical account sources on disclosure. */
+function LogicalCalendarRow({
+  group,
+  connections,
+  disabled,
+  onUpdate,
+  onSeparate,
+}: LogicalCalendarRowProps): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const confirmedGroupId = group.persistedGroupId;
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="hover:bg-surface-container flex min-w-0 items-center gap-3 px-4 py-3 transition-colors">
+        <Checkbox
+          checked={group.selected}
+          disabled={disabled}
+          onChange={(event) => {
+            onUpdate(group.id, {
+              selected: event.currentTarget.checked,
+              visibleByDefault: event.currentTarget.checked,
+            });
+          }}
+          aria-label={`Toggle ${group.title} visibility`}
+        />
+        <span
+          aria-hidden="true"
+          className="size-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: group.color ?? 'var(--color-primary)' }}
+        />
+        <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">
+          {group.title}
+        </span>
+        {group.sources.length > 1 ? (
+          <span className="text-on-surface-variant text-body-small flex shrink-0 items-center gap-1">
+            <Layers aria-hidden="true" className="size-4" />
+            {group.sources.length} accounts
+          </span>
+        ) : null}
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={`${open ? 'Hide' : 'Show'} sources for ${group.title}`}
+          >
+            <ChevronDown
+              aria-hidden="true"
+              className={`size-4 transition-transform ${open ? 'rotate-180' : ''}`}
+            />
+          </Button>
+        </CollapsibleTrigger>
+      </div>
+      <CollapsibleContent>
+        <div className="bg-surface-container-low border-outline-variant flex flex-col border-t px-4 py-2">
+          {group.sources.map((source) => {
+            const preferred = source.layerId === group.preferredLayerId;
+            return (
+              <div key={source.layerId} className="flex min-w-0 items-center gap-2 py-2 pl-8">
+                <span className="text-on-surface-variant text-body-small min-w-0 flex-1 truncate">
+                  {connectionLabel(source.connectionId, connections)}
+                </span>
+                {preferred ? (
+                  <Badge variant="secondary">Preferred</Badge>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={disabled}
+                    onClick={() => {
+                      onUpdate(group.id, { preferredLayerId: source.layerId });
+                    }}
+                  >
+                    Use as preferred
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+          {group.provenance === 'confirmed' && confirmedGroupId ? (
+            <div className="flex justify-end py-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={disabled}
+                onClick={() => {
+                  onSeparate(confirmedGroupId);
+                }}
+              >
+                Separate calendars
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+interface ConnectionSettingsGroupProps {
+  readonly connection: CalendarConnectionOut;
+  readonly googleAvailable: boolean;
+  readonly oauthPending: boolean;
+  readonly onEnableEditing: () => void;
+}
+
+/** One linked account's health and granted Calendar access. */
+function ConnectionSettingsGroup({
+  connection,
+  googleAvailable,
+  oauthPending,
+  onEnableEditing,
+}: ConnectionSettingsGroupProps): JSX.Element {
+  const scopeStatus = writeScopeStatus(connection);
+  return (
+    <SettingsGroup
+      title={connection.accountEmail ?? connection.accountName ?? 'Google account'}
+      description={
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span>
+            {connection.calendarsEnabled} of {connection.calendarsTotal} calendars visible
+          </span>
+          {connection.lastSyncedAt ? (
+            <span>
+              Last synced{' '}
+              <RelativeTime iso={connection.lastSyncedAt}>
+                {relativeTime(connection.lastSyncedAt)}
+              </RelativeTime>
+            </span>
+          ) : null}
+        </span>
+      }
+      action={
+        <Badge variant={STATUS_LABEL[connection.status].variant}>
+          {STATUS_LABEL[connection.status].label}
+        </Badge>
+      }
+      body="rows"
+    >
+      {connection.status === 'error' ? (
+        <p role="alert" className="text-error bg-surface-container text-body-small px-4 py-2">
+          Google Calendar could not be synced. Reconnect it to restore syncing.
+        </p>
+      ) : null}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+        <Badge variant={scopeStatus.variant}>{scopeStatus.label}</Badge>
+        {!connection.scopeState?.calendarWrite && googleAvailable ? (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={oauthPending}
+            onClick={onEnableEditing}
+            title="Choose this Google account again to grant Calendar editing."
+          >
+            Enable calendar editing
+          </Button>
+        ) : null}
+      </div>
+    </SettingsGroup>
+  );
+}
+
+interface CalendarGroupsProps {
+  readonly groups: readonly CalendarSourceGroupOut[];
+  readonly suggestions: readonly {
+    key: string;
+    title: string;
+    layerIds: readonly string[];
+  }[];
+  readonly connections: readonly CalendarConnectionOut[];
+  readonly disabled: boolean;
+  readonly onCombine: (layerIds: readonly string[]) => void;
+  readonly onUpdate: LogicalCalendarRowProps['onUpdate'];
+  readonly onSeparate: LogicalCalendarRowProps['onSeparate'];
+}
+
+/** Logical calendar rows and the confirmation prompts that can create them. */
+function CalendarGroups({
+  groups,
+  suggestions,
+  connections,
+  disabled,
+  onCombine,
+  onUpdate,
+  onSeparate,
+}: CalendarGroupsProps): JSX.Element | null {
+  if (groups.length === 0 && suggestions.length === 0) return null;
+  return (
+    <>
+      {suggestions.map((suggestion) => (
+        <SettingsGroup key={suggestion.key} body="rows">
+          <div className="flex min-w-0 items-center gap-3 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-on-surface text-body-medium truncate">{suggestion.title}</p>
+              <p className="text-on-surface-variant text-body-small">
+                These calendars may represent the same schedule.
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={disabled}
+              onClick={() => {
+                onCombine(suggestion.layerIds);
+              }}
+            >
+              Combine these calendars?
+            </Button>
+          </div>
+        </SettingsGroup>
+      ))}
+      {groups.length > 0 ? (
+        <SettingsGroup
+          title="Calendars"
+          description="Choose which logical calendars appear across Docket."
+          body="rows"
+        >
+          {groups.map((group) => (
+            <LogicalCalendarRow
+              key={group.id}
+              group={group}
+              connections={connections}
+              disabled={disabled}
+              onUpdate={onUpdate}
+              onSeparate={onSeparate}
+            />
+          ))}
+        </SettingsGroup>
+      ) : null}
+    </>
+  );
+}
+
 /** Render and mutate Google Calendar account/calendar visibility settings. */
 export default function GoogleCalendarSettings(): JSX.Element {
   const router = useRouter();
@@ -119,17 +374,42 @@ export default function GoogleCalendarSettings(): JSX.Element {
     ),
   );
 
-  const updateCalendar = useApiMutation({
-    mutationFn: (vars: { id: string; selected: boolean }) =>
+  const updateGroup = useApiMutation({
+    mutationFn: (vars: {
+      id: string;
+      patch: { selected?: boolean; visibleByDefault?: boolean; preferredLayerId?: string };
+    }) =>
       unwrap(
         () =>
-          api.v1.me.calendar.calendars[':id'].$patch({
+          api.v1.me.calendar['source-groups'][':id'].$patch({
             param: { id: vars.id },
-            json: { selected: vars.selected, visibleByDefault: vars.selected },
+            json: vars.patch,
           }),
         'Could not update calendar visibility.',
       ),
-    invalidateKeys: [queryKeys.calendarSettings()],
+    invalidateKeys: [
+      queryKeys.calendarSettings(),
+      queryKeys.calendarLayers(),
+      CALENDAR_ITEMS_PREFIX,
+    ],
+  });
+
+  const combineGroup = useApiMutation({
+    mutationFn: (vars: { layerIds: string[]; preferredLayerId: string }) =>
+      unwrap(
+        () => api.v1.me.calendar['source-groups'].$post({ json: vars }),
+        'Could not combine these calendars.',
+      ),
+    invalidateKeys: [queryKeys.calendarSettings(), queryKeys.calendarLayers()],
+  });
+
+  const separateGroup = useApiMutation({
+    mutationFn: (id: string) =>
+      unwrap(
+        () => api.v1.me.calendar['source-groups'][':id'].$delete({ param: { id } }),
+        'Could not separate these calendars.',
+      ),
+    invalidateKeys: [queryKeys.calendarSettings(), queryKeys.calendarLayers()],
   });
 
   const sync = useApiMutation({
@@ -175,29 +455,20 @@ export default function GoogleCalendarSettings(): JSX.Element {
     router.replace(window.location.pathname);
   }, [router, sync]);
 
-  const layersQuery = useApiListQuery(calendarLayersDef());
-  const layers = layersQuery.data?.items ?? [];
-
   const data = query.data;
-  const calendarsByConnection = new Map(
-    (data?.connections ?? []).map((connection) => [
-      connection.id,
-      (data?.calendars ?? []).filter((calendar) => calendar.connectionId === connection.id),
-    ]),
-  );
-  const layersByConnection = new Map(
-    (data?.connections ?? []).map((connection) => [
-      connection.id,
-      layers.filter((layer) => layer.connectionId === connection.id),
-    ]),
-  );
-  const nativeLayers = layers.filter((layer) => layer.connectionId === null);
-  const mutationDisabled = updateCalendar.isPending || sync.isPending;
+  const mutationDisabled = [
+    updateGroup.isPending,
+    combineGroup.isPending,
+    separateGroup.isPending,
+    sync.isPending,
+  ].some(Boolean);
   const syncFeedback = sync.data ? syncSummary(sync.data, data?.calendars ?? []) : null;
   // Both writes were fire-and-forget: a refused visibility toggle snapped the checkbox back with
   // no explanation, and a failed manual sync left the summary line showing the previous run.
   const writeError = firstWriteError([
-    [updateCalendar, 'Could not update calendar visibility.'],
+    [updateGroup, 'Could not update calendar visibility.'],
+    [combineGroup, 'Could not combine these calendars.'],
+    [separateGroup, 'Could not separate these calendars.'],
     [sync, 'Could not sync Google Calendar.'],
   ]);
   const googleAvailable = identitiesQuery.data?.googleOAuth?.available === true;
@@ -299,105 +570,35 @@ export default function GoogleCalendarSettings(): JSX.Element {
         </SettingsGroup>
       ) : null}
 
-      {(data?.connections ?? []).map((connection) => {
-        const calendars = calendarsByConnection.get(connection.id) ?? [];
-        return (
-          <SettingsGroup
-            key={connection.id}
-            title={connection.accountEmail ?? connection.accountName ?? 'Google account'}
-            discoverable={false}
-            description={
-              <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                <span>
-                  {connection.calendarsEnabled} of {connection.calendarsTotal} calendars visible
-                </span>
-                {connection.lastSyncedAt ? (
-                  <span>
-                    Last synced{' '}
-                    <RelativeTime iso={connection.lastSyncedAt}>
-                      {relativeTime(connection.lastSyncedAt)}
-                    </RelativeTime>
-                  </span>
-                ) : null}
-              </span>
-            }
-            action={
-              <Badge variant={STATUS_LABEL[connection.status].variant}>
-                {STATUS_LABEL[connection.status].label}
-              </Badge>
-            }
-            body="rows"
-          >
-            {connection.status === 'error' ? (
-              <p role="alert" className="text-error bg-surface-container text-body-small px-4 py-2">
-                Google Calendar could not be synced. Reconnect it to restore syncing.
-              </p>
-            ) : null}
-            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
-              <Badge variant={writeScopeStatus(connection).variant}>
-                {writeScopeStatus(connection).label}
-              </Badge>
-              {!connection.scopeState?.calendarWrite && googleAvailable ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={oauthPending}
-                  onClick={() => {
-                    void startGoogleLink();
-                  }}
-                  title="Choose this Google account again to grant Calendar editing."
-                >
-                  Enable calendar editing
-                </Button>
-              ) : null}
-            </div>
-            <ul>
-              {calendars.map((calendar) => (
-                <li
-                  key={calendar.id}
-                  className="hover:bg-surface-container flex items-center justify-between gap-3 px-4 py-3 transition-colors"
-                >
-                  <label className="flex min-w-0 items-center gap-3">
-                    <Checkbox
-                      checked={calendar.selected}
-                      disabled={mutationDisabled}
-                      onChange={(event) => {
-                        updateCalendar.mutate({
-                          id: calendar.id,
-                          selected: event.currentTarget.checked,
-                        });
-                      }}
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="size-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: calendar.color ?? 'var(--color-primary)' }}
-                    />
-                    <span className="text-on-surface text-body-medium truncate">
-                      {calendar.title}
-                    </span>
-                  </label>
-                  <span className="text-on-surface-variant text-body-small shrink-0">
-                    {calendar.primary ? 'Primary' : (calendar.accessRole ?? 'Calendar')}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            {(layersByConnection.get(connection.id) ?? []).length > 0 ? (
-              <div className="flex flex-col gap-1.5 px-4 pt-1 pb-3">
-                <h4 className="text-on-surface-variant text-label-medium">Layers</h4>
-                <CalendarLayerPanel layers={layersByConnection.get(connection.id) ?? []} />
-              </div>
-            ) : null}
-          </SettingsGroup>
-        );
-      })}
+      {(data?.connections ?? []).map((connection) => (
+        <ConnectionSettingsGroup
+          key={connection.id}
+          connection={connection}
+          googleAvailable={googleAvailable}
+          oauthPending={oauthPending}
+          onEnableEditing={() => {
+            void startGoogleLink();
+          }}
+        />
+      ))}
 
-      {nativeLayers.length > 0 ? (
-        <SettingsGroup capability={SETTINGS_NODES.connectionsDocketCalendars}>
-          <CalendarLayerPanel layers={nativeLayers} />
-        </SettingsGroup>
-      ) : null}
+      <CalendarGroups
+        groups={data?.sourceGroups ?? []}
+        suggestions={data?.sourceGroupSuggestions ?? []}
+        connections={data?.connections ?? []}
+        disabled={mutationDisabled}
+        onCombine={(layerIds) => {
+          const preferredLayerId = layerIds[0];
+          if (!preferredLayerId) return;
+          combineGroup.mutate({ layerIds: [...layerIds], preferredLayerId });
+        }}
+        onUpdate={(groupId, patch) => {
+          updateGroup.mutate({ id: groupId, patch });
+        }}
+        onSeparate={(groupId) => {
+          separateGroup.mutate(groupId);
+        }}
+      />
     </div>
   );
 }

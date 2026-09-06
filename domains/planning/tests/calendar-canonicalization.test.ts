@@ -83,6 +83,25 @@ describe('groupExactCalendarSources', () => {
       ]),
     );
   });
+
+  it('applies a confirmed group across different provider source identities', () => {
+    const result = canonicalizeCalendarLayers(
+      [
+        layer('us-holidays'),
+        layer('regional-holidays', {
+          sourceIdentity: { namespace: 'google-calendar', value: 'regional-holidays' },
+        }),
+      ],
+      {
+        preferredLayerIdByLayerId: new Map([
+          ['us-holidays', 'regional-holidays'],
+          ['regional-holidays', 'regional-holidays'],
+        ]),
+      },
+    );
+
+    expect(result.layers.map((entry) => entry.id)).toEqual(['regional-holidays']);
+  });
 });
 
 describe('canonicalizeCalendarItems', () => {

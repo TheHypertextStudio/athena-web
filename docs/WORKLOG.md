@@ -10799,6 +10799,72 @@ states became the `EmptyState` atom; and the description editor's 224px floor ca
   `docs/engineering/ui-verification.md` documents. Clearing it worked first try. Separately, this
   entry had to be written twice: the first copy was lost in a rebase where `main` had also edited
   `docs/WORKLOG.md` and the auto-merge silently kept its version.
+### [ATHENA-PLAN-CANVAS-001] Plan initiatives on the canvas with Athena
+
+- **Completed**: 2026-09-06
+- **Priority**: P1
+- **Summary**: A person can now plan a large body of work by talking to Athena while the graph
+  canvas fills in beside the conversation. Athena drafts an initiative, its projects, and their
+  tasks into a durable personal plan draft (`plan_draft`); the person edits the draft directly on
+  the canvas or through conversation, and confirms any part of it into real objects whenever the
+  conversation settles it. Draft and created nodes share one canvas. Entry points are Athena's
+  offer in the thread (a durable plan card) and Plan with Athena on an initiative.
+
+#### Shape
+
+- A plan document (`@docket/work/plan-draft`) with a pure reducer shared by the API and the web
+  app; every edit is a batch of ops against a revision, and a stale batch gets `412` and a rebase.
+- `/v1/me/plans` routes over a personal `plan_draft` row; the commit reuses the `organize` tool's
+  placement so a confirmed plan lands exactly where a hand-made one would.
+- Four Athena tools (`plan_start`, `plan_read`, `plan_draft`, `plan_commit`). Draft writes carry a
+  first-party `private_draft` annotation and skip the approval gate; the commit stays gated.
+- A board on the shared `Canvas`: initiative card beside stacked project containers holding task
+  rows by containment, membership as dashed links, dependencies as the shared edge; a portrait
+  host runs the board down the page instead. Inspector, selection bar, ghost grammar, enter and
+  field-sweep motion, and a viewport that widens when Athena adds nodes.
+
+#### Files changed
+
+- `domains/work/src/{contracts/plan-draft.ts,plan-draft.ts}`, `domains/registry.json`
+- `packages/db/src/schema/plan-draft.ts`, `packages/db/drizzle/0125_plan_draft.sql`
+- `apps/api/src/lib/plan-draft/`, `apps/api/src/lib/organize/place.ts`,
+  `apps/api/src/routes/me-plans.ts`, `apps/api/src/mcp/plan-draft-tools.ts`,
+  `apps/api/src/agent/{approval-policy,toolbox,system-prompt,loop}.ts`
+- `apps/web/src/lib/plan-draft/defs.ts`, `apps/web/src/components/plan-canvas/`,
+  `apps/web/src/app/(app)/orgs/[orgId]/plans/[planId]/`,
+  `apps/web/src/components/athena/athena-conversation.tsx`,
+  `apps/web/src/components/initiatives/plan-with-athena-action.tsx`
+- `apps/web/e2e/athena/plan-canvas.spec.ts`, `packages/service-worker/src/precache-manifest.ts`
+- `docs/engineering/specs/{planning-canvas,mcp-surface,offline}.md`,
+  `docs/design/audits/2026-09-06-planning-canvas.md`
+
+#### Validation
+
+- `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm test:coverage`, and `pnpm build` pass
+  at the final commit (turbo with `--force`, after `pnpm db:reset`).
+- `apps/web/e2e/athena/plan-canvas.spec.ts` passes against the worktree stack: draft renders with
+  containment, Confirm from the inspector creates the project and its tasks, and Plan with Athena
+  on an initiative lands on the canvas.
+- Design review at `docs/design/audits/2026-09-06-planning-canvas.md` (ship bar; ten findings
+  fixed during review, two known limits recorded).
+
+#### Learnings
+
+- The shared dependency-ranked layout is wrong for a plan: three projects became four columns and a
+  half-scale first frame. A plan reads as a board, and the board needs its own orientation for a
+  phone. Screenshots found this; nothing in the unit tests could have.
+- The minimap and toolbar band reduce the working area by about 180 px, so a plan that "fits" by
+  bounds still opens under 1:1. Sizing decisions must be made against the pane, not the panel.
+- Playwright clicks the centre of a container, which is a task row that is its own xyflow node;
+  aim container clicks at the header band.
+- The repo-wide policy suites (doc coverage, domain registry, source text, timestamptz) and the
+  service-worker precache budget only run in the full `test:coverage` and `build` gates, so run
+  those before calling a slice done; the slice-level suites were green while all five were red.
+- A still frame is not a journey. Walking the surface step by step in a scripted browser session
+  found five things no screenshot showed: the seeded conversation lost to navigation, focus left on
+  the Add button so typing created twins, rows that could never leave their container, a selected
+  row hidden behind the inspector, and a confirm that reported "Created 0 items". Critique the
+  hands, not just the eyes, before calling a surface done.
 
 ### [LATTICE-FEDCM-CONTINUATION-001] Finish the Lattice connection when Lovelace asks for consent
 

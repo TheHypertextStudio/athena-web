@@ -557,7 +557,10 @@
   Docket's current generator still writes `PORT=3001` while `.env.example` and the working local
   configuration use `4000`, and it omits `BETTER_AUTH_COOKIE_DOMAIN` and
   `NEXT_PUBLIC_PASSKEY_RP_ID`; those stale host-sensitive values can break session-cookie and
-  WebAuthn sign-in even when `env:check` passes on an already repaired developer file.
+  WebAuthn sign-in even when `env:check` passes on an already repaired developer file. The local
+  reconciler and conventional executable hooks now pass focused tests; a real second run preserved
+  the local file's SHA-256 and mtime. Service startup and returning-user passkey acceptance remain
+  separate, open gates.
 - **External boundary**: No shared-engine GitHub repository, push, tag, hosted build, or release has
   been created. Docket cannot pin its root launcher until the four native release artifacts and
   checksums exist.

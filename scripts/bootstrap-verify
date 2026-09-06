@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
+cd "$repo_root"
+
+if [ ! -x node_modules/.bin/tsx ]; then
+  if [ "${BOOTSTRAP_NO_INSTALL:-0}" = 1 ]; then
+    echo 'bootstrap-verify: dependencies are absent and --no-install forbids pnpm install' >&2
+    exit 2
+  fi
+  if [ "${BOOTSTRAP_OFFLINE:-0}" = 1 ]; then
+    pnpm install --offline --frozen-lockfile
+  else
+    pnpm install --frozen-lockfile
+  fi
+fi
+
+exec pnpm exec tsx scripts/bootstrap/verify.ts "$@"

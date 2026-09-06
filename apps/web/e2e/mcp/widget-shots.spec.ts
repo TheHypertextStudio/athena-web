@@ -171,6 +171,37 @@ const CASES: readonly WidgetCase[] = [
     },
   },
   {
+    // A rename, which is the most common single edit and the one the card handled worst: it printed
+    // the new title in the row and again as the right-hand side of the diff, truncating the row's
+    // copy to make room for the duplicate.
+    name: 'change-report-renamed',
+    tool: 'update',
+    html: CHANGE_REPORT_HTML,
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        changed: 1,
+        entity: 'task',
+        changeSetId: 'cs_9',
+        changes: [
+          {
+            id: 't_1',
+            title: 'Write down what to change for Dallas',
+            fields: [
+              {
+                field: 'title',
+                from: 'Write down what worked, for the Dallas version',
+                to: 'Write down what to change for Dallas',
+              },
+              { field: 'priority', from: 'none', to: 'high' },
+              { field: 'dueDate', from: null, to: '2026-09-12' },
+            ],
+          },
+        ],
+      },
+    },
+  },
+  {
     name: 'change-report-nothing-changed',
     tool: 'update',
     html: CHANGE_REPORT_HTML,

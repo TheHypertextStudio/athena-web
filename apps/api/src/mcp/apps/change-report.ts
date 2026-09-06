@@ -107,6 +107,62 @@ const SCRIPT = String.raw`
     return window.docket.untitled(item.kind);
   }
 
+  /**
+   * What changed, under the row's title.
+   *
+   * Two rules, both learned from the card this replaces. A rename printed the new title in the row
+   * and then printed it again as the diff's right-hand side, so the row said the same thing twice
+   * and truncated the half that carried it — the useful part of a rename is the title it *used* to
+   * have. And a second changed field was reported as "+2", which names nothing; the fields are
+   * named instead, because "priority and due" is the difference between checking the change and
+   * opening the app to find out what it was.
+   */
+  function diffLine(fields) {
+    const line = document.createElement('div');
+    line.className = 'facts';
+    const first = fields[0];
+    const renamed = first.field === 'title' || first.field === 'name';
+
+    if (renamed) {
+      const was = document.createElement('span');
+      was.textContent = 'was ';
+      const from = document.createElement('span');
+      from.className = 'from';
+      from.textContent = valueLabel(first.from);
+      line.append(was, from);
+    } else {
+      const label = document.createElement('span');
+      label.textContent = fieldLabel(first.field);
+      const from = document.createElement('span');
+      from.className = 'from';
+      from.textContent = valueLabel(first.from);
+      const to = document.createElement('span');
+      to.className = 'to';
+      to.textContent = valueLabel(first.to);
+      line.append(label, from, document.createTextNode('→'), to);
+    }
+
+    if (fields.length > 1) {
+      // Separated rather than joined into prose: "was X and priority and due" has two "and"s doing
+      // different jobs. The dot is the same separator the work list uses between a row's facts.
+      const sep = document.createElement('span');
+      sep.className = 'sep';
+      sep.textContent = '·';
+      const named = document.createElement('span');
+      named.textContent =
+        'also ' +
+        fields
+          .slice(1)
+          .map((f) => fieldLabel(f.field).toLowerCase())
+          .join(', ');
+      line.append(sep, named);
+    }
+    line.title = fields
+      .map((f) => fieldLabel(f.field) + ': ' + valueLabel(f.from) + ' → ' + valueLabel(f.to))
+      .join('\n');
+    return line;
+  }
+
   function diffRow(item) {
     const row = document.createElement('div');
     row.className = 'row';
@@ -114,7 +170,7 @@ const SCRIPT = String.raw`
     // initiative, three tasks under that project" checkable at a glance, which is the only reason
     // a caller reaches for a tool that writes a whole plan in one call.
     if (item.depth) {
-      row.style.paddingLeft = String(item.depth * 18) + 'px';
+      row.style.paddingLeft = String(item.depth * 16) + 'px';
     }
     if (item.matched) {
       row.className = 'row matched';
@@ -142,30 +198,7 @@ const SCRIPT = String.raw`
       row.appendChild(open);
     }
     if (fields.length > 0) {
-      const d = document.createElement('span');
-      d.className = 'diff';
-      const f = fields[0];
-      const label = document.createElement('span');
-      label.className = 'muted';
-      label.textContent = fieldLabel(f.field) + ' ';
-      const from = document.createElement('span');
-      from.className = 'from';
-      from.textContent = valueLabel(f.from);
-      const arrow = document.createTextNode(' → ');
-      const to = document.createElement('span');
-      to.className = 'to';
-      to.textContent = valueLabel(f.to);
-      d.append(label, from, arrow, to);
-      // The clamp keeps the row a row; the full pair stays reachable on hover and to a screen
-      // reader, because a truncated diff a person cannot expand is worse than no diff.
-      d.title = fieldLabel(f.field) + ': ' + valueLabel(f.from) + ' → ' + valueLabel(f.to);
-      if (fields.length > 1) {
-        const more = document.createElement('span');
-        more.className = 'muted more';
-        more.textContent = ' +' + String(fields.length - 1);
-        d.appendChild(more);
-      }
-      row.appendChild(d);
+      row.appendChild(diffLine(fields));
     }
     return row;
   }
@@ -218,7 +251,10 @@ const SCRIPT = String.raw`
       if (n === 0) {
         return window.docket.own(NOTHING, tool) || 'Nothing changed';
       }
-      return verb + ' ' + n + ' ' + (n === 1 ? 'item' : 'items');
+      // "Changed 1 item" over one row counts what the reader is already looking at, and the row
+      // says which item. The verb alone carries what the count was there for — that something
+      // happened, and which of the four write tools did it.
+      return n === 1 ? verb : verb + ' ' + n + ' items';
     }
     if (typeof data.created === 'number') {
       // A plan is named by what it built, not by how many nodes it took. "Filed 4, matched 1

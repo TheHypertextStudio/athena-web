@@ -667,14 +667,16 @@ body[data-state='error'] .skeleton { display: none; }
 .status { margin: 0; color: var(--color-text-secondary); }
 .status[data-tone='error'] { color: var(--color-text-danger); }
 
+/* Every measurement on this card comes off the same 4px scale the Stack and Row primitives close
+   over: 0, 4, 8, 12, 16, 24, 32. The 14px inset and 10px stack gap were on no scale at all. */
 .card {
   border: 1px solid var(--color-border-primary);
   border-radius: var(--border-radius-lg);
   background: var(--color-background-primary);
-  padding: 12px 14px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 .headline {
   font-size: var(--font-heading-xs-size);
@@ -767,23 +769,34 @@ body[data-state='error'] .skeleton { display: none; }
   background: var(--color-background-secondary);
 }
 .batch-action { min-height: 2rem; }
-/* A list, not a stack of chips. Every row used to be a filled rounded rectangle, which gave five
-   rows five competing edges and no reading order — and left no room for anything under the title,
-   so a row could only ever be a title and one word. Hairlines cost nothing, so the ink is spent on
-   the content instead: title on top, the facts that separate this row from its neighbours under
-   it. */
-.rows { display: flex; flex-direction: column; }
+/* A list, not a stack of chips and not a ruled table. Every row used to be a filled rounded
+   rectangle, which gave five rows five competing edges and no reading order, and left no room for
+   anything under the title. Spacing does the separating — the design system bans a border drawn for
+   grouping (§8) — so the rhythm carries it: 2px holds a title to its own facts, 12px holds one row
+   off the next, and the eye groups on the difference. */
+.rows { display: flex; flex-direction: column; gap: 12px; }
 .row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
-  gap: 2px 10px;
-  padding: 9px 0;
-  border-top: 1px solid var(--color-border-primary);
+  /* No column gap. The glyph column is auto-sized and collapses to nothing on a card that has no
+     glyphs, but a column *gap* does not collapse with it — every row on the change report sat
+     10px right of its own headline for a track that was not there. The glyph pays for its own
+     spacing instead. */
+  column-gap: 0;
+  row-gap: 4px;
 }
-.rows .row:first-of-type { border-top: 0; }
-.rows.tree .row { border-top: 0; padding: 4px 0; }
-.row .glyph { grid-row: 1 / span 2; margin-top: 1px; }
+/* Indentation already groups a tree, so its rows sit closer than a flat list's. */
+.rows.tree { gap: 8px; }
+/* A height in real units, matching the title's line box, so the glyph centres on the first line
+   rather than on the whole row. A unitless line-height is a number, not a length, and as a height
+   it is simply dropped. */
+.row .glyph {
+  grid-row: 1;
+  height: 1.25rem;
+  align-items: center;
+  margin-right: 8px;
+}
 .row .name {
   grid-column: 2;
   font-weight: var(--font-weight-medium);
@@ -799,7 +812,7 @@ body[data-state='error'] .skeleton { display: none; }
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0 6px;
+  gap: 0 4px;
   color: var(--color-text-secondary);
   font-size: var(--font-text-sm-size);
   line-height: var(--font-text-sm-line-height);
@@ -810,11 +823,14 @@ body[data-state='error'] .skeleton { display: none; }
 .row .facts .late { color: var(--color-text-danger); font-weight: var(--font-weight-medium); }
 /* Sized to the line it sits beside, not to the button metrics: it is invisible until hover, and a
    26px control in a 20px row silently set the height of every row on the card. */
+/* Row 1, not spanning. Spanning two rows made the grid materialise a second row on every card,
+   including the single-line ones, and charged each of them its row-gap for a row holding nothing. */
 .row .open {
   grid-column: 3;
-  grid-row: 1 / span 2;
+  grid-row: 1;
   align-self: center;
-  padding: 0 6px;
+  margin-left: 8px;
+  padding: 0 8px;
   font-size: var(--font-text-sm-size);
   line-height: var(--font-text-md-line-height);
   opacity: 0;
@@ -825,29 +841,16 @@ body[data-state='error'] .skeleton { display: none; }
 @media (hover: none) {
   .row .open { opacity: 1; }
 }
-.diff {
-  /* The change report's own second line, in the same slot the work list's facts occupy. */
-  grid-column: 2;
-  color: var(--color-text-secondary);
-  font-size: var(--font-text-sm-size);
-  line-height: var(--font-text-sm-line-height);
-  font-variant-numeric: tabular-nums;
-  /* A diff line summarises what moved. Two lines is the most it can take before it stops being a
-     line and starts being the document it is describing. */
-  min-width: 0;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
-}
-.diff .from { color: var(--color-text-secondary); text-decoration: line-through; }
-.diff .to { color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
+/* What a value moved from and to, on the same second line the work list puts its facts on. The
+   change report used to draw this as its own column beside the title, which squeezed the title to
+   half the card and wrapped the diff under it anyway. */
+.row .facts .from { text-decoration: line-through; }
+.row .facts .to { color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
+.row .facts { overflow-wrap: anywhere; }
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 /* The remainder, when the host cannot expand the card. Aligned with the rows above it rather than
    with the card edge, because it is the last entry in the list and not a footer. */
-.rest { align-self: flex-start; padding: 5px 0; text-align: left; }
+.rest { align-self: flex-start; padding: 4px 0; text-align: left; }
 
 /* Fullscreen is the one place a card may scroll: it is no longer sitting in the transcript flow,
    so a scroll region here traps nothing. The card loses its own frame because the host is now
@@ -877,7 +880,9 @@ body[data-display-mode='fullscreen'] .rows {
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 button {
   font: inherit;
-  padding: 5px 11px;
+  /* 8px horizontal is the design system's floor for every control step, so no control renders text
+     flush against its own edge. */
+  padding: 4px 12px;
   border-radius: var(--border-radius-md);
   border: 1px solid var(--color-border-primary);
   background: var(--color-background-primary);

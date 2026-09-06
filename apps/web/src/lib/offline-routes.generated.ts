@@ -102,6 +102,10 @@ export const OFFLINE_ROUTES = [
     load: async () => (await import('@/app/(app)/orgs/[orgId]/people/page')).default,
   },
   {
+    pattern: '/orgs/[orgId]/plans/[planId]',
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/plans/[planId]/plan-client')).default,
+  },
+  {
     pattern: '/orgs/[orgId]/programs/[programId]',
     load: async () =>
       (await import('@/app/(app)/orgs/[orgId]/programs/[programId]/program-detail-client')).default,

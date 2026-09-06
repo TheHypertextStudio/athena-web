@@ -213,6 +213,53 @@ describe('readCalendarItemsInRange', () => {
     expect(items.map((i) => i.id)).toEqual([itemA.id]);
     expect(layers.map((l) => l.id)).toEqual([layerA.id]);
   });
+
+  it('returns one canonical event when two connected sources share exact provider identity', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'CanonicalRangeUser');
+    const workLayer = await seedLayer(schema, userId, {
+      title: 'Personal through work',
+      externalLayerId: 'personal@example.com',
+      sourceIdentityNamespace: 'google-calendar',
+      sourceIdentityValue: 'personal@example.com',
+      sourceRelationship: 'subscribed',
+    });
+    const personalLayer = await seedLayer(schema, userId, {
+      title: 'Personal',
+      externalLayerId: 'personal@example.com',
+      sourceIdentityNamespace: 'google-calendar',
+      sourceIdentityValue: 'personal@example.com',
+      sourceRelationship: 'owned',
+    });
+    await seedItem(schema, userId, workLayer.id, {
+      title: 'Planning through work',
+      externalEventId: 'work-copy',
+      eventIdentityNamespace: 'ical',
+      eventIdentityValue: 'planning@example.com',
+      startsAt: new Date('2026-07-01T10:00:00.000Z'),
+      endsAt: new Date('2026-07-01T11:00:00.000Z'),
+    });
+    const personalItem = await seedItem(schema, userId, personalLayer.id, {
+      title: 'Planning',
+      externalEventId: 'personal-copy',
+      eventIdentityNamespace: 'ical',
+      eventIdentityValue: 'planning@example.com',
+      startsAt: new Date('2026-07-01T10:00:00.000Z'),
+      endsAt: new Date('2026-07-01T11:00:00.000Z'),
+    });
+
+    const result = await readCalendarItemsInRange(schema.db, {
+      userId,
+      start: rangeStart,
+      end: rangeEnd,
+    });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: personalItem.id,
+      eventIdentity: { namespace: 'ical', value: 'planning@example.com' },
+    });
+  });
 });
 
 describe('readCalendarLayers', () => {
@@ -229,6 +276,46 @@ describe('readCalendarLayers', () => {
 });
 
 describe('readItemDetail', () => {
+  it('resolves an equivalent source copy to the canonical event', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'CanonicalDetailUser');
+    const subscribedLayer = await seedLayer(schema, userId, {
+      title: 'Personal through work',
+      sourceIdentityNamespace: 'google-calendar',
+      sourceIdentityValue: 'personal@example.com',
+      sourceRelationship: 'subscribed',
+    });
+    const ownedLayer = await seedLayer(schema, userId, {
+      title: 'Personal',
+      sourceIdentityNamespace: 'google-calendar',
+      sourceIdentityValue: 'personal@example.com',
+      sourceRelationship: 'owned',
+      editableCore: true,
+    });
+    const subscribedItem = await seedItem(schema, userId, subscribedLayer.id, {
+      title: 'Planning through work',
+      eventIdentityNamespace: 'ical',
+      eventIdentityValue: 'planning@example.com',
+    });
+    const ownedItem = await seedItem(schema, userId, ownedLayer.id, {
+      title: 'Planning',
+      eventIdentityNamespace: 'ical',
+      eventIdentityValue: 'planning@example.com',
+    });
+
+    const detail = await readItemDetail(schema.db, {
+      userId,
+      itemId: subscribedItem.id,
+    });
+
+    expect(detail).toMatchObject({
+      id: ownedItem.id,
+      title: 'Planning',
+      layerId: ownedLayer.id,
+      eventIdentity: { namespace: 'ical', value: 'planning@example.com' },
+    });
+  });
+
   it('resolves a native block as fully editable', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'DetailUser');

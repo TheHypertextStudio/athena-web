@@ -20,6 +20,7 @@ import {
   CalendarLayerSourceKind,
   type CalendarLayerOut,
   CalendarProvider,
+  CalendarSourceRelationship,
 } from '@docket/planning/calendar-contract';
 import type { z } from 'zod';
 
@@ -44,6 +45,16 @@ export function toCalendarLayerOut(row: CalendarLayerRow): z.input<typeof Calend
     provider: CalendarProvider.nullable().parse(row.provider),
     sourceKind: CalendarLayerSourceKind.parse(row.sourceKind),
     externalLayerId: row.externalLayerId,
+    sourceIdentity:
+      row.sourceIdentityNamespace && row.sourceIdentityValue
+        ? { namespace: row.sourceIdentityNamespace, value: row.sourceIdentityValue }
+        : null,
+    sourceRelationship: CalendarSourceRelationship.nullable().parse(row.sourceRelationship),
+    sourceManagement: row.sourceManagement ?? {
+      canRemoveSubscription: false,
+      requiresIncrementalConsent: false,
+    },
+    suggestedGroupKey: row.suggestedGroupKey,
     title: row.title,
     description: row.description,
     timezone: row.timezone,
@@ -88,6 +99,11 @@ export function toCalendarItemOut(
     providerEventType: normalizeCalendarProviderEventType(row.providerRaw),
     externalCalendarId: row.externalCalendarId,
     externalEventId: row.externalEventId,
+    eventIdentity:
+      row.eventIdentityNamespace && row.eventIdentityValue
+        ? { namespace: row.eventIdentityNamespace, value: row.eventIdentityValue }
+        : null,
+    occurrenceIdentity: row.occurrenceIdentity,
     recurringEventId: row.recurringEventId,
     recurrenceInstanceKey: row.recurrenceInstanceKey,
     status: CalendarItemStatus.parse(row.status),

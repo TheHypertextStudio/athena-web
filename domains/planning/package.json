@@ -8,6 +8,7 @@
   "exports": {
     "./date-time": "./src/date-time.ts",
     "./calendar-date": "./src/calendar-date.ts",
+    "./calendar-canonicalization": "./src/calendar-canonicalization.ts",
     "./ids": "./src/ids.ts",
     "./wall-time": "./src/wall-time.ts",
     "./exact-move": "./src/exact-move.ts",

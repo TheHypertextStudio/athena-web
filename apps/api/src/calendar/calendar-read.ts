@@ -24,6 +24,10 @@ import {
   type CalendarItemOut,
   type CalendarLayerOut,
 } from '@docket/planning/calendar-contract';
+import {
+  canonicalizeCalendarItems,
+  canonicalizeCalendarLayers,
+} from '@docket/planning/calendar-canonicalization';
 import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
 
@@ -193,9 +197,24 @@ export async function readCalendarItemsInRange(
     itemRows.map((row) => row.item.id),
   );
 
-  const items = itemRows.map((row) => serializeItemRow(row, linkedTasksByItem));
+  const layers = layerRows.map(toCalendarLayerOut).map((layer) => ({
+    ...layer,
+    sourceIdentity: layer.sourceIdentity ?? null,
+    sourceRelationship: layer.sourceRelationship ?? null,
+  }));
+  const items = itemRows
+    .map((row) => serializeItemRow(row, linkedTasksByItem))
+    .map((item) => ({
+      ...item,
+      eventIdentity: item.eventIdentity ?? null,
+      occurrenceIdentity: item.occurrenceIdentity ?? null,
+    }));
+  const canonicalLayers = canonicalizeCalendarLayers(layers);
+  const canonicalItems = canonicalizeCalendarItems(items, layers, {
+    preferredLayerIdByLayerId: canonicalLayers.preferredLayerIdByLayerId,
+  });
 
-  return { layers: layerRows.map(toCalendarLayerOut), items };
+  return { layers: [...canonicalLayers.layers], items: [...canonicalItems.items] };
 }
 
 /** Build the driver-safe overlap predicate shared by Calendar range reads. */
@@ -297,8 +316,93 @@ export async function readItemDetail(
   const row = rows[0];
   if (row === undefined) return null;
 
-  const linkedTasksByItem = await hydrateLinkedTasks(db, input.userId, [row.item.id]);
-  return serializeItemRow(row, linkedTasksByItem);
+  const equivalentRows = await readEquivalentItemRows(db, input.userId, row);
+  const linkedTasksByItem = await hydrateLinkedTasks(
+    db,
+    input.userId,
+    equivalentRows.map((candidate) => candidate.item.id),
+  );
+  const layersById = new Map(
+    equivalentRows.map((candidate) => [candidate.layer.id, toCanonicalLayer(candidate.layer)]),
+  );
+  const items = equivalentRows.map((candidate) => toCanonicalItem(candidate, linkedTasksByItem));
+  const canonicalLayers = canonicalizeCalendarLayers([...layersById.values()]);
+  const canonicalItems = canonicalizeCalendarItems(items, [...layersById.values()], {
+    preferredLayerIdByLayerId: canonicalLayers.preferredLayerIdByLayerId,
+  });
+  return findCanonicalItem(canonicalItems, input.itemId) ?? toCanonicalItem(row, linkedTasksByItem);
+}
+
+interface JoinedCalendarItemRow {
+  item: CalendarItemRow;
+  layer: typeof calendarLayer.$inferSelect;
+  connection: typeof calendarConnection.$inferSelect | null;
+}
+
+async function readEquivalentItemRows(
+  db: Database,
+  userId: string,
+  row: JoinedCalendarItemRow,
+): Promise<JoinedCalendarItemRow[]> {
+  const item = row.item;
+  if (item.eventIdentityNamespace === null || item.eventIdentityValue === null) return [row];
+  const occurrenceCondition =
+    item.occurrenceIdentity === null
+      ? isNull(calendarItem.occurrenceIdentity)
+      : eq(calendarItem.occurrenceIdentity, item.occurrenceIdentity);
+  return db
+    .select({ item: calendarItem, layer: calendarLayer, connection: calendarConnection })
+    .from(calendarItem)
+    .innerJoin(calendarLayer, eq(calendarLayer.id, calendarItem.layerId))
+    .leftJoin(calendarConnection, eq(calendarConnection.id, calendarItem.connectionId))
+    .where(
+      and(
+        eq(calendarItem.userId, userId),
+        eq(calendarItem.eventIdentityNamespace, item.eventIdentityNamespace),
+        eq(calendarItem.eventIdentityValue, item.eventIdentityValue),
+        occurrenceCondition,
+        isNull(calendarItem.archivedAt),
+      ),
+    );
+}
+
+function toCanonicalLayer(row: CalendarLayerRow): z.input<typeof CalendarLayerOut> & {
+  sourceIdentity: NonNullable<z.input<typeof CalendarLayerOut>['sourceIdentity']> | null;
+  sourceRelationship: NonNullable<z.input<typeof CalendarLayerOut>['sourceRelationship']> | null;
+} {
+  const layer = toCalendarLayerOut(row);
+  return {
+    ...layer,
+    sourceIdentity: layer.sourceIdentity ?? null,
+    sourceRelationship: layer.sourceRelationship ?? null,
+  };
+}
+
+function toCanonicalItem(
+  row: JoinedCalendarItemRow,
+  linkedTasksByItem: Map<string, z.input<typeof CalendarItemLinkedTaskOut>[]>,
+): z.input<typeof CalendarItemOut> & {
+  eventIdentity: NonNullable<z.input<typeof CalendarItemOut>['eventIdentity']> | null;
+  occurrenceIdentity: string | null;
+} {
+  const item = serializeItemRow(row, linkedTasksByItem);
+  return {
+    ...item,
+    eventIdentity: item.eventIdentity ?? null,
+    occurrenceIdentity: item.occurrenceIdentity ?? null,
+  };
+}
+
+function findCanonicalItem<TItem extends { id: string }>(
+  result: {
+    items: readonly TItem[];
+    equivalentItemIds: ReadonlyMap<string, readonly string[]>;
+  },
+  requestedItemId: string,
+): TItem | undefined {
+  return result.items.find((item) =>
+    (result.equivalentItemIds.get(item.id) ?? [item.id]).includes(requestedItemId),
+  );
 }
 
 /** Shared item-row -> `CalendarItemOut` mapping: resolve permissions, then serialize. */

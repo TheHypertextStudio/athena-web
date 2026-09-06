@@ -163,6 +163,7 @@
       "publicExports": [
         "./date-time",
         "./calendar-date",
+        "./calendar-canonicalization",
         "./ids",
         "./wall-time",
         "./exact-move",

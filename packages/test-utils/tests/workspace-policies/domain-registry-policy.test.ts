@@ -389,6 +389,7 @@ describe('domain registry policy', () => {
     expect(planning?.publicExports).toEqual([
       './date-time',
       './calendar-date',
+      './calendar-canonicalization',
       './ids',
       './wall-time',
       './exact-move',

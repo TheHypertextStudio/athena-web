@@ -114,7 +114,7 @@ export const calendarList = pgTable(
     watchResourceId: text('watch_resource_id'),
     watchToken: text('watch_token'),
     watchExpiresAt: timestamp('watch_expires_at'),
-    removedAt: timestamp('removed_at'),
+    removedAt: timestamp('removed_at', { withTimezone: true }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at')
       .notNull()
@@ -223,7 +223,7 @@ export const calendarLayer = pgTable(
     watchRegisteredAt: timestamp('watch_registered_at'),
     lastSyncedAt: timestamp('last_synced_at'),
     lastError: text('last_error'),
-    removedAt: timestamp('removed_at'),
+    removedAt: timestamp('removed_at', { withTimezone: true }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at')
       .notNull()
@@ -253,8 +253,8 @@ export const calendarSourceGroup = pgTable(
     preferredLayerId: text('preferred_layer_id').references(() => calendarLayer.id, {
       onDelete: 'set null',
     }),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at')
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),

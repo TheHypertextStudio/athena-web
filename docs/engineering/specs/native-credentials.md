@@ -61,6 +61,12 @@ both Better Auth success callbacks before a credential can be stored or a sessio
 The callback guard is necessary because the pinned Better Auth passkey plugin does not expose a
 server-verification option and otherwise invokes SimpleWebAuthn with user verification disabled.
 
+Ordinary passkey ceremonies require user verification. Athena sets registration selection and
+authentication options to `required`, then checks SimpleWebAuthn's verified `userVerified` result in
+both Better Auth success callbacks before a credential can be stored or a session can be issued.
+The callback guard is necessary because the pinned Better Auth passkey plugin does not expose a
+server-verification option and otherwise invokes SimpleWebAuthn with user verification disabled.
+
 ## 4. Restore credentials
 
 Android's Credential Manager can hold a cloud-backed **restore credential**: a discoverable
@@ -90,10 +96,10 @@ Better Auth plugin (`packages/auth/src/restore-credential.ts`) rather than in th
 3. A challenge records which ceremony it was minted for and, for registration, which person. A
    registration verified with an authentication challenge, or with a challenge issued to a different
    account, is refused.
-4. The relying-party ID is `BETTER_AUTH_PASSKEY_RP_ID`. Android restore credentials accept only
+4. The relying-party ID is `BETTER_AUTH_PASSKEY_RP_ID`. Android restore credentials accept exactly
    the comma-separated APK key-hash origins in `BETTER_AUTH_PASSKEY_NATIVE_ORIGINS`. Apple platform
-   passkeys use the HTTPS origin derived from the non-local RP ID. An empty Android allowlist never
-   widens Android verification to a web origin.
+   passkeys use the HTTPS origin derived from the non-local RP ID. An empty Android allowlist refuses
+   both registration and authentication rather than falling back to a web origin.
 5. Registration requires a resident credential and user verification. Silent restore authentication
    requests `userVerification: discouraged`, and the server accepts an assertion without the UV flag,
    because Android's restore API is a passive first-launch mechanism and cannot display an

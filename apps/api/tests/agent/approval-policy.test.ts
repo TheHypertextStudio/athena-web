@@ -14,6 +14,7 @@ describe('classifyTool', () => {
       readOnly: false,
       destructive: false,
       openWorld: false,
+      privateDraft: false,
     });
   });
 
@@ -30,7 +31,12 @@ describe('classifyTool', () => {
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       'first_party',
     );
-    expect(cls).toEqual({ readOnly: false, destructive: true, openWorld: true });
+    expect(cls).toEqual({
+      readOnly: false,
+      destructive: true,
+      openWorld: true,
+      privateDraft: false,
+    });
   });
 
   it('treats explicit false hints as false', () => {
@@ -38,7 +44,24 @@ describe('classifyTool', () => {
       { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
       'first_party',
     );
-    expect(cls).toEqual({ readOnly: true, destructive: false, openWorld: false });
+    expect(cls).toEqual({
+      readOnly: true,
+      destructive: false,
+      openWorld: false,
+      privateDraft: false,
+    });
+  });
+
+  it('classifies a first-party private-draft marker, and ignores a remote one', () => {
+    expect(classifyTool({ readOnlyHint: false, privateDraft: true }, 'first_party')).toEqual({
+      readOnly: false,
+      destructive: false,
+      openWorld: false,
+      privateDraft: true,
+    });
+    expect(classifyTool({ readOnlyHint: false, privateDraft: true }, 'remote').privateDraft).toBe(
+      false,
+    );
   });
 
   it('never lets a remote server declare its own tool read-only', () => {
@@ -51,7 +74,35 @@ describe('classifyTool', () => {
   it('still honours a remote server’s stricter hints', () => {
     // These can only tighten the gate, so a lying server gains nothing by setting them.
     const cls = classifyTool({ destructiveHint: true, openWorldHint: true }, 'remote');
-    expect(cls).toEqual({ readOnly: false, destructive: true, openWorld: true });
+    expect(cls).toEqual({
+      readOnly: false,
+      destructive: true,
+      openWorld: true,
+      privateDraft: false,
+    });
+  });
+});
+
+describe('a private-draft write', () => {
+  const DRAFT = classifyTool({ readOnlyHint: false, privateDraft: true }, 'first_party');
+  const FORGED = classifyTool({ readOnlyHint: false, privateDraft: true }, 'remote');
+
+  it('executes under every dial except suggest, which records it', () => {
+    expect(decideToolExecution('suggest', DRAFT)).toBe('record_only');
+    expect(decideToolExecution('act_with_approval', DRAFT)).toBe('execute');
+    expect(decideToolExecution('autonomous', DRAFT)).toBe('execute');
+  });
+
+  it('is not slowed by the personal ask-first ceiling, but is still silenced by suggest-only', () => {
+    expect(decideUserOwnedToolExecution('autonomous', 'ask_before_acting', DRAFT)).toBe('execute');
+    expect(decideUserOwnedToolExecution('autonomous', 'routine_autonomy', DRAFT)).toBe('execute');
+    expect(decideUserOwnedToolExecution('autonomous', 'suggest_only', DRAFT)).toBe('record_only');
+    expect(decideUserOwnedToolExecution('suggest', 'routine_autonomy', DRAFT)).toBe('record_only');
+  });
+
+  it('claimed by a remote server is still a gated write', () => {
+    expect(decideToolExecution('act_with_approval', FORGED)).toBe('propose');
+    expect(decideUserOwnedToolExecution('autonomous', 'ask_before_acting', FORGED)).toBe('propose');
   });
 });
 

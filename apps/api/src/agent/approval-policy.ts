@@ -26,6 +26,16 @@ export interface ToolAnnotationHints {
   readonly destructiveHint?: boolean | undefined;
   /** Whether the tool reaches outside Docket (e.g. a remote MCP connection). */
   readonly openWorldHint?: boolean | undefined;
+  /**
+   * Whether the tool writes only to the caller's own private draft.
+   *
+   * @remarks
+   * Carried on a first-party tool as `_meta["docket/approval"] = "private_draft"`. A planning
+   * draft has no workspace consequence until a separate, gated commit, so gating every field the
+   * conversation fills in would remove the feature without protecting anything. The toolbox sets
+   * this only for Docket's own tools; a remote server's claim is ignored by {@link classifyTool}.
+   */
+  readonly privateDraft?: boolean | undefined;
 }
 
 /** A tool's gate-relevant classification, derived purely from its annotations. */
@@ -36,6 +46,8 @@ export interface ToolClassification {
   readonly destructive: boolean;
   /** The declared open-world hint (false when undeclared). */
   readonly openWorld: boolean;
+  /** True only for a first-party tool that declares itself a private-draft write. */
+  readonly privateDraft: boolean;
 }
 
 /**
@@ -82,6 +94,7 @@ export function classifyTool(
     readOnly: source === 'first_party' && annotations?.readOnlyHint === true,
     destructive: annotations?.destructiveHint === true,
     openWorld: annotations?.openWorldHint === true,
+    privateDraft: source === 'first_party' && annotations?.privateDraft === true,
   };
 }
 
@@ -113,7 +126,11 @@ export function decideToolExecution(
   classification: ToolClassification,
 ): ToolDecision {
   const row = POLICY_TABLE[policy];
-  return classification.readOnly ? row.read : row.write;
+  if (classification.readOnly) return row.read;
+  // A private-draft write has no workspace consequence, so it runs wherever anything runs; only
+  // the suggest dial, which executes nothing, keeps it as a recorded suggestion.
+  if (classification.privateDraft) return policy === 'suggest' ? 'record_only' : 'execute';
+  return row.write;
 }
 
 /**
@@ -132,6 +149,7 @@ export function decideUserOwnedToolExecution(
   const workspaceDecision = decideToolExecution(agentPolicy, classification);
   if (classification.readOnly || workspaceDecision !== 'execute') return workspaceDecision;
   if (personalMode === 'suggest_only') return 'record_only';
+  if (classification.privateDraft) return 'execute';
   if (personalMode === 'ask_before_acting') return 'propose';
   return classification.destructive || classification.openWorld ? 'propose' : 'execute';
 }

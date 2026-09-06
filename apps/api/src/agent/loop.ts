@@ -470,7 +470,7 @@ async function driveSessionWithAdmission(
   const turnRuntime = deps.turnRuntime ?? (await resolveOwnerTurnRuntime(session.ownerUserId));
   let toolbox: Awaited<ReturnType<typeof openToolbox>> | null = null;
   try {
-    const openedToolbox = await openToolbox(executor);
+    const openedToolbox = await openToolbox(executor, sessionId);
     toolbox = openedToolbox;
     const settleOwned = async (
       status: 'awaiting_input' | 'awaiting_approval' | 'completed' | 'failed' | 'canceled',
@@ -920,7 +920,7 @@ export async function executeApprovedActions(
   const withCalls = approved.filter((a) => a.body.action?.toolCall);
   let toolbox: Awaited<ReturnType<typeof openToolbox>> | null = null;
   try {
-    toolbox = withCalls.length > 0 ? await openToolbox(executor) : null;
+    toolbox = withCalls.length > 0 ? await openToolbox(executor, session.id) : null;
     for (const action of approved) {
       const claimed = await persistGenerationEffect(lease, deps, 'action-claim', async (tx) => {
         const [row] = await tx

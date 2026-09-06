@@ -93,6 +93,10 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   link: 'work:write',
   archive: 'work:write',
   plan_day: 'work:write',
+  plan_start: 'work:read',
+  plan_read: 'work:read',
+  plan_draft: 'work:read',
+  plan_commit: 'work:write',
   acknowledge_directive: 'work:write',
   undo: 'work:write',
   // The timer's read actions (`status`, `segments`) narrow to `work:read` inside the handler;

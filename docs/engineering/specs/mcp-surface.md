@@ -251,6 +251,19 @@ Both match on the caller's own `assignmentId` and `triggerId`; another user's id
 `not_found` rather than a distinguishable error, and trigger scope is inherited from the assignment
 and cannot be widened through them.
 
+Four more belong to the planning canvas (`planning-canvas.md`). They act on a personal plan draft,
+so they too resolve only a user principal; a registered agent is told the plan does not exist.
+
+| Tool          | readOnly | destructive | idempotent | openWorld | Scope        | Widget          | Approval        |
+| ------------- | :------: | :---------: | :--------: | :-------: | ------------ | --------------- | --------------- |
+| `plan_start`  |    F     |      F      |     T      |     F     | `work:read`  | —               | `private_draft` |
+| `plan_read`   |  **T**   |      F      |     T      |     F     | `work:read`  | —               | —               |
+| `plan_draft`  |    F     |      F      |     T      |     F     | `work:read`  | —               | `private_draft` |
+| `plan_commit` |    F     |      F      |     T      |     F     | `work:write` | `change-report` | —               |
+
+`plan_commit` is idempotent for the same reason `organize` is: it reuses the same reconciling
+placement, so confirming a part twice matches rather than duplicates.
+
 Notes on the less obvious entries:
 
 - **`organize` is idempotent** because it reconciles: it matches each item against what already
@@ -301,6 +314,20 @@ extension ignores the key and renders the JSON, so a widget can never make the s
 
 Documents are self-contained (the host serves them under a deny-all CSP) and take all colour from
 `hostContext.styles.variables`. See `apps/api/src/mcp/apps/`.
+
+### 3.2.2 Approval metadata (`docket/approval`)
+
+Athena's approval engine classifies every tool from its annotations and fails closed: anything not
+declared read-only is a write, and under the default dial a write pauses for approval. One kind of
+write is exempt. A tool that carries `_meta["docket/approval"] = "private_draft"` writes only to
+the caller's own private draft — today the plan draft behind the planning canvas — and nothing it
+touches reaches a workspace until a separate, gated commit. The loop executes such a call under
+`act_with_approval` and `autonomous`, and records it without executing under `suggest`, which
+executes nothing.
+
+The marker is honoured only on Docket's own catalog. The toolbox reads it from the first-party
+`tools/list` and never from a connected server, so a remote tool claiming it is still a gated
+write. A host other than Athena ignores the key, as it ignores the widget key above.
 
 ### 3.3 Where the definitions actually live
 

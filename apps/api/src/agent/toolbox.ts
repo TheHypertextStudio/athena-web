@@ -246,12 +246,53 @@ function flattenContent(result: CallToolResult): string {
  * @param executor - The persisted Athena owner or registered-agent identity.
  * @returns the connected {@link Toolbox}.
  */
-export async function openToolbox(executor: ToolboxExecutor): Promise<Toolbox> {
+/** One listed first-party tool, as far as the hint mapping needs to see it. */
+interface ListedFirstPartyTool {
+  readonly annotations?:
+    | {
+        readonly readOnlyHint?: boolean | undefined;
+        readonly destructiveHint?: boolean | undefined;
+        readonly openWorldHint?: boolean | undefined;
+      }
+    | undefined;
+  readonly _meta?: Readonly<Record<string, unknown>> | undefined;
+}
+
+/**
+ * The classifier's hints for one of Docket's own tools, or undefined when it declared nothing.
+ *
+ * @remarks
+ * Docket's private-draft marker rides in `_meta`, beside the standard annotations. It is lifted
+ * here, on the first-party catalog only; remote tools take the other path and never reach this.
+ */
+function firstPartyHints(tool: ListedFirstPartyTool): ToolAnnotationHints | undefined {
+  const privateDraft = tool._meta?.['docket/approval'] === 'private_draft';
+  if (!tool.annotations && !privateDraft) return undefined;
+  return {
+    ...(tool.annotations?.readOnlyHint !== undefined
+      ? { readOnlyHint: tool.annotations.readOnlyHint }
+      : {}),
+    ...(tool.annotations?.destructiveHint !== undefined
+      ? { destructiveHint: tool.annotations.destructiveHint }
+      : {}),
+    ...(tool.annotations?.openWorldHint !== undefined
+      ? { openWorldHint: tool.annotations.openWorldHint }
+      : {}),
+    ...(privateDraft ? { privateDraft: true } : {}),
+  };
+}
+
+export async function openToolbox(
+  executor: ToolboxExecutor,
+  sessionId: string | null = null,
+): Promise<Toolbox> {
   const ctx =
     executor.kind === 'athena'
       ? await internalUserContext(executor.ownerUserId)
       : await internalAgentContext(executor.organizationId, executor.agentId);
-  const server = buildServer(ctx);
+  // The Athena session id rides into the server so a tool that creates a conversation-owned
+  // artifact (a plan draft) can attach itself to the conversation that opened it.
+  const server = buildServer(ctx, sessionId);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   const client = new Client({ name: 'athena-loop', version: '1.0.0' });
@@ -263,19 +304,8 @@ export async function openToolbox(executor: ToolboxExecutor): Promise<Toolbox> {
   const docketNames = new Set<string>();
   for (const tool of listed.tools) {
     docketNames.add(tool.name);
-    if (tool.annotations) {
-      annotationsByName.set(tool.name, {
-        ...(tool.annotations.readOnlyHint !== undefined
-          ? { readOnlyHint: tool.annotations.readOnlyHint }
-          : {}),
-        ...(tool.annotations.destructiveHint !== undefined
-          ? { destructiveHint: tool.annotations.destructiveHint }
-          : {}),
-        ...(tool.annotations.openWorldHint !== undefined
-          ? { openWorldHint: tool.annotations.openWorldHint }
-          : {}),
-      });
-    }
+    const hints = firstPartyHints(tool);
+    if (hints) annotationsByName.set(tool.name, hints);
     defs.push({
       name: tool.name,
       description: tool.description ?? tool.name,

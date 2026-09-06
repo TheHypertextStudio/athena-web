@@ -487,7 +487,7 @@ export function registerUpdateTool(
     {
       title: 'Update work',
       description:
-        'Change work by describing which work, not by listing ids. The scope takes the same filters as list_work, so "everything Sarah has open in the migration project" is one call — and so is a single item, via `scope.ids`. Every row you may not write is reported back with a reason rather than skipped quietly, and the whole call is reversible with `undo`.',
+        'Change work by describing which work, not by listing ids. One call changes up to 100 items: the scope takes the same filters as list_work, so "everything Sarah has open in the migration project" is one call, and `scope.ids` takes as many ids as you have. Never call this once per item — put every id in one call, or the person watching gets a separate card for each one. Every row you may not write is reported back with a reason rather than skipped quietly, and the whole call is reversible with `undo`.',
       inputSchema: {
         orgId: orgIdParam,
         entity: z.enum(WORK_ENTITIES).describe('What kind of work to update.'),

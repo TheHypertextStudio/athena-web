@@ -202,11 +202,14 @@ describe('capture tool', () => {
     expect(result.isError).toBeFalsy();
     const first = result.content[0];
     expect(first?.type).toBe('text');
-    const payload = JSON.parse((first as { text: string }).text) as { id: string; state: string };
-    expect(payload.id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
+    const payload = JSON.parse((first as { text: string }).text) as {
+      items: { id: string; state: string }[];
+    };
+    const captured = assertDefined(payload.items[0]);
+    expect(captured.id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
 
     // The task is actually persisted in the org, created by the caller's actor.
-    const rows = await db.select().from(task).where(eq(task.id, payload.id)).limit(1);
+    const rows = await db.select().from(task).where(eq(task.id, captured.id)).limit(1);
     expect(rows[0]?.title).toBe('From MCP');
     expect(rows[0]?.organizationId).toBe(s.orgId);
     expect(rows[0]?.createdBy).toBe(s.actorId);

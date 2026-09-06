@@ -26,6 +26,15 @@ import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
 
+/**
+ * The most tasks one capture call may create.
+ *
+ * @remarks
+ * Matches the scope cap in `update` and `archive`. Longer lists belong in `organize`, which can
+ * place items under a parent instead of landing them all loose on one team.
+ */
+const MAX_CAPTURES = 100;
+
 /** Register capture and undo on `server`. */
 export function registerWriteTools(
   server: McpRegistrar,
@@ -44,22 +53,27 @@ export function registerWriteTools(
     {
       title: 'Capture',
       description:
-        'Turn something said into a task, without needing to know where it should go. The team, workflow state, current cycle, and assignee are all resolved for you, so this is the cheapest path from a sentence to a tracked piece of work. Use organize when you need to place it precisely, or file several things at once.',
+        'Turn something said into a task, without needing to know where it should go. The team, workflow state, current cycle, and assignee are all resolved for you, so this is the cheapest path from a sentence to a tracked piece of work. `text` takes a list, so capturing ten things said in one breath is one call and not ten. Use organize when the things need placing under a project or each other.',
       inputSchema: {
         orgId: orgIdParam,
         text: z
-          .string()
-          .min(1)
+          .union([z.string().min(1), z.array(z.string().min(1)).min(1).max(MAX_CAPTURES)])
           .describe(
-            'The text to capture. The first line becomes the title; the whole thing becomes the description, so pasting several lines is fine.',
+            'What to capture, as one string or a list of them. Each becomes its own task: the first line is the title, the whole thing is the description, so pasting several lines is fine.',
           ),
       },
       outputSchema: {
-        id: TaskId,
-        title: z.string(),
-        state: z.string().describe("The workflow state it landed in — the team's first."),
-        teamId: z.string().describe('The team it landed on.'),
-        changeSetId: z.string().describe('Pass to `undo` to take this back.'),
+        items: z
+          .array(
+            z.object({
+              id: TaskId,
+              title: z.string(),
+              state: z.string().describe("The workflow state it landed in — the team's first."),
+              teamId: z.string().describe('The team it landed on.'),
+            }),
+          )
+          .describe('One entry per captured task, in the order given.'),
+        changeSetId: z.string().describe('Pass to `undo` to take the whole call back.'),
       },
       _meta: widgetMeta(WIDGET.changeReport),
       annotations: {
@@ -81,39 +95,57 @@ export function registerWriteTools(
         const landing = await resolveLandingTarget(input.orgId, actorCtx.actorId);
         if (!landing) throw new NotFoundError('No team to capture into');
 
-        const inserted = await db
+        const texts = Array.isArray(input.text) ? input.text : [input.text];
+        // One insert for the whole list, against the landing target resolved once above, so every
+        // task in a call lands on the same team and cycle.
+        const rows = await db
           .insert(task)
-          .values({
-            organizationId: input.orgId,
-            title: deriveCaptureTitle(input.text),
-            description: input.text,
-            teamId: landing.teamId,
-            statusId: landing.statusId,
-            state: landing.state,
-            assigneeId: landing.assigneeId,
-            cycleId: landing.cycleId,
-            source: 'native',
-            createdBy: actorCtx.actorId,
-          })
+          .values(
+            texts.map((text) => ({
+              organizationId: input.orgId,
+              title: deriveCaptureTitle(text),
+              description: text,
+              teamId: landing.teamId,
+              statusId: landing.statusId,
+              state: landing.state,
+              assigneeId: landing.assigneeId,
+              cycleId: landing.cycleId,
+              source: 'native' as const,
+              createdBy: actorCtx.actorId,
+            })),
+          )
           .returning();
-        const row = inserted[0];
-        /* v8 ignore next -- @preserve defensive: insert always returns a row */
-        if (!row) throw new Error('capture insert returned no row');
-        await enqueueSearchUpsert(input.orgId, 'task', row.id);
+        /* v8 ignore next -- @preserve defensive: insert always returns a row per value */
+        if (rows.length === 0) throw new Error('capture insert returned no row');
+        for (const row of rows) await enqueueSearchUpsert(input.orgId, 'task', row.id);
 
+        const first = rows[0];
+        /* v8 ignore next -- @preserve defensive: length is checked above */
+        if (!first) throw new Error('capture insert returned no row');
         const changeSetId = await recordChangeSet({
           orgId: input.orgId,
           actorId: actorCtx.actorId,
           origin: originFor('capture'),
-          summary: `Captured "${row.title}"`,
-          changes: [{ kind: 'task', id: row.id, op: 'create', after: trackedFields('task', row) }],
+          summary:
+            rows.length === 1
+              ? `Captured "${first.title}"`
+              : `Captured ${String(rows.length)} tasks`,
+          // One change set for the call, so `undo` reverses the whole capture.
+          changes: rows.map((row) => ({
+            kind: 'task' as const,
+            id: row.id,
+            op: 'create' as const,
+            after: trackedFields('task', row),
+          })),
         });
 
         return jsonResult({
-          id: row.id,
-          title: row.title,
-          state: row.state,
-          teamId: row.teamId,
+          items: rows.map((row) => ({
+            id: row.id,
+            title: row.title,
+            state: row.state,
+            teamId: row.teamId,
+          })),
           changeSetId,
         });
       }),

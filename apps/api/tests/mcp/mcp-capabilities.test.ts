@@ -183,6 +183,29 @@ async function call(
   return JSON.parse(text) as Record<string, unknown>;
 }
 
+const ONE_SENTENCE = 'Draft the pricing memo';
+
+const THINGS_SAID_AT_ONCE = ['Book the room', 'Send the agenda', 'Chase the caterer'] as const;
+
+interface CapturedTask {
+  readonly id: string;
+  readonly title: string;
+}
+
+/** Returns the created tasks in the order given. */
+async function capture(
+  client: Client,
+  orgId: string,
+  text: string | readonly string[],
+): Promise<CapturedTask[]> {
+  const out = await call(client, 'capture', { orgId, text });
+  return out['items'] as CapturedTask[];
+}
+
+async function captureOne(client: Client, orgId: string, text: string): Promise<string> {
+  return assertDefined((await capture(client, orgId, text))[0]).id;
+}
+
 describe('capability: get references for all my workspaces', () => {
   it('lists the caller’s workspaces without needing an orgId first', async () => {
     const first = await seedOrg();
@@ -262,22 +285,26 @@ describe('capability: create and edit tasks', () => {
   it('creates a task from a sentence', async () => {
     const s = await seedOrg();
     const client = await connect(s.ctx);
-    const out = await call(client, 'capture', {
-      orgId: s.orgId,
-      text: 'Draft the pricing memo',
-    });
-    expect(out['title']).toBe('Draft the pricing memo');
+    const captured = await capture(client, s.orgId, ONE_SENTENCE);
+    expect(assertDefined(captured[0]).title).toBe(ONE_SENTENCE);
+  });
+
+  it('creates several tasks in one call, so ten things said is not ten calls', async () => {
+    const s = await seedOrg();
+    const client = await connect(s.ctx);
+    const captured = await capture(client, s.orgId, THINGS_SAID_AT_ONCE);
+    expect(captured.map((task) => task.title)).toEqual([...THINGS_SAID_AT_ONCE]);
   });
 
   it('edits a task without being handed its id', async () => {
     const s = await seedOrg();
     const client = await connect(s.ctx);
-    const created = await call(client, 'capture', { orgId: s.orgId, text: 'Renameable' });
+    const createdId = await captureOne(client, s.orgId, 'Renameable');
 
     const out = await call(client, 'update', {
       orgId: s.orgId,
       entity: 'task',
-      scope: { ids: [created['id']] },
+      scope: { ids: [createdId] },
       set: { title: 'Renamed', priority: 'high', state: 'In Progress' },
     });
     expect(out['changed']).toBe(1);
@@ -289,7 +316,7 @@ describe('capability: create and edit tasks', () => {
         state: schema.task.state,
       })
       .from(schema.task)
-      .where(eq(schema.task.id, String(created['id'])));
+      .where(eq(schema.task.id, createdId));
     expect(row).toEqual({ title: 'Renamed', priority: 'high', state: 'in_progress' });
   });
 });
@@ -347,8 +374,7 @@ describe('capability: assign and deassign tasks to projects', () => {
       orgId: s.orgId,
       items: [{ ref: 'p', kind: 'project', title: 'Billing Revamp' }],
     });
-    const task = await call(client, 'capture', { orgId: s.orgId, text: 'Wire the webhook' });
-    const id = String(task['id']);
+    const id = await captureOne(client, s.orgId, 'Wire the webhook');
 
     await call(client, 'update', {
       orgId: s.orgId,
@@ -448,8 +474,7 @@ describe('capability: change and remove deadlines on any object', () => {
   it('sets and clears a task due date', async () => {
     const s = await seedOrg();
     const client = await connect(s.ctx);
-    const task = await call(client, 'capture', { orgId: s.orgId, text: 'Has a deadline' });
-    const id = String(task['id']);
+    const id = await captureOne(client, s.orgId, 'Has a deadline');
 
     await call(client, 'update', {
       orgId: s.orgId,
@@ -565,14 +590,14 @@ describe('capability: find any object', () => {
   it('reads any object by id, in a batch, without failing on one it cannot see', async () => {
     const s = await seedOrg();
     const client = await connect(s.ctx);
-    const task = await call(client, 'capture', { orgId: s.orgId, text: 'Readable' });
+    const taskId = await captureOne(client, s.orgId, 'Readable');
 
     const out = (await call(client, 'get', {
       orgId: s.orgId,
       type: 'task',
-      refs: [String(task['id']), '01ARZ3NDEKTSV4RRFFQ69G5FAV'],
+      refs: [taskId, '01ARZ3NDEKTSV4RRFFQ69G5FAV'],
     })) as { items: { id: string }[]; missing: { ref: string }[] };
-    expect(out.items.map((i) => i.id)).toEqual([String(task['id'])]);
+    expect(out.items.map((i) => i.id)).toEqual([taskId]);
     expect(out.missing.map((m) => m.ref)).toEqual(['01ARZ3NDEKTSV4RRFFQ69G5FAV']);
   });
 
@@ -616,18 +641,18 @@ describe('capability: find any object', () => {
   it('preserves the requested task order in a semantic batch', async () => {
     const s = await seedOrg();
     const client = await connect(s.ctx);
-    const first = await call(client, 'capture', { orgId: s.orgId, text: 'First task' });
-    const second = await call(client, 'capture', { orgId: s.orgId, text: 'Second task' });
+    const firstId = await captureOne(client, s.orgId, 'First task');
+    const secondId = await captureOne(client, s.orgId, 'Second task');
 
     const out = (await call(client, 'get_tasks', {
       orgId: s.orgId,
-      refs: [String(second['id']), String(first['id'])],
+      refs: [secondId, firstId],
     })) as { items: { id: string; href: string }[] };
 
-    expect(out.items.map((item) => item.id)).toEqual([String(second['id']), String(first['id'])]);
+    expect(out.items.map((item) => item.id)).toEqual([secondId, firstId]);
     expect(out.items.map((item) => item.href)).toEqual([
-      `/orgs/${s.orgId}/tasks/${String(second['id'])}`,
-      `/orgs/${s.orgId}/tasks/${String(first['id'])}`,
+      `/orgs/${s.orgId}/tasks/${secondId}`,
+      `/orgs/${s.orgId}/tasks/${firstId}`,
     ]);
   });
 });

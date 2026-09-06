@@ -148,19 +148,44 @@ describe('capture tool', () => {
     })) as CallToolResult;
     expect(res.isError).toBeFalsy();
 
-    const out = payload(res) as { id: string; title: string; state: string; teamId: string };
+    const out = payload(res) as {
+      items: { id: string; title: string; state: string; teamId: string }[];
+    };
+    const only = assertDefined(out.items[0]);
     // The first line becomes the title; the whole paste stays as the body.
-    expect(out.title).toBe('Chase the vendor SOC2');
-    expect(out.teamId).toBe(s.teamId);
-    expect(out.state).toBe('backlog');
+    expect(only.title).toBe('Chase the vendor SOC2');
+    expect(only.teamId).toBe(s.teamId);
+    expect(only.state).toBe('backlog');
 
     const [row] = await db
       .select({ description: schema.task.description, assigneeId: schema.task.assigneeId })
       .from(schema.task)
-      .where(eq(schema.task.id, out.id));
+      .where(eq(schema.task.id, only.id));
     expect(row?.description).toContain('they went quiet last week');
     // Landing assigns the caller, so captured work is not orphaned.
     expect(row?.assigneeId).toBe(s.actorId);
+  });
+
+  it('captures a list in one call, under one change set', async () => {
+    // Ten things said in one breath were ten round trips and ten cards in the transcript, each
+    // with its own undo. The landing target is resolved once, so they all land together.
+    const s = await seedOrg(['contribute']);
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'capture',
+      arguments: { orgId: s.orgId, text: ['Book the room', 'Send the agenda'] },
+    })) as CallToolResult;
+    expect(res.isError).toBeFalsy();
+
+    const out = payload(res) as { items: { id: string; title: string }[]; changeSetId: string };
+    expect(out.items.map((item) => item.title)).toEqual(['Book the room', 'Send the agenda']);
+
+    // One undo takes back the whole call, not just its last task.
+    const undone = (await client.callTool({
+      name: 'undo',
+      arguments: { orgId: s.orgId, changeSetId: out.changeSetId },
+    })) as CallToolResult;
+    expect(payload(undone)).toMatchObject({ reverted: 2 });
   });
 
   it('records an origin naming the tool and session', async () => {
@@ -191,7 +216,7 @@ describe('undo tool', () => {
         name: 'capture',
         arguments: { orgId: s.orgId, text: 'Undo me' },
       })) as CallToolResult,
-    ) as { id: string; changeSetId: string };
+    ) as { items: { id: string }[]; changeSetId: string };
 
     const res = (await client.callTool({
       name: 'undo',
@@ -204,7 +229,7 @@ describe('undo tool', () => {
     const [row] = await db
       .select({ archivedAt: schema.task.archivedAt })
       .from(schema.task)
-      .where(eq(schema.task.id, created.id));
+      .where(eq(schema.task.id, assertDefined(created.items[0]).id));
     expect(row?.archivedAt).not.toBeNull();
   });
 
@@ -217,7 +242,7 @@ describe('undo tool', () => {
         name: 'capture',
         arguments: { orgId: s.orgId, text: 'Second' },
       })) as CallToolResult,
-    ) as { id: string };
+    ) as { items: { id: string }[] };
 
     const res = (await client.callTool({
       name: 'undo',
@@ -228,7 +253,7 @@ describe('undo tool', () => {
     const [row] = await db
       .select({ archivedAt: schema.task.archivedAt })
       .from(schema.task)
-      .where(eq(schema.task.id, second.id));
+      .where(eq(schema.task.id, assertDefined(second.items[0]).id));
     expect(row?.archivedAt).not.toBeNull();
   });
 
@@ -240,13 +265,13 @@ describe('undo tool', () => {
         name: 'capture',
         arguments: { orgId: s.orgId, text: 'Contested' },
       })) as CallToolResult,
-    ) as { id: string; changeSetId: string };
+    ) as { items: { id: string }[]; changeSetId: string };
 
     // Somebody else moves it on before the undo lands.
     await db
       .update(schema.task)
       .set({ state: 'in_progress', statusId: s.statusId('task', 'in_progress') })
-      .where(eq(schema.task.id, created.id));
+      .where(eq(schema.task.id, assertDefined(created.items[0]).id));
 
     const res = (await client.callTool({
       name: 'undo',
@@ -257,13 +282,15 @@ describe('undo tool', () => {
       skipped: { id: string; reason: string }[];
     };
     expect(out.reverted).toBe(0);
-    expect(out.skipped).toEqual([{ kind: 'task', id: created.id, reason: 'changed_since' }]);
+    expect(out.skipped).toEqual([
+      { kind: 'task', id: assertDefined(created.items[0]).id, reason: 'changed_since' },
+    ]);
 
     // Reversing your own change must not discard someone else's.
     const [row] = await db
       .select({ state: schema.task.state, archivedAt: schema.task.archivedAt })
       .from(schema.task)
-      .where(eq(schema.task.id, created.id));
+      .where(eq(schema.task.id, assertDefined(created.items[0]).id));
     expect(row?.state).toBe('in_progress');
     expect(row?.archivedAt).toBeNull();
   });
@@ -328,10 +355,10 @@ describe('change-set provenance', () => {
         name: 'capture',
         arguments: { orgId: s.orgId, text: 'Whence' },
       })) as CallToolResult,
-    ) as { id: string };
+    ) as { items: { id: string }[] };
 
     const { originOf } = await import('../../src/mcp/change-set');
-    const origin = await originOf('task', created.id);
+    const origin = await originOf('task', assertDefined(created.items[0]).id);
     expect(origin?.origin).toMatchObject({ tool: 'capture' });
     expect(origin?.actorId).toBe(s.actorId);
 
@@ -358,12 +385,17 @@ describe('change-set provenance', () => {
         name: 'capture',
         arguments: { orgId: s.orgId, text: 'Still native' },
       })) as CallToolResult,
-    ) as { id: string };
+    ) as { items: { id: string }[] };
 
     const [row] = await db
       .select({ source: schema.task.source })
       .from(schema.task)
-      .where(and(eq(schema.task.id, created.id), eq(schema.task.organizationId, s.orgId)));
+      .where(
+        and(
+          eq(schema.task.id, assertDefined(created.items[0]).id),
+          eq(schema.task.organizationId, s.orgId),
+        ),
+      );
     // `native|linked` means "is this mirrored from an external system", not "who made it".
     expect(row?.source).toBe('native');
   });

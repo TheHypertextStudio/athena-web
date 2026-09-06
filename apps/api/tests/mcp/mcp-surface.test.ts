@@ -444,8 +444,9 @@ describe('MCP tool metadata and task execution', () => {
       arguments: { orgId: s.orgId, text: 'Structured task' },
     })) as CallToolResult;
 
-    expect(res.structuredContent).toMatchObject({ state: 'backlog' });
-    expect(payload(res)['state']).toBe('backlog');
+    expect(res.structuredContent).toMatchObject({ items: [{ state: 'backlog' }] });
+    const items = payload(res)['items'] as { state: string }[];
+    expect(assertDefined(items[0]).state).toBe('backlog');
   });
 
   it('runs optional task-capable tools through MCP Tasks when requested', async () => {

@@ -107,16 +107,7 @@ const SCRIPT = String.raw`
     return window.docket.untitled(item.kind);
   }
 
-  /**
-   * What changed, under the row's title.
-   *
-   * Two rules, both learned from the card this replaces. A rename printed the new title in the row
-   * and then printed it again as the diff's right-hand side, so the row said the same thing twice
-   * and truncated the half that carried it — the useful part of a rename is the title it *used* to
-   * have. And a second changed field was reported as "+2", which names nothing; the fields are
-   * named instead, because "priority and due" is the difference between checking the change and
-   * opening the app to find out what it was.
-   */
+  /** A rename shows only the old title; the row already shows the new one. */
   function diffLine(fields) {
     const line = document.createElement('div');
     line.className = 'facts';
@@ -182,8 +173,7 @@ const SCRIPT = String.raw`
     row.appendChild(name);
     const fields = item.fields || [];
     if (item.matched) {
-      // The tool's whole promise is that running the same plan twice does not duplicate it. This
-      // line is that promise, kept where the person can see it kept.
+      // Shows that a repeat run reconciled instead of duplicating.
       const already = document.createElement('div');
       already.className = 'facts';
       already.textContent = 'already there';
@@ -251,15 +241,11 @@ const SCRIPT = String.raw`
       if (n === 0) {
         return window.docket.own(NOTHING, tool) || 'Nothing changed';
       }
-      // "Changed 1 item" over one row counts what the reader is already looking at, and the row
-      // says which item. The verb alone carries what the count was there for — that something
-      // happened, and which of the four write tools did it.
+      // The single row names the item, so the verb alone is enough.
       return n === 1 ? verb : verb + ' ' + n + ' items';
     }
     if (typeof data.created === 'number') {
-      // A plan is named by what it built, not by how many nodes it took. "Filed 4, matched 1
-      // already there" is a tally of the API call; the person who asked for a Q3 initiative wants
-      // to read the words "Q3 transit access" back.
+      // Name what the plan built rather than counting its nodes.
       const roots = (data.placed || []).filter((p) => !p.parent);
       if (roots.length === 1 && roots[0] && roots[0].title) {
         return verb + ' “' + roots[0].title + '”';
@@ -268,6 +254,11 @@ const SCRIPT = String.raw`
         return verb + ' ' + roots.map((r) => '“' + (r.title || r.ref) + '”').join(', ');
       }
       return window.docket.own(NOTHING, tool) || 'Nothing to do';
+    }
+    if (Array.isArray(data.items)) {
+      // The count matters only once the card folds and some rows are off screen.
+      if (data.items.length === 0) return window.docket.own(NOTHING, tool) || 'Nothing captured';
+      return data.items.length === 1 ? verb : verb + ' ' + data.items.length + ' items';
     }
     if (data.title) {
       return verb + ' “' + data.title + '”';
@@ -332,7 +323,9 @@ const SCRIPT = String.raw`
       return data.changes.map((c) => ({ ...c, kind: data.entity }));
     }
     if (Array.isArray(data.items)) {
-      return data.items.map((i) => ({ ...i, kind: data.entity }));
+      // \`capture\` sends no \`entity\` and only ever makes tasks. Without the fallback the row has
+      // no kind, and the open action has no path to build.
+      return data.items.map((i) => ({ ...i, kind: data.entity || 'task' }));
     }
     if (Array.isArray(data.placed)) {
       return treeOf(data.placed);

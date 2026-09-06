@@ -42,3 +42,9 @@ apps/web/src/lib/offline-routes.generated.ts
 # puts Mintlify and `pnpm format:check` in the same fight drizzle-kit was in above. The MDX pages
 # beside it are already outside Prettier's `**/*.{ts,tsx,md,json}` glob.
 apps/docs/docs.json
+
+# Written verbatim by `packages/brand/src/render-embedded.ts`: three base64 payloads, one per line,
+# each thousands of characters long. Prettier cannot break a string literal, so formatting it
+# changes nothing a reader would notice and only puts the generator's output and `pnpm
+# format:check` at risk of disagreeing over the trailing newline.
+packages/brand/src/embedded-icons.generated.ts

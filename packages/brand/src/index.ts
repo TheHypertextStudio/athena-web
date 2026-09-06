@@ -6,6 +6,10 @@
  * a ready-made SVG document (`faviconSvg` and friends). The renderers under `src/render-*.ts`
  * are executables rather than exports; run them with `pnpm --filter @docket/brand icons`.
  *
+ * A server that has to serve the mark as an image, rather than draw it, imports the
+ * `@docket/brand/embedded-icons` subpath instead. That module is bytes and nothing else, so
+ * importing it pulls in neither `svg-path-bbox` nor the `sharp` the renderers rasterize with.
+ *
  * @see {@link file://../../../docs/design/brand-mark.md} for the design rationale.
  */
 export { APPLE_ICONS, type AppleIconExport, type AppleRendition } from './apple-icons';
@@ -36,12 +40,14 @@ export { bareMarkSvg, CANVAS, faviconSvg, platedMarkSvg } from './svg';
 export { inGamut, oklchToHex, parseOklch } from './color';
 export {
   APPLE_LAYER,
+  EMBEDDED_ICONS,
   EXPORTS_DIR,
   ICON_DOCUMENT,
   OFFLINE_MARK_SIZE,
   OFFLINE_PAGE,
   PWA_ICONS_DIR,
   REPO_ROOT,
+  WEB_FAVICON,
   WEB_ICON,
   WEB_ROOT,
 } from './paths';

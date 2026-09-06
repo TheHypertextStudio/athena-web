@@ -196,10 +196,16 @@ CAL-38 requires Apple's own tool, so hand-editing `icon.json` is not an option.
 pnpm icons
 ```
 
-Runs, in order: the favicon and the offline page's inline copy, the PWA set, the Apple layer, and
-the `ictool` export. The last step needs a Mac with Xcode 26; it refuses to run rather than falling
-back to an approximation of an Apple render.
+Runs, in order: the favicon and the offline page's inline copy, the PWA set, the Apple layer, the
+`ictool` export, and the embedded copy. The `ictool` step needs a Mac with Xcode 26; it refuses to
+run rather than falling back to an approximation of an Apple render.
 
-Changing the mark means changing `mark.ts` and re-running that. Editing `icon.svg`,
-`Assets/Bars.svg`, `public/icons/*` or the offline page directly is undone by the next run, and
-`packages/brand/tests/offline-page.test.ts` fails in the meantime.
+The embedded step runs last because it reads what the others wrote. It produces `favicon.ico` and
+`packages/brand/src/embedded-icons.generated.ts`, which is the committed icons base64-encoded. The
+API is bundled to a single `.mjs` and ships no static directory, so the only mark it can serve is
+one inside its own source graph — and it has to serve one, because an MCP client asks its origin for
+`/favicon.ico` before it has authenticated far enough to be told anything else.
+
+Changing the mark means changing `mark.ts` and re-running that. Editing `icon.svg`, `favicon.ico`,
+`Assets/Bars.svg`, `public/icons/*`, `embedded-icons.generated.ts` or the offline page directly is
+undone by the next run, and `offline-page.test.ts` or `embedded-icons.test.ts` fails in the meantime.

@@ -32,6 +32,7 @@ import { mcpAppSandboxHandler } from './mcp/apps/sandbox';
 import { authorizationServerMetadata, mcpHandler, protectedResourceMetadata } from './mcp/server';
 import { registerOpenapi } from './openapi';
 import { healthRoutes } from './routes/health';
+import { brandIcons } from './routes/brand-icons';
 import calendarWebhook from './routes/calendar-webhook';
 import cron from './routes/cron';
 import inboundMail from './routes/inbound-mail';
@@ -130,6 +131,10 @@ server.get('/.well-known/oauth-authorization-server', authorizationServerMetadat
 // missing via `discoverOAuthServerInfo()` returning no `authorizationServerMetadata` at all
 // against production; see `authorizationServerMetadata`'s remarks in `mcp/server.ts`.
 server.get('/.well-known/oauth-authorization-server/api/auth', authorizationServerMetadata);
+// The Docket mark, on this origin. An MCP client draws its connector card before it authenticates,
+// so it never sees `serverInfo.icons` and guesses `/favicon.ico` — which this server answered with
+// a 405. See `routes/brand-icons.ts`.
+server.route('/', brandIcons);
 // URL-form client identifiers (CIMD) are the current MCP OAuth preference. This document is
 // public and contains no tenant, user, or credential data; authorization servers fetch it while
 // connecting any remote MCP server to Athena.

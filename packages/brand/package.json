@@ -7,16 +7,18 @@
   "description": "Docket brand mark — the single source of the app icon, and the generators for every asset derived from it.",
   "exports": {
     ".": "./src/index.ts",
-    "./mark": "./src/mark.ts"
+    "./mark": "./src/mark.ts",
+    "./embedded-icons": "./src/embedded-icons.generated.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "icons": "pnpm icons:web && pnpm icons:pwa && pnpm icons:apple:layer && pnpm icons:apple",
+    "icons": "pnpm icons:web && pnpm icons:pwa && pnpm icons:apple:layer && pnpm icons:apple && pnpm icons:embedded",
     "icons:web": "tsx src/render-web.ts",
     "icons:pwa": "tsx src/render-pwa.ts",
     "icons:apple:layer": "tsx src/render-apple-layer.ts",
     "icons:apple": "tsx src/render-apple.ts",
+    "icons:embedded": "tsx src/render-embedded.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

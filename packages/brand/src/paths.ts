@@ -14,6 +14,15 @@ export const WEB_ROOT = join(REPO_ROOT, 'apps/web');
 /** The favicon Next serves at `/icon.svg`. */
 export const WEB_ICON = join(WEB_ROOT, 'src/app/icon.svg');
 
+/**
+ * The favicon Next serves at `/favicon.ico`.
+ *
+ * @remarks
+ * `icon.svg` covers every consumer that reads the document's `<link rel="icon">`. This one covers
+ * the consumer that never sees the document and guesses the conventional path instead.
+ */
+export const WEB_FAVICON = join(WEB_ROOT, 'src/app/favicon.ico');
+
 /** The offline fallback page, which inlines the mark rather than requesting it. */
 export const OFFLINE_PAGE = join(WEB_ROOT, 'public/offline.html');
 
@@ -28,6 +37,16 @@ export const APPLE_LAYER = join(ICON_DOCUMENT, 'Assets/Bars.svg');
 
 /** Reviewable full-resolution renders, not served to anyone. */
 export const EXPORTS_DIR = join(WEB_ROOT, 'design/exports');
+
+/**
+ * The mark as base64 bytes, for a runtime that cannot read a file.
+ *
+ * @remarks
+ * The one generated asset that lands inside this package rather than in the web app. The API is
+ * bundled to a single `.mjs` by esbuild and ships no `public/` directory, so it can only serve the
+ * mark if the mark is part of its source graph.
+ */
+export const EMBEDDED_ICONS = join(REPO_ROOT, 'packages/brand/src/embedded-icons.generated.ts');
 
 /** Size the mark is displayed at inside the offline page's disc. */
 export const OFFLINE_MARK_SIZE = 28;

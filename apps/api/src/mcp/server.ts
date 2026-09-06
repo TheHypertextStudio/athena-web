@@ -15,6 +15,7 @@
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+import type { Implementation } from '@modelcontextprotocol/sdk/types.js';
 import { auth } from '@docket/auth';
 import { publicProblemTitle } from '../contracts/errors';
 import type { Context } from 'hono';
@@ -29,6 +30,7 @@ import { createMcpCatalog } from './catalog';
 import { registerPrompts } from './prompts';
 import { withRequestScope } from './request-context';
 import { registerResources } from './resources';
+import { SERVED_ICONS } from '../routes/brand-icons';
 import { challenge401, challenge403, CONNECT_SCOPES, TOOL_SCOPE } from './scope';
 import { installTaskProtocolHandlers } from './task-protocol';
 import { taskStoreForContext } from './task-store';
@@ -44,19 +46,38 @@ const repoVersion =
 /** The web app's public origin, with no trailing slash — also the source for {@link authorizationServerMetadata}. */
 const WEB_ORIGIN = env.WEB_URL.replace(/\/$/, '');
 
-/** The advertised MCP server identity. `version`/`websiteUrl`/`icons` are derived rather than duplicated. */
-const SERVER_INFO = {
-  name: 'docket',
-  title: 'Docket',
-  version: repoVersion,
-  description:
-    'Search, read, and update tasks, projects, and initiatives in Docket. Add comments and status updates, and work within cycles.',
-  websiteUrl: WEB_ORIGIN,
-  icons: [
-    { src: `${WEB_ORIGIN}/icons/icon-192.png`, mimeType: 'image/png', sizes: ['192x192'] },
-    { src: `${WEB_ORIGIN}/icons/icon-512.png`, mimeType: 'image/png', sizes: ['512x512'] },
-  ],
-};
+/**
+ * The advertised MCP server identity.
+ *
+ * @remarks
+ * The icons are the ones this server serves itself (`routes/brand-icons.ts`), not the web app's
+ * copies of the same artwork: the MCP schema asks a client to prefer icons "from the same domain as
+ * the client/server", and Docket's web and API origins are two different hosts. The origin comes
+ * from the canonical resource URL so it cannot disagree with the `resource` the Protected Resource
+ * Metadata document publishes. Only the PNGs are advertised — a client MUST support `image/png` and
+ * need not decode the `.ico` served for the pre-connection `/favicon.ico` guess.
+ *
+ * A function rather than a constant because a constant would read the environment at import, and
+ * `mcp-server-default-url.test.ts` unsets `API_URL` before importing this file.
+ *
+ * @returns The `serverInfo` block sent in every `initialize` result.
+ */
+export function serverInfo(): Implementation {
+  const origin = new URL(env.MCP_RESOURCE_URL ?? env.API_URL).origin;
+  return {
+    name: 'docket',
+    title: 'Docket',
+    version: repoVersion,
+    description:
+      'Search, read, and update tasks, projects, and initiatives in Docket. Add comments and status updates, and work within cycles.',
+    websiteUrl: WEB_ORIGIN,
+    icons: SERVED_ICONS.filter((icon) => icon.mimeType === 'image/png').map((icon) => ({
+      src: `${origin}${icon.path}`,
+      mimeType: icon.mimeType,
+      sizes: [...icon.sizes],
+    })),
+  };
+}
 
 /**
  * Build a fresh MCP server for one request, bound to the authenticated caller.
@@ -77,7 +98,7 @@ export function buildServer(ctx: McpContext, sessionId: string | null = null): M
   // it survives `--max-instances=10` with no session affinity. `listChanged` is advertised on all
   // three lists; only the tool list actually fires one, when a grant change alters what the
   // caller may call.
-  const server = new McpServer(SERVER_INFO, {
+  const server = new McpServer(serverInfo(), {
     capabilities: {
       tools: { listChanged: true },
       resources: { subscribe: true, listChanged: true },

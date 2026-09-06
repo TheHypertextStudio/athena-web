@@ -416,7 +416,21 @@ On `initialize`, the RS advertises:
 ```jsonc
 {
   "protocolVersion": "2025-11-25",
-  "serverInfo": { "name": "docket", "title": "Docket", "version": "<build>" },
+  "serverInfo": {
+    "name": "docket",
+    "title": "Docket",
+    "version": "<build>",
+    "description": "Search, read, and update tasks, projects, and initiatives in Docket…",
+    "websiteUrl": "<WEB_URL>",
+    // Same origin as `/mcp`, never the web app's copies: the MCP schema asks a consumer to prefer
+    // icons "from the same domain as the client/server". `/favicon.ico` on this origin carries the
+    // same mark for a client drawing a connector card, which happens before `initialize` and so
+    // never sees this block at all.
+    "icons": [
+      { "src": "<API_URL>/icons/icon-192.png", "mimeType": "image/png", "sizes": ["192x192"] },
+      { "src": "<API_URL>/icons/icon-512.png", "mimeType": "image/png", "sizes": ["512x512"] },
+    ],
+  },
   "capabilities": {
     "tools": { "listChanged": true }, // fires when a grant change alters the caller's tool set
     "resources": { "subscribe": true, "listChanged": true }, // see mcp-notifications.md

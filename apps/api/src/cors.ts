@@ -58,6 +58,23 @@ const SHARE_TOKEN_HEADER = 'X-Docket-Share-Token';
 const PUBLIC_SHARE_PATHS: ReadonlySet<string> = new Set(['/v1/public/time/status']);
 
 /**
+ * The Docket mark, which anyone may read.
+ *
+ * @remarks
+ * Three static images with no caller, no session and no tenant (`routes/brand-icons.ts`). An
+ * `<img>` needs no CORS header, but an MCP client that fetches its connector icon through script
+ * does — and that set of clients is as unknowable in advance as the OAuth one above.
+ *
+ * Written out rather than imported, which is the rule this file already follows for every other
+ * path.
+ */
+const PUBLIC_ICON_PATHS: ReadonlySet<string> = new Set([
+  '/favicon.ico',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+]);
+
+/**
  * Request headers a browser client is allowed to send.
  *
  * @remarks
@@ -155,7 +172,11 @@ export function buildCorsMiddleware(trustedOrigins: readonly string[]): Middlewa
     exposeHeaders: EXPOSED_RESPONSE_HEADERS,
   });
   return (c, next) => {
-    if (PUBLIC_OAUTH_PATHS.has(c.req.path) || PUBLIC_SHARE_PATHS.has(c.req.path)) {
+    if (
+      PUBLIC_OAUTH_PATHS.has(c.req.path) ||
+      PUBLIC_SHARE_PATHS.has(c.req.path) ||
+      PUBLIC_ICON_PATHS.has(c.req.path)
+    ) {
       return publicOAuthCors(c, next);
     }
 

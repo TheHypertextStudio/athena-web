@@ -302,6 +302,9 @@ importers:
       '@docket/blob-store':
         specifier: workspace:*
         version: link:../../packages/blob-store
+      '@docket/brand':
+        specifier: workspace:*
+        version: link:../../packages/brand
       '@docket/connections':
         specifier: workspace:*
         version: link:../../domains/connections

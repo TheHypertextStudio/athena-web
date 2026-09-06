@@ -38,6 +38,7 @@
     "@docket/automation": "workspace:*",
     "@docket/billing": "workspace:*",
     "@docket/blob-store": "workspace:*",
+    "@docket/brand": "workspace:*",
     "@docket/connections": "workspace:*",
     "@docket/db": "workspace:*",
     "@docket/env": "workspace:*",

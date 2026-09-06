@@ -282,6 +282,14 @@ function firstPartyHints(tool: ListedFirstPartyTool): ToolAnnotationHints | unde
   };
 }
 
+/**
+ * Open the toolbox for one executor: the catalog tools it may call, with first-party hints
+ * attached, and the session id the plan tools bind a plan to.
+ *
+ * @param executor - Who is calling: Athena on someone's behalf, or a connected agent.
+ * @param sessionId - The hosting agent session, when there is one.
+ * @returns the toolbox for this turn.
+ */
 export async function openToolbox(
   executor: ToolboxExecutor,
   sessionId: string | null = null,

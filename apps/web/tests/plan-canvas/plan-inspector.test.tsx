@@ -7,6 +7,25 @@ import type { ReactNode } from 'react';
 import type { PlanDraftOut, PlanNode } from '@docket/work/plan-draft-contract';
 
 vi.mock('@docket/ui/components', () => ({
+  DatePicker: ({
+    value,
+    onChange,
+    placeholder,
+  }: {
+    value: string | null;
+    onChange: (value: string | null) => void;
+    placeholder: string;
+  }) => (
+    <button
+      type="button"
+      data-testid="date-picker"
+      onClick={() => {
+        onChange('2026-05-20');
+      }}
+    >
+      {value ?? placeholder}
+    </button>
+  ),
   ActorPicker: ({
     value,
     onChange,
@@ -201,6 +220,14 @@ describe('PlanInspector', () => {
     expect(confirm).toHaveTextContent('task');
     fireEvent.click(confirm);
     expect(onConfirm).toHaveBeenCalledWith(['p1']);
+  });
+
+  it('sets the target date through the shared date picker as one set_fields op', () => {
+    const { onApply } = renderInspector('p1');
+    fireEvent.click(screen.getByTestId('date-picker'));
+    expect(onApply).toHaveBeenCalledWith([
+      { op: 'set_fields', ref: 'p1', fields: { targetDate: '2026-05-20' } },
+    ]);
   });
 
   it('sets the lead through the actor picker and joins an initiative through the enum picker', () => {

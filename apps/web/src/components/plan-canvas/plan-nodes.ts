@@ -31,9 +31,11 @@ export const PLAN_EDGE_TYPE = {
   dependency: 'default',
 } as const;
 
-/** Card and row geometry, in canvas units. */
+/** The initiative card, in canvas units. */
 export const PLAN_INITIATIVE_SIZE = { width: 268, height: 96 } as const;
+/** A task row inside its container, in canvas units. */
 export const PLAN_TASK_SIZE = { width: 272, height: 40 } as const;
+/** The project container's width; its height follows its rows. */
 export const PLAN_PROJECT_WIDTH = 304;
 /** The container's header band: glyph, title, meta line. */
 export const PLAN_PROJECT_HEADER = 68;

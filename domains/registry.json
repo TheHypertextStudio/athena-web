@@ -220,6 +220,8 @@
         "./label-contract",
         "./comment-contract",
         "./attachment-contract",
+        "./plan-draft-contract",
+        "./plan-draft",
         "./document-image-contract",
         "./update-contract",
         "./saved-view-contract",

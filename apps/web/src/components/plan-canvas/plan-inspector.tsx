@@ -13,7 +13,7 @@
  * the workspace says about it and sends the person there to edit.
  */
 import type { PickerOption } from '@docket/ui/components';
-import { ActorPicker, EnumPicker } from '@docket/ui/components';
+import { ActorPicker, DatePicker, EnumPicker } from '@docket/ui/components';
 import { CheckCircle2, OpenInNew, Sparkles, Trash2, X } from '@docket/ui/icons';
 import { Button, Input, Textarea } from '@docket/ui/primitives';
 import type { PlanDraftOut, PlanNode, PlanOp } from '@docket/work/plan-draft-contract';
@@ -165,10 +165,10 @@ function personField(kind: PlanNode['kind']): {
 /** The date field a kind carries, if any. */
 function dateField(
   kind: PlanNode['kind'],
-): { key: 'targetDate' | 'dueDate'; label: string } | null {
-  if (kind === 'task') return { key: 'dueDate', label: 'Due' };
+): { key: 'targetDate' | 'dueDate'; label: string; placeholder: string } | null {
+  if (kind === 'task') return { key: 'dueDate', label: 'Due', placeholder: 'Set due date' };
   if (kind === 'program') return null;
-  return { key: 'targetDate', label: 'Target' };
+  return { key: 'targetDate', label: 'Target', placeholder: 'Set target date' };
 }
 
 /** The templates that create this node's kind, as a picker. */
@@ -408,23 +408,17 @@ function DraftBody({
         />
       </Field>
       {date ? (
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor={`plan-date-${node.ref}`}
-            className="text-on-surface-variant text-label-medium"
-          >
-            {date.label}
-          </label>
-          <Input
-            id={`plan-date-${node.ref}`}
-            type="date"
-            value={node.fields[date.key] ?? ''}
+        <Field label={date.label}>
+          <DatePicker
+            value={node.fields[date.key] ?? null}
+            placeholder={date.placeholder}
+            ariaLabel={` date`}
             disabled={disabled}
-            onChange={(event) => {
-              setField({ [date.key]: event.target.value.length > 0 ? event.target.value : null });
+            onChange={(value) => {
+              setField({ [date.key]: value });
             }}
           />
-        </div>
+        </Field>
       ) : null}
       <TemplateField orgId={orgId} node={node} disabled={disabled} onApply={onApply} />
       {node.kind === 'project' ? (

@@ -51,12 +51,12 @@ export const planDraft = pgTable(
     /** Incremented on every document write; edits carry the revision they were written against. */
     revision: integer('revision').notNull().default(0),
     document: jsonb('document').$type<PlanDocument>().notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at')
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
-    archivedAt: timestamp('archived_at'),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
   },
   (t) => [
     index('plan_draft_owner_status_idx').on(t.ownerUserId, t.status),

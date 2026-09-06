@@ -9,9 +9,9 @@ CREATE TABLE "plan_draft" (
 	"status" "plan_draft_status" DEFAULT 'active' NOT NULL,
 	"revision" integer DEFAULT 0 NOT NULL,
 	"document" jsonb NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL,
-	"archived_at" timestamp,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"archived_at" timestamp with time zone,
 	CONSTRAINT "plan_draft_title_not_blank" CHECK ("plan_draft"."title" ~ '[^[:space:]]')
 );
 --> statement-breakpoint

@@ -18,7 +18,7 @@ export type SyncNoticeTone = 'progress' | 'attention';
 /** One rendered account of an item's provider write state. */
 export interface SyncNotice {
   /** What happened, in this application's own words. */
-  readonly message: string;
+  readonly text: string;
   /** The recovery action's label, when the outbox can be retried. */
   readonly actionLabel: string | null;
   /** Whether the notice is a quiet progress note or something the person should act on. */
@@ -32,7 +32,7 @@ export interface SyncNotice {
  * @returns the provider's product name, or a neutral phrase for an unknown source.
  */
 export function providerLabel(layer: CalendarLayerOut | undefined): string {
-  return layer?.provider === 'google' ? 'Google Calendar' : 'the source calendar';
+  return layer?.provider === 'google' ? 'Google Calendar' : 'source calendar';
 }
 
 /**
@@ -50,22 +50,22 @@ export function syncNotice(
   const notices: Record<CalendarItemSyncState, SyncNotice | null> = {
     clean: null,
     local_dirty: {
-      message: `Saved here. Not sent to ${provider} yet.`,
+      text: `Saved here. Not sent to ${provider} yet.`,
       actionLabel: null,
       tone: 'progress',
     },
     push_pending: {
-      message: `Sending your changes to ${provider}…`,
+      text: `Sending your changes to ${provider}…`,
       actionLabel: null,
       tone: 'progress',
     },
     provider_error: {
-      message: `${provider} turned down the last change. Your version is still here.`,
+      text: `${provider} turned down the last change. Your version is still here.`,
       actionLabel: 'Try again',
       tone: 'attention',
     },
     conflict: {
-      message: `This event changed in ${provider} while you were editing it. Your version is still here, and nothing has been overwritten.`,
+      text: `This event changed in ${provider} while you were editing it. Your version is still here, and nothing has been overwritten.`,
       actionLabel: 'Keep my changes',
       tone: 'attention',
     },

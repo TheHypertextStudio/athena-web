@@ -2,11 +2,13 @@
 import type { CalendarItemOut } from '@docket/planning/calendar-contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const apiCalls = vi.hoisted(() => ({
   list: vi.fn(),
   bind: vi.fn(),
+  relations: vi.fn(),
 }));
 
 vi.mock('../../src/components/active-org', () => ({
@@ -23,6 +25,11 @@ vi.mock('../../src/components/create-object/create-object-provider', () => ({
 vi.mock('../../src/lib/api', () => ({
   api: {
     v1: {
+      me: {
+        calendar: {
+          items: { ':id': { relations: { $get: apiCalls.relations } } },
+        },
+      },
       orgs: {
         ':orgId': {
           'process-definitions': { $get: apiCalls.list },
@@ -33,8 +40,16 @@ vi.mock('../../src/lib/api', () => ({
   },
 }));
 
-import { LinkedTasksSection } from '../../src/components/calendar/item-drawer/linked-tasks-section';
+import { EventArc } from '../../src/components/calendar/item-drawer/event-arc';
 import { assertDefined } from '@docket/test-utils';
+
+beforeEach(() => {
+  apiCalls.relations.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({ items: [] }),
+  });
+});
 
 afterEach(() => {
   cleanup();
@@ -97,11 +112,18 @@ describe('calendar event process setup', () => {
     });
     render(
       <QueryClientProvider client={client}>
-        <LinkedTasksSection item={calendarItem('provider-meetups')} onOpenTask={vi.fn()} />
+        <EventArc
+          item={calendarItem('provider-meetups')}
+          onOpenTask={vi.fn()}
+          onOpenItem={vi.fn()}
+        />
       </QueryClientProvider>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add tasks for each event' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Add prep' }));
+    await userEvent.click(
+      await screen.findByRole('menuitem', { name: 'Add tasks for each event' }),
+    );
     expect(
       await screen.findByText(
         'Choose the reusable work Docket should create for this event and each future occurrence.',
@@ -132,15 +154,18 @@ describe('calendar event process setup', () => {
     expect(screen.queryByText(/attach process/i)).toBeNull();
   });
 
-  it('uses singular event language for a one-off calendar item', () => {
+  it('uses singular event language for a one-off calendar item', async () => {
     apiCalls.list.mockResolvedValue(response({ items: [] }));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <LinkedTasksSection item={calendarItem(null)} onOpenTask={vi.fn()} />
+        <EventArc item={calendarItem(null)} onOpenTask={vi.fn()} onOpenItem={vi.fn()} />
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole('button', { name: 'Plan work around this event' })).toBeTruthy();
+    await userEvent.click(await screen.findByRole('button', { name: 'Add prep' }));
+    expect(
+      await screen.findByRole('menuitem', { name: 'Plan work around this event' }),
+    ).toBeTruthy();
   });
 });

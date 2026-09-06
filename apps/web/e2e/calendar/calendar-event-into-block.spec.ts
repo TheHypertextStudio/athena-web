@@ -22,7 +22,7 @@ import type { CalendarItemOut } from '@docket/planning/calendar-contract';
 import type { Page } from '@playwright/test';
 
 import { signUpAndOnboard } from '../helpers/app';
-import { dragLocatorToLocator, scheduleItem } from '../helpers/calendar-ui';
+import { dragLocatorToLocator, openScheduleItemDetail, scheduleItem } from '../helpers/calendar-ui';
 import { ORIGIN } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 
@@ -96,13 +96,12 @@ test('drags an event onto a time block and the association survives a reload', a
     .toEqual([event.id]);
 
   // 2. The UI reflects the stored relationship when the block opens.
-  await scheduleItem(page, block.id).body.click();
-  const drawer = page.getByRole('dialog');
+  const drawer = await openScheduleItemDetail(page, block.id);
   await expect(drawer.getByText(event.title)).toBeVisible();
 
   // 3. It survives a cold reload — nothing here is optimistic cache state.
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('region', { name: 'Schedule' })).toBeVisible();
-  await scheduleItem(page, block.id).body.click();
-  await expect(page.getByRole('dialog').getByText(event.title)).toBeVisible();
+  const reopened = await openScheduleItemDetail(page, block.id);
+  await expect(reopened.getByText(event.title)).toBeVisible();
 });

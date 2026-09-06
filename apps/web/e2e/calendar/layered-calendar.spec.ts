@@ -4,7 +4,7 @@ import type { CalendarItemOut } from '@docket/planning/calendar-contract';
 import { signUpAndOnboard } from '../helpers/app';
 import { CALENDAR_IDS, makeCalendarItem, makeCalendarLayer } from '../helpers/calendar-fixtures';
 import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
-import { scheduleItem } from '../helpers/calendar-ui';
+import { openScheduleItemDetail, scheduleItem } from '../helpers/calendar-ui';
 import { orgHref, settingsHref } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 
@@ -127,9 +127,7 @@ test.describe('layered calendar', () => {
     await expect(card.getByText('Read-only', { exact: true })).toBeVisible();
     await expect(card.getByRole('button', { name: `Move ${item.title}` })).toHaveCount(0);
     await expect(card.locator('[data-schedule-resize-target]')).toHaveCount(0);
-    await scheduleItem(page, item.id).body.click();
-
-    const drawer = page.getByRole('dialog');
+    const drawer = await openScheduleItemDetail(page, item.id);
     await expect(drawer.getByText(/^Read-only/)).toBeVisible();
     await expect(drawer.getByLabel('Title')).toBeDisabled();
     await expect(drawer.getByLabel('Description')).toBeDisabled();
@@ -203,14 +201,15 @@ test.describe('layered calendar', () => {
 
     const body = scheduleItem(page, CALENDAR_IDS.createdNativeItem).body;
     await expect(body).toBeVisible();
-    await body.click();
-    const drawer = page.getByRole('dialog');
+    const drawer = await openScheduleItemDetail(page, CALENDAR_IDS.createdNativeItem);
     await drawer.getByLabel('Title').fill('Deep focus block');
     // Editing a text field autosaves on blur; there is no Save button.
     await drawer.getByLabel('Title').blur();
-    await expect(drawer.getByRole('heading', { name: 'Deep focus block' })).toBeVisible();
+    await expect(drawer.getByLabel('Title')).toHaveValue('Deep focus block');
 
-    await drawer.getByRole('button', { name: 'Delete', exact: true }).click();
+    // Delete is a menu row now, not a footer control beside the primary action.
+    await drawer.getByRole('button', { name: 'More' }).click();
+    await page.getByRole('menuitem', { name: 'Delete event' }).click();
     const confirmation = page.getByRole('dialog', { name: 'Delete “Deep focus block”?' });
     await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);

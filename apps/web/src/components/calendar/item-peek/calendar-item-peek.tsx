@@ -94,7 +94,7 @@ export function CalendarItemPeek({
               : `text-on-surface-variant text-body-small ${FACT_GUTTER}`
           }
         >
-          {notice.message}
+          {notice.text}
         </p>
       ) : null}
 

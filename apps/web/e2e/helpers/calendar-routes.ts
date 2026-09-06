@@ -61,6 +61,8 @@ export interface CalendarRouteState {
   readonly itemCreates: CalendarItemCreateType[];
   readonly itemPatches: CalendarItemPatchRecord[];
   readonly taskLinkPosts: CalendarTaskLinkPostRecord[];
+  /** Item ids whose failed or conflicted provider write was retried. */
+  readonly retryWrites: string[];
   readonly taskCreates: CalendarTaskCreateRecord[];
   readonly relationGets: string[];
   readonly ownedItemGets: string[];
@@ -91,6 +93,7 @@ export function calendarRouteState(
     itemCreates: [],
     itemPatches: [],
     taskLinkPosts: [],
+    retryWrites: [],
     taskCreates: [],
     relationGets: [],
     ownedItemGets: [],
@@ -214,6 +217,24 @@ async function installCollectionRoutes(page: Page, state: CalendarRouteState): P
 
 /** Install explicit relation reads/writes and retain their directed request payloads. */
 async function installRelationRoutes(page: Page, state: CalendarRouteState): Promise<void> {
+  // Recovering a conflicted provider write. The route clears the conflict so the surface can prove
+  // it recovered rather than merely that it asked.
+  await page.route('**/v1/me/calendar/items/*/retry-write', async (route) => {
+    const request = route.request();
+    const itemId = new URL(request.url()).pathname.split('/items/')[1]?.split('/retry-write')[0];
+    if (!itemId || request.method() !== 'POST') return route.fallback();
+    state.retryWrites.push(itemId);
+    const index = state.items.findIndex((candidate) => candidate.id === itemId);
+    const item = state.items[index];
+    if (!item) {
+      await route.fulfill({ status: 404, json: { code: 'NOT_FOUND' } });
+      return;
+    }
+    const recovered = { ...item, syncState: 'push_pending' as const, hasConflict: false };
+    state.items.splice(index, 1, recovered);
+    await route.fulfill({ json: recovered });
+  });
+
   await page.route('**/v1/me/calendar/items/*/relations', async (route) => {
     const request = route.request();
     const itemId = new URL(request.url()).pathname.split('/items/')[1]?.split('/relations')[0];

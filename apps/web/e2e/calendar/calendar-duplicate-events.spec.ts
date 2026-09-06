@@ -24,7 +24,7 @@ import {
   utcAt,
 } from '../helpers/calendar-fixtures';
 import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
-import { scheduleItem } from '../helpers/calendar-ui';
+import { openScheduleItemDetail } from '../helpers/calendar-ui';
 import { expect, test } from '../helpers/fixtures';
 import { assertDefined } from '@docket/test-utils';
 
@@ -133,8 +133,7 @@ test('renders one block for an event that synced from two accounts, and says whe
   ).find((id) => id === WORK_COPY || id === PERSONAL_COPY);
   expect(survivor, 'one copy of the duplicated meeting survived').toBeDefined();
 
-  await scheduleItem(page, assertDefined(survivor)).body.click();
-  const drawer = page.getByRole('dialog');
+  const drawer = await openScheduleItemDetail(page, assertDefined(survivor));
   await expect(drawer.getByRole('heading', { name: 'Also on' })).toBeVisible();
   await expect(
     drawer.getByText('This event also synced from one other calendar. It is drawn once here.'),

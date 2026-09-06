@@ -9,7 +9,7 @@ import {
   utcAt,
 } from '../helpers/calendar-fixtures';
 import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
-import { dragLocatorToLocator, scheduleItem } from '../helpers/calendar-ui';
+import { dragLocatorToLocator, openScheduleItemDetail, scheduleItem } from '../helpers/calendar-ui';
 import { expect, test } from '../helpers/fixtures';
 
 const ANCHOR_DATE = '2026-07-13';
@@ -94,7 +94,7 @@ test('drags an event into another event and into a time block', async ({ page })
     input: { targetItemId: sourceEvent.id, role: 'contained' },
   });
 
-  await scheduleItem(page, targetEvent.id).body.click();
+  const drawer = await openScheduleItemDetail(page, targetEvent.id);
   await expect.poll(() => state.relationGets).toContain(targetEvent.id);
-  await expect(page.getByRole('dialog').getByText(sourceEvent.title)).toBeVisible();
+  await expect(drawer.getByText(sourceEvent.title)).toBeVisible();
 });

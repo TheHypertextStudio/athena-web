@@ -1,11 +1,6 @@
 {
-  "apps/admin/src/app/(admin)/discounts/page.tsx": {
-    "complexity": 18,
-    "sonarjs/cognitive-complexity": 19
-  },
   "apps/admin/src/app/(admin)/orgs/[id]/page.tsx": {
-    "complexity": 67,
-    "sonarjs/cognitive-complexity": 101
+    "complexity": 17
   },
   "apps/api/src/account/archive.ts": {
     "complexity": 17,
@@ -163,8 +158,7 @@
     "sonarjs/cognitive-complexity": 76
   },
   "apps/api/src/lib/work-views/query.ts": {
-    "complexity": 26,
-    "sonarjs/cognitive-complexity": 17
+    "complexity": 24
   },
   "apps/api/src/lib/work-views/sort-sql.ts": {
     "max-params": 6
@@ -335,9 +329,6 @@
   "apps/api/src/routes/integrations.ts": {
     "complexity": 26,
     "sonarjs/cognitive-complexity": 23
-  },
-  "apps/api/src/routes/lattice-oauth.ts": {
-    "complexity": 19
   },
   "apps/api/src/routes/lattice.ts": {
     "complexity": 15
@@ -598,10 +589,6 @@
   "apps/api/tests/work-views/tenant-relations.test.ts": {
     "complexity": 14
   },
-  "apps/runner/src/http.ts": {
-    "complexity": 15,
-    "sonarjs/cognitive-complexity": 16
-  },
   "apps/runner/src/workflow.ts": {
     "complexity": 14
   },
@@ -619,9 +606,9 @@
     "sonarjs/cognitive-complexity": 19
   },
   "apps/web/e2e/tools/capture-shots.ts": {
-    "complexity": 31,
+    "complexity": 29,
     "max-params": 6,
-    "sonarjs/cognitive-complexity": 29
+    "sonarjs/cognitive-complexity": 27
   },
   "apps/web/e2e/work/focus-companion.spec.ts": {
     "sonarjs/cognitive-complexity": 21
@@ -721,8 +708,8 @@
     "complexity": 15
   },
   "apps/web/src/app/(app)/settings/athena/lattice-section.tsx": {
-    "complexity": 49,
-    "sonarjs/cognitive-complexity": 48
+    "complexity": 45,
+    "sonarjs/cognitive-complexity": 27
   },
   "apps/web/src/app/(app)/settings/calendar/page.tsx": {
     "complexity": 27,
@@ -832,16 +819,6 @@
   "apps/web/src/components/calendar/create-block-schedule-editor.tsx": {
     "complexity": 15
   },
-  "apps/web/src/components/calendar/item-drawer/calendar-item-workspace.tsx": {
-    "complexity": 16
-  },
-  "apps/web/src/components/calendar/item-drawer/core-fields-form.tsx": {
-    "complexity": 38,
-    "sonarjs/cognitive-complexity": 31
-  },
-  "apps/web/src/components/calendar/item-drawer/relations-section.tsx": {
-    "complexity": 13
-  },
   "apps/web/src/components/canvas/bulk-actions-bar.tsx": {
     "complexity": 14
   },
@@ -914,8 +891,8 @@
     "sonarjs/cognitive-complexity": 26
   },
   "apps/web/src/components/composer/composer-shell.tsx": {
-    "complexity": 44,
-    "sonarjs/cognitive-complexity": 36
+    "complexity": 41,
+    "sonarjs/cognitive-complexity": 31
   },
   "apps/web/src/components/composer/template-menu.tsx": {
     "complexity": 15
@@ -928,9 +905,6 @@
   },
   "apps/web/src/components/cycles/active-cycle-overview.tsx": {
     "sonarjs/cognitive-complexity": 17
-  },
-  "apps/web/src/components/cycles/cycle-row.tsx": {
-    "complexity": 14
   },
   "apps/web/src/components/dnd/use-relation-drop-target.ts": {
     "complexity": 19
@@ -979,8 +953,8 @@
     "sonarjs/cognitive-complexity": 66
   },
   "apps/web/src/components/library/resource-detail-panel.tsx": {
-    "complexity": 21,
-    "sonarjs/cognitive-complexity": 30
+    "complexity": 18,
+    "sonarjs/cognitive-complexity": 27
   },
   "apps/web/src/components/mentions/mention-hovercard.tsx": {
     "complexity": 35,
@@ -1334,8 +1308,8 @@
     "sonarjs/cognitive-complexity": 46
   },
   "apps/web/src/components/work-views/filter-builder.tsx": {
-    "complexity": 44,
-    "sonarjs/cognitive-complexity": 40
+    "complexity": 43,
+    "sonarjs/cognitive-complexity": 38
   },
   "apps/web/src/components/work-views/program-work-card.tsx": {
     "complexity": 15
@@ -1352,11 +1326,11 @@
     "sonarjs/cognitive-complexity": 19
   },
   "apps/web/src/components/work-views/work-board.tsx": {
-    "complexity": 20
+    "complexity": 17
   },
   "apps/web/src/components/work-views/work-list.tsx": {
-    "complexity": 27,
-    "sonarjs/cognitive-complexity": 24
+    "complexity": 18,
+    "sonarjs/cognitive-complexity": 18
   },
   "apps/web/src/components/work-views/work-view-page.tsx": {
     "complexity": 67,
@@ -1469,8 +1443,8 @@
     "sonarjs/cognitive-complexity": 18
   },
   "domains/athena/src/turn/translate.ts": {
-    "complexity": 17,
-    "sonarjs/cognitive-complexity": 29
+    "complexity": 16,
+    "sonarjs/cognitive-complexity": 27
   },
   "domains/billing/src/adapters/in-memory.ts": {
     "complexity": 15
@@ -1626,10 +1600,6 @@
     "complexity": 44,
     "sonarjs/cognitive-complexity": 73
   },
-  "packages/test-utils/tests/workspace-policies/migrated-contract-import-policy.test.ts": {
-    "complexity": 23,
-    "sonarjs/cognitive-complexity": 21
-  },
   "packages/test-utils/tests/workspace-policies/retired-package-policy.test.ts": {
     "complexity": 15
   },
@@ -1680,17 +1650,14 @@
     "complexity": 30,
     "sonarjs/cognitive-complexity": 24
   },
-  "packages/ui/src/components/views/EntityTable.tsx": {
-    "complexity": 13
-  },
   "packages/ui/src/components/views/entity-table-row.tsx": {
-    "complexity": 17
+    "complexity": 14
   },
   "packages/ui/src/components/views/flatten-groups.ts": {
     "sonarjs/cognitive-complexity": 21
   },
   "packages/ui/src/hooks/useListKeyboard.tsx": {
-    "complexity": 16
+    "complexity": 14
   },
   "packages/ui/src/primitives/chip.tsx": {
     "complexity": 15

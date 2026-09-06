@@ -75,7 +75,7 @@ export function PropertyPanelRow({
           {icon}
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="text-on-surface-variant text-xs font-medium">{label}</span>
+          <span className="text-on-surface-variant text-label-medium">{label}</span>
           <div className="text-on-surface text-body-medium -ml-2 min-w-0">{children}</div>
         </div>
       </div>

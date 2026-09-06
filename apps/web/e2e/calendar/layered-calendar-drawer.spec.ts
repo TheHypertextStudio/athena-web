@@ -7,7 +7,7 @@ import {
   todayAt,
 } from '../helpers/calendar-fixtures';
 import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
-import { scheduleItem } from '../helpers/calendar-ui';
+import { openScheduleItemDetail, scheduleItem } from '../helpers/calendar-ui';
 import { expect, test } from '../helpers/fixtures';
 
 test.describe('layered calendar drawer', () => {
@@ -23,13 +23,12 @@ test.describe('layered calendar drawer', () => {
     await installCalendarRoutes(page, state);
 
     await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
-    const body = scheduleItem(page, item.id).body;
-    await expect(body).toBeVisible();
-    await body.click();
-    const drawer = page.getByRole('dialog');
+    await expect(scheduleItem(page, item.id).body).toBeVisible();
+    const drawer = await openScheduleItemDetail(page, item.id);
 
-    await drawer.getByLabel('New task relationship').selectOption('prep');
-    await drawer.getByRole('button', { name: 'Create task' }).click();
+    // The band decides the role, so there is no relationship select to set first.
+    await drawer.getByRole('button', { name: 'Add prep' }).click();
+    await page.getByRole('menuitem', { name: 'New task' }).click();
     const composer = page.getByRole('dialog', { name: 'New task' });
     await composer.getByLabel('Task title').fill('Prep the deck');
     await composer.getByRole('button', { name: 'Create task' }).click();
@@ -42,7 +41,8 @@ test.describe('layered calendar drawer', () => {
     const refreshedDrawer = page.getByRole('dialog');
     await expect(refreshedDrawer.getByText('Prep the deck')).toBeVisible();
 
-    await refreshedDrawer.getByRole('button', { name: 'Link task' }).click();
+    await refreshedDrawer.getByRole('button', { name: 'Add prep' }).click();
+    await page.getByRole('menuitem', { name: 'Link an existing task' }).click();
     const linkForm = refreshedDrawer.locator('form').filter({ has: page.getByLabel('Task ID') });
     await linkForm.getByLabel('Task ID').fill(CALENDAR_IDS.existingTask);
     await linkForm.getByRole('button', { name: 'Link task' }).click();
@@ -73,10 +73,8 @@ test.describe('layered calendar drawer', () => {
     await installCalendarRoutes(page, state);
 
     await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
-    const body = scheduleItem(page, item.id).body;
-    await expect(body).toBeVisible();
-    await body.click();
-    const drawer = page.getByRole('dialog');
+    await expect(scheduleItem(page, item.id).body).toBeVisible();
+    const drawer = await openScheduleItemDetail(page, item.id);
     await drawer.getByLabel('Title').fill('Design review (revised)');
     // Editing a text field autosaves on blur (no Save button), scoped to just that field.
     await drawer.getByLabel('Title').blur();
@@ -89,7 +87,9 @@ test.describe('layered calendar drawer', () => {
     expect(state.items.find((candidate) => candidate.id === item.id)?.title).toBe(
       'Design review (revised)',
     );
-    await expect(drawer.getByRole('heading', { name: 'Design review (revised)' })).toBeVisible();
+    // The visible title is the editable field itself, so assert its value rather than a heading
+    // that is now screen-reader only.
+    await expect(drawer.getByLabel('Title')).toHaveValue('Design review (revised)');
     await expect(drawer.getByText('Synced')).toHaveCount(0);
   });
 
@@ -127,24 +127,23 @@ test.describe('layered calendar drawer', () => {
       endsAt: todayAt(14),
       permissions: { canEditCore: false, canDelete: false, readOnlyReason: 'provider_scope' },
     });
-    await installCalendarRoutes(
-      page,
-      calendarRouteState({ layers: [layer], items: [conflict, readOnly] }),
-    );
+    const state = calendarRouteState({ layers: [layer], items: [conflict, readOnly] });
+    await installCalendarRoutes(page, state);
 
     await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
-    await scheduleItem(page, conflict.id).body.click();
-    const drawer = page.getByRole('dialog');
+    const drawer = await openScheduleItemDetail(page, conflict.id);
     await expect(drawer.getByRole('link', { name: 'Open in source calendar' })).toHaveAttribute(
       'href',
       conflict.htmlLink,
     );
-    await expect(drawer.getByText('Sync conflict')).toHaveCount(0);
-    await expect(drawer.getByRole('button', { name: 'Retry with local changes' })).toHaveCount(0);
+    // A conflict is recoverable and says so, rather than going quietly read-only.
+    await expect(drawer.getByText(/nothing has been overwritten/)).toBeVisible();
+    await drawer.getByRole('button', { name: 'Keep my changes' }).click();
+    await expect.poll(() => state.retryWrites.at(-1)).toBe(conflict.id);
     await page.keyboard.press('Escape');
 
-    await scheduleItem(page, readOnly.id).body.click();
-    await expect(drawer.getByText(/^Read-only/)).toBeVisible();
-    await expect(drawer.getByLabel('Title')).toBeDisabled();
+    const readOnlyDrawer = await openScheduleItemDetail(page, readOnly.id);
+    await expect(readOnlyDrawer.getByText(/^Read-only/)).toBeVisible();
+    await expect(readOnlyDrawer.getByLabel('Title')).toBeDisabled();
   });
 });

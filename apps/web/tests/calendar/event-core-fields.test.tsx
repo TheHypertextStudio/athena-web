@@ -12,7 +12,65 @@ vi.mock('../../src/components/calendar/calendar-mutations', () => ({
   useUpdateCalendarItem: () => ({ mutate, isPending: false, isError: false }),
 }));
 
-import { CoreFieldsForm } from '../../src/components/calendar/item-drawer/core-fields-form';
+import { Input, Select } from '@docket/ui/primitives';
+import type { JSX } from 'react';
+
+import { EventCoreFields } from '../../src/components/calendar/item-drawer/event-core-fields';
+import { useCoreFieldDrafts } from '../../src/components/calendar/item-drawer/use-core-field-drafts';
+
+/**
+ * The event's editable fields, composed exactly as the workspace composes them.
+ *
+ * @remarks
+ * The drafts and the schedule rules moved out of the component this file used to render, so the
+ * test mounts the same three pieces the dialog does — the title, the provider-owned fields, and
+ * the saved place — without pulling in the dialog itself. Every assertion below is unchanged,
+ * which is the point: this rewrite is only allowed to move presentation.
+ */
+function CoreFieldsForm({
+  displayTimezone,
+  item,
+  workPlaces = [],
+  onDirtyChange,
+}: {
+  readonly displayTimezone: string;
+  readonly item: CalendarItemOut;
+  readonly workPlaces?: readonly WorkPlaceOut[];
+  readonly onDirtyChange?: (dirty: boolean) => void;
+}): JSX.Element {
+  const editor = useCoreFieldDrafts({ item, displayTimezone, onDirtyChange });
+  return (
+    <>
+      <Input
+        variant="plain"
+        aria-label="Title"
+        value={editor.title.value}
+        disabled={!editor.canEdit}
+        onChange={(event) => {
+          editor.title.onChange(event.target.value);
+        }}
+        onBlur={editor.title.onBlur}
+      />
+      <EventCoreFields item={item} displayTimezone={displayTimezone} editor={editor} />
+      <Select
+        aria-label="Saved place"
+        variant="plain"
+        value={editor.workPlaceId}
+        disabled={!editor.canEdit}
+        onChange={(event) => {
+          editor.setWorkPlace(event.target.value);
+        }}
+      >
+        <option value="">No saved place</option>
+        {workPlaces.map((place) => (
+          <option key={place.id} value={place.id}>
+            {place.name}
+          </option>
+        ))}
+      </Select>
+    </>
+  );
+}
 
 const ITEM_ID = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVS1');
 
@@ -84,7 +142,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('CoreFieldsForm range validation', () => {
+describe('Event core fields range validation', () => {
   // The schedule fields autosave on a 600ms debounce (no Save button); drive that clock explicitly.
   beforeEach(() => {
     vi.useFakeTimers();
@@ -192,7 +250,7 @@ describe('CoreFieldsForm range validation', () => {
   });
 });
 
-describe('CoreFieldsForm saved-place binding', () => {
+describe('Event core fields saved-place binding', () => {
   it('persists an arbitrary regular place independently of display location text', () => {
     render(<CoreFieldsForm displayTimezone="UTC" item={calendarItem()} workPlaces={[STUDIO]} />);
 
@@ -205,7 +263,7 @@ describe('CoreFieldsForm saved-place binding', () => {
   });
 });
 
-describe('CoreFieldsForm refetch hydration', () => {
+describe('Event core fields refetch hydration', () => {
   it('preserves an edited repeated occurrence while hydrating a different exact seed', () => {
     const view = render(
       <CoreFieldsForm

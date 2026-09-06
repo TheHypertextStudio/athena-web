@@ -1,25 +1,52 @@
 'use client';
 
+/**
+ * `calendar/item-drawer/calendar-item-workspace` — one calendar event, read as a moment.
+ *
+ * @remarks
+ * This surface used to be a settings page: a header, then six stacked labelled input boxes, then
+ * "Related events" and "Tasks" with a role dropdown between two buttons. Nothing was primary,
+ * everything was the same weight, and an event with nothing attached still rendered seven controls
+ * and two apology sentences.
+ *
+ * It now reads top to bottom as the arc the data already described — what you do before, the event
+ * itself, what it leaves you with — and it is honest about the seam it sits on. The provider owns
+ * the event's own fields; Docket owns the work around it, and that stratum is recessed onto the
+ * surface ramp rather than announced with a legend.
+ *
+ * The composition is deliberately thin. Every region is its own module so that adding a fact to an
+ * event does not mean editing the file that arranges them.
+ */
 import type { CalendarItemOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
 import type { WorkPlaceOut } from '@docket/planning/work-location-contract';
-import { Sparkles } from '@docket/ui/icons';
-import { Badge, Button, DialogDescription, DialogTitle } from '@docket/ui/primitives';
-import { type JSX } from 'react';
+import { Home, Sparkles, Trash2, Workflow } from '@docket/ui/icons';
+import {
+  Button,
+  DialogBody,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Select,
+  Surface,
+} from '@docket/ui/primitives';
+import { type JSX, useState } from 'react';
 
 import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
+import { PropertyPanelRow } from '@/components/property-pickers/property-panel';
 
-import {
-  CALENDAR_ITEM_KIND_ICON,
-  CALENDAR_ITEM_KIND_LABEL,
-  READ_ONLY_REASON_LABEL,
-  itemTimeLabel,
-} from '../item-presentation/event-identity';
 import { CalendarDrawerClose } from '../calendar-drawer-close';
 import { CalendarItemDuplicateSources } from '../calendar-item-duplicate-sources';
-import { CoreFieldsForm } from './core-fields-form';
-import { LinkedTasksSection } from './linked-tasks-section';
-import { CalendarItemRelationsSection } from './relations-section';
-import { DeleteCalendarItemAction } from './status-actions';
+import { EventArc } from './event-arc';
+import { EventCoreFields } from './event-core-fields';
+import { EventMasthead } from './event-masthead';
+import { GuestList } from './guest-list';
+import { canDeleteCalendarItem, CalendarItemDeleteDialog } from './status-actions';
+import { SyncStateNotice } from './sync-state-notice';
+import { useCoreFieldDrafts } from './use-core-field-drafts';
 
 /** Props for {@link CalendarItemWorkspace}. */
 export interface CalendarItemWorkspaceProps {
@@ -64,105 +91,150 @@ export function CalendarItemWorkspace({
   onOpenTask,
   onOpenItem,
 }: CalendarItemWorkspaceProps): JSX.Element {
-  const { openAthena } = useAthenaPanel();
-  const KindIcon = CALENDAR_ITEM_KIND_ICON[item.kind];
-  const providerLabel = layer?.provider === 'google' ? 'Google Calendar' : 'source calendar';
-  const showKind = item.kind !== 'provider_event' && item.kind !== 'native_event';
-  const readOnlyLabel = item.permissions.readOnlyReason
-    ? READ_ONLY_REASON_LABEL[item.permissions.readOnlyReason]
-    : item.permissions.canEditCore
-      ? null
-      : 'Read-only';
+  const editor = useCoreFieldDrafts({ item, displayTimezone, onDirtyChange });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="border-outline-variant flex shrink-0 flex-col gap-2 border-b px-6 py-5 pr-16">
-        <div className="flex items-start gap-2">
-          <span
-            aria-hidden="true"
-            className="mt-0.5 shrink-0 [&_svg]:size-5"
-            style={{ color: layer?.color ?? undefined }}
-          >
-            <KindIcon />
-          </span>
-          <DialogTitle className="text-on-surface text-title-large min-w-0 flex-1">
-            {item.title}
-          </DialogTitle>
-          <CalendarDrawerClose label="Close calendar item" onClick={onClose} />
-          <DialogDescription className="sr-only">
-            Edit event details and manage related work.
-          </DialogDescription>
-        </div>
-        <p className="text-on-surface-variant text-body-medium">
-          {itemTimeLabel(item, displayTimezone)}
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          {layer ? (
-            <Badge variant="outline" className="gap-1.5">
-              <span
-                aria-hidden="true"
-                className="size-2 rounded-full"
-                style={{ backgroundColor: layer.color ?? 'var(--color-outline-variant)' }}
-              />
-              {layer.title}
-            </Badge>
-          ) : null}
-          {showKind ? (
-            <Badge variant="secondary">{CALENDAR_ITEM_KIND_LABEL[item.kind]}</Badge>
-          ) : null}
-          {readOnlyLabel ? <Badge variant="secondary">{readOnlyLabel}</Badge> : null}
-          {item.htmlLink ? (
-            <a
-              href={item.htmlLink}
-              target="_blank"
-              rel="noreferrer"
-              className="text-primary text-body-small hover:underline"
-            >
-              Open in {providerLabel}
-            </a>
-          ) : null}
-        </div>
-      </header>
+      <DialogHeader className="gap-2">
+        <EventMasthead
+          item={item}
+          layer={layer}
+          displayTimezone={displayTimezone}
+          editor={editor}
+        />
+        <DialogDescription className="sr-only">
+          Edit this event and the work around it.
+        </DialogDescription>
+        <CalendarDrawerClose label="Close calendar item" onClick={onClose} />
+      </DialogHeader>
 
-      <div
+      <DialogBody
         data-testid="calendar-item-dialog-scroll"
-        className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overscroll-contain px-6 py-5"
+        className="flex flex-col gap-5 overscroll-contain"
       >
+        <SyncStateNotice item={item} layer={layer} />
         <CalendarItemDuplicateSources duplicates={duplicates} layers={layers} />
 
-        <section className="flex flex-col gap-3">
-          <h3 className="text-on-surface text-title-small">Event details</h3>
-          <CoreFieldsForm
-            displayTimezone={displayTimezone}
-            item={item}
-            workPlaces={workPlaces}
-            onDirtyChange={onDirtyChange}
-          />
-        </section>
+        <div className="flex flex-col">
+          <EventCoreFields item={item} displayTimezone={displayTimezone} editor={editor} />
+          <GuestList item={item} />
+        </div>
 
-        <CalendarItemRelationsSection itemId={item.id} onOpenItem={onOpenItem} />
-        <LinkedTasksSection item={item} onOpenTask={onOpenTask} />
-      </div>
+        <Surface tone="well" shape="medium" pad="tight">
+          <PropertyPanelRow icon={<Home />} label="Saved place">
+            <Select
+              aria-label="Saved place"
+              variant="plain"
+              value={editor.workPlaceId}
+              disabled={!editor.canEdit}
+              onChange={(event) => {
+                editor.setWorkPlace(event.target.value);
+              }}
+            >
+              <option value="">No saved place</option>
+              {workPlaces.map((place) => (
+                <option key={place.id} value={place.id}>
+                  {place.name}
+                </option>
+              ))}
+            </Select>
+          </PropertyPanelRow>
+        </Surface>
 
-      <div className="border-outline-variant flex shrink-0 justify-between border-t px-6 py-3">
-        <DeleteCalendarItemAction item={item} onDeleted={onClose} />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="min-h-10"
-          onClick={() => {
-            const workspaceId = item.linkedTasks[0]?.organizationId;
-            openAthena({
-              ...(workspaceId ? { workspaceId } : {}),
-              source: { type: 'calendar_item', id: item.id, label: item.title },
-            });
-          }}
-        >
-          <Sparkles aria-hidden="true" />
-          Have Athena handle this
-        </Button>
-      </div>
+        <EventArc item={item} onOpenTask={onOpenTask} onOpenItem={onOpenItem} />
+
+        <SaveState editor={editor} />
+      </DialogBody>
+
+      <DialogFooter className="sm:justify-between">
+        <EventOverflowMenu item={item} onClose={onClose} />
+        <AthenaAction item={item} />
+      </DialogFooter>
     </div>
+  );
+}
+
+/** The quiet line that says whether the last edit reached the server. */
+function SaveState({ editor }: { readonly editor: ReturnType<typeof useCoreFieldDrafts> }) {
+  if (!editor.canEdit) return null;
+  if (editor.saveFailed) {
+    return (
+      <p role="alert" className="text-error text-body-small">
+        We couldn&apos;t save these changes. Please try again.
+      </p>
+    );
+  }
+  return (
+    <p aria-live="polite" className="text-on-surface-variant text-body-small min-h-4">
+      {editor.saving ? 'Saving…' : editor.saved ? 'Saved' : ''}
+    </p>
+  );
+}
+
+interface EventOverflowMenuProps {
+  item: CalendarItemOut;
+  onClose: () => void;
+}
+
+/**
+ * The actions that are not the point of this surface.
+ *
+ * @remarks
+ * Delete used to sit in the footer at the same visual weight as Athena, which put an irreversible
+ * action and the primary one side by side. It is a menu row now, and the menu renders at all only
+ * when it would hold something.
+ */
+function EventOverflowMenu({ item, onClose }: EventOverflowMenuProps): JSX.Element | null {
+  const [confirming, setConfirming] = useState(false);
+  if (!canDeleteCalendarItem(item)) return null;
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" variant="ghost" controlSize="sm">
+            <Workflow aria-hidden="true" />
+            More
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" width="md">
+          <DropdownMenuItem
+            className="text-error"
+            onSelect={() => {
+              setConfirming(true);
+            }}
+          >
+            <Trash2 aria-hidden="true" />
+            Delete event
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <CalendarItemDeleteDialog
+        item={item}
+        open={confirming}
+        onOpenChange={setConfirming}
+        onDeleted={onClose}
+      />
+    </>
+  );
+}
+
+/** The one primary action: hand the whole moment to Athena. */
+function AthenaAction({ item }: { readonly item: CalendarItemOut }): JSX.Element {
+  const { openAthena } = useAthenaPanel();
+  return (
+    <Button
+      type="button"
+      onClick={() => {
+        const workspaceId = item.linkedTasks[0]?.organizationId;
+        openAthena({
+          ...(workspaceId ? { workspaceId } : {}),
+          source: { type: 'calendar_item', id: item.id, label: item.title },
+        });
+      }}
+    >
+      <Sparkles aria-hidden="true" />
+      Have Athena handle this
+    </Button>
   );
 }

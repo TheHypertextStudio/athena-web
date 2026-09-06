@@ -18,6 +18,7 @@ import { type TaskOut } from '@docket/work/task-model';
 import { TaskId } from '@docket/work/ids';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -317,8 +318,11 @@ describe('CalendarItemDrawer', () => {
     expect(screen.queryByText('Provider metadata')).not.toBeInTheDocument();
     expect(screen.queryByText('Calendar relationships')).not.toBeInTheDocument();
     expect(screen.queryByText('Synced')).not.toBeInTheDocument();
-    expect(screen.getByText('Related events')).toBeInTheDocument();
-    expect(screen.getByText('Tasks')).toBeInTheDocument();
+    // The arc names itself only where it has something to show, so a provider event with two
+    // linked tasks shows Before and After and stays quiet about the other two bands.
+    expect(screen.getByRole('heading', { name: 'Before' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'After' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Related' })).not.toBeInTheDocument();
   });
 
   it('explains why a provider event is read-only', async () => {
@@ -525,8 +529,8 @@ describe('CalendarItemDrawer', () => {
       expect(screen.getByText('Prep notes')).toBeInTheDocument();
     });
     expect(screen.getByText('Send recap')).toBeInTheDocument();
-    expect(screen.getByText('Prep', { selector: 'p' })).toBeInTheDocument();
-    expect(screen.getByText('Follow-up', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Before' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'After' })).toBeInTheDocument();
   });
 
   it('opens the global Task composer and awaits a selected-role link', async () => {
@@ -536,10 +540,9 @@ describe('CalendarItemDrawer', () => {
       expect(screen.getByText('Design review')).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'New task relationship' }), {
-      target: { value: 'follow_up' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+    // The band a person adds to decides the role, which is what retired the relationship select.
+    await userEvent.click(screen.getByRole('button', { name: 'Add follow-up' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'New task' }));
 
     expect(openCreate).toHaveBeenCalledWith({
       kind: 'task',
@@ -572,7 +575,8 @@ describe('CalendarItemDrawer', () => {
     renderDrawer(ITEM_ID);
     await screen.findByText('Design review');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add prep' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'New task' }));
     const request = openCreate.mock.calls[0]?.[0] as {
       afterCreate?: (task: TaskOut) => Promise<void>;
     };
@@ -589,22 +593,120 @@ describe('CalendarItemDrawer', () => {
         "Saved on this device. Docket will sync it as soon as you're back online.",
       ),
     ).toBeVisible();
-    expect(
-      screen.queryByText("The task was created, but we couldn't link it to this calendar item."),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn't attach it to this event/)).not.toBeInTheDocument();
   });
 
-  it('does not expose provider sync state for a conflicted item', async () => {
+  it('says a conflicted event kept your version, and offers to send it again', async () => {
     itemGet.mockResolvedValue(
-      okResponse(makeItem({ hasConflict: true, htmlLink: 'https://calendar.google.com/event/1' })),
+      okResponse(
+        makeItem({
+          kind: 'provider_event',
+          provider: 'google',
+          syncState: 'conflict',
+          hasConflict: true,
+          htmlLink: 'https://calendar.google.com/event/1',
+          permissions: { canEditCore: false, canDelete: false, readOnlyReason: 'conflict' },
+        }),
+      ),
+    );
+    layersGet.mockResolvedValue(okResponse({ items: [makeLayer({ provider: 'google' })] }));
+    retryWritePost.mockResolvedValue(okResponse(makeItem()));
+    renderDrawer(ITEM_ID);
+
+    await screen.findByRole('dialog', { name: 'Design review' });
+    expect(screen.getByText(/nothing has been overwritten/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Keep my changes' }));
+    await waitFor(() => {
+      expect(retryWritePost).toHaveBeenCalledWith({ param: { id: ITEM_ID } });
+    });
+  });
+
+  it('reports a provider write that has not been sent yet', async () => {
+    itemGet.mockResolvedValue(
+      okResponse(
+        makeItem({ kind: 'provider_event', provider: 'google', syncState: 'push_pending' }),
+      ),
+    );
+    layersGet.mockResolvedValue(okResponse({ items: [makeLayer({ provider: 'google' })] }));
+    renderDrawer(ITEM_ID);
+
+    await screen.findByRole('dialog', { name: 'Design review' });
+    expect(screen.getByText('Sending your changes to Google Calendar…')).toBeInTheDocument();
+  });
+
+  it('says nothing about sync for an event that has nothing pending', async () => {
+    renderDrawer(ITEM_ID);
+
+    await screen.findByRole('dialog', { name: 'Design review' });
+    expect(screen.queryByText(/Sending your changes/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/nothing has been overwritten/)).not.toBeInTheDocument();
+  });
+
+  it('names the guests and their answers without offering a response it cannot send', async () => {
+    itemGet.mockResolvedValue(
+      okResponse(
+        makeItem({
+          kind: 'provider_event',
+          provider: 'google',
+          organizer: { email: 'lead@example.com', displayName: 'Ada Lead' },
+          attendees: [
+            { email: 'lead@example.com', displayName: 'Ada Lead', responseStatus: 'accepted' },
+            {
+              email: 'you@example.com',
+              displayName: 'Sam',
+              responseStatus: 'needsAction',
+              self: true,
+            },
+            { email: 'maybe@example.com', displayName: 'Jo', responseStatus: 'tentative' },
+          ],
+        }),
+      ),
     );
     renderDrawer(ITEM_ID);
 
     await screen.findByRole('dialog', { name: 'Design review' });
-    expect(screen.queryByText('Sync conflict')).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'Retry with local changes' }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText('Ada Lead')).toBeInTheDocument();
+    expect(screen.getByText('Organizer')).toBeInTheDocument();
+    expect(screen.getByText('You')).toBeInTheDocument();
+    expect(screen.getByText(/^Maybe/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Yes$/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the debrief the scheduler created under After', async () => {
+    itemRelationsGet.mockResolvedValue(
+      okResponse({
+        items: [
+          {
+            sourceItemId: ITEM_ID,
+            targetItemId: RELATED_ITEM_ID,
+            targetTitle: 'Design review debrief',
+            targetKind: 'native_event',
+            role: 'follow_up',
+            createdByUserId: '01BX5ZZKBKACTAV9WEVGEMMVA1',
+            createdAt: '2026-07-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    renderDrawer(ITEM_ID);
+
+    const after = await screen.findByText('Design review debrief');
+    expect(after).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'After' })).toBeInTheDocument();
+  });
+
+  it('offers one affordance, and no apologies, for an event with nothing attached', async () => {
+    itemGet.mockResolvedValue(okResponse(makeItem({ linkedTasks: [] })));
+    renderDrawer(ITEM_ID);
+
+    await screen.findByRole('dialog', { name: 'Design review' });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Add prep' })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('heading', { name: 'Before' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/No tasks are linked/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No related events/)).not.toBeInTheDocument();
   });
 
   it('shows contained items, opens them in place, and detaches relationships', async () => {
@@ -634,7 +736,8 @@ describe('CalendarItemDrawer', () => {
     );
     renderDrawer(ITEM_ID);
 
-    expect(await screen.findByText('Included events')).toBeInTheDocument();
+    // A contained item is part of what happens inside the event, so it reads under During.
+    expect(await screen.findByRole('heading', { name: 'During' })).toBeInTheDocument();
     expect(screen.getByText('Event')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Detach Customer interview' }));
     await waitFor(() => {

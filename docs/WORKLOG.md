@@ -9,9 +9,11 @@
 
 ### [CAL-EVENT-001] A calendar event opens as a peek, and reads as a moment
 
-- **Status**: REVIEW
+- **Status**: SHIPPED
 - **Started**: 2026-09-06
 - **Completed**: 2026-09-06
+- **Released**: `d25f5d73a` and `4c6bcf578` on `main`, both green through CI and deployed to
+  production. `pnpm launch:verify-prod` passes 11/11 against `docket.hypertext.studio`.
 - **Priority**: P1
 - **Summary**: Clicking any event threw a 1024px-wide centered modal over the calendar you were
   reading, and the surface it opened was the only detail surface in Docket shaped like a settings

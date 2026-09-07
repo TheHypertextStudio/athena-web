@@ -51,9 +51,10 @@ Screenshots ✅
 2. **A colourless layer gets no colour moment** — `calendar-item-peek-overlay.tsx`. Docket-native
    layers have `color: null`, so the peek's band falls back to a hairline. Google events read
    correctly; native ones lose the tie back to the block they came from.
-3. **Linking an existing task still asks for an id** —
-   `item-drawer/task-forms.tsx`. Out of scope here: a picker needs a `calendar-item.task` relation
-   definition in the work domain and a new picker request kind.
+3. **Linking an existing task has no picker** — `item-drawer/task-forms.tsx`. It takes a pasted
+   task link, which names its own workspace, or a bare id with the workspace picker. A real picker
+   needs a `calendar-item.task` relation definition in the work domain and a new picker request
+   kind, because the shared picker overlay has no task option source behind it.
 
 Verdict: SHIP. Every dimension is at or above the bar and every gate is green. Findings 1 and 2 are
 craft debt worth a follow-up, not blockers.

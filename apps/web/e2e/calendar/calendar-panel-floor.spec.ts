@@ -116,11 +116,17 @@ async function openOverlay(page: Page, overlay: Overlay): Promise<void> {
     await playwrightExpect(page.getByRole('menu')).toBeVisible();
     return;
   }
+  // A click answers with the peek; the drawer this measures is what Open escalates to. The old
+  // wait matched the workspace's "Event details" section heading, which the arc replaced.
   await page
     .getByRole('button', { name: /^Research review/ })
     .first()
     .click();
-  await playwrightExpect(page.getByRole('heading', { name: 'Details' })).toBeVisible();
+  const peek = page.locator(`[data-calendar-item-peek="${CALENDAR_IDS.existingNativeItem}"]`);
+  await playwrightExpect(peek).toBeVisible();
+  await peek.getByRole('button', { name: 'Open' }).click();
+  await playwrightExpect(peek).toBeHidden();
+  await playwrightExpect(page.getByLabel('Title')).toHaveValue(/^Research review/);
 }
 
 /** Fixture state with real content, optionally carrying a sync conflict that shows the alert. */

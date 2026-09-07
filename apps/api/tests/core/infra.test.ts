@@ -10,6 +10,7 @@ import ts from 'typescript';
 
 import type { AdminAppType as SourceAdminAppType, AppType as SourceAppType } from '../../src/app';
 import type { AppEnv } from '../../src/context';
+import type * as HealthRouteModule from '../../src/routes/health';
 import type { server as ApiServer } from '../../src/server';
 import type {
   AdminAppType as RpcContractAdminAppType,
@@ -438,11 +439,22 @@ describe('server boot', () => {
     // fresh module registry so this describe block's own env stub is what actually lands.
     vi.resetModules();
     vi.stubEnv('WEB_URL', 'https://docket.test');
+    // This block verifies that the root server mounts the health router. The router's healthy and
+    // degraded dependency behavior has dedicated tests; relying on the shared file-backed PGlite
+    // instance here made the 2-second production probe race unrelated CPU-heavy test workers.
+    vi.doMock('../../src/routes/health', async () => {
+      const actual = await vi.importActual<typeof HealthRouteModule>('../../src/routes/health');
+      return {
+        ...actual,
+        healthRoutes: actual.createHealthRoutes(() => Promise.resolve('ok')),
+      };
+    });
     server = (await import('../../src/server')).server;
   });
 
   afterAll(() => {
     log.mockRestore();
+    vi.doUnmock('../../src/routes/health');
   });
 
   it('calls serve() at import (mocked) and exposes /v1/health', async () => {
@@ -512,7 +524,11 @@ describe('server CORS trusted-origins parsing', () => {
     vi.doMock('@hono/node-server', () => ({ serve: freshServe }));
     try {
       const { server: fresh } = await import('../../src/server');
-      expect((await fresh.request('/v1/health')).status).toBe(200);
+      const response = await fresh.request('/v1/openapi.json', {
+        headers: { Origin: 'https://b.com' },
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('access-control-allow-origin')).toBe('https://b.com');
     } finally {
       log.mockRestore();
       vi.doUnmock('@hono/node-server');

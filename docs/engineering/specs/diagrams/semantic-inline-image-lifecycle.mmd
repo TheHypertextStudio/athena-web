@@ -1,0 +1,18 @@
+flowchart LR
+  Author[Author in shared prose editor]
+  Upload[Document image upload route]
+  Blob[(Blob storage)]
+  Markdown[(Authoritative Markdown)]
+  Projection[(Image reference projection)]
+  Cleanup[Daily cleanup]
+  Public[Public brief image route]
+
+  Author -->|browse, paste, drop, replace| Upload
+  Upload -->|store unchanged raster bytes| Blob
+  Author -->|save semantic figure| Markdown
+  Markdown -->|reconcile complete subject references| Projection
+  Cleanup -->|find uploads older than seven days| Projection
+  Cleanup -->|reparse before delete or repair| Markdown
+  Cleanup -->|delete only after authoritative miss| Blob
+  Public -->|authorize against current publication| Markdown
+  Public -->|stream authorized bytes with no-store| Blob

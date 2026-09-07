@@ -31,11 +31,12 @@ import {
   Skeleton,
 } from '@docket/ui/primitives';
 import type { JSX } from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { useActiveOrgIdOptional } from '@/components/active-org';
 import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
-import MentionTextarea from '@/components/mentions/mention-textarea';
+import { FreeformTextEditor } from '@/components/editor/freeform-text';
+import { StaticMarkdown } from '@/components/editor/static-markdown';
 
 /** Resolve an actor id to a display name + kind (passed by the caller). */
 export type ResolveActor = (actorId: string | null | undefined) => {
@@ -106,6 +107,8 @@ export function UpdatesPanel({
   showHealthComposer = true,
 }: UpdatesPanelProps): JSX.Element {
   const [body, setBody] = useState('');
+  const bodyRef = useRef('');
+  const [composerKey, setComposerKey] = useState(0);
   const activeOrgId = useActiveOrgIdOptional();
   const [health, setHealth] = useState<HealthChoice>('');
 
@@ -118,9 +121,8 @@ export function UpdatesPanel({
    * author would need to retry. Awaiting the parent's write keeps a failed draft exactly where it
    * was — the error is recoverable instead of destructive.
    */
-  async function submit(event: React.SyntheticEvent): Promise<void> {
-    event.preventDefault();
-    const trimmed = body.trim();
+  async function submit(): Promise<void> {
+    const trimmed = bodyRef.current.trim();
     if (trimmed.length === 0 || posting) return;
     try {
       await onPost(trimmed, health === '' ? undefined : health);
@@ -128,7 +130,9 @@ export function UpdatesPanel({
       // The parent owns the message and renders it through `postError`; keep the draft to retry.
       return;
     }
+    bodyRef.current = '';
     setBody('');
+    setComposerKey((current) => current + 1);
     setHealth('');
   }
 
@@ -136,24 +140,27 @@ export function UpdatesPanel({
     <div className="flex flex-col gap-6">
       <form
         onSubmit={(event) => {
-          void submit(event);
+          event.preventDefault();
+          void submit();
         }}
         className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4"
       >
-        <label
-          htmlFor="program-update-body"
-          className="text-on-surface text-body-medium font-medium"
-        >
-          Post an update
-        </label>
-        <MentionTextarea
-          id="program-update-body"
+        <p className="text-on-surface text-body-medium font-medium">Post an update</p>
+        <FreeformTextEditor
+          key={composerKey}
           value={body}
-          onChange={setBody}
-          {...(activeOrgId === null ? {} : { orgId: activeOrgId })}
-          rows={3}
+          onChange={(next) => {
+            bodyRef.current = next;
+            setBody(next);
+          }}
+          {...(activeOrgId === null ? {} : { mentionOrgId: activeOrgId })}
+          ariaLabel="Post an update"
           placeholder="Share how this line of work is flowing — wins, risks, or what changed…"
-          className="bg-surface-container-high hover:bg-surface-container-highest text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring text-body-medium min-h-20 w-full resize-y rounded-lg border border-transparent px-3 py-2 transition-colors outline-none focus-visible:ring-2 disabled:opacity-60"
+          className="bg-surface-container-high hover:bg-surface-container-highest min-h-20 max-w-none rounded-lg border border-transparent p-3 transition-colors"
+          disabled={posting}
+          onSubmit={() => {
+            void submit();
+          }}
         />
         <div className="flex flex-wrap items-center justify-between gap-3">
           {showHealthComposer ? (
@@ -264,9 +271,7 @@ export function UpdatesPanel({
                       </span>
                     ) : null}
                   </div>
-                  <p className="text-on-surface text-body-medium leading-relaxed whitespace-pre-wrap">
-                    {update.body}
-                  </p>
+                  <StaticMarkdown value={update.body} className="max-w-none" />
                 </div>
               </li>
             );

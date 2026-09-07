@@ -10,11 +10,15 @@
  * configuration, not request state.
  */
 import { createDrizzleMentionStorage } from '../content/drizzle-mention-storage';
+import { createDrizzleDocumentImageReferenceStorage } from '../content/drizzle-document-image-reference-storage';
+import { createDocumentImageReferenceReconciler } from '../content/document-image-references';
+import type { DocumentImageReferenceStorage } from '../content/document-image-references';
 import { createMentionReconciler } from '../content/reconcile-mentions';
 
 import { EntityWriteBus } from './entity-write-bus';
 import {
   mcpNotifySubscriber,
+  documentImageReconcileSubscriber,
   mentionReconcileSubscriber,
   notionMirrorWakeSubscriber,
   searchIndexSubscriber,
@@ -32,10 +36,16 @@ let bus: EntityWriteBus | undefined;
  * @param storage - Where the mention reconciler reads and writes.
  * @returns A wired bus.
  */
-export function buildEntityWriteBus(storage = createDrizzleMentionStorage()): EntityWriteBus {
+export function buildEntityWriteBus(
+  storage = createDrizzleMentionStorage(),
+  imageStorage: DocumentImageReferenceStorage = createDrizzleDocumentImageReferenceStorage(),
+): EntityWriteBus {
   return new EntityWriteBus()
     .subscribe(searchIndexSubscriber())
     .subscribe(mentionReconcileSubscriber(createMentionReconciler(storage)))
+    .subscribe(
+      documentImageReconcileSubscriber(createDocumentImageReferenceReconciler(imageStorage)),
+    )
     .subscribe(mcpNotifySubscriber())
     .subscribe(notionMirrorWakeSubscriber());
 }

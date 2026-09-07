@@ -10,6 +10,8 @@ import type { Token, Tokens } from 'marked';
 import type { ReactNode } from 'react';
 import { Fragment } from 'react';
 
+import { parseDocumentFigureHtml, type DocumentFigure } from '@docket/markdown-tree';
+
 import Link from '@/components/docket-link';
 
 import { MarkdownTable, MarkdownTaskItem, type MarkdownTableCell } from './markdown-block-parts';
@@ -20,7 +22,6 @@ function safeHref(href: string): string | undefined {
   return /^(https?:|mailto:|\/|#)/i.test(href) ? href : undefined;
 }
 
-/**
 /**
  * Allow only the sources this renderer is willing to point a real `<img src>` at.
  *
@@ -35,7 +36,122 @@ function safeHref(href: string): string | undefined {
  * rendered rather than silently deleted, and simply fails to load for anyone who cannot reach it.
  */
 function safeImageSrc(src: string): string | undefined {
-  return /^(https?:|\/)/i.test(src) ? src : undefined;
+  if (src.startsWith('/') && !src.startsWith('//')) return src;
+  return /^https:\/\/[^/\s?#]+(?:[/?#][^\s]*)?$/.test(src) ? src : undefined;
+}
+
+/** Optional source policy supplied by a surface such as an anonymous public brief. */
+export interface MarkdownRenderOptions {
+  /** Resolve or rewrite one safe image source before it enters an `img` element. */
+  readonly resolveImageSource?: (src: string) => string | undefined;
+  /** Render ordinary anchors with the browser alone, for a server-only public document. */
+  readonly nativeLinks?: boolean;
+}
+
+/** Resolve an image through the caller's stricter policy or the default persisted-Markdown policy. */
+function resolvedImageSource(src: string, options: MarkdownRenderOptions): string | undefined {
+  return options.resolveImageSource ? options.resolveImageSource(src) : safeImageSrc(src);
+}
+
+/** Return whether a figure has visible caption or attribution content. */
+function hasFigureCaption(figure: DocumentFigure): boolean {
+  return [
+    figure.caption,
+    figure.creditText,
+    figure.sourceUrl,
+    figure.licenseText,
+    figure.licenseUrl,
+  ].some((value) => Boolean(value));
+}
+
+/** Render the attribution attached to one codec-owned figure. */
+function renderFigureAttribution(figure: DocumentFigure): ReactNode {
+  const visible = [figure.creditText, figure.sourceUrl, figure.licenseText, figure.licenseUrl].some(
+    (value) => Boolean(value),
+  );
+  if (!visible) return null;
+  let license: ReactNode = null;
+  if (figure.licenseUrl) {
+    license = (
+      <a href={figure.licenseUrl} target="_blank" rel="license noreferrer" itemProp="license">
+        {figure.licenseText ?? 'License'}
+      </a>
+    );
+  } else if (figure.licenseText) {
+    license = <span itemProp="license">{figure.licenseText}</span>;
+  }
+  return (
+    <span data-docket-attribution="">
+      {figure.creditText ? <span itemProp="creditText">{figure.creditText}</span> : null}
+      {figure.sourceUrl ? (
+        <a href={figure.sourceUrl} target="_blank" rel="noreferrer">
+          Source
+        </a>
+      ) : null}
+      {license}
+    </span>
+  );
+}
+
+/** Render one parsed codec-owned figure without trusting its original HTML string. */
+function renderFigure(
+  figure: DocumentFigure,
+  key: string,
+  options: MarkdownRenderOptions,
+): ReactNode {
+  const src = resolvedImageSource(figure.src, options);
+  if (!src) return <p key={key}>{figure.alt}</p>;
+  return (
+    <figure
+      key={key}
+      data-docket-figure="1"
+      data-decorative={String(figure.decorative)}
+      itemScope
+      itemType="https://schema.org/ImageObject"
+    >
+      <img src={src} alt={figure.decorative ? '' : figure.alt} itemProp="contentUrl" />
+      {hasFigureCaption(figure) ? (
+        <figcaption>
+          {figure.caption ? <span itemProp="caption">{figure.caption}</span> : null}
+          {renderFigureAttribution(figure)}
+        </figcaption>
+      ) : null}
+    </figure>
+  );
+}
+
+/** Render one ordinary Markdown link under the surface's navigation policy. */
+function renderLinkToken(
+  link: Tokens.Link,
+  key: string,
+  options: MarkdownRenderOptions,
+): ReactNode {
+  const href = safeHref(link.href);
+  const content = renderInline(link.tokens, key, options);
+  if (href === undefined) return <Fragment key={key}>{content}</Fragment>;
+  if (options.nativeLinks) {
+    return (
+      <a key={key} href={href} title={link.title ?? undefined} data-native-navigation="">
+        {content}
+      </a>
+    );
+  }
+  return (
+    <Link key={key} href={href} title={link.title ?? undefined}>
+      {content}
+    </Link>
+  );
+}
+
+/** Render one legacy Markdown image without widening the semantic-figure source policy. */
+function renderLegacyImageToken(
+  image: Tokens.Image,
+  key: string,
+  options: MarkdownRenderOptions,
+): ReactNode {
+  const src = resolvedImageSource(image.href, options);
+  if (src === undefined) return <Fragment key={key}>{image.text}</Fragment>;
+  return <img key={key} src={src} alt={image.text} title={image.title ?? undefined} />;
 }
 
 /**
@@ -48,24 +164,32 @@ function safeImageSrc(src: string): string | undefined {
  * vs. a hovercard excerpt's single flowing line), never in how a `**bold**` or a `[link](url)`
  * becomes a React node.
  */
-export function renderInline(tokens: readonly Token[], prefix: string): ReactNode[] {
+export function renderInline(
+  tokens: readonly Token[],
+  prefix: string,
+  options: MarkdownRenderOptions = {},
+): ReactNode[] {
   return tokens.map((token, index) => {
     const key = `${prefix}-${index}`;
     switch (token.type) {
       case 'text': {
         const text = token as Tokens.Text;
         return (
-          <Fragment key={key}>{text.tokens ? renderInline(text.tokens, key) : text.text}</Fragment>
+          <Fragment key={key}>
+            {text.tokens ? renderInline(text.tokens, key, options) : text.text}
+          </Fragment>
         );
       }
       case 'escape':
         return <Fragment key={key}>{(token as Tokens.Escape).text}</Fragment>;
       case 'strong':
-        return <strong key={key}>{renderInline((token as Tokens.Strong).tokens, key)}</strong>;
+        return (
+          <strong key={key}>{renderInline((token as Tokens.Strong).tokens, key, options)}</strong>
+        );
       case 'em':
-        return <em key={key}>{renderInline((token as Tokens.Em).tokens, key)}</em>;
+        return <em key={key}>{renderInline((token as Tokens.Em).tokens, key, options)}</em>;
       case 'del':
-        return <del key={key}>{renderInline((token as Tokens.Del).tokens, key)}</del>;
+        return <del key={key}>{renderInline((token as Tokens.Del).tokens, key, options)}</del>;
       case 'codespan':
         return (
           <code key={key} data-inline-code="">
@@ -75,35 +199,19 @@ export function renderInline(tokens: readonly Token[], prefix: string): ReactNod
       case 'br':
         return <br key={key} />;
       case 'link': {
-        const link = token as Tokens.Link;
-        const href = safeHref(link.href);
-        const content = renderInline(link.tokens, key);
-        return href === undefined ? (
-          <Fragment key={key}>{content}</Fragment>
-        ) : (
-          <Link key={key} href={href} title={link.title ?? undefined}>
-            {content}
-          </Link>
-        );
+        return renderLinkToken(token as Tokens.Link, key, options);
       }
       case 'underline':
         // Not standard Markdown — `++text++` is the syntax `@tiptap/markdown`'s Underline mark
         // serializes to, so the reader must understand exactly what the editor writes.
         return (
           <u key={key}>
-            {token.tokens ? renderInline(token.tokens, key) : String(token['text'] ?? '')}
+            {token.tokens ? renderInline(token.tokens, key, options) : String(token['text'] ?? '')}
           </u>
         );
       case 'image': {
-        const image = token as Tokens.Image;
-        const src = safeImageSrc(image.href);
-        // No source we are willing to fetch: fall back to the alt text, which is the whole reason
-        // alt text exists, rather than rendering nothing where a picture used to be.
-        return src === undefined ? (
-          <Fragment key={key}>{image.text}</Fragment>
-        ) : (
-          <img key={key} src={src} alt={image.text} title={image.title ?? undefined} />
-        );
+        // No safe source means alt text instead of a request to an authored address.
+        return renderLegacyImageToken(token as Tokens.Image, key, options);
       }
       case 'html':
         return <Fragment key={key}>{(token as Tokens.HTML).text}</Fragment>;
@@ -111,7 +219,9 @@ export function renderInline(tokens: readonly Token[], prefix: string): ReactNod
         const generic = token as Tokens.Generic;
         return (
           <Fragment key={key}>
-            {generic.tokens ? renderInline(generic.tokens, key) : String(generic['text'] ?? '')}
+            {generic.tokens
+              ? renderInline(generic.tokens, key, options)
+              : String(generic['text'] ?? '')}
           </Fragment>
         );
       }
@@ -120,7 +230,7 @@ export function renderInline(tokens: readonly Token[], prefix: string): ReactNod
 }
 
 /** Render one GFM list into its `<ul>`/`<ol>`, rendering task items as real checkboxes. */
-function renderList(list: Tokens.List, key: string): ReactNode {
+function renderList(list: Tokens.List, key: string, options: MarkdownRenderOptions): ReactNode {
   // GFM allows mixing plain and task items in one list, so only mark the `<ul>` itself as a
   // checklist (which drops its bullet/indent) when every item is a task. A mixed list keeps its
   // normal bullet styling; task items among them still get their own checkbox layout, since that
@@ -128,7 +238,7 @@ function renderList(list: Tokens.List, key: string): ReactNode {
   const isTaskList = list.items.every((item) => item.task);
   const items = list.items.map((item, itemIndex) => {
     const itemKey = `${key}-${itemIndex}`;
-    const content = renderBlocks(item.tokens, itemKey);
+    const content = renderBlocks(item.tokens, itemKey, options);
     return item.task ? (
       <MarkdownTaskItem key={itemKey} checked={item.checked ?? false}>
         {content}
@@ -149,9 +259,9 @@ function renderList(list: Tokens.List, key: string): ReactNode {
 }
 
 /** Render one GFM table, pre-rendering each cell's inline content for {@link MarkdownTable}. */
-function renderTable(table: Tokens.Table, key: string): ReactNode {
+function renderTable(table: Tokens.Table, key: string, options: MarkdownRenderOptions): ReactNode {
   const toCell = (cell: Tokens.TableCell, cellKey: string): MarkdownTableCell => ({
-    content: renderInline(cell.tokens, cellKey),
+    content: renderInline(cell.tokens, cellKey, options),
     align: cell.align,
   });
   return (
@@ -185,7 +295,11 @@ function renderTable(table: Tokens.Table, key: string): ReactNode {
  * their siblings' React keys.
  * @returns One React node per top-level token, in source order.
  */
-export function renderBlocks(tokens: readonly Token[], prefix = 'block'): ReactNode[] {
+export function renderBlocks(
+  tokens: readonly Token[],
+  prefix = 'block',
+  options: MarkdownRenderOptions = {},
+): ReactNode[] {
   return tokens.map((token, index) => {
     const key = `${prefix}-${index}`;
     switch (token.type) {
@@ -193,10 +307,10 @@ export function renderBlocks(tokens: readonly Token[], prefix = 'block'): ReactN
       case 'def':
         return null;
       case 'paragraph':
-        return <p key={key}>{renderInline((token as Tokens.Paragraph).tokens, key)}</p>;
+        return <p key={key}>{renderInline((token as Tokens.Paragraph).tokens, key, options)}</p>;
       case 'heading': {
         const heading = token as Tokens.Heading;
-        const content = renderInline(heading.tokens, key);
+        const content = renderInline(heading.tokens, key, options);
         if (heading.depth === 1) return <h1 key={key}>{content}</h1>;
         if (heading.depth === 2) return <h2 key={key}>{content}</h2>;
         return <h3 key={key}>{content}</h3>;
@@ -204,7 +318,7 @@ export function renderBlocks(tokens: readonly Token[], prefix = 'block'): ReactN
       case 'blockquote':
         return (
           <blockquote key={key}>
-            {renderBlocks((token as Tokens.Blockquote).tokens, key)}
+            {renderBlocks((token as Tokens.Blockquote).tokens, key, options)}
           </blockquote>
         );
       case 'code': {
@@ -214,19 +328,22 @@ export function renderBlocks(tokens: readonly Token[], prefix = 'block'): ReactN
       case 'hr':
         return <hr key={key} />;
       case 'list':
-        return renderList(token as Tokens.List, key);
+        return renderList(token as Tokens.List, key, options);
       case 'table':
-        return renderTable(token as Tokens.Table, key);
-      case 'html':
-        return <p key={key}>{(token as Tokens.HTML).text}</p>;
+        return renderTable(token as Tokens.Table, key, options);
+      case 'html': {
+        const html = token as Tokens.HTML;
+        const figure = parseDocumentFigureHtml(html.raw);
+        return figure ? renderFigure(figure, key, options) : <p key={key}>{html.text}</p>;
+      }
       case 'text': {
         const text = token as Tokens.Text;
-        return <p key={key}>{text.tokens ? renderInline(text.tokens, key) : text.text}</p>;
+        return <p key={key}>{text.tokens ? renderInline(text.tokens, key, options) : text.text}</p>;
       }
       default: {
         const generic = token as Tokens.Generic;
         return generic.tokens ? (
-          <Fragment key={key}>{renderBlocks(generic.tokens, key)}</Fragment>
+          <Fragment key={key}>{renderBlocks(generic.tokens, key, options)}</Fragment>
         ) : null;
       }
     }

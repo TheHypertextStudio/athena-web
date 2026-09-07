@@ -52,6 +52,88 @@
     text-decoration-color: var(--brief-ink);
   }
 
+  .brief-prose {
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+
+  .brief-prose > * + * {
+    margin-top: 1rem;
+  }
+
+  .brief-prose h1,
+  .brief-prose h2,
+  .brief-prose h3 {
+    font-weight: 600;
+    line-height: 1.25;
+    margin-top: 2rem;
+  }
+
+  .brief-prose h1 {
+    font-size: 1.5rem;
+  }
+
+  .brief-prose h2 {
+    font-size: 1.25rem;
+  }
+
+  .brief-prose h3 {
+    font-size: 1.125rem;
+  }
+
+  .brief-prose ul,
+  .brief-prose ol {
+    padding-left: 1.5rem;
+  }
+
+  .brief-prose ul {
+    list-style: disc;
+  }
+
+  .brief-prose ol {
+    list-style: decimal;
+  }
+
+  .brief-prose blockquote {
+    border-left: 2px solid var(--brief-rule);
+    color: var(--brief-ink-muted);
+    padding-left: 1rem;
+  }
+
+  .brief-prose a {
+    color: var(--brief-ink);
+    text-decoration-color: var(--brief-rule);
+    text-decoration-line: underline;
+    text-underline-offset: 3px;
+  }
+
+  .brief-prose figure {
+    margin-block: 1.5rem;
+  }
+
+  .brief-prose figure img {
+    border-radius: 0.75rem;
+    display: block;
+    height: auto;
+    max-width: 100%;
+  }
+
+  .brief-prose figcaption {
+    color: var(--brief-ink-muted);
+    display: flex;
+    flex-direction: column;
+    font-size: 0.8125rem;
+    gap: 0.25rem;
+    line-height: 1.4;
+    padding-top: 0.625rem;
+  }
+
+  .brief-prose [data-docket-attribution] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+  }
+
   /* The reader's own preference, honoured — but only on a screen. */
   @media (prefers-color-scheme: dark) {
     .brief {
@@ -133,9 +215,15 @@
 
   /* One row of work never straddles a page break. */
   .brief-row,
-  .brief-fact {
+  .brief-fact,
+  .brief-prose figure {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  .brief-prose figure img {
+    height: auto;
+    max-width: 100%;
   }
 
   /* On paper the page box is the measure: `@page`'s 16mm side margins leave ~180mm of text on

@@ -1,5 +1,4 @@
 import { Editor, Node } from '@tiptap/core';
-import Image from '@tiptap/extension-image';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
@@ -10,6 +9,7 @@ import {
   looksLikeMarkdown,
   serializeSliceToMarkdown,
 } from '@/components/editor/markdown-clipboard';
+import { createDocumentFigureExtension } from '@/components/editor/document-figure-extension';
 import { MarkdownTableKit } from '@/components/editor/markdown-table-extension';
 import { tableToCsv } from '@/components/editor/table-clipboard';
 
@@ -49,9 +49,9 @@ function editorWith(value: string): Editor {
       TaskList,
       TaskItem.configure({ nested: true }),
       MarkdownTableKit,
-      Image,
+      createDocumentFigureExtension(),
       Markdown.configure({ markedOptions: { gfm: true, breaks: false } }),
-      createMarkdownClipboardExtension({ resolveUploader: () => null }),
+      createMarkdownClipboardExtension({}),
     ],
     content: value,
     contentType: 'markdown',
@@ -230,8 +230,11 @@ describe('copying out of the editor', () => {
     expect(copied).toBe(copied.trim());
   });
 
-  it('keeps an image reference', () => {
-    expect(copyAll('![Chart](/v1/orgs/o/images/i)')).toContain('![Chart](/v1/orgs/o/images/i)');
+  it('upgrades a legacy image reference to the restricted semantic figure when copied', () => {
+    const copied = copyAll('![Chart](/v1/orgs/o/images/i)');
+
+    expect(copied).toContain('<figure data-docket-figure="1"');
+    expect(copied).toContain('src="/v1/orgs/o/images/i" alt="Chart"');
   });
 
   it('copies a partial selection without inventing a document around it', () => {

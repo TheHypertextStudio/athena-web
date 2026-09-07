@@ -26,6 +26,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
+import { getDocumentImageReferenceReconciler } from '../content/document-image-reference-registry';
 import { NotFoundError, ValidationError } from '../error';
 import { seedDefaultTemplates } from '../lib/templates/defaults';
 import { created, ok } from '../lib/ok';
@@ -34,6 +35,29 @@ import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
 type TemplateRow = typeof template.$inferSelect;
+
+/** Reconcile a template projection without turning a derived-state failure into a lost edit. */
+async function reconcileTemplateImages(
+  organizationId: string,
+  templateId: string,
+  operation: 'upsert' | 'delete',
+): Promise<void> {
+  try {
+    const reconciler = getDocumentImageReferenceReconciler();
+    if (operation === 'delete') {
+      await reconciler.deleteForSubject(organizationId, 'template', templateId);
+    } else {
+      await reconciler.reconcile(organizationId, 'template', templateId);
+    }
+  } catch (error) {
+    console.warn('Template document-image reconciliation failed', {
+      organizationId,
+      templateId,
+      operation,
+      error,
+    });
+  }
+}
 
 function toOut(t: TemplateRow): z.input<typeof TemplateOut> {
   return {
@@ -186,6 +210,7 @@ const templates = new Hono<AppEnv>()
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
       if (!row) throw new Error('template insert returned no row');
+      await reconcileTemplateImages(orgId, row.id, 'upsert');
       return created(c, TemplateOut, toOut(row));
     },
   )
@@ -275,6 +300,7 @@ const templates = new Hono<AppEnv>()
       const row = updated[0];
       /* v8 ignore next -- @preserve defensive: the select above proved the row exists */
       if (!row) throw new NotFoundError('Template not found');
+      await reconcileTemplateImages(orgId, row.id, 'upsert');
       return ok(c, TemplateOut, toOut(row));
     },
   )
@@ -298,6 +324,7 @@ const templates = new Hono<AppEnv>()
         .returning();
       const row = deleted[0];
       if (!row) throw new NotFoundError('Template not found');
+      await reconcileTemplateImages(orgId, row.id, 'delete');
       return ok(c, TemplateOut, toOut(row));
     },
   );

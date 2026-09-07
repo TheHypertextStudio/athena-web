@@ -49,6 +49,8 @@ export interface SlashCommands {
   readonly listboxId: string;
   /** Id of the highlighted option, for the host editor's `aria-activedescendant`. */
   readonly activeKey: string | undefined;
+  /** Open the same block menu at the current empty paragraph without inserting a slash. */
+  readonly openAtSelection: () => void;
 }
 
 /**
@@ -210,5 +212,20 @@ export function useSlashCommands(options: SlashCommandsOptions = {}): SlashComma
       run === null || items[activeIndex] === undefined
         ? undefined
         : `${listboxId}-${items[activeIndex].id}`,
+    openAtSelection: () => {
+      const current = editorRef.current;
+      if (!current) return;
+      const at = current.state.selection.from;
+      let rect = new DOMRect(0, 0, 0, 0);
+      try {
+        const coords = current.view.coordsAtPos(at);
+        rect = new DOMRect(coords.left, coords.top, 0, coords.bottom - coords.top);
+      } catch {
+        // A menu without layout information still opens at the viewport origin in test and
+        // degraded browser environments. The suggestion surface clamps it into view.
+      }
+      setActiveIndex(0);
+      setRun({ trigger: '/', query: '', from: at, to: at, rect });
+    },
   };
 }

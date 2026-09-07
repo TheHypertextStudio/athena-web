@@ -1,11 +1,69 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-09-06
+> **Last Updated**: 2026-09-07
 
 ---
 
 ## Active Tasks
+
+### [INLINE-IMAGES-001] Add semantic figures to shared entity content
+
+- **Status**: REVIEW
+- **Started**: 2026-09-05
+- **Priority**: P1
+- **Description**: Every shared prose editor must support uploaded PNG, JPEG, GIF, and WebP
+  figures up to 4 MB. Each use can carry alt text, a decorative state, a caption, credit text, a
+  source URL, and license text or URL. The feature must preserve existing Markdown images, expose
+  the same insertion flow to browse, paste, and file drop, and keep published brief images live and
+  revocable.
+- **Approach**: A versioned codec owns the only HTML figure shape the application accepts. The web
+  editor, API reference projection, static renderer, search projection, clipboard conversion, and
+  public brief renderer use that codec instead of parsing authored HTML independently. Saved prose
+  remains Markdown. A derived image-reference table makes routine use checks and cleanup cheap,
+  while deletion and delayed cleanup re-read authoritative prose before they remove bytes. Public
+  image routes resolve the current publication on every request and return
+  `Cache-Control: no-store` so removing a figure or publication revokes access at once.
+- **Subtasks**:
+  - [x] Add and test the versioned figure codec and plain-text projection.
+  - [x] Reconcile image references for all nine persisted prose subjects.
+  - [x] Refuse deletion with the stable `image_in_use` conflict and clean abandoned uploads after
+        seven days without trusting a stale projection.
+  - [x] Authorize anonymous public image reads against the current live brief.
+  - [x] Add the shared editor figure node, insertion menu, upload controller, caption editing,
+        details panel, responsive toolbar, and keyboard behavior.
+  - [x] Preserve figure meaning in search, excerpts, AI context, print, clipboard, MCP, templates,
+        exports, and public brief rendering.
+  - [x] Complete the repository-wide release gates.
+  - [ ] Commit, push to `main`, and verify the production deployment.
+- **Files changed**: The Markdown package now owns the versioned figure codec. The shared editor
+  owns figure insertion and editing. The API owns derived reference reconciliation, safe deletion,
+  cleanup, and live public-image authorization. The database adds the reference projection and its
+  subject enum. The static and public renderers, clipboard conversion, excerpts, Library
+  projection, update composer, scheduler, tests, and the engineering specification consume the
+  same contract.
+- **Validation**: The production-mode browser release suite passed all five authenticated,
+  fixture, and responsive roster journeys on the rebased tree. The final repository-wide
+  typecheck passed across all packages after the API and web packages received a bounded 4 GB Node
+  heap. Lint passed across all 26 tasks. The production build passed across all four deployable
+  packages and generated all 89 web routes. The full coverage graph passed 24 tasks and at least
+  4,096 individual tests before two unrelated source-policy scans exceeded their timeouts under the
+  concurrent load. Both scans passed alone: the web drag policy passed 3 tests in 5.5 seconds, and
+  the API source policy passed 22 tests in 39 seconds. The codec suite passed 37 tests, the isolated
+  database suite passed 235 tests, focused API suites passed 141 tests, the scheduler suite passed 7
+  tests, and focused web suites passed 115 tests before the final rebase.
+- **Notes**: The approved design is in
+  `docs/engineering/specs/semantic-inline-images.md`. SVG, arbitrary HTML, remote-URL insertion,
+  cropping, resizing, EXIF extraction, and generated derivatives remain outside this slice. The
+  local Next development server deadlocked after its startup probes, so it could not produce the
+  planned screenshot matrix. The production-mode browser harness compiled the same route graph and
+  passed without that proxy path.
+- **Learnings**: A semantic figure needs one codec across editing, persistence, projection, and
+  public rendering. Independent HTML parsers would disagree on escaping and authorization. The
+  upload projection can speed up ordinary checks, but cleanup still has to read authoritative prose
+  before it deletes bytes.
+
+---
 
 ### [MCP-CARD-001] Make the tool cards carry work instead of metadata about themselves
 

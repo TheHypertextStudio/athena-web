@@ -5,7 +5,7 @@ import type { JSX } from 'react';
 
 import { BriefDocument } from '@/components/publishing/brief-document';
 
-import { briefMetadata, readBriefAt } from '../../shared';
+import { briefMetadata, readBriefAt, visitorHost } from '../../shared';
 
 /**
  * The published brief page on a workspace's own verified custom domain: the surface that lets a
@@ -65,5 +65,7 @@ export default async function PublishedDomainBriefPage({
 }): Promise<JSX.Element> {
   const brief = await readBrief(await params);
   if (!brief) notFound();
-  return <BriefDocument brief={brief} />;
+  const host = await visitorHost();
+  if (!host) notFound();
+  return <BriefDocument brief={brief} imageRoute={{ kind: 'domain', host }} />;
 }

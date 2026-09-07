@@ -8,12 +8,16 @@
  * pin the corrected lifetime: the draft survives a failure and clears only once the post succeeds.
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   UpdatesPanel,
   type UpdatesPanelProps,
 } from '../../src/components/entity-detail/updates-panel';
+import { installProseMirrorLayoutShims } from '../editor/prosemirror-jsdom';
+
+installProseMirrorLayoutShims();
 
 afterEach(() => {
   cleanup();
@@ -35,8 +39,8 @@ function renderPanel(onPost: UpdatesPanelProps['onPost']): void {
   );
 }
 
-/** The update composer's textarea. */
-function draftField(): HTMLTextAreaElement {
+/** The update composer's rich-text surface. */
+function draftField(): HTMLElement {
   return screen.getByLabelText('Post an update');
 }
 
@@ -51,12 +55,13 @@ describe('UpdatesPanel composer', () => {
   it('clears the draft once the post succeeds', async () => {
     const onPost = vi.fn().mockResolvedValue(undefined);
     renderPanel(onPost);
+    const user = userEvent.setup();
 
-    fireEvent.change(draftField(), { target: { value: 'Shipped the ingest rewrite.' } });
+    await user.type(draftField(), 'Shipped the ingest rewrite.');
     submitDraft();
 
     await waitFor(() => {
-      expect(draftField().value).toBe('');
+      expect(draftField().textContent).toBe('');
     });
     expect(onPost).toHaveBeenCalledWith('Shipped the ingest rewrite.', undefined);
   });
@@ -64,13 +69,14 @@ describe('UpdatesPanel composer', () => {
   it('keeps the draft when the post fails, so it can be retried', async () => {
     const onPost = vi.fn().mockRejectedValue(new Error('offline'));
     renderPanel(onPost);
+    const user = userEvent.setup();
 
-    fireEvent.change(draftField(), { target: { value: 'Risk: the vendor migration slipped.' } });
+    await user.type(draftField(), 'Risk: the vendor migration slipped.');
     submitDraft();
 
     await waitFor(() => {
       expect(onPost).toHaveBeenCalledTimes(1);
     });
-    expect(draftField().value).toBe('Risk: the vendor migration slipped.');
+    expect(draftField()).toHaveTextContent('Risk: the vendor migration slipped.');
   });
 });

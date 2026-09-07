@@ -3,6 +3,8 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { serializeDocumentFigure } from '@docket/markdown-tree';
+
 import { ExcerptMarkdown } from '../../../src/components/mentions/excerpt-markdown';
 
 afterEach(cleanup);
@@ -73,5 +75,23 @@ describe('ExcerptMarkdown', () => {
     expect(container.children).toHaveLength(1);
     expect(container.firstElementChild?.tagName).toBe('P');
     expect(container.firstElementChild).toHaveClass('line-clamp-3');
+  });
+
+  it('flattens figure alt text, caption, credit, and license into the flowing excerpt', () => {
+    const figure = serializeDocumentFigure({
+      version: 1,
+      src: '/v1/orgs/org-1/images/image-1',
+      alt: 'Route 109 bus',
+      decorative: false,
+      caption: 'The bus stops at Maryland Parkway.',
+      creditText: 'RTC',
+      licenseText: 'CC BY 4.0',
+    });
+    const { container } = render(<ExcerptMarkdown value={`Before.\n\n${figure}\n\nAfter.`} />);
+
+    expect(container.querySelector('img, figure')).toBeNull();
+    expect(container.textContent).toBe(
+      'Before. Route 109 bus. The bus stops at Maryland Parkway. RTC. CC BY 4.0. After. ',
+    );
   });
 });

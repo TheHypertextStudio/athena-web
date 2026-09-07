@@ -30,6 +30,11 @@ import { sweepLinearAgentSessions } from './linear-agent-sweep';
 import { getContainer } from '../container';
 import { sweepLegacyMentions } from '../content/legacy-mention-sweep';
 import { sweepResourceUnfurls } from '../content/unfurl-sweep';
+import {
+  createDrizzleDocumentImageCleanupStorage,
+  sweepUnreferencedDocumentImages,
+} from '../content/document-image-cleanup';
+import { getDocumentImageReferenceReconciler } from '../content/document-image-reference-registry';
 import { processSearchIndexJobs } from '../search/process-jobs';
 import { processObjectCommandEffectJobs } from '../lib/object-command-effects';
 import { sweepAthenaAssignmentTriggers } from '../agent/assignments';
@@ -187,6 +192,19 @@ const cron = new Hono()
   .post('/unfurl-resources', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepResourceUnfurls(getContainer().unfurler, new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // Abandoned document-image cleanup: consider only uploads older than seven days whose derived
+  // projection is empty, then re-read authoritative prose before removing bytes. This daily pass
+  // can repair a subscriber miss without turning it into data loss.
+  .post('/document-image-cleanup', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepUnreferencedDocumentImages(
+      createDrizzleDocumentImageCleanupStorage(),
+      getDocumentImageReferenceReconciler(),
+      getContainer().blob,
+      new Date(),
+    );
     return c.json({ swept: true, ...result });
   })
   // Daily-digest sweep: generate + email each opted-in user's end-of-day summary once their

@@ -107,6 +107,19 @@ export function resolvedPublicationDialogState(
   return lookupState;
 }
 
+/** Explain public visibility, including the figure metadata stored inside prose. */
+export function publicationDialogDescription(
+  state: PublicationDialogState,
+  lowerNoun: string,
+): string {
+  if (state === 'loading') return 'Checking whether this page is already published.';
+  if (state === 'error') return 'Try again before changing this page’s publication.';
+  if (state === 'published') {
+    return 'Anyone with the link can read this page. Inline images, captions, credits, and license details are public. The page always shows the current record.';
+  }
+  return `Anyone with the link will be able to read this ${lowerNoun} as a public page. Inline images, captions, credits, and license details become public. The page stays in step with the record automatically.`;
+}
+
 /**
  * The publish icon button and its dialog.
  *
@@ -224,13 +237,7 @@ export function PublishAction({
                     : `Publish this ${lower}`}
             </DialogTitle>
             <DialogDescription>
-              {dialogState === 'loading'
-                ? 'Checking whether this page is already published.'
-                : dialogState === 'error'
-                  ? 'Try again before changing this page’s publication.'
-                  : published
-                    ? 'Anyone with the link can read this page. It always shows the current record — there is no separate copy.'
-                    : `Anyone with the link will be able to read this ${lower} as a public page — Docket calls it a brief. It stays in step with the record automatically, so there's no separate copy to keep up to date.`}
+              {publicationDialogDescription(dialogState, lower)}
             </DialogDescription>
           </DialogHeader>
 

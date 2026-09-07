@@ -2,9 +2,8 @@
  * `@docket/api` — document image routes (mounted at `/v1/orgs/:orgId/images`).
  *
  * @remarks
- * The storage behind an image pasted into prose. A body is Markdown, so an image inside one is
- * `![alt](/v1/orgs/:orgId/images/:id)`, and these routes make that reference resolve for everyone
- * who can read the body.
+ * The storage behind an image inserted into prose. The Markdown body keeps a versioned semantic
+ * figure whose `contentUrl` names this route. Existing `![alt](url)` images remain valid too.
  *
  * ## Serving inline safely
  *
@@ -30,8 +29,9 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import { getContainer } from '../container';
+import { getDocumentImageReferenceReconciler } from '../content/document-image-reference-registry';
 import type { AppEnv } from '../context';
-import { NotFoundError } from '../error';
+import { ConflictError, NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zForm, zParam } from '../lib/validate';
@@ -83,7 +83,7 @@ const uploadForm = z.object({
 
 const imageParam = z.object({ imageId: z.string() });
 
-/** The app-relative URL an image is referenced by from inside Markdown. */
+/** The app-relative URL a semantic figure references from inside Markdown. */
 function imageUrl(orgId: string, imageId: string): string {
   return `/v1/orgs/${orgId}/images/${imageId}`;
 }
@@ -112,7 +112,7 @@ const documentImages = new Hono<AppEnv>()
       summary: 'Upload an inline image',
       capability: 'contribute',
       response: DocumentImageOut,
-      description: `Store an image for use inside an entity's prose. **Multipart/form-data**: a single \`file\` part, non-empty and ≤ ${String(MAX_IMAGE_MB)} MB, of type \`image/png\`, \`image/jpeg\`, \`image/gif\`, or \`image/webp\` — any other type is rejected with 422. The image is org-scoped and belongs to no entity; reference it by writing the returned \`url\` into Markdown as \`![alt](url)\`. Requires \`contribute\`.`,
+      description: `Store an image for use inside an entity's prose. **Multipart/form-data**: a single \`file\` part, non-empty and ≤ ${String(MAX_IMAGE_MB)} MB, of type \`image/png\`, \`image/jpeg\`, \`image/gif\`, or \`image/webp\` — any other type is rejected with 422. The image is org-scoped and belongs to no entity; write the returned \`url\` into a Docket semantic figure or an existing Markdown image. Requires \`contribute\`.`,
     }),
     zForm(uploadForm),
     async (c) => {
@@ -201,7 +201,7 @@ const documentImages = new Hono<AppEnv>()
       summary: 'Delete an inline image',
       capability: 'contribute',
       response: DocumentImageRemoved,
-      description: `Delete a stored inline image and its bytes. Images are not reference-counted, so deletion is explicit: call this to reclaim storage once no body references the image. Any Markdown still pointing at it renders its alt text instead. An unknown id, or one belonging to another organization, returns 404. Requires \`contribute\`.`,
+      description: `Delete a stored inline image and its bytes once no saved prose references it. A live reference returns 409 with the stable \`image_in_use\` code; the check repairs a missing derived reference before it refuses deletion. An unknown id, or one belonging to another organization, returns 404. Requires \`contribute\`.`,
     }),
     zParam(imageParam),
     async (c) => {
@@ -215,6 +215,12 @@ const documentImages = new Hono<AppEnv>()
         .limit(1);
       const row = rows[0];
       if (!row) throw new NotFoundError('Image not found');
+      if (await getDocumentImageReferenceReconciler().isImageInUse(orgId, imageId)) {
+        throw new ConflictError(
+          'Remove the image from saved content before deleting it',
+          'image_in_use',
+        );
+      }
 
       // Bytes first: the row is what addresses the blob, and the serve route already 404s a row
       // whose bytes are gone.

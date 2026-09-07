@@ -207,6 +207,15 @@ export const JOBS: readonly CronJob[] = [
     description:
       'Docket: resource-unfurl drain (resolves titles/icons/previews for pending referenced URLs).',
   },
+  // One invocation per day. The API limits each run to 100 old uploads and reparses authoritative
+  // prose before deletion, so this does not multiply with workspace or user count at the runner.
+  {
+    name: 'docket-document-image-cleanup',
+    path: '/internal/cron/document-image-cleanup',
+    schedule: '37 4 * * *',
+    description:
+      'Docket: document-image cleanup (reclaims uploads left unreferenced for seven days after an authoritative prose check).',
+  },
   {
     name: 'docket-directive-posture',
     path: '/internal/cron/directive-posture',

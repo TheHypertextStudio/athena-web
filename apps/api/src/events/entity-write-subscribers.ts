@@ -1,5 +1,5 @@
 /**
- * The three things that currently happen when an entity is written.
+ * The independent projections and notifications that run after an entity write.
  *
  * @remarks
  * Each is a small adapter around work that already existed, gathered here so the composition root
@@ -10,6 +10,7 @@ import { enqueueSearchIndexJob } from '../search/enqueue';
 import { notifyResourceUpdated } from '../mcp/notify';
 import { entityUri } from '../mcp/resources';
 import type { MentionReconciler } from '../content/reconcile-mentions';
+import type { DocumentImageReferenceReconciler } from '../content/document-image-references';
 import { wakeConfiguredNotionMirrors } from '../routes/notion-mirror-wake';
 
 import type { EntityWriteSubscriber } from './entity-write-bus';
@@ -62,6 +63,22 @@ export function mentionReconcileSubscriber(reconciler: MentionReconciler): Entit
     handle: async (event) => {
       if (event.operation === 'delete') {
         await reconciler.deleteForSubject(event.sourceTable, event.entityId);
+        return;
+      }
+      await reconciler.reconcile(event.organizationId, event.sourceTable, event.entityId);
+    },
+  };
+}
+
+/** Re-derive uploaded-image references written in the entity's prose. */
+export function documentImageReconcileSubscriber(
+  reconciler: DocumentImageReferenceReconciler,
+): EntityWriteSubscriber {
+  return {
+    name: 'document-image-reconcile',
+    handle: async (event) => {
+      if (event.operation === 'delete') {
+        await reconciler.deleteForSubject(event.organizationId, event.sourceTable, event.entityId);
         return;
       }
       await reconciler.reconcile(event.organizationId, event.sourceTable, event.entityId);

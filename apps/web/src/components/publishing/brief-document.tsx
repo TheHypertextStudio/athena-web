@@ -26,6 +26,10 @@ import type { BriefSection, BriefWorkItem, PublicBriefOut } from '@docket/work/p
 import { Text } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
+import { documentImageIdFromSource } from '@docket/markdown-tree';
+
+import { parsePersistedMarkdown } from '@/components/editor/parse-markdown';
+import { renderBlocks } from '@/components/editor/render-markdown-tokens';
 import { formatCalendarDate } from '@/lib/format-date';
 
 import {
@@ -40,6 +44,9 @@ import {
 export interface BriefDocumentProps {
   /** The brief, projected live from the publishing workspace's work records. */
   readonly brief: PublicBriefOut;
+  /** Which anonymous image-route shape this request can use. */
+  readonly imageRoute:
+    { readonly kind: 'shared' } | { readonly kind: 'domain'; readonly host: string };
 }
 
 /** Short day form used throughout a brief, e.g. `Sep 30, 2026`. */
@@ -53,7 +60,7 @@ function day(iso: string): string | null {
  * @param props - The {@link BriefDocumentProps}.
  * @returns The rendered document.
  */
-export function BriefDocument({ brief }: BriefDocumentProps): JSX.Element {
+export function BriefDocument({ brief, imageRoute }: BriefDocumentProps): JSX.Element {
   const facts = brief.facts
     .map((fact) => ({
       key: fact.key,
@@ -66,6 +73,16 @@ export function BriefDocument({ brief }: BriefDocumentProps): JSX.Element {
 
   const sections = brief.sections.filter((section) => section.items.length > 0);
   const updated = day(brief.updatedAt);
+  const resolveImageSource = (src: string): string | undefined => {
+    const imageId = documentImageIdFromSource(src);
+    if (!imageId) return /^https:\/\//i.test(src) ? src : undefined;
+    const encodedSlug = encodeURIComponent(brief.slug);
+    const encodedImageId = encodeURIComponent(imageId);
+    if (imageRoute.kind === 'shared') {
+      return `/v1/public/briefs/${encodeURIComponent(brief.workspaceSlug)}/${encodedSlug}/images/${encodedImageId}`;
+    }
+    return `/v1/public/briefs/domain/${encodedSlug}/images/${encodedImageId}?host=${encodeURIComponent(imageRoute.host)}`;
+  };
 
   return (
     <article className="brief-column mx-auto flex w-full max-w-[36rem] flex-col gap-10 px-5 py-12 sm:px-8 sm:py-16">
@@ -104,16 +121,11 @@ export function BriefDocument({ brief }: BriefDocumentProps): JSX.Element {
       </header>
 
       {brief.description ? (
-        <div className="flex flex-col gap-4">
-          {brief.description
-            .split(/\n{2,}/)
-            .map((paragraph) => paragraph.trim())
-            .filter((paragraph) => paragraph.length > 0)
-            .map((paragraph) => (
-              <Text as="p" token="body-large" key={paragraph.slice(0, 64)}>
-                {paragraph}
-              </Text>
-            ))}
+        <div className="brief-prose">
+          {renderBlocks(parsePersistedMarkdown(brief.description), 'brief', {
+            nativeLinks: true,
+            resolveImageSource,
+          })}
         </div>
       ) : null}
 

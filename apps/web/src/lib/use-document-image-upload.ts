@@ -1,17 +1,17 @@
 'use client';
 
 /**
- * `lib/use-document-image-upload` — rehosting an image that arrived on the clipboard.
+ * `lib/use-document-image-upload` — storing image bytes selected for prose.
  *
  * @remarks
- * A pasted screenshot arrives as bytes with no home. They are uploaded, and the Markdown records the
- * URL they became addressable at — see `apps/api/src/routes/document-images`.
+ * Browse, paste, drop, and replace gestures produce bytes with no home. The hook uploads them, and
+ * the semantic figure records the URL where they became addressable.
  *
  * The upload resolves after the paste gesture is over and can fail: the image is too large, the
  * network is gone, the workspace is read-only. The hook holds a small state machine and the sentence
  * describing it; the editor renders both.
  *
- * @see {@link ../components/editor/markdown-clipboard} for the paste handler that calls this.
+ * @see {@link ../components/editor/use-document-figure-uploads} for the controller that calls this.
  */
 import type { DocumentImageOut } from '@docket/work/document-image-contract';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -20,7 +20,7 @@ import { api } from './api';
 import type { PastedImageUploader } from '@/components/editor/markdown-clipboard';
 import { unwrap } from './query';
 
-/** Where a pasted image currently stands. */
+/** Where the most recent document-image upload currently stands. */
 export type DocumentImageUploadStatus = 'idle' | 'uploading' | 'failed';
 
 /** What {@link useDocumentImageUpload} exposes. */
@@ -43,7 +43,7 @@ const UPLOADING_MESSAGE = 'Uploading pasted image…';
 const FAILED_MESSAGE = 'Could not upload that image. Try pasting it again.';
 
 /**
- * Provide an uploader for images pasted into prose.
+ * Provide an uploader for images inserted into prose.
  *
  * @param orgId - The workspace to store into, or `undefined` outside one.
  * @returns The uploader and its observable status.
@@ -51,7 +51,7 @@ const FAILED_MESSAGE = 'Could not upload that image. Try pasting it again.';
  * @example
  * ```tsx
  * const images = useDocumentImageUpload(orgId);
- * createMarkdownClipboardExtension({ uploadImage: images.upload });
+ * useDocumentFigureUploads(editor, images.upload);
  * ```
  */
 export function useDocumentImageUpload(orgId: string | undefined): DocumentImageUpload {

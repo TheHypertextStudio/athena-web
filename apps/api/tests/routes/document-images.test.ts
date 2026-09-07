@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type { DocumentImageOut } from '@docket/work/document-image-contract';
+import { serializeDocumentFigure } from '@docket/markdown-tree';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type documentImageRouter from '../../src/routes/document-images';
@@ -168,6 +169,37 @@ describe('document image routes', () => {
     // one goes away — reclaiming has to be something a caller can ask for outright.
     expect(await getContainer().blob.get(key)).toBeNull();
     expect((await w.request(`/${created.id}`)).status).toBe(404);
+  });
+
+  it('returns image_in_use and repairs the projection when saved prose still references it', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(documentImages, orgId, ['contribute'], humanActorId);
+    const created = await body<DocumentImageOut>(await upload(w, imageOfSize('kept.png', 6)));
+    const description = serializeDocumentFigure({
+      version: 1,
+      src: created.url,
+      alt: 'A retained figure',
+      decorative: false,
+    });
+    await db.insert(schema.task).values({
+      organizationId: orgId,
+      teamId,
+      title: 'References the upload',
+      state: 'todo',
+      statusId: statusId('task', 'todo'),
+      description,
+    });
+
+    const del = await w.request(`/${created.id}`, { method: 'DELETE' });
+
+    expect(del.status).toBe(409);
+    expect(await body<{ code: string }>(del)).toMatchObject({ code: 'image_in_use' });
+    expect(await getContainer().blob.get(blobKeyFor(orgId, created.id))).not.toBeNull();
+    expect(
+      await db
+        .select({ imageId: schema.documentImageReference.imageId })
+        .from(schema.documentImageReference),
+    ).toContainEqual({ imageId: created.id });
   });
 
   it('requires `contribute` to delete (403 for a viewer)', async () => {

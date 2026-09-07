@@ -111,7 +111,7 @@ describe('the slash insert menu', () => {
     await user.keyboard('/');
     const menu = await screen.findByRole('listbox', { name: 'Insert a block' });
     const options = within(menu).getAllByRole('option');
-    expect(options).toHaveLength(SLASH_COMMANDS.length);
+    expect(options).toHaveLength(SLASH_COMMANDS.length + 1);
     const labels = options.map((option) => option.textContent);
     for (const required of [
       'Heading 1',
@@ -124,6 +124,7 @@ describe('the slash insert menu', () => {
       'Code block',
       'Table',
       'Divider',
+      'Image',
     ]) {
       expect(labels.some((label) => label.startsWith(required))).toBe(true);
     }

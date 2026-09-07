@@ -1104,6 +1104,18 @@ export const mentionSubjectType = pgEnum('mention_subject_type', [
   'update',
   'team',
 ]);
+/** The persisted prose subjects that can reference an uploaded document image. */
+export const documentImageSubjectType = pgEnum('document_image_subject_type', [
+  'task',
+  'project',
+  'program',
+  'initiative',
+  'team',
+  'milestone',
+  'comment',
+  'update',
+  'template',
+]);
 /**
  * Which arm of a {@link mention} carries its target.
  *

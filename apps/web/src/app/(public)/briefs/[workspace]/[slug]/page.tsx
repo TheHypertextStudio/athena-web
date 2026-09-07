@@ -95,5 +95,5 @@ export default async function PublishedBriefPage({
 }): Promise<JSX.Element> {
   const brief = await readBrief(await params);
   if (!brief) notFound();
-  return <BriefDocument brief={brief} />;
+  return <BriefDocument brief={brief} imageRoute={{ kind: 'shared' }} />;
 }

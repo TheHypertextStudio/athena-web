@@ -5,6 +5,7 @@ import type { UpdateOut } from '@docket/work/update-contract';
 import { ActorAvatar } from '@docket/ui/components';
 import type { JSX } from 'react';
 
+import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 import { relativeTime } from '@docket/ui';
 
@@ -58,7 +59,7 @@ export function LatestUpdateSummary({
                 </span>
               ) : null}
             </div>
-            <p className="text-on-surface text-body-medium whitespace-pre-wrap">{update.body}</p>
+            <StaticMarkdown value={update.body} className="max-w-none" />
           </div>
         </div>
       )}

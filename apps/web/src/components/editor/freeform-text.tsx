@@ -7,20 +7,19 @@
  * There is deliberately no toolbar, source toggle, or document chrome. Familiar keyboard input
  * and Markdown shortcuts work in place; the host only receives serialized Markdown on save.
  */
-import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Markdown } from '@tiptap/markdown';
-import { EditorContent, useEditor } from '@tiptap/react';
+import { EditorContent, ReactNodeViewRenderer, useEditor } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { ReactNodeViewRenderer } from '@tiptap/react';
-
 import { cn } from '@docket/ui/lib/utils';
+import { FileImage } from '@docket/ui/icons';
+import { Button } from '@docket/ui/primitives';
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 import { useActiveOrgIdOptional } from '@/components/active-org';
 import MentionHydrationProvider from '@/components/mentions/mention-hydration';
@@ -42,11 +41,15 @@ import { useDocumentImageUpload } from '@/lib/use-document-image-upload';
 import { useSlashCommands } from './use-slash-commands';
 import { createCodeBlockExtension } from './code-block-extension';
 import CodeBlockNodeView from './code-block-node-view';
+import { DocumentFigureActionsContext, DocumentFigureNodeView } from './document-figure-node-view';
+import { createDocumentFigureExtension, DOCUMENT_FIGURE_NODE } from './document-figure-extension';
 import type { EditorContribution } from './editor-contribution';
 import { createMarkdownClipboardExtension } from './markdown-clipboard';
 import { MarkdownTableKit } from './markdown-table-extension';
 import { createTaskListShortcutExtension } from './task-list-shortcut';
 import { TableControls } from './table-controls';
+import type { SlashCommand } from './slash-commands';
+import { useDocumentFigureUploads } from './use-document-figure-uploads';
 
 /** Props for {@link FreeformTextEditor}. */
 export interface FreeformTextEditorProps {
@@ -80,6 +83,33 @@ export interface FreeformTextEditorProps {
   contributions?: readonly EditorContribution[] | undefined;
 }
 
+interface ContextualInsertProps {
+  readonly visible: boolean;
+  readonly top: number;
+  readonly onOpen: () => void;
+}
+
+/** Place the shared block menu beside the empty paragraph that owns the caret. */
+function ContextualInsert({ visible, top, onOpen }: ContextualInsertProps): JSX.Element | null {
+  if (!visible) return null;
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      data-editor-insert=""
+      className="absolute right-0 z-10 shrink-0"
+      style={{ top }}
+      onMouseDown={(event) => {
+        event.preventDefault();
+      }}
+      onClick={onOpen}
+    >
+      Insert
+    </Button>
+  );
+}
+
 /** Render a bare freeform rich-text field backed by Markdown. */
 export function FreeformTextEditor({
   value,
@@ -98,6 +128,11 @@ export function FreeformTextEditor({
   const onChangeRef = useRef(onChange);
   const onSubmitRef = useRef(onSubmit);
   const onCancelRef = useRef(onCancel);
+  const browseInputRef = useRef<HTMLInputElement | null>(null);
+  const browsePositionRef = useRef<number | undefined>(undefined);
+  const insertFiguresRef = useRef<(files: readonly File[], position?: number) => boolean>(
+    () => false,
+  );
   // React may deliver controlled values one or more editor transactions late. Keep a bounded
   // journal so those self-echoes cannot replace newer ProseMirror content mid-keystroke.
   const pendingLocalValuesRef = useRef<string[]>([]);
@@ -108,9 +143,27 @@ export function FreeformTextEditor({
   // `/` and `@` are separate runs on purpose. Slash inserts a block and never leaves the
   // document, so it stays on the plugin that owns it. Mentions reach across workspaces and
   // connected apps, so they ride the controller that knows how to search and hydrate them.
+  const imageCommand = useMemo<SlashCommand>(
+    () => ({
+      id: 'image',
+      label: 'Image',
+      hint: 'Upload one or more figures',
+      keywords: ['photo', 'picture', 'figure', 'upload'],
+      icon: FileImage,
+      run: (instance, range) => {
+        instance.chain().focus().deleteRange(range).run();
+        browsePositionRef.current = instance.state.selection.from;
+        browseInputRef.current?.click();
+      },
+    }),
+    [],
+  );
   const contextualSlashCommands = useMemo(
-    () => contributions.flatMap((contribution) => contribution.slashCommands ?? []),
-    [contributions],
+    () => [
+      imageCommand,
+      ...contributions.flatMap((contribution) => contribution.slashCommands ?? []),
+    ],
+    [contributions, imageCommand],
   );
   const emptyContributions = useMemo(
     () => contributions.filter((contribution) => contribution.renderEmptyAction !== undefined),
@@ -134,12 +187,6 @@ export function FreeformTextEditor({
   // a personal space still needs somewhere to put a screenshot.
   const activeOrgId = useActiveOrgIdOptional();
   const images = useDocumentImageUpload(mentionOrgId ?? activeOrgId ?? undefined);
-  // Through a ref, because the editor is created once: an extension's options are captured at
-  // creation and `useEditor` never rebuilds it, so a surface that mounted before its workspace
-  // resolved would hold `null` forever and silently drop every pasted screenshot.
-  const uploadImageRef = useRef(images.upload);
-  uploadImageRef.current = images.upload;
-  const resolveUploader = useCallback(() => uploadImageRef.current, []);
   // `useEditor`'s callbacks are created once and close over their first render's values, the same
   // reason `onChangeRef` exists a few lines up. The controller changes every keystroke, so the
   // handlers must reach it through a ref or they would act on a stale menu.
@@ -150,8 +197,30 @@ export function FreeformTextEditor({
   // temporarily bound without a stray fragment appearing mid-sentence.
   const [linkOffer, setLinkOffer] = useState<PendingLinkUpgrade | undefined>(undefined);
   const [isEmpty, setIsEmpty] = useState(value.trim().length === 0);
+  const [caretInEmptyParagraph, setCaretInEmptyParagraph] = useState(value.trim().length === 0);
+  const [insertControlTop, setInsertControlTop] = useState(0);
   const editorRef = useRef<Editor | null>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
   const tableControlsRef = useRef<HTMLDivElement>(null);
+
+  const updateContextualInsert = useCallback((instance: Editor): void => {
+    const { selection } = instance.state;
+    const isEmptyParagraph =
+      selection.empty &&
+      selection.$from.parent.type.name === 'paragraph' &&
+      selection.$from.parent.content.size === 0;
+    setCaretInEmptyParagraph(isEmptyParagraph);
+    if (!isEmptyParagraph || surfaceRef.current === null) return;
+    try {
+      const caret = instance.view.coordsAtPos(selection.from);
+      const surface = surfaceRef.current.getBoundingClientRect();
+      setInsertControlTop(Math.max(0, caret.top - surface.top));
+    } catch {
+      // ProseMirror cannot resolve DOM coordinates before the first layout pass. The control stays
+      // at its safe initial position until the next selection update supplies real coordinates.
+      setInsertControlTop(0);
+    }
+  }, []);
 
   const upgradeLink = useCallback((pending: PendingLinkUpgrade): boolean => {
     const instance = editorRef.current;
@@ -215,17 +284,19 @@ export function FreeformTextEditor({
       // own Markdown hooks, so a pasted table, image, or underline survives the round trip through
       // the Markdown the body is stored as rather than being dropped by the schema.
       MarkdownTableKit,
-      Image,
+      createDocumentFigureExtension({ nodeView: ReactNodeViewRenderer(DocumentFigureNodeView) }),
       Markdown.configure({ markedOptions: { gfm: true, breaks: false } }),
       // After Markdown: the clipboard extension reads the manager that extension installs.
-      createMarkdownClipboardExtension({ resolveUploader }),
+      createMarkdownClipboardExtension({
+        handleImageFiles: (files, position) => insertFiguresRef.current(files, position),
+      }),
       // `showOnlyWhenEditable` (the default) already keeps this silent for the read-only instance
       // below — that one never reaches an empty document anyway, since `FreeformText` renders its
       // own `<p>{emptyText}</p>` instead of mounting an editor over nothing to prompt into.
       Placeholder.configure({ placeholder }),
       ...slashExtensions,
     ],
-    [slashExtensions, resolveUploader, placeholder],
+    [slashExtensions, placeholder],
   );
 
   const editor = useEditor({
@@ -245,7 +316,7 @@ export function FreeformTextEditor({
               role: 'textbox',
             }),
         class:
-          "text-on-surface text-body-medium min-h-10 w-full flex-1 cursor-text font-normal outline-none [&_a:not([data-mention-kind])]:text-primary [&_a:not([data-mention-kind])]:underline [&_blockquote]:border-outline-variant [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_[data-inline-code]]:border-outline-variant [&_[data-inline-code]]:bg-surface-container-high [&_[data-inline-code]]:rounded [&_[data-inline-code]]:border [&_[data-inline-code]]:px-1.5 [&_[data-inline-code]]:py-0.5 [&_[data-inline-code]]:font-mono [&_.hljs-keyword]:text-primary [&_.hljs-built_in]:text-primary [&_.hljs-type]:text-primary [&_.hljs-selector-tag]:text-primary [&_.hljs-title]:text-secondary [&_.hljs-function]:text-secondary [&_.hljs-section]:text-secondary [&_.hljs-string]:text-tertiary [&_.hljs-attr]:text-tertiary [&_.hljs-addition]:text-tertiary [&_.hljs-number]:text-secondary [&_.hljs-literal]:text-secondary [&_.hljs-symbol]:text-secondary [&_.hljs-comment]:text-on-surface-variant [&_.hljs-quote]:text-on-surface-variant [&_.hljs-meta]:text-on-surface-variant [&_.hljs-deletion]:text-error [&_h1]:text-title-large [&_h1]:mt-6 [&_h1]:font-medium [&_h2]:text-title-large [&_h2]:mt-5 [&_h3]:text-title-medium [&_h3]:mt-4 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_img]:my-3 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-lg [&_.tableWrapper]:my-3 [&_.tableWrapper]:max-w-full [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-corner-xs [&_.tableWrapper_table]:my-0 [&_table]:min-w-full [&_table]:rounded-corner-xs [&_td]:border-outline-variant [&_td]:border [&_td]:p-2 [&_td_p]:my-0 [&_th]:border-outline-variant [&_th]:border [&_th]:p-2 [&_th]:text-left [&_th]:text-label-large [&_th_p]:my-0 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul[data-type='taskList']]:my-2 [&_ul[data-type='taskList']]:list-none [&_ul[data-type='taskList']]:pl-0 [&_ul[data-type='taskList']_ul[data-type='taskList']]:my-0 [&_ul[data-type='taskList']_ul[data-type='taskList']]:pl-6 [&_ul[data-type='taskList']_li[data-checked]]:flex [&_ul[data-type='taskList']_li[data-checked]]:items-start [&_ul[data-type='taskList']_li[data-checked]]:gap-2 [&_ul[data-type='taskList']_li[data-checked]]:my-1 [&_ul[data-type='taskList']_li[data-checked]>label]:relative [&_ul[data-type='taskList']_li[data-checked]>label]:mt-0.5 [&_ul[data-type='taskList']_li[data-checked]>label]:flex [&_ul[data-type='taskList']_li[data-checked]>label]:shrink-0 [&_ul[data-type='taskList']_li[data-checked]>label]:cursor-pointer [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:border-outline [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:size-4 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:shrink-0 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:cursor-pointer [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:appearance-none [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:rounded-[0.1875rem] [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:border-2 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:bg-transparent [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:transition-colors [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']:checked]:border-primary [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']:checked]:bg-primary [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-on-primary [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:pointer-events-none [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:absolute [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:top-[2px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:left-[5px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:h-[7px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:w-[3px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:rotate-45 [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-r-2 [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-b-2 [&_ul[data-type='taskList']_li[data-checked]>div]:min-w-0 [&_ul[data-type='taskList']_li[data-checked]>div]:flex-1 [&_ul[data-type='taskList']_li[data-checked]>div_p]:my-0 [&_ul[data-type='taskList']_li[data-checked][data-checked='true']>div]:text-on-surface-variant [&_ul[data-type='taskList']_li[data-checked][data-checked='true']>div]:line-through [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+          "text-on-surface text-body-medium min-h-10 w-full flex-1 cursor-text font-normal outline-none [&_a:not([data-mention-kind])]:text-primary [&_a:not([data-mention-kind])]:underline [&_blockquote]:border-outline-variant [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_[data-inline-code]]:border-outline-variant [&_[data-inline-code]]:bg-surface-container-high [&_[data-inline-code]]:rounded [&_[data-inline-code]]:border [&_[data-inline-code]]:px-1.5 [&_[data-inline-code]]:py-0.5 [&_[data-inline-code]]:font-mono [&_.hljs-keyword]:text-primary [&_.hljs-built_in]:text-primary [&_.hljs-type]:text-primary [&_.hljs-selector-tag]:text-primary [&_.hljs-title]:text-secondary [&_.hljs-function]:text-secondary [&_.hljs-section]:text-secondary [&_.hljs-string]:text-tertiary [&_.hljs-attr]:text-tertiary [&_.hljs-addition]:text-tertiary [&_.hljs-number]:text-secondary [&_.hljs-literal]:text-secondary [&_.hljs-symbol]:text-secondary [&_.hljs-comment]:text-on-surface-variant [&_.hljs-quote]:text-on-surface-variant [&_.hljs-meta]:text-on-surface-variant [&_.hljs-deletion]:text-error [&_h1]:text-title-large [&_h1]:mt-6 [&_h1]:font-medium [&_h2]:text-title-large [&_h2]:mt-5 [&_h3]:text-title-medium [&_h3]:mt-4 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_img]:my-3 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-lg [&_figure_img]:my-0 [&_.tableWrapper]:my-3 [&_.tableWrapper]:max-w-full [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-corner-xs [&_.tableWrapper_table]:my-0 [&_table]:min-w-full [&_table]:rounded-corner-xs [&_td]:border-outline-variant [&_td]:border [&_td]:p-2 [&_td_p]:my-0 [&_th]:border-outline-variant [&_th]:border [&_th]:p-2 [&_th]:text-left [&_th]:text-label-large [&_th_p]:my-0 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul[data-type='taskList']]:my-2 [&_ul[data-type='taskList']]:list-none [&_ul[data-type='taskList']]:pl-0 [&_ul[data-type='taskList']_ul[data-type='taskList']]:my-0 [&_ul[data-type='taskList']_ul[data-type='taskList']]:pl-6 [&_ul[data-type='taskList']_li[data-checked]]:flex [&_ul[data-type='taskList']_li[data-checked]]:items-start [&_ul[data-type='taskList']_li[data-checked]]:gap-2 [&_ul[data-type='taskList']_li[data-checked]]:my-1 [&_ul[data-type='taskList']_li[data-checked]>label]:relative [&_ul[data-type='taskList']_li[data-checked]>label]:mt-0.5 [&_ul[data-type='taskList']_li[data-checked]>label]:flex [&_ul[data-type='taskList']_li[data-checked]>label]:shrink-0 [&_ul[data-type='taskList']_li[data-checked]>label]:cursor-pointer [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:border-outline [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:size-4 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:shrink-0 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:cursor-pointer [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:appearance-none [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:rounded-[0.1875rem] [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:border-2 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:bg-transparent [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:transition-colors [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']:checked]:border-primary [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']:checked]:bg-primary [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-on-primary [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:pointer-events-none [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:absolute [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:top-[2px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:left-[5px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:h-[7px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:w-[3px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:rotate-45 [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-r-2 [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-b-2 [&_ul[data-type='taskList']_li[data-checked]>div]:min-w-0 [&_ul[data-type='taskList']_li[data-checked]>div]:flex-1 [&_ul[data-type='taskList']_li[data-checked]>div_p]:my-0 [&_ul[data-type='taskList']_li[data-checked][data-checked='true']>div]:text-on-surface-variant [&_ul[data-type='taskList']_li[data-checked][data-checked='true']>div]:line-through [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
       },
       handleKeyDown: (view, event) => {
         // First, because ProseMirror consults `editorProps.handleKeyDown` before any plugin
@@ -263,6 +334,23 @@ export function FreeformTextEditor({
             return true;
           }
         }
+        if (
+          event.altKey &&
+          event.key === 'F10' &&
+          editorRef.current?.isActive(DOCUMENT_FIGURE_NODE)
+        ) {
+          const selectedFigure = editorRef.current.view.dom.querySelector<HTMLElement>(
+            '[data-docket-figure][data-selected="true"]',
+          );
+          const firstFigureControl = selectedFigure?.querySelector<HTMLElement>(
+            '[data-figure-toolbar] button:not(:disabled)',
+          );
+          if (firstFigureControl) {
+            event.preventDefault();
+            firstFigureControl.focus();
+            return true;
+          }
+        }
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && onSubmitRef.current) {
           event.preventDefault();
           onSubmitRef.current();
@@ -274,6 +362,19 @@ export function FreeformTextEditor({
           return true;
         }
         return false;
+      },
+      handleDOMEvents: {
+        drop: (view, event) => {
+          const transfer = event.dataTransfer;
+          if (!transfer || !Array.from(transfer.types).includes('Files')) return false;
+          const files = Array.from(transfer.files).filter((file) => file.type.startsWith('image/'));
+          if (files.length === 0) return false;
+          const coordinates = view.posAtCoords({ left: event.clientX, top: event.clientY });
+          const position = coordinates?.pos ?? view.state.selection.from;
+          if (!insertFiguresRef.current(files, position)) return false;
+          event.preventDefault();
+          return true;
+        },
       },
     },
     onUpdate: ({ editor: instance }) => {
@@ -289,11 +390,16 @@ export function FreeformTextEditor({
     },
     onSelectionUpdate: ({ editor: instance }) => {
       mentionsRef.current.syncFromEditor(instance);
+      updateContextualInsert(instance);
     },
     onCreate: ({ editor: instance }) => {
       editorRef.current = instance;
+      updateContextualInsert(instance);
     },
   });
+
+  const figureUploads = useDocumentFigureUploads(editor, images.upload);
+  insertFiguresRef.current = figureUploads.insert;
 
   attachSlash(editor);
 
@@ -353,6 +459,7 @@ export function FreeformTextEditor({
 
   return (
     <div
+      ref={surfaceRef}
       data-editor-surface=""
       className={cn(
         'relative flex min-h-0 max-w-[75ch] flex-1 flex-col [&_.ProseMirror]:min-h-10 [&_.ProseMirror]:flex-1 [&_.ProseMirror]:outline-none [&_.ProseMirror_.is-editor-empty:first-child::before]:hidden [&_.tableWrapper[data-table-controls-visible]]:mt-16 sm:[&_.tableWrapper[data-table-controls-visible]]:mt-14',
@@ -361,9 +468,30 @@ export function FreeformTextEditor({
         className,
       )}
     >
-      <EditorContent
-        editor={editor}
-        className="flex min-h-0 flex-1 flex-col [&>.ProseMirror]:flex-1"
+      <DocumentFigureActionsContext.Provider value={figureUploads.actions}>
+        <EditorContent
+          editor={editor}
+          className="flex min-h-0 flex-1 flex-col [&>.ProseMirror]:flex-1"
+        />
+      </DocumentFigureActionsContext.Provider>
+      <input
+        ref={browseInputRef}
+        type="file"
+        multiple
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        aria-label="Choose images to insert"
+        className="sr-only"
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          figureUploads.insert(files, browsePositionRef.current);
+          browsePositionRef.current = undefined;
+          event.currentTarget.value = '';
+        }}
+      />
+      <ContextualInsert
+        visible={isEditingEnabled && caretInEmptyParagraph}
+        top={insertControlTop}
+        onOpen={slash.openAtSelection}
       />
       {isEditingEnabled ? <TableControls editor={editor} controlsRef={tableControlsRef} /> : null}
       {isEditingEnabled && isEmpty ? (
@@ -387,12 +515,9 @@ export function FreeformTextEditor({
           ))}
         </div>
       ) : null}
-      {images.status === 'failed' ? (
-        <p className="text-error text-body-small mt-1">{images.announcement}</p>
-      ) : null}
       <p aria-live="polite" aria-atomic="true" className="sr-only">
-        {images.announcement !== ''
-          ? images.announcement
+        {figureUploads.announcement !== ''
+          ? figureUploads.announcement
           : linkOffer === undefined
             ? ''
             : 'Link pasted. Press Tab to turn it into a chip.'}

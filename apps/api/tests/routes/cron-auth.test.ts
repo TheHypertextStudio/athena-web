@@ -13,6 +13,7 @@ const CRON_PATHS: readonly string[] = [
   '/service-probe',
   '/legacy-mentions',
   '/unfurl-resources',
+  '/document-image-cleanup',
   '/daily-digests',
   '/pull-activity',
   '/account-deletion-sweep',

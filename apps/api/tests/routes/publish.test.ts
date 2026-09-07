@@ -10,6 +10,7 @@
  * workspace.
  */
 import type * as DbModule from '@docket/db';
+import { serializeDocumentFigure } from '@docket/markdown-tree';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -619,6 +620,177 @@ describe('a brief reads the live record, not a snapshot', () => {
     for (const forbidden of ['title', 'name', 'description', 'summary', 'status', 'body', 'html']) {
       expect(columns).not.toContain(forbidden);
     }
+  });
+});
+
+describe('public brief image reads', () => {
+  async function publishedImageFixture(): Promise<{
+    anon: Awaited<ReturnType<typeof publicApp>>;
+    imageId: string;
+    orgId: string;
+    projectId: string;
+    publicationId: string;
+    slug: string;
+    workspace: string;
+  }> {
+    const workspace = `image-ws-${Math.random().toString(36).slice(2, 8)}`;
+    const { orgId, humanActorId, statusId } = await seedPublishingOrg(workspace);
+    const imageId = `image-${Math.random().toString(36).slice(2, 12)}`;
+    const blobKey = `document-images/${orgId}/${imageId}`;
+    const figure = serializeDocumentFigure({
+      version: 1,
+      src: `/v1/orgs/${orgId}/images/${imageId}`,
+      alt: 'A bus at a stop',
+      decorative: false,
+      caption: 'Route 109 at Maryland Parkway.',
+      creditText: 'Regional Transportation Commission',
+      licenseText: 'CC BY 4.0',
+      licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    });
+    const projectId = one(
+      await db
+        .insert(schema.project)
+        .values({
+          organizationId: orgId,
+          name: 'Published image',
+          description: figure,
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
+        .returning({ id: schema.project.id }),
+    ).id;
+    await db.insert(schema.documentImage).values({
+      id: imageId,
+      organizationId: orgId,
+      createdBy: humanActorId,
+      blobKey,
+      fileName: 'bus.png',
+      mimeType: 'image/png',
+      byteSize: 4,
+    });
+    const { getContainer } = await import('../../src/container');
+    await getContainer().blob.put(blobKey, new Uint8Array([1, 2, 3, 4]), 'image/png');
+    const publication = (await (
+      await (
+        await publishApp(orgId, ['contribute'], humanActorId)
+      ).request('/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ subjectKind: 'project', subjectId: projectId, slug: 'with-image' }),
+      })
+    ).json()) as { id: string; slug: string };
+    return {
+      anon: await publicApp(),
+      imageId,
+      orgId,
+      projectId,
+      publicationId: publication.id,
+      slug: publication.slug,
+      workspace,
+    };
+  }
+
+  it('serves referenced raster bytes without a session and disables caching', async () => {
+    const fixture = await publishedImageFixture();
+    const response = await fixture.anon.request(
+      `/briefs/${fixture.workspace}/${fixture.slug}/images/${fixture.imageId}`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/png');
+    expect(response.headers.get('content-disposition')).toBe('inline');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([1, 2, 3, 4]);
+  });
+
+  it('revokes a removed image immediately and restores it after a live edit', async () => {
+    const fixture = await publishedImageFixture();
+    const path = `/briefs/${fixture.workspace}/${fixture.slug}/images/${fixture.imageId}`;
+    const original = one(
+      await db
+        .select({ description: schema.project.description })
+        .from(schema.project)
+        .where(eq(schema.project.id, fixture.projectId)),
+    ).description;
+
+    await db
+      .update(schema.project)
+      .set({ description: 'The image was removed.' })
+      .where(eq(schema.project.id, fixture.projectId));
+    expect((await fixture.anon.request(path)).status).toBe(404);
+
+    await db
+      .update(schema.project)
+      .set({ description: original })
+      .where(eq(schema.project.id, fixture.projectId));
+    expect((await fixture.anon.request(path)).status).toBe(200);
+  });
+
+  it('revokes old slugs and withdrawn briefs without waiting for a cache', async () => {
+    const fixture = await publishedImageFixture();
+    const app = await publishApp(fixture.orgId, ['contribute']);
+    const oldPath = `/briefs/${fixture.workspace}/${fixture.slug}/images/${fixture.imageId}`;
+
+    await app.request(`/${fixture.publicationId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug: 'moved-image' }),
+    });
+    expect((await fixture.anon.request(oldPath)).status).toBe(404);
+    const movedPath = `/briefs/${fixture.workspace}/moved-image/images/${fixture.imageId}`;
+    expect((await fixture.anon.request(movedPath)).status).toBe(200);
+
+    await app.request(`/${fixture.publicationId}`, { method: 'DELETE' });
+    expect((await fixture.anon.request(movedPath)).status).toBe(404);
+  });
+
+  it('serves through a verified custom domain and refuses a cross-workspace image id', async () => {
+    const fixture = await publishedImageFixture();
+    const host = `images-${Math.random().toString(36).slice(2, 8)}.example`;
+    await db.insert(schema.workspaceDomain).values({
+      organizationId: fixture.orgId,
+      host,
+      verificationToken: 'i'.repeat(32),
+      verifiedAt: new Date(),
+    });
+    expect(
+      (
+        await fixture.anon.request(
+          `/briefs/domain/${fixture.slug}/images/${fixture.imageId}?host=${host}`,
+        )
+      ).status,
+    ).toBe(200);
+
+    const other = await seedBaseOrg(db, schema);
+    const foreignImageId = `image-${Math.random().toString(36).slice(2, 12)}`;
+    await db.insert(schema.documentImage).values({
+      id: foreignImageId,
+      organizationId: other.orgId,
+      createdBy: other.humanActorId,
+      blobKey: `document-images/${other.orgId}/${foreignImageId}`,
+      fileName: 'private.png',
+      mimeType: 'image/png',
+      byteSize: 1,
+    });
+    const crossWorkspaceFigure = serializeDocumentFigure({
+      version: 1,
+      src: `/v1/orgs/${other.orgId}/images/${foreignImageId}`,
+      alt: 'Private image',
+      decorative: false,
+    });
+    await db
+      .update(schema.project)
+      .set({ description: crossWorkspaceFigure })
+      .where(eq(schema.project.id, fixture.projectId));
+
+    expect(
+      (
+        await fixture.anon.request(
+          `/briefs/${fixture.workspace}/${fixture.slug}/images/${foreignImageId}`,
+        )
+      ).status,
+    ).toBe(404);
   });
 });
 

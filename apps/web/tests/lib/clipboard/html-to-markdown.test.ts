@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { serializeDocumentFigure } from '@docket/markdown-tree';
+
 import { htmlFragmentToMarkdown } from '../../../src/lib/clipboard/html-to-markdown';
 
 /**
@@ -45,6 +47,30 @@ describe('htmlFragmentToMarkdown', () => {
     expect(md('<p><img src="/v1/orgs/o/images/i" alt="Chart"></p>')).toBe(
       '![Chart](/v1/orgs/o/images/i)',
     );
+  });
+
+  it('restores a semantic figure with its caption and attribution', () => {
+    const source = serializeDocumentFigure({
+      version: 1,
+      src: '/v1/orgs/o/images/i',
+      alt: 'Route map',
+      decorative: false,
+      caption: 'The proposed route.',
+      creditText: 'RTC',
+      sourceUrl: 'https://example.com/source',
+      licenseText: 'CC BY 4.0',
+      licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    });
+    const rendered =
+      '<figure data-docket-figure="1" data-decorative="false" itemscope itemtype="https://schema.org/ImageObject">' +
+      '<img src="/v1/orgs/o/images/i" alt="Route map" itemprop="contentUrl">' +
+      '<figcaption><span itemprop="caption">The proposed route.</span>' +
+      '<span data-docket-attribution><span itemprop="creditText">RTC</span>' +
+      '<a href="https://example.com/source">Source</a>' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" rel="license" itemprop="license">CC BY 4.0</a>' +
+      '</span></figcaption></figure>';
+
+    expect(md(rendered)).toBe(source);
   });
 
   it('restores bullet and ordered lists', () => {

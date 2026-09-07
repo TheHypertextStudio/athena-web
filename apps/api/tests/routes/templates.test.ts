@@ -2,7 +2,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type { TemplateOut } from '@docket/work/template-contract';
-import { inArray } from 'drizzle-orm';
+import { serializeDocumentFigure } from '@docket/markdown-tree';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type templatesRouter from '../../src/routes/templates';
@@ -102,6 +103,69 @@ async function seedScopedTemplates() {
 }
 
 describe('templates router', () => {
+  it('reconciles image references from the typed payload after create, replace, and delete', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    await db.insert(schema.documentImage).values([
+      {
+        id: 'template_image_1',
+        organizationId: orgId,
+        blobKey: `document-images/${orgId}/template_image_1`,
+        mimeType: 'image/png',
+        byteSize: 1,
+      },
+      {
+        id: 'template_image_2',
+        organizationId: orgId,
+        blobKey: `document-images/${orgId}/template_image_2`,
+        mimeType: 'image/png',
+        byteSize: 1,
+      },
+    ]);
+    const figure = (id: string) =>
+      serializeDocumentFigure({
+        version: 1,
+        src: `/v1/orgs/${orgId}/images/${id}`,
+        alt: 'Template figure',
+        decorative: false,
+      });
+    const w = appWithActor(router, orgId, ['contribute'], humanActorId);
+
+    const created = await body<TemplateOut>(
+      await w.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({
+          targetType: 'task',
+          name: 'Illustrated task',
+          payload: { targetType: 'task', description: figure('template_image_1') },
+        }),
+      }),
+    );
+    const references = () =>
+      db
+        .select({ imageId: schema.documentImageReference.imageId })
+        .from(schema.documentImageReference)
+        .where(
+          and(
+            eq(schema.documentImageReference.subjectType, 'template'),
+            eq(schema.documentImageReference.subjectId, created.id),
+          ),
+        );
+    await expect(references()).resolves.toEqual([{ imageId: 'template_image_1' }]);
+
+    await w.request(`/${created.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({
+        payload: { targetType: 'task', description: figure('template_image_2') },
+      }),
+    });
+    await expect(references()).resolves.toEqual([{ imageId: 'template_image_2' }]);
+
+    await w.request(`/${created.id}`, { method: 'DELETE' });
+    await expect(references()).resolves.toEqual([]);
+  });
+
   it('creates, reads, updates, and deletes a template (payload round-trip)', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const w = appWithActor(router, orgId, ['contribute'], humanActorId);

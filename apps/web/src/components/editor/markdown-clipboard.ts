@@ -30,9 +30,6 @@ import type { EditorView } from '@tiptap/pm/view';
 /** The node name of the custom code block. */
 const CODE_BLOCK_NODE = 'codeBlock';
 
-/** The node name the image extension registers under. */
-const IMAGE_NODE = 'image';
-
 /** Node names supplied by {@link TableKit}. */
 const TABLE_NODE = 'table';
 const TABLE_ROW_NODE = 'tableRow';
@@ -44,18 +41,8 @@ export type PastedImageUploader = (file: File) => Promise<string | null>;
 
 /** Options for {@link createMarkdownClipboardExtension}. */
 export interface MarkdownClipboardOptions {
-  /**
-   * Resolve the current uploader for image bytes found on the clipboard, or `null` where uploads
-   * are unavailable.
-   *
-   * @remarks
-   * A resolver: extension options are captured when the editor is created, and `useEditor` keeps
-   * that instance for its lifetime. Asking at paste time reaches a workspace that resolved after
-   * the editor mounted.
-   *
-   * Injected, keeping this extension free of the API client. A `null` return declines the paste.
-   */
-  readonly resolveUploader: () => PastedImageUploader | null;
+  /** Route every image-only paste through the semantic figure upload controller. */
+  readonly handleImageFiles?: (files: readonly File[], position: number) => boolean;
 }
 
 /**
@@ -254,37 +241,9 @@ function tableContent(rows: readonly (readonly string[])[]): JSONContent {
  * @param clipboardData - The paste event's data.
  * @returns The image file, or `null` when this is not an image-only paste.
  */
-function imageOnlyFile(clipboardData: DataTransfer): File | null {
-  if (clipboardData.getData('text/plain').trim() !== '') return null;
-  for (const file of Array.from(clipboardData.files)) {
-    if (file.type.startsWith('image/')) return file;
-  }
-  return null;
-}
-
-/**
- * Upload a pasted image and place it where it was pasted, leaving the document untouched on failure.
- *
- * @remarks
- * The position is captured before the upload starts, so the image lands where it was pasted however
- * long the network takes and wherever the cursor moves to meanwhile.
- *
- * A destroyed editor ends the insert; the reader may navigate away mid-upload.
- *
- * @param editor - The editor to insert into.
- * @param upload - The uploader resolved at paste time.
- * @param file - The pasted image.
- * @param at - The document position the paste happened at.
- */
-async function insertUploadedImage(
-  editor: Editor,
-  upload: PastedImageUploader,
-  file: File,
-  at: number,
-): Promise<void> {
-  const src = await upload(file);
-  if (src === null || editor.isDestroyed) return;
-  editor.commands.insertContentAt(at, { type: IMAGE_NODE, attrs: { src, alt: file.name } });
+function imageOnlyFiles(clipboardData: DataTransfer): readonly File[] {
+  if (clipboardData.getData('text/plain').trim() !== '') return [];
+  return Array.from(clipboardData.files).filter((file) => file.type.startsWith('image/'));
 }
 
 /**
@@ -295,7 +254,7 @@ async function insertUploadedImage(
  *
  * @example
  * ```ts
- * createMarkdownClipboardExtension({ resolveUploader: () => uploadRef.current })
+ * createMarkdownClipboardExtension({ handleImageFiles: (files, at) => insert(files, at) })
  * ```
  */
 export function createMarkdownClipboardExtension(
@@ -310,7 +269,7 @@ export function createMarkdownClipboardExtension(
 
     addProseMirrorPlugins() {
       const { editor } = this;
-      const resolveUploader = this.options.resolveUploader;
+      const handleImageFiles = this.options.handleImageFiles;
 
       return [
         new Plugin({
@@ -325,22 +284,25 @@ export function createMarkdownClipboardExtension(
               // Inside a fence, Markdown syntax is content.
               if (inCodeBlock(view.state)) return false;
 
-              const image = imageOnlyFile(clipboardData);
-              const uploadImage = image === null ? null : resolveUploader();
-              if (image !== null && uploadImage !== null) {
-                if (editor.schema.nodes[IMAGE_NODE] === undefined) return false;
+              const images = imageOnlyFiles(clipboardData);
+              const at = view.state.selection.from;
+              if (images.length > 0 && handleImageFiles?.(images, at)) {
                 event.preventDefault();
-                // The paste position, held for the length of the upload.
-                const at = view.state.selection.from;
-                // The upload reports its own failure through the surface that owns it.
-                void insertUploadedImage(editor, uploadImage, image, at).catch(() => undefined);
                 return true;
               }
-
+              const text = clipboardData.getData('text/plain');
+              if (text.includes('<figure data-docket-figure="1"')) {
+                try {
+                  editor.commands.insertContent(markdownManager(editor).parse(text));
+                  event.preventDefault();
+                  return true;
+                } catch {
+                  return false;
+                }
+              }
               // ProseMirror parses the HTML flavor against the schema.
               if (clipboardData.getData('text/html') !== '') return false;
 
-              const text = clipboardData.getData('text/plain');
               const explicitCsv = clipboardData.getData('text/csv');
               const delimited =
                 explicitCsv !== ''

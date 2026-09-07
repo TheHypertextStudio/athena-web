@@ -39,7 +39,12 @@
 import { marked, type Token, type Tokens } from 'marked';
 import { Fragment, type JSX, type ReactNode, useMemo } from 'react';
 
-import { EXCERPT_SKIP_TOKEN_TYPES, childTokensOf } from '@docket/markdown-tree';
+import {
+  EXCERPT_SKIP_TOKEN_TYPES,
+  childTokensOf,
+  documentFigurePlainText,
+  parseDocumentFigureHtml,
+} from '@docket/markdown-tree';
 
 import { renderInline } from '../editor/render-markdown-tokens';
 
@@ -47,6 +52,13 @@ function renderExcerptBlocks(tokens: readonly Token[], prefix: string): ReactNod
   const nodes: ReactNode[] = [];
   tokens.forEach((token, index) => {
     const key = `${prefix}-${index}`;
+    if (token.type === 'html') {
+      const figure = parseDocumentFigureHtml(token.raw);
+      if (figure) {
+        nodes.push(<Fragment key={key}>{documentFigurePlainText(figure)} </Fragment>);
+      }
+      return;
+    }
     if (EXCERPT_SKIP_TOKEN_TYPES.has(token.type)) return;
 
     if (token.type === 'heading') {

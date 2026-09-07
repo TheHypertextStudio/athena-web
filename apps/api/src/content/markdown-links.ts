@@ -13,7 +13,13 @@
 import { Lexer, type Token, type Tokens } from 'marked';
 
 import { snippetOf } from '@docket/mail';
-import { EXCERPT_SKIP_TOKEN_TYPES, type TextualToken, childTokensOf } from '@docket/markdown-tree';
+import {
+  EXCERPT_SKIP_TOKEN_TYPES,
+  type TextualToken,
+  childTokensOf,
+  documentFigurePlainText,
+  parseDocumentFigureHtml,
+} from '@docket/markdown-tree';
 
 /** One link found in a Markdown field. */
 export interface MarkdownLink {
@@ -38,26 +44,50 @@ function collectLinks(tokens: readonly Token[], out: MarkdownLink[]): void {
     // `code` is a fenced or indented block; `codespan` is inline backticks. Neither contains
     // links a reader could click, so neither contains mentions.
     if (token.type === 'code' || token.type === 'codespan') continue;
-
-    if (token.type === 'link') {
-      const link = token as Tokens.Link;
-      out.push({
-        label: flattenText(link.tokens, link.text),
-        href: link.href,
-        // A missing title arrives as undefined from one lexer path and null from another;
-        // collapse both, plus the empty string, so consumers test one thing.
-        title:
-          link.title === null || link.title === undefined || link.title === ''
-            ? undefined
-            : link.title,
-        position: out.length,
-      });
-      // Deliberately no descent: a link nested inside a link is not expressible in Markdown,
-      // and descending would double-count the label's own tokens.
-      continue;
-    }
+    if (collectLinkToken(token, out)) continue;
     collectLinks(childTokensOf(token), out);
   }
+}
+
+/** Collect one token when it represents a semantic figure source or Markdown link. */
+function collectLinkToken(token: Token, out: MarkdownLink[]): boolean {
+  if (token.type === 'html') {
+    collectFigureSourceLink(token.raw, out);
+    return true;
+  }
+  if (token.type !== 'link') return false;
+
+  const link = token as Tokens.Link;
+  out.push({
+    label: flattenText(link.tokens, link.text),
+    href: link.href,
+    title: normalizeLinkTitle(link.title),
+    position: out.length,
+  });
+  // Deliberately no descent: a link nested inside a link is not expressible in Markdown,
+  // and descending would double-count the label's own tokens.
+  return true;
+}
+
+/** Add a Library source link for a codec-owned figure when it has one. */
+function collectFigureSourceLink(raw: string, out: MarkdownLink[]): void {
+  const figure = parseDocumentFigureHtml(raw);
+  if (!figure?.sourceUrl) return;
+
+  const label = [figure.creditText, figure.caption, figure.alt].find(
+    (candidate) => candidate !== undefined && candidate !== '',
+  );
+  out.push({
+    label: label ?? 'Image source',
+    href: figure.sourceUrl,
+    title: undefined,
+    position: out.length,
+  });
+}
+
+/** Collapse every lexer representation of a missing link title to `undefined`. */
+function normalizeLinkTitle(title: string | null | undefined): string | undefined {
+  return title === null || title === undefined || title === '' ? undefined : title;
 }
 
 /** Reduce a link's inline tokens to plain text, so `[**Q3** plan]` yields `Q3 plan`. */
@@ -126,21 +156,36 @@ function collectPlainText(
 ): boolean {
   for (const token of tokens) {
     if (budget.charsRemaining <= 0) return true;
-    if (EXCERPT_SKIP_TOKEN_TYPES.has(token.type)) continue;
-
-    const children = childTokensOf(token);
-    if (children.length > 0) {
-      if (collectPlainText(children, out, budget)) return true;
-      continue;
-    }
-
-    const candidate: TextualToken = token;
-    if (typeof candidate.text === 'string' && candidate.text !== '') {
-      out.push(candidate.text);
-      budget.charsRemaining -= candidate.text.length + 1; // +1 for the join separator.
-    }
+    if (collectPlainTextToken(token, out, budget)) return true;
   }
   return false;
+}
+
+/** Reduce one token to visible plain text and report whether it exhausted the walk budget. */
+function collectPlainTextToken(
+  token: Token,
+  out: string[],
+  budget: { charsRemaining: number },
+): boolean {
+  if (token.type === 'html') {
+    const figure = parseDocumentFigureHtml(token.raw);
+    return appendPlainText(figure ? documentFigurePlainText(figure) : '', out, budget);
+  }
+  if (EXCERPT_SKIP_TOKEN_TYPES.has(token.type)) return false;
+
+  const children = childTokensOf(token);
+  if (children.length > 0) return collectPlainText(children, out, budget);
+
+  const candidate: TextualToken = token;
+  return appendPlainText(typeof candidate.text === 'string' ? candidate.text : '', out, budget);
+}
+
+/** Append one visible text fragment and account for the separator used by the final join. */
+function appendPlainText(text: string, out: string[], budget: { charsRemaining: number }): boolean {
+  if (text === '') return false;
+  out.push(text);
+  budget.charsRemaining -= text.length + 1;
+  return budget.charsRemaining <= 0;
 }
 
 /**

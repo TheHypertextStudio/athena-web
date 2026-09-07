@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { serializeDocumentFigure } from '@docket/markdown-tree';
+
 import { extractMarkdownLinks, markdownToPlainText } from '../../src/content/markdown-links';
 
 describe('extractMarkdownLinks', () => {
@@ -89,6 +91,37 @@ describe('extractMarkdownLinks', () => {
     expect(links.map((l) => l.href)).toEqual(['https://target']);
     expect(links[0]?.label).not.toBe('');
   });
+
+  it('turns a figure source into a Library reference but keeps its license as metadata', () => {
+    const figure = serializeDocumentFigure({
+      version: 1,
+      src: '/v1/orgs/org-1/images/image-1',
+      alt: 'Transit riders boarding a bus',
+      decorative: false,
+      caption: 'Riders board the Maryland Parkway bus.',
+      creditText: 'Regional Transportation Commission',
+      sourceUrl: 'https://example.com/photos/boarding',
+      licenseText: 'CC BY 4.0',
+      licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    });
+
+    expect(extractMarkdownLinks(figure)).toEqual([
+      {
+        label: 'Regional Transportation Commission',
+        href: 'https://example.com/photos/boarding',
+        title: undefined,
+        position: 0,
+      },
+    ]);
+  });
+
+  it('does not trust source links inside malformed figure HTML', () => {
+    expect(
+      extractMarkdownLinks(
+        '<figure data-docket-figure="1"><a href="https://example.com">source</a></figure>',
+      ),
+    ).toEqual([]);
+  });
 });
 
 describe('markdownToPlainText', () => {
@@ -143,6 +176,36 @@ describe('markdownToPlainText', () => {
 
   it('collapses internal newlines and repeated whitespace to single spaces', () => {
     expect(markdownToPlainText('Line one.\nLine   two.')).toBe('Line one. Line two.');
+  });
+
+  it('includes figure alt text, caption, credit, and license text in prose projections', () => {
+    const figure = serializeDocumentFigure({
+      version: 1,
+      src: '/v1/orgs/org-1/images/image-1',
+      alt: 'Transit riders boarding a bus',
+      decorative: false,
+      caption: 'Riders board the Maryland Parkway bus.',
+      creditText: 'Regional Transportation Commission',
+      sourceUrl: 'https://example.com/photos/boarding',
+      licenseText: 'CC BY 4.0',
+      licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    });
+
+    expect(markdownToPlainText(`Before.\n\n${figure}\n\nAfter.`)).toBe(
+      'Before. Transit riders boarding a bus. Riders board the Maryland Parkway bus. Regional Transportation Commission. CC BY 4.0. After.',
+    );
+  });
+
+  it('omits empty decorative alt text while retaining a figure caption', () => {
+    const figure = serializeDocumentFigure({
+      version: 1,
+      src: '/v1/orgs/org-1/images/image-1',
+      alt: '',
+      decorative: true,
+      caption: 'A divider made from the Docket wordmark.',
+    });
+
+    expect(markdownToPlainText(figure)).toBe('A divider made from the Docket wordmark.');
   });
 
   it('leaves text at or under the limit untouched', () => {

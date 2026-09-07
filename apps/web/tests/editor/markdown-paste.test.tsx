@@ -4,6 +4,8 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { serializeDocumentFigure } from '@docket/markdown-tree';
+
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
 
 import { makeQueryWrapper } from '../support/query';
@@ -132,6 +134,47 @@ describe('pasting into the editor', () => {
     });
     expect(editor.querySelectorAll('th')).toHaveLength(2);
     expect(editor.querySelectorAll('td')).toHaveLength(2);
+  });
+
+  it('uses the exact codec when rich clipboard data includes a Docket figure', async () => {
+    const { user, onChange } = renderEditor();
+    const editor = await screen.findByRole('textbox', { name: 'Description' });
+    const figure = serializeDocumentFigure({
+      version: 1,
+      src: '/v1/orgs/org_1/images/image_1',
+      alt: 'Transit center',
+      decorative: false,
+      caption: 'Opening day.',
+    });
+
+    await user.click(editor);
+    paste(editor, {
+      'text/html': '<figure><img src="/v1/orgs/org_1/images/image_1"></figure>',
+      'text/plain': figure,
+    });
+
+    expect(await screen.findByRole('img', { name: 'Transit center' })).toBeVisible();
+    await waitFor(() => {
+      expect(onChange.mock.calls.at(-1)?.[0] ?? '').toContain('Opening day.');
+    });
+  });
+
+  it('does not insert a remote image from arbitrary rich HTML', async () => {
+    const { user } = renderEditor();
+    const editor = await screen.findByRole('textbox', { name: 'Description' });
+
+    await user.click(editor);
+    paste(editor, {
+      'text/html':
+        '<p>Before</p><img src="https://example.com/remote.png" alt="Remote"><p>After</p>',
+      'text/plain': 'Before\n\n![Remote](https://example.com/remote.png)\n\nAfter',
+    });
+
+    await waitFor(() => {
+      expect(editor).toHaveTextContent('Before');
+      expect(editor).toHaveTextContent('After');
+    });
+    expect(editor.querySelector('img')).toBeNull();
   });
 
   it('turns a tab-separated spreadsheet range into a table', async () => {

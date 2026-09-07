@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   publicationDialogState,
+  publicationDialogDescription,
   resolvedPublicationDialogState,
 } from '@/components/publishing/publish-action';
 import { publicationStateStatus } from '@/components/publishing/use-publishing';
@@ -32,5 +33,14 @@ describe('publicationDialogState', () => {
     expect(resolvedPublicationDialogState('published', 2, 1)).toBe('loading');
     expect(resolvedPublicationDialogState('published', 2, 2)).toBe('published');
     expect(resolvedPublicationDialogState('error', 2, 1)).toBe('error');
+  });
+
+  it('states that inline figures and their attribution become public', () => {
+    expect(publicationDialogDescription('unpublished', 'project')).toContain(
+      'Inline images, captions, credits, and license details become public',
+    );
+    expect(publicationDialogDescription('published', 'project')).toContain(
+      'Inline images, captions, credits, and license details are public',
+    );
   });
 });

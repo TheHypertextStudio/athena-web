@@ -14,6 +14,7 @@
  *
  * @see {@link ../../components/clipboard/clipboard-provider} for the listener that calls this.
  */
+import { serializeDocumentFigure, type DocumentFigure } from '@docket/markdown-tree';
 
 /** Elements that begin a new block, and so end whatever inline run preceded them. */
 const BLOCK_TAGS = new Set([
@@ -188,6 +189,45 @@ function codeOf(element: Element): string {
   return `\`\`\`${language}\n${code}\n\`\`\``;
 }
 
+/** Restore one renderer-owned figure, including the attribution attached to this use. */
+function figureOf(element: Element): string | null {
+  if (
+    element.getAttribute('data-docket-figure') !== '1' ||
+    element.getAttribute('itemtype') !== 'https://schema.org/ImageObject'
+  ) {
+    return null;
+  }
+  const image = element.querySelector(':scope > img[itemprop="contentUrl"]');
+  if (!image) return null;
+  const caption = element.querySelector(':scope > figcaption [itemprop="caption"]')?.textContent;
+  const creditText = element.querySelector(
+    ':scope > figcaption [itemprop="creditText"]',
+  )?.textContent;
+  const sourceUrl = element
+    .querySelector(':scope > figcaption a:not([rel~="license"])')
+    ?.getAttribute('href');
+  const license = element.querySelector(':scope > figcaption [itemprop="license"]');
+  const licenseUrl = license instanceof HTMLAnchorElement ? license.getAttribute('href') : null;
+  const licenseText = license?.textContent;
+  const decorative = element.getAttribute('data-decorative') === 'true';
+  const figure: DocumentFigure = {
+    version: 1,
+    src: image.getAttribute('src') ?? '',
+    alt: decorative ? '' : (image.getAttribute('alt') ?? ''),
+    decorative,
+    ...(caption ? { caption } : {}),
+    ...(creditText ? { creditText } : {}),
+    ...(sourceUrl ? { sourceUrl } : {}),
+    ...(licenseText && licenseText !== 'License' ? { licenseText } : {}),
+    ...(licenseUrl ? { licenseUrl } : {}),
+  };
+  try {
+    return serializeDocumentFigure(figure);
+  } catch {
+    return null;
+  }
+}
+
 /** Serialize one block-level element. */
 function blockOf(element: Element): string {
   if (isCodeBlockFrame(element)) return codeOf(element);
@@ -215,6 +255,8 @@ function blockOf(element: Element): string {
       return tableOf(element);
     case 'HR':
       return '---';
+    case 'FIGURE':
+      return figureOf(element) ?? blocksOf(element);
     default:
       // A structural wrapper — the table's scroll container, a task item's content div. Its children
       // carry the content.

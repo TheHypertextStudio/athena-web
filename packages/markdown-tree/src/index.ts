@@ -15,6 +15,17 @@
  */
 import type { Token } from 'marked';
 
+export {
+  DOCUMENT_FIGURE_VERSION,
+  altTextFromFilename,
+  documentFigurePlainText,
+  documentImageIdFromSource,
+  extractDocumentFigures,
+  parseDocumentFigureHtml,
+  serializeDocumentFigure,
+  type DocumentFigure,
+} from './document-figure';
+
 /** A token that may carry inline children, which is most of them. */
 interface TokenWithChildren {
   readonly tokens?: readonly Token[];

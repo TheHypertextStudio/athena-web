@@ -25,6 +25,7 @@
 import {
   actor,
   db,
+  documentImage,
   initiative,
   initiativeProgram,
   initiativeProject,
@@ -39,6 +40,7 @@ import {
 } from '@docket/db';
 import { apiHosts, isOwnHost } from '@docket/env/api';
 import { normalizeCustomDomain } from '@docket/env/custom-domain';
+import { documentImageIdFromSource, extractDocumentFigures } from '@docket/markdown-tree';
 import type {
   BriefFact,
   BriefSection,
@@ -159,6 +161,14 @@ interface ResolvedPublication {
   readonly publishedAt: Date;
 }
 
+/** The storage fields needed to serve one image from a currently live public brief. */
+export interface PublicBriefImage {
+  /** The immutable blob-store key. */
+  readonly blobKey: string;
+  /** The allowlisted raster MIME type recorded at upload. */
+  readonly mimeType: string;
+}
+
 /**
  * Resolve which workspace a locator addresses, before its brief slug is looked up.
  *
@@ -235,6 +245,82 @@ async function resolvePublication(locator: BriefLocator): Promise<ResolvedPublic
     workspaceSlug: workspace.slug,
     publishedAt: row.publishedAt,
   };
+}
+
+/** Read the current authoritative description for a resolved publication. */
+async function publishedDescription(resolved: ResolvedPublication): Promise<string | null> {
+  if (resolved.subjectKind === 'initiative') {
+    const rows = await db
+      .select({ description: initiative.description })
+      .from(initiative)
+      .where(
+        and(
+          eq(initiative.id, resolved.subjectId),
+          eq(initiative.organizationId, resolved.organizationId),
+        ),
+      )
+      .limit(1);
+    if (!rows[0]) throw new NotFoundError('Brief not found');
+    return rows[0].description;
+  }
+  if (resolved.subjectKind === 'program') {
+    const rows = await db
+      .select({ description: program.description })
+      .from(program)
+      .where(
+        and(
+          eq(program.id, resolved.subjectId),
+          eq(program.organizationId, resolved.organizationId),
+        ),
+      )
+      .limit(1);
+    if (!rows[0]) throw new NotFoundError('Brief not found');
+    return rows[0].description;
+  }
+  const rows = await db
+    .select({ description: project.description })
+    .from(project)
+    .where(
+      and(
+        eq(project.id, resolved.subjectId),
+        eq(project.organizationId, resolved.organizationId),
+        isNull(project.archivedAt),
+      ),
+    )
+    .limit(1);
+  if (!rows[0]) throw new NotFoundError('Brief not found');
+  return rows[0].description;
+}
+
+/**
+ * Authorize one anonymous public-image read against the current publication and prose.
+ *
+ * @param locator - The same live locator used for the brief document.
+ * @param imageId - The image blob named by the public route.
+ * @returns The org-owned blob fields when the current description still references the image.
+ * @throws {NotFoundError} When the publication, record, reference, or image is not currently live.
+ */
+export async function loadPublicBriefImage(
+  locator: BriefLocator,
+  imageId: string,
+): Promise<PublicBriefImage> {
+  const resolved = await resolvePublication(locator);
+  const description = await publishedDescription(resolved);
+  const referenced = extractDocumentFigures(description ?? '').some(
+    (figure) => documentImageIdFromSource(figure.src) === imageId,
+  );
+  if (!referenced) throw new NotFoundError('Brief not found');
+
+  const rows = await db
+    .select({ blobKey: documentImage.blobKey, mimeType: documentImage.mimeType })
+    .from(documentImage)
+    .where(
+      and(eq(documentImage.id, imageId), eq(documentImage.organizationId, resolved.organizationId)),
+    )
+    .limit(1);
+  const image = rows[0];
+  if (!image) throw new NotFoundError('Brief not found');
+  return image;
 }
 
 /** Resolve an owning actor id to a display name, or `null` when unset or deleted. */

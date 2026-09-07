@@ -126,15 +126,48 @@ describe('the application wiring', () => {
         entityExists: () => Promise.resolve(false),
       },
     };
+    const noopImageStorage = {
+      references: {
+        replaceForSubject: () => Promise.resolve(),
+        deleteForSubject: () => Promise.resolve(),
+        hasImageReference: () => Promise.resolve(false),
+      },
+      images: {
+        filterOwnedImageIds: () => Promise.resolve(new Set<string>()),
+      },
+      subjects: {
+        read: () => Promise.resolve(undefined),
+        listAll: () => Promise.resolve([]),
+      },
+    };
 
-    const bus = buildEntityWriteBus(noopStorage);
+    const bus = buildEntityWriteBus(noopStorage, noopImageStorage);
 
     expect(bus.subscriberNames).toEqual([
       'search-index',
       'mention-reconcile',
+      'document-image-reconcile',
       'mcp-notify',
       'notion-mirror-wake',
     ]);
+  });
+
+  it('reconciles or removes document image references after the matching entity write', async () => {
+    const { documentImageReconcileSubscriber } =
+      await import('../../src/events/entity-write-subscribers');
+    const reconcile = vi.fn().mockResolvedValue(undefined);
+    const deleteForSubject = vi.fn().mockResolvedValue(undefined);
+    const subscriber = documentImageReconcileSubscriber({
+      reconcile,
+      deleteForSubject,
+      isImageInUse: vi.fn().mockResolvedValue(false),
+    });
+
+    await subscriber.handle(event);
+    await subscriber.handle({ ...event, operation: 'delete' });
+
+    expect(reconcile).toHaveBeenCalledWith('org_1', 'project', 'proj_1');
+    expect(deleteForSubject).toHaveBeenCalledWith('org_1', 'project', 'proj_1');
   });
 
   it('wakes Notion only for entity kinds that the mirror projects', async () => {

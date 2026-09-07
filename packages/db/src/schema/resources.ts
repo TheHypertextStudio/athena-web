@@ -27,6 +27,7 @@ import { check, index, integer, pgTable, text, timestamp, uniqueIndex } from 'dr
 
 import {
   externalResourceType,
+  documentImageSubjectType,
   mentionEntityKind,
   mentionSubjectType,
   mentionTargetKind,
@@ -35,7 +36,7 @@ import {
 } from '../enums';
 import { genId } from '../id';
 import { user } from './auth';
-import { integration } from './crosscutting';
+import { documentImage, integration } from './crosscutting';
 import { auditColumns, organization } from './identity';
 
 /**
@@ -146,6 +147,44 @@ export const mention = pgTable(
       'mention_external_arm_check',
       sql`(${t.targetKind} = 'external') = (${t.externalResourceId} IS NOT NULL)`,
     ),
+  ],
+);
+
+/**
+ * One uploaded image occurrence derived from authoritative saved prose.
+ *
+ * @remarks
+ * This table is a replaceable projection. `subjectType`, `subjectId`, `field`, and `position`
+ * identify the occurrence. The Markdown still owns the figure and all use-specific caption and
+ * attribution data. Callers must re-read Markdown before a destructive cleanup when this table
+ * reports no use, because an entity-write subscriber can fail after the source write commits.
+ */
+export const documentImageReference = pgTable(
+  'document_image_reference',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    imageId: text('image_id')
+      .notNull()
+      .references(() => documentImage.id, { onDelete: 'cascade' }),
+    subjectType: documentImageSubjectType('subject_type').notNull(),
+    subjectId: text('subject_id').notNull(),
+    field: text('field').notNull(),
+    position: integer('position').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('document_image_reference_inline_uq').on(
+      t.organizationId,
+      t.subjectType,
+      t.subjectId,
+      t.field,
+      t.position,
+    ),
+    index('document_image_reference_image_idx').on(t.organizationId, t.imageId),
+    index('document_image_reference_subject_idx').on(t.organizationId, t.subjectType, t.subjectId),
   ],
 );
 

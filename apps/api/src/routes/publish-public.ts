@@ -23,15 +23,23 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
+import { getContainer } from '../container';
+import { NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { zParam, zQuery } from '../lib/validate';
-import { loadPublicBrief } from './publish-brief';
+import { loadPublicBrief, loadPublicBriefImage } from './publish-brief';
 
 /** The workspace's own identity slug and the brief slug that identify one brief. */
 const briefParam = z.object({ workspaceSlug: z.string(), slug: z.string() });
 
+/** A shared-host brief plus one image referenced by its current description. */
+const briefImageParam = briefParam.extend({ imageId: z.string() });
+
 /** The brief slug alone, for a request whose `Host` already identifies the workspace. */
 const domainBriefParam = z.object({ slug: z.string() });
+
+/** A custom-domain brief plus one image referenced by its current description. */
+const domainBriefImageParam = domainBriefParam.extend({ imageId: z.string() });
 
 /**
  * The host the visitor's browser actually asked on.
@@ -61,19 +69,58 @@ function noStore(c: { header: (name: string, value: string) => void }): void {
   c.header('Cache-Control', 'no-store');
 }
 
-/** The public brief router: two reads (shared host, custom domain), no session, no mutation. */
+/** Stream one authorized public brief image with revocation-safe response headers. */
+async function publicImageResponse(
+  locator: { host: string | undefined; workspaceSlug: string | undefined; slug: string },
+  imageId: string,
+): Promise<Response> {
+  const image = await loadPublicBriefImage(locator, imageId);
+  const bytes = await getContainer().blob.get(image.blobKey);
+  if (!bytes) throw new NotFoundError('Brief not found');
+  return new Response(new Uint8Array(bytes), {
+    status: 200,
+    headers: {
+      'Content-Type': image.mimeType,
+      'Content-Disposition': 'inline',
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+
+/** The public brief router: document and image reads on two host shapes, no session or mutation. */
 const publicBriefs = new Hono<AppEnv>()
-  .get('/briefs/:workspaceSlug/:slug', zParam(briefParam), zQuery(briefQuery), async (c) => {
-    const { workspaceSlug, slug } = c.req.valid('param');
-    const { host } = c.req.valid('query');
-    const brief = await loadPublicBrief({ host, workspaceSlug, slug });
-    noStore(c);
-    return ok(c, PublicBriefOut, brief);
-  })
+  .get(
+    '/briefs/domain/:slug/images/:imageId',
+    zParam(domainBriefImageParam),
+    zQuery(briefQuery),
+    async (c) => {
+      const { slug, imageId } = c.req.valid('param');
+      const { host } = c.req.valid('query');
+      return publicImageResponse({ host, workspaceSlug: undefined, slug }, imageId);
+    },
+  )
+  .get(
+    '/briefs/:workspaceSlug/:slug/images/:imageId',
+    zParam(briefImageParam),
+    zQuery(briefQuery),
+    async (c) => {
+      const { workspaceSlug, slug, imageId } = c.req.valid('param');
+      const { host } = c.req.valid('query');
+      return publicImageResponse({ host, workspaceSlug, slug }, imageId);
+    },
+  )
   .get('/briefs/domain/:slug', zParam(domainBriefParam), zQuery(briefQuery), async (c) => {
     const { slug } = c.req.valid('param');
     const { host } = c.req.valid('query');
     const brief = await loadPublicBrief({ host, workspaceSlug: undefined, slug });
+    noStore(c);
+    return ok(c, PublicBriefOut, brief);
+  })
+  .get('/briefs/:workspaceSlug/:slug', zParam(briefParam), zQuery(briefQuery), async (c) => {
+    const { workspaceSlug, slug } = c.req.valid('param');
+    const { host } = c.req.valid('query');
+    const brief = await loadPublicBrief({ host, workspaceSlug, slug });
     noStore(c);
     return ok(c, PublicBriefOut, brief);
   });

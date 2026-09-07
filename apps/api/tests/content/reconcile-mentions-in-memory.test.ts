@@ -10,6 +10,8 @@
  */
 import { describe, expect, it } from 'vitest';
 
+import { serializeDocumentFigure } from '@docket/markdown-tree';
+
 import {
   formatMentionLink,
   type MentionEntityKind,
@@ -124,6 +126,25 @@ describe('the reconciler, with no database', () => {
     const state = await reconcileProse('Background: https://example.com/handbook');
     expect(edgesFor(state)).toHaveLength(1);
     expect(state.resources.get('web:https://example.com/handbook')?.provider).toBe('web');
+  });
+
+  it('adds a figure source to Library without treating its license as a resource', async () => {
+    const state = await reconcileProse(
+      serializeDocumentFigure({
+        version: 1,
+        src: '/v1/orgs/org_1/images/image_1',
+        alt: 'Route map',
+        decorative: false,
+        caption: 'The proposed route.',
+        creditText: 'RTC',
+        sourceUrl: 'https://example.com/route-map-source',
+        licenseText: 'CC BY 4.0',
+        licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
+      }),
+    );
+
+    expect(edgesFor(state).map((edge) => edge.label)).toEqual(['RTC']);
+    expect([...state.resources.keys()]).toEqual(['web:https://example.com/route-map-source']);
   });
 
   it('numbers edges by their order within the field', async () => {

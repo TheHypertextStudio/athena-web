@@ -461,6 +461,14 @@ describe('server boot', () => {
     expect(auth.status).toBe(200);
   });
 
+  it('serves /favicon.ico to an anonymous caller, through the global middleware', async () => {
+    // The point of the icon routes is that a client drawing a connector card fetches this before it
+    // has a token. Asserting it on the sub-app alone would not notice a middleware that gated it.
+    const res = await server.request('/favicon.ico');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('image/x-icon');
+  });
+
   it('mounts AS metadata at the RFC 8414 path-aware location, not only the bare root', async () => {
     // Regression coverage for a production incident: the official MCP SDK's
     // discoverAuthorizationServerMetadata (and therefore Claude Desktop / claude.ai / any

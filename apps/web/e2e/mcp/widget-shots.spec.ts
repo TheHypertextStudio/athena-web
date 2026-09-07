@@ -130,6 +130,8 @@ const CASES: readonly WidgetCase[] = [
     result: {
       structuredContent: {
         changed: 4,
+        entity: 'task',
+        listHref: '/orgs/org_1/tasks',
         changeSetId: 'cs_2',
         changes: [
           {
@@ -176,6 +178,7 @@ const CASES: readonly WidgetCase[] = [
       structuredContent: {
         changed: 1,
         entity: 'task',
+        listHref: '/orgs/org_1/tasks',
         changeSetId: 'cs_9',
         changes: [
           {
@@ -189,7 +192,7 @@ const CASES: readonly WidgetCase[] = [
                 to: 'Write down what to change for Dallas',
               },
               { field: 'priority', from: 'none', to: 'high' },
-              { field: 'dueDate', from: null, to: '2026-09-12' },
+              { field: 'dueDate', from: 'none', to: '2026-09-12' },
             ],
           },
         ],
@@ -327,6 +330,7 @@ const CASES: readonly WidgetCase[] = [
     result: {
       structuredContent: {
         entity: 'task',
+        listHref: '/orgs/org_1/tasks',
         items: [
           {
             id: 't_1',
@@ -430,6 +434,7 @@ const CASES: readonly WidgetCase[] = [
     result: {
       structuredContent: {
         entity: 'task',
+        listHref: '/orgs/org_1/tasks',
         items: [
           {
             id: 't_1',

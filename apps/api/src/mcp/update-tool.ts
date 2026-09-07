@@ -54,7 +54,7 @@ import {
 import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam, resolveStateTransition } from './tools-shared';
-import { entityHref } from './entity-href';
+import { entityHref, entityListHref } from './entity-href';
 
 /**
  * The most rows one call will touch.
@@ -511,6 +511,9 @@ export function registerUpdateTool(
       },
       outputSchema: {
         matched: z.number().int().describe('How many items the scope selected.'),
+        listHref: z
+          .string()
+          .describe('The page listing this kind of work, for what the card cannot fit.'),
         changed: z.number().int().describe('How many were actually written.'),
         entity: z
           .enum(WORK_ENTITIES)
@@ -755,6 +758,7 @@ export function registerUpdateTool(
 
         return jsonResult({
           matched: visibleRows.length,
+          listHref: entityListHref(input.orgId, entity),
           changed: changes.length,
           entity,
           changes: report,

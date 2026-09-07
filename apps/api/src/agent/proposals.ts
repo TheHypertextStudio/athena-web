@@ -72,6 +72,22 @@ function ghostDate(value: unknown): string | null {
 }
 
 /**
+ * The one text a capture proposal previews.
+ *
+ * @remarks
+ * `capture.text` also takes a list. A one-item list still has the single spatial home a ghost
+ * needs; anything longer falls back to the session card, like a multi-node plan.
+ *
+ * @param raw - The stored `text` argument.
+ * @returns the single text, or null when there is not exactly one.
+ */
+function soleCaptureText(raw: unknown): string | null {
+  const list: readonly unknown[] | null = Array.isArray(raw) ? (raw as readonly unknown[]) : null;
+  const text: unknown = list ? (list.length === 1 ? list[0] : null) : raw;
+  return typeof text === 'string' && text.trim().length > 0 ? text : null;
+}
+
+/**
  * Project one stored tool call into its workspace ghost, when it has one.
  *
  * @remarks
@@ -90,8 +106,8 @@ function projectGhost(
   input: Record<string, unknown>,
 ): z.input<typeof GhostTaskOut> | null {
   if (tool === 'capture') {
-    const text = input['text'];
-    if (typeof text !== 'string' || text.trim().length === 0) return null;
+    const text = soleCaptureText(input['text']);
+    if (!text) return null;
     // The same derivation `capture` itself uses, so the preview and the write agree on the title.
     return { title: deriveCaptureTitle(text), teamId: null, projectId: null, dueDate: null };
   }

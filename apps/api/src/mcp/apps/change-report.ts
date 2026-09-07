@@ -257,6 +257,7 @@ const SCRIPT = String.raw`
         rows.push({
           id: node.id,
           title: node.title || node.ref,
+          href: node.href,
           kind: node.kind,
           matched: node.created === false,
           depth: Math.min(depth, 3),
@@ -314,7 +315,7 @@ const SCRIPT = String.raw`
       rows.appendChild(diffRow(item));
     }
     const rest = el('rest');
-    rest.hidden = shown.length === items.length;
+    rest.hidden = shown.length === items.length || !data.listHref;
     rest.textContent = 'Open in Docket to see ' + String(items.length - shown.length) + ' more';
 
     // \`skipped\` only ever comes from \`update\`/\`archive\`, both scoped to one \`entity\` — same
@@ -362,8 +363,7 @@ const SCRIPT = String.raw`
   });
 
   el('rest').addEventListener('click', () => {
-    const first = (state ? itemsOf(state) : [])[0];
-    if (first && first.href) window.docket.link(first.href);
+    if (state && state.listHref) window.docket.link(state.listHref);
   });
 
   window.docket.onData(render);

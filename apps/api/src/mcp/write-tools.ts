@@ -25,7 +25,7 @@ import { recordChangeSet, trackedFields, undoChangeSet } from './change-set';
 import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
-import { entityHref } from './entity-href';
+import { entityHref, entityListHref } from './entity-href';
 
 /**
  * The most tasks one capture call may create.
@@ -84,6 +84,7 @@ export function registerWriteTools(
             }),
           )
           .describe('One entry per captured task, in the order given.'),
+        listHref: z.string().describe('The page listing tasks, for what the card cannot fit.'),
         changeSetId: z.string().describe('Pass to `undo` to take the whole call back.'),
       },
       _meta: widgetMeta(WIDGET.changeReport),
@@ -167,6 +168,7 @@ export function registerWriteTools(
             state: row.state,
             teamId: row.teamId,
           })),
+          listHref: entityListHref(input.orgId, 'task'),
           changeSetId,
         });
       }),

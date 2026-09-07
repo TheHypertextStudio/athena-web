@@ -9,7 +9,7 @@ import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { createTaskToolHandler } from './task-tools';
 import { ApiError } from '../error';
 import { DESCRIPTOR_HINT, type DescriptorKind, resolveDescriptor } from './descriptors';
-import { entityHref, type ReadableType } from './entity-href';
+import { entityHref, entityListHref, type ReadableType } from './entity-href';
 import { READABLE_TYPES, readEntity } from './resources';
 
 /**
@@ -113,6 +113,9 @@ const listWorkInputSchema = {
 const listWorkOutputSchema = {
   entity: z.enum(WORK_ENTITIES),
   items: z.array(WorkRow),
+  listHref: z
+    .string()
+    .describe('The page listing this kind of work, for what the card cannot fit.'),
   nextCursor: z.string().optional(),
 };
 
@@ -240,7 +243,12 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
         decodeWorkCursor(cursor),
       );
       const { items, nextCursor } = pageWorkRows(rows, limit);
-      return jsonResult({ entity, items, ...(nextCursor ? { nextCursor } : {}) });
+      return jsonResult({
+        entity,
+        items,
+        listHref: entityListHref(orgId, entity),
+        ...(nextCursor ? { nextCursor } : {}),
+      });
     });
 
   registerOptionalTaskTool(

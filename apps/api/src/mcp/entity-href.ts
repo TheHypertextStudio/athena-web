@@ -49,3 +49,33 @@ const ROUTE: Record<ReadableType, (orgId: string, id: string) => string> = {
 export function entityHref(orgId: string, type: ReadableType, id: string): string {
   return ROUTE[type](orgId, id);
 }
+
+/**
+ * The page listing each kind that has one.
+ *
+ * @remarks
+ * Written out for the same reason {@link ROUTE} is: a path built by appending an "s" is a guess
+ * this file exists to stop. Not every `ReadableType` has a list page, so the keys are their own
+ * statement of which do.
+ */
+const LIST_ROUTE = {
+  task: (orgId: string) => `/orgs/${orgId}/tasks`,
+  project: (orgId: string) => `/orgs/${orgId}/projects`,
+  program: (orgId: string) => `/orgs/${orgId}/programs`,
+  initiative: (orgId: string) => `/orgs/${orgId}/initiatives`,
+} as const;
+
+/**
+ * The page listing every entity of one kind.
+ *
+ * @remarks
+ * A card that folds after four rows sends the reader here for the rest. Pointing them at the first
+ * row's detail page instead shows them none of the rows they clicked to see.
+ *
+ * @param orgId - The workspace.
+ * @param type - Which kind to list.
+ * @returns the list path within the product app.
+ */
+export function entityListHref(orgId: string, type: keyof typeof LIST_ROUTE): string {
+  return LIST_ROUTE[type](orgId);
+}

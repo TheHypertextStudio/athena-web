@@ -206,7 +206,10 @@ const SCRIPT = String.raw`
    */
   function scopeOf(input) {
     const parts = [];
-    const named = (value) => typeof value === 'string' && value !== '' && !/^[a-z]+_[A-Za-z0-9]{10,}$/.test(value);
+    // Docket ids are bare 26-character ULIDs, so the test is on that shape and not on a prefix.
+    // An id here would say less than an empty line does.
+    const named = (value) =>
+      typeof value === 'string' && value !== '' && !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(value);
     if (named(input.assignee)) parts.push('assigned to ' + input.assignee);
     if (named(input.delegate)) parts.push('delegated to ' + input.delegate);
     if (named(input.lead)) parts.push('led by ' + input.lead);
@@ -263,7 +266,7 @@ const SCRIPT = String.raw`
     // When the host cannot expand, the rest of the list is only reachable in Docket — so the card
     // says so instead of dropping the remainder on the floor behind a count.
     const rest = el('rest');
-    rest.hidden = full || hidden <= 0 || window.docket.canDisplay('fullscreen');
+    rest.hidden = full || hidden <= 0 || !state.listHref || window.docket.canDisplay('fullscreen');
     rest.textContent = 'Open in Docket to see ' + String(hidden) + ' more';
   }
 
@@ -282,11 +285,8 @@ const SCRIPT = String.raw`
     render();
   });
 
-  // The remainder lives one level up from any single row, and only a row carries an href — so this
-  // opens the first one, which is the same list in the app.
   el('rest').addEventListener('click', () => {
-    const first = (state && state.items) || [];
-    if (first[0] && first[0].href) window.docket.link(first[0].href);
+    if (state && state.listHref) window.docket.link(state.listHref);
   });
 })();
 `;

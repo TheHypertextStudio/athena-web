@@ -407,10 +407,15 @@ function cycleLabel(row: { name: string | null; startsAt: Date; endsAt: Date }):
  * Four queries per page, not four per row, on the same reasoning as {@link teamWorkflows} above: a
  * 50-row page spanning every project in the org still costs four round trips.
  *
+ * Every lookup is scoped to the organization, and the parent lookup also excludes archived rows.
+ * `task.parentTaskId` carries no foreign key, so nothing below this constrains it to a row the
+ * caller may see.
+ *
+ * @param orgId - The organization the page was read from.
  * @param rows - The visible rows for one page.
  * @returns Each id space resolved to display names; ids with no row are simply absent.
  */
-async function taskRowNames(rows: readonly TaskRowRefs[]): Promise<TaskRowNames> {
+async function taskRowNames(orgId: string, rows: readonly TaskRowRefs[]): Promise<TaskRowNames> {
   /**
    * Resolve one id space to a name map, skipping the query when the page references none.
    *
@@ -436,7 +441,7 @@ async function taskRowNames(rows: readonly TaskRowRefs[]): Promise<TaskRowNames>
         db
           .select({ id: actor.id, name: actor.displayName })
           .from(actor)
-          .where(inArray(actor.id, ids)),
+          .where(and(eq(actor.organizationId, orgId), inArray(actor.id, ids))),
       (row) => row.name,
     ),
     lookup(
@@ -445,12 +450,18 @@ async function taskRowNames(rows: readonly TaskRowRefs[]): Promise<TaskRowNames>
         db
           .select({ id: project.id, name: project.name })
           .from(project)
-          .where(inArray(project.id, ids)),
+          .where(and(eq(project.organizationId, orgId), inArray(project.id, ids))),
       (row) => row.name,
     ),
     lookup(
       (row) => row.parentTaskId,
-      (ids) => db.select({ id: task.id, name: task.title }).from(task).where(inArray(task.id, ids)),
+      (ids) =>
+        db
+          .select({ id: task.id, name: task.title })
+          .from(task)
+          .where(
+            and(eq(task.organizationId, orgId), isNull(task.archivedAt), inArray(task.id, ids)),
+          ),
       (row) => row.name,
     ),
     lookup(
@@ -464,7 +475,7 @@ async function taskRowNames(rows: readonly TaskRowRefs[]): Promise<TaskRowNames>
             endsAt: cycle.endsAt,
           })
           .from(cycle)
-          .where(inArray(cycle.id, ids)),
+          .where(and(eq(cycle.organizationId, orgId), inArray(cycle.id, ids))),
       (row) => cycleLabel(row),
     ),
   ]);
@@ -612,7 +623,7 @@ async function listTasks(
       orgId,
       visibleRows.map((row) => row.teamId),
     ),
-    taskRowNames(visibleRows),
+    taskRowNames(orgId, visibleRows),
   ]);
 
   // `teamId` is read to resolve the state type and then dropped. It is not part of the row

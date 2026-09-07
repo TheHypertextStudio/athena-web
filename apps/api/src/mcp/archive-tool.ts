@@ -35,7 +35,7 @@ import {
 import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
-import { entityHref } from './entity-href';
+import { entityHref, entityListHref } from './entity-href';
 
 /** The table each archivable entity lives in. */
 const TABLES = { task, project, program, initiative } as const;
@@ -87,6 +87,9 @@ export function registerArchiveTool(
       },
       outputSchema: {
         matched: z.number().int().describe('How many items the scope selected.'),
+        listHref: z
+          .string()
+          .describe('The page listing this kind of work, for what the card cannot fit.'),
         changed: z.number().int().describe('How many moved.'),
         entity: z
           .enum(WORK_ENTITIES)
@@ -245,6 +248,7 @@ export function registerArchiveTool(
 
         return jsonResult({
           matched: visibleRows.length,
+          listHref: entityListHref(input.orgId, entity),
           changed: items.length,
           entity,
           items,

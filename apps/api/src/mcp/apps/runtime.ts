@@ -1052,6 +1052,22 @@ input[type='date']:disabled { opacity: 0.5; }
  */
 const WEB_ORIGIN = (process.env['WEB_URL'] ?? '').replace(/\/$/, '');
 
+/**
+ * Wrap one widget's markup in the shared MCP app shell.
+ *
+ * @remarks
+ * Every widget ships the same chrome — the runtime stylesheet, the skeleton the host shows while
+ * the data arrives, a status line for anything the widget needs to say, and the runtime script that
+ * swaps `data-state` once content is ready. Building that here rather than per widget is what keeps
+ * one widget's loading state from looking like a different product than the next one's.
+ *
+ * @param title - The document title, also the card's accessible name.
+ * @param body - The widget's own markup, placed inside the content region.
+ * @param script - The widget's own script, run after the shared runtime.
+ * @param options - `skeletonRows` sizes the placeholder to the real layout; `displayModes` declares
+ *   which presentations the host may use.
+ * @returns the complete HTML document.
+ */
 export function appDocument(
   title: string,
   body: string,

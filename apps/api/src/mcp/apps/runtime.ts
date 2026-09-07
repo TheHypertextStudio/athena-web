@@ -1024,21 +1024,6 @@ input[type='date']:disabled { opacity: 0.5; }
 `;
 
 /**
- * Wrap a widget body in the shared document shell.
- *
- * @remarks
- * The card chrome, the loading skeleton, and the status line live here rather than in each widget,
- * because every one of them needs all three and the four ways a result can fail to arrive are not
- * a widget's business. A widget supplies only what it draws when there is something to draw.
- *
- * @param title - The document title, and the accessible name of the card.
- * @param body - The widget's own markup, rendered inside `.content`.
- * @param script - The widget's own script, run after {@link RUNTIME_JS}.
- * @param skeletonRows - How many placeholder rows to show while waiting, matched to the widget's
- *   usual density so the card does not jump size when the real content lands.
- * @returns a self-contained HTML document.
- */
-/**
  * The product origin every widget link resolves against, with no trailing slash.
  *
  * @remarks

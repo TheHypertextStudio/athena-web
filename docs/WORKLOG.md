@@ -7,6 +7,116 @@
 
 ## Active Tasks
 
+### [MCP-CARD-001] Make the tool cards carry work instead of metadata about themselves
+
+- **Completed**: 2026-09-06
+- **Priority**: P1
+- **Summary**: The work-list card printed "8 tasks" over four rows reading `Backlog`, `Backlog`,
+  `Backlog`, `Backlog`. The organize card printed the model's throwaway refs — `ppt`, `t-date`,
+  `t-rules` — as titles, flattened a tree into five equal rows, and headlined "Filed 4, matched 1
+  already there". Both had a single "Open in Docket" button that did nothing at all. All of it is
+  the same defect: the cards described the response instead of the work.
+- **Approach**: The dead button first, because it was two bugs. `ui/open-link` takes a URL and every
+  href this server builds is a path, so a host refused each one silently; `link()` now joins the
+  product origin on, read from `process.env` rather than through `@docket/env/api` because
+  `widget-shots.spec.ts` imports the widget documents with no API environment and the validated
+  module throws on import. Then the card-level button went away entirely: it landed on a list, so
+  the reader had to find their row a second time. Every row carries its own.
+
+  The work list could not be fixed by restyling, because `list_work` sent nothing to style.
+  `assigneeId` and `projectId` went out as raw ids and `dueDate` was only ever a filter predicate,
+  never selected — the card fell back to the state word because the state word was all it had. Rows
+  now carry `dueDate` plus resolved `assignee`, `project`, `parent` and `cycle` names, four batch
+  lookups per page rather than four per row. The ids stay: those are what `update` takes back.
+
+  With data to show, the card leads with when it lands ("3 days late", in the only colour on the
+  card), then where it lives, then who owns it — and drops any column whose value is identical down
+  the page, which is what made four rows say Backlog. The count headline is now the scope the agent
+  queried, read back from the tool arguments: "Assigned to Sarah Okafor · In progress or Todo". That
+  is the thing a reader can actually check.
+
+  `organize` writes a tree and the card threw the tree away. `placed` now echoes each item's parent
+  `ref`, and the card rebuilds the nesting from it, names the root in the headline instead of
+  tallying nodes, and keeps matched-not-created rows dimmed — they are the evidence the call
+  reconciled instead of duplicating, which is the tool's whole promise.
+
+  Rows stopped being filled grey pills. Five of them stacked into a striped block with no reading
+  order and no room for a second line; hairlines cost nothing and leave the ink for content.
+
+- **Files changed**: `apps/api/src/mcp/list-work.ts` (row contract + `taskRowNames`),
+  `organize-tool.ts` (`title`/`parent` on `placed`), `apps/api/src/mcp/apps/{runtime,work-list,change-report}.ts`,
+  `apps/api/tests/mcp/{mcp-surface,mcp-organize-tool,mcp-app-runtime}.test.ts`,
+  `apps/web/e2e/mcp/widget-shots.spec.ts` (an `organize` case, which had none).
+- **Validation**: `apps/api` typecheck and lint clean, the MCP suites green, and 224 widget
+  screenshots reshot at two widths in both themes and both token modes. The evidence is
+  `docs/design/audits/screenshots/mcp-apps/`; `change-report-organized-*` is new, and the case it
+  covers is the one that shipped broken.
+- **Learnings**: A card cannot be designed past the payload behind it. Three of the four complaints
+  — repeated words, thin rows, counts standing in for content — were one cause, which is that
+  `list_work` sent ids and a state key and nothing else. Restyling would have produced a
+  better-looking card that still said nothing.
+
+  `placeItem` failed the complexity gate at 31 against a ceiling of 30 for a single added ternary.
+  Typing the field `string | undefined` rather than spreading it conditionally removed the branch;
+  `JSON.stringify` drops the key either way.
+
+- **Follow-ups**: `organize` is a verb that does not say "writes a tree", and its refs leaking into
+  the card is what made that unreadable. Renaming a shipped tool is its own change. The entity card
+  still assembles its own links and was not touched here.
+
+---
+
+### [MCP-ICON-001] Serve the Docket mark from the origin the MCP server answers on
+
+- **Completed**: 2026-09-06
+- **Priority**: P2
+- **Summary**: MCP clients drew Docket as a generic placeholder despite the server advertising
+  `serverInfo.icons` since `9f614ac9`. Two causes, both measured against production: the advertised
+  URLs were cross-origin, and `https://docket-api.hypertext.studio/favicon.ico` answered `405`. The
+  API now serves the mark at `/favicon.ico`, `/icons/icon-192.png` and `/icons/icon-512.png`, and
+  advertises those.
+- **Approach**: The MCP schema says an `Icon.src` should come "from the same domain as the
+  client/server or a trusted domain". Docket answers MCP on `docket-api.hypertext.studio` and
+  pointed its icons at `docket.hypertext.studio`, so a client honouring that drops them.
+
+  The second cause is the one that explains the placeholder, because it applies when the connector
+  card is drawn. `POST /mcp` is behind the auth guard — an unauthenticated `initialize` returns 401
+  and nothing else — so no client reads `serverInfo` before connecting. It holds only an origin,
+  guesses `/favicon.ico`, and every unmatched path here throws rather than 404ing.
+
+  Serving an image needed bytes inside a runtime that cannot read a file: esbuild bundles the API to
+  one `dist/server.mjs` and the image copies no static directory. `@docket/brand` grew a fifth
+  renderer for it. `icons:embedded` reads back the PNGs `icons:pwa` committed, base64-encodes them
+  into `packages/brand/src/embedded-icons.generated.ts`, and writes the `.ico` nothing had
+  generated — a real container with 16, 32 and 48px PNG renditions. It reads rather than re-renders
+  so the icon the API serves and the icon Android installs are one artwork. The same `.ico` lands at
+  `apps/web/src/app/favicon.ico`, which was 404ing on the web origin too.
+
+  `mcp/server.ts` builds its `icons` array from the route table rather than restating paths, and the
+  test fetches every `src` it advertises.
+
+- **Files changed**: added `packages/brand/src/{ico,render-embedded,embedded-icons.generated}.ts`,
+  `packages/brand/tests/embedded-icons.test.ts`, `apps/api/src/routes/brand-icons.ts`,
+  `apps/api/tests/core/brand-icons.test.ts`, `apps/web/src/app/favicon.ico`; updated
+  `packages/brand/src/{paths,index}.ts` and its manifest (a `./embedded-icons` subpath),
+  `apps/api/src/{server,cors}.ts`, `apps/api/src/mcp/server.ts`, the API manifest,
+  `.prettierignore`, `docs/design/brand-mark.md`, `docs/engineering/specs/mcp-surface.md`.
+- **Validation**: `@docket/brand` tests (30) and the new API suite green; `apps/api` typecheck,
+  lint, and `pnpm build` green. Production before the change: `/favicon.ico` on the API origin
+  returned 405, an unauthenticated `initialize` returned 401, and the web origin's
+  `/icons/icon-192.png` returned 200 — the artwork was reachable all along, on an origin nothing was
+  looking at. The generated `.ico` was extracted and its 48px rendition read back as the mark.
+- **Learnings**: An icon in `serverInfo` is invisible to the surface that most needs it, because the
+  connector card is drawn before the OAuth dance. `websiteUrl` has the same problem.
+
+  The earlier fix shipped six days before and did nothing: it filled in `icons` correctly and
+  pointed them at the wrong host, and no assertion about an advertised URL fails whether or not
+  anything answers it. Fetching what you advertise is the only version of that test worth writing.
+
+- **Follow-ups**: The admin and marketing origins still serve no favicon.
+
+---
+
 ### [CAL-EVENT-001] A calendar event opens as a peek, and reads as a moment
 
 - **Status**: SHIPPED

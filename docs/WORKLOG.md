@@ -211,6 +211,11 @@
   peek. That is the largest single source of test churn in a change like this, and the fix is an
   e2e helper that walks the tier explicitly rather than a bare role query.
 
+  The advisory E2E suite is where a change like this gets caught, and it is dispatch-only. Nothing
+  in the deploy gate opens a calendar event, so `calendar-panel-floor.spec.ts` waited on a section
+  heading the arc had removed and stayed broken through two green releases. A change that rewrites
+  how a whole surface opens should dispatch E2E as part of landing it, not after.
+
 - **Remaining**: Linking an existing task takes a pasted task link, which names its own workspace,
   or a bare id with the workspace picker. A real picker still needs a `calendar-item.task` relation
   definition in the work domain and a new picker request kind, because no task option source or

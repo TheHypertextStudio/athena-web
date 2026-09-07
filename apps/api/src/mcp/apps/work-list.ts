@@ -257,17 +257,20 @@ const SCRIPT = String.raw`
 
     const expand = el('expand');
     const hidden = items.length - INLINE_ROWS;
+    // A page is capped, so what this card holds is not always the whole set. The trailing + says
+    // the remainder runs past the page too, which a bare count would state as complete.
+    const more = String(hidden) + (state.nextCursor ? '+' : '');
     // Offered only when the host says it can honour it AND there is something behind the fold.
     // A control that expands four rows into four rows is noise.
     expand.hidden = !window.docket.canDisplay('fullscreen') || (!full && hidden <= 0);
     // The count earns its place here and nowhere else on this card: it is what the reader gets by
     // clicking, which is the one thing they cannot already see.
-    expand.textContent = full ? 'Show less' : 'Show ' + String(hidden) + ' more';
+    expand.textContent = full ? 'Show less' : 'Show ' + more + ' more';
     // When the host cannot expand, the rest of the list is only reachable in Docket — so the card
     // says so instead of dropping the remainder on the floor behind a count.
     const rest = el('rest');
     rest.hidden = full || hidden <= 0 || !state.listHref || window.docket.canDisplay('fullscreen');
-    rest.textContent = 'Open in Docket to see ' + String(hidden) + ' more';
+    rest.textContent = 'Open in Docket to see ' + more + ' more';
   }
 
   el('expand').addEventListener('click', () => {

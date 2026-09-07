@@ -15,14 +15,14 @@
  * version. Every string is this application's own; provider error text never reaches a person.
  */
 import type { CalendarItemOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
-import { CloudSync, OpenInNew, RefreshCw } from '@docket/ui/icons';
+import { CloudSync, RefreshCw } from '@docket/ui/icons';
 import { Button, Surface } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { userErrorMessage } from '@/lib/problem';
 
 import { useRetryCalendarItemWrite } from '../calendar-mutations';
-import { providerLabel, syncNotice } from '../item-presentation/sync-presentation';
+import { syncNotice } from '../item-presentation/sync-presentation';
 
 /** Props for {@link SyncStateNotice}. */
 export interface SyncStateNoticeProps {
@@ -70,14 +70,6 @@ export function SyncStateNotice({ item, layer }: SyncStateNoticeProps): JSX.Elem
           >
             <RefreshCw aria-hidden="true" />
             {retry.isPending ? 'Sending…' : notice.actionLabel}
-          </Button>
-        ) : null}
-        {item.htmlLink ? (
-          <Button asChild variant="ghost" controlSize="sm">
-            <a href={item.htmlLink} target="_blank" rel="noreferrer">
-              <OpenInNew aria-hidden="true" />
-              {`Open in ${providerLabel(layer)}`}
-            </a>
           </Button>
         ) : null}
       </div>

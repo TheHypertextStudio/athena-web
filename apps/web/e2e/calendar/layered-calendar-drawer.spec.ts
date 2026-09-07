@@ -26,8 +26,9 @@ test.describe('layered calendar drawer', () => {
     await expect(scheduleItem(page, item.id).body).toBeVisible();
     const drawer = await openScheduleItemDetail(page, item.id);
 
-    // The band decides the role, so there is no relationship select to set first.
-    await drawer.getByRole('button', { name: 'Add prep' }).click();
+    // An event with nothing attached offers one affordance, and the band it opens decides the
+    // role — which is what retired the relationship select.
+    await drawer.getByRole('button', { name: 'Add work to this event' }).click();
     await page.getByRole('menuitem', { name: 'New task' }).click();
     const composer = page.getByRole('dialog', { name: 'New task' });
     await composer.getByLabel('Task title').fill('Prep the deck');
@@ -90,7 +91,10 @@ test.describe('layered calendar drawer', () => {
     // The visible title is the editable field itself, so assert its value rather than a heading
     // that is now screen-reader only.
     await expect(drawer.getByLabel('Title')).toHaveValue('Design review (revised)');
-    await expect(drawer.getByText('Synced')).toHaveCount(0);
+    // The seam is named deliberately; the provider's own state vocabulary still is not.
+    await expect(drawer.getByText(/^Synced from .* · your edits push back$/)).toBeVisible();
+    await expect(drawer.getByText('push_pending')).toHaveCount(0);
+    await expect(drawer.getByText('clean')).toHaveCount(0);
   });
 
   test('source access remains available while permission-denied items explain read-only state', async ({

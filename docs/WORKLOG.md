@@ -84,9 +84,12 @@
   schedule label, titles clipped mid-word, a 1024px panel around one column, and the whole-arc
   affordance wearing a single band's label.
 
-- **Blockers**: The e2e specs are updated for the two tiers but have not been run. Playwright plus
-  four dev servers repeatedly breached the machine's shared agent memory ceiling, which is what the
-  interactive shots were competing with; the vitest suite and both policy gates run clean.
+- **Blockers**: The e2e specs are updated for the two tiers and only partly run. The best run of
+  `layered-calendar-drawer.spec.ts` reached 2 of 3 passing and found two real defects — the sync
+  notice duplicated the masthead's provider link, and the whole-arc affordance's label had been
+  renamed out from under the spec — both fixed. Every later run died when the resource guard killed
+  the dev stack: Playwright plus four dev servers repeatedly breach this machine's shared agent
+  memory ceiling. The vitest suite and both policy gates run clean.
 
 - **Learnings**: Two ledgers govern this code, not one. `design-token-debt.json` is the documented
   gate; `tooling/eslint-config/complexity-debt.json` is a second ratchet that pinned three of the

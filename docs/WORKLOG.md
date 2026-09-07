@@ -99,9 +99,11 @@
   peek. That is the largest single source of test churn in a change like this, and the fix is an
   e2e helper that walks the tier explicitly rather than a bare role query.
 
-- **Remaining**: Linking an existing task still asks for a task id. Doing it with a picker needs a
-  `calendar-item.task` relation definition in the work domain and a new picker request kind.
-  `GET /items/:id/relations` is outgoing-only, so a debrief shows its meeting nowhere.
+- **Remaining**: Linking an existing task takes a pasted task link, which names its own workspace,
+  or a bare id with the workspace picker. A real picker still needs a `calendar-item.task` relation
+  definition in the work domain and a new picker request kind, because no task option source or
+  search exists for the shared picker overlay. `GET /items/:id/relations` is outgoing-only, so a
+  debrief shows its meeting nowhere.
 
 ---
 

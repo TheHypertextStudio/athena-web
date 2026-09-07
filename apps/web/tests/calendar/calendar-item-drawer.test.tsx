@@ -694,6 +694,31 @@ describe('CalendarItemDrawer', () => {
     expect(screen.getByRole('heading', { name: 'After' })).toBeInTheDocument();
   });
 
+  it('links a task from a pasted link, without asking which workspace it is in', async () => {
+    itemGet.mockResolvedValue(okResponse(makeItem({ linkedTasks: [] })));
+    itemTasksPost.mockResolvedValue(okResponse(makeItem()));
+    renderDrawer(ITEM_ID);
+    await screen.findByRole('dialog', { name: 'Design review' });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Add work to this event' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Link an existing task' }));
+
+    // A task's own address already carries its workspace, so the picker disappears.
+    await userEvent.type(
+      screen.getByLabelText('Task ID'),
+      `https://docket.hypertext.studio/orgs/${ORG_ID}/tasks/${TASK_A}`,
+    );
+    expect(screen.queryByLabelText('Organization')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Link task' }));
+
+    await waitFor(() => {
+      expect(itemTasksPost).toHaveBeenCalledWith({
+        param: { id: ITEM_ID },
+        json: { mode: 'link', organizationId: ORG_ID, taskId: TASK_A, role: 'related' },
+      });
+    });
+  });
+
   it('offers one affordance, and no apologies, for an event with nothing attached', async () => {
     itemGet.mockResolvedValue(okResponse(makeItem({ linkedTasks: [] })));
     renderDrawer(ITEM_ID);

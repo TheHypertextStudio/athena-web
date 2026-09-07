@@ -122,7 +122,9 @@ async function openOverlay(page: Page, overlay: Overlay): Promise<void> {
     .getByRole('button', { name: /^Research review/ })
     .first()
     .click();
-  const peek = page.locator(`[data-calendar-item-peek="${CALENDAR_IDS.existingNativeItem}"]`);
+  // Only one peek is ever open, and the block this clicks is not the one whose id is easiest to
+  // reach for — naming the attribute rather than an id keeps the two from drifting apart again.
+  const peek = page.locator('[data-calendar-item-peek]');
   await playwrightExpect(peek).toBeVisible();
   await peek.getByRole('button', { name: 'Open' }).click();
   await playwrightExpect(peek).toBeHidden();

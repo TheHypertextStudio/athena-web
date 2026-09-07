@@ -11,6 +11,7 @@
 
 - **Status**: REVIEW
 - **Started**: 2026-09-06
+- **Completed**: 2026-09-06
 - **Priority**: P1
 - **Summary**: Clicking any event threw a 1024px-wide centered modal over the calendar you were
   reading, and the surface it opened was the only detail surface in Docket shaped like a settings
@@ -77,10 +78,15 @@
   in `@docket/test-utils` pass. Eleven raw type-utility violations paid off, two files removed from
   `design-token-debt.json` and three from `complexity-debt.json`, with no new entry in either.
 
-- **Blockers**: Screenshots. `scripts/dev-stack.sh start` is killed by the resource guard on this
-  machine — 2.8 GB of node from other agent worktrees is resident before the stack starts, and the
-  four dev servers push the shared forest total past its 40% ceiling. The e2e specs are updated for
-  the two tiers but have not been run.
+- **Screenshots**: `docs/design/audits/screenshots/2026-09-06-calendar-event/`, scored in
+  `docs/design/audits/2026-09-06-calendar-event.md` (SHIP). Looking at them found six defects that
+  reasoning had not: a stranded close control, every native event claiming to be synced, a doubled
+  schedule label, titles clipped mid-word, a 1024px panel around one column, and the whole-arc
+  affordance wearing a single band's label.
+
+- **Blockers**: The e2e specs are updated for the two tiers but have not been run. Playwright plus
+  four dev servers repeatedly breached the machine's shared agent memory ceiling, which is what the
+  interactive shots were competing with; the vitest suite and both policy gates run clean.
 
 - **Learnings**: Two ledgers govern this code, not one. `design-token-debt.json` is the documented
   gate; `tooling/eslint-config/complexity-debt.json` is a second ratchet that pinned three of the

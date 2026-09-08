@@ -1930,6 +1930,7 @@ describe('hub resources', () => {
       'docket://hub/inbox',
       'docket://hub/directive',
       'docket://hub/portfolio',
+      'docket://hub/active-work',
     ]) {
       await expect(client.readResource({ uri })).rejects.toThrow(/work:read/);
     }

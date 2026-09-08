@@ -56,6 +56,7 @@ import {
 } from './resource-work-hydrators';
 import { authorize, scopedActor } from './result';
 import { RESOURCE_READ_SCOPE, requireScope } from './scope';
+import { registerActiveWorkResource } from './active-work-resource';
 
 /** The entity types the `docket://{org}/{type}/{id}` template can read. */
 export const READABLE_TYPES = [
@@ -343,6 +344,7 @@ async function hydrate(
 export function registerResources(server: McpRegistrar, ctx: McpContext): void {
   registerApps(server);
   registerStaticResources(server, ctx);
+  registerActiveWorkResource(server, ctx);
 
   server.registerResource(
     'entity',

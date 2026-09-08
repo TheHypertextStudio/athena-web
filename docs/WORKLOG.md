@@ -9091,6 +9091,68 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [TYPE-SCALE-001] Close the gaps between the design system and its enforcement
+
+- **Completed**: 2026-09-08
+- **Started**: 2026-09-07
+- **Priority**: P2
+- **Summary**: A craft pass on Today and task detail that turned into three enforcement gaps. Each
+  followed the same shape: the contract in `docs/design/design-system.md` said one thing, the gate
+  checked a narrower thing, and the difference accumulated silently for months.
+
+#### The three gaps
+
+`ZERO_TOLERANCE_PREFIX` was `packages/ui/src/primitives/`, so ratchet rule 4 hardened the
+primitives and left `packages/ui/src/components/` — the layer product screens actually import —
+ledger-eligible like ordinary product code. Ten shared components had accumulated 26 violations
+there. The count understates it: `EntityListRow`, `GroupHeader` and `AppShell` are what a screen
+author reads to learn how a row or a header is built, so `font-medium` on a row title propagated as
+house style. That is why 475 of the 487 violations in the ledger were `raw-type-utility` while
+motion, spacing and empty states were already clean.
+
+`ad-hoc-border` was scoped to `apps/admin/src`. §8 says grouping is a tonal step and not a drawn
+line; the web app had 519 border utilities and nothing counted them, so nothing could shrink them.
+
+`raw-radius-utility` did not exist. 112 corners in the web app and nine inside the design system
+itself sat outside both documented radius scales, with no rule of any kind.
+
+#### What changed
+
+The prefix moved to `packages/ui/src`, so the whole design system is ledger-ineligible.
+`ad-hoc-border` widened to `apps/web/src` and its debt was seeded. `raw-radius-utility` is new, and
+after resolving the design system's own nine corners onto the two scales it needs no scope at all —
+a corner is never load-bearing the way a field's outline is, so unlike borders there was no
+exemption vocabulary to invent first.
+
+On the surfaces: Today and entity detail moved fully onto the fifteen type roles; the composer
+stopped being centred 52px inside every heading and card; the agenda rail stopped floating an empty
+-state pill over whatever hour was scrolled into view; the day-context chips came off the
+`floating` overlay role onto `Badge`; the row meta reserved its numeric columns; four bare empty
+states became the `EmptyState` atom; and the description editor's 224px floor came down to 128px.
+
+- **Files changed**: `packages/test-utils/tests/design-policies/` owns the two new rules and the
+  widened prefix. `packages/ui/src/components/` and `primitives/` carry the type-role and radius
+  corrections. `apps/web/src` covers Today, the agenda, entity detail, the views infrastructure and
+  the empty states. `docs/design/design-system.md` §9 and a new scorecard record the reasoning.
+- **Validation**: Full workspace build (4/4) and lint (26/26) green. Typecheck green across all 27
+  tasks, with `api` and `web` run individually because the memory guard kills them concurrently.
+  766 `packages/ui` tests, 3,837 `apps/web` tests and the 9 design-policy tests pass. Both new rules
+  were proven by injecting `rounded-2xl border-outline-variant border` into a clean web file and
+  confirming the gate named both rules and the file. CI passed on `5396ae09b`, including the API
+  suite the local memory guard would not allow, and production deployed.
+- **Learnings**: Three worth keeping. A closed vocabulary is only as closed as the narrowest root
+  its rule runs on, and a scope comment explaining why a rule is narrow ages into a reason nobody
+  revisits. A scorecard written by whoever did the work grades what they were looking at — this one
+  scored `ship` while three of eight dimensions were failing, and only a second reader caught it.
+  And the ledger total is not a score: it rose from 388 to 1,023 in this task while type debt fell,
+  because widening enforcement counts debt that was always there.
+- **Blockers hit**: The dev stack would not start for three attempts and I reported the machine's
+  memory ceiling as the cause. That was wrong. The real blocker was a stale `portless` proxy from
+  another worktree holding `:1355` — 10MB, and precisely the first-come alias trap
+  `docs/engineering/ui-verification.md` documents. Clearing it worked first try. Separately, this
+  entry had to be written twice: the first copy was lost in a rebase where `main` had also edited
+  `docs/WORKLOG.md` and the auto-merge silently kept its version.
+
 ### [LATTICE-FEDCM-CONTINUATION-001] Finish the Lattice connection when Lovelace asks for consent
 
 - **Completed**: 2026-09-02

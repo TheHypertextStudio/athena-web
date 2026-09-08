@@ -86,7 +86,7 @@ export function GroupHeader({
       data-level={level}
       className={cn(
         surfaceToneColor('canvas'),
-        'border-outline-variant hover:bg-surface-container-high text-label-large flex w-full cursor-pointer items-center gap-2 border-b px-3 transition-colors outline-none select-none',
+        'hover:bg-surface-container-high text-label-large flex w-full cursor-pointer items-center gap-2 px-3 transition-colors outline-none select-none',
         rowHeight === undefined ? 'h-9' : 'min-h-(--row-h)',
         focusRingInset,
         className,

@@ -169,9 +169,8 @@ function rowRenderProps(parts: {
 const ROW_BASE =
   '@container/row group/row relative flex min-h-(--row-h) w-full items-center gap-2 px-3 py-(--row-py) text-left text-body-medium';
 
-/** Separation classes per tone: hairline dividers when bordered, rounded rows when tonal. */
+/** Separation per tone: a rounded row that separates by the surface step, never a hairline. */
 const ROW_TONE: Record<EntityListTone, string> = {
-  bordered: 'border-outline-variant border-b last:border-b-0',
   tonal: 'rounded-lg',
 };
 

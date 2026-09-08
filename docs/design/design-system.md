@@ -817,21 +817,31 @@ and `rounded-[inherit]`, which defer to a token or to the parent rather than pic
 
 #### Per-rule scope
 
-Every rule runs across all of `ENFORCED_ROOTS` except where `RULE_ROOTS` in `design-token-scan.ts`
-narrows it. One rule is narrowed: **`ad-hoc-border`**, to `apps/admin/src` and `apps/web/src`.
-`raw-radius-utility` runs everywhere, `packages/ui/src` included.
+`RULE_ROOTS` in `design-token-scan.ts` is now empty: every rule runs across all of `ENFORCED_ROOTS`.
 
 `ad-hoc-border` was admin-only until 2026-09-07. The cost of that scope was not less debt but
 invisible debt: the web app had reached 519 border utilities against a §8 that says grouping is a
 tonal step and not a drawn line, and nothing counted them, so nothing could shrink them. They are
 now seeded and ratcheted like everything else.
 
-`ad-hoc-border` does not reach `packages/ui/src`, and that is deliberate rather than pending. Rule
-4 below holds that tree to zero with no ledger entries permitted, so covering it would demand every
-violation come out in the same change — and in the primitives a border is frequently the correct
-answer, being the field's editable affordance, a separator's whole purpose, or a control's outline.
-The rule has no vocabulary for those exemptions, so applying it there would force removals that
-make the components wrong. Giving it that vocabulary is the work that has to happen first.
+Reaching `packages/ui/src` took removing every border in the design system that §8 does not earn,
+because rule 4 below permits that tree no ledger entries — the widening and the removals had to
+land together. Twenty-five files drew one; seven still do. What went: each overlay's outline, which
+sat redundantly beside a tonal fill and an elevation shadow (`menu-styles.ts` had already worked
+this out — MD3's menu spec has no outline role); the shell's dividers; the picker section rules;
+`EmptyState`'s frame; `AuthLayout`'s card, whose own comment argued the `page` tone already stepped
+off the canvas behind it; and the row rules on tables and lists. `EntityList`'s `bordered` tone and
+`EntityTable`'s `outlined` tone went with them. Neither was chosen: `bordered` had zero call sites
+against five explicit `tonal` ones, and `outlined` was the default for all ten tables without one
+naming it.
+
+What survives is `BORDER_EARNED_FILES`, an exemption rather than a scope — the rule reads those
+files and finds a border it agrees with. Each is one of §8's three cases: `field.tsx` is the
+editable affordance; `checkbox.tsx` and `switch.tsx` draw the control itself; `button.tsx`,
+`chip.tsx` and `badge.tsx` are MD3's outlined variants, where the line _is_ the variant; and
+`AppShell.tsx`'s skip link is `page` tone landing over content of the same tone, so the ramp
+separates nothing and only a line can. Adding a file there means arguing it into one of those
+cases, not parking it pending a migration.
 
 `raw-radius-utility` had the same shape of problem and it turned out to be smaller than it looked.
 Nine corners in the design system were off both scales, not the 22 a raw grep suggested — the rest

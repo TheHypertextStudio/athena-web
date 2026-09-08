@@ -11,9 +11,9 @@ import type { EntityTableRowInteraction } from './EntityTable';
 import type { EntityTableRowAria } from './EntityTable';
 import { columnClassName, columnStyle } from './entity-table-columns';
 
-/** The shared row chrome (density + dividers + the named container) — matches {@link ListRow}. */
+/** The shared row chrome (density + the named container) — matches {@link ListRow}. */
 const TABLE_ROW_BASE =
-  'border-outline-variant relative flex min-h-(--row-h) w-full items-center gap-2 border-b px-3 py-(--row-py) text-body-medium last:border-b-0';
+  'relative flex min-h-(--row-h) w-full items-center gap-2 px-3 py-(--row-py) text-body-medium';
 
 /** The interactive affordances for a data row — matches {@link ListRow}/{@link EntityListRow}. */
 const TABLE_ROW_INTERACTIVE = cn(
@@ -22,8 +22,8 @@ const TABLE_ROW_INTERACTIVE = cn(
 );
 
 /** Resolve the resting row surface without adding branching to the row renderer. */
-function rowSurfaceTone(tone: 'outlined' | 'tonal'): string {
-  return surfaceToneColor(tone === 'tonal' ? 'card' : 'page');
+function rowSurfaceTone(_tone: 'tonal'): string {
+  return surfaceToneColor('card');
 }
 
 /** Resolve row state attributes outside the main renderer's branch budget. */
@@ -53,7 +53,7 @@ export interface EntityTableRowProps<T> {
   /** Optional caller-owned hierarchy metadata. */
   rowAria?: EntityTableRowAria | undefined;
   /** Surface treatment inherited from the owning table. */
-  tone: 'outlined' | 'tonal';
+  tone: 'tonal';
   columns: readonly Column<T>[];
   row: T;
   active: boolean;

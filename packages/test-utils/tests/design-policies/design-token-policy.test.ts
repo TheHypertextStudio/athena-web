@@ -56,6 +56,7 @@ import {
   formatViolations,
   scanDesignTokenRoots,
   scanDesignTokens,
+  BORDER_EARNED_FILES,
   SHADOW_ALLOWED_FILES,
   tallyViolations,
 } from './design-token-scan';
@@ -194,15 +195,25 @@ describe('design token policy', () => {
       'rounded-t',
     ]);
 
-    // The same text outside `ad-hoc-border`'s roots must produce nothing. `packages/ui/src` is the
-    // one enforced root the rule does not cover, which makes this a scope proof rather than a
-    // restatement. `raw-radius-utility` has no RULE_ROOTS entry and so runs everywhere, which is
-    // why it is excluded from this assertion rather than asserted alongside.
+    // `ad-hoc-border` has no RULE_ROOTS entry any more, so there is no root to prove it out of.
+    // What needs proving instead is BORDER_EARNED_FILES: the identical text must produce nothing
+    // in a file where §8 earns a border, and everything in one where it does not. Asserting both
+    // halves is what stops the allow-set from silently exempting the whole tree.
+    for (const earned of BORDER_EARNED_FILES) {
+      expect(
+        scanDesignTokens(resolve(WORKSPACE_ROOT, earned), borderFixture).filter(
+          (violation) => violation.rule === 'ad-hoc-border',
+        ),
+        `expected ${earned} to be exempt from ad-hoc-border`,
+      ).toEqual([]);
+    }
     expect(
-      scanDesignTokens(resolve(WORKSPACE_ROOT, 'packages/ui/src/fixture.ts'), borderFixture).filter(
-        (violation) => violation.rule === 'ad-hoc-border',
-      ),
-    ).toEqual([]);
+      scanDesignTokens(
+        resolve(WORKSPACE_ROOT, 'packages/ui/src/primitives/not-earned.tsx'),
+        borderFixture,
+      ).filter((violation) => violation.rule === 'ad-hoc-border').length,
+      'expected a design-system file outside the allow-set to still be checked',
+    ).toBeGreaterThan(0);
 
     const values = [...violations, ...overlayViolations, ...borderViolations].map(
       (violation) => violation.value,

@@ -96,7 +96,7 @@ export const ListRow = React.forwardRef<HTMLDivElement, ListRowProps>(function L
   ref,
 ): React.JSX.Element {
   const rowClassName = cn(
-    'border-outline-variant text-body-medium flex min-h-(--row-h) w-full cursor-pointer items-center gap-2 border-b px-3 py-(--row-py) transition-colors outline-none',
+    'text-body-medium flex min-h-(--row-h) w-full cursor-pointer items-center gap-2 px-3 py-(--row-py) transition-colors outline-none',
     'hover:bg-surface-container-high focus-visible:bg-surface-container-high',
     focusRingInset,
     active && !selected && 'bg-surface-container-highest',

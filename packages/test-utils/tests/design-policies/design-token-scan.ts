@@ -78,21 +78,16 @@ export const DESIGN_TOKEN_RULES: readonly DesignTokenRule[] = [
  * and not a drawn line. Nothing counted them, so nothing could shrink them. Widening the rule and
  * seeding the current count makes it a one-way ratchet like every other rule here.
  *
- * It stays away from `packages/ui/src`, and that tree is being driven to zero so it can stop doing
- * so. Ratchet rule 4 permits no ledger entries there, so the rule can only widen once every border
- * in the design system is either gone or genuinely earned under §8. Scanning it found 25 files;
- * removing the ones that were decoration or separation — every overlay's outline, the shell's
- * dividers, the picker section rules, `EmptyState`'s frame, `AuthLayout`'s card — leaves these:
+ * `ad-hoc-border` now runs everywhere and so has **no entry here**. Reaching `packages/ui/src` took
+ * removing every border in the design system that §8 does not earn: each overlay's outline
+ * (redundant beside a tonal fill and an elevation shadow), the shell's dividers, the picker section
+ * rules, `EmptyState`'s frame, `AuthLayout`'s card, and the row rules on tables and lists. The
+ * `bordered` and `outlined` tones went with them — `bordered` had zero callers, and `outlined` was
+ * the default for all ten tables without one asking for it by name. Rule 4 permits that tree no
+ * ledger entries, so the widening and the removals had to land together.
  *
- * - **Earned, and what the exemption has to cover**: `field.tsx` (the editable affordance),
- *   `checkbox.tsx` and `switch.tsx` (a control's own outline), `button.tsx`, `chip.tsx` and
- *   `badge.tsx` (MD3's outlined variants, where the line *is* the variant), and `AppShell.tsx`'s
- *   skip link, which lands over content of its own tone where a tonal step separates nothing.
- * - **Still undecided**: `EntityTable.tsx`, `entity-table-row.tsx`, `GroupHeader.tsx` and
- *   `ListRow.tsx` draw row rules, and `EntityList`'s `bordered` tone draws them for lists. §8 puts
- *   separation outside what earns a border, and a `tonal` alternative already exists for both — but
- *   `outlined` is the default for all ten tables in the product, so that is a design decision about
- *   dense tables rather than a cleanup.
+ * What survives is {@link BORDER_EARNED_FILES}, which is an exemption rather than a scope: the
+ * rule reads those files and finds a border it agrees with.
  *
  * `raw-radius-utility` deliberately has **no entry here** and so runs on every enforced root,
  * `packages/ui/src` included. Corners have no equivalent of the border rule's three exemptions —
@@ -102,9 +97,37 @@ export const DESIGN_TOKEN_RULES: readonly DesignTokenRule[] = [
  * Widening this to another root is a migration commitment: drive that root to zero first, or seed
  * it into the ledger in the same change.
  */
-export const RULE_ROOTS: Partial<Record<DesignTokenRule, readonly string[]>> = {
-  'ad-hoc-border': ['apps/admin/src', 'apps/web/src'],
-};
+export const RULE_ROOTS: Partial<Record<DesignTokenRule, readonly string[]>> = {};
+
+/**
+ * The files where §8 earns a border, exempt from `ad-hoc-border`.
+ *
+ * @remarks
+ * §8 earns one in exactly three cases, and each entry here is one of them:
+ *
+ * - **A field's editable affordance.** `field.tsx` — the outline is what says "type here", and
+ *   `Input`, `Textarea` and `Select` all resolve through it.
+ * - **A control's own outline.** `checkbox.tsx` and `switch.tsx` draw a box and a track; without
+ *   the border there is no control, only a fill that appears when checked.
+ * - **MD3's outlined variants**, where the line *is* the variant: `button.tsx` (Outlined Button),
+ *   `chip.tsx` (`outline-width 1dp` unselected, per the chip spec) and `badge.tsx`, whose
+ *   `outline` variant has no fill and would otherwise be bare text.
+ * - **A boundary between things not contained by one another.** `AppShell.tsx`'s skip link is
+ *   `page` tone landing over content of the same tone, so the surface ramp separates nothing and
+ *   the line is the only thing that can.
+ *
+ * This is an allow-set, not a ledger: it does not shrink on a schedule and nothing is parked here
+ * pending a migration. Adding a file means arguing it into one of those four cases.
+ */
+export const BORDER_EARNED_FILES: readonly string[] = [
+  'packages/ui/src/components/shell/AppShell.tsx',
+  'packages/ui/src/primitives/badge.tsx',
+  'packages/ui/src/primitives/button.tsx',
+  'packages/ui/src/primitives/checkbox.tsx',
+  'packages/ui/src/primitives/chip.tsx',
+  'packages/ui/src/primitives/field.tsx',
+  'packages/ui/src/primitives/switch.tsx',
+];
 
 /** One flagged value, located precisely enough to fix without searching. */
 export interface DesignTokenViolation {
@@ -403,13 +426,14 @@ export function scanDesignTokens(filePath: string, sourceText: string): DesignTo
   const violations: DesignTokenViolation[] = [];
 
   // Which rules apply to this file, resolved once rather than per string literal. A rule is out
-  // of scope when the file is (or is not) an overlay module, or when RULE_ROOTS restricts it to
-  // roots this file does not live under.
+  // of scope when the file is (or is not) an overlay module, when it is one of the files §8 earns
+  // a border in, or when RULE_ROOTS restricts it to roots this file does not live under.
   const activePatterns = RULE_PATTERNS.filter(({ rule }) => {
     if (rule === 'shadow-outside-overlay') return !shadowAllowed;
     // The mirror of the rule above: inside an overlay a shadow is correct, so what is checked
     // there is whether it names an MD3 elevation level instead of Tailwind's unnamed scale.
     if (rule === 'raw-shadow-on-overlay') return shadowAllowed;
+    if (rule === 'ad-hoc-border' && BORDER_EARNED_FILES.includes(relativePath)) return false;
     const roots = RULE_ROOTS[rule];
     return roots === undefined || roots.some((root) => relativePath.startsWith(root));
   });

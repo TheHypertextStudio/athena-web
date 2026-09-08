@@ -108,8 +108,16 @@ export interface EntityTableProps<T> {
   groups?: readonly EntityTableGroup<T>[] | undefined;
   /** Stable React key for a row. */
   getRowKey: (row: T) => string;
-  /** Surface treatment. The current outlined table remains the default. */
-  tone?: 'outlined' | 'tonal' | undefined;
+  /**
+   * Surface treatment.
+   *
+   * @remarks
+   * One tone. The `outlined` treatment drew a hairline around the table and a `border-b` under
+   * every row, and it was the default for all ten tables in the product — none of which asked for
+   * it by name. §8 keeps a border to a field's affordance, a focus indicator, and a boundary
+   * between things not contained by one another, so row separation is the surface step's job.
+   */
+  tone?: 'tonal' | undefined;
   /** Grid semantics for flat or hierarchical rosters. */
   gridRole?: 'grid' | 'treegrid' | undefined;
   /** Supply hierarchy metadata without coupling this package to a domain model. */
@@ -188,8 +196,8 @@ export interface EntityTableProps<T> {
 }
 
 /** Resolve the resting table surface for one presentation tone. */
-function tableSurfaceTone(tone: 'outlined' | 'tonal'): string {
-  return surfaceToneColor(tone === 'tonal' ? 'card' : 'page');
+function tableSurfaceTone(_tone: 'tonal'): string {
+  return surfaceToneColor('card');
 }
 
 /** Resolve a row estimate from an explicit value or shared density. */
@@ -238,14 +246,13 @@ function nearestSurvivingEntityTableKey(
 
 /** Resolve table chrome classes from the two public presentation switches. */
 function entityTableClassName(
-  tone: 'outlined' | 'tonal',
+  tone: 'tonal',
   virtualized: boolean,
   className: string | undefined,
 ): string {
   return cn(
     tableSurfaceTone(tone),
     '@container/table flex w-full flex-col overflow-x-auto rounded-xl outline-none',
-    tone === 'outlined' && 'border-outline-variant border',
     virtualized ? 'relative h-full min-h-0 overflow-y-auto' : 'overflow-y-hidden',
     focusRingInset,
     className,
@@ -273,7 +280,7 @@ function EntityTableHeader<T>({
 }: {
   readonly columns: readonly Column<T>[];
   readonly hidden: boolean;
-  readonly tone: 'outlined' | 'tonal';
+  readonly tone: 'tonal';
 }): React.JSX.Element | null {
   if (hidden) return null;
   return (
@@ -381,7 +388,7 @@ function EntityTableContinuationEntry({
       data-row-height={rowHeight}
       style={{ '--row-h': `${String(rowHeight)}px` } as React.CSSProperties}
       className={cn(
-        'border-outline-variant flex min-h-(--row-h) w-full items-center border-b px-3 py-(--row-py)',
+        'flex min-h-(--row-h) w-full items-center px-3 py-(--row-py)',
         active && 'bg-surface-container-highest',
       )}
     >
@@ -426,7 +433,7 @@ export function EntityTable<T>({
   rows,
   groups,
   getRowKey,
-  tone = 'outlined',
+  tone = 'tonal',
   gridRole = 'grid',
   getRowAria,
   rowHref,

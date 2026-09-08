@@ -16,7 +16,8 @@ describe('EntityListRow', () => {
     const row = screen.getByRole('button', { name: 'Billing revamp' });
     expect(row).toHaveAttribute('type', 'button');
     expect(row).toHaveAttribute('tabindex', '0');
-    expect(row).toHaveClass('min-h-(--row-h)', 'px-3', 'focus-visible:ring-1', 'border-b');
+    expect(row).toHaveClass('min-h-(--row-h)', 'px-3', 'focus-visible:ring-1', 'rounded-lg');
+    expect(row).not.toHaveClass('border-b');
     expect(row).not.toHaveAttribute('data-active');
     expect(row).not.toHaveAttribute('data-selected');
   });
@@ -149,7 +150,7 @@ describe('EntityListRow', () => {
     const row = screen.getByLabelText('ENG Engineering');
     expect(row.tagName).toBe('DIV');
     // Keeps the shared layout/density, but drops the interactive affordances.
-    expect(row).toHaveClass('min-h-(--row-h)', 'px-3', 'border-b');
+    expect(row).toHaveClass('min-h-(--row-h)', 'px-3');
     expect(row).not.toHaveClass('cursor-pointer', 'hover:bg-surface-container-high');
     // It is inert: there is nothing to click that would fire activation.
     expect(onActivate).not.toHaveBeenCalled();
@@ -228,7 +229,7 @@ describe('RowProgress', () => {
 });
 
 describe('EntityList', () => {
-  it('wraps rows in the bordered rounded container with an accessible label', () => {
+  it('wraps rows in the tonal rounded container with an accessible label', () => {
     render(
       <EntityList aria-label="Projects">
         <EntityListRow title="One" />
@@ -236,7 +237,8 @@ describe('EntityList', () => {
       </EntityList>,
     );
     const group = screen.getByRole('group', { name: 'Projects' });
-    expect(group).toHaveClass('rounded-xl', 'border', 'border-outline-variant', 'overflow-hidden');
+    expect(group).toHaveClass('rounded-xl', 'bg-surface-container-low', 'p-2');
+    expect(group).not.toHaveClass('border');
     expect(screen.getByRole('button', { name: 'One' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Two' })).toBeInTheDocument();
   });

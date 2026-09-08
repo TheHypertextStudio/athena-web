@@ -198,7 +198,7 @@ describe('EntityTable — column alignment + sizing', () => {
   it('is its own container and scrolls horizontally within its panel (no app overflow)', () => {
     render(<EntityTable aria-label="Items" columns={COLUMNS} rows={ROWS} getRowKey={getRowKey} />);
     const grid = screen.getByRole('grid', { name: 'Items' });
-    expect(grid).toHaveClass('@container/table', 'overflow-x-auto', 'rounded-xl', 'border');
+    expect(grid).toHaveClass('@container/table', 'overflow-x-auto', 'rounded-xl');
   });
 });
 
@@ -231,15 +231,17 @@ describe('EntityTable — rows + chrome', () => {
     );
   });
 
-  it('keeps the outlined default and makes the table itself the tonal roster surface', () => {
+  it('is the tonal roster surface by default and draws no outline', () => {
     const { rerender } = render(
       <EntityTable aria-label="Items" columns={COLUMNS} rows={ROWS} getRowKey={getRowKey} />,
     );
+    // The default was `outlined` — a hairline around the table and one under every row — and no
+    // caller ever asked for it by name. §8 leaves separation to the surface step.
     expect(screen.getByRole('grid', { name: 'Items' })).toHaveClass(
-      'bg-surface',
-      'border',
+      'bg-surface-container-low',
       'rounded-xl',
     );
+    expect(screen.getByRole('grid', { name: 'Items' })).not.toHaveClass('border');
 
     rerender(
       <EntityTable
@@ -265,13 +267,7 @@ describe('EntityTable — rows + chrome', () => {
     // 1 header row + 3 data rows.
     expect(screen.getAllByRole('row')).toHaveLength(4);
     const dataRow = screen.getByRole('row', { name: /Billing revamp/ });
-    expect(dataRow).toHaveClass(
-      'min-h-(--row-h)',
-      'px-3',
-      'py-(--row-py)',
-      'border-b',
-      'focus-visible:ring-1',
-    );
+    expect(dataRow).toHaveClass('min-h-(--row-h)', 'px-3', 'py-(--row-py)', 'focus-visible:ring-1');
     expect(within(dataRow).getByTestId('glyph-r1')).toBeInTheDocument();
   });
 

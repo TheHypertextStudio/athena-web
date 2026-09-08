@@ -82,22 +82,25 @@ export function RowProgress({
  * How an {@link EntityList} and its rows separate from the page.
  *
  * @remarks
- * - `bordered` (default) — an outlined `bg-surface` container with hairline `border-b` row
- *   dividers. The original chrome; Teams and Cycles keep it.
- * - `tonal` — a borderless `bg-surface-container-low` container whose rows separate purely by the
- *   MD3 surface step on hover (`rounded-lg`, no dividers). Matches the Projects/Initiatives list
- *   treatment, replacing stacked borders with tonal hierarchy.
+ * One tone. `tonal` is a borderless `bg-surface-container-low` container whose rows separate by the
+ * MD3 surface step on hover (`rounded-lg`, no dividers).
+ *
+ * There was a `bordered` tone — an outlined `bg-surface` container with hairline `border-b` row
+ * dividers — and it was the *default*, yet every one of the five call sites passed `tonal`
+ * explicitly. Nobody chose it, and §8 puts separation outside the three things that earn a border,
+ * so it is gone rather than kept as an unused second vocabulary. The prop survives because those
+ * five call sites name the tone they want and there is no reason to churn them.
  */
-export type EntityListTone = 'bordered' | 'tonal';
+export type EntityListTone = 'tonal';
 
 /**
  * The tone an {@link EntityListRow} inherits from its enclosing {@link EntityList}.
  *
  * @remarks
  * Provided by {@link EntityList} so a row need not be told its tone at each call site; a row
- * rendered outside a list falls back to `bordered`.
+ * rendered outside a list falls back to `tonal`, which is now the only tone.
  */
-export const EntityListToneContext = React.createContext<EntityListTone>('bordered');
+export const EntityListToneContext = React.createContext<EntityListTone>('tonal');
 
 /** Props for {@link EntityList}. */
 export interface EntityListProps {
@@ -128,7 +131,7 @@ export function EntityList({
   children,
   'aria-label': ariaLabel,
   className,
-  tone = 'bordered',
+  tone = 'tonal',
 }: EntityListProps): React.JSX.Element {
   return (
     <EntityListToneContext.Provider value={tone}>
@@ -137,9 +140,8 @@ export function EntityList({
         aria-label={ariaLabel}
         className={cn(
           'flex w-full flex-col rounded-xl',
-          tone === 'bordered'
-            ? [surfaceToneColor('page'), 'border-outline-variant overflow-hidden border']
-            : [surfaceToneColor('card'), 'p-2'],
+          surfaceToneColor('card'),
+          'p-2',
           className,
         )}
       >

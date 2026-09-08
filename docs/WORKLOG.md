@@ -635,19 +635,27 @@
 
 ### [AUTH-CREDENTIAL-RACES] Preserve credential revocation during concurrent authentication
 
-- **Upstream integration (2026-09-06)**: Rebased the isolated credential branch onto `origin/main` at `e0f2cda1a`, preserving the intervening Lattice authorization and detail-page work. The only textual overlap was this append-only worklog; the credential implementation files did not conflict. Android remains aligned with its current `origin/main`. The restore user-verification policy decision is still unresolved, so no verifier behavior changed during reconciliation.
+- **Restore verification decision (2026-09-06)**: The user approved passive verification only for
+  silent restore authentication. The public authentication options now request
+  `userVerification: discouraged`, and assertion verification accepts a valid signature without the
+  UV flag. Restore registration remains user-verification-required. Independent review found that
+  the pinned Better Auth plugin did not enforce the same stated policy for ordinary passkeys, so
+  Athena now requests required UV and rejects registration/authentication callbacks unless
+  SimpleWebAuthn reports `userVerified: true`. Four focused regressions failed before that correction;
+  the combined builder/restore suite then passed 97 tests.
+- **Upstream integration (2026-09-06)**: Rebased the isolated credential branch onto `origin/main` at `e0f2cda1a`, preserving the intervening Lattice authorization and detail-page work. The only textual overlap was this append-only worklog; the credential implementation files did not conflict. Android remains aligned with its current `origin/main`. The restore user-verification policy decision was still unresolved at this checkpoint, so no verifier behavior changed during reconciliation.
 - **Local delivery checkpoint (2026-09-05)**: Freshly fetched origin; the isolated branch remains based on `19714a63f` with no upstream divergence. Reviewed the complete diff, reset only the idle worktree-local `.data/docket` test database, and reran `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` successfully. Unchanged package inputs reused the shared Turbo cache. Preparing one local `fix(auth)` commit for the transactional deletion guards, restore race/error boundary, generic-route retirement, typed browser-test migration, and their documentation/tests. This checkpoint does not close browser Signal acceptance, the restore UV decision, or the overall Android program. No integration into the original dirty checkout, push, deployment, or production migration.
 - **Retrospection**: Deterministic suspended-verifier and concurrent-deletion tests exposed security failures that simple successful authentication tests missed. Independent review caught the cross-method identity deletion race. Keeping browser runtime acceptance separate from root package gates avoids misrepresenting a dev-server timeout as a successful user journey; resolve that runtime gate before release.
 - **Browser runtime isolation (2026-09-05)**: With about 60 GiB free and upstream still unchanged, the documented stack reached readiness and a signup warm-up returned 200, then the browser timed out at initial navigation. Direct API get-session returned 200 while the same-origin web proxy and subsequent signup request timed out; Next consumed a full CPU core. Repeated with installed Node 24.20.0, matching both version files, and verified the child runtime: identical initial-navigation failure. This rules out disk exhaustion and a Node-26-only cause, not the underlying dev-server defect. Official Turbo environment documentation confirms the prior `TURBO_UI=false` attempt was valid. Scoped stack stopped; Signal assertion remains unexecuted. No source configuration workaround or release claim.
 - **Post-review release validation (2026-09-05)**: Reset the disposable worktree PGlite database after confirming no open handles. The chained root typecheck, lint, test, and build completed with exit 0 after all review fixes. Browser Signal acceptance remains open because signup stalled before the assertion under test; root gates do not establish browser or native-provider acceptance.
-- **Status**: IN_PROGRESS
+- **Status**: REVIEW
 - **Started**: 2026-09-04
 - **Priority**: P1
 - **Description**: Complete the Android credential program's server concurrency and validation gates.
 - **Approach**: Reproduce deletion-during-restore verification and stale counter writes with deterministic barriers; require an owned, unchanged credential row before issuing a session. Then serialize last-passkey reachability checks and deletion, retire generic management routes after consumer verification, and cover replay/expiry/rate limits.
 - **Files to modify**: `packages/auth/src/restore-credential.ts`, its tests, typed passkey management and supporting auth policy, auth/deployment documentation.
 - **Validation**: Focused failing regressions before fixes; auth/API/database tests followed by root typecheck, lint, tests and build. No production migration, push or deployment.
-- **Risks**: Authenticators with zero counters must continue working; concurrent requests must not undo revocation. The native restore user-verification policy still requires a user decision and will not be silently relaxed.
+- **Risks**: Authenticators with zero counters must continue working; concurrent requests must not undo revocation. Passive verification is confined to silent restore authentication; broadening it to restore registration or ordinary passkeys would weaken the approved policy.
 - **Notes**: Work is isolated from the main checkout's unrelated worklog edit in `codex/credential-ux-completion`, based on `origin/main` at `19714a63f`.
 - **Progress**: Restore deletion-during-verification and out-of-order counter regressions both reproduced HTTP 200 session issuance. Conditional update/returning now rejects either race with HTTP 401 before creating a session; zero-counter authenticators remain accepted. Eleven restore tests, auth typecheck and auth lint pass. Full-package and root gates remain pending; no completion or release claim.
 - **Passkey management**: Concurrent typed deletion reproduced two HTTP 200 responses that removed both credentials. An owner-row lock and transaction now preserve one method. Recovery-code status is read through that same transaction; exhausted codes no longer justify removing the last passkey. Generic list/update/delete routes return 404 after verifying web and Android consumers use typed resources; authentication options remain available. Auth coverage passes at 179 tests and 100%; all eight typed passkey API tests pass. Android's current `./run check` and nine managed API-35 tests also pass.
@@ -657,6 +665,18 @@
 - **Browser follow-up**: Migrated the stale-passkey Signal test to the typed list envelope and DELETE response credentialId. Existing dev-stack reports web/API/OIDC readiness. The first browser attempt stopped earlier in the shared signup helper: name/email remained empty and Continue stayed disabled through its 60-second retry window. This does not verify the Signal flow; investigate the signup failure, rerun the migrated browser test, then stop the dev stack/reset its disposable database before renewed root gates.
 - **Browser environment evidence**: Plain restart and fresh worktree dev cache both reproduced the failure. Direct HTTP requests to Next time out while API/OIDC remain healthy. Sampling the live Next process shows sustained native uncaught-exception handling. The generated `.next/dev` cache was moved recoverably to `/tmp/docket-credential-dev-cache.AYGHWE/dev`; source and database were untouched. Testing the same dev-stack with `TURBO_UI=false` based on the analogous upstream stdout-pipe hang (Next issue 96216); this is a diagnostic environment override, not a repository configuration change or a verified root cause.
 - **Renewed release checks**: Upstream remains unchanged at `19714a63f`. The TUI-disabled browser attempt advanced through signup input but timed out waiting for onboarding, so Signal behavior remains unverified. The scoped dev stack is stopped. Disk pressure subsequently required deleting only unused generated Next.js output and the retired cache; neither source nor database was removed by that cleanup. Resetting the validated disposable `.data/docket` PGlite database and rerunning all four root gates after the identity-lock and browser-test changes. Browser acceptance remains a separate open gate.
+- **Final local validation (2026-09-06)**: After the approved restore policy and the
+  independent-review ordinary-passkey correction, `pnpm typecheck` passed 27/27 tasks,
+  `pnpm lint` passed 26/26, `pnpm test` passed 27/27, and `pnpm build` passed 4/4. The auth package
+  separately passed 186 tests at 100% statement, branch, function, and line coverage. Docket
+  Android's `./run check` passed, followed by a forced API-35 managed-device execution: 58/58 tests,
+  zero failures or skips, 85 tasks executed. Independent re-review found no remaining actionable
+  policy issue. This is local implementation evidence, not real provider or production acceptance.
+- **Blockers for release**: Deploy Athena and migration `0123_native_credentials` before distributing
+  the Android consumer. Real Google chooser, cross-device passkey, cloud backup/new-device restore,
+  browser Signal, OS process death, and physical-device journeys remain separately unverified and
+  require their configured external environments or explicit authorization. No push, deployment,
+  production migration, provider operation, or physical-device operation was performed here.
 
 ---
 

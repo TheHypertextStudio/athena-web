@@ -249,7 +249,7 @@ export function restoreCredentialPlugin(
           const options = await webAuthn.generateAuthenticationOptions({
             rpID: authEnv.BETTER_AUTH_PASSKEY_RP_ID,
             allowCredentials: [],
-            userVerification: 'required',
+            userVerification: 'discouraged',
           });
           await issueChallenge(ctx, { kind: 'authenticate', challenge: options.challenge });
           return ctx.json(options);
@@ -286,7 +286,7 @@ export function restoreCredentialPlugin(
               counter: record.counter,
               transports: record.transports?.split(',') as never,
             },
-            requireUserVerification: true,
+            requireUserVerification: false,
           });
           if (!verification.verified) {
             throw new RestoreError('UNAUTHORIZED', {

@@ -50,6 +50,17 @@ import {
 import { signupChallenge } from './signup-challenge';
 import { INTENT_IDENTIFIER_PREFIX, type SignupIntent } from './signup-intent';
 
+const PASSKEY_USER_VERIFICATION_REQUIRED = 'passkey_user_verification_required';
+
+/** Reject an ordinary passkey ceremony that did not verify the person operating the authenticator. */
+function requirePasskeyUserVerification(userVerified: boolean | undefined): void {
+  if (userVerified === true) return;
+  throw new APIError('UNAUTHORIZED', {
+    code: PASSKEY_USER_VERIFICATION_REQUIRED,
+    message: 'Passkey user verification is required.',
+  });
+}
+
 /** The external dependencies {@link buildAuthOptions} injects into email-sending auth flows. */
 export interface AuthDeps {
   /** The mailer the sign-up verification and change-email flows send through. */
@@ -611,10 +622,12 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       rpID: e.BETTER_AUTH_PASSKEY_RP_ID,
       rpName: e.BETTER_AUTH_PASSKEY_RP_NAME,
       ...(passkeyOrigins ? { origin: passkeyOrigins } : {}),
+      authenticatorSelection: { userVerification: 'required' },
       registration: {
         requireSession: false,
-        afterVerification: ({ ctx, verification, clientData }) => {
+        afterVerification: async ({ ctx, verification, clientData }) => {
           const registrationInfo = verification.registrationInfo;
+          requirePasskeyUserVerification(registrationInfo?.userVerified);
           return {
             name: derivePasskeyLabel({
               aaguid: registrationInfo?.aaguid,
@@ -646,7 +659,8 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
           ),
       },
       authentication: {
-        afterVerification: async ({ clientData }) => {
+        afterVerification: async ({ verification, clientData }) => {
+          requirePasskeyUserVerification(verification.authenticationInfo.userVerified);
           await db
             .update(passkeyTable)
             .set({ lastUsedAt: new Date() })
@@ -874,6 +888,18 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
         }
       }),
       after: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === '/passkey/generate-authenticate-options') {
+          const returned = ctx.context.returned;
+          if (
+            returned &&
+            typeof returned === 'object' &&
+            !(returned instanceof Response) &&
+            !(returned instanceof APIError)
+          ) {
+            return { ...returned, userVerification: 'required' };
+          }
+          return;
+        }
         if (ctx.path === '/get-session' || ctx.path === '/sign-out') {
           // Browsers apply Set-Cookie before client code can inspect the response. A response that
           // started under account A may therefore arrive after account B signs in and must not
@@ -935,6 +961,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
         } catch {
           // Best-effort — see remark above.
         }
+        return;
       }),
     },
     database: drizzleAdapter(db, {

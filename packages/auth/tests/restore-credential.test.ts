@@ -204,6 +204,12 @@ describe('restore credential plugin', () => {
 
     const options = await request('/restore-credential/generate-authenticate-options');
     expect(options.status).toBe(200);
+    expect(webAuthn.generateAuthenticationOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowCredentials: [],
+        userVerification: 'discouraged',
+      }),
+    );
     const challengeCookie = responseCookies(options);
     const body = { id: 'restore-credential-auth' };
     const verified = await request(
@@ -213,6 +219,13 @@ describe('restore credential plugin', () => {
     expect(verified.status).toBe(200);
     expect(await verified.json()).toEqual({ status: true, recordId: assertDefined(stored).id });
     expect(responseCookies(verified)).toContain('session_token');
+    expect(webAuthn.verifyAuthenticationResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedOrigin: [ORIGIN],
+        expectedRPID: 'localhost',
+        requireUserVerification: false,
+      }),
+    );
 
     const [updated] = await db
       .select({ counter: restoreCredential.counter, lastUsedAt: restoreCredential.lastUsedAt })

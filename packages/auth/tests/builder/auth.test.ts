@@ -1105,6 +1105,7 @@ describe('passkey reachability policy and retired management routes', () => {
       }),
     );
     expect(challenge.status).toBe(200);
+    expect(await challenge.json()).toMatchObject({ userVerification: 'required' });
   });
 
   beforeAll(async () => {
@@ -1391,8 +1392,19 @@ describe('buildAuthOptions env-gating', () => {
     expect(pkOptions['rpID']).toBe('localhost');
     expect(pkOptions['rpName']).toBe('Docket');
     const registration = pkOptions['registration'] as Record<string, unknown> | undefined;
+    const authenticatorSelection = pkOptions['authenticatorSelection'] as
+      Record<string, unknown> | undefined;
+    expect(authenticatorSelection?.['userVerification']).toBe('required');
     expect(registration?.['requireSession']).toBe(false);
     expect(typeof registration?.['resolveUser']).toBe('function');
+
+    const after = (opts.hooks as { after: (ctx: unknown) => Promise<unknown> }).after;
+    await expect(
+      after({
+        path: '/passkey/generate-authenticate-options',
+        context: { returned: undefined },
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it('derives a useful passkey label after registration when the client supplies none', async () => {
@@ -1404,6 +1416,7 @@ describe('buildAuthOptions env-gating', () => {
       verification: {
         registrationInfo: {
           aaguid: string;
+          userVerified: boolean;
           credentialDeviceType: 'singleDevice' | 'multiDevice';
           credentialBackedUp: boolean;
         };
@@ -1427,6 +1440,7 @@ describe('buildAuthOptions env-gating', () => {
       verification: {
         registrationInfo: {
           aaguid: 'fbfc3007-154e-4ecc-8c0b-6e020557d7bd',
+          userVerified: true,
           credentialDeviceType: 'multiDevice',
           credentialBackedUp: true,
         },
@@ -1446,6 +1460,7 @@ describe('buildAuthOptions env-gating', () => {
       verification: {
         registrationInfo: {
           aaguid: '00000000-0000-0000-0000-000000000000',
+          userVerified: true,
           credentialDeviceType: 'singleDevice',
           credentialBackedUp: false,
         },
@@ -1459,6 +1474,7 @@ describe('buildAuthOptions env-gating', () => {
       verification: {
         registrationInfo: {
           aaguid: '00000000-0000-0000-0000-000000000000',
+          userVerified: true,
           credentialDeviceType: 'singleDevice',
           credentialBackedUp: false,
         },
@@ -1466,6 +1482,21 @@ describe('buildAuthOptions env-gating', () => {
       clientData: { response: { transports: ['usb', 'nfc'] } },
     });
     expect(kindFallback).toEqual({ name: 'Security key' });
+
+    await expect(
+      registration.afterVerification({
+        ...baseArgs,
+        verification: {
+          registrationInfo: {
+            aaguid: '00000000-0000-0000-0000-000000000000',
+            userVerified: false,
+            credentialDeviceType: 'multiDevice',
+            credentialBackedUp: true,
+          },
+        },
+        clientData: { response: { transports: ['internal'] } },
+      }),
+    ).rejects.toMatchObject({ body: { code: 'passkey_user_verification_required' } });
   });
 
   it('records the asserted credential as recently used after successful authentication', async () => {
@@ -1497,7 +1528,7 @@ describe('buildAuthOptions env-gating', () => {
     const plugin = (opts.plugins ?? []).find((candidate) => candidate.id === 'passkey');
     type AfterVerification = (args: {
       ctx: unknown;
-      verification: unknown;
+      verification: { authenticationInfo: { userVerified: boolean } };
       clientData: { id: string };
     }) => Promise<void>;
     const authentication = (
@@ -1508,9 +1539,17 @@ describe('buildAuthOptions env-gating', () => {
     if (!authentication?.afterVerification) return;
     await authentication.afterVerification({
       ctx: {},
-      verification: {},
+      verification: { authenticationInfo: { userVerified: true } },
       clientData: { id: credentialID },
     });
+
+    await expect(
+      authentication.afterVerification({
+        ctx: {},
+        verification: { authenticationInfo: { userVerified: false } },
+        clientData: { id: credentialID },
+      }),
+    ).rejects.toMatchObject({ body: { code: 'passkey_user_verification_required' } });
 
     const [updated] = await db
       .select({ lastUsedAt: passkeyTable.lastUsedAt })

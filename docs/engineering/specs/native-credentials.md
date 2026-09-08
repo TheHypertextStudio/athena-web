@@ -1,6 +1,6 @@
 # Native credentials: what the Android client needs from Docket's auth server
 
-> **Status**: Current as of 2026-09-01
+> **Status**: Current as of 2026-09-06
 > **Owner**: auth
 > **Decision record**: `docs/engineering/DECISIONS.md` — "Android restore credentials are
 > system-managed records, never ordinary passkeys"
@@ -55,6 +55,12 @@ lets the Security page tell a stale enrollment from an active one. The web Secur
 reads these routes. Better Auth's generic list, update, and delete paths now return `404`, preventing
 them from bypassing safe summaries or the transactional deletion guard.
 
+Ordinary passkey ceremonies require user verification. Athena sets registration selection and
+authentication options to `required`, then checks SimpleWebAuthn's verified `userVerified` result in
+both Better Auth success callbacks before a credential can be stored or a session can be issued.
+The callback guard is necessary because the pinned Better Auth passkey plugin does not expose a
+server-verification option and otherwise invokes SimpleWebAuthn with user verification disabled.
+
 ## 4. Restore credentials
 
 Android's Credential Manager can hold a cloud-backed **restore credential**: a discoverable
@@ -88,7 +94,13 @@ Better Auth plugin (`packages/auth/src/restore-credential.ts`) rather than in th
    the comma-separated APK key-hash origins in `BETTER_AUTH_PASSKEY_NATIVE_ORIGINS`. Apple platform
    passkeys use the HTTPS origin derived from the non-local RP ID. An empty Android allowlist never
    widens Android verification to a web origin.
-5. Resident keys and user verification are required on both sides of the ceremony.
+5. Registration requires a resident credential and user verification. Silent restore authentication
+   requests `userVerification: discouraged`, and the server accepts an assertion without the UV flag,
+   because Android's restore API is a passive first-launch mechanism and cannot display an
+   authentication prompt. This exception applies only to the system-managed, cloud-backed restore
+   credential. Ordinary passkey registration and authentication continue to require user
+   verification. Restore authentication still proves possession of the private key and enforces the
+   signed, single-use challenge, native-origin allowlist, RP ID, credential ownership, and counter.
 6. Authentication looks the credential up by its WebAuthn id, verifies against the stored public key
    and counter, then conditionally writes the new counter and `last_used_at` only if the credential
    still exists with the counter that was verified. A deletion or a concurrent counter advance
@@ -117,8 +129,9 @@ the owning user. The same migration adds `passkey.last_used_at`.
 
 ## 5. Compatibility and rollout
 
-- Current web and older Android sign-in clients remain compatible. New fields are nullable and
-  registration/authentication routes are unchanged. Clients managing passkeys must use the typed
+- Current web and Android clients remain compatible. New fields are nullable and ceremony route
+  shapes are unchanged; ordinary passkey authenticators must satisfy the already-present biometric,
+  PIN, or screen-lock verification UX. Clients managing passkeys must use the typed
   resources; the three generic management routes are intentionally disabled.
 - Deployment is separately authorized; the migration is additive and safe to apply ahead of the
   Android client that uses it.

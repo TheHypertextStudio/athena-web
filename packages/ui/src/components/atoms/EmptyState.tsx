@@ -3,7 +3,7 @@
  *
  * @remarks
  * The single, consistent empty-state treatment used across every Docket surface: a glyph in a
- * toned disc, a short `font-medium` title, a one-line `on-surface-variant` subtext, and an
+ * toned disc, a short `label-large` title, a one-line `on-surface-variant` subtext, and an
  * optional primary action. Centralizing it here keeps thin surfaces (the Agents feed, the Session
  * activity stream) visually consistent with the richer ones (My Work, Projects, Inbox, Portfolio)
  * instead of falling back to plain centered text or a hand-rolled dashed panel.
@@ -151,10 +151,8 @@ export function EmptyState({
       >
         <Icon />
       </span>
-      <p className="text-on-surface text-body-medium font-medium">{title}</p>
-      {body ? (
-        <p className="text-on-surface-variant text-body-medium max-w-xs leading-relaxed">{body}</p>
-      ) : null}
+      <p className="text-on-surface text-label-large">{title}</p>
+      {body ? <p className="text-on-surface-variant text-body-medium max-w-xs">{body}</p> : null}
       {cta ? (
         <Button size="sm" onClick={cta.onClick} disabled={cta.disabled ?? false}>
           {cta.label}

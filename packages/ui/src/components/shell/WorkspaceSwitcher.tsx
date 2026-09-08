@@ -21,6 +21,7 @@ import {
   Avatar,
   AvatarFallback,
   AvatarImage,
+  Badge,
   Button,
   DropdownMenu,
   DropdownMenuContent,
@@ -93,12 +94,11 @@ function AttentionBadge({
 }): React.JSX.Element | null {
   if (count <= 0) return null;
   return (
-    <span
-      aria-label={`${count} ${label}`}
-      className="bg-primary text-on-primary ring-surface flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold tabular-nums ring-2"
-    >
+    // The compact geometry is this badge's own: it overlaps an avatar's corner, so it keeps the
+    // 16px box and 4px padding rather than Badge's standing `px-2 py-0.5`.
+    <Badge aria-label={`${count} ${label}`} className="ring-surface h-4 min-w-4 px-1 ring-2">
       {badgeText(count)}
-    </span>
+    </Badge>
   );
 }
 
@@ -117,7 +117,7 @@ function WorkspaceAvatar({
       style={{ '--tw-ring-color': getOrgAccent(workspace.id) } as React.CSSProperties}
     >
       {workspace.avatar ? <AvatarImage src={workspace.avatar} alt="" /> : null}
-      <AvatarFallback className="text-label-small rounded-md font-semibold">
+      <AvatarFallback className="text-label-small rounded-md">
         {initialsOf(workspace.name)}
       </AvatarFallback>
     </Avatar>
@@ -235,7 +235,7 @@ export function WorkspaceSwitcher({
           ) : (
             <span
               title={triggerLabel}
-              className="text-body-medium min-w-0 flex-1 truncate text-left font-semibold"
+              className="text-title-small min-w-0 flex-1 truncate text-left"
             >
               {triggerLabel}
             </span>

@@ -836,8 +836,15 @@ is recorded in `design-token-debt.json` and the gate is one-way:
 2. A file with a ledger entry may not **exceed** its recorded count. Debt cannot grow anywhere.
 3. A file whose count reaches **zero** must be **removed** from the ledger. A finished file cannot
    keep its exemption.
-4. `packages/ui/src/primitives/**` is held to zero with **no ledger entries permitted at all**. The
-   design system does not get to carry debt.
+4. `packages/ui/src/**` is held to zero with **no ledger entries permitted at all**. The design
+   system does not get to carry debt, and that includes the shared components in
+   `packages/ui/src/components/` as well as the primitives beneath them. The rule covered only
+   `primitives/` until 2026-09-07, and in that gap ten shared components — `EntityListRow`,
+   `GroupHeader`, `EntityTable`, `AppShell`, `SidebarNavItem`, `WorkspaceSwitcher`, `EmptyState`,
+   `ActorAvatar`, `PropertyTrigger`, `AuthLayout` — accumulated 26 violations. That mattered more
+   than the count suggests: those files are what a screen author reads to learn how a row, a header,
+   or an empty state is built, so `text-body-medium font-medium` on a row title propagated as house
+   style. It is why 475 of the 487 violations in the ledger at that point were `raw-type-utility`.
 
 The ledger is not an ignore list: under rule 3 an entry is a debt with a maturity date, and the test
 collects on it. **Launch sign-off is `design-token-debt.json` being `{}`.** Progress is countable

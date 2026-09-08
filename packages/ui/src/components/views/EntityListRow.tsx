@@ -253,14 +253,14 @@ export function EntityListRow({
         <span className="flex shrink-0 items-center self-start pt-px">{leading}</span>
       ) : null}
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-on-surface flex min-w-0 items-center gap-2 truncate font-medium">
+        <span className="text-on-surface text-label-large flex min-w-0 items-center gap-2 truncate">
           {title}
         </span>
         {subtitle !== undefined && subtitle !== null ? (
           <span
             className={cn(
               'text-on-surface-variant min-w-0',
-              wrap ? 'text-body-small line-clamp-2 break-words' : 'truncate text-xs',
+              wrap ? 'text-body-small line-clamp-2 break-words' : 'text-body-small truncate',
             )}
           >
             {subtitle}
@@ -268,7 +268,7 @@ export function EntityListRow({
         ) : null}
       </span>
       {meta !== undefined && meta !== null ? (
-        <span className="text-on-surface-variant hidden shrink-0 items-center gap-x-4 gap-y-1 text-xs @md/row:flex">
+        <span className="text-on-surface-variant text-body-small hidden shrink-0 items-center gap-x-4 gap-y-1 @md/row:flex">
           {meta}
         </span>
       ) : null}

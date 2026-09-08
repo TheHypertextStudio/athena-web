@@ -13,8 +13,8 @@
  * Both {@link ListGroup} and {@link ListSubGroup} render through this component; `level`
  * adjusts the indentation so nested sub-groups read as subordinate.
  *
- * Density follows the shared row rhythm — `h-9 px-3 gap-2`, a real `text-body-medium font-medium` title
- * (never an uppercase / `tracking-wide` eyebrow), and the inset keyboard-focus ring
+ * Density follows the shared row rhythm — `h-9 px-3 gap-2`, a real `label-large` title (never an
+ * uppercase / `tracking-wide` eyebrow), and the inset keyboard-focus ring
  * ({@link focusRingInset}) so a focused header rings exactly like the data rows beneath it.
  */
 import * as React from 'react';
@@ -86,7 +86,7 @@ export function GroupHeader({
       data-level={level}
       className={cn(
         surfaceToneColor('canvas'),
-        'border-outline-variant hover:bg-surface-container-high text-body-medium flex w-full cursor-pointer items-center gap-2 border-b px-3 font-medium transition-colors outline-none select-none',
+        'border-outline-variant hover:bg-surface-container-high text-label-large flex w-full cursor-pointer items-center gap-2 border-b px-3 transition-colors outline-none select-none',
         rowHeight === undefined ? 'h-9' : 'min-h-(--row-h)',
         focusRingInset,
         className,
@@ -104,7 +104,7 @@ export function GroupHeader({
       {decoration ? <span className="flex shrink-0 items-center">{decoration}</span> : null}
       <span className="truncate">{label}</span>
       {typeof count === 'number' ? (
-        <span className="text-on-surface-variant ml-1 shrink-0 text-xs font-normal tabular-nums">
+        <span className="text-on-surface-variant text-body-small ml-1 shrink-0 tabular-nums">
           {count}
         </span>
       ) : null}

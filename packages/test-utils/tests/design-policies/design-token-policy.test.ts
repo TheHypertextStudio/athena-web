@@ -28,8 +28,9 @@
  * 3. A file whose count reaches **zero** must be **removed** from the ledger. A finished file
  *    cannot keep its exemption, so the ledger can only shrink and cannot quietly become permanent
  *    cover.
- * 4. `packages/ui/src/primitives/**` — the design system itself — is held to zero with **no ledger
- *    entries permitted at all**. The source of truth does not get to carry debt.
+ * 4. `packages/ui/src/**` — the design system itself, primitives and shared components alike — is
+ *    held to zero with **no ledger entries permitted at all**. The source of truth does not get to
+ *    carry debt, and neither does the layer product screens actually import from.
  *
  * The ledger is not an ignore list under rule 3: an entry is a debt with a maturity date, and the
  * test collects on it. Launch sign-off is the ledger being empty, which makes progress countable
@@ -63,8 +64,17 @@ import { WORKSPACE_ROOT } from '../workspace';
 /** Every tree whose visual values must trace to the design system. */
 const ENFORCED_ROOTS = ['apps/web/src', 'apps/admin/src', 'packages/ui/src'] as const;
 
-/** The design system's own primitives: zero violations, zero ledger entries, no exceptions. */
-const ZERO_TOLERANCE_PREFIX = 'packages/ui/src/primitives/';
+/**
+ * The design system itself: zero violations, zero ledger entries, no exceptions.
+ *
+ * @remarks
+ * This covers all of `packages/ui/src`, not just `primitives/`. The shared components one layer up
+ * are what product surfaces import, so a `font-medium` there is not one component's problem — it is
+ * the example every new screen copies. Ten of them carried 26 violations while the primitives below
+ * them were spotless, and 475 of the 487 violations in the ledger at that point were the same
+ * `raw-type-utility` rule those components were modelling.
+ */
+const ZERO_TOLERANCE_PREFIX = 'packages/ui/src/';
 
 const LEDGER_PATH = resolve(
   WORKSPACE_ROOT,
@@ -259,7 +269,7 @@ describe('design token policy', () => {
     allViolations = scanEnforcedRoots();
   });
 
-  it('holds the design system primitives to zero, with no ledger entries permitted', () => {
+  it('holds the whole design system to zero, with no ledger entries permitted', () => {
     const violations = allViolations.filter((violation) =>
       violation.file.startsWith(ZERO_TOLERANCE_PREFIX),
     );
@@ -267,7 +277,8 @@ describe('design token policy', () => {
     expect(
       violations,
       [
-        'The design system primitives must contain no off-token visual values.',
+        'The design system must contain no off-token visual values — primitives and the shared',
+        'components above them alike, since those components are what product screens copy from.',
         'Type comes from the MD3 roles in primitives/text.tsx; height, padding, and icon size',
         'come from the scale in primitives/control.tsx; shadows belong to overlays only.',
         formatViolations(violations),

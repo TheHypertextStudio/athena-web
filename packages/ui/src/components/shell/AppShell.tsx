@@ -584,7 +584,9 @@ export function AppShell({
           href="#main-content"
           className={cn(
             surfaceToneColor('page'),
-            'border-outline-variant focus-visible:ring-ring text-body-medium sr-only z-50 rounded-md border px-3 py-2 font-medium shadow-sm transition-colors focus-visible:not-sr-only focus-visible:absolute focus-visible:top-2 focus-visible:left-2 focus-visible:ring-2 focus-visible:outline-none',
+            // No shadow: §8 keeps shadows on overlay surfaces only, and this link's own border
+            // already separates it from the content it lands over when focus reveals it.
+            'border-outline-variant focus-visible:ring-ring text-label-large sr-only z-50 rounded-md border px-3 py-2 transition-colors focus-visible:not-sr-only focus-visible:absolute focus-visible:top-2 focus-visible:left-2 focus-visible:ring-2 focus-visible:outline-none',
           )}
         >
           Skip to content
@@ -610,9 +612,7 @@ export function AppShell({
               <Menu aria-hidden="true" className="size-5" />
             </button>
           }
-          title={
-            mobileBrand ?? <span className="text-body-medium truncate font-semibold">Docket</span>
-          }
+          title={mobileBrand ?? <span className="text-title-small truncate">Docket</span>}
           actions={
             <>
               {mobileActions}

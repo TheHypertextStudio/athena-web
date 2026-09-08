@@ -96,7 +96,7 @@ export function ActorAvatar({
         ) : null}
         <AvatarFallback
           className={cn(
-            'bg-surface-container-high text-on-surface-variant text-[0.625rem] font-medium',
+            'bg-surface-container-high text-on-surface-variant text-label-small',
             KIND_SHAPE_CLASS[kind],
           )}
         >

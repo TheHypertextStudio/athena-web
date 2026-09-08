@@ -22,7 +22,14 @@ import * as React from 'react';
 
 import type { LucideIcon } from '../../icons';
 import { cn } from '../../lib/utils';
-import { Button, focusRingInset, Tooltip, TooltipContent, TooltipTrigger } from '../../primitives';
+import {
+  Badge,
+  Button,
+  focusRingInset,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '../../primitives';
 
 /** Props for {@link SidebarNavItem}. */
 export interface SidebarNavItemProps {
@@ -62,12 +69,9 @@ function badgeText(count: number): string {
 /** A small trailing attention pill, hidden from the a11y tree (the name carries the count). */
 function NavBadge({ count }: { readonly count: number }): React.JSX.Element {
   return (
-    <span
-      aria-hidden="true"
-      className="bg-surface-container-highest text-on-surface-variant ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] leading-none font-semibold tabular-nums"
-    >
+    <Badge aria-hidden="true" variant="secondary" className="ml-auto">
       {badgeText(count)}
-    </span>
+    </Badge>
   );
 }
 
@@ -98,7 +102,7 @@ export function SidebarNavItem({
   // desktop sidebar and mobile drawer. `focusRingInset` swaps the Button's standalone 2px ring for
   // the 1px inset ring so adjacent flush rows never clip an overlapping outline.
   const className = cn(
-    'text-body-large font-normal [&_svg]:size-4',
+    'text-body-large [&_svg]:size-4',
     // Collapsed the row is a square the glyph sits in the middle of; expanded it is the full-width
     // label row. `[&>span:last-child]:hidden` is what hides an `asChild` link's label without the
     // caller having to know it is collapsed — the link content is the host's, not this file's.

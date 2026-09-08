@@ -171,7 +171,9 @@ export const PropertyTrigger = React.forwardRef<HTMLButtonElement, PropertyTrigg
         disabled={disabled}
         aria-label={ariaLabel}
         className={cn(
-          'h-auto max-w-full justify-start gap-2 px-2 py-1.5 font-normal',
+          // `body-medium`, not the button's own `label-large`: this trigger shows a property's
+          // value, which is prose the reader takes in rather than a name they scan for.
+          'text-body-medium h-auto max-w-full justify-start gap-2 px-2 py-1.5',
           hasValue ? 'text-on-surface' : 'text-on-surface-variant',
           className,
         )}

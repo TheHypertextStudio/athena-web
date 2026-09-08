@@ -60,7 +60,7 @@ export function AuthLayout({
     // No gutter below `@md`. A phone has ~390px to spend and an outer gutter plus the card's own
     // inset was charging ~40px a side for the privilege of drawing a border nobody can see against
     // a full-height card. The card goes edge-to-edge there and only becomes a card — max width,
-    // radius, border, shadow, canvas around it — once there is width to spare.
+    // radius, border, canvas around it — once there is width to spare.
     <main className={cn(surfaceToneColor('canvas'), '@container min-h-dvh')}>
       {/* A container query cannot target the element that declares the container, so the centring
           lives on this descendant rather than on <main> — as a class on <main> it silently never
@@ -72,7 +72,9 @@ export function AuthLayout({
             'flex min-h-dvh w-full flex-col justify-center gap-6 px-5 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]',
             // A floor height rather than hugging the content, which made the card a squat
             // letterbox on a desktop viewport once the two columns halved its height.
-            'border-outline-variant @md:min-h-80 @md:max-w-md @md:rounded-xl @md:border @md:p-6 @md:shadow-sm',
+            // No shadow: this card is a resting surface, and the `page` tone already steps off the
+            // `canvas` <main> behind it (§8 — the ramp separates regions, not a drop shadow).
+            'border-outline-variant @md:min-h-80 @md:max-w-md @md:rounded-xl @md:border @md:p-6',
             '@3xl:min-h-96 @3xl:max-w-3xl @3xl:p-10',
             className,
           )}

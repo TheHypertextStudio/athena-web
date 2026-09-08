@@ -164,7 +164,7 @@
     "raw-type-utility": 4
   },
   "apps/web/src/components/entity-detail/updates-panel.tsx": {
-    "raw-type-utility": 5
+    "raw-type-utility": 4
   },
   "apps/web/src/components/entity-display/entity-icon-picker-loaded.tsx": {
     "hardcoded-color": 1
@@ -311,36 +311,5 @@
   },
   "apps/web/src/components/workspace-creation/workspace-name-field.tsx": {
     "raw-type-utility": 2
-  },
-  "packages/ui/src/components/atoms/ActorAvatar.tsx": {
-    "raw-type-utility": 2
-  },
-  "packages/ui/src/components/atoms/EmptyState.tsx": {
-    "raw-type-utility": 2
-  },
-  "packages/ui/src/components/auth/AuthLayout.tsx": {
-    "shadow-outside-overlay": 1
-  },
-  "packages/ui/src/components/pickers/PropertyTrigger.tsx": {
-    "raw-type-utility": 1
-  },
-  "packages/ui/src/components/shell/AppShell.tsx": {
-    "raw-type-utility": 2,
-    "shadow-outside-overlay": 1
-  },
-  "packages/ui/src/components/shell/SidebarNavItem.tsx": {
-    "raw-type-utility": 4
-  },
-  "packages/ui/src/components/shell/WorkspaceSwitcher.tsx": {
-    "raw-type-utility": 5
-  },
-  "packages/ui/src/components/views/EntityListRow.tsx": {
-    "raw-type-utility": 3
-  },
-  "packages/ui/src/components/views/EntityTable.tsx": {
-    "raw-type-utility": 2
-  },
-  "packages/ui/src/components/views/GroupHeader.tsx": {
-    "raw-type-utility": 3
   }
 }

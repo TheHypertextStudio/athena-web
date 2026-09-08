@@ -282,7 +282,7 @@ function EntityTableHeader<T>({
       aria-rowindex={1}
       className={cn(
         tableSurfaceTone(tone),
-        'text-on-surface-variant sticky top-0 z-10 flex min-h-8 w-full shrink-0 items-center gap-2 px-3 py-1.5 text-xs font-medium select-none',
+        'text-on-surface-variant text-label-medium sticky top-0 z-10 flex min-h-8 w-full shrink-0 items-center gap-2 px-3 py-1.5 select-none',
       )}
     >
       {columns.map((column) => (

@@ -74,7 +74,7 @@ describe('EntityTable — header band', () => {
     expect(titleHeader).not.toHaveClass('uppercase', 'tracking-wide');
     // The header band uses type and whitespace instead of adding a non-MD3 divider.
     const headerRow = titleHeader.parentElement;
-    expect(headerRow).toHaveClass('text-on-surface-variant', 'text-xs');
+    expect(headerRow).toHaveClass('text-on-surface-variant', 'text-label-medium');
     expect(headerRow).not.toHaveClass('border-b', 'border-outline-variant');
   });
 

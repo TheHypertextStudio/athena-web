@@ -124,8 +124,14 @@ function recordPayload(record: CurrentRecord, observedAt: string): ActiveWorkPay
   };
 }
 
-/** Resolve visible task context and omit it when the caller cannot view the anchored task. */
-async function visibleTaskContext(
+/**
+ * Load visible task context and omit it when the caller cannot view the anchored task.
+ *
+ * @param userId - The authenticated person whose memberships and grants constrain the read.
+ * @param taskId - The task to load.
+ * @returns the authorized task context, or null when the person cannot view the task.
+ */
+export async function loadVisibleTaskContext(
   userId: string,
   taskId: string,
 ): Promise<ActiveWorkPayload['task']> {
@@ -306,7 +312,7 @@ async function readActiveWork(ctx: McpContext): Promise<ActiveWorkPayload> {
   }
   if (!record.taskId) return recordPayload(record, observedAt);
 
-  const task = await visibleTaskContext(ctx.principal.userId, record.taskId);
+  const task = await loadVisibleTaskContext(ctx.principal.userId, record.taskId);
   return ActiveWorkOut.parse(
     task ? { ...recordPayload(record, observedAt), task } : recordPayload(record, observedAt),
   );

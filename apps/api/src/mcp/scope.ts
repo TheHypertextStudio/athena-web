@@ -105,6 +105,7 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   // agents:run — agent session lifecycle
   run_agent: 'agents:run',
   manage_session: 'agents:run',
+  review_work_destination: 'agents:run',
   // work:read — reads exposed as tools
   list_work: 'work:read',
   find: 'work:read',

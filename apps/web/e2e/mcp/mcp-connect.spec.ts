@@ -99,13 +99,19 @@ test('an MCP client can discover, register, consent, read, step up, and write', 
     'a token granted offline_access must carry a refresh token',
   ).toBeTruthy();
   const writeToken = stepUp.accessToken;
-  const created = await mcpToolCall<{ id: string; state: string }>(request, writeToken, 'capture', {
-    orgId,
-    text: 'Created over MCP e2e',
-  });
-  expect(created.id).toBeTruthy();
+  // `capture` takes a list, so it answers with one entry per captured task rather than a single
+  // task at the top level. One string in still means one entry out.
+  const created = await mcpToolCall<{ items: { id: string; state: string }[] }>(
+    request,
+    writeToken,
+    'capture',
+    { orgId, text: 'Created over MCP e2e' },
+  );
+  expect(created.items).toHaveLength(1);
+  const capturedId = created.items[0]?.id;
+  expect(capturedId).toBeTruthy();
 
   // ── The write is real: the typed RPC surface sees the task ──
-  const task = await apiJson<{ title: string }>(page, `/v1/orgs/${orgId}/tasks/${created.id}`);
+  const task = await apiJson<{ title: string }>(page, `/v1/orgs/${orgId}/tasks/${capturedId}`);
   expect(task.title).toBe('Created over MCP e2e');
 });

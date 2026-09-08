@@ -295,8 +295,16 @@ const CASES: readonly WidgetCase[] = [
     input: { orgId: 'org_1' },
     result: {
       structuredContent: {
-        id: 't_9',
-        title: 'Chase the RTC coordination reply',
+        items: [
+          {
+            id: 't_9',
+            title: 'Chase the RTC coordination reply',
+            href: '/orgs/org_1/tasks/t_9',
+            state: 'Backlog',
+            teamId: 'team_1',
+          },
+        ],
+        listHref: '/orgs/org_1/tasks',
         changeSetId: 'cs_4',
       },
     },

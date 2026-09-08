@@ -1245,6 +1245,7 @@ describe('object commands', () => {
           .where(eq(schema.timeRecord.id, forwardTimer.id)),
       ).status,
     ).toBe('closed');
+    const undoTimer = await startTimer();
 
     const undo = await send(app, {
       commandId: 'undo-complete-task',
@@ -1265,13 +1266,12 @@ describe('object commands', () => {
     };
     expect(undoPayload.conflictingIds).toEqual([]);
     expect(undoPayload.receipt.entries).toHaveLength(4);
-    const redoTimer = await startTimer();
     expect(
       one(
         await db
           .select({ status: schema.timeRecord.status })
           .from(schema.timeRecord)
-          .where(eq(schema.timeRecord.id, redoTimer.id)),
+          .where(eq(schema.timeRecord.id, undoTimer.id)),
       ).status,
     ).toBe('open');
     const redo = await send(app, {
@@ -1290,7 +1290,7 @@ describe('object commands', () => {
         await db
           .select({ status: schema.timeRecord.status })
           .from(schema.timeRecord)
-          .where(eq(schema.timeRecord.id, redoTimer.id)),
+          .where(eq(schema.timeRecord.id, undoTimer.id)),
       ).status,
     ).toBe('closed');
   });

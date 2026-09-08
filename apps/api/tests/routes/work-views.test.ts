@@ -2336,6 +2336,101 @@ describe('work-view routes', () => {
     );
   });
 
+  it('closes the mover’s timer when the destination Team defaults tasks to completed', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
+    const userId = await seedUserWithHub(schema.db, schema, 'Completed team timer owner');
+    await schema.db.update(schema.actor).set({ userId }).where(eq(schema.actor.id, humanActorId));
+    const [destinationTeam] = await schema.db
+      .insert(schema.team)
+      .values({ organizationId: orgId, name: 'Completed Team', key: `C${orgId.slice(-4)}` })
+      .returning({ id: schema.team.id });
+    if (!destinationTeam) throw new Error('completed destination Team was not seeded');
+    const [destinationStatus] = await schema.db
+      .insert(schema.workStatus)
+      .values({
+        organizationId: orgId,
+        teamId: destinationTeam.id,
+        entityType: 'task',
+        key: 'done',
+        name: 'Done',
+        category: 'completed',
+        position: 0,
+        isDefault: true,
+      })
+      .returning({ id: schema.workStatus.id });
+    if (!destinationStatus) throw new Error('completed destination status was not seeded');
+    const [item] = await schema.db
+      .insert(schema.task)
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'Move into completion',
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        visibility: 'public',
+      })
+      .returning({ id: schema.task.id });
+    if (!item) throw new Error('team-completion Task was not seeded');
+    await grantOrganizationCapability(orgId, humanActorId, 'contribute');
+    const timer = appWithSession(time, fakeSession(userId));
+    const started = await timer.request('/records', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        context: { organizationId: orgId, taskId: item.id, label: 'Move into completion' },
+      }),
+    });
+    expect(started.status).toBe(200);
+    const record = (await started.json()) as { id: string };
+    const app = appWithActor(workViews, orgId, ['contribute'], humanActorId);
+
+    expect(
+      (
+        await app.request('/order', {
+          method: 'PATCH',
+          headers: JSON_HEADERS,
+          body: JSON.stringify({
+            target: 'task',
+            itemId: item.id,
+            context: { kind: 'organization' },
+            groupField: 'team',
+            groupValue: destinationTeam.id,
+            beforeId: null,
+            afterId: null,
+          }),
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await schema.db
+          .select({ completedAt: schema.task.completedAt, state: schema.task.state })
+          .from(schema.task)
+          .where(eq(schema.task.id, item.id))
+      )[0],
+    ).toMatchObject({ completedAt: expect.any(Date), state: 'done' });
+    expect(
+      (
+        await schema.db
+          .select({ status: schema.timeRecord.status })
+          .from(schema.timeRecord)
+          .where(eq(schema.timeRecord.id, record.id))
+      )[0]?.status,
+    ).toBe('closed');
+    expect(
+      await schema.db
+        .select({ id: schema.event.id })
+        .from(schema.event)
+        .where(
+          and(
+            eq(schema.event.organizationId, orgId),
+            eq(schema.event.kind, 'timer_stopped'),
+            eq(schema.event.docketEntityId, item.id),
+          ),
+        ),
+    ).toHaveLength(1);
+  });
+
   it('treats a same-Team Task drop as rank-only without a status transition', async () => {
     const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
     const completedAt = new Date('2026-08-20T20:00:00.000Z');

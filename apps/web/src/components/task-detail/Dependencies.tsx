@@ -47,7 +47,7 @@ function DependencyRow({
 }: DependencyRowProps): JSX.Element {
   const categoryOf = useCategoryOf('task');
   const project = (
-    <span className="text-on-surface-variant shrink-0 text-xs">
+    <span className="text-on-surface-variant text-body-small shrink-0">
       {task.projectId ? projectName(task.projectId) : `No ${projectLabel.toLowerCase()}`}
     </span>
   );
@@ -123,7 +123,7 @@ export function Dependencies({
 
   return (
     <section aria-labelledby="dependencies-heading" className="flex flex-col gap-3">
-      <h2 id="dependencies-heading" className="text-body-medium font-medium">
+      <h2 id="dependencies-heading" className="text-label-large">
         Dependencies
       </h2>
 
@@ -133,7 +133,7 @@ export function Dependencies({
         <div className="flex flex-col gap-4">
           {blockedBy.length > 0 ? (
             <div className="flex flex-col gap-1">
-              <div className="text-on-surface-variant flex items-center gap-1.5 text-xs font-medium">
+              <div className="text-on-surface-variant text-label-medium flex items-center gap-1.5">
                 <ChevronLeft className="size-4" />
                 Blocked by
               </div>
@@ -155,7 +155,7 @@ export function Dependencies({
 
           {blocking.length > 0 ? (
             <div className="flex flex-col gap-1">
-              <div className="text-on-surface-variant flex items-center gap-1.5 text-xs font-medium">
+              <div className="text-on-surface-variant text-label-medium flex items-center gap-1.5">
                 <ChevronRight className="size-4" />
                 Blocking
               </div>

@@ -89,7 +89,7 @@ export default function AgendaEntryCard({
   const taskId = entry.source === 'task' ? entry.taskId : undefined;
   const isTask = taskId !== undefined && taskOrgId !== undefined;
   const titleClass = cn(
-    'truncate text-sm font-medium',
+    'text-label-large truncate',
     entry.done ? 'text-on-surface-variant line-through' : 'text-on-surface',
   );
   const contextLabel =
@@ -106,25 +106,27 @@ export default function AgendaEntryCard({
   const content = block ? (
     <>
       <span className={titleClass}>{entry.title}</span>
-      <span className="text-on-surface-variant truncate text-xs tabular-nums">{time}</span>
+      <span className="text-on-surface-variant text-body-small truncate tabular-nums">{time}</span>
       <div className="mt-auto pt-1">
         {isTask ? (
           <OrgChip orgId={taskOrgId} name={orgName(taskOrgId)} />
         ) : (
-          <span className="text-on-surface-variant truncate text-xs">{contextLabel}</span>
+          <span className="text-on-surface-variant text-body-small truncate">{contextLabel}</span>
         )}
       </div>
     </>
   ) : (
     <>
-      <span className="text-on-surface-variant w-14 shrink-0 pt-0.5 text-xs tabular-nums">
+      <span className="text-on-surface-variant text-body-small w-14 shrink-0 pt-0.5 tabular-nums">
         {time}
       </span>
       <span className={cn('flex-1', titleClass)}>{entry.title}</span>
       {isTask ? (
         <OrgChip orgId={taskOrgId} name={orgName(taskOrgId)} />
       ) : (
-        <span className="text-on-surface-variant max-w-28 truncate text-xs">{contextLabel}</span>
+        <span className="text-on-surface-variant text-body-small max-w-28 truncate">
+          {contextLabel}
+        </span>
       )}
     </>
   );
@@ -134,7 +136,9 @@ export default function AgendaEntryCard({
       style={{ viewTransitionName: agendaEntryTransitionName(entry.id) }}
       className={cn(
         surfaceToneColor('card'),
-        'hover:bg-surface-container relative flex h-full w-full items-start gap-2 overflow-hidden rounded-lg px-3 py-2.5 transition-[opacity,background-color,box-shadow,transform] duration-(--dur-base) ease-(--ease-out) hover:shadow-sm motion-safe:hover:-translate-y-px',
+        // Hover is the tonal step plus the 1px lift, with no shadow: this card rests on the
+        // agenda rather than floating over it, and §8 keeps shadows to overlay surfaces.
+        'hover:bg-surface-container relative flex h-full w-full items-start gap-2 overflow-hidden rounded-lg px-3 py-2.5 transition-[opacity,background-color,transform] duration-(--dur-base) ease-(--ease-out) motion-safe:hover:-translate-y-px',
         entry.done && 'opacity-60',
       )}
     >

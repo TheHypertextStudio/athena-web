@@ -468,7 +468,7 @@ export function TodayPrompt({
           <p className="text-error text-body-small">{error}</p>
         ) : notice ? (
           <p className="text-on-surface-variant text-body-small">
-            Added <span className="text-on-surface font-medium">“{notice.title}”</span> —{' '}
+            Added <span className="text-on-surface text-label-medium">“{notice.title}”</span> —{' '}
             <Button asChild variant="link" controlSize="sm">
               <Link href={notice.href}>view task</Link>
             </Button>

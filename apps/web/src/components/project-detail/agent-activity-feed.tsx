@@ -37,7 +37,7 @@ export function AgentActivityFeed({
     <section aria-labelledby="agent-activity-heading" className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <DecorativeIcon icon={Sparkles} className="bg-primary/12 text-primary" />
-        <h2 id="agent-activity-heading" className="text-on-surface text-body-medium font-semibold">
+        <h2 id="agent-activity-heading" className="text-on-surface text-title-small">
           Agent activity
         </h2>
       </div>
@@ -50,12 +50,14 @@ export function AgentActivityFeed({
             <ActorAvatar kind="agent" name={entry.agentName} size={24} />
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="text-on-surface text-body-medium">
-                <span className="font-medium">{entry.agentName}</span>{' '}
+                <span className="text-label-large">{entry.agentName}</span>{' '}
                 <span className="text-on-surface-variant">{ACTIVITY_VERB[entry.type]}</span>
               </span>
-              <span className="text-on-surface-variant truncate text-xs">{entry.summary}</span>
+              <span className="text-on-surface-variant text-body-small truncate">
+                {entry.summary}
+              </span>
             </div>
-            <span className="text-on-surface-variant shrink-0 text-xs">
+            <span className="text-on-surface-variant text-body-small shrink-0">
               {relativeTime(entry.createdAt)}
             </span>
           </li>

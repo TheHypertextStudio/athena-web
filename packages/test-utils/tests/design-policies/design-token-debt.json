@@ -14,14 +14,8 @@
   "apps/web/src/app/(app)/orgs/[orgId]/programs/[programId]/program-detail-client.tsx": {
     "raw-type-utility": 3
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx": {
-    "raw-type-utility": 5
-  },
   "apps/web/src/app/(app)/orgs/[orgId]/sessions/[sessionId]/page.tsx": {
     "raw-type-utility": 3
-  },
-  "apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx": {
-    "raw-type-utility": 4
   },
   "apps/web/src/app/(app)/orgs/[orgId]/teams/teams-client.tsx": {
     "raw-type-utility": 3
@@ -29,19 +23,10 @@
   "apps/web/src/app/(app)/orgs/[orgId]/triage/page.tsx": {
     "raw-type-utility": 3
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/views/page.tsx": {
-    "raw-type-utility": 3
-  },
   "apps/web/src/app/(app)/portfolio/portfolio-client.tsx": {
     "raw-type-utility": 1
   },
   "apps/web/src/app/(app)/settings/calendar/page.tsx": {
-    "raw-type-utility": 1
-  },
-  "apps/web/src/app/(app)/tasks/all-tasks-client.tsx": {
-    "raw-type-utility": 7
-  },
-  "apps/web/src/app/(app)/today/page.tsx": {
     "raw-type-utility": 1
   },
   "apps/web/src/app/(app)/workspaces/new/page.tsx": {
@@ -88,13 +73,6 @@
   },
   "apps/web/src/components/account-menu.tsx": {
     "raw-type-utility": 5
-  },
-  "apps/web/src/components/agenda/agenda-entry-card.tsx": {
-    "raw-type-utility": 6,
-    "shadow-outside-overlay": 1
-  },
-  "apps/web/src/components/agenda/agenda-timebox-form.tsx": {
-    "raw-type-utility": 1
   },
   "apps/web/src/components/agents/activity-item.tsx": {
     "raw-type-utility": 13
@@ -159,12 +137,6 @@
   },
   "apps/web/src/components/editor/freeform-text.tsx": {
     "raw-type-utility": 2
-  },
-  "apps/web/src/components/entity-detail/mentioned-resources.tsx": {
-    "raw-type-utility": 4
-  },
-  "apps/web/src/components/entity-detail/updates-panel.tsx": {
-    "raw-type-utility": 4
   },
   "apps/web/src/components/entity-display/entity-icon-picker-loaded.tsx": {
     "hardcoded-color": 1
@@ -243,15 +215,6 @@
   "apps/web/src/components/programs/flow-snapshot.tsx": {
     "raw-type-utility": 4
   },
-  "apps/web/src/components/project-detail/agent-activity-feed.tsx": {
-    "raw-type-utility": 4
-  },
-  "apps/web/src/components/project-detail/agents-strip.tsx": {
-    "raw-type-utility": 6
-  },
-  "apps/web/src/components/project-detail/overview-summary.tsx": {
-    "raw-type-utility": 7
-  },
   "apps/web/src/components/projects/project-catalog.ts": {
     "raw-type-utility": 1
   },
@@ -261,12 +224,6 @@
   "apps/web/src/components/search/search-client.tsx": {
     "raw-type-utility": 13
   },
-  "apps/web/src/components/task-detail/Dependencies.tsx": {
-    "raw-type-utility": 6
-  },
-  "apps/web/src/components/task-detail/Subtasks.tsx": {
-    "raw-type-utility": 2
-  },
   "apps/web/src/components/teams/create-team.tsx": {
     "raw-type-utility": 4
   },
@@ -274,9 +231,6 @@
     "raw-type-utility": 4
   },
   "apps/web/src/components/teams/team-picker.tsx": {
-    "raw-type-utility": 1
-  },
-  "apps/web/src/components/today/today-prompt.tsx": {
     "raw-type-utility": 1
   },
   "apps/web/src/components/triage/source-tag.tsx": {
@@ -291,19 +245,7 @@
   "apps/web/src/components/views/entity-detail-layout.tsx": {
     "raw-type-utility": 1
   },
-  "apps/web/src/components/views/filter-toolbar.tsx": {
-    "raw-type-utility": 1
-  },
   "apps/web/src/components/views/page-layout.tsx": {
-    "raw-type-utility": 2
-  },
-  "apps/web/src/components/views/save-view-composer.tsx": {
-    "raw-type-utility": 5
-  },
-  "apps/web/src/components/views/view-list.tsx": {
-    "raw-type-utility": 2
-  },
-  "apps/web/src/components/views/view-scope-badge.tsx": {
     "raw-type-utility": 1
   },
   "apps/web/src/components/wordmark.tsx": {

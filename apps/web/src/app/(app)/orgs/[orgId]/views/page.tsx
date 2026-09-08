@@ -32,6 +32,7 @@
  * All data is fetched at runtime, so the production build needs no running server.
  */
 import { LayoutGrid, Plus } from '@docket/ui/icons';
+import { EmptyState } from '@docket/ui/components';
 import { Button, Separator, Skeleton } from '@docket/ui/primitives';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useTypedRoute } from '@/lib/app-location';
@@ -92,15 +93,17 @@ export default function ViewsPage(): JSX.Element {
         <div className="flex flex-col gap-6">
           <section aria-label="Saved views" className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-on-surface-variant text-xs font-medium">
+              <h2 className="text-on-surface-variant text-label-medium">
                 {views.length === 0 ? 'No saved views yet' : `${String(views.length)} saved`}
               </h2>
             </div>
             {views.length === 0 ? (
-              <div className="text-on-surface-variant text-body-medium flex flex-col items-center gap-2 p-8 text-center">
-                <LayoutGrid className="size-6 opacity-60" aria-hidden="true" />
-                <p>No saved views</p>
-              </div>
+              <EmptyState
+                icon={LayoutGrid}
+                title="No saved views"
+                body="Build a query below with filters and grouping, then save it to come back to it in one click."
+                frame="none"
+              />
             ) : (
               <ViewList
                 views={views}
@@ -115,9 +118,7 @@ export default function ViewsPage(): JSX.Element {
 
           <section aria-label="Working view" className="flex min-h-0 flex-1 flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-on-surface text-body-medium font-semibold">
-                {openViewName ?? 'New view'}
-              </h2>
+              <h2 className="text-on-surface text-title-small">{openViewName ?? 'New view'}</h2>
             </div>
 
             <FilterToolbar

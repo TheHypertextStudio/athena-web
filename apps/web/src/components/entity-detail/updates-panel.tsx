@@ -145,7 +145,7 @@ export function UpdatesPanel({
         }}
         className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4"
       >
-        <p className="text-on-surface text-body-medium font-medium">Post an update</p>
+        <p className="text-on-surface text-label-large">Post an update</p>
         <FreeformTextEditor
           key={composerKey}
           value={body}
@@ -255,14 +255,12 @@ export function UpdatesPanel({
                 <ActorAvatar kind={author.kind} name={author.name} size={32} />
                 <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-on-surface text-body-medium font-medium">
-                      {author.name}
-                    </span>
-                    <span className="text-on-surface-variant text-xs">
+                    <span className="text-on-surface text-label-large">{author.name}</span>
+                    <span className="text-on-surface-variant text-body-small">
                       {relativeTime(update.createdAt)}
                     </span>
                     {update.health ? (
-                      <span className="text-on-surface-variant inline-flex items-center gap-1.5 text-xs">
+                      <span className="text-on-surface-variant text-body-small inline-flex items-center gap-1.5">
                         <span
                           aria-hidden="true"
                           className={cn('size-1.5 rounded-full', HEALTH_FILL_CLASS[update.health])}

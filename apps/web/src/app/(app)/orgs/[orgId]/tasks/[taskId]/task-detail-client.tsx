@@ -338,7 +338,7 @@ export default function TaskDetailPage(): JSX.Element {
               entityDisplay.mutation.mutate({ glyph, colorKey, customColor });
             }}
           />
-          <h1 className="min-w-0 leading-tight">
+          <h1 className="min-w-0">
             <EditableTitle
               value={task.title}
               onSave={(title) => {
@@ -346,7 +346,7 @@ export default function TaskDetailPage(): JSX.Element {
               }}
               canEdit={canEdit}
               ariaLabel="Task title"
-              className="text-on-surface text-title-large leading-tight"
+              className="text-on-surface text-title-large"
             />
           </h1>
         </div>
@@ -390,7 +390,7 @@ export default function TaskDetailPage(): JSX.Element {
           delegate={
             delegate ? (
               <span className="text-body-medium flex min-w-0 items-center gap-1.5 whitespace-nowrap">
-                <span className="text-on-surface-variant text-xs">delegate</span>
+                <span className="text-on-surface-variant text-body-small">delegate</span>
                 <ActorAvatar
                   kind={delegate.kind}
                   name={delegate.name}
@@ -513,7 +513,7 @@ export default function TaskDetailPage(): JSX.Element {
 
         {linkedContentOpen ? (
           <section className="flex flex-col gap-2">
-            <h2 className="text-on-surface text-title-small font-medium">Dependency map</h2>
+            <h2 className="text-on-surface text-title-small">Dependency map</h2>
             <div className="bg-surface-container h-80 overflow-hidden rounded-xl">
               <TaskGraphPanel
                 scope={{ orgId, rootTaskId: taskId, depth: 2 }}

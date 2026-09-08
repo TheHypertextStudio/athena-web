@@ -87,12 +87,14 @@ export default function MentionedResources({
                     <Glyph aria-hidden className="size-4!" />
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-on-surface truncate text-sm font-medium">
+                    <span className="text-on-surface text-label-large truncate">
                       {external?.title ?? mention.label}
                     </span>
-                    <span className="text-on-surface-variant truncate text-xs">{kindLabel}</span>
+                    <span className="text-on-surface-variant text-body-small truncate">
+                      {kindLabel}
+                    </span>
                   </span>
-                  <span className="text-on-surface-variant hidden shrink-0 text-xs sm:inline">
+                  <span className="text-on-surface-variant text-body-small hidden shrink-0 sm:inline">
                     {provenance(mention)}
                   </span>
                 </Link>

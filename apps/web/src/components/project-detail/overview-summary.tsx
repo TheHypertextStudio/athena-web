@@ -134,7 +134,7 @@ export function OverviewSummary({
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <DecorativeIcon icon={ListChecks} />
-          <h2 className="text-on-surface text-base font-semibold">Status</h2>
+          <h2 className="text-on-surface text-title-medium">Status</h2>
         </div>
 
         {/* Distribution bar: one rounded slice per non-empty state type, widths proportional to
@@ -168,10 +168,10 @@ export function OverviewSummary({
           {byState
             .filter((s) => s.count > 0)
             .map((s) => (
-              <li key={s.type} className="flex items-center gap-1.5 text-xs">
+              <li key={s.type} className="text-body-small flex items-center gap-1.5">
                 <StatusIcon type={s.type} className="size-4" label={CATEGORY_LABEL[s.type]} />
                 <span className="text-on-surface-variant">{CATEGORY_LABEL[s.type]}</span>
-                <span className="text-on-surface font-medium tabular-nums">{s.count}</span>
+                <span className="text-on-surface text-label-medium tabular-nums">{s.count}</span>
               </li>
             ))}
         </ul>
@@ -180,7 +180,7 @@ export function OverviewSummary({
       <div className="border-outline-variant flex flex-col gap-3 border-t pt-4">
         <div className="flex items-center gap-2">
           <DecorativeIcon icon={Flag} />
-          <h2 className="text-on-surface text-base font-semibold">By milestone</h2>
+          <h2 className="text-on-surface text-title-medium">By milestone</h2>
         </div>
 
         <ul className="flex flex-col gap-3">
@@ -190,7 +190,7 @@ export function OverviewSummary({
               <li key={m.id} className="flex flex-col gap-1.5">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-on-surface text-body-medium truncate">{m.label}</span>
-                  <span className="text-on-surface-variant shrink-0 text-xs tabular-nums">
+                  <span className="text-on-surface-variant text-body-small shrink-0 tabular-nums">
                     {m.done}/{m.total}
                   </span>
                 </div>

@@ -623,7 +623,7 @@ export default function ProjectDetailPage(): JSX.Element {
           onSave={(summary) => {
             mutations.patchProject({ summary });
           }}
-          className="text-on-surface-variant text-body-large font-normal"
+          className="text-on-surface-variant text-body-large"
         />
       }
       metadata={
@@ -703,7 +703,7 @@ export default function ProjectDetailPage(): JSX.Element {
             />
           </EntityMetadataRow>
           {mutations.propsError || (ownerPickerOpen && membersQ.isError) ? (
-            <p role="alert" className="text-error text-sm">
+            <p role="alert" className="text-error text-body-medium">
               {mutations.propsError ?? 'Could not load members.'}
             </p>
           ) : null}
@@ -774,7 +774,7 @@ export default function ProjectDetailPage(): JSX.Element {
       }
     >
       {aggregateQ.isError ? (
-        <p role="alert" className="text-error text-sm">
+        <p role="alert" className="text-error text-body-medium">
           Could not refresh this {projectNoun.toLowerCase()}.
         </p>
       ) : null}
@@ -809,7 +809,7 @@ export default function ProjectDetailPage(): JSX.Element {
             placeholder="Add the Project brief…"
           />
           {workQ.isError ? (
-            <p role="alert" className="text-error text-sm">
+            <p role="alert" className="text-error text-body-medium">
               Could not load Project work.
             </p>
           ) : null}
@@ -847,7 +847,7 @@ export default function ProjectDetailPage(): JSX.Element {
           className="flex flex-col gap-2"
         >
           {workQ.isError ? (
-            <p role="alert" className="text-error text-sm">
+            <p role="alert" className="text-error text-body-medium">
               Could not load Project work.
             </p>
           ) : null}

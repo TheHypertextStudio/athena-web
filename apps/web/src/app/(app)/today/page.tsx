@@ -72,7 +72,7 @@ export default function TodayPage(): JSX.Element {
           characters of 22px text reading as one run-on rather than as a title with a date under it.
           Two lines, two sizes: the title carries the page, the date supports it. */}
       <Stack gap={1} className="shrink-0">
-        <h1 aria-label="Today" className="text-on-surface text-title-large font-semibold">
+        <h1 aria-label="Today" className="text-on-surface text-title-large">
           Today
         </h1>
         <p className="text-on-surface-variant text-body-medium">{heading}</p>

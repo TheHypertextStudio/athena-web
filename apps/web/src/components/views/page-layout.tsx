@@ -123,7 +123,7 @@ export function PageTitle({ children, className }: SlotProps): JSX.Element {
  */
 export function PageSubtitle({ children, className }: SlotProps): JSX.Element {
   return (
-    <p className={cn('text-on-surface-variant mt-1 hidden text-sm @2xl:block', className)}>
+    <p className={cn('text-on-surface-variant text-body-medium mt-1 hidden @2xl:block', className)}>
       {children}
     </p>
   );

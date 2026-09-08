@@ -100,12 +100,10 @@ export function ViewList({ views, activeId, onOpen, catalog }: ViewListProps): J
               )}
             >
               <div className="flex items-center justify-between gap-3">
-                <span className="text-on-surface text-body-medium truncate font-medium">
-                  {view.name}
-                </span>
+                <span className="text-on-surface text-label-large truncate">{view.name}</span>
                 <ViewScopeBadge scope={view.scope} />
               </div>
-              <div className="text-on-surface-variant flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+              <div className="text-on-surface-variant text-body-small flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span className="inline-flex items-center gap-1">
                   <Filter className="size-4" aria-hidden="true" />
                   {summary.filters}

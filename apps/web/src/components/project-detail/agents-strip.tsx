@@ -79,8 +79,10 @@ export function AgentsStrip({ agents }: AgentsStripProps): JSX.Element | null {
     >
       <div className="flex items-center gap-2">
         <DecorativeIcon icon={Sparkles} className="bg-primary/12 text-primary" />
-        <h2 className="text-on-surface text-body-medium font-semibold">Agents working here</h2>
-        <span className="text-on-surface-variant text-xs tabular-nums">{agents.length}</span>
+        <h2 className="text-on-surface text-title-small">Agents working here</h2>
+        <span className="text-on-surface-variant text-body-small tabular-nums">
+          {agents.length}
+        </span>
       </div>
       <ul className="flex flex-col gap-2">
         {agents.map((agent) => (
@@ -90,16 +92,14 @@ export function AgentsStrip({ agents }: AgentsStripProps): JSX.Element | null {
           >
             <ActorAvatar kind="agent" name={agent.agentName} size={28} />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="text-on-surface text-body-medium truncate font-medium">
-                {agent.agentName}
-              </span>
-              <span className="text-on-surface-variant truncate text-xs">
+              <span className="text-on-surface text-label-large truncate">{agent.agentName}</span>
+              <span className="text-on-surface-variant text-body-small truncate">
                 Working <span className="text-on-surface">{agent.taskTitle}</span>
               </span>
             </div>
             <span
               className={cn(
-                'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset',
+                'text-label-medium inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 ring-1 ring-inset',
                 STATUS_CLASS[agent.status],
               )}
             >

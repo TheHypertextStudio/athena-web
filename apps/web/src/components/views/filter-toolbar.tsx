@@ -265,7 +265,7 @@ export function FilterToolbar<T>({
             const description = describeFilterTerm(filter, catalog);
             return (
               <li key={`${filter.field}-${filter.op}-${index}`}>
-                <span className="border-outline-variant bg-surface-container inline-flex items-center gap-1.5 rounded-md border py-1 pr-1 pl-2.5 text-xs">
+                <span className="border-outline-variant bg-surface-container text-body-small inline-flex items-center gap-1.5 rounded-md border py-1 pr-1 pl-2.5">
                   <Filter className="text-on-surface-variant size-3.5" aria-hidden="true" />
                   <span>{description}</span>
                   <button

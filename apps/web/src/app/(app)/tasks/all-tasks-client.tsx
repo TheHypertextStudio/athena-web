@@ -158,7 +158,7 @@ export default function AllTasksClient(): JSX.Element {
         </Stack>
       ) : loadError && sorted.length === 0 ? (
         <Stack align="center" gap={2} role="alert" className="justify-center p-12 text-center">
-          <p className="text-error text-body-medium font-medium">{loadError}</p>
+          <p className="text-error text-label-large">{loadError}</p>
           <Button variant="outline" size="sm" onClick={refetchAll}>
             Try again
           </Button>
@@ -251,10 +251,10 @@ function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
               router.push(href);
             }}
             ariaLabel="Task title"
-            className="text-on-surface min-w-0 flex-1 truncate text-sm font-medium"
+            className="text-on-surface text-label-large min-w-0 flex-1 truncate"
           />
         ) : (
-          <span className="text-on-surface min-w-0 flex-1 truncate text-sm font-medium">
+          <span className="text-on-surface text-label-large min-w-0 flex-1 truncate">
             {task.title}
           </span>
         )}
@@ -262,8 +262,8 @@ function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
           <span
             className={
               overdue
-                ? 'text-error shrink-0 text-xs tabular-nums'
-                : 'text-on-surface-variant shrink-0 text-xs tabular-nums'
+                ? 'text-error text-body-small shrink-0 tabular-nums'
+                : 'text-on-surface-variant text-body-small shrink-0 tabular-nums'
             }
           >
             {formatDue(task.dueDate)}

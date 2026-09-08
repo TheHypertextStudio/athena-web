@@ -156,7 +156,7 @@ export function TimeboxForm({
         </div>
       </Row>
       {error ? (
-        <p id={errorId} role="alert" className="text-error text-xs">
+        <p id={errorId} role="alert" className="text-error text-body-small">
           {error}
         </p>
       ) : null}

@@ -92,11 +92,11 @@ export function Subtasks({
   return (
     <section aria-labelledby="subtasks-heading" className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
-        <h2 id="subtasks-heading" className="text-body-medium font-medium">
+        <h2 id="subtasks-heading" className="text-label-large">
           Subtasks
         </h2>
         {subtasks.length > 0 ? (
-          <span className="text-on-surface-variant text-xs tabular-nums">
+          <span className="text-on-surface-variant text-body-small tabular-nums">
             {doneCount}/{subtasks.length}
           </span>
         ) : null}

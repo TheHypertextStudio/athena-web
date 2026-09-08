@@ -114,7 +114,7 @@ export function SaveViewComposer({
           className="flex flex-col gap-4"
         >
           <div className="flex flex-col gap-1.5">
-            <label htmlFor={nameId} className="text-body-medium font-medium">
+            <label htmlFor={nameId} className="text-label-large">
               View name
             </label>
             <Input
@@ -129,12 +129,14 @@ export function SaveViewComposer({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-body-medium font-medium">Who can see this view</span>
+            <span className="text-label-large">Who can see this view</span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button type="button" variant="outline" className="w-fit gap-2">
                   <span>{activeScope?.label ?? 'Personal'}</span>
-                  <span className="text-on-surface-variant text-xs">{activeScope?.hint}</span>
+                  <span className="text-on-surface-variant text-body-small">
+                    {activeScope?.hint}
+                  </span>
                   <ChevronDown className="size-4 opacity-60" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
@@ -149,7 +151,9 @@ export function SaveViewComposer({
                     <DropdownMenuRadioItem key={option.value} value={option.value}>
                       <span className="flex w-full items-center justify-between gap-6">
                         <span>{option.label}</span>
-                        <span className="text-on-surface-variant text-xs">{option.hint}</span>
+                        <span className="text-on-surface-variant text-body-small">
+                          {option.hint}
+                        </span>
                       </span>
                     </DropdownMenuRadioItem>
                   ))}
@@ -158,7 +162,7 @@ export function SaveViewComposer({
             </DropdownMenu>
           </div>
 
-          <p className="text-on-surface-variant text-xs">
+          <p className="text-on-surface-variant text-body-small">
             Captures: <span className="text-on-surface">{summary}</span>
           </p>
 

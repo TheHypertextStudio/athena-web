@@ -89,7 +89,15 @@ interface ContextualInsertProps {
   readonly onOpen: () => void;
 }
 
-/** Place the shared block menu beside the empty paragraph that owns the caret. */
+/**
+ * Place the shared block menu beside the empty paragraph that owns the caret.
+ *
+ * @remarks
+ * This is the mouse path to `/`, and its menu holds an image upload plus whatever slash commands a
+ * contribution registered. It stays off an empty document: templates are already on the prompt row
+ * there, images can be pasted or dropped, and nobody opens a description with a figure. A second
+ * control on the one line a blank body has reads as a page action rather than as an insertion here.
+ */
 function ContextualInsert({ visible, top, onOpen }: ContextualInsertProps): JSX.Element | null {
   if (!visible) return null;
   return (
@@ -107,6 +115,44 @@ function ContextualInsert({ visible, top, onOpen }: ContextualInsertProps): JSX.
     >
       Insert
     </Button>
+  );
+}
+
+interface EmptyDocumentPromptProps {
+  readonly visible: boolean;
+  readonly editor: Editor;
+  readonly placeholder: string;
+  readonly contributions: readonly EditorContribution[];
+}
+
+/** The prompt an unwritten body shows on the line the first character will occupy. */
+function EmptyDocumentPrompt({
+  visible,
+  editor,
+  placeholder,
+  contributions,
+}: EmptyDocumentPromptProps): JSX.Element | null {
+  if (!visible) return null;
+  return (
+    <div
+      data-editor-empty-actions=""
+      className="text-on-surface-variant text-body-medium z-10 flex w-fit max-w-full flex-wrap items-center gap-1.5 self-start"
+      onMouseDown={(event) => {
+        if (
+          event.target instanceof Element &&
+          event.target.closest('button, a, [role="menuitem"]')
+        ) {
+          return;
+        }
+        event.preventDefault();
+        editor.commands.focus('end');
+      }}
+    >
+      <span>{placeholder}</span>
+      {contributions.map((contribution) => (
+        <span key={contribution.id}>{contribution.renderEmptyAction?.(editor)}</span>
+      ))}
+    </div>
   );
 }
 
@@ -468,12 +514,28 @@ export function FreeformTextEditor({
         className,
       )}
     >
-      <DocumentFigureActionsContext.Provider value={figureUploads.actions}>
-        <EditorContent
+      {/*
+       * The empty prompt shares one grid cell with the editor rather than carrying its own inset.
+       * An absolute offset here resolves against this surface's *padding box*, and each host pads
+       * it differently: a document body puts its `p-4` on the card around this element, while a
+       * composer pads this element by 12px. The old `top-4 left-4` was therefore 16px below and
+       * right of the caret in a document and 4px off in a composer. A shared cell starts where the
+       * text starts in both, with no number to keep in sync with either host.
+       */}
+      <div className="relative grid min-h-0 flex-1 grid-cols-1 grid-rows-1 [&>*]:col-start-1 [&>*]:row-start-1">
+        <DocumentFigureActionsContext.Provider value={figureUploads.actions}>
+          <EditorContent
+            editor={editor}
+            className="flex min-h-0 flex-1 flex-col [&>.ProseMirror]:flex-1"
+          />
+        </DocumentFigureActionsContext.Provider>
+        <EmptyDocumentPrompt
+          visible={isEditingEnabled && isEmpty}
           editor={editor}
-          className="flex min-h-0 flex-1 flex-col [&>.ProseMirror]:flex-1"
+          placeholder={placeholder}
+          contributions={emptyContributions}
         />
-      </DocumentFigureActionsContext.Provider>
+      </div>
       <input
         ref={browseInputRef}
         type="file"
@@ -489,32 +551,11 @@ export function FreeformTextEditor({
         }}
       />
       <ContextualInsert
-        visible={isEditingEnabled && caretInEmptyParagraph}
+        visible={isEditingEnabled && caretInEmptyParagraph && !isEmpty}
         top={insertControlTop}
         onOpen={slash.openAtSelection}
       />
       {isEditingEnabled ? <TableControls editor={editor} controlsRef={tableControlsRef} /> : null}
-      {isEditingEnabled && isEmpty ? (
-        <div
-          data-editor-empty-actions=""
-          className="text-on-surface-variant text-body-medium absolute top-4 left-4 z-10 inline-flex flex-nowrap items-center gap-1.5 whitespace-nowrap"
-          onMouseDown={(event) => {
-            if (
-              event.target instanceof Element &&
-              event.target.closest('button, a, [role="menuitem"]')
-            ) {
-              return;
-            }
-            event.preventDefault();
-            editor.commands.focus('end');
-          }}
-        >
-          <span>{placeholder}</span>
-          {emptyContributions.map((contribution) => (
-            <span key={contribution.id}>{contribution.renderEmptyAction?.(editor)}</span>
-          ))}
-        </div>
-      ) : null}
       <p aria-live="polite" aria-atomic="true" className="sr-only">
         {figureUploads.announcement !== ''
           ? figureUploads.announcement

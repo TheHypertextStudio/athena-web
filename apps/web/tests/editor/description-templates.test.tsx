@@ -166,8 +166,11 @@ describe('description templates inside an existing entity editor', () => {
     const emptyState = assertDefined(action.closest('[data-editor-empty-actions]'));
     expect(emptyState).toHaveTextContent('Add the Initiative brief…');
     expect(emptyState).toHaveTextContent('Start from template');
-    expect(emptyState).toHaveClass('inline-flex', 'top-4', 'left-4', 'flex-nowrap');
-    expect(emptyState).not.toHaveClass('top-8');
+    // The prompt starts where the first typed character will. It earns that by sharing the
+    // editor's own box rather than by an inset, which every host's padding would falsify.
+    const stack = assertDefined(emptyState.parentElement);
+    expect(stack).toContainElement(surface);
+    expect(emptyState.className).not.toMatch(/\b(absolute|top-\d|left-\d)\b/);
     expect(action).toHaveClass('border-outline-variant', 'border', 'rounded-full');
 
     await user.click(surface);

@@ -77,7 +77,11 @@ function deferredUpload(): {
 describe('semantic figures in the shared prose editor', () => {
   it('opens the same block menu from Insert and uploads multiple browsed files in order', async () => {
     imageUpload.run.mockImplementation(async (file) => privateUrl(file));
+    // Insert belongs to an empty paragraph inside a written document. A blank body offers its own
+    // prompt row instead, so the caret has to reach a fresh paragraph for the control to exist.
     const { onChange, user } = renderEditor();
+    await user.click(await screen.findByRole('textbox', { name: 'Description' }));
+    await user.keyboard('An opening line{Enter}');
 
     await user.click(await screen.findByRole('button', { name: 'Insert' }));
     const menu = await screen.findByRole('listbox', { name: 'Insert a block' });

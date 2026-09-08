@@ -166,6 +166,23 @@ describe('Markdown formats as it is typed, not on blur or save', () => {
   });
 });
 
+describe('the block menu control', () => {
+  it('stays off a blank body and appears once the caret reaches an empty paragraph', async () => {
+    const user = userEvent.setup();
+    renderEditor(<EntityDocument value="" canEdit onSave={vi.fn()} />);
+
+    const surface = await screen.findByRole('textbox', { name: 'Description' });
+    // A blank body has one line, and the prompt already owns it. Insert offers an image upload
+    // and nothing else there, which is not how anyone opens a description.
+    expect(screen.queryByRole('button', { name: 'Insert' })).toBeNull();
+
+    await user.click(surface);
+    await user.keyboard('An opening line{Enter}');
+
+    expect(await screen.findByRole('button', { name: 'Insert' })).toBeVisible();
+  });
+});
+
 describe('clicking an editor-shaped surface', () => {
   it('does not move the caret when the click lands in the outer editor margin', async () => {
     renderEditor(<EntityDocument value="A single line." canEdit onSave={vi.fn()} />);

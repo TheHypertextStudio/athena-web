@@ -843,6 +843,15 @@ editable affordance; `checkbox.tsx` and `switch.tsx` draw the control itself; `b
 separates nothing and only a line can. Adding a file there means arguing it into one of those
 cases, not parking it pending a migration.
 
+The removals were checked by screenshot, not only by test, because a class-name assertion cannot
+say whether a table still reads as rows. `/orgs/:orgId/tasks` was captured at 1440×900 in both
+themes with ten seeded tasks: without its outline or row rules the table reads as a
+`surface-container-low` panel on the page tone, and the rows separate on height and the leading
+glyph alone. Dark is the case worth knowing about, since its surface steps are compressed into
+L 0.175–0.36 — the panel still reads as contained there. The header row is the weakest point in
+both themes now that it has no underline, and it holds on colour and weight, but it is the first
+thing to look at if this treatment ever feels flat.
+
 `raw-radius-utility` had the same shape of problem and it turned out to be smaller than it looked.
 Nine corners in the design system were off both scales, not the 22 a raw grep suggested — the rest
 were the word "rounded" in prose. All nine are resolved: `rounded-2xl` on `Surface`'s `large` shape

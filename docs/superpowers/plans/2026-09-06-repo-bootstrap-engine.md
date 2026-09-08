@@ -1,5 +1,11 @@
 # Repo Bootstrap Engine Implementation Plan
 
+> **Implementation status (2026-09-08):** The engine and conformance implementation are complete in
+> the local `TheHypertextStudio/bootstrap` repository. Publishing the repository and its four
+> checksummed release artifacts requires explicit remote-write authorization. Docket therefore uses
+> the same public contract through a checked-in POSIX dispatcher today and can switch to the rendered
+> pinned launcher without changing its API after the release exists.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the runtime-independent engine and root launcher that give every Hypertext Studio repository the same bootstrap command surface.
@@ -32,6 +38,7 @@
 
 - Create in `TheHypertextStudio/bootstrap`: `Cargo.toml`
 - Create: `rust-toolchain.toml`
+- Create: `src/lib.rs`
 - Create: `src/main.rs`
 - Create: `src/cli.rs`
 - Create: `src/contract.rs`

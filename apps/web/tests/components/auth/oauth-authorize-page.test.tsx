@@ -18,7 +18,7 @@ import { OAUTH_ISSUABLE_SCOPES } from '@docket/identity-access/oauth-scope-contr
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { signInReturnPath } from '@/components/app-shell-utils';
+import { signInReturnPath } from '@/lib/auth-navigation';
 import { OAUTH_SCOPE_COPY } from '@/lib/oauth-scope-copy';
 
 /**

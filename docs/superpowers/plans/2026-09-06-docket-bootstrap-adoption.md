@@ -1,5 +1,10 @@
 # Docket Repo Bootstrap Adoption Implementation Plan
 
+> **Implementation status (2026-09-08):** Docket now has the required root API, configuration
+> reconciliation, conventional hooks, Git policy, explicit-port service lifecycle, and isolated
+> returning-passkey verification. The launcher is source-contained until the shared engine has an
+> authorized published release; that distribution boundary does not block a fresh Docket clone.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make a fresh Docket clone converge to a working local app through the standard `./bootstrap` API, and make the same entrypoint explicitly guide, plan, apply, and verify production readiness.

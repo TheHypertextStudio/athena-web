@@ -1,6 +1,6 @@
 'use client';
 
-import { Input } from '@docket/ui/primitives';
+import { Input } from '@docket/ui/primitives/field';
 import type { JSX } from 'react';
 
 /** Props for the shared workspace-name field. */

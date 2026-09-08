@@ -32,6 +32,12 @@ language runtime first. The likely implementation is a small POSIX launcher plus
 portable engine release. The engine's implementation language and distribution mechanism remain an
 implementation decision; they must not become part of an application's public setup contract.
 
+No repository relies on a globally installed bootstrap executable. Before the first shared release
+is published, a repository may ship a source-contained POSIX dispatcher for this exact command and
+flag contract, provided it passes the same conformance suite and requires no project runtime merely
+to explain missing prerequisites. Publishing the engine replaces that dispatcher's internals, not
+the repository API or project hooks.
+
 Application repositories do not implement a formal adapter SDK. The engine recognizes a project
 by what is present and what the project already knows how to do. It understands common files,
 native commands, existing configuration, and provider state. Supporting a new kind of project is

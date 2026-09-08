@@ -22,7 +22,9 @@
  */
 import type { IntegrationCreate, IntegrationOut } from '@docket/connections/integration-contract';
 import type { TaskOut } from '@docket/work/task-model';
-import { Calendar, Layers, TaskAlt } from '@docket/ui/icons';
+import { Calendar } from '@docket/ui/icons/calendar';
+import { Layers } from '@docket/ui/icons/layers';
+import { TaskAlt } from '@docket/ui/icons/task-alt';
 import { type JSX, useCallback, useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';

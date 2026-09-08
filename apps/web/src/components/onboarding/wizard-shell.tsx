@@ -11,9 +11,9 @@
  * their one concept. The body keys off the current step so React remounts it between steps,
  * which re-triggers the enter animation for a smooth, deliberate transition.
  */
-import { ChevronLeft } from '@docket/ui/icons';
+import { ChevronLeft } from '@docket/ui/icons/chevron-left';
 import { cn } from '@docket/ui/lib/utils';
-import { Button } from '@docket/ui/primitives';
+import { Button } from '@docket/ui/primitives/button';
 import type { JSX, ReactNode } from 'react';
 
 /** Props for {@link WizardShell}. */

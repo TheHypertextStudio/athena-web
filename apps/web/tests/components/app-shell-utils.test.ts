@@ -3,11 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import {
-  homeKeyFromPath,
-  isObjectDetailPath,
-  signInReturnPath,
-} from '../../src/components/app-shell-utils';
+import { homeKeyFromPath, isObjectDetailPath } from '../../src/components/app-shell-utils';
+import { signInReturnPath } from '../../src/lib/auth-navigation';
 
 const root = resolve(import.meta.dirname, '../../../..');
 const shellFrame = readFileSync(join(root, 'apps/web/src/components/app-shell-frame.tsx'), 'utf8');

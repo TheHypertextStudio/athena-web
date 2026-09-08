@@ -61,7 +61,7 @@
  */
 import * as React from 'react';
 
-import { ChevronDown } from '../icons';
+import { ChevronDown } from '../icons/chevron-down';
 import { cn } from '../lib/utils';
 import { CONTROL, CONTROL_RADIUS, COARSE_FLOOR, type ControlSize, useControlSize } from './control';
 import { focusRing } from './focus';

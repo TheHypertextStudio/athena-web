@@ -9,7 +9,8 @@
  * (keyboard-focusable, Enter/Space activatable) carrying `aria-pressed` to announce its
  * selected state, with a token-driven selected treatment and a visible focus ring.
  */
-import { Check, type LucideIcon } from '@docket/ui/icons';
+import { Check } from '@docket/ui/icons/check';
+import type { DocketIcon } from '@docket/ui/icons/icon-type';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX, ReactNode } from 'react';
 
@@ -24,7 +25,7 @@ export interface SelectableCardProps {
   /** A short supporting sentence under the title. */
   description: string;
   /** An optional leading glyph rendered in a tinted badge. */
-  icon?: LucideIcon;
+  icon?: DocketIcon;
   /** Optional extra content (e.g. a vocabulary preview) rendered below the description. */
   children?: ReactNode;
   /** Optional extra classes (e.g. layout/sizing from the parent grid). */

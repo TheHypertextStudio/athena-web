@@ -1,9 +1,10 @@
 'use client';
 
-import type { LucideIcon } from '@docket/ui/icons';
-import { Cable, CheckCircle2 } from '@docket/ui/icons';
+import { Cable } from '@docket/ui/icons/cable';
+import { CheckCircle2 } from '@docket/ui/icons/check-circle-2';
+import type { DocketIcon } from '@docket/ui/icons/icon-type';
 import { cn } from '@docket/ui/lib/utils';
-import { Button } from '@docket/ui/primitives';
+import { Button } from '@docket/ui/primitives/button';
 import { useMemo, type JSX } from 'react';
 
 /** Static presentation for one onboarding source. */
@@ -11,7 +12,7 @@ export interface ProviderCard<Provider extends string = string> {
   readonly provider: Provider;
   readonly name: string;
   readonly blurb: string;
-  readonly icon: LucideIcon;
+  readonly icon: DocketIcon;
 }
 
 /** Where a single provider card is in its connect lifecycle. */

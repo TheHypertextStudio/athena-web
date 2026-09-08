@@ -6,7 +6,7 @@ import { useEffect, useState, type JSX } from 'react';
 
 import { api } from '@/lib/api';
 import { useAppSearchParams } from '@/lib/app-location';
-import { safeSameOriginPath } from '@/components/app-shell-utils';
+import { safeSameOriginPath } from '@/lib/auth-navigation';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /** How long the return page waits for Stripe webhook reconciliation. */

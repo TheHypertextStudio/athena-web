@@ -30,6 +30,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+import { AppProviders } from '../../src/components/app-providers';
 import { Providers } from '../../src/components/providers';
 
 afterEach(cleanup);
@@ -46,22 +47,27 @@ describe('Providers', () => {
     expect(container.querySelector('script')).toBeNull();
   });
 
-  it('composes the receipt provider inside the query client without replacing the action provider', () => {
+  it('keeps application interaction providers out of public and authentication routes', () => {
+    const add = vi.spyOn(document, 'addEventListener');
     const { container } = render(
       <Providers>
-        <main>Receipt-ready</main>
+        <main>Public route</main>
       </Providers>,
     );
 
-    expect(screen.getByText('Receipt-ready')).toBeTruthy();
+    expect(screen.getByText('Public route')).toBeTruthy();
     expect(container.querySelector('script')).toBeNull();
+    expect(add.mock.calls.filter(([type]) => type === 'contextmenu')).toHaveLength(0);
+    add.mockRestore();
   });
 
   it('installs exactly one document-level object context-menu handler', () => {
     const add = vi.spyOn(document, 'addEventListener');
     render(
       <Providers>
-        <main>One menu</main>
+        <AppProviders>
+          <main>One menu</main>
+        </AppProviders>
       </Providers>,
     );
 
@@ -73,7 +79,9 @@ describe('Providers', () => {
     const add = vi.spyOn(document, 'addEventListener');
     render(
       <Providers>
-        <main>One find router</main>
+        <AppProviders>
+          <main>One find router</main>
+        </AppProviders>
       </Providers>,
     );
 

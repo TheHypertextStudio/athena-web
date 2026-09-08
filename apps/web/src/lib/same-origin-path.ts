@@ -4,7 +4,7 @@
  * @remarks
  * There are two callers with two different notions of "here" — the browser knows its real origin,
  * and a Server Component has none it can compare against — so they used to carry two near-identical
- * copies of this check: `safeSameOriginPath` in `components/app-shell-utils.tsx` and
+ * copies of this check: `safeSameOriginPath` in `lib/auth-navigation.ts` and
  * `safeServerReturnPath` in `lib/server-session.ts`. Both are still exported under those names,
  * because each has a different contract about what to do when there is no window, but the actual
  * URL reasoning happens exactly once, here.

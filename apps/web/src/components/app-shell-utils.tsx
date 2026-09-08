@@ -15,8 +15,6 @@ import {
 import DocketLink from '@/components/docket-link';
 import type { ReactNode } from 'react';
 
-import { sameOriginPath } from '@/lib/same-origin-path';
-
 /** homeKeyFromPath derives a stable app shell storage or navigation key. */
 export function homeKeyFromPath(pathname: string): HomeNavKey | undefined {
   if (/^\/today(?:\/|$)/.test(pathname)) return 'today';
@@ -83,41 +81,6 @@ export function isObjectDetailPath(pathname: string): boolean {
     OBJECT_DETAIL_SEGMENTS.includes(segments[2] as (typeof OBJECT_DETAIL_SEGMENTS)[number]) &&
     Boolean(segments[3])
   );
-}
-
-/**
- * Build a Docket sign-in URL that returns to the given same-origin app path.
- *
- * @remarks
- * `returnPath` must already be a same-origin absolute path (from Next's routing hooks or
- * `window.location`), not an externally supplied URL — the sign-in page independently re-validates
- * it before use. `URLSearchParams` owns the query-string encoding so this never has to hand-roll
- * `encodeURIComponent` (and can't drift from how the sign-in page decodes it back out).
- */
-export function signInReturnPath(returnPath: string): string {
-  return `/sign-in?${new URLSearchParams({ callbackURL: returnPath }).toString()}`;
-}
-
-/**
- * Resolve `value` against the *browser's* origin, rejecting anything that would leave it.
- *
- * @remarks
- * The client-side binding of {@link sameOriginPath}, which owns the URL reasoning; this function
- * owns only the one thing that is specific to running in a browser — that with no `window` there is
- * no origin to compare against, and the honest answer is `null` rather than a guess. Every caller
- * here (the interlock, the sign-in screen) runs in an event handler or an effect, so a `window` is
- * always present in practice and the guard is a correctness floor, not a code path.
- *
- * The server has no `window` and therefore cannot use this. It resolves against a fixed placeholder
- * origin instead — see `safeServerReturnPath` in `lib/server-session.ts`, which delegates to the
- * same shared check.
- *
- * @param value - The raw candidate, typically a `?callbackURL=` query value.
- * @returns The safe same-origin path, or `null`.
- */
-export function safeSameOriginPath(value: string | null | undefined): string | null {
-  if (typeof window === 'undefined') return null;
-  return sameOriginPath(value, window.location.origin);
 }
 
 /** lastOrgStorageKey derives a stable app shell storage or navigation key. */

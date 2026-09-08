@@ -231,25 +231,36 @@ describe('(app) layout guard', () => {
 });
 
 describe('root missing-route recovery', () => {
-  it('keeps an authenticated unknown URL in the app shell instead of Next’s root fallback', async () => {
+  it('keeps a root miss lightweight even when the caller has a session', async () => {
     readServerSessionMock.mockResolvedValue(AUTHENTICATED);
 
-    const tree = await RootNotFound();
+    const tree = RootNotFound();
 
-    expect(shellProps(tree).initialSession).toEqual(AUTHENTICATED.user);
-    expect(prefetchQuery).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: ['me', 'orgs'] }),
-    );
+    expect(missingPageCopy(tree)).toContain('This page isn’t available');
+    expect(readServerSessionMock).not.toHaveBeenCalled();
+    expect(prefetchQuery).not.toHaveBeenCalled();
   });
 
-  it('keeps the shell when the session service is unavailable rather than treating an outage as sign-out', async () => {
+  it('does not turn a missing public URL into a session-service dependency', async () => {
     readServerSessionMock.mockResolvedValue({ state: 'unknown' });
 
-    const tree = await RootNotFound();
+    const tree = RootNotFound();
 
-    expect(shellProps(tree).initialSession).toBeNull();
+    expect(missingPageCopy(tree)).toContain('Go to Docket home');
+    expect(readServerSessionMock).not.toHaveBeenCalled();
   });
 });
+
+/** Read direct text children without serializing React's circular element types. */
+function missingPageCopy(tree: unknown): string[] {
+  const element = tree as { props?: { children?: unknown } };
+  const children = Array.isArray(element.props?.children) ? element.props.children : [];
+  return children.flatMap((child) => {
+    if (typeof child === 'string') return [child];
+    const content = (child as { props?: { children?: unknown } } | null)?.props?.children;
+    return typeof content === 'string' ? [content] : [];
+  });
+}
 
 describe('(focus) layout guard', () => {
   it('protects the chrome-free route with a callback to Focus', async () => {

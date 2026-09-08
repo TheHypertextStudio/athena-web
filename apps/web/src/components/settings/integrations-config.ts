@@ -1,9 +1,5 @@
 import type { IntegrationOut } from '@docket/connections/integration-contract';
 import {
-  CONNECTOR_PROVIDER_IDS,
-  connectorIdentityProvider,
-} from '@docket/connections/provider-catalog-contract';
-import {
   Calendar,
   Github,
   Layers,
@@ -13,6 +9,8 @@ import {
   Sparkles,
   TaskAlt,
 } from '@docket/ui/icons';
+
+export { socialProviderForConnector } from '@/lib/connector-identity';
 
 /** PROVIDER_ICON maps integration providers to their display icon component. */
 export const PROVIDER_ICON: Record<string, LucideIcon> = {
@@ -65,16 +63,6 @@ export const STATUS_LABEL: Record<
  * grant; GitHub and Linear each have their own. Used to decide which
  * provider's OAuth redirect to launch when finishing/repairing a connection.
  */
-export function socialProviderForConnector(
-  provider: string,
-): 'google' | 'github' | 'linear' | 'notion' {
-  const connectorProvider = CONNECTOR_PROVIDER_IDS.find((p) => p === provider);
-  const identityProvider = connectorProvider
-    ? connectorIdentityProvider(connectorProvider)
-    : 'google';
-  return identityProvider;
-}
-
 // Provider/connector *availability* (isMockMode, connectorOAuthConfigured, connectorAvailable) is
 // derived from the server's `/v1/config` — see `@/lib/public-config`. This module holds only the
 // static display catalog (icons, labels) and the connector → social-provider mapping above, so no

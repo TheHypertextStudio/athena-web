@@ -15,9 +15,10 @@ committed here.
 bash scripts/dev-stack.sh start
 ```
 
-Brings the whole stack up in the CI topology — plain HTTP on `:1355`, branch-prefixed hostnames —
-and blocks until web, API, and the OIDC discovery document all answer `200`. It prints `READY` plus
-the exact env to export. It is idempotent: it stops anything already running first.
+Brings the whole stack up on explicit adjacent HTTP ports—web `1355`, API `1356`, admin `1357`, and
+runner `1358` by default—with branch-prefixed hostnames. It bypasses Portless completely and blocks
+until all four processes, the auth routes, API health, and OIDC discovery answer `200`. It prints
+`READY` plus the exact env to export. Set `DOCKET_DEV_PORT` to move the complete four-port range.
 
 ```bash
 eval "$(bash scripts/dev-stack.sh env)"
@@ -124,19 +125,19 @@ failure from your own fixtures.
 
 ## When something will not start
 
-| Symptom                                                                  | Cause                                                                                                                  | Fix                                                                                                   |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `Another next dev server is already running`                             | A `next dev` survived the stop and holds `.next/dev`'s lock                                                            | The message names the PID — `kill <pid>`, then `rm -r apps/web/.next/dev`                             |
-| Opaque TLS `EPROTO` / `ERR_SSL_TLSV1_ALERT_INTERNAL_ERROR` on auth calls | Talking to the portless `:443` HTTPS aliases                                                                           | Use `dev-stack.sh`, which runs `--no-tls` on `:1355`                                                  |
-| 502s from a stack that just started                                      | Bare `docket.localhost` portless aliases are first-come and are not re-pointed when an older worktree's stack dies     | `dev-stack.sh` addresses this worktree by its own branch-prefixed hostnames; never use the bare alias |
-| Passkey ceremony fails with `CHALLENGE_NOT_FOUND`                        | `BETTER_AUTH_COOKIE_DOMAIN` does not cover the origin being driven                                                     | `dev-stack.sh`'s topology is consistent by construction; do not hand-roll the origins                 |
-| `dev-session.ts` times out waiting for `#name`                           | `next dev` compiles a route on first request, and the cold compile outruns the tool's own timeout                      | `curl` the route once to warm it, then re-run                                                         |
-| Env overrides silently ignored                                           | `dotenv-cli`'s `-o/--override` makes the **file** win over the environment — the opposite of what the flag sounds like | Put exports inside the child: `dotenv -e .env.local -- bash -c 'export FOO=…; …'`                     |
+| Symptom                                                                  | Cause                                                                                                                  | Fix                                                                                   |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `Another next dev server is already running`                             | A `next dev` survived the stop and holds `.next/dev`'s lock                                                            | The message names the PID — `kill <pid>`, then `rm -r apps/web/.next/dev`             |
+| Opaque TLS `EPROTO` / `ERR_SSL_TLSV1_ALERT_INTERNAL_ERROR` on auth calls | Talking to the optional Portless `:443` HTTPS aliases                                                                  | Use the HTTP origin printed by `dev-stack.sh`                                         |
+| A request hangs and every registered route later returns 404             | The optional shared Portless proxy wedged under concurrent Next client-chunk requests                                  | Stop using the proxy for acceptance; `dev-stack.sh` addresses each process directly   |
+| Passkey ceremony fails with `CHALLENGE_NOT_FOUND`                        | `BETTER_AUTH_COOKIE_DOMAIN` does not cover the origin being driven                                                     | `dev-stack.sh`'s topology is consistent by construction; do not hand-roll the origins |
+| `dev-session.ts` times out waiting for `#name`                           | `next dev` compiles a route on first request, and the cold compile outruns the tool's own timeout                      | `curl` the route once to warm it, then re-run                                         |
+| Env overrides silently ignored                                           | `dotenv-cli`'s `-o/--override` makes the **file** win over the environment — the opposite of what the flag sounds like | Put exports inside the child: `dotenv -e .env.local -- bash -c 'export FOO=…; …'`     |
 
 ## What not to do
 
-- Do not run `pnpm dev` directly for automated verification; it depends on the privileged portless
-  `:443` proxy and fails opaquely when that daemon is unhealthy.
+- Do not run `pnpm dev` directly for automated verification; it depends on the optional privileged
+  Portless `:443` proxy and can fail independently of a healthy Docket process.
 - Do not add a launch-config entry, script, or `.env` file to work around any of the above. Every
   one of these problems is already solved by `dev-stack.sh`; a second path is a second thing to keep
   correct.

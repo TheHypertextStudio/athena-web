@@ -1,0 +1,200 @@
+#!/bin/sh
+# Stable repository bootstrap API. Project behavior lives in the three conventional executable
+# hooks below so this entrypoint remains language-neutral and replaceable by the shared engine.
+set -eu
+
+repo_root=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
+cd "$repo_root"
+
+command_name=converge
+command_seen=0
+target=local
+target_seen=0
+approved=0
+non_interactive=0
+offline=0
+no_install=0
+json=0
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./bootstrap [flags]
+  ./bootstrap check [flags]
+  ./bootstrap plan [local|production] [flags]
+  ./bootstrap production [flags]
+  ./bootstrap verify [local|production] [flags]
+
+Flags:
+  --yes              Accept the displayed ordinary changes.
+  --non-interactive  Never prompt; fail with recovery guidance instead.
+  --json             Emit stable machine-readable lifecycle events.
+  --offline          Prohibit network work.
+  --no-install       Prohibit tool and dependency installation.
+  -h, --help         Show this help.
+EOF
+}
+
+fail_usage() {
+  echo "bootstrap: $1" >&2
+  usage >&2
+  exit 2
+}
+
+for argument in "$@"; do
+  case "$argument" in
+    --yes) approved=1 ;;
+    --non-interactive) non_interactive=1 ;;
+    --json) json=1 ;;
+    --offline) offline=1 ;;
+    --no-install) no_install=1 ;;
+    -h|--help) usage; exit 0 ;;
+    check|plan|verify)
+      [ "$command_seen" -eq 0 ] || fail_usage "multiple commands were supplied"
+      command_name=$argument
+      command_seen=1
+      ;;
+    production)
+      case "$command_name" in
+        plan|verify)
+          [ "$target_seen" -eq 0 ] || fail_usage "multiple targets were supplied"
+          target=production
+          target_seen=1
+          ;;
+        converge)
+          [ "$command_seen" -eq 0 ] || fail_usage "multiple commands were supplied"
+          command_name=production
+          command_seen=1
+          target=production
+          ;;
+        *) fail_usage "target 'production' cannot follow command '$command_name'" ;;
+      esac
+      ;;
+    local)
+      case "$command_name" in
+        plan|verify)
+          [ "$target_seen" -eq 0 ] || fail_usage "multiple targets were supplied"
+          target=$argument
+          target_seen=1
+          ;;
+        *) fail_usage "target '$argument' is valid only after plan or verify" ;;
+      esac
+      ;;
+    --*) fail_usage "unknown flag '$argument'" ;;
+    *) fail_usage "unknown command or target '$argument'" ;;
+  esac
+done
+
+export BOOTSTRAP_APPROVED=$approved
+export BOOTSTRAP_NON_INTERACTIVE=$non_interactive
+export BOOTSTRAP_OFFLINE=$offline
+export BOOTSTRAP_NO_INSTALL=$no_install
+if [ "$non_interactive" -eq 1 ]; then export CI=1; fi
+
+emit() {
+  message=$1
+  echo "$message"
+  if [ "$json" -eq 1 ]; then
+    printf '{"schema":"hypertext.bootstrap/v1","command":"%s","target":"%s","message":"%s"}\n' \
+      "$command_name" "$target" "$message"
+  fi
+}
+
+require_hook() {
+  hook=$1
+  if [ ! -x "$repo_root/$hook" ]; then
+    echo "FAIL hook.$hook: required executable is missing" >&2
+    echo "  Restore it from the repository, mark it executable, and rerun ./bootstrap." >&2
+    return 1
+  fi
+  echo "PASS hook.$hook"
+}
+
+check_machine() {
+  status=0
+  os=$(uname -s 2>/dev/null || echo unknown)
+  case "$os" in
+    Darwin|Linux) echo "PASS platform.$os" ;;
+    *)
+      echo "FAIL platform: macOS or Linux is required; found $os" >&2
+      status=1
+      ;;
+  esac
+  if command -v git >/dev/null 2>&1; then
+    echo 'PASS tool.git'
+  else
+    echo 'FAIL tool.git: install Git with Apple Command Line Tools or your Linux package manager' >&2
+    status=1
+  fi
+  if [ -f package.json ]; then
+    if command -v node >/dev/null 2>&1; then
+      echo 'PASS tool.node'
+    else
+      echo 'FAIL tool.node: install the Node.js version declared by this repository and rerun' >&2
+      status=1
+    fi
+    if command -v pnpm >/dev/null 2>&1 || command -v corepack >/dev/null 2>&1; then
+      echo 'PASS tool.pnpm'
+    else
+      echo 'FAIL tool.pnpm: enable Corepack for the repository-pinned pnpm version and rerun' >&2
+      status=1
+    fi
+  fi
+  require_hook scripts/bootstrap-local || status=1
+  require_hook scripts/bootstrap-production || status=1
+  require_hook scripts/bootstrap-verify || status=1
+  return "$status"
+}
+
+case "$command_name" in
+  check)
+    emit 'Checking the repository and machine without changing them.'
+    check_machine
+    ;;
+  plan)
+    emit "Planning $target bootstrap without changing local or remote state."
+    if [ "$target" = local ]; then
+      echo '1. Reconcile safe local configuration and repository dependencies with scripts/bootstrap-local.'
+      echo '2. Prove configuration, services, account creation, and passkey sign-in with scripts/bootstrap-verify local.'
+      echo '3. Start the normal development stack, or retain it unchanged when it is already healthy.'
+    else
+      echo '1. Inspect production prerequisites and ask before remote, billable, or privileged changes.'
+      echo '2. Reconcile production providers with scripts/bootstrap-production.'
+      echo '3. Prove the deployed application with scripts/bootstrap-verify production.'
+    fi
+    ;;
+  verify)
+    emit "Verifying $target postconditions without provisioning resources."
+    exec "$repo_root/scripts/bootstrap-verify" "$target"
+    ;;
+  production)
+    emit 'Production bootstrap may change remote, privileged, or billable resources.'
+    check_machine
+    if [ "$approved" -ne 1 ]; then
+      if [ "$non_interactive" -eq 1 ] || [ ! -t 0 ]; then
+        echo 'bootstrap: production approval is required; inspect ./bootstrap plan production, then rerun with --yes' >&2
+        exit 4
+      fi
+      printf 'Continue with production bootstrap? Type yes: '
+      IFS= read -r response
+      [ "$response" = yes ] || { echo 'bootstrap: production bootstrap cancelled' >&2; exit 4; }
+      export BOOTSTRAP_APPROVED=1
+    fi
+    "$repo_root/scripts/bootstrap-production"
+    exec "$repo_root/scripts/bootstrap-verify" production
+    ;;
+  converge)
+    emit 'Converging the local development environment.'
+    check_machine
+    "$repo_root/scripts/bootstrap-local"
+    "$repo_root/scripts/bootstrap-verify" local
+    if [ -x "$repo_root/scripts/dev-stack.sh" ]; then
+      if "$repo_root/scripts/dev-stack.sh" status >/dev/null 2>&1; then
+        emit 'Retaining the already healthy local development stack.'
+      else
+        emit 'Starting the verified local development stack.'
+        exec "$repo_root/scripts/dev-stack.sh" start
+      fi
+    fi
+    ;;
+esac

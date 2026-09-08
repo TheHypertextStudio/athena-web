@@ -7,6 +7,7 @@ fi
 
 repo_root=$(git rev-parse --show-toplevel)
 git_dir=$(git -C "$repo_root" rev-parse --git-dir)
+guardrails_changed=0
 
 case "$git_dir" in
   /*) ;;
@@ -17,11 +18,32 @@ esac
 # checkout overwrite this worktree's policy whenever it runs `pnpm install`. Worktree config gives
 # each checkout its own hook path under its own Git directory, so the hook always matches the code
 # that invoked it.
-git config --local extensions.worktreeConfig true
+if [ "$(git config --local --get extensions.worktreeConfig 2>/dev/null || true)" != true ]; then
+  git config --local extensions.worktreeConfig true
+  guardrails_changed=1
+fi
 hooks_dir="$git_dir/docket-hooks"
 mkdir -p "$hooks_dir"
 
-cat > "$hooks_dir/use-repo-node.sh" <<'HOOK'
+write_hook() {
+  hook_target=$1
+  hook_temp="$hook_target.tmp.$$"
+  trap 'rm -f "$hook_temp"' EXIT HUP INT TERM
+  cat >"$hook_temp"
+  if [ -f "$hook_target" ] && cmp -s "$hook_temp" "$hook_target"; then
+    rm -f "$hook_temp"
+  else
+    mv -f "$hook_temp" "$hook_target"
+    guardrails_changed=1
+  fi
+  if [ ! -x "$hook_target" ]; then
+    chmod +x "$hook_target"
+    guardrails_changed=1
+  fi
+  trap - EXIT HUP INT TERM
+}
+
+write_hook "$hooks_dir/use-repo-node.sh" <<'HOOK'
 #!/bin/sh
 set -eu
 
@@ -50,13 +72,28 @@ if [ -s "$repo_root/.nvmrc" ]; then
 fi
 HOOK
 
-git config --local pull.ff only
-git config --local pull.rebase true
-git config --local branch.main.rebase true
-git config --local branch.main.mergeOptions --ff-only
-git config --worktree core.hooksPath "$hooks_dir"
+if [ "$(git config --local --get pull.ff 2>/dev/null || true)" != only ]; then
+  git config --local pull.ff only
+  guardrails_changed=1
+fi
+if [ "$(git config --local --get pull.rebase 2>/dev/null || true)" != true ]; then
+  git config --local pull.rebase true
+  guardrails_changed=1
+fi
+if [ "$(git config --local --get branch.main.rebase 2>/dev/null || true)" != true ]; then
+  git config --local branch.main.rebase true
+  guardrails_changed=1
+fi
+if [ "$(git config --local --get branch.main.mergeOptions 2>/dev/null || true)" != --ff-only ]; then
+  git config --local branch.main.mergeOptions --ff-only
+  guardrails_changed=1
+fi
+if [ "$(git config --worktree --get core.hooksPath 2>/dev/null || true)" != "$hooks_dir" ]; then
+  git config --worktree core.hooksPath "$hooks_dir"
+  guardrails_changed=1
+fi
 
-cat > "$hooks_dir/pre-commit" <<'HOOK'
+write_hook "$hooks_dir/pre-commit" <<'HOOK'
 #!/bin/sh
 set -eu
 
@@ -66,6 +103,9 @@ if ! command -v pnpm >/dev/null 2>&1; then
   echo "pnpm is required to run commit checks." >&2
   exit 1
 fi
+
+# Reject credential-shaped tracked content before formatting can obscure which change introduced it.
+pnpm secret-scan
 
 # Git snapshots the index after pre-commit but before commit-msg. Formatting any later leaves the
 # rewritten files staged for a second commit while the first commit records the unformatted input.
@@ -77,7 +117,7 @@ pnpm lint:staged
 pnpm --filter @docket/test-utils exec vitest run tests/design-policies/design-token-policy.test.ts --maxWorkers=1
 HOOK
 
-cat > "$hooks_dir/commit-msg" <<'HOOK'
+write_hook "$hooks_dir/commit-msg" <<'HOOK'
 #!/bin/sh
 set -eu
 
@@ -86,14 +126,14 @@ set -eu
 node scripts/validate-commit-message.mjs "$1"
 HOOK
 
-cat > "$hooks_dir/pre-merge-commit" <<'HOOK'
+write_hook "$hooks_dir/pre-merge-commit" <<'HOOK'
 #!/bin/sh
 
 echo "Merge commits are forbidden in this repository. Rebase, cherry-pick, or use git merge --ff-only." >&2
 exit 1
 HOOK
 
-cat > "$hooks_dir/prepare-commit-msg" <<'HOOK'
+write_hook "$hooks_dir/prepare-commit-msg" <<'HOOK'
 #!/bin/sh
 set -eu
 
@@ -107,11 +147,25 @@ fi
 exit 0
 HOOK
 
-chmod +x \
-  "$hooks_dir/use-repo-node.sh" \
-  "$hooks_dir/pre-commit" \
-  "$hooks_dir/commit-msg" \
-  "$hooks_dir/pre-merge-commit" \
-  "$hooks_dir/prepare-commit-msg"
+write_hook "$hooks_dir/pre-push" <<'HOOK'
+#!/bin/sh
+set -eu
 
-echo "Installed native Git guardrails in $hooks_dir"
+. "$(dirname "$0")/use-repo-node.sh"
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "pnpm is required to run pre-push checks." >&2
+  exit 1
+fi
+
+# A direct push is the repository's integration boundary, so it runs the complete local gates.
+pnpm typecheck
+pnpm lint
+pnpm test
+HOOK
+
+if [ "$guardrails_changed" -eq 1 ]; then
+  echo "CHANGE native Git guardrails reconciled in $hooks_dir"
+else
+  echo "PASS native Git guardrails converged in $hooks_dir"
+fi

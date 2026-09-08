@@ -1,6 +1,7 @@
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -66,5 +67,53 @@ describe('Docket bootstrap hooks', () => {
     expect(source).toContain('BOOTSTRAP_NO_INSTALL');
     expect(source).toContain('BOOTSTRAP_OFFLINE');
     expect(source).toContain('pnpm install --frozen-lockfile');
+  });
+
+  it('always reconciles repository Git guardrails', () => {
+    const source = readFileSync(
+      resolve(import.meta.dirname, '../../scripts/bootstrap-local'),
+      'utf8',
+    );
+
+    expect(source).toContain('scripts/install-git-guardrails.sh');
+  });
+
+  it('installs secret, commit-message, merge, and pre-push policy', () => {
+    const source = readFileSync(
+      resolve(import.meta.dirname, '../../scripts/install-git-guardrails.sh'),
+      'utf8',
+    );
+
+    expect(source).toContain('pnpm secret-scan');
+    expect(source).toContain('write_hook "$hooks_dir/commit-msg"');
+    expect(source).toContain('write_hook "$hooks_dir/pre-merge-commit"');
+    expect(source).toContain('write_hook "$hooks_dir/pre-push"');
+    expect(source).toContain('pnpm typecheck');
+    expect(source).toContain('pnpm test');
+  });
+
+  it('does not rewrite converged Git guardrails', async () => {
+    const root = mkdtempSync(resolve(tmpdir(), 'docket-bootstrap-git-'));
+    roots.push(root);
+    execFileSync('git', ['init', '--quiet', root]);
+    const installer = resolve(import.meta.dirname, '../../scripts/install-git-guardrails.sh');
+
+    execFileSync(installer, { cwd: root });
+    const hook = resolve(root, '.git/docket-hooks/commit-msg');
+    const config = resolve(root, '.git/config');
+    const before = {
+      hookBytes: readFileSync(hook),
+      hookMtime: statSync(hook).mtimeMs,
+      configBytes: readFileSync(config),
+      configMtime: statSync(config).mtimeMs,
+    };
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
+
+    execFileSync(installer, { cwd: root });
+
+    expect(readFileSync(hook)).toEqual(before.hookBytes);
+    expect(statSync(hook).mtimeMs).toBe(before.hookMtime);
+    expect(readFileSync(config)).toEqual(before.configBytes);
+    expect(statSync(config).mtimeMs).toBe(before.configMtime);
   });
 });

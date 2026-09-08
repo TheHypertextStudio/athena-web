@@ -5,7 +5,7 @@ import type { JSX } from 'react';
 
 import { SectionHeader } from '@/components/settings/section-header';
 import { BillingDiscountsSection } from '@/components/settings/billing-discounts-section';
-import { safeSameOriginPath } from '@/components/app-shell-utils';
+import { safeSameOriginPath } from '@/lib/auth-navigation';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';

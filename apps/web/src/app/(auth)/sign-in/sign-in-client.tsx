@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
-import { safeSameOriginPath } from '@/components/app-shell-utils';
+import { safeSameOriginPath } from '@/lib/auth-navigation';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 

@@ -1,19 +1,18 @@
 'use client';
 
+import { Button } from '@docket/ui/primitives/button';
 import {
-  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@docket/ui/primitives';
+} from '@docket/ui/primitives/dialog';
 import { createContext, type JSX, type ReactNode, useCallback, useContext, useState } from 'react';
 
 import { AuthenticationRequiredError } from '@/lib/query-core';
-
-import { safeSameOriginPath, signInReturnPath } from './app-shell-utils';
+import { safeSameOriginPath, signInReturnPath } from '@/lib/auth-navigation';
 
 interface AuthenticationInterlockValue {
   /** Block the current surface until the person explicitly continues to sign-in. */

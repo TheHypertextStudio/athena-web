@@ -1,33 +1,75 @@
 # Local development
 
-Docket dev servers run behind [portless](https://github.com/vercel-labs/portless),
-which gives each app a stable named URL instead of a port number:
+## Initial setup on macOS or Linux
 
-| App             | URL                            |
-| --------------- | ------------------------------ |
-| `@docket/web`   | https://docket.localhost       |
-| `@docket/admin` | https://admin.docket.localhost |
-| `@docket/api`   | https://api.docket.localhost   |
+From a fresh clone, run:
 
-## One-time setup
-
-```bash
-pnpm install          # install deps; also arms the .env.local protection (see below)
-pnpm proxy:install    # install the portless HTTPS proxy as an OS service (sudo once)
-pnpm dev              # start everything
+```sh
+./bootstrap
 ```
 
-`.env.local` is already committed with working local defaults, so there's no file to
-copy — `pnpm dev` runs out of the box. No Docker daemon is needed: the default
-`DATABASE_URL=pglite://.data/docket` is an embedded, in-process Postgres, and `pnpm dev` applies
-migrations before any app server starts (turbo's `dev → ^db:migrate` dependency). To use the Docker
-Postgres instead, run `pnpm db:up` and set `DATABASE_URL=postgres://docket:docket@localhost:5433/docket`.
+The checked-in launcher is the only setup API a person or automation needs to learn. It checks Git,
+Node.js, and the repository-pinned pnpm toolchain; installs locked dependencies; reconciles the safe
+local configuration; installs repository-owned Git hooks and Conventional Commit scopes; migrates
+the database; and runs the returning-user passkey journey against an isolated temporary database.
+Only after that journey passes does it start the normal development stack.
 
-Those defaults are kept honest by `packages/env/tests/env-files/env-files.test.ts`, which derives the required
-variables from the schema itself and fails if `.env.local` or `.env.example` is missing any of them.
+No global bootstrap installation, Docker daemon, local TLS certificate, `sudo`, cloud account, or
+provider credential is required. If Node.js, Corepack, or Git is missing, `./bootstrap check` names
+the missing prerequisite and the kind of installation required rather than failing later in an
+unrelated package command.
 
-## `pnpm proxy:install` — what it does and its implications
+The deterministic stack uses explicit adjacent HTTP ports and bypasses the machine-wide reverse
+proxy:
 
+| App              | Main-checkout origin                 |
+| ---------------- | ------------------------------------ |
+| `@docket/web`    | `http://docket.localhost:1355`       |
+| `@docket/api`    | `http://api.docket.localhost:1356`   |
+| `@docket/admin`  | `http://admin.docket.localhost:1357` |
+| `@docket/runner` | `http://127.0.0.1:1358`              |
+
+Linked worktrees add the branch name before each `.docket.localhost` host. Bootstrap prints the
+exact origins; never guess or hardcode the prefix. The committed `.env.local` remains the canonical
+safe local configuration. Runtime topology overrides are applied only to the child processes and do
+not rewrite that file.
+
+Useful lifecycle commands:
+
+```sh
+./scripts/dev-stack.sh status
+eval "$(./scripts/dev-stack.sh env)"
+./scripts/dev-stack.sh stop
+./bootstrap verify local
+```
+
+The default `DATABASE_URL=pglite://.data/docket` is embedded and persistent. Bootstrap verification
+uses a separate temporary PGlite directory and deletes only that directory, so it never seeds,
+resets, or inspects the developer database. To opt into Docker Postgres, run `pnpm db:up` and set
+`DATABASE_URL=postgres://docket:docket@localhost:5433/docket` in `.env.local`.
+
+The environment defaults are checked against the typed registry by
+`packages/env/tests/env-files/env-files.test.ts`. Bootstrap additionally verifies that the API,
+browser, Better Auth, WebAuthn relying-party, cookie-domain, MCP, and OIDC values describe one
+consistent origin set.
+
+## Version-control guardrails
+
+Bootstrap installs checkout-local hooks after the pinned repository dependencies are available.
+It does not require or modify a global hook manager. Rerunning bootstrap compares the effective Git
+configuration and generated hook bytes before writing, so an already-converged checkout is left
+unchanged.
+
+The repository reads Conventional Commit scopes from `COMMIT_SCOPES.txt`. Its `commit-msg` hook
+enforces that policy; `pre-commit` scans for secrets, runs staged formatting and linting, and checks
+the design-token policy; `pre-push` runs typecheck, lint, and the full test graph. Merge-commit hooks
+enforce the repository's linear-history policy, while local Git configuration uses rebase and
+fast-forward-only pulls. Personal author identity and global Git preferences remain untouched.
+
+## Optional Portless HTTPS mode
+
+Portless is not required for ordinary development or acceptance. Use it only when an advanced flow
+requires stable port-free HTTPS names, such as a real OAuth provider or inbound webhook tunnel.
 `pnpm proxy:install` runs `portless service install`. **Read this before running it** — it
 changes machine-wide state and asks for `sudo`.
 
@@ -64,15 +106,14 @@ pnpm proxy:uninstall   # remove the startup service
 portless clean         # fully revert: drop the CA trust, /etc/hosts entries, and state
 ```
 
-No `sudo` available (CI, locked-down machines)? Skip the service and run the proxy on an
-unprivileged port instead — `portless proxy start --port 1355 --https` — but then the URLs
-carry the port (e.g. `https://docket.localhost:1355`).
+No `sudo` available (CI, locked-down machines)? Use the standard `./bootstrap` and explicit-port
+stack. Do not start another unprivileged Portless proxy on the ports owned by `dev-stack.sh`.
 
 ## `.env.local` — committed defaults, protected edits
 
 `.env.local` is **committed** with safe, non-secret local defaults (`.env.example` remains
-the full contract / production template), so `pnpm dev` works on a fresh clone with no copy
-step. To stop real secrets you add locally from being committed by accident, `pnpm install`
+the full contract / production template), so `./bootstrap` works on a fresh clone with no copy
+step. To stop real secrets you add locally from being committed by accident, dependency installation
 (via the `prepare` script) arms it with:
 
 ```bash
@@ -85,13 +126,13 @@ That tells git "this file is tracked, but ignore my local changes to it." So:
 ports, whatever. Git won't show it in `git status` and you can't commit it by accident.
 Nothing else to do.
 
-**Intentionally changing the committed defaults (for everyone).** Un-arm, edit, commit, re-arm:
+**Intentionally changing the committed defaults (for everyone).** Un-arm, edit, commit through the
+repository's normal atomic staging workflow, and re-arm:
 
 ```bash
 git update-index --no-skip-worktree .env.local    # 1. stop ignoring local changes
 # 2. edit .env.local
-git add .env.local && git commit -m "chore: update local env defaults"
-git update-index --skip-worktree .env.local       # 3. re-arm (also re-done by `pnpm install`)
+git update-index --skip-worktree .env.local       # 3. re-arm after the commit
 ```
 
 **Footgun — upstream changes.** Because git is ignoring your local copy, if the committed
@@ -105,17 +146,15 @@ git update-index --skip-worktree .env.local       # re-arm
 git stash pop                                      # reapply your edits
 ```
 
-## Running
+## Running without bootstrap
 
 ```bash
-pnpm dev
+./scripts/dev-stack.sh start
 ```
 
-For **automated verification** — driving the app headlessly, signing in, taking screenshots — use
-`scripts/dev-stack.sh` rather than `pnpm dev`, and follow
-[`engineering/ui-verification.md`](engineering/ui-verification.md). `pnpm dev` relies on the
-privileged portless `:443` proxy, which fails opaquely from headless Chromium; `dev-stack.sh` brings
-the same stack up on plain HTTP in the topology CI uses.
+For automated verification—driving the app headlessly, signing in, or taking screenshots—follow
+[`engineering/ui-verification.md`](engineering/ui-verification.md). `pnpm dev` remains the optional
+Portless HTTPS path and is not an acceptance boundary.
 
 `turbo` resolves the task graph natively — `//#db:up` (Docker Postgres) →
 `@docket/db#db:migrate` → each app's `dev` — so the database is up and migrated before the
@@ -125,7 +164,7 @@ servers start. No shell chaining required.
 
 `APP_MODE=local` runs every connector against **mock** adapters, so most dev needs no tunnel. You
 only need the below to exercise **real** OAuth (linking a real Google/GitHub account) or **inbound
-webhooks** (the GitHub firehose) locally. It is all driven by `pnpm bootstrap` (Phase 1) — there is
+webhooks** (the GitHub firehose) locally. It is driven by `pnpm bootstrap:project` (Phase 1)—there is
 no separate tunnel command.
 
 **Why a tunnel at all:** Google rejects `*.docket.localhost` redirect URIs (non-public TLD), and a
@@ -135,13 +174,13 @@ per-dev tunnel URL can't be self-registered on the shared Google OAuth client. S
 
 ### Per-dev: link real accounts locally (turnkey)
 
-`pnpm bootstrap` → answer **yes** to "Link real Google/GitHub via the team OAuth proxy", and paste
+`pnpm bootstrap:project` → answer **yes** to "Link real Google/GitHub via the team OAuth proxy", and paste
 the shared anchor URL + `OAUTH_PROXY_SECRET` (from the team secret store). That's it — no tunnel, no
 Google registration on your part. Your local sign-in relays through the anchor's registered callback.
 
-### Set up a persistent tunnel (real OAuth + webhooks) — `pnpm bootstrap` does it
+### Set up a persistent tunnel (real OAuth + webhooks) — `pnpm bootstrap:project` does it
 
-`pnpm bootstrap` → answer **yes** to "Set up a persistent cloudflared tunnel". It **does the work**,
+`pnpm bootstrap:project` → answer **yes** to "Set up a persistent cloudflared tunnel". It **does the work**,
 not just print it:
 
 1. ensures `cloudflared` is installed (offers `brew install` if missing);
@@ -197,7 +236,7 @@ Apple Developer console the Services ID's return URL must be `https://<host>/api
 
 - **GitHub firehose** — handled by the **shared dev GitHub App** → the shared anchor's
   `/v1/ingest/github`; real events are exercised on the shared instance. (For an isolated personal
-  firehose, the same `pnpm bootstrap` tunnel step exposes your own stack — point a personal GitHub
+  firehose, the same `pnpm bootstrap:project` tunnel step exposes your own stack—point a personal GitHub
   App's webhook at it.)
 - **Stripe** — no tunnel; use the Stripe CLI (`stripe listen`), and locally the billing gateway is
   mocked anyway. Note the handler path is `POST /internal/billing/webhook`

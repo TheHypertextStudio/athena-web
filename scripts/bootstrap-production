@@ -4,16 +4,30 @@ set -eu
 repo_root=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
 cd "$repo_root"
 
+run_pnpm() {
+  if command -v pnpm >/dev/null 2>&1; then
+    pnpm "$@"
+  elif command -v corepack >/dev/null 2>&1; then
+    corepack pnpm "$@"
+  else
+    echo 'bootstrap-production: pnpm is unavailable; install Node.js with Corepack and rerun ./bootstrap' >&2
+    exit 2
+  fi
+}
+
 if [ ! -x node_modules/.bin/tsx ]; then
   if [ "${BOOTSTRAP_NO_INSTALL:-0}" = 1 ]; then
     echo 'bootstrap-production: dependencies are absent and --no-install forbids pnpm install' >&2
     exit 2
   fi
   if [ "${BOOTSTRAP_OFFLINE:-0}" = 1 ]; then
-    pnpm install --offline --frozen-lockfile
+    run_pnpm install --offline --frozen-lockfile
   else
-    pnpm install --frozen-lockfile
+    run_pnpm install --frozen-lockfile
   fi
 fi
 
-exec pnpm exec tsx scripts/bootstrap/production.ts
+if command -v pnpm >/dev/null 2>&1; then
+  exec pnpm exec tsx scripts/bootstrap/production.ts
+fi
+exec corepack pnpm exec tsx scripts/bootstrap/production.ts

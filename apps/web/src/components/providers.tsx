@@ -1,13 +1,11 @@
 'use client';
 
-import { ContextProvider } from '@docket/ui/components';
-import { VocabularyProvider } from '@docket/ui/hooks';
-import { TooltipProvider } from '@docket/ui/primitives';
+import { ContextProvider } from '@docket/ui/components/context-provider';
+import { VocabularyProvider } from '@docket/ui/hooks/vocabulary';
+import { TooltipProvider } from '@docket/ui/primitives/tooltip';
 import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { type JSX, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 
-import ActionDomainsProvider from '@/components/actions/action-domains-provider';
-import { PickerOverlayProvider } from '@/components/pickers/picker-overlay';
 import {
   type OutboxOwnerToken,
   captureOutboxOwner,
@@ -15,23 +13,16 @@ import {
   subscribeOutbox,
 } from '@/components/pwa/outbox';
 import { canQueueWrites } from '@/components/pwa/outbox-store';
-import { InteractionProvider } from '@/lib/actions';
-import { InteractionReceiptProvider } from '@/lib/interactions/receipt-context';
 import { probeSession } from '@/lib/auth-client';
 import { createQueryClient } from '@/lib/query';
 import { SessionExpiredError } from '@/lib/query';
 import { createUnauthorizedConfirmer } from '@/lib/session-recovery';
 import { purgeLocalSessionState } from '@/lib/sign-out';
-import {
-  invalidateWorkTargetQueriesFromPeer,
-  subscribeWorkTargetInvalidations,
-} from '@/lib/work-target-invalidation';
 
 import {
   AuthenticationInterlockProvider,
   useAuthenticationInterlock,
 } from './authentication-interlock';
-import { InPageSearchProvider } from './in-page-search/in-page-search-provider';
 import { ServiceWorkerProvider } from './service-worker-provider';
 
 /** Props for {@link Providers}. */
@@ -55,25 +46,13 @@ export interface ProvidersProps {
  * 4. TanStack Query's `QueryClientProvider` — the dynamic-data layer that backs every
  *    read/mutation hook in `@/lib/query`, so data surfaces auto-refetch on window focus
  *    and after mutations instead of needing a manual "Refresh" button.
- * 5. {@link InteractionReceiptProvider} — the app's single local receipt lifecycle for semantic,
- *    painted acknowledgement and local feedback escalation. It is deliberately separate from the
- *    action registry and sends no production observation data.
- * 6. {@link InteractionProvider} — the app's single action registry, drag record, and
- *    document-level right-click handler. Mounted exactly once, and here rather than in the
- *    authenticated shell, because "exactly one" is the whole point: two registries would mean two
- *    context menus and two answers to what a gesture does. It is inert until a surface registers
- *    an action domain — with nothing registered, a right-click resolves to no actions and the
- *    browser's own menu is deliberately left alone.
- * 7. {@link PickerOverlayProvider} — the app's one moved "edit labels on N objects" popover,
- *    mounted above {@link ActionDomainsProvider} so both the `task.label` registry action and
- *    every task list's `L` hotkey can summon it via `usePickerOverlay().open(...)`.
- * 8. {@link ActionDomainsProvider} — registers each object domain with the one registry owned by
- *    {@link InteractionProvider}; it does not mount another menu handler.
- * 9. {@link InPageSearchProvider} — routes Ctrl/Cmd+F to the active virtualized surface while
- *    leaving native browser find alone when no surface registers a target.
- * 10. {@link ServiceWorkerProvider} — registers the service worker on EVERY route, not just the
+ * 5. {@link ServiceWorkerProvider} — registers the service worker on EVERY route, not just the
  *    authenticated shell. Offline support has to be installed before it is needed, and someone
  *    arriving at `/sign-in` is exactly who benefits from the offline page being cached already.
+ *
+ * The object-action, picker, receipt, and in-page-search providers live in `AppProviders`, mounted
+ * only by the authenticated `(app)` route group. Importing them here forced every public and auth
+ * route to compile the full application interaction graph before it could navigate.
  *
  * All are Client Components, so this file carries the `'use client'` boundary and is
  * mounted once by the root layout. The {@link QueryClient} is created via `useState` (lazy
@@ -100,37 +79,13 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
           <AuthenticationInterlockProvider>
             <QueryClientProvider client={queryClient}>
               <UnauthorizedWatcher handlerRef={handleCacheError} />
-              <WorkTargetInvalidationSync />
-              <InteractionReceiptProvider>
-                <InteractionProvider>
-                  <PickerOverlayProvider>
-                    <ActionDomainsProvider>
-                      <InPageSearchProvider>
-                        <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
-                      </InPageSearchProvider>
-                    </ActionDomainsProvider>
-                  </PickerOverlayProvider>
-                </InteractionProvider>
-              </InteractionReceiptProvider>
+              <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
             </QueryClientProvider>
           </AuthenticationInterlockProvider>
         </TooltipProvider>
       </VocabularyProvider>
     </ContextProvider>
   );
-}
-
-/** Keep mounted work rosters current when another tab changes their source records. */
-function WorkTargetInvalidationSync(): null {
-  const queryClient = useQueryClient();
-  useEffect(
-    () =>
-      subscribeWorkTargetInvalidations((invalidation) => {
-        void invalidateWorkTargetQueriesFromPeer(queryClient, invalidation);
-      }),
-    [queryClient],
-  );
-  return null;
 }
 
 /** Props for {@link UnauthorizedWatcher}. */

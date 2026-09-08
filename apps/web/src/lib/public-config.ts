@@ -16,7 +16,7 @@
 import type { PublicConfigOut } from '@docket/identity-access/public-config-contract';
 import type { UseQueryResult } from '@tanstack/react-query';
 
-import { socialProviderForConnector } from '@/components/settings/integrations-config';
+import { socialProviderForConnector } from '@/lib/connector-identity';
 import { api } from '@/lib/api';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 

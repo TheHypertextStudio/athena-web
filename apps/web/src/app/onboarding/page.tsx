@@ -2,7 +2,7 @@
 
 import type { OrgCreate } from '../../lib/contracts/organization';
 import { cn } from '@docket/ui/lib/utils';
-import { Button } from '@docket/ui/primitives';
+import { Button } from '@docket/ui/primitives/button';
 import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 

@@ -542,28 +542,41 @@
 ---
 ### [REPO-BOOTSTRAP-001] Turn a fresh clone into a verified Docket environment
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-09-06
 - **Priority**: P0
 - **Description**: Adopt the shared Hypertext Bootstrap contract, repair Docket's stale local
   configuration and sign-in prerequisites, converge version-control policy and services, and make
   the local and production paths explicitly verifiable on macOS and Linux.
-- **Approach**: Build and black-box test the manifest-free shared engine first, then migrate Docket
-  behind its conventional repository hooks. Treat configuration as observed state reconciled from
-  the environment registry and checked-in example; preserve existing valid values and generated
-  secrets, report inconsistent manual values, and prove the second run is byte-for-byte inert.
-- **Current evidence**: The local engine repository has a clean unpublished candidate with 54 Rust
-  tests, Clippy, ShellCheck, deterministic archive coverage, and an arm64 macOS package receipt.
-  Docket's current generator still writes `PORT=3001` while `.env.example` and the working local
-  configuration use `4000`, and it omits `BETTER_AUTH_COOKIE_DOMAIN` and
-  `NEXT_PUBLIC_PASSKEY_RP_ID`; those stale host-sensitive values can break session-cookie and
-  WebAuthn sign-in even when `env:check` passes on an already repaired developer file. The local
-  reconciler and conventional executable hooks now pass focused tests; a real second run preserved
-  the local file's SHA-256 and mtime. Service startup and returning-user passkey acceptance remain
-  separate, open gates.
-- **External boundary**: No shared-engine GitHub repository, push, tag, hosted build, or release has
-  been created. Docket cannot pin its root launcher until the four native release artifacts and
-  checksums exist.
+- **Approach**: Ship the mandatory, language-neutral `./bootstrap` API as a source-contained POSIX
+  dispatcher until the shared engine has a published release. Let Docket expose ordinary local,
+  production, and verification hooks; reconcile configuration from observed state; install native
+  Git guardrails; and prove the real returning-user passkey journey against an isolated database.
+- **Current evidence**: The sign-in implementation was healthy. The former Portless-backed
+  development topology could lose Next.js routes under concurrent client-chunk compilation after
+  authentication, producing proxy 404s even though the direct upstream remained healthy. The
+  canonical bootstrap stack now uses deterministic adjacent HTTP ports and a scoped supervisor,
+  keeping Portless optional for provider callbacks and tunnels. The web sign-in and onboarding
+  boundary no longer imports the authenticated application provider graph. `./bootstrap verify
+  local --non-interactive` brought up web, API, admin, OIDC, and runner health checks and completed
+  the real Playwright passkey sign-in journey against a temporary PGlite database. Repeated local
+  configuration and Git-guardrail reconciliation preserved file hashes and mtimes.
+- **Files changed**: Root `bootstrap` and README; local, production, verification, stack, and Git
+  guardrail scripts; public/authenticated web provider boundaries and focused UI subpath exports;
+  tooling and web regressions; local-development, UI-verification, bootstrap specification, and
+  implementation-plan documentation.
+- **Validation**: Root typecheck passed 27/27 tasks; lint passed 26/26; tooling passed 30 files and
+  339 tests; the full test graph passed 27/27 tasks, including 482 web suites and 3,782 web tests;
+  docs, formatting, ShellCheck, secret scanning, focused web tests, package typechecks, and the
+  isolated returning-user passkey verification all passed.
+- **External boundary**: The shared engine remains a clean, unpublished local candidate without a
+  remote, tag, hosted build, or native release artifacts. Docket does not depend on that publication:
+  its checked-in source dispatcher implements the stable command contract now. Publishing and
+  pinning the portable engine later requires explicit authorization and does not change Docket's
+  user-facing bootstrap API.
+
+---
+
 ### [DETAIL-INSET-001] Every edge of a detail page is measured the same way
 
 - **Completed**: 2026-09-05

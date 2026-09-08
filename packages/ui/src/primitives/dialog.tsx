@@ -53,7 +53,7 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as React from 'react';
 
-import { X } from '../icons';
+import { X } from '../icons/x';
 
 import { cn } from '../lib/utils';
 import { focusRing } from './focus';

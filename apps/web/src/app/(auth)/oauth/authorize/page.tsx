@@ -100,7 +100,7 @@ import {
   useState,
 } from 'react';
 
-import { signInReturnPath } from '@/components/app-shell-utils';
+import { signInReturnPath } from '@/lib/auth-navigation';
 import Wordmark from '@/components/wordmark';
 import { api } from '@/lib/api';
 import { signOut, useSession } from '@/lib/auth-client';

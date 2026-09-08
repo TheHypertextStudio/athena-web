@@ -7,8 +7,10 @@
  * Three large choice cards fork the rest of the wizard and record the org's informational
  * `intent`. The fork is front-loaded so each subsequent screen stays about one concept.
  */
-import { Sparkles, User, Users } from '@docket/ui/icons';
-import type { LucideIcon } from '@docket/ui/icons';
+import type { DocketIcon } from '@docket/ui/icons/icon-type';
+import { Sparkles } from '@docket/ui/icons/sparkles';
+import { User } from '@docket/ui/icons/user';
+import { Users } from '@docket/ui/icons/users';
 import type { JSX } from 'react';
 
 import { SelectableCard } from './selectable-card';
@@ -23,7 +25,7 @@ interface IntentOption {
   /** Supporting sentence. */
   description: string;
   /** The leading glyph for the card. */
-  icon: LucideIcon;
+  icon: DocketIcon;
 }
 
 /**

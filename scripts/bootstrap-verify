@@ -4,16 +4,61 @@ set -eu
 repo_root=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
 cd "$repo_root"
 
+run_pnpm() {
+  if command -v pnpm >/dev/null 2>&1; then
+    pnpm "$@"
+  elif command -v corepack >/dev/null 2>&1; then
+    corepack pnpm "$@"
+  else
+    echo 'bootstrap-verify: pnpm is unavailable; install Node.js with Corepack and rerun ./bootstrap' >&2
+    exit 2
+  fi
+}
+
 if [ ! -x node_modules/.bin/tsx ]; then
   if [ "${BOOTSTRAP_NO_INSTALL:-0}" = 1 ]; then
     echo 'bootstrap-verify: dependencies are absent and --no-install forbids pnpm install' >&2
     exit 2
   fi
   if [ "${BOOTSTRAP_OFFLINE:-0}" = 1 ]; then
-    pnpm install --offline --frozen-lockfile
+    run_pnpm install --offline --frozen-lockfile
   else
-    pnpm install --frozen-lockfile
+    run_pnpm install --frozen-lockfile
   fi
 fi
 
-exec pnpm exec tsx scripts/bootstrap/verify.ts "$@"
+target=${1:-}
+case "$target" in
+  local|production) ;;
+  *) echo 'usage: scripts/bootstrap-verify {local|production}' >&2; exit 6 ;;
+esac
+
+run_pnpm exec tsx scripts/bootstrap/verify.ts "$target"
+[ "$target" = local ] || exit 0
+
+# Use a deterministic checkout-specific port range so sibling worktrees can verify concurrently.
+checksum=$(printf '%s' "$repo_root" | cksum)
+checksum_value=${checksum%% *}
+verification_port=$((20000 + (checksum_value % 1000) * 4))
+verification_database=$(mktemp -d "${TMPDIR:-/tmp}/docket-bootstrap-verify.XXXXXX")
+
+cleanup() {
+  trap - EXIT INT TERM
+  DOCKET_DEV_PORT="$verification_port" "$repo_root/scripts/dev-stack.sh" stop >/dev/null 2>&1 || true
+  if [ -d "$verification_database" ]; then
+    find "$verification_database" -depth -delete
+  fi
+}
+trap cleanup EXIT INT TERM
+
+DATABASE_URL="pglite://$verification_database" \
+DATABASE_URL_UNPOOLED="pglite://$verification_database" \
+DOCKET_DEV_PORT="$verification_port" \
+  "$repo_root/scripts/dev-stack.sh" start
+
+environment_exports=$(DOCKET_DEV_PORT="$verification_port" "$repo_root/scripts/dev-stack.sh" env)
+eval "$environment_exports"
+export APP_URL API_URL PASSKEY_RP_ID
+
+run_pnpm --dir apps/web test:e2e e2e/auth/sign-in.spec.ts
+echo 'PASS local.passkey-sign-in verified with isolated data'

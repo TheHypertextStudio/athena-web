@@ -33,7 +33,7 @@ import { Apple, Github, Google, Layers, ListChecks, type LucideIcon } from '@doc
 import { Button } from '@docket/ui/primitives';
 import { type JSX, useCallback, useState } from 'react';
 
-import { safeSameOriginPath } from '@/components/app-shell-utils';
+import { safeSameOriginPath } from '@/lib/auth-navigation';
 import { authClient } from '@/lib/auth-client';
 import { userErrorMessage } from '@/lib/problem';
 import { usePublicConfig } from '@/lib/public-config';

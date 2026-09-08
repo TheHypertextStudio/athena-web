@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { safeSameOriginPath } from '../../src/components/app-shell-utils';
+import { safeSameOriginPath } from '../../src/lib/auth-navigation';
 import { sameOriginPath } from '../../src/lib/same-origin-path';
 import { safeServerReturnPath } from '../../src/lib/server-session';
 

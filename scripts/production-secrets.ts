@@ -37,6 +37,7 @@ export const REQUIRED_PRODUCTION_SECRET_ENV_NAMES = [
   'LINEAR_CLIENT_ID',
   'LINEAR_CLIENT_SECRET',
   'LINEAR_WEBHOOK_SECRET',
+  'MAPBOX_ACCESS_TOKEN',
 ] as const;
 
 /** The credentials required before Athena may accept Linear Agent sessions in production. */

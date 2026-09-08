@@ -70,6 +70,107 @@ describe('/v1/me/work-location routes', () => {
     expect(response.status).toBe(401);
   });
 
+  it('requires a session for saved-place geocoding', async () => {
+    const response = await appWithSession(workLocation, null).request(
+      '/places/geocoding/search?query=Library',
+    );
+    expect(response.status).toBe(401);
+  });
+
+  it('searches, permanently resolves, and reverse-geocodes saved-place locations', async () => {
+    const { app } = await seedWorkLocationUser('WorkLocationGeocoding');
+
+    const searched = await app.request('/places/geocoding/search?query=Library');
+    expect(searched.status).toBe(200);
+    expect(await searched.json()).toEqual({
+      items: [
+        {
+          id: 'local:10-library-lane',
+          address: '10 Library Lane, Las Vegas, Nevada 89101',
+          latitude: 36.1716,
+          longitude: -115.1391,
+        },
+      ],
+      attribution: 'Search results by Mapbox',
+    });
+
+    const resolved = await app.request('/places/geocoding/resolutions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: 'local:10-library-lane',
+        address: '10 Library Lane, Las Vegas, Nevada 89101',
+      }),
+    });
+    expect(resolved.status).toBe(200);
+    expect(await resolved.json()).toMatchObject({
+      address: '10 Library Lane, Las Vegas, Nevada 89101',
+      latitude: 36.1716,
+      longitude: -115.1391,
+    });
+
+    const reversed = await app.request('/places/geocoding/reverse', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ latitude: 36.1699, longitude: -115.141 }),
+    });
+    expect(reversed.status).toBe(200);
+    expect(await reversed.json()).toMatchObject({ latitude: 36.1699, longitude: -115.141 });
+  });
+
+  it('strictly validates geocoding queries and coordinate bounds', async () => {
+    const { app } = await seedWorkLocationUser('WorkLocationGeocodingValidation');
+    expect((await app.request('/places/geocoding/search?query=ab')).status).toBe(422);
+    expect((await app.request(`/places/geocoding/search?query=${'a'.repeat(241)}`)).status).toBe(
+      422,
+    );
+    expect(
+      (await app.request('/places/geocoding/search?query=Library&permanent=true')).status,
+    ).toBe(422);
+    expect(
+      (
+        await app.request('/places/geocoding/reverse', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ latitude: 91, longitude: 0 }),
+        })
+      ).status,
+    ).toBe(422);
+  });
+
+  it('durably limits one user to thirty geocoding requests in a rolling minute', async () => {
+    const { app } = await seedWorkLocationUser('WorkLocationGeocodingLimit');
+    for (let request = 0; request < 30; request += 1) {
+      const response = await app.request('/places/geocoding/search?query=Library');
+      expect(response.status).toBe(200);
+    }
+
+    const limited = await app.request('/places/geocoding/search?query=Library');
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('Retry-After')).toMatch(/^\d+$/);
+    expect(await limited.json()).toMatchObject({ code: 'rate_limited' });
+
+    const { app: otherUserApp } = await seedWorkLocationUser('WorkLocationGeocodingLimitOther');
+    expect((await otherUserApp.request('/places/geocoding/search?query=Library')).status).toBe(200);
+  });
+
+  it('maps provider failures to stable application-owned copy', async () => {
+    const { app } = await seedWorkLocationUser('WorkLocationGeocodingUnavailable');
+    const response = await app.request('/places/geocoding/resolutions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: 'provider-secret-that-must-not-escape',
+        address: '10 Library Lane',
+      }),
+    });
+
+    expect(response.status).toBe(503);
+    const problem = await response.json();
+    expect(problem).toMatchObject({ code: 'geocoding_unavailable' });
+    expect(JSON.stringify(problem)).not.toContain('provider-secret-that-must-not-escape');
+  });
+
   it('is ready immediately when the user has no linked calendar accounts', async () => {
     const userId = await seedUserWithHub(db, schema, 'WorkLocationNoAccounts');
     const app = appWithSession(

@@ -87,12 +87,16 @@ The bootstrap script checks for these and exits if any are missing or unauthenti
    separate Docket access-policy value after the Google Console flow.
 4. Keep `GOOGLE_OAUTH_PUBLIC=false` and set
    `GOOGLE_OAUTH_TEST_EMAILS=willieechalmers@gmail.com` while Google verification is pending.
-5. Keep the `docket` Vercel project's Git integration enabled for `main`. In Project Settings →
+5. Configure the Hypertext Studio Mapbox account through `pnpm integrations -- --production
+--provider=mapbox`. Confirm that the account can store permanent geocoding results before adding
+   `MAPBOX_ACCESS_TOKEN`. The wizard writes `docket-mapbox-access-token` to Secret Manager and adds
+   its Cloud Run binding.
+6. Keep the `docket` Vercel project's Git integration enabled for `main`. In Project Settings →
    Deployment Checks, require the GitHub Actions check
    `Deploy production / Migrate database and deploy API` and configure it to block production alias
    assignment. Vercel may build immediately, but it must not promote the deployment to the production
    domain until that backend check succeeds.
-6. Push the validated commit to `main`. CI migrates the database, deploys the API, verifies the
+7. Push the validated commit to `main`. CI migrates the database, deploys the API, verifies the
    health/session/signup routes, refreshes Scheduler jobs, and deploys admin. Vercel independently
    builds the web commit from Git and promotes it only after the migration/API check passes.
 
@@ -177,17 +181,23 @@ Runtime env vars are split between Secret Manager (sensitive) and Cloud Run env 
 **From Secret Manager** (injected by Cloud Run at startup through bootstrap's
 `API_SECRET_BINDINGS` manifest):
 
-| Secret                | Env var              |
-| --------------------- | -------------------- |
-| `docket-database-url` | `DATABASE_URL`       |
-| `docket-auth-secret`  | `BETTER_AUTH_SECRET` |
-| `docket-cron-secret`  | `CRON_SECRET`        |
+| Secret                       | Env var               |
+| ---------------------------- | --------------------- |
+| `docket-database-url`        | `DATABASE_URL`        |
+| `docket-auth-secret`         | `BETTER_AUTH_SECRET`  |
+| `docket-cron-secret`         | `CRON_SECRET`         |
+| `docket-mapbox-access-token` | `MAPBOX_ACCESS_TOKEN` |
 
 The deployment runner reads `docket-database-url-unpooled` and passes it to the migration process as
 `DATABASE_URL_UNPOOLED`; the pooled application URL must not be used for schema migrations.
 Configured provider secrets are appended to the same manifest under their canonical runtime env
 names. Legacy `docket-github-client-*` secrets remain readable as `GITHUB_APP_CLIENT_*` until the
 guided GitHub App flow rotates them to canonical secret names.
+
+Production API startup requires a real `MAPBOX_ACCESS_TOKEN`. Local and test modes use the
+deterministic geocoder and do not call Mapbox. The deploy secret gate rejects a missing,
+inaccessible, or placeholder Mapbox binding before Cloud Run changes. The browser never receives
+this token.
 
 **From Cloud Run env vars** (set at deploy time from GitHub `vars.*`):
 

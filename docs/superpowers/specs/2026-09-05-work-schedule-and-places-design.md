@@ -147,10 +147,31 @@ optional address, and meaningful states. Provider names will appear only when th
 or a problem. The current-location action will use a text label in the row overflow or a visible
 button when it is the next action. It will not rely on an unexplained target icon.
 
+The place editor will use a content-sized large dialog. It will not show a subtitle or a map
+disclosure. The map will remain visible below an accessible address autocomplete. The autocomplete
+will wait 400 milliseconds and will require three characters before it searches. It will show at
+most five results with Mapbox attribution. The interface will discard results that belong to an old
+query.
+
+Selecting a temporary result will make the API repeat the address lookup with `permanent=true`.
+The API will verify the selected Mapbox feature id in that permanent response. The permanent address
+and point will update the field and marker together. A changed nonempty address will block saving
+until the person selects a result. Existing addresses will stay valid until edited. Name-only places
+will remain valid outside automatic-location setup.
+
+Map clicks, marker drags, current position, existing values, and address results will use one marker
+update path. Map-selected points will receive a permanent reverse lookup. Docket will offer the
+returned address and will never replace the current address without acceptance. The map will expose
+loading, ready, failed, and selected states. Initial failure will show Docket-owned copy and a retry
+action. It will use OpenFreeMap Positron in light mode and OpenFreeMap Dark in dark mode. A resize
+observer will keep MapLibre synchronized with the dialog and viewport.
+
 Automatic location will show `Set up automatic location` when no place has a map position. That
-action will open the relevant place workflow. It will never show a disabled `Start` button without
-a recovery action. Once at least one place has a map position, the section will show an MD3 switch
-with a concise state description.
+action will open the relevant place workflow and require a point. The primary action will read
+`Save and turn on`. Docket will persist the device opt-in and start foreground matching only after
+the place save succeeds. A denied browser permission will turn the switch off and explain how to
+restore access. Once at least one place has a map position, the section will show an MD3 switch with
+a concise state description.
 
 The design will use the shared MD3 primitives from `@docket/ui`. Tonal containers will separate the
 current plan, dated changes, and problems. Shape, type scale, state layers, focus rings, and motion
@@ -174,14 +195,19 @@ The implementation must preserve these behaviors:
 
 ## Privacy And Error Ownership
 
-Docket will keep geofence coordinates owner-only. The browser will continue to match positions
-locally and send only a place identifier and accuracy. Provider event labels may appear in unmatched
-name items. They will not become public place data until the person saves or links them.
+Docket will keep geofence coordinates owner-only. The browser will continue to match foreground
+positions locally and send only a place identifier and accuracy. Address searches will pass through
+the authenticated API to Mapbox. Temporary autocomplete results will not be stored. The selected
+address or reverse-geocoded point will use permanent Mapbox geocoding before Docket stores it.
+Provider event labels may appear in unmatched name items. They will not become public place data
+until the person saves or links them.
 
-The API will return stable problem codes. The interface will map those codes to Docket-owned copy.
-The interface will never render provider error text. A transient delivery failure will remain
-background state. A missing grant will appear under the affected connected account with a `Reconnect`
-action.
+The API will allow 30 Mapbox requests per user in a rolling minute through a durable database
+window. It will return `rate_limited` with `Retry-After` when the window is full. Missing provider
+configuration, authentication failures, provider throttling, malformed output, timeouts, and outages
+will return `geocoding_unavailable`. The interface will map stable codes to Docket-owned copy. It
+will never render provider error text. A transient delivery failure will remain background state. A
+missing grant will appear under the affected connected account with a `Reconnect` action.
 
 ## Rejected Alternatives
 

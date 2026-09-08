@@ -16,6 +16,11 @@ import {
   WorkLocationRangeOut,
   WorkLocationRangeQuery,
   WorkLocationSyncOut,
+  WorkPlaceGeocodeResolve,
+  WorkPlaceGeocodeResult,
+  WorkPlaceGeocodeSearchOut,
+  WorkPlaceGeocodeSearchQuery,
+  WorkPlaceReverseGeocode,
   WorkScheduleChangeListOut,
   WorkScheduleChangeResolution,
   WorkScheduleExceptionCreate,
@@ -33,7 +38,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv, AuthSession } from '../context';
-import { AuthError, ConflictError } from '../error';
+import { getContainer } from '../container';
+import { AuthError, ConflictError, GeocodingUnavailableError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
@@ -69,6 +75,8 @@ import {
   resolveWorkScheduleConflict,
   setWorkScheduleException,
 } from '../services/work-location/schedule-repository';
+import { consumeGeocodingRequest } from '../services/work-location/geocoding-rate-limit';
+import { PlaceGeocoderUnavailable } from '../services/work-location/place-geocoder';
 import {
   resolveExpectedWorkLocationRange,
   resolveWorkLocationPoint,
@@ -86,6 +94,16 @@ const assertionParam = z.object({ id: WorkLocationAssertionId }).strict();
 const occurrenceParam = z.object({ id: WorkLocationAssertionId, date: DateString }).strict();
 const scheduleDateParam = z.object({ date: DateString }).strict();
 const scheduleChangeParam = z.object({ id: WorkScheduleChangeId }).strict();
+
+async function geocodeForUser<T>(userId: string, operation: () => Promise<T>): Promise<T> {
+  await consumeGeocodingRequest(db, userId);
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof PlaceGeocoderUnavailable) throw new GeocodingUnavailableError();
+    throw error;
+  }
+}
 
 /** Resolve the caller-owned Hub without accepting a Hub id from the request. */
 async function callerHub(c: { get: (key: 'session') => AuthSession }): Promise<string> {
@@ -146,6 +164,65 @@ const workLocation = new Hono<AppEnv>()
         'List arbitrary regular places and the independent optional home designation. Places have no fixed home/office kind.',
     }),
     async (c) => ok(c, WorkPlaceListOut, await listWorkPlaces(db, await callerHub(c))),
+  )
+  .get(
+    '/places/geocoding/search',
+    apiDoc({
+      tag: 'Work location',
+      summary: 'Search saved-place addresses',
+      response: WorkPlaceGeocodeSearchOut,
+      description:
+        'Return temporary Mapbox autocomplete candidates. A selected candidate must be permanently resolved before storage.',
+    }),
+    zQuery(WorkPlaceGeocodeSearchQuery),
+    async (c) => {
+      const userId = requireSession(c).user.id;
+      const { query } = c.req.valid('query');
+      return ok(
+        c,
+        WorkPlaceGeocodeSearchOut,
+        await geocodeForUser(userId, () => getContainer().placeGeocoder.search(query)),
+      );
+    },
+  )
+  .post(
+    '/places/geocoding/resolutions',
+    apiDoc({
+      tag: 'Work location',
+      summary: 'Resolve a saved-place address',
+      response: WorkPlaceGeocodeResult,
+      description: 'Permanently resolve the Mapbox feature selected from temporary search results.',
+    }),
+    zJson(WorkPlaceGeocodeResolve),
+    async (c) => {
+      const userId = requireSession(c).user.id;
+      const candidate = c.req.valid('json');
+      return ok(
+        c,
+        WorkPlaceGeocodeResult,
+        await geocodeForUser(userId, () => getContainer().placeGeocoder.resolve(candidate)),
+      );
+    },
+  )
+  .post(
+    '/places/geocoding/reverse',
+    apiDoc({
+      tag: 'Work location',
+      summary: 'Suggest an address for a saved-place point',
+      response: WorkPlaceGeocodeResult,
+      description:
+        'Permanently reverse-geocode a map or device point. The client offers the address before replacing saved text.',
+    }),
+    zJson(WorkPlaceReverseGeocode),
+    async (c) => {
+      const userId = requireSession(c).user.id;
+      const point = c.req.valid('json');
+      return ok(
+        c,
+        WorkPlaceGeocodeResult,
+        await geocodeForUser(userId, () => getContainer().placeGeocoder.reverse(point)),
+      );
+    },
   )
   .post(
     '/places',

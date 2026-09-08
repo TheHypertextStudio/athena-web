@@ -50,6 +50,18 @@ be matched, it shows a switch. Opting in starts one authenticated-app provider, 
 watcher remains active after the person leaves Settings. Opting out prevents the browser from
 requesting location.
 
+The place editor keeps the map visible below an address autocomplete. It searches Mapbox after a
+400-millisecond pause once the person has typed three characters. Search results are temporary.
+When the person selects one, the API repeats the address lookup with `permanent=true` and verifies
+that the permanent response contains the selected Mapbox feature id before Docket stores the
+canonical address and point. A changed nonempty address cannot be saved until the person selects a
+result. Existing saved addresses and name-only places remain valid.
+
+A map click, marker drag, or current-position selection updates the same explicit point. Docket
+permanently reverse-geocodes that point and offers the returned address as a replacement. It never
+changes the address without acceptance. Automatic-location setup requires a point. Its successful
+save also persists this device's opt-in and starts foreground matching.
+
 ## Resolution
 
 The expected-location resolver expands the applicable plan version and then applies a dated
@@ -87,4 +99,5 @@ action, and the detail view names the concrete decision.
 
 The schedule does not model an active shift with no known end. A segment can span at most seven days.
 Cycle days use ordinal and weekday labels rather than custom crew names. Microsoft remains a tested
-capability contract rather than a connected provider.
+capability contract rather than a connected provider. The API accepts at most 30 geocoding requests
+per user in a rolling minute.

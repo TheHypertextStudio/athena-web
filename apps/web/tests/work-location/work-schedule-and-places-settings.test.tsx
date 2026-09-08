@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { TooltipProvider } from '@docket/ui/primitives';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -123,9 +123,48 @@ vi.mock('../../src/components/work-location/work-location-data', () => ({
   workScheduleChangesDef: () => ({ kind: 'changes' }),
 }));
 
+vi.mock('../../src/components/work-location/place-map-picker', () => ({
+  PlaceMapPicker: ({ onChange }: { onChange: (point: object, source: 'map') => void }) => (
+    <button
+      type="button"
+      aria-label="Place map"
+      onClick={() => {
+        onChange({ latitude: 36.17, longitude: -115.14 }, 'map');
+      }}
+    >
+      Select map point
+    </button>
+  ),
+}));
+
+vi.mock('../../src/components/work-location/place-address-autocomplete', () => ({
+  PlaceAddressAutocomplete: ({
+    value,
+    onValueChange,
+  }: {
+    value: string;
+    onValueChange: (value: string) => void;
+  }) => (
+    <label>
+      Address (optional)
+      <input
+        value={value}
+        onChange={(event) => {
+          onValueChange(event.target.value);
+        }}
+      />
+    </label>
+  ),
+}));
+
+vi.mock('../../src/components/work-location/use-place-reverse-geocode', () => ({
+  usePlaceReverseGeocode: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+}));
+
 vi.mock('../../src/lib/query', () => ({
   queryKeys: {
     workLocation: () => ['work-location'],
+    workLocationGeocoding: (query: string) => ['work-location', 'geocoding', query],
     workSchedule: () => ['work-schedule'],
     workScheduleChanges: () => ['work-schedule-changes'],
   },
@@ -153,6 +192,7 @@ vi.mock('../../src/lib/query', () => ({
     error: null,
     isPending: false,
   }),
+  apiQueryOptions: (key: unknown, queryFn: unknown) => ({ queryKey: key, queryFn }),
   unwrap: vi.fn(),
 }));
 
@@ -340,6 +380,25 @@ describe('PlacesSettingsPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('requires a mapped point and persists opt-in only after automatic setup saves', async () => {
+    mutateAsync.mockResolvedValueOnce({ place: firstPlace(), projections: [] });
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { watchPosition: vi.fn(() => 1), clearWatch: vi.fn() },
+    });
+    renderPage(<PlacesSettingsPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set up automatic location' }));
+    expect(screen.getByRole('dialog', { name: 'Set up automatic location' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save and turn on' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Place map' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save and turn on' }));
+
+    await waitFor(() => {
+      expect(localStorage.getItem('docket.work-location.device-opt-in')).toBe('1');
+    });
+  });
+
   it('uses Resolve as the queue action and never mixes in Review or Compare', async () => {
     renderPage(<PlacesSettingsPage />);
 
@@ -393,6 +452,38 @@ describe('PlacesSettingsPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('switch', { name: 'Automatic location' })).toBeChecked();
     });
+  });
+
+  it('turns automatic location off and explains recovery after permission denial', async () => {
+    Object.assign(firstPlace(), {
+      geofence: { latitude: 36.17, longitude: -115.14, radiusMeters: 180 },
+    });
+    let deny: PositionErrorCallback | undefined;
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        watchPosition: vi.fn((_success: PositionCallback, failure: PositionErrorCallback) => {
+          deny = failure;
+          return 1;
+        }),
+        clearWatch: vi.fn(),
+      },
+    });
+    localStorage.setItem('docket.work-location.device-opt-in', '1');
+    renderPage(<PlacesSettingsPage />);
+    await waitFor(() => {
+      expect(deny).toBeDefined();
+    });
+
+    act(() => deny?.({ code: 1 } as GeolocationPositionError));
+
+    expect(screen.getByRole('switch', { name: 'Automatic location' })).not.toBeChecked();
+    expect(
+      screen.getByText(
+        'Location permission is off. Allow it in this browser’s site settings, then turn automatic location on again.',
+      ),
+    ).toBeVisible();
+    expect(localStorage.getItem('docket.work-location.device-opt-in')).toBe('0');
   });
 
   it('explains when this browser cannot run automatic location', async () => {

@@ -64,6 +64,7 @@ describe('parseSecretBindings', () => {
 describe('requiredProductionSecretEnvNames', () => {
   it('omits the Linear Agent secrets when the feature is disabled', () => {
     expect(requiredProductionSecretEnvNames(false)).not.toContain('LINEAR_AGENT_CLIENT_ID');
+    expect(requiredProductionSecretEnvNames(false)).toContain('MAPBOX_ACCESS_TOKEN');
   });
 
   it('includes the Linear Agent secrets when the feature is enabled', () => {

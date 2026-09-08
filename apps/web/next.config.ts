@@ -113,7 +113,8 @@ function authAllowedDevOrigins(): string[] {
  * origin. `()` blocks it outright, which the browser reports only as a permissions-policy
  * violation in the console while the UI shows a permission denial the person cannot fix from
  * their own browser settings. `self` still forbids every embedded third-party frame from asking.
- * The camera and geolocation stay fully denied: nothing in Docket uses either.
+ * Saved-place setup and foreground matching use geolocation from this origin. The camera stays
+ * fully denied. Third-party frames cannot request either capability.
  *
  * Every one of these replaces the upstream header on the `/docs` paths proxied to Mintlify, which
  * is fine for all five — Docket's values are at least as strict, and `X-Frame-Options: DENY` is
@@ -124,7 +125,7 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=()' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=(self)' },
 ];
 
 /**

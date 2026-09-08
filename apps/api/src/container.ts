@@ -67,6 +67,11 @@ import {
   TwilioTelephony,
 } from './routes/twilio-telephony';
 import { resolveVoiceProvider, type VoiceRealtimeProvider } from './routes/voice-provider';
+import {
+  DeterministicPlaceGeocoder,
+  MapboxPlaceGeocoder,
+  type PlaceGeocoder,
+} from './services/work-location/place-geocoder';
 
 /** Runtime configuration values used to choose local mocks or production services. */
 export interface AppRuntimeEnv {
@@ -123,6 +128,7 @@ export interface AppRuntimeEnv {
   readonly TWILIO_VERIFY_API_KEY_SID?: string;
   readonly TWILIO_VERIFY_API_KEY_SECRET?: string;
   readonly TWILIO_VERIFY_SERVICE_SID?: string;
+  readonly MAPBOX_ACCESS_TOKEN?: string;
 }
 
 /** Service dependencies shared by API route handlers and background execution paths. */
@@ -148,6 +154,8 @@ export interface AppContainer {
   readonly voice: VoiceRealtimeProvider;
   readonly blob: BlobStore;
   readonly unfurler: Unfurler;
+  /** Address-search provider for user-owned saved places. */
+  readonly placeGeocoder: PlaceGeocoder;
 }
 
 function localMode(runtimeEnv: AppRuntimeEnv): boolean {
@@ -185,6 +193,10 @@ export function anthropicConfigFromEnv(runtimeEnv: AppRuntimeEnv): AnthropicClie
   const baseURL = runtimeEnv.CLOUDFLARE_AI_GATEWAY_BASE_URL;
   const gatewayToken = runtimeEnv.CLOUDFLARE_AI_GATEWAY_TOKEN;
   return baseURL && gatewayToken ? { apiKey, baseURL, gatewayToken } : { apiKey };
+}
+
+function mapboxRuntimeEnv(): Pick<AppRuntimeEnv, 'MAPBOX_ACCESS_TOKEN'> {
+  return env.MAPBOX_ACCESS_TOKEN ? { MAPBOX_ACCESS_TOKEN: env.MAPBOX_ACCESS_TOKEN } : {};
 }
 
 /** Build the container runtime configuration from the validated API environment. */
@@ -263,6 +275,7 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
     ...(env.TWILIO_AUTH_TOKEN ? { TWILIO_AUTH_TOKEN: env.TWILIO_AUTH_TOKEN } : {}),
     ...(env.TWILIO_PHONE_NUMBER ? { TWILIO_PHONE_NUMBER: env.TWILIO_PHONE_NUMBER } : {}),
     ...toPhoneVerificationRuntimeEnv(),
+    ...mapboxRuntimeEnv(),
     ...(env.GITHUB_API_BASE ? { GITHUB_API_BASE: env.GITHUB_API_BASE } : {}),
     ...(env.LINEAR_API_BASE ? { LINEAR_API_BASE: env.LINEAR_API_BASE } : {}),
     ...(env.GOOGLE_GMAIL_API_BASE ? { GOOGLE_GMAIL_API_BASE: env.GOOGLE_GMAIL_API_BASE } : {}),
@@ -606,6 +619,13 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
           ...(runtimeEnv.EXPORT_BUCKET_URL ? { baseUrl: runtimeEnv.EXPORT_BUCKET_URL } : {}),
         }),
   );
+  const placeGeocoder = lazyValue<PlaceGeocoder>(() =>
+    mock
+      ? new DeterministicPlaceGeocoder()
+      : new MapboxPlaceGeocoder({
+          accessToken: required('MAPBOX_ACCESS_TOKEN', runtimeEnv.MAPBOX_ACCESS_TOKEN),
+        }),
+  );
 
   const built: AppContainer = {
     get billing() {
@@ -655,6 +675,9 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
     },
     get unfurler() {
       return unfurler();
+    },
+    get placeGeocoder() {
+      return placeGeocoder();
     },
   };
 

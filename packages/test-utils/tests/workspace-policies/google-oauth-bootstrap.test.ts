@@ -257,6 +257,7 @@ describe('guided integration bootstrap contracts', () => {
       'linear-agent',
       'notion',
       'apple',
+      'mapbox',
       'stripe',
       'anthropic',
       'twilio-verify',

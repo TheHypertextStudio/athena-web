@@ -77,6 +77,13 @@ run_release_env() {
 }
 
 run_browser_checks() {
+  if [[ -n "${RELEASE_BROWSER_TARGETS:-}" ]]; then
+    local browser_targets=()
+    read -r -a browser_targets <<< "${RELEASE_BROWSER_TARGETS}"
+    run_release_env env E2E_EVIDENCE="${E2E_EVIDENCE:-0}" \
+      pnpm --filter @docket/web exec playwright test "${browser_targets[@]}" --workers=1
+    return
+  fi
   if [[ "${RELEASE_EVIDENCE:-0}" == 1 ]]; then
     run_release_env env E2E_EVIDENCE=1 pnpm --filter @docket/web exec playwright test \
       e2e/work/initiative-roster-shots.spec.ts --workers=1

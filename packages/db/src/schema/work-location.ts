@@ -30,6 +30,16 @@ import {
 
 import { genId } from '../id';
 import { hub } from './identity';
+import { user } from './auth';
+
+/** One durable rolling request window for a user's saved-place geocoding. */
+export const workLocationGeocodeRateLimit = pgTable('work_location_geocode_rate_limit', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  requestTimestamps: jsonb('request_timestamps').$type<string[]>().notNull().default([]),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 /** One arbitrary user-named regular place. */
 export const workPlace = pgTable(

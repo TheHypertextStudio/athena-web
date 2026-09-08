@@ -212,6 +212,16 @@ export const INFRA_VARS: readonly VarSpec[] = [
 
   // connector (per-provider API-base overrides; the OAuth token is per-connection, not env)
   {
+    name: 'MAPBOX_ACCESS_TOKEN',
+    slice: 'connector',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: connectorServer.MAPBOX_ACCESS_TOKEN,
+    where: 'Hypertext Studio Mapbox access token. Required when APP_MODE=production',
+    sensitive: true,
+  },
+  {
     name: 'GITHUB_API_BASE',
     slice: 'connector',
     scope: 'server',

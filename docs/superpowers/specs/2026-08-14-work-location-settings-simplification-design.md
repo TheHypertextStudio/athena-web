@@ -41,9 +41,9 @@ explains a blocked action.
 A name alone is valid. The address is private owner-facing context and is not sent to calendar
 providers. Choosing a map point stores private latitude/longitude through the existing geofence
 field with a product-owned 250 metre matching radius. The radius is never shown or configurable.
-The map is loaded only after the user asks for it, uses MapLibre GL JS with OpenFreeMap, and offers
-ordinary pan/zoom, point selection, and a user-gesture `Use current position` control. No address
-geocoding service is introduced in this slice; typing an address does not leak it to a third party.
+This 2026-08-14 slice loaded MapLibre only after the person asked for it and did not geocode address
+text. The 2026-09-08 saved-place picker repair supersedes those two limits. The current contract is
+recorded in `2026-09-05-work-schedule-and-places-design.md` and `docs/core/work-schedule.md`.
 
 Each saved place is one compact row:
 
@@ -113,7 +113,8 @@ relationship, and every person may keep any number of ordinary saved places.
 
 ## Non-Goals
 
-- Address autocomplete or third-party geocoding.
+- Address autocomplete or third-party geocoding. The 2026-09-08 saved-place picker repair
+  supersedes this non-goal.
 - User-configurable detection radii.
 - Background location sensing.
 - Changes to canonical precedence or provider convergence.

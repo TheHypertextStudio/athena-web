@@ -1,10 +1,13 @@
 'use client';
 
-/** Lazy interactive point picker for a private saved-place location. */
+/** Interactive point picker for a private saved-place location. */
 import { Button } from '@docket/ui/primitives';
 import type { Map as MapLibreMap, Marker as MapLibreMarker } from 'maplibre-gl';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import 'maplibre-gl/dist/maplibre-gl.css';
+
+const LIGHT_STYLE = 'https://tiles.openfreemap.org/styles/positron';
+const DARK_STYLE = 'https://tiles.openfreemap.org/styles/dark';
 
 /** One private point selected by the owner. */
 export interface PlaceMapPoint {
@@ -12,122 +15,199 @@ export interface PlaceMapPoint {
   readonly longitude: number;
 }
 
+/** The user action that selected a point. */
+export type PlaceMapSelectionSource = 'map' | 'current-position';
+
 /** Props for {@link PlaceMapPicker}. */
 export interface PlaceMapPickerProps {
   /** Existing or newly selected point. */
   readonly value: PlaceMapPoint | null;
   /** Receive a point selected on the map or from the current-position action. */
-  readonly onChange: (point: PlaceMapPoint) => void;
+  readonly onChange: (point: PlaceMapPoint, source: PlaceMapSelectionSource) => void;
 }
 
-/**
- * Render MapLibre only after the editor discloses the map.
- *
- * @remarks
- * OpenFreeMap supplies the basemap without an API key. Coordinates remain in this editor until the
- * owner saves the place; the map does not geocode or transmit the optional address.
- */
+type MapState = 'loading' | 'ready' | 'failed' | 'selected';
+
+function geolocationErrorCopy(code: number): string {
+  if (code === 1) {
+    return 'Location permission is off. Allow it in this browser’s site settings, then try again.';
+  }
+  if (code === 3) return 'This browser did not get a current position in time. Try again.';
+  return 'This browser could not determine your current position.';
+}
+
+/** Render a continuously visible MapLibre picker with explicit load and selection states. */
 export function PlaceMapPicker({ value, onChange }: PlaceMapPickerProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRef = useRef<MapLibreMarker | null>(null);
-  const initialValueRef = useRef(value);
-  const [status, setStatus] = useState<string | null>(null);
+  const createMarkerRef = useRef<((point: PlaceMapPoint) => MapLibreMarker) | null>(null);
+  const latestValueRef = useRef(value);
+  latestValueRef.current = value;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const [mapState, setMapState] = useState<MapState>('loading');
+  const [message, setMessage] = useState<string | null>(null);
+  const [retryVersion, setRetryVersion] = useState(0);
 
-  const setMarker = useCallback((point: PlaceMapPoint): void => {
-    const marker = markerRef.current;
-    if (marker) marker.setLngLat([point.longitude, point.latitude]);
-    mapRef.current?.easeTo({ center: [point.longitude, point.latitude], zoom: 15 });
+  const moveMarker = useCallback((point: PlaceMapPoint): void => {
+    if (!mapRef.current) return;
+    if (!markerRef.current && createMarkerRef.current) {
+      markerRef.current = createMarkerRef.current(point);
+    } else {
+      markerRef.current?.setLngLat([point.longitude, point.latitude]);
+    }
+    mapRef.current.easeTo({ center: [point.longitude, point.latitude], zoom: 15 });
+    setMapState('selected');
   }, []);
 
+  const selectPoint = useCallback(
+    (point: PlaceMapPoint, source: PlaceMapSelectionSource): void => {
+      moveMarker(point);
+      onChangeRef.current(point, source);
+      setMessage(null);
+    },
+    [moveMarker],
+  );
+
   useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
     let active = true;
-    void import('maplibre-gl').then(({ Map, Marker, NavigationControl }) => {
-      if (!active || !containerRef.current) return;
-      const initialValue = initialValueRef.current;
-      const center: [number, number] = initialValue
-        ? [initialValue.longitude, initialValue.latitude]
-        : [-98.5795, 39.8283];
-      const map = new Map({
-        container: containerRef.current,
-        style: 'https://tiles.openfreemap.org/styles/positron',
-        center,
-        zoom: initialValue ? 15 : 2.5,
-        attributionControl: {},
-      });
-      const addMarker = (point: [number, number]): MapLibreMarker => {
-        const marker = new Marker({ draggable: true }).setLngLat(point).addTo(map);
-        marker.on('dragend', () => {
-          const position = marker.getLngLat();
-          onChangeRef.current({ latitude: position.lat, longitude: position.lng });
-          setStatus('Map location selected.');
+    let loaded = false;
+    let resizeObserver: ResizeObserver | null = null;
+    let colorScheme: MediaQueryList | null = null;
+    let updateStyle: ((event: MediaQueryListEvent) => void) | null = null;
+    setMapState('loading');
+    setMessage(null);
+
+    void import('maplibre-gl')
+      .then(({ Map, Marker, NavigationControl }) => {
+        if (!active) return;
+        const initialValue = latestValueRef.current;
+        const center: [number, number] = initialValue
+          ? [initialValue.longitude, initialValue.latitude]
+          : [-98.5795, 39.8283];
+        colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
+        const map = new Map({
+          container,
+          style: colorScheme.matches ? DARK_STYLE : LIGHT_STYLE,
+          center,
+          zoom: initialValue ? 15 : 2.5,
+          attributionControl: {},
         });
-        return marker;
-      };
-      map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
-      map.on('click', (event) => {
-        const point = { latitude: event.lngLat.lat, longitude: event.lngLat.lng };
-        if (!markerRef.current) {
-          markerRef.current = addMarker([event.lngLat.lng, event.lngLat.lat]);
-        } else markerRef.current.setLngLat(event.lngLat);
-        onChangeRef.current(point);
-        setStatus('Map location selected.');
+        mapRef.current = map;
+
+        const createMarker = (point: PlaceMapPoint): MapLibreMarker => {
+          const marker = new Marker({ draggable: true })
+            .setLngLat([point.longitude, point.latitude])
+            .addTo(map);
+          marker.on('dragend', () => {
+            const position = marker.getLngLat();
+            selectPoint({ latitude: position.lat, longitude: position.lng }, 'map');
+          });
+          return marker;
+        };
+        createMarkerRef.current = createMarker;
+        if (initialValue) markerRef.current = createMarker(initialValue);
+
+        map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
+        map.on('load', () => {
+          loaded = true;
+          setMapState(latestValueRef.current ? 'selected' : 'ready');
+        });
+        map.on('error', () => {
+          if (!loaded) setMapState('failed');
+        });
+        map.on('click', (event) => {
+          selectPoint({ latitude: event.lngLat.lat, longitude: event.lngLat.lng }, 'map');
+        });
+
+        updateStyle = (event: MediaQueryListEvent): void => {
+          map.setStyle(event.matches ? DARK_STYLE : LIGHT_STYLE);
+        };
+        colorScheme.addEventListener('change', updateStyle);
+        if ('ResizeObserver' in window) {
+          resizeObserver = new ResizeObserver(() => map.resize());
+          resizeObserver.observe(container);
+        }
+      })
+      .catch(() => {
+        if (active) setMapState('failed');
       });
-      mapRef.current = map;
-      markerRef.current = initialValue ? addMarker(center) : null;
-    });
+
     return () => {
       active = false;
+      resizeObserver?.disconnect();
+      if (colorScheme && updateStyle) colorScheme.removeEventListener('change', updateStyle);
       markerRef.current?.remove();
       markerRef.current = null;
+      createMarkerRef.current = null;
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [retryVersion, selectPoint]);
 
   useEffect(() => {
-    if (value) setMarker(value);
-  }, [setMarker, value]);
+    if (value) moveMarker(value);
+  }, [moveMarker, value]);
+
+  const useCurrentPosition = (): void => {
+    if (!('geolocation' in navigator)) {
+      setMessage('This browser does not provide location access.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        selectPoint(
+          { latitude: position.coords.latitude, longitude: position.coords.longitude },
+          'current-position',
+        );
+      },
+      (error) => {
+        setMessage(geolocationErrorCopy(error.code));
+      },
+      { enableHighAccuracy: false, maximumAge: 30_000, timeout: 15_000 },
+    );
+  };
 
   return (
     <div className="flex flex-col gap-2">
-      <div
-        ref={containerRef}
-        role="region"
-        aria-label="Place map"
-        className="border-outline-variant bg-surface-container-low h-64 w-full overflow-hidden rounded-lg border"
-      />
-      <div className="flex min-h-10 flex-wrap items-center justify-between gap-2">
-        <p className="text-on-surface-variant text-body-small" role="status">
-          {status ?? (value ? 'Map location selected.' : 'Click the map to choose a location.')}
-        </p>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => {
-            if (!('geolocation' in navigator)) {
-              setStatus('This browser does not offer location access.');
-              return;
-            }
-            navigator.geolocation.getCurrentPosition(
-              (position) => {
-                const point = {
-                  latitude: position.coords.latitude,
-                  longitude: position.coords.longitude,
-                };
-                onChange(point);
-                setMarker(point);
-                setStatus('Using this device’s current position.');
-              },
-              () => {
-                setStatus('This browser could not use the current position.');
-              },
-            );
-          }}
-        >
+      <div className="border-outline-variant bg-surface-container-low relative h-64 w-full overflow-hidden rounded-lg border">
+        <div
+          ref={containerRef}
+          role="region"
+          aria-label="Place map"
+          data-map-state={mapState}
+          className="size-full"
+        />
+        {mapState === 'loading' ? (
+          <p className="bg-surface/80 text-on-surface-variant text-body-small absolute inset-0 grid place-items-center">
+            Loading map…
+          </p>
+        ) : null}
+        {mapState === 'failed' ? (
+          <div className="bg-surface/95 absolute inset-0 flex flex-col items-center justify-center gap-3 p-4 text-center">
+            <p className="text-on-surface text-body-medium">Docket could not load the map.</p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setRetryVersion((current) => current + 1);
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        ) : null}
+      </div>
+      <div className="flex min-h-10 flex-wrap items-center justify-end gap-2">
+        {message !== null || !value ? (
+          <p className="text-on-surface-variant text-body-small mr-auto" role="status">
+            {message ?? 'Click the map to choose a location.'}
+          </p>
+        ) : null}
+        <Button type="button" variant="ghost" onClick={useCurrentPosition}>
           Use current position
         </Button>
       </div>

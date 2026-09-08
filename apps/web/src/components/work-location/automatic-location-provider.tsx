@@ -40,7 +40,9 @@ export interface AutomaticLocationContextValue {
 const AutomaticLocationContext = createContext<AutomaticLocationContextValue | null>(null);
 
 function deviceErrorCopy(error: ForegroundLocationError): string {
-  if (error === 'permission_denied') return 'Location permission is off for this browser.';
+  if (error === 'permission_denied') {
+    return 'Location permission is off. Allow it in this browser’s site settings, then turn automatic location on again.';
+  }
   if (error === 'timed_out') return 'This browser could not get a fresh position in time.';
   if (error === 'delivery_failed') return 'Docket could not record the matched place.';
   return 'This browser could not determine its position.';

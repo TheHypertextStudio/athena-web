@@ -29,7 +29,7 @@ export default function PrivacyPage(): JSX.Element {
         <h1 className="font-display text-display-large-small text-ink mt-4 tracking-tight">
           Privacy policy
         </h1>
-        <p className="text-ink-muted mt-4">Effective August 15, 2026</p>
+        <p className="text-ink-muted mt-4">Effective September 8, 2026</p>
       </header>
 
       <PolicySection title="Who operates Docket">
@@ -53,6 +53,12 @@ export default function PrivacyPage(): JSX.Element {
           When you authorize a connector, we also process the provider account identifier, granted
           scopes, encrypted OAuth access and refresh tokens, synchronization cursors, and the data
           needed to provide that connector.
+        </p>
+        <p>
+          When you search for a saved-place address, Docket sends the text you type to Mapbox
+          through Docket&apos;s API. Docket does not store temporary autocomplete results. When you
+          choose a result or ask Docket to identify a point on the map, Docket requests a permanent
+          Mapbox result and stores the selected address and coordinates with your saved place.
         </p>
       </PolicySection>
 
@@ -81,6 +87,11 @@ export default function PrivacyPage(): JSX.Element {
           with contracted infrastructure providers, including Google Cloud, Neon, Vercel, and
           Cloudflare, only as needed to host, secure, back up, and deliver the service. We may also
           disclose information when required by law or to protect users and the service.
+        </p>
+        <p>
+          Automatic location matches your foreground browser position against saved places on your
+          device. Docket receives the matched place identifier and accuracy. It does not receive the
+          raw foreground position used for routine matching.
         </p>
       </PolicySection>
 

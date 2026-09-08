@@ -110,7 +110,11 @@ export async function signUp(page: Page, { name, email }: TestUser): Promise<voi
   // ~40s here, which the default silently turns into "page.goto: Timeout 30000ms exceeded" — a
   // failure that reads like the app is down rather than like it is still building. Every other
   // wait in this helper already budgets for that; this one was the gap.
-  await page.goto('/sign-up', { waitUntil: 'domcontentloaded', timeout: TIMEOUTS.pageReady });
+  await page.goto('/sign-up', { waitUntil: 'commit', timeout: TIMEOUTS.pageReady });
+  await page.getByRole('heading', { name: 'Create your account' }).waitFor({
+    state: 'visible',
+    timeout: TIMEOUTS.pageReady,
+  });
   // A production build has no lazy route compilation to warm. Sending the warm-up request there
   // spends one of the real sign-up rate-limit slots and makes a serial release suite throttle its
   // third account before the browser can exercise the product.
@@ -157,8 +161,26 @@ export async function signUp(page: Page, { name, email }: TestUser): Promise<voi
 
     // Step 2: enter the code and complete the passkey ceremony.
     if (devCode) {
+      const authenticated = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/auth/passkey/verify-authentication') &&
+          response.request().method() === 'POST' &&
+          response.ok(),
+        { timeout: TIMEOUTS.ceremony },
+      );
       await page.fill('#code', devCode);
       await verifyButton.click();
+      await authenticated;
+      // A dev HMR chunk can remain open after the app requests `/onboarding`, which prevents the
+      // client transition from committing even though authentication and session creation passed.
+      // Navigate explicitly at the completed authentication boundary so product journeys do not
+      // depend on an unrelated development-bundler stream closing.
+      await page.goto('/onboarding', { waitUntil: 'commit', timeout: TIMEOUTS.pageReady });
+      await page.getByRole('heading', { name: /Set up Docket|How will you use Docket/ }).waitFor({
+        state: 'visible',
+        timeout: TIMEOUTS.pageReady,
+      });
+      return;
     }
 
     const reached = await Promise.race([
@@ -188,7 +210,9 @@ async function onboardJustMe(page: Page): Promise<string> {
     async (r) => ((await r.json()) as { organization?: { id?: string } }).organization?.id,
   );
 
-  await page.getByText('Just me', { exact: false }).first().click();
+  // The Next dev HMR client can keep this intent card moving by subpixels after hydration. Force
+  // the click once the visible label exists because actionability stability adds no product signal.
+  await page.getByText('Just me', { exact: false }).first().click({ force: true });
   // The personal fork creates its workspace as soon as the intent card is selected. Waiting for
   // the connection step keeps this helper aligned with that transition and avoids targeting its
   // disabled primary action while the organization request is still in flight.

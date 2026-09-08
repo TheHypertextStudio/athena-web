@@ -454,6 +454,8 @@ export const clientShared = {
  * the `@docket/integrations` resolver, not this schema, decides real-vs-mock.
  */
 export const connectorServer = {
+  /** Server-held Mapbox token for permanent saved-place geocoding. */
+  MAPBOX_ACCESS_TOKEN: z.string().min(1).optional(),
   /** GitHub REST API base override (e.g. `https://ghe.example.com/api/v3`). */
   GITHUB_API_BASE: z.string().min(1).optional(),
   /** Linear GraphQL API base override (defaults to `https://api.linear.app`). */

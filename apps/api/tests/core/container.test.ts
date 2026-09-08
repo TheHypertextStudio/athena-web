@@ -45,6 +45,10 @@ import {
   TwilioVerifyProvider,
 } from '../../src/routes/phone-verification-provider';
 import { CaptureTelephonyProvider, TwilioTelephony } from '../../src/routes/twilio-telephony';
+import {
+  DeterministicPlaceGeocoder,
+  MapboxPlaceGeocoder,
+} from '../../src/services/work-location/place-geocoder';
 
 const LOCAL: AppRuntimeEnv = { APP_MODE: 'local' };
 const TEST: AppRuntimeEnv = { APP_MODE: 'test' };
@@ -228,6 +232,20 @@ describe('buildAppContainer', () => {
     expect(container.inboundMail).toBeDefined();
     expect(container.mcpConnector).toBeDefined();
     expect(container.blob).toBeDefined();
+    expect(container.placeGeocoder).toBeInstanceOf(DeterministicPlaceGeocoder);
+  });
+
+  it('requires Mapbox configuration for the production geocoder', () => {
+    const missing = buildAppContainer(PROD_BASE);
+    expect(() => missing.placeGeocoder).toThrow(
+      'Missing required production config: MAPBOX_ACCESS_TOKEN',
+    );
+
+    const configured = buildAppContainer({
+      APP_MODE: 'production',
+      MAPBOX_ACCESS_TOKEN: 'pk.mapbox-production',
+    });
+    expect(configured.placeGeocoder).toBeInstanceOf(MapboxPlaceGeocoder);
   });
 
   it('configures Verify independently from the voice phone number', () => {

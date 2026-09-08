@@ -17,7 +17,10 @@ async function addPlace(page: Page, name: string, address?: string): Promise<voi
   await page.getByRole('button', { name: 'Add place' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add place' });
   await dialog.getByRole('textbox', { name: 'Name' }).fill(name);
-  if (address) await dialog.getByRole('textbox', { name: 'Address (optional)' }).fill(address);
+  if (address) {
+    await dialog.getByRole('combobox', { name: 'Address (optional)' }).fill(address);
+    await dialog.getByRole('option').first().click();
+  }
   await dialog.getByRole('button', { name: 'Save place' }).click();
   await expect(dialog).not.toBeVisible();
 }

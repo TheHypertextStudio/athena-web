@@ -175,6 +175,13 @@ function assertPhoneVerificationConfig(e: typeof env): void {
   if (missing) failCrossField(`${rolloutSetting} requires ${missing}.`);
 }
 
+function assertProductionMapbox(e: typeof env, fail: (message: string) => never): void {
+  if (e.APP_MODE !== 'production') return;
+  if (!e.MAPBOX_ACCESS_TOKEN || !isRealValue(e.MAPBOX_ACCESS_TOKEN)) {
+    fail('MAPBOX_ACCESS_TOKEN is required for production saved-place geocoding.');
+  }
+}
+
 /**
  * Cross-field invariants that a per-var schema cannot express. Runs at module load
  * so a misconfigured contract fails fast, the same as a missing required var.
@@ -185,6 +192,7 @@ function assertCrossFieldRules(e: typeof env): void {
   const fail = failCrossField;
 
   assertPhoneVerificationConfig(e);
+  assertProductionMapbox(e, fail);
 
   const billingCanaryEnabled =
     e.BILLING_CANARY_EMAILS?.split(',').some((email) => email.trim().length > 0) ?? false;

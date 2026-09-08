@@ -31,6 +31,13 @@ async function cspCovers(pathname: string): Promise<boolean> {
 }
 
 describe('app CSP route coverage', () => {
+  it('allows this origin to request browser geolocation', async () => {
+    const rules = (await nextConfig.headers?.()) ?? [];
+    const allRoutes = rules.find((rule) => rule.source === '/:path*');
+    const policy = allRoutes?.headers.find((header) => header.key === 'Permissions-Policy');
+    expect(policy?.value).toContain('geolocation=(self)');
+    expect(policy?.value).not.toContain('geolocation=()');
+  });
   it.each([
     ['/', 'the marketing home page'],
     ['/pricing', 'a marketing page'],

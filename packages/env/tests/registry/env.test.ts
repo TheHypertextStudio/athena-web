@@ -62,6 +62,7 @@ function validApiEnv(): Record<string, string> {
     BILLING_ENABLED: 'false',
     BILLING_RECONCILIATION_MODE: 'off',
     MCP_TASKS_ENABLED: 'false',
+    MAPBOX_ACCESS_TOKEN: 'pk.mapbox-test',
   };
 }
 
@@ -296,6 +297,8 @@ describe('slices', () => {
   });
 
   it('keeps genuinely-optional vars optional and fails fast on required ops/client vars', () => {
+    expect(connectorServer.MAPBOX_ACCESS_TOKEN.parse(undefined)).toBeUndefined();
+    expect(connectorServer.MAPBOX_ACCESS_TOKEN.parse('pk.mapbox-test')).toBe('pk.mapbox-test');
     expect(agentServer.ANTHROPIC_API_KEY.parse(undefined)).toBeUndefined();
     expect(() => agentServer.AGENT_MAX_TURNS.parse(undefined)).toThrow();
     expect(agentServer.AGENT_MAX_TURNS.parse('24')).toBe(24);
@@ -328,6 +331,16 @@ describe('slices', () => {
     expect(() => clientShared.NEXT_PUBLIC_PASSKEY_RP_ID.parse(undefined)).toThrow();
     expect(clientShared.NEXT_PUBLIC_PASSKEY_RP_ID.parse('example.com')).toBe('example.com');
     expect(stripeServer.STRIPE_PUBLISHABLE_KEY.parse(undefined)).toBeUndefined();
+  });
+
+  it('requires the Mapbox geocoding token in production', async () => {
+    const production: Record<string, string> = { ...validApiEnv(), APP_MODE: 'production' };
+    delete production['MAPBOX_ACCESS_TOKEN'];
+    for (const [key, value] of Object.entries(production)) vi.stubEnv(key, value);
+
+    await expect(import('../../src/api')).rejects.toThrow(
+      'MAPBOX_ACCESS_TOKEN is required for production saved-place geocoding',
+    );
   });
 });
 

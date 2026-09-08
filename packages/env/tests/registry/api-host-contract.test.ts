@@ -42,6 +42,7 @@ function productionBase(): Record<string, string> {
     LINEAR_CLIENT_ID: 'linear-client-id',
     LINEAR_CLIENT_SECRET: 'linear-client-secret',
     LINEAR_WEBHOOK_SECRET: 'linear-webhook-secret',
+    MAPBOX_ACCESS_TOKEN: 'mapbox-test-token',
   };
 }
 

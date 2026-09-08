@@ -100,6 +100,13 @@ export class RateLimitedError extends ApiError {
   }
 }
 
+/** 503 — saved-place geocoding failed without exposing provider details. */
+export class GeocodingUnavailableError extends ApiError {
+  constructor() {
+    super(503, 'geocoding_unavailable', 'Saved-place geocoding is unavailable');
+  }
+}
+
 /** 409 — account deletion is blocked by unresolved sole-owner shared orgs. */
 export class DeletionBlockedError extends ApiError {
   constructor(message = 'Resolve sole-owned shared workspaces before deleting your account') {

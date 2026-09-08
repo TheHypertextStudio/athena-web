@@ -155,6 +155,7 @@ describe('mandatory production provider catalog', () => {
       'linear-agent',
       'notion',
       'apple',
+      'mapbox',
       'stripe',
       'anthropic',
       'twilio-verify',
@@ -170,6 +171,12 @@ describe('mandatory production provider catalog', () => {
         expect(findVar(varName), `${group.label}: ${varName}`).toBeDefined();
       }
     }
+  });
+
+  it('binds the Mapbox token into the production API when the secret exists', () => {
+    expect(buildApiSecretBindings('production', new Set(['docket-mapbox-access-token']))).toContain(
+      'MAPBOX_ACCESS_TOKEN=docket-mapbox-access-token:latest',
+    );
   });
   it('uses Mailpit variables locally and the native Resend API contract in production', () => {
     const email = PROVIDER_GROUPS.find((group) => group.id === 'email');

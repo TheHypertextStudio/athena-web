@@ -1,6 +1,12 @@
 flowchart LR
   WorkSchedule[Work schedule settings] --> ScheduleAPI[Schedule API]
   Places[Places settings] --> PlaceAPI[Place and alias API]
+  Places --> PlacePicker[Saved-place picker]
+  PlacePicker --> OpenFreeMap[OpenFreeMap styles]
+  PlacePicker --> GeocodingAPI[Geocoding API]
+  GeocodingAPI --> RateStore[(Per-user request window)]
+  GeocodingAPI --> Geocoder[PlaceGeocoder]
+  Geocoder --> Mapbox[Mapbox Geocoding]
   Accounts[Connected accounts] --> ConnectionAPI[Connection API]
   ScheduleAPI --> ScheduleStore[(Plan versions and dated changes)]
   PlaceAPI --> PlaceStore[(Places and account aliases)]

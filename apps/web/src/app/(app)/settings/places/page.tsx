@@ -40,6 +40,7 @@ import { SettingsSectionPage } from '@/components/settings/settings-section-page
 import { useAutomaticLocation } from '@/components/work-location/automatic-location-provider';
 import {
   PlaceEditorDialog,
+  type PlaceEditorIntent,
   type PlaceEditorValue,
 } from '@/components/work-location/place-editor-dialog';
 import {
@@ -328,6 +329,7 @@ function PlacesDialogs(props: {
   readonly placeEditorOpen: boolean;
   readonly editingPlace: WorkPlaceOut | null;
   readonly suggestedPlaceName: string | undefined;
+  readonly editorIntent: PlaceEditorIntent;
   readonly places: readonly WorkPlaceOut[];
   readonly resolvingChange: WorkScheduleChangeOut | null;
   readonly resolutionPlaceId: string;
@@ -356,6 +358,7 @@ function PlacesDialogs(props: {
         open={props.placeEditorOpen}
         onOpenChange={props.onEditorOpenChange}
         place={props.editingPlace}
+        intent={props.editorIntent}
         {...(props.suggestedPlaceName === undefined
           ? {}
           : { initialName: props.suggestedPlaceName })}
@@ -438,6 +441,7 @@ export default function PlacesSettingsPage(): JSX.Element {
   const pointQ = useApiQuery(workLocationPointDef(pointAt));
   const [placeEditorOpen, setPlaceEditorOpen] = useState(false);
   const [editingPlace, setEditingPlace] = useState<WorkPlaceOut | null>(null);
+  const [placeEditorIntent, setPlaceEditorIntent] = useState<PlaceEditorIntent>('standard');
   const [confirmRetire, setConfirmRetire] = useState<WorkPlaceOut | null>(null);
   const [resolvingChange, setResolvingChange] = useState<WorkScheduleChangeOut | null>(null);
   const [creatingForChange, setCreatingForChange] = useState<WorkScheduleChangeOut | null>(null);
@@ -546,23 +550,34 @@ export default function PlacesSettingsPage(): JSX.Element {
   const manualCurrent = pointQ.data?.current.source === 'manual';
 
   const openNewPlace = (): void => {
+    setPlaceEditorIntent('standard');
     setCreatingForChange(null);
     setEditingPlace(null);
     setPlaceEditorOpen(true);
   };
   const openPlaceEditor = (place: WorkPlaceOut): void => {
+    setPlaceEditorIntent('standard');
     setCreatingForChange(null);
     setEditingPlace(place);
     setPlaceEditorOpen(true);
   };
   const setUpAutomaticLocation = (): void => {
+    setPlaceEditorIntent('automatic-setup');
     setCreatingForChange(null);
     setEditingPlace(places.find((place) => place.geofence === null) ?? null);
     setPlaceEditorOpen(true);
   };
   const savePlace = (value: PlaceEditorValue): void => {
-    if (editingPlace) updatePlace.mutate({ id: editingPlace.id, patch: value });
-    else if (creatingForChange) {
+    const enableAfterSave = placeEditorIntent === 'automatic-setup';
+    const finishAutomaticSetup = (): void => {
+      if (enableAfterSave) automaticLocation.setEnabled(true);
+    };
+    if (editingPlace) {
+      void updatePlace
+        .mutateAsync({ id: editingPlace.id, patch: value })
+        .then(finishAutomaticSetup)
+        .catch(() => undefined);
+    } else if (creatingForChange) {
       const change = creatingForChange;
       void createPlace
         .mutateAsync(value)
@@ -574,7 +589,12 @@ export default function PlacesSettingsPage(): JSX.Element {
           });
         })
         .catch(() => undefined);
-    } else createPlace.mutate(value);
+    } else {
+      void createPlace
+        .mutateAsync(value)
+        .then(finishAutomaticSetup)
+        .catch(() => undefined);
+    }
   };
   const resolveName = (): void => {
     if (!resolvingChange) return;
@@ -654,6 +674,7 @@ export default function PlacesSettingsPage(): JSX.Element {
       <PlacesDialogs
         placeEditorOpen={placeEditorOpen}
         editingPlace={editingPlace}
+        editorIntent={placeEditorIntent}
         suggestedPlaceName={
           creatingForChange
             ? WorkScheduleUnmatchedPlacePayload.safeParse(creatingForChange.payload).data?.label
@@ -699,6 +720,7 @@ export default function PlacesSettingsPage(): JSX.Element {
           setCreatingForChange(resolvingChange);
           setResolvingChange(null);
           setEditingPlace(null);
+          setPlaceEditorIntent('standard');
           setPlaceEditorOpen(true);
         }}
         onResolveName={resolveName}

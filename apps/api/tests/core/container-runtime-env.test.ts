@@ -49,6 +49,7 @@ const FULL_ENV = {
   GOOGLE_GMAIL_API_BASE: 'https://gmail.googleapis.example',
   GOOGLE_CALENDAR_API_BASE: 'https://calendar.googleapis.example',
   GOOGLE_TASKS_API_BASE: 'https://tasks.googleapis.example',
+  MAPBOX_ACCESS_TOKEN: 'pk.mapbox-production',
 };
 
 let toAppRuntimeEnv!: typeof ToAppRuntimeEnv;

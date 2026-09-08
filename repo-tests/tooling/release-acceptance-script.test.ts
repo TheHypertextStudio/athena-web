@@ -65,6 +65,8 @@ describe('release acceptance runner', () => {
     expect(source).toContain('/v1/health');
     expect(source).toContain('/sign-in');
     expect(source).toContain('pnpm --filter @docket/web test:e2e:release');
+    expect(source).toContain('RELEASE_BROWSER_TARGETS');
+    expect(source).toContain('read -r -a browser_targets');
     expect(source).toContain('RELEASE_EVIDENCE:-0');
     expect(source).toContain('e2e/work/initiative-roster-shots.spec.ts --workers=1');
     expect(source).toContain('trap cleanup EXIT');

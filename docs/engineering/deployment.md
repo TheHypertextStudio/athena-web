@@ -9,13 +9,14 @@ after formatting, lint, types, tests, build, and browser E2E are green.
 
 ## Architecture
 
-| Service        | Domain                          | Platform  | Notes                                                   |
-| -------------- | ------------------------------- | --------- | ------------------------------------------------------- |
-| `docket` web   | `docket.hypertext.studio`       | Vercel    | Next.js product + marketing; same-origin API/auth proxy |
-| `docket-api`   | `docket-api.hypertext.studio`   | Cloud Run | Hono API, Better Auth, MCP, webhooks, cron endpoints    |
-| `docket-admin` | `docket-admin.hypertext.studio` | Cloud Run | Next.js operator back office                            |
+| Service        | Domain                     | Platform  | Notes                                                   |
+| -------------- | -------------------------- | --------- | ------------------------------------------------------- |
+| `docket` web   | `clearthedocket.com`       | Vercel    | Next.js product + marketing; same-origin API/auth proxy |
+| `docket-api`   | `api.clearthedocket.com`   | Cloud Run | Hono API, Better Auth, MCP, webhooks, cron endpoints    |
+| `docket-admin` | `admin.clearthedocket.com` | Cloud Run | Next.js operator back office                            |
 
-**Passkey RP ID:** `hypertext.studio` — the shared registrable suffix across the production web and admin hosts.
+**Passkey RP ID:** `clearthedocket.com`. Existing credentials remain bound to the old RP and need
+the recovery flow described in [the domain cutover runbook](./domain-cutover.md).
 
 All services use `--max-instances=10` and `--memory=512Mi`. Services scale to zero by default.
 `docket-api` keeps one warm instance while `LINEAR_AGENT_ENABLED=true` so Linear's five-second
@@ -117,12 +118,12 @@ Set by `pnpm bootstrap`. Add missing ones with `gh variable set NAME --body "VAL
 | `GCP_REGION`                       | bootstrap            | Deployment region (e.g. `us-central1`)                                                                                    |
 | `GCP_SERVICE_ACCOUNT`              | bootstrap            | Full SA email: `docket-deploy@<project>.iam.gserviceaccount.com`                                                          |
 | `GCP_WIF_PROVIDER`                 | bootstrap            | Full WIF provider resource name: `projects/<num>/locations/global/workloadIdentityPools/github/providers/github-actions`  |
-| `PASSKEY_RP_ID`                    | bootstrap/manual     | WebAuthn relying-party domain. Use `hypertext.studio` for the production `*.hypertext.studio` hosts.                      |
+| `PASSKEY_RP_ID`                    | bootstrap/manual     | WebAuthn relying-party domain. Production uses `clearthedocket.com`.                                                      |
 | `NEON_PROJECT_ID`                  | bootstrap            | Neon project ID (from Neon console)                                                                                       |
 | `API_URL`                          | manual (post-deploy) | Public custom-domain origin of `docket-api`                                                                               |
 | `WEB_URL`                          | manual (post-deploy) | Public custom-domain origin of the Vercel web app                                                                         |
 | `ADMIN_URL`                        | manual (post-deploy) | Public custom-domain origin of `docket-admin`                                                                             |
-| `BETTER_AUTH_ALLOWED_HOSTS`        | manual               | `docket.hypertext.studio,docket-api.hypertext.studio,docket-admin.hypertext.studio`                                       |
+| `BETTER_AUTH_ALLOWED_HOSTS`        | manual               | Canonical web, API, and admin hosts plus old hosts during the migration window.                                           |
 | `GOOGLE_OAUTH_PUBLIC`              | manual               | `false` during review; `true` only after Google approval                                                                  |
 | `GOOGLE_OAUTH_TEST_EMAILS`         | manual               | Staged Docket user allowlist, initially `willieechalmers@gmail.com`                                                       |
 | `GCP_API_RUNTIME_SERVICE_ACCOUNT`  | bootstrap            | Runtime identity for `docket-api`: `docket-api@<project>.iam.gserviceaccount.com`. Unset ⇒ Cloud Run's default compute SA |
@@ -557,7 +558,7 @@ Two things make Apple different:
 
 Register in the **Apple Developer** console (App ID with "Sign in with Apple" → a **Services ID** →
 a **Sign in with Apple key** `.p8` + your **Team ID**), with return URL
-`https://docket-api.hypertext.studio/api/auth/callback/apple`. Then wire the four vars:
+`https://clearthedocket.com/api/auth/callback/apple`. Then wire the four vars:
 
 ```bash
 # 1) Create the four Secret Manager secrets (seed real values, or 'placeholder' to stay dormant):

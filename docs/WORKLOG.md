@@ -9,7 +9,7 @@
 
 ### [NATIVE-APPLE-AUTH-001] Add native Apple authentication and shell foundations
 
-- **Status**: BLOCKED
+- **Status**: IN_PROGRESS
 - **Started**: 2026-09-07
 - **Priority**: P1
 - **Description**: Docket needs an iOS, iPadOS, and macOS 26 client that signs new and returning
@@ -23,19 +23,44 @@
   and production builds isolate their Keychain accounts. The real `athena-services` Google Cloud
   project now has a Docket iOS OAuth client for `studio.hypertext.docket`, and the native build uses
   that client with the existing production web client as its server audience. Better Auth derives
-  the Apple passkey origin from the production RP ID so the client and server cannot drift.
+  the Apple passkey origin from the production RP ID so the client and server cannot drift. The
+  Apple target uses the web design source's layered `Docket.icon` package, so Xcode 26 compiles the
+  same Liquid Glass artwork for iOS, iPadOS, and macOS instead of using a flattened PWA export.
+- **Domain migration**: `clearthedocket.com` is now the canonical production web origin,
+  `api.clearthedocket.com` is the API origin, and `admin.clearthedocket.com` is the operator
+  origin. The native release configuration uses the new apex as its passkey RP and associated
+  domain. The Docket web app publishes the AASA document directly at the new apex. Vercel owns the
+  apex and `www` aliases on the existing `docket` project, but Cloudflare has not published the
+  required DNS records yet. The old `docket.hypertext.studio` host remains live until the recovery
+  ceremony succeeds on the new RP, after which it will redirect to the new apex.
 - **Validation**: The rebased server packages pass typecheck and lint. Focused validation passes 178
   auth tests, 161 environment tests, 3 identity contract tests, 5 API config tests, and 28 web
   consumer tests. Twenty native auth and HTTP-contract tests pass on macOS and iOS 26.5. Seven UI
   tests pass on both iPhone and iPad. Development and production-mode iOS Simulator and arm64 macOS
   builds pass with two Xcode jobs. The Release app contains the exact Google values returned by the
-  provider console. Light and dark simulator evidence covers iPhone and iPad.
-- **Blocker**: Apple Developer shows `willieechalmers@gmail.com` as a free account and offers
+  provider console. The macOS Release build compiles `Docket.icon` into `Docket.icns` and names it
+  as the app icon in the built bundle. A rendered 256-pixel representation shows the expected blue
+  translucent three-bar mark. Light and dark simulator evidence covers iPhone and iPad.
+- **Domain validation**: Verisign RDAP records the `clearthedocket.com` registration on 2026-09-08
+  and delegates it to `candy.ns.cloudflare.com` and `ricardo.ns.cloudflare.com`. Vercel accepted
+  `clearthedocket.com` and `www.clearthedocket.com` for project `docket` and requires an apex A
+  record to `76.76.21.21`. The AASA artifact and JSON response-header tests pass. The preceding API
+  release run `34263039491` passed every gate before domain work began. The production web build,
+  typecheck, lint, documentation checks, and focused AASA tests pass with the new production
+  origins. Deployment run `34265999967` confirms the current Cloud Run targets as
+  `docket-api-mdchlo736a-uc.a.run.app` and `docket-admin-mdchlo736a-uc.a.run.app`.
+- **Blockers**: Apple Developer shows `willieechalmers@gmail.com` as a free account and offers
   enrollment in the $99/year Apple Developer Program. Xcode refuses to provision Associated
   Domains and Sign in with Apple for team `39AB9DY3K8`. Paid enrollment and Apple's agreements are
   required before Docket can create its App ID, associate a Services ID, obtain signing profiles,
   or run physical-device passkey and Apple credential ceremonies. An agent cannot authorize that
   purchase or accept those agreements for the user.
+  The Hypertext Studio Cloudflare zone needs DNS records for the Vercel web aliases and the Cloud
+  Run API and admin aliases. The local Wrangler login belongs to a different Cloudflare account and
+  lacks DNS write permission. The Hypertext Studio browser session is open, but its automation
+  bridge times out before exposing the zone controls. The passkey RP variable must not change until
+  recovery codes exist because existing `hypertext.studio` passkeys cannot authenticate against
+  `clearthedocket.com`.
 - **Notes**: The original Apple checkout's untracked `Athena/Task.swift` and `README.md` remain
   untouched.
 

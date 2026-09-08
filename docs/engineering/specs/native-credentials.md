@@ -79,10 +79,10 @@ Better Auth plugin (`packages/auth/src/restore-credential.ts`) rather than in th
 3. A challenge records which ceremony it was minted for and, for registration, which person. A
    registration verified with an authentication challenge, or with a challenge issued to a different
    account, is refused.
-4. The relying-party ID is `BETTER_AUTH_PASSKEY_RP_ID` and the accepted origins are exactly
-   `BETTER_AUTH_PASSKEY_NATIVE_ORIGINS` (comma-separated Android APK key-hash origins). An empty
-   allowlist refuses both registration and authentication rather than falling back to the web
-   origin.
+4. The relying-party ID is `BETTER_AUTH_PASSKEY_RP_ID`. Android restore credentials accept only
+   the comma-separated APK key-hash origins in `BETTER_AUTH_PASSKEY_NATIVE_ORIGINS`. Apple platform
+   passkeys use the HTTPS origin derived from the non-local RP ID. An empty Android allowlist never
+   widens Android verification to a web origin.
 5. Resident keys and user verification are required on both sides of the ceremony.
 6. Authentication looks the credential up by its WebAuthn id, verifies against the stored public key
    and counter, then writes the new counter and `last_used_at` before issuing the ordinary Better

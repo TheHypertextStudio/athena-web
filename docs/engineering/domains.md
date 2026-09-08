@@ -1,41 +1,37 @@
-# Domains — where Docket runs, and where it is going
+# Domains — Docket's production host contract
 
-> **Read this first.** §0 is what production answers on **today**. Everything from §1 onwards is
-> the shortlist for a domain that **has not been bought yet**. The two are constantly confused,
-> which is why they now live on one page.
+> **Read this first.** `clearthedocket.com` was registered on 2026-09-08. The migration is active.
+> DNS and authentication cutover remain incomplete, so the old hosts still answer until the
+> recovery ceremony succeeds on the new passkey relying party.
 
 ---
 
-## 0. The production hosts, today
+## 0. The production hosts
 
-Docket runs on the studio apex as an interim home. These are live and serving:
+Docket uses this canonical topology:
 
-| Role              | Host                            | Env var                     |
-| ----------------- | ------------------------------- | --------------------------- |
-| Web app           | `docket.hypertext.studio`       | `WEB_URL`                   |
-| API               | `docket-api.hypertext.studio`   | `API_URL`                   |
-| Admin back-office | `docket-admin.hypertext.studio` | `ADMIN_URL`                 |
-| Passkey RP ID     | `hypertext.studio`              | `BETTER_AUTH_PASSKEY_RP_ID` |
+| Role              | Host                       | Env var                     |
+| ----------------- | -------------------------- | --------------------------- |
+| Web app           | `clearthedocket.com`       | `WEB_URL`                   |
+| API               | `api.clearthedocket.com`   | `API_URL`                   |
+| Admin back-office | `admin.clearthedocket.com` | `ADMIN_URL`                 |
+| Passkey RP ID     | `clearthedocket.com`       | `BETTER_AUTH_PASSKEY_RP_ID` |
 
-Note the shape: three **hyphenated siblings** under one apex, not nested subdomains. That is why
-the session cookie is scoped to `hypertext.studio` — `docket-api` is not a child of `docket`, so a
-cookie set on the app host is invisible to the API without the shared parent.
+The browser reaches auth through the app's same-origin proxy. Better Auth therefore keeps its
+session cookie host-only. The API and admin hosts do not need a shared cross-subdomain cookie.
 
-**The single source of truth is `PUBLIC_ROOT_DOMAIN`, resolved by
-[`packages/env/src/hosts.ts`](../../packages/env/src/hosts.ts).** No hostname is hard-coded in
-production source; every consumer asks that module, and it derives `app` / `api` / `admin` /
-`briefs` from the one apex. Setting the apex moves the whole product. Do not add a literal —
-`packages/env/tests/hosts/legacy-host-policy.test.ts` fails the build on one, which is
-[GEN-25](./domain-cutover.md) enforcing the move off the studio apex.
+`WEB_URL`, `API_URL`, and `ADMIN_URL` are explicit deployment variables. `PUBLIC_ROOT_DOMAIN`
+records the owned apex. `packages/env/tests/hosts/legacy-host-policy.test.ts` rejects old product
+host literals in production source.
 
 Docs are outside that ban, which is why this page may name the hosts and source may not.
 
-### What `docket.app` means in this repo
+### Migration state
 
-A **placeholder for the apex Docket has not bought yet** — not a live host, and not a decision. It
-appears in doc comments and examples because `hosts.ts` derives `api.<apex>` / `admin.<apex>`, the
-shape the product will have _after_ the cutover, which is not the hyphenated shape it has now.
-Where you see it, read `<future-apex>`.
+Vercel owns `clearthedocket.com` and `www.clearthedocket.com` on project `docket`. Cloudflare DNS,
+the Cloud Run aliases, provider callbacks, and the passkey recovery ceremony remain open. The old
+`docket.hypertext.studio` origin must stay usable until that ceremony succeeds. It will then issue
+a permanent redirect to `https://clearthedocket.com`.
 
 The cutover itself — the order of operations, and the passkey-invalidation trap in it — is
 [`domain-cutover.md`](./domain-cutover.md).

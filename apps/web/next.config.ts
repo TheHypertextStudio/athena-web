@@ -150,6 +150,12 @@ const nextConfig: NextConfig = {
       { source: '/:path*', headers: securityHeaders },
       { source: NON_DOCS_ROUTES, headers: cspHeader },
       {
+        // Apple rejects redirects and content sniffing for this extensionless trust document.
+        // Keep it on the canonical Docket origin with an explicit JSON media type.
+        source: '/.well-known/apple-app-site-association',
+        headers: [{ key: 'Content-Type', value: 'application/json' }],
+      },
+      {
         // The worker script itself must never be served stale, or a deployed update can sit
         // unnoticed behind a cached copy for as long as the browser's heuristic freshness lasts —
         // and the update prompt only fires when the browser actually re-fetches these bytes and

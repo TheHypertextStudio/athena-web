@@ -78,13 +78,21 @@ export const DESIGN_TOKEN_RULES: readonly DesignTokenRule[] = [
  * and not a drawn line. Nothing counted them, so nothing could shrink them. Widening the rule and
  * seeding the current count makes it a one-way ratchet like every other rule here.
  *
- * It stays away from `packages/ui/src`, and that is not an oversight. Ratchet rule 4 holds that
- * tree to zero with *no ledger entries permitted at all*, so widening the rule there would demand
- * the borders come out in the same change — and in the primitives a border is frequently the
- * correct answer, being the field's editable affordance (`field.tsx`), a divider that is the
- * component's whole purpose (`separator.tsx`), or a control's outline (`checkbox.tsx`). The rule
- * has no exemption for those, so applying it there would force removals that make the components
- * wrong. Giving the rule that vocabulary is its own piece of work.
+ * It stays away from `packages/ui/src`, and that tree is being driven to zero so it can stop doing
+ * so. Ratchet rule 4 permits no ledger entries there, so the rule can only widen once every border
+ * in the design system is either gone or genuinely earned under §8. Scanning it found 25 files;
+ * removing the ones that were decoration or separation — every overlay's outline, the shell's
+ * dividers, the picker section rules, `EmptyState`'s frame, `AuthLayout`'s card — leaves these:
+ *
+ * - **Earned, and what the exemption has to cover**: `field.tsx` (the editable affordance),
+ *   `checkbox.tsx` and `switch.tsx` (a control's own outline), `button.tsx`, `chip.tsx` and
+ *   `badge.tsx` (MD3's outlined variants, where the line *is* the variant), and `AppShell.tsx`'s
+ *   skip link, which lands over content of its own tone where a tonal step separates nothing.
+ * - **Still undecided**: `EntityTable.tsx`, `entity-table-row.tsx`, `GroupHeader.tsx` and
+ *   `ListRow.tsx` draw row rules, and `EntityList`'s `bordered` tone draws them for lists. §8 puts
+ *   separation outside what earns a border, and a `tonal` alternative already exists for both — but
+ *   `outlined` is the default for all ten tables in the product, so that is a design decision about
+ *   dense tables rather than a cleanup.
  *
  * `raw-radius-utility` deliberately has **no entry here** and so runs on every enforced root,
  * `packages/ui/src` included. Corners have no equivalent of the border rule's three exemptions —
@@ -185,6 +193,18 @@ const STOCK_RADII = 'xs|sm|2xl|3xl|4xl';
 
 /** The corner sides Tailwind allows between `rounded` and its value. */
 const RADIUS_SIDES = 't|r|b|l|tl|tr|br|bl|s|e|ss|se|es|ee';
+
+/**
+ * CSS property names beginning `border-` that are not Tailwind utilities.
+ *
+ * @remarks
+ * These reach the scanner inside arbitrary values and plain style strings, where they name a
+ * property rather than draw anything: `transition-[border-radius]` says a corner animates, and
+ * `box-sizing: border-box` says nothing about a line at all. Without this the rule reads both as
+ * ad-hoc borders. `border-color`, `-width` and `-style` are here for the same reason — Tailwind
+ * spells those `border-<colour>` and `border-<n>`, so the longhand can only be raw CSS.
+ */
+const CSS_BORDER_PROPERTIES = 'radius|box|color|width|style|image';
 
 /**
  * Geometry-affecting utility prefixes that must never appear behind an interaction variant.
@@ -334,6 +354,9 @@ const RULE_PATTERNS: readonly {
     //   Exempting the *property* rather than a list of spellings is what keeps `border-0` and
     //   `border-x-0` from disagreeing.
     // - `border-collapse`, `border-separate`, `border-spacing-*` — table layout, not a border.
+    // - the CSS *property* names, which are not utilities at all and reach the scanner inside
+    //   arbitrary values: `transition-[border-radius]` in `menu-styles.ts` was read as a drawn
+    //   border, and `box-sizing: border-box` in any style string would be too.
     // - a border behind a *focus* variant, because design-system §8 names a focus indicator as one
     //   of the three things that earns one. Deliberately not the whole interaction set the geometry
     //   rule uses: a border that appears on hover is decoration, and decoration is what this bans.
@@ -341,6 +364,7 @@ const RULE_PATTERNS: readonly {
       String.raw`(?<![\w-])(?<!(?:(?:group-|peer-)?(?:${BORDER_FOCUS_VARIANTS})):)border` +
         String.raw`(?:-(?!(?:${BORDER_SIDES}-)?(?:0|transparent|none)(?![\w-])` +
         String.raw`|collapse(?![\w-])|separate(?![\w-])` +
+        String.raw`|(?:${CSS_BORDER_PROPERTIES})(?![\w-])` +
         String.raw`|spacing(?:-[\w.[\]/-]+)?(?![\w-]))[\w.[\]/-]+)?(?![\w-])`,
       'g',
     ),

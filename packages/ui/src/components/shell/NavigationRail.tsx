@@ -234,10 +234,7 @@ export function NavigationRail({
         </nav>
 
         {recentDocuments.length > 0 ? (
-          <nav
-            aria-label="Recent"
-            className="border-outline-variant mx-2 mt-2 flex flex-col items-center gap-1 border-t pt-2"
-          >
+          <nav aria-label="Recent" className="mx-2 mt-2 flex flex-col items-center gap-1 pt-2">
             {recentDocuments.slice(0, 3).map((document) => {
               const Icon = TYPE_ICON[document.type];
               const renderedIdentity = renderRecentDocumentIcon?.(document);

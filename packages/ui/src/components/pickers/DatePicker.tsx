@@ -103,7 +103,7 @@ function PickerFooter({
   readonly todayDisabled: boolean;
 }): React.JSX.Element {
   return (
-    <ControlGroup controlSize="sm" className="border-outline-variant justify-between border-t pt-2">
+    <ControlGroup controlSize="sm" className="justify-between pt-2">
       <Button type="button" variant="ghost" disabled={todayDisabled} onClick={onToday}>
         Today
       </Button>

@@ -37,7 +37,7 @@ export function ShellTopBar({
       shape="none"
       data-slot="shell-top-bar"
       className={cn(
-        'border-outline-variant flex min-h-12 shrink-0 items-center gap-2 border-b px-2 pt-[env(safe-area-inset-top)]',
+        'flex min-h-12 shrink-0 items-center gap-2 px-2 pt-[env(safe-area-inset-top)]',
         className,
       )}
     >

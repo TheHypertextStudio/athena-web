@@ -101,7 +101,7 @@ export function HoverCardContent({
         collisionPadding={collisionPadding}
         data-surface-tone="floating"
         className={cn(
-          'bg-surface-container-high text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 shadow-level2 z-[120] max-w-[calc(100vw-1.5rem)] origin-[var(--radix-hover-card-content-transform-origin)] rounded-lg border outline-none',
+          'bg-surface-container-high text-on-surface data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 shadow-level2 z-[120] max-w-[calc(100vw-1.5rem)] origin-[var(--radix-hover-card-content-transform-origin)] rounded-lg outline-none',
           HOVER_CARD_WIDTH[width],
           hoverCardInset(inset),
         )}

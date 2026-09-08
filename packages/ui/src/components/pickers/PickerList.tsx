@@ -361,7 +361,7 @@ export function PickerList<TValue extends string = string>({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {searchable ? (
-        <div className="border-outline-variant flex items-center gap-3 border-b px-4 py-2">
+        <div className="flex items-center gap-3 px-4 py-2">
           <Search aria-hidden="true" className="text-on-surface-variant size-5 shrink-0" />
           <input
             // A bare input (not the boxed Input primitive) so the search field reads as part

@@ -138,7 +138,10 @@ export function EmptyState({
     <div
       className={cn(
         'flex flex-col items-center gap-3 p-8 text-center',
-        frame === 'panel' && 'border-outline-variant bg-surface-container-low/60 rounded-xl border',
+        // A tonal step, not a drawn line. §8 keeps borders to a field's affordance, a focus
+        // indicator, and a boundary between things that are not contained by one another; framing
+        // a region is none of those, and the ramp exists to do exactly this without a hairline.
+        frame === 'panel' && 'bg-surface-container-low/60 rounded-xl',
         className,
       )}
     >

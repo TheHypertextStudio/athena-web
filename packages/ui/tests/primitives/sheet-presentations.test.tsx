@@ -46,11 +46,7 @@ describe('Sheet presentations', () => {
       </Sheet>,
     );
 
-    expect(screen.getByRole('dialog', { name: 'Inspect event' })).toHaveClass(
-      'sm:right-0',
-      'sm:border-l',
-      'w-96',
-    );
+    expect(screen.getByRole('dialog', { name: 'Inspect event' })).toHaveClass('sm:right-0', 'w-96');
   });
 
   // Each side's anchor has to be a complete class name in the source, because that is the only
@@ -58,16 +54,11 @@ describe('Sheet presentations', () => {
   // an anchor assembled from a variable still renders this exact attribute and still matches
   // nothing, so a test that only reads the class list cannot tell the two apart on its own.
   it.each([
-    { side: 'left' as const, anchor: 'sm:left-0', release: 'sm:right-auto', border: 'sm:border-r' },
-    {
-      side: 'right' as const,
-      anchor: 'sm:right-0',
-      release: 'sm:left-auto',
-      border: 'sm:border-l',
-    },
+    { side: 'left' as const, anchor: 'sm:left-0', release: 'sm:right-auto' },
+    { side: 'right' as const, anchor: 'sm:right-0', release: 'sm:left-auto' },
   ])(
     'anchors a responsive fullscreen sheet to its $side edge on desktop',
-    ({ side, anchor, release, border }) => {
+    ({ side, anchor, release }) => {
       render(
         <Sheet defaultOpen>
           <SheetContent presentation="responsive-fullscreen" side={side} size="navigation">
@@ -80,9 +71,10 @@ describe('Sheet presentations', () => {
       const sheet = screen.getByRole('dialog', { name: 'Navigate' });
       // The phone layout still fills the screen.
       expect(sheet).toHaveClass('inset-0', 'h-[100dvh]');
-      // On desktop it pins to its own edge, releases the opposite one that `inset-0` pinned,
-      // and carries the border that faces the page.
-      expect(sheet).toHaveClass(anchor, release, border, 'sm:w-auto', 'w-72');
+      // On desktop it pins to its own edge and releases the opposite one that `inset-0` pinned.
+      // No border faces the page: the sheet is an overlay, so its `shadow-level1` and its tonal
+      // fill do that separating, the way every other overlay in the system does it.
+      expect(sheet).toHaveClass(anchor, release, 'sm:w-auto', 'w-72');
     },
   );
 });

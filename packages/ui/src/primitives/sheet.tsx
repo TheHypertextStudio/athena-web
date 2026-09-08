@@ -93,9 +93,9 @@ export type SheetSide = 'left' | 'right';
 
 /** The edge-anchored geometry + slide-in motion for each {@link SheetSide}. */
 const SIDE_CLASS: Record<SheetSide, string> = {
-  left: 'inset-y-0 left-0 h-full data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left border-r',
+  left: 'inset-y-0 left-0 h-full data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left',
   right:
-    'inset-y-0 right-0 h-full data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right border-l',
+    'inset-y-0 right-0 h-full data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right',
 };
 
 const SHEET_SIZE: Readonly<Record<SheetSize, string>> = {
@@ -114,8 +114,8 @@ const SHEET_SIZE: Readonly<Record<SheetSize, string>> = {
  * edge — and it looked correct in both the markup and any test that reads the class list.
  */
 const SIDE_ANCHOR_SM: Readonly<Record<SheetSide, string>> = {
-  left: 'sm:right-auto sm:left-0 sm:border-r',
-  right: 'sm:left-auto sm:right-0 sm:border-l',
+  left: 'sm:right-auto sm:left-0',
+  right: 'sm:left-auto sm:right-0',
 };
 
 function sheetPresentationClass(
@@ -165,7 +165,7 @@ export function SheetContent({
       <SheetOverlay />
       <DialogPrimitive.Content
         className={cn(
-          'bg-surface-container-high text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out shadow-level1 fixed z-[100] flex min-h-0 flex-col gap-0 overflow-hidden overscroll-contain p-0 ease-(--ease-out) outline-none data-[state=closed]:duration-(--dur-base) data-[state=open]:duration-(--dur-slow)',
+          'bg-surface-container-high text-on-surface data-[state=open]:animate-in data-[state=closed]:animate-out shadow-level1 fixed z-[100] flex min-h-0 flex-col gap-0 overflow-hidden overscroll-contain p-0 ease-(--ease-out) outline-none data-[state=closed]:duration-(--dur-base) data-[state=open]:duration-(--dur-slow)',
           focusRing,
           sheetPresentationClass(presentation, side, size),
           className,

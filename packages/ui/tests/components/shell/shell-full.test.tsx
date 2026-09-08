@@ -522,7 +522,6 @@ describe('AppShell rail', () => {
     );
     expect(within(overlay).getByTestId('shell-utility-pane-bar')).toHaveClass(
       'min-h-12',
-      'border-b',
       'pt-[env(safe-area-inset-top)]',
     );
     expect(within(overlay).getByRole('button', { name: 'Close Tasks' })).toHaveClass('size-10');

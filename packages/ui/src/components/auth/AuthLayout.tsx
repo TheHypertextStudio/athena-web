@@ -72,9 +72,11 @@ export function AuthLayout({
             'flex min-h-dvh w-full flex-col justify-center gap-6 px-5 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]',
             // A floor height rather than hugging the content, which made the card a squat
             // letterbox on a desktop viewport once the two columns halved its height.
-            // No shadow: this card is a resting surface, and the `page` tone already steps off the
-            // `canvas` <main> behind it (§8 — the ramp separates regions, not a drop shadow).
-            'border-outline-variant @md:min-h-80 @md:max-w-md @md:rounded-xl @md:border @md:p-6',
+            // No shadow and no border: this card is a resting surface, and the `page` tone already
+            // steps off the `canvas` <main> behind it (§8 — the ramp separates regions, not a drop
+            // shadow and not a hairline). The border this used to carry was drawing the same
+            // boundary the tonal step had already drawn.
+            '@md:min-h-80 @md:max-w-md @md:rounded-xl @md:p-6',
             '@3xl:min-h-96 @3xl:max-w-3xl @3xl:p-10',
             className,
           )}

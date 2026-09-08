@@ -220,7 +220,7 @@ export function TimeframePicker({
             })}
           </div>
 
-          <div className="border-outline-variant border-t pt-2">
+          <div className="pt-2">
             {mode === 'day' ? (
               <CalendarGrid
                 value={value?.date ?? null}
@@ -300,7 +300,7 @@ export function TimeframePicker({
           </div>
 
           {value ? (
-            <div className="border-outline-variant flex justify-end border-t pt-2">
+            <div className="flex justify-end pt-2">
               <Button
                 type="button"
                 variant="ghost"

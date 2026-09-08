@@ -747,7 +747,7 @@ export function AppShell({
             {!isDesktop && activePanel ? (
               <div
                 data-testid="shell-utility-pane-bar"
-                className="border-outline-variant flex min-h-12 shrink-0 items-center border-b px-2 pt-[env(safe-area-inset-top)]"
+                className="flex min-h-12 shrink-0 items-center px-2 pt-[env(safe-area-inset-top)]"
               >
                 <div className="min-w-0 flex-1">
                   <MobilePanelSwitcher

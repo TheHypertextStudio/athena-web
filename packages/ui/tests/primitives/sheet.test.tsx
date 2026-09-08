@@ -81,7 +81,7 @@ describe('Sheet family', () => {
     // Left-anchored geometry and the shared floating panel treatment make the drawer distinct
     // from the page that remains behind the scrim.
     expect(sheet).toHaveAttribute('data-surface-tone', 'floating');
-    expect(sheet).toHaveClass('left-0', 'inset-y-0', 'border-r');
+    expect(sheet).toHaveClass('left-0', 'inset-y-0');
   });
 
   it('anchors to the right edge when side="right"', async () => {
@@ -94,7 +94,7 @@ describe('Sheet family', () => {
       </Sheet>,
     );
     const sheet = await screen.findByRole('dialog');
-    expect(sheet).toHaveClass('right-0', 'border-l');
+    expect(sheet).toHaveClass('right-0');
     expect(sheet).not.toHaveClass('left-0');
   });
 

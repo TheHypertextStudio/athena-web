@@ -170,7 +170,7 @@ function dialogPresentationClass(presentation: DialogPresentation): string {
   if (presentation.kind === 'bottom-sheet')
     return `inset-x-0 bottom-0 ${height} w-full rounded-t-xl border-x-0 border-b-0`;
   if (presentation.kind === 'responsive-fullscreen')
-    return `inset-0 h-[100dvh] w-[100vw] rounded-none border-0 sm:top-1/2 sm:left-1/2 sm:w-[calc(100%-1.5rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl sm:border ${size} ${DIALOG_HEIGHT_SM[presentation.height ?? 'content']}`;
+    return `inset-0 h-[100dvh] w-[100vw] rounded-none border-0 sm:top-1/2 sm:left-1/2 sm:w-[calc(100%-1.5rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl ${size} ${DIALOG_HEIGHT_SM[presentation.height ?? 'content']}`;
   if (presentation.kind === 'top')
     return `top-3 left-1/2 w-[calc(100%-1.5rem)] -translate-x-1/2 ${size} ${height}`;
   if (presentation.kind === 'hosted') return `${size} ${height}`;
@@ -236,7 +236,7 @@ export function DialogContent({
           // `w-[calc(100%-2rem)]` keeps a 1rem gutter on each side at small viewports so the
           // panel never bleeds to the window edge; `max-w-lg` caps it once the screen is wide
           // enough that the calc would exceed it (the narrower per-dialog `max-w-md` still wins).
-          'bg-surface-container-high text-on-surface data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-[0.98] data-[state=open]:zoom-in-[0.98] shadow-level3 border-outline-variant z-[110] flex min-h-0 flex-col gap-0 overflow-hidden overscroll-contain rounded-xl border p-0 duration-(--dur-slow) ease-(--ease-out) outline-none',
+          'bg-surface-container-high text-on-surface data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-[0.98] data-[state=open]:zoom-in-[0.98] shadow-level3 z-[110] flex min-h-0 flex-col gap-0 overflow-hidden overscroll-contain rounded-xl p-0 duration-(--dur-slow) ease-(--ease-out) outline-none',
           hostedDialogInteractivityClass(hosted),
           presentationClass ??
             'top-1/2 left-1/2 max-h-[85vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 p-6',

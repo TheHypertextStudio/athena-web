@@ -17,8 +17,8 @@ import {
 } from '../../scripts/docs-live-verify';
 import { checkDocs, DOCS_CHECK_NAMES } from '../../scripts/production-verify';
 
-const APP = 'https://docket.hypertext.studio';
-const API = 'https://docket-api.hypertext.studio';
+const APP = 'https://clearthedocket.com';
+const API = 'https://api.clearthedocket.com';
 
 function response(body: string, init: ResponseInit, url: string): Response {
   const value = new Response(body, init);

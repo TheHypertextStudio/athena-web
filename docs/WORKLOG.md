@@ -25,7 +25,9 @@
   that client with the existing production web client as its server audience. Better Auth derives
   the Apple passkey origin from the production RP ID so the client and server cannot drift. The
   Apple target uses the web design source's layered `Docket.icon` package, so Xcode 26 compiles the
-  same Liquid Glass artwork for iOS, iPadOS, and macOS instead of using a flattened PWA export.
+  same Liquid Glass artwork for iOS, iPadOS, and macOS instead of using a flattened PWA export. The
+  production Google web client retains the legacy origin and callback while also accepting the new
+  apex callback and the canonical API-host callback required after `API_URL` moves.
 - **Domain migration**: `clearthedocket.com` is now the canonical production web origin,
   `api.clearthedocket.com` is the API origin, and `admin.clearthedocket.com` is the operator
   origin. The native release configuration uses the new apex as its passkey RP and associated
@@ -33,9 +35,13 @@
   apex and `www` aliases on the existing `docket` project. Cloudflare publishes both Vercel
   records. Google Search Console verifies the apex, and Cloud Run maps `api.clearthedocket.com` to
   `docket-api` and `admin.clearthedocket.com` to `docket-admin`. Both Cloud Run aliases now use the
-  required DNS-only CNAME to `ghs.googlehosted.com`; Google is issuing their certificates. The old
-  `docket.hypertext.studio` host remains live until the recovery ceremony succeeds on the new RP,
-  after which it will redirect to the new apex.
+  required DNS-only CNAME to `ghs.googlehosted.com`, and both aliases now serve verified TLS. Vercel
+  owns `briefs.clearthedocket.com` on the `docket` project, and Cloudflare publishes its required
+  DNS-only CNAME to `2a70dcb5fd25748c.vercel-dns-017.com`. Vercel issued a valid certificate for
+  that host. The publishing app still leaves root requests open on both the old and new publishing
+  hosts, so that application defect is independent of the DNS and certificate cutover.
+  The old `docket.hypertext.studio` host remains live until the recovery ceremony succeeds on the
+  new RP, after which it will redirect to the new apex.
 - **Validation**: The rebased server packages pass typecheck and lint. Focused validation passes 178
   auth tests, 161 environment tests, 3 identity contract tests, 5 API config tests, and 28 web
   consumer tests. Twenty native auth and HTTP-contract tests pass on macOS and iOS 26.5. Seven UI
@@ -44,6 +50,20 @@
   provider console. The macOS Release build compiles `Docket.icon` into `Docket.icns` and names it
   as the app icon in the built bundle. A rendered 256-pixel representation shows the expected blue
   translucent three-bar mark. Light and dark simulator evidence covers iPhone and iPad.
+  `scripts/build-environment.sh staging` also produces a Release-optimized macOS app when given an
+  explicit staging API URL. Inspection of that built app confirms the `staging` environment, the
+  supplied API origin, the production WebAuthn origin, and both real Google client identifiers.
+  CI run `34284054508` passes the full graph at `df38c5307e`, including API and web coverage, the
+  production build, and core-screen acceptance. Vercel rebuilt that SHA after the production web
+  variables changed and aliased the result to `https://clearthedocket.com`. Deploy run
+  `34285861522` attempt 2 deployed the same validated SHA after the GitHub production variables
+  changed. Its API, admin, and scheduler jobs pass; its final documentation job was cancelled. The
+  canonical API health, admin home, and apex now return HTTP 200. Live config points MCP at
+  `https://api.clearthedocket.com/mcp`, keeps the passkey RP at `hypertext.studio`, and keeps Apple
+  and Google hidden behind their existing release gates. The production verifier now probes the
+  canonical web and API hosts. Its focused 12-test suite and a live `pnpm launch:verify-docs` run
+  pass. The live run settles on its first attempt and passes all app, documentation, API, OAuth,
+  MCP, and immutable-asset checks.
 - **Domain validation**: Verisign RDAP records the `clearthedocket.com` registration on 2026-09-08
   and delegates it to `candy.ns.cloudflare.com` and `ricardo.ns.cloudflare.com`. Vercel accepted
   `clearthedocket.com` and `www.clearthedocket.com` for project `docket` and requires an apex A
@@ -53,17 +73,20 @@
   `ghs.googlehosted.com` for the API and admin CNAMEs. CI run `34277685985` and production deploy
   run `34279696697` pass at commit `4a808e60f`. The production Better Auth host allowlist contains
   the old and new web, API, and admin hosts so the additive cutover can proceed without taking down
-  the current service.
-- **Blockers**: Apple Developer shows `willieechalmers@gmail.com` as a free account and offers
+  the current service. Google OAuth client
+  `770668668034-ur7mk3bikrbdkvaomkjrruhkgmkp99vl.apps.googleusercontent.com` now persists
+  `https://clearthedocket.com` as a JavaScript origin plus callbacks on both
+  `https://clearthedocket.com` and `https://api.clearthedocket.com`; the legacy entries remain.
+- **Blockers**: The account holder must generate and save ten recovery codes through a fresh
+  passkey ceremony on `docket.hypertext.studio` before production can change its passkey RP ID.
+  The account holder must then consume one code at `https://clearthedocket.com/recover` and create
+  the first `clearthedocket.com` passkey on real hardware. Apple Developer shows
+  `willieechalmers@gmail.com` as a free account and offers
   enrollment in the $99/year Apple Developer Program. Xcode refuses to provision Associated
   Domains and Sign in with Apple for team `39AB9DY3K8`. Paid enrollment and Apple's agreements are
   required before Docket can create its App ID, associate a Services ID, obtain signing profiles,
   or run physical-device passkey and Apple credential ceremonies. An agent cannot authorize that
   purchase or accept those agreements for the user.
-  Google is still issuing certificates for the new Cloud Run mappings, so the API and admin hosts
-  do not yet accept TLS. The Google web OAuth client still needs the new web origin and callback.
-  The passkey RP variable must not change until recovery codes exist because existing
-  `hypertext.studio` passkeys cannot authenticate against `clearthedocket.com`.
 - **Notes**: The original Apple checkout's untracked `Athena/Task.swift` and `README.md` remain
   untouched.
 

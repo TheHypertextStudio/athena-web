@@ -15,8 +15,8 @@ function requestUrl(input: string | URL | Request): string {
 
 describe('production verification', () => {
   it('checks the primary app, docs, API contract, auth metadata, and immutable assets', async () => {
-    const app = 'https://docket.hypertext.studio';
-    const api = 'https://docket-api.hypertext.studio';
+    const app = 'https://clearthedocket.com';
+    const api = 'https://api.clearthedocket.com';
     const fetcher = vi.fn(async (input: string | URL | Request) => {
       const url = requestUrl(input);
       const responses: Record<string, Response> = {

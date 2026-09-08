@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-const APP_ORIGIN = 'https://docket.hypertext.studio';
-const API_ORIGIN = 'https://docket-api.hypertext.studio';
+const APP_ORIGIN = 'https://clearthedocket.com';
+const API_ORIGIN = 'https://api.clearthedocket.com';
 
 /** Fetch implementation a verification pass reads production through. */
 export type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;

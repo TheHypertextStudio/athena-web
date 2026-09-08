@@ -61,9 +61,13 @@ export function SkeletonText({
   ...props
 }: SkeletonTextProps): React.JSX.Element {
   // placeholder: one line of text the caller names in its own annotation.
-  // `rounded-lg` rather than a bare `rounded`: `--radius` is 0.625rem, so `rounded-lg` resolves to
-  // the identical 10px while naming a step the scale owns.
-  return <Skeleton className={cn(TEXT_SCALE_HEIGHT[scale], 'rounded-lg', className)} {...props} />;
+  // `corner-xs`, not `rounded-lg`. Tailwind v4's bare `rounded` is a static 0.25rem utility rather
+  // than a step derived from `--radius`, so the two are 4px and 10px — a 10px corner on a 16px
+  // text placeholder is nearly a stadium, and stops it reading as the line of text it stands for.
+  // `corner-xs` is 4px exactly, so this keeps the shape and only changes the name.
+  return (
+    <Skeleton className={cn(TEXT_SCALE_HEIGHT[scale], 'rounded-corner-xs', className)} {...props} />
+  );
 }
 
 /**

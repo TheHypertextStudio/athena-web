@@ -69,7 +69,9 @@ function badgeText(count: number): string {
 /** A small trailing attention pill, hidden from the a11y tree (the name carries the count). */
 function NavBadge({ count }: { readonly count: number }): React.JSX.Element {
   return (
-    <Badge aria-hidden="true" variant="secondary" className="ml-auto">
+    // `min-w-5` keeps a single digit circular on a `rounded-full` shape. `Badge`'s own `px-2` sets
+    // width from content, which reads as an oval at one character.
+    <Badge aria-hidden="true" variant="secondary" className="ml-auto min-w-5 px-1.5">
       {badgeText(count)}
     </Badge>
   );

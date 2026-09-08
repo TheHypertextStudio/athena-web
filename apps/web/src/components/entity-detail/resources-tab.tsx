@@ -308,10 +308,14 @@ export function ResourcesTab({
           })}
         </ul>
       ) : hasDerived ? null : (
+        // `frame="none"`: the panel frame draws a hairline, and §8 keeps a border to the three
+        // things that earn one. The section's heading and its "Add resource" button already bound
+        // this region, so the atom supplies the treatment without a line around it.
         <EmptyState
           icon={LinkIcon}
           title="No linked resources yet"
           body="Attach a file, a link, or a document so the work and the material it depends on sit together."
+          frame="none"
         />
       )}
       {canEdit && onUpload ? (

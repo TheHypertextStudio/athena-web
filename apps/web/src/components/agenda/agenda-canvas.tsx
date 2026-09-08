@@ -395,7 +395,17 @@ function TimelineArrangement({
           }}
         />
       )}
-      <AgendaEmptyStatus loading={loading} itemCount={lane.items.length} error={error} />
+      {/* Only alongside the canvas, and only when nothing else is speaking. The create host
+          replaces the timeline outright, so there is no empty grid to describe; and an inline
+          update failure is announced by the notice's own `role="alert"`, which this would
+          contradict by saying the day is empty at the same moment. */}
+      {mobileCreateActive ? null : (
+        <AgendaEmptyStatus
+          loading={loading}
+          itemCount={lane.items.length}
+          error={hasInlineUpdateFailure ? INLINE_UPDATE_FAILURE_COPY : error}
+        />
+      )}
       {workLocationComposition?.overlays}
       <CreateBlockForm
         presentation="agenda"

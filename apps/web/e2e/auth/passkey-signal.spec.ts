@@ -15,10 +15,9 @@ import { apiFetch, apiJson, waitForApiResponse } from '../helpers/net';
 import { installSignalSpy } from '../helpers/webauthn';
 import { assertDefined } from '@docket/test-utils';
 
-/** The passkey rows returned by `/api/auth/passkey/list-user-passkeys`. */
+/** Safe passkey summary returned by `/v1/me/passkeys`. */
 interface PasskeyRow {
   id: string;
-  credentialID: string;
 }
 
 test.describe('passkey signal', () => {
@@ -27,26 +26,29 @@ test.describe('passkey signal', () => {
     await signUp(page, newUser('PasskeySignal'));
 
     // Deleting a user's only passkey is blocked server-side unless another recovery path exists
-    // (see the `/passkey/delete-passkey` guard in `packages/auth`) — generate recovery codes so
+    // (see the typed passkey deletion guard) — generate recovery codes so
     // this test's deletion represents a real, allowed account state rather than a lockout attempt.
     // The just-completed sign-up ceremony leaves the session fresh enough for this step-up route.
     const codes = await apiFetch(page, '/v1/me/recovery-codes', { method: 'POST' });
     expect(codes.status, 'recovery-code generation should succeed').toBe(200);
 
     // 2. Capture the registered credential, then delete the passkey server-side.
-    const before = await apiJson<PasskeyRow[]>(page, '/api/auth/passkey/list-user-passkeys');
-    expect(before.length, 'expected a registered passkey').toBeGreaterThan(0);
-    const { id: passkeyRowId, credentialID: credentialId } = assertDefined(before[0]);
-    expect(credentialId, 'passkey row missing credentialID').toBeTruthy();
+    const before = await apiJson<{ items: PasskeyRow[] }>(page, '/v1/me/passkeys');
+    expect(before.items.length, 'expected a registered passkey').toBeGreaterThan(0);
+    const { id: passkeyRowId } = assertDefined(before.items[0]);
 
-    const del = await apiFetch(page, '/api/auth/passkey/delete-passkey', {
-      method: 'POST',
-      body: { id: passkeyRowId },
-    });
-    expect(del.status, 'delete-passkey should succeed').toBeGreaterThanOrEqual(200);
-    expect(del.status).toBeLessThan(300);
+    const del = await apiJson<{ status: true; credentialId: string }>(
+      page,
+      `/v1/me/passkeys/${passkeyRowId}`,
+      {
+        method: 'DELETE',
+      },
+    );
+    expect(del.status, 'delete-passkey should succeed').toBe(true);
+    const { credentialId } = del;
+    expect(credentialId, 'deletion response missing credentialId').toBeTruthy();
     expect(
-      await apiJson<PasskeyRow[]>(page, '/api/auth/passkey/list-user-passkeys'),
+      (await apiJson<{ items: PasskeyRow[] }>(page, '/v1/me/passkeys')).items,
       'passkey was not deleted server-side',
     ).toHaveLength(0);
 

@@ -38,7 +38,7 @@ import { and, eq, inArray, ne } from 'drizzle-orm';
 import { generateAppleClientSecret, type AppleClientSecretInput } from './apple-secret';
 import type { GoogleDirectoryPort } from './google-directory';
 import { syncStaffOnSignIn } from './staff-google-sync';
-import { hasRecoveryCodes } from './backup-codes';
+import { getRecoveryCodeStatus } from './backup-codes';
 import { changeEmailConfirmationEmail, recoveryCodeUsedEmail } from './emails';
 import { derivePasskeyLabel } from './passkey-label';
 import { recoveryChallenge } from './recovery-challenge';
@@ -457,19 +457,26 @@ const CONNECTORS_BY_IDENTITY: Readonly<Record<string, readonly string[]>> = {
 export const LAST_PASSKEY_MESSAGE =
   'Add a recovery code or a linked sign-in provider before removing your last passkey.';
 
-/** Whether removing one passkey leaves another supported account-recovery path. */
-export async function canRemovePasskey(userId: string): Promise<boolean> {
-  const remaining = await db
+/**
+ * Whether removing one passkey leaves another supported account-recovery path.
+ * @param userId - The owner whose remaining methods are checked.
+ * @param database - The transaction holding the owner's credential-change lock, when mutating.
+ */
+export async function canRemovePasskey(
+  userId: string,
+  database: Pick<typeof db, 'select'> = db,
+): Promise<boolean> {
+  const remaining = await database
     .select({ id: passkeyTable.id })
     .from(passkeyTable)
     .where(eq(passkeyTable.userId, userId))
     .limit(2);
   if (remaining.length > 1) return true;
-  const [hasCodes, linkedAccounts] = await Promise.all([
-    hasRecoveryCodes(userId),
-    db.select({ id: account.id }).from(account).where(eq(account.userId, userId)).limit(1),
+  const [codes, linkedAccounts] = await Promise.all([
+    getRecoveryCodeStatus(userId, database),
+    database.select({ id: account.id }).from(account).where(eq(account.userId, userId)).limit(1),
   ]);
-  return hasCodes || linkedAccounts.length > 0;
+  return (codes?.remaining ?? 0) > 0 || linkedAccounts.length > 0;
 }
 
 /**
@@ -817,7 +824,12 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
     // Identity removal is owned by Docket's `/v1/me/identities/:provider/:accountId` route so
     // dependent connector checks and the passkey lockout guard cannot be bypassed through the
     // framework's generic endpoint.
-    disabledPaths: ['/unlink-account'],
+    disabledPaths: [
+      '/unlink-account',
+      '/passkey/list-user-passkeys',
+      '/passkey/update-passkey',
+      '/passkey/delete-passkey',
+    ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
         if (ctx.path === '/sign-out') {
@@ -834,15 +846,6 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
               code: 'session_owner_changed',
               message: 'The active account changed before sign-out completed.',
             });
-          }
-          return;
-        }
-        if (ctx.path === '/passkey/delete-passkey') {
-          const currentSession = await getSessionFromCtx(ctx);
-          if (!currentSession) return;
-          const userId = currentSession.user.id;
-          if (!(await canRemovePasskey(userId))) {
-            throw new APIError('FORBIDDEN', { message: LAST_PASSKEY_MESSAGE });
           }
           return;
         }

@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { assertDefined } from '@docket/test-utils';
 import { betterAuth } from 'better-auth';
 import { migrate } from 'drizzle-orm/pglite/migrator';
+import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { Mailer } from '@docket/mail';
@@ -41,8 +42,13 @@ function harness(
   authEnv: AuthEnv,
   restoreWebAuthn: RestoreWebAuthn,
   restoreDatabase?: RestoreDatabase,
+  rateLimitEnabled = false,
 ): RequestFn {
-  const auth = betterAuth(buildAuthOptions(authEnv, { mailer, restoreWebAuthn, restoreDatabase }));
+  const options = buildAuthOptions(authEnv, { mailer, restoreWebAuthn, restoreDatabase });
+  const auth = betterAuth({
+    ...options,
+    rateLimit: { ...options.rateLimit, enabled: rateLimitEnabled },
+  });
   return (path, init = {}) => {
     const headers = new Headers(init.headers);
     headers.set('origin', ORIGIN);
@@ -83,7 +89,79 @@ beforeAll(async () => {
   });
 });
 
+/** Store one restore credential for a fresh account. */
+async function seedCredential(credentialID: string): Promise<void> {
+  const { db, restoreCredential, user } = await import('@docket/db');
+  const [owner] = await db
+    .insert(user)
+    .values({ name: 'Guard owner', email: `guard-${Math.random()}@example.com` })
+    .returning();
+  await db.insert(restoreCredential).values({
+    userId: assertDefined(owner).id,
+    credentialID,
+    publicKey: Buffer.from('public-key').toString('base64url'),
+    counter: 0,
+    deviceType: 'multiDevice',
+    backedUp: true,
+  });
+}
+
 describe('restore credential plugin', () => {
+  it.each(['challenge', 'verification', 'database'] as const)(
+    'does not expose or log sensitive %s failures',
+    async (stage) => {
+      const { db } = await import('@docket/db');
+      const credentialID = `sensitive-${stage}`;
+      await seedCredential(credentialID);
+      const sensitive = 'private-credential-payload-sentinel';
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const warnings = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const logs = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      try {
+        const fail = async (): Promise<never> => {
+          throw new Error(sensitive);
+        };
+        const request = harness(
+          env,
+          acceptingWebAuthn({
+            ...(stage === 'challenge' ? { generateAuthenticationOptions: fail } : {}),
+            ...(stage === 'verification' ? { verifyAuthenticationResponse: fail } : {}),
+          }),
+          stage === 'database'
+            ? {
+                insert: db.insert.bind(db),
+                update: db.update.bind(db),
+                delete: db.delete.bind(db),
+                select: () => {
+                  throw new Error(sensitive);
+                },
+              }
+            : undefined,
+        );
+        const challenge = await request('/restore-credential/generate-authenticate-options');
+        const response =
+          stage === 'challenge'
+            ? challenge
+            : await request(
+                '/restore-credential/verify-authentication',
+                json(responseCookies(challenge), { id: credentialID }),
+              );
+        expect(response.status).toBe(500);
+        expect(responseCookies(response)).not.toContain('session_token');
+        expect(await response.text()).not.toContain(sensitive);
+        const output = [...errors.mock.calls, ...warnings.mock.calls, ...logs.mock.calls]
+          .flat()
+          .map(String)
+          .join('\n');
+        expect(output).not.toContain(sensitive);
+      } finally {
+        errors.mockRestore();
+        warnings.mockRestore();
+        logs.mockRestore();
+      }
+    },
+  );
+
   it('consumes challenges once, advances the counter, and issues a session', async () => {
     const { db, restoreCredential, user } = await import('@docket/db');
     const [owner] = await db
@@ -138,7 +216,8 @@ describe('restore credential plugin', () => {
 
     const [updated] = await db
       .select({ counter: restoreCredential.counter, lastUsedAt: restoreCredential.lastUsedAt })
-      .from(restoreCredential);
+      .from(restoreCredential)
+      .where(eq(restoreCredential.id, assertDefined(stored).id));
     expect(updated).toMatchObject({ counter: 4 });
     expect(updated?.lastUsedAt).toBeInstanceOf(Date);
 
@@ -184,22 +263,130 @@ describe('restore credential plugin', () => {
 });
 
 describe('restore credential plugin guards', () => {
-  /** Store one restore credential for a fresh account. */
-  async function seedCredential(credentialID: string): Promise<void> {
-    const { db, restoreCredential, user } = await import('@docket/db');
-    const [owner] = await db
-      .insert(user)
-      .values({ name: 'Guard owner', email: `guard-${Math.random()}@example.com` })
-      .returning();
-    await db.insert(restoreCredential).values({
-      userId: assertDefined(owner).id,
-      credentialID,
-      publicKey: Buffer.from('public-key').toString('base64url'),
-      counter: 0,
-      deviceType: 'multiDevice',
-      backedUp: true,
-    });
-  }
+  it('rejects an expired authentication challenge without issuing a session', async () => {
+    await seedCredential('expired-challenge');
+    const request = harness(env, acceptingWebAuthn());
+    const challenge = await request('/restore-credential/generate-authenticate-options');
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 5 * 60 * 1000 + 1 });
+    try {
+      const response = await request(
+        '/restore-credential/verify-authentication',
+        json(responseCookies(challenge), { id: 'expired-challenge' }),
+      );
+      expect(response.status).toBe(400);
+      expect(responseCookies(response)).not.toContain('session_token');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('issues only one session when the same challenge is submitted concurrently', async () => {
+    await seedCredential('concurrent-replay');
+    const request = harness(env, acceptingWebAuthn());
+    const challenge = await request('/restore-credential/generate-authenticate-options');
+    const body = json(responseCookies(challenge), { id: 'concurrent-replay' });
+    const responses = await Promise.all([
+      request('/restore-credential/verify-authentication', body),
+      request('/restore-credential/verify-authentication', body),
+    ]);
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 400]);
+    expect(
+      responses.filter((response) => responseCookies(response).includes('session_token')),
+    ).toHaveLength(1);
+  });
+
+  it.each([
+    ['/restore-credential/generate-authenticate-options', 'GET', '203.0.113.21', 200],
+    ['/restore-credential/verify-authentication', 'POST', '203.0.113.22', 400],
+  ] as const)(
+    'enforces the public request limit on %s',
+    async (path, method, ip, allowedStatus) => {
+      const request = harness(env, acceptingWebAuthn(), undefined, true);
+      const init: RequestInit = {
+        method,
+        headers: { 'x-forwarded-for': ip, 'content-type': 'application/json' },
+        ...(method === 'POST' ? { body: JSON.stringify({ id: 'not-a-credential' }) } : {}),
+      };
+      for (let attempt = 0; attempt < 10; attempt++) {
+        expect((await request(path, init)).status).toBe(allowedStatus);
+      }
+      const limited = await request(path, init);
+      expect(limited.status).toBe(429);
+      expect(responseCookies(limited)).not.toContain('session_token');
+    },
+  );
+
+  it('does not issue a session when the credential is deleted during verification', async () => {
+    const { db, restoreCredential } = await import('@docket/db');
+    await seedCredential('revoked-during-verification');
+    const request = harness(
+      env,
+      acceptingWebAuthn({
+        verifyAuthenticationResponse: async () => {
+          await db
+            .delete(restoreCredential)
+            .where(eq(restoreCredential.credentialID, 'revoked-during-verification'));
+          return { verified: true, authenticationInfo: { newCounter: 1 } };
+        },
+      }),
+    );
+    const challenge = await request('/restore-credential/generate-authenticate-options');
+    const response = await request(
+      '/restore-credential/verify-authentication',
+      json(responseCookies(challenge), { id: 'revoked-during-verification' }),
+    );
+    expect(response.status).toBe(401);
+    expect(responseCookies(response)).not.toContain('session_token');
+  });
+
+  it('does not roll back a counter advanced by another verified assertion', async () => {
+    const { db, restoreCredential } = await import('@docket/db');
+    await seedCredential('concurrent-counter');
+    const request = harness(
+      env,
+      acceptingWebAuthn({
+        verifyAuthenticationResponse: async () => {
+          await db
+            .update(restoreCredential)
+            .set({ counter: 2 })
+            .where(eq(restoreCredential.credentialID, 'concurrent-counter'));
+          return { verified: true, authenticationInfo: { newCounter: 1 } };
+        },
+      }),
+    );
+    const challenge = await request('/restore-credential/generate-authenticate-options');
+    const response = await request(
+      '/restore-credential/verify-authentication',
+      json(responseCookies(challenge), { id: 'concurrent-counter' }),
+    );
+    expect(response.status).toBe(401);
+    expect(responseCookies(response)).not.toContain('session_token');
+    const [stored] = await db
+      .select({ counter: restoreCredential.counter })
+      .from(restoreCredential)
+      .where(eq(restoreCredential.credentialID, 'concurrent-counter'));
+    expect(stored?.counter).toBe(2);
+  });
+
+  it('continues to accept authenticators that do not advance a zero counter', async () => {
+    await seedCredential('zero-counter');
+    const request = harness(
+      env,
+      acceptingWebAuthn({
+        verifyAuthenticationResponse: async () => ({
+          verified: true,
+          authenticationInfo: { newCounter: 0 },
+        }),
+      }),
+    );
+    const challenge = await request('/restore-credential/generate-authenticate-options');
+    const response = await request(
+      '/restore-credential/verify-authentication',
+      json(responseCookies(challenge), { id: 'zero-counter' }),
+    );
+    expect(response.status).toBe(200);
+    expect(responseCookies(response)).toContain('session_token');
+  });
 
   /** Complete a restore authentication and return the session cookie it issued. */
   async function signIn(request: RequestFn, credentialID: string): Promise<string> {
@@ -345,7 +532,9 @@ describe('restore credential plugin guards', () => {
     const database = {
       insert: () => ({ values: () => ({ returning: async () => [] }) }),
       select: () => ({ from: () => ({ where: () => ({ limit: async () => [ghost] }) }) }),
-      update: () => ({ set: () => ({ where: async () => undefined }) }),
+      update: () => ({
+        set: () => ({ where: () => ({ returning: async () => [{ id: ghost.id }] }) }),
+      }),
       delete: () => ({ where: () => ({ returning: async () => [] }) }),
     } as unknown as RestoreDatabase;
     const request = harness(env, acceptingWebAuthn(), database);

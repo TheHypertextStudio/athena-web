@@ -63,6 +63,7 @@ export interface RecoveryCodeStatus {
  * Read a user's recovery-code status (remaining count + last-generated time).
  *
  * @param userId - The user whose codes to read.
+ * @param database - The active transaction when checking a serialized credential change.
  * @returns the {@link RecoveryCodeStatus}, or `null` when the user has never generated any
  *   (no `two_factor` row) — letting callers distinguish "no codes" from "0 codes left".
  *
@@ -74,8 +75,11 @@ export interface RecoveryCodeStatus {
  * added to the env contract, revisit this decrypt key. The decrypted codes never leave this
  * function; only the count crosses the boundary.
  */
-export async function getRecoveryCodeStatus(userId: string): Promise<RecoveryCodeStatus | null> {
-  const [row] = await db
+export async function getRecoveryCodeStatus(
+  userId: string,
+  database: Pick<typeof db, 'select'> = db,
+): Promise<RecoveryCodeStatus | null> {
+  const [row] = await database
     .select({
       backupCodes: twoFactorTable.backupCodes,
       generatedAt: twoFactorTable.backupCodesGeneratedAt,

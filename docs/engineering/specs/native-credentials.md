@@ -18,8 +18,9 @@ each one keeps older clients working, and where the guards live.
 | Typed passkey management    | `/v1/me/passkeys` (list, rename, delete)    | Web Security page; Android account screen   |
 | Restore credentials         | `/api/auth/restore-credential/*` (5 routes) | Android only, automatically, never a person |
 
-Each one is additive. Existing web sessions, existing passkeys, and any Android build that predates
-the contract keep working unchanged.
+The contracts are additive. Existing sessions, passkeys, and older Android sign-in flows keep
+working. Generic passkey management is retired now that web and Android management use the typed
+resources; registration and authentication ceremonies remain available.
 
 ## 2. Public Google configuration
 
@@ -43,12 +44,16 @@ three ownership-scoped routes typed by
 - `PATCH /v1/me/passkeys/:id` takes `PasskeyRenameIn` (a trimmed name of at most 100 characters).
 - `DELETE /v1/me/passkeys/:id` returns `PasskeyDeleteOut`, which includes the provider credential
   id so the client can drop its local copy. The existing last-passkey lockout guard still applies:
-  a person with no other sign-in method cannot delete their only passkey.
+  a person with no other sign-in method cannot delete their only passkey. Both passkey and linked
+  identity deletion acquire the same owner-row lock, so concurrent removals of different sign-in
+  methods cannot each rely on the method being removed by the other request. The owner row is locked
+  while checking and deleting, so concurrent deletions cannot each treat the other passkey as a
+  remaining method. A recovery-code set must contain unused codes; an exhausted set does not count.
 
 `passkey.last_used_at` is written by the sign-in hook whenever an assertion succeeds, which is what
 lets the Security page tell a stale enrollment from an active one. The web Security section already
-reads these routes; Better Auth's generic paths stay mounted until the Android account screen has
-moved over, and the final Android milestone turns them off.
+reads these routes. Better Auth's generic list, update, and delete paths now return `404`, preventing
+them from bypassing safe summaries or the transactional deletion guard.
 
 ## 4. Restore credentials
 
@@ -85,16 +90,23 @@ Better Auth plugin (`packages/auth/src/restore-credential.ts`) rather than in th
    widens Android verification to a web origin.
 5. Resident keys and user verification are required on both sides of the ceremony.
 6. Authentication looks the credential up by its WebAuthn id, verifies against the stored public key
-   and counter, then writes the new counter and `last_used_at` before issuing the ordinary Better
-   Auth session cookie. A credential whose account has vanished is refused rather than resurrected.
+   and counter, then conditionally writes the new counter and `last_used_at` only if the credential
+   still exists with the counter that was verified. A deletion or a concurrent counter advance
+   makes the assertion fail with `401` before any session is issued. Authenticators that report
+   zero counters remain supported. A credential whose account has vanished is also refused.
 7. Deletion is scoped to the caller: a record the caller does not own answers `404`, exactly like a
    missing one.
 8. The two unauthenticated routes are rate-limited to ten calls per minute each.
+9. Unexpected provider and persistence failures are replaced at the endpoint boundary with an
+   application-owned error, without retaining the original error or cause. Better Auth must not
+   log credential payloads, credential IDs, cookies, tokens, or account details from those failures.
 
 The plugin takes its WebAuthn verifier and its database as injectable dependencies. Production uses
 `@simplewebauthn/server` and the shared Drizzle client; the tests in
 `packages/auth/tests/restore-credential.test.ts` substitute deterministic verifiers and a fake store
-to prove every refusal above, and the auth package holds a 100% coverage floor.
+to exercise handler guards, persistence failures, revocation races, and counter updates. Those tests
+do not replace real native-origin, provider, or cloud-restore acceptance. The auth package holds a
+100% coverage floor; coverage alone is not proof of the complete Android restoration journey.
 
 ### Data model
 
@@ -105,8 +117,9 @@ the owning user. The same migration adds `passkey.last_used_at`.
 
 ## 5. Compatibility and rollout
 
-- Web and older Android clients see no behavior change. New fields are nullable, new routes are
-  additive, and nothing existing was removed.
+- Current web and older Android sign-in clients remain compatible. New fields are nullable and
+  registration/authentication routes are unchanged. Clients managing passkeys must use the typed
+  resources; the three generic management routes are intentionally disabled.
 - Deployment is separately authorized; the migration is additive and safe to apply ahead of the
   Android client that uses it.
 - `BETTER_AUTH_PASSKEY_NATIVE_ORIGINS` is a deployment fact (which APK signatures may talk to this

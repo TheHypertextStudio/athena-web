@@ -20,6 +20,7 @@ import {
   db,
   passkey,
   sessionActivity,
+  user as userTable,
 } from '@docket/db';
 import {
   IdentityDeleteOut,
@@ -198,40 +199,48 @@ The display \`email\`/\`name\`/\`picture\` are **decoded server-side from the st
       const { provider, accountId } = c.req.valid('param');
       const userId = session.user.id;
 
-      const identities = await linkedIdentities(userId);
-      const identity = identities.find(
-        (candidate) => candidate.provider === provider && candidate.accountId === accountId,
-      );
-      if (!identity) throw new NotFoundError('Linked identity not found');
-      if (identity.connectionCount > 0) {
-        throw new ConflictError(
-          'Disconnect or rebind every Docket connection using this account before removing it.',
-          'identity_in_use',
+      await db.transaction(async (tx) => {
+        // Share the passkey-deletion lock so removing different credential kinds cannot lock out the owner.
+        await tx
+          .select({ id: userTable.id })
+          .from(userTable)
+          .where(eq(userTable.id, userId))
+          .for('update');
+        const identities = await linkedIdentities(userId, tx);
+        const identity = identities.find(
+          (candidate) => candidate.provider === provider && candidate.accountId === accountId,
         );
-      }
+        if (!identity) throw new NotFoundError('Linked identity not found');
+        if (identity.connectionCount > 0) {
+          throw new ConflictError(
+            'Disconnect or rebind every Docket connection using this account before removing it.',
+            'identity_in_use',
+          );
+        }
 
-      const passkeys = await db
-        .select({ id: passkey.id })
-        .from(passkey)
-        .where(eq(passkey.userId, userId))
-        .limit(1);
-      if (identities.length <= 1 && passkeys.length === 0) {
-        throw new ConflictError(
-          'Add a passkey or another sign-in account before removing your last linked identity.',
-        );
-      }
+        const passkeys = await tx
+          .select({ id: passkey.id })
+          .from(passkey)
+          .where(eq(passkey.userId, userId))
+          .limit(1);
+        if (identities.length <= 1 && passkeys.length === 0) {
+          throw new ConflictError(
+            'Add a passkey or another sign-in account before removing your last linked identity.',
+          );
+        }
 
-      const removed = await db
-        .delete(account)
-        .where(
-          and(
-            eq(account.userId, userId),
-            eq(account.providerId, provider),
-            eq(account.accountId, accountId),
-          ),
-        )
-        .returning({ id: account.id });
-      if (!removed[0]) throw new NotFoundError('Linked identity not found');
+        const removed = await tx
+          .delete(account)
+          .where(
+            and(
+              eq(account.userId, userId),
+              eq(account.providerId, provider),
+              eq(account.accountId, accountId),
+            ),
+          )
+          .returning({ id: account.id });
+        if (!removed[0]) throw new NotFoundError('Linked identity not found');
+      });
       return ok(c, IdentityDeleteOut, { status: true });
     },
   );

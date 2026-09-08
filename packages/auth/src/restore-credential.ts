@@ -22,6 +22,25 @@ const requestBody = z.looseObject({ id: z.string().min(1) });
 
 type EndpointContext = Parameters<typeof getSessionFromCtx>[0];
 
+/** Only errors created here may cross the sensitive ceremony boundary unchanged. */
+class RestoreError extends APIError {}
+
+/** Discard provider and persistence error details before Better Auth can log them. */
+function safeRestoreHandler<T extends EndpointContext, R>(
+  handler: (ctx: T) => Promise<R>,
+): (ctx: T) => Promise<R> {
+  return async (ctx) => {
+    try {
+      return await handler(ctx);
+    } catch (error) {
+      if (error instanceof RestoreError) throw error;
+      throw new RestoreError('INTERNAL_SERVER_ERROR', {
+        message: 'Restore operation could not be completed.',
+      });
+    }
+  };
+}
+
 /** The library call's input, with only the fields this plugin reads on the way back. */
 type Narrowed<F extends (input: never) => unknown, R> = (input: Parameters<F>[0]) => Promise<R>;
 
@@ -90,10 +109,10 @@ async function requireFreshUser(ctx: EndpointContext): Promise<{
   readonly email: string;
 }> {
   const current = await getSessionFromCtx(ctx);
-  if (!current) throw new APIError('UNAUTHORIZED', { message: 'Authentication required.' });
+  if (!current) throw new RestoreError('UNAUTHORIZED', { message: 'Authentication required.' });
   const freshAgeMs = ctx.context.sessionConfig.freshAge * 1000;
   if (Date.now() - new Date(current.session.createdAt).getTime() > freshAgeMs) {
-    throw new APIError('UNAUTHORIZED', {
+    throw new RestoreError('UNAUTHORIZED', {
       code: 'reauth_required',
       message: 'Re-authentication required.',
     });
@@ -126,16 +145,16 @@ async function consumeChallenge(
   const cookie = challengeCookie(ctx);
   const identifier = await ctx.getSignedCookie(cookie.name, ctx.context.secret);
   if (typeof identifier !== 'string') {
-    throw new APIError('BAD_REQUEST', { message: 'Restore challenge is missing or expired.' });
+    throw new RestoreError('BAD_REQUEST', { message: 'Restore challenge is missing or expired.' });
   }
   const consumed = await ctx.context.internalAdapter.consumeVerificationValue(identifier);
   expireCookie(ctx, cookie);
   if (!consumed || consumed.expiresAt < new Date()) {
-    throw new APIError('BAD_REQUEST', { message: 'Restore challenge is missing or expired.' });
+    throw new RestoreError('BAD_REQUEST', { message: 'Restore challenge is missing or expired.' });
   }
   const payload = JSON.parse(consumed.value) as ChallengePayload;
   if (payload.kind !== expectedKind) {
-    throw new APIError('BAD_REQUEST', { message: 'Restore challenge is invalid.' });
+    throw new RestoreError('BAD_REQUEST', { message: 'Restore challenge is invalid.' });
   }
   return payload;
 }
@@ -154,7 +173,7 @@ export function restoreCredentialPlugin(
       generateRestoreRegistrationOptions: createAuthEndpoint(
         '/restore-credential/generate-register-options',
         { method: 'GET' },
-        async (ctx) => {
+        safeRestoreHandler(async (ctx) => {
           const user = await requireFreshUser(ctx);
           const options = await webAuthn.generateRegistrationOptions({
             rpID: authEnv.BETTER_AUTH_PASSKEY_RP_ID,
@@ -175,19 +194,19 @@ export function restoreCredentialPlugin(
             userId: user.id,
           });
           return ctx.json(options);
-        },
+        }),
       ),
       verifyRestoreRegistration: createAuthEndpoint(
         '/restore-credential/verify-registration',
         { method: 'POST', body: requestBody },
-        async (ctx) => {
+        safeRestoreHandler(async (ctx) => {
           const user = await requireFreshUser(ctx);
           if (!originsConfigured) {
-            throw new APIError('BAD_REQUEST', { message: 'Restore challenge is invalid.' });
+            throw new RestoreError('BAD_REQUEST', { message: 'Restore challenge is invalid.' });
           }
           const challenge = await consumeChallenge(ctx, 'register');
           if (challenge.userId !== user.id) {
-            throw new APIError('BAD_REQUEST', { message: 'Restore challenge is invalid.' });
+            throw new RestoreError('BAD_REQUEST', { message: 'Restore challenge is invalid.' });
           }
           const verification = await webAuthn.verifyRegistrationResponse({
             response: ctx.body as never,
@@ -198,7 +217,9 @@ export function restoreCredentialPlugin(
           });
           const info = verification.registrationInfo;
           if (!verification.verified || !info) {
-            throw new APIError('UNAUTHORIZED', { message: 'Restore credential was not verified.' });
+            throw new RestoreError('UNAUTHORIZED', {
+              message: 'Restore credential was not verified.',
+            });
           }
           const [record] = await database
             .insert(restoreCredential)
@@ -214,17 +235,17 @@ export function restoreCredentialPlugin(
             })
             .returning({ id: restoreCredential.id });
           if (!record) {
-            throw new APIError('INTERNAL_SERVER_ERROR', {
+            throw new RestoreError('INTERNAL_SERVER_ERROR', {
               message: 'Restore credential could not be saved.',
             });
           }
           return ctx.json({ status: true, recordId: record.id });
-        },
+        }),
       ),
       generateRestoreAuthenticationOptions: createAuthEndpoint(
         '/restore-credential/generate-authenticate-options',
         { method: 'GET' },
-        async (ctx) => {
+        safeRestoreHandler(async (ctx) => {
           const options = await webAuthn.generateAuthenticationOptions({
             rpID: authEnv.BETTER_AUTH_PASSKEY_RP_ID,
             allowCredentials: [],
@@ -232,15 +253,17 @@ export function restoreCredentialPlugin(
           });
           await issueChallenge(ctx, { kind: 'authenticate', challenge: options.challenge });
           return ctx.json(options);
-        },
+        }),
       ),
       verifyRestoreAuthentication: createAuthEndpoint(
         '/restore-credential/verify-authentication',
         { method: 'POST', body: requestBody },
-        async (ctx) => {
+        safeRestoreHandler(async (ctx) => {
           const challenge = await consumeChallenge(ctx, 'authenticate');
           if (!originsConfigured) {
-            throw new APIError('UNAUTHORIZED', { message: 'Restore credential was not verified.' });
+            throw new RestoreError('UNAUTHORIZED', {
+              message: 'Restore credential was not verified.',
+            });
           }
           const [record] = await database
             .select()
@@ -248,7 +271,9 @@ export function restoreCredentialPlugin(
             .where(eq(restoreCredential.credentialID, ctx.body.id))
             .limit(1);
           if (!record) {
-            throw new APIError('UNAUTHORIZED', { message: 'Restore credential was not verified.' });
+            throw new RestoreError('UNAUTHORIZED', {
+              message: 'Restore credential was not verified.',
+            });
           }
           const verification = await webAuthn.verifyAuthenticationResponse({
             response: ctx.body as never,
@@ -264,28 +289,43 @@ export function restoreCredentialPlugin(
             requireUserVerification: true,
           });
           if (!verification.verified) {
-            throw new APIError('UNAUTHORIZED', { message: 'Restore credential was not verified.' });
+            throw new RestoreError('UNAUTHORIZED', {
+              message: 'Restore credential was not verified.',
+            });
           }
-          // The counter write and the owner lookup are independent; only the session needs both.
-          const [, user] = await Promise.all([
+          // Verification may yield while another request revokes or advances this credential.
+          // A successful compare-and-update is the authentication decision's linearization point.
+          const [updated, user] = await Promise.all([
             database
               .update(restoreCredential)
               .set({ counter: verification.authenticationInfo.newCounter, lastUsedAt: new Date() })
-              .where(eq(restoreCredential.id, record.id)),
+              .where(
+                and(
+                  eq(restoreCredential.id, record.id),
+                  eq(restoreCredential.counter, record.counter),
+                ),
+              )
+              .returning({ id: restoreCredential.id }),
             ctx.context.internalAdapter.findUserById(record.userId),
           ]);
-          if (!user) throw new APIError('UNAUTHORIZED', { message: 'Account not found.' });
+          if (updated.length !== 1) {
+            throw new RestoreError('UNAUTHORIZED', {
+              message: 'Restore credential was not verified.',
+            });
+          }
+          if (!user) throw new RestoreError('UNAUTHORIZED', { message: 'Account not found.' });
           const session = await ctx.context.internalAdapter.createSession(user.id);
           await setSessionCookie(ctx, { session, user });
           return ctx.json({ status: true, recordId: record.id });
-        },
+        }),
       ),
       deleteRestoreCredential: createAuthEndpoint(
         '/restore-credential/delete',
         { method: 'POST', body: z.object({ recordId: z.string().min(1) }) },
-        async (ctx) => {
+        safeRestoreHandler(async (ctx) => {
           const current = await getSessionFromCtx(ctx);
-          if (!current) throw new APIError('UNAUTHORIZED', { message: 'Authentication required.' });
+          if (!current)
+            throw new RestoreError('UNAUTHORIZED', { message: 'Authentication required.' });
           const deleted = await database
             .delete(restoreCredential)
             .where(
@@ -296,10 +336,10 @@ export function restoreCredentialPlugin(
             )
             .returning({ id: restoreCredential.id });
           if (deleted.length === 0) {
-            throw new APIError('NOT_FOUND', { message: 'Restore credential not found.' });
+            throw new RestoreError('NOT_FOUND', { message: 'Restore credential not found.' });
           }
           return ctx.json({ status: true });
-        },
+        }),
       ),
     },
     // Only the two unauthenticated routes can be hammered by a stranger.

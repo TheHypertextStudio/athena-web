@@ -306,10 +306,14 @@ const IDENTITY_PROVIDERS: readonly IdentityProvider[] = [...IdentityProviderSche
  * carry no id token, so those claims are null and the UI falls back to the provider name.
  *
  * @param userId - The Docket user whose linked identities to list.
+ * @param database - Transaction-scoped reader for credential reachability checks.
  */
-export async function linkedIdentities(userId: string): Promise<IdentityOut[]> {
+export async function linkedIdentities(
+  userId: string,
+  database: Pick<typeof db, 'select'> = db,
+): Promise<IdentityOut[]> {
   const [rows, connections] = await Promise.all([
-    db
+    database
       .select({
         accountId: account.accountId,
         providerId: account.providerId,
@@ -321,7 +325,7 @@ export async function linkedIdentities(userId: string): Promise<IdentityOut[]> {
       })
       .from(account)
       .where(and(eq(account.userId, userId), inArray(account.providerId, [...IDENTITY_PROVIDERS]))),
-    db
+    database
       .select({
         provider: integration.provider,
         externalAccountId: integration.externalAccountId,

@@ -74,9 +74,9 @@ export const authClient = createAuthClient({
 export const signIn = authClient.signIn;
 
 /**
- * The passkey namespace (`passkey.addPasskey(...)`, `passkey.listUserPasskeys()`, …).
+ * The passkey enrollment namespace (`passkey.addPasskey(...)`).
  *
- * @remarks Convenience re-export of {@link authClient.passkey}.
+ * @remarks Management uses typed `/v1/me/passkeys` resources, not the disabled generic routes.
  */
 export const passkey = authClient.passkey;
 

@@ -122,6 +122,68 @@ describe('PATCH /me/passkeys/:id', () => {
 });
 
 describe('DELETE /me/passkeys/:id', () => {
+  it('preserves a sign-in path when two linked identities are removed concurrently', async () => {
+    const { db, schema } = await setup();
+    const userId = await seedUserWithHub(db, schema, `identity-removal-${Math.random()}`);
+    const ids = [`first-${Math.random()}`, `second-${Math.random()}`];
+    await db
+      .insert(schema.account)
+      .values(ids.map((accountId) => ({ userId, providerId: 'google', accountId })));
+    const identities = (await import('../../src/routes/me-identities')).default;
+    const app = appWithSession(identities, fakeSession(userId));
+    const responses = await Promise.all(
+      ids.map(async (id) => app.request(`/google/${id}`, { method: 'DELETE' })),
+    );
+    expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
+    const accounts = await db
+      .select()
+      .from(schema.account)
+      .where(eq(schema.account.userId, userId));
+    expect(accounts).toHaveLength(1);
+  });
+
+  it('preserves a sign-in path during concurrent identity and passkey removal', async () => {
+    const { db, schema, mePasskeys } = await setup();
+    const userId = await seedUserWithHub(db, schema, `mixed-removal-${Math.random()}`);
+    const only = await seedPasskey(userId, `mixed-${Math.random()}`);
+    const accountId = `google-${Math.random()}`;
+    await db.insert(schema.account).values({ userId, providerId: 'google', accountId });
+    const identities = (await import('../../src/routes/me-identities')).default;
+    const current = fakeSession(userId);
+    const responses = await Promise.all([
+      appWithSession(mePasskeys, current).request(`/${only.id}`, { method: 'DELETE' }),
+      appWithSession(identities, current).request(`/google/${accountId}`, { method: 'DELETE' }),
+    ]);
+    expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
+    const passkeys = await db
+      .select()
+      .from(schema.passkey)
+      .where(eq(schema.passkey.userId, userId));
+    const accounts = await db
+      .select()
+      .from(schema.account)
+      .where(eq(schema.account.userId, userId));
+    expect(passkeys.length + accounts.length).toBe(1);
+  });
+
+  it('preserves one sign-in path when two passkeys are deleted concurrently', async () => {
+    const { db, schema, mePasskeys } = await setup();
+    const userId = await seedUserWithHub(db, schema, `passkey-concurrent-${Math.random()}`);
+    const first = await seedPasskey(userId, `first-${Math.random()}`);
+    const second = await seedPasskey(userId, `second-${Math.random()}`);
+    const app = appWithSession(mePasskeys, fakeSession(userId));
+    const responses = await Promise.all([
+      app.request(`/${first.id}`, { method: 'DELETE' }),
+      app.request(`/${second.id}`, { method: 'DELETE' }),
+    ]);
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 403]);
+    const remaining = await db
+      .select({ id: schema.passkey.id })
+      .from(schema.passkey)
+      .where(eq(schema.passkey.userId, userId));
+    expect(remaining).toHaveLength(1);
+  });
+
   it('returns the provider credential ID after deleting one of multiple owned passkeys', async () => {
     const { db, schema, mePasskeys } = await setup();
     const userId = await seedUserWithHub(db, schema, `passkey-delete-${Math.random()}`);

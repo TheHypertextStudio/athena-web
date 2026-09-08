@@ -1,6 +1,6 @@
 /** `@docket/api` — authenticated passkey management mounted at `/v1/me/passkeys`. */
 import { LAST_PASSKEY_MESSAGE, canRemovePasskey } from '@docket/auth';
-import { db, passkey } from '@docket/db';
+import { db, passkey, user as userTable } from '@docket/db';
 import {
   PasskeyDeleteOut,
   PasskeyListOut,
@@ -114,15 +114,24 @@ const mePasskeys = new Hono<AppEnv>()
     async (c) => {
       const { user } = requireSession(c);
       const { id } = c.req.valid('param');
-      const [owned] = await db
-        .select({ credentialID: passkey.credentialID })
-        .from(passkey)
-        .where(ownedBy(id, user.id))
-        .limit(1);
-      if (!owned) throw new NotFoundError('Passkey not found.');
-      if (!(await canRemovePasskey(user.id))) throw new CapabilityError(LAST_PASSKEY_MESSAGE);
-      await db.delete(passkey).where(ownedBy(id, user.id));
-      return ok(c, PasskeyDeleteOut, { status: true, credentialId: owned.credentialID });
+      const credentialId = await db.transaction(async (tx) => {
+        // Lock the owner, not an individual passkey: competing deletions may target different rows.
+        await tx
+          .select({ id: userTable.id })
+          .from(userTable)
+          .where(eq(userTable.id, user.id))
+          .for('update');
+        const [owned] = await tx
+          .select({ credentialID: passkey.credentialID })
+          .from(passkey)
+          .where(ownedBy(id, user.id))
+          .limit(1);
+        if (!owned) throw new NotFoundError('Passkey not found.');
+        if (!(await canRemovePasskey(user.id, tx))) throw new CapabilityError(LAST_PASSKEY_MESSAGE);
+        await tx.delete(passkey).where(ownedBy(id, user.id));
+        return owned.credentialID;
+      });
+      return ok(c, PasskeyDeleteOut, { status: true, credentialId });
     },
   );
 

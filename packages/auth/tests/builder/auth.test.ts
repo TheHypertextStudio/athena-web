@@ -1073,7 +1073,40 @@ describe('auth config', () => {
   });
 });
 
-describe('passkey lockout guard (hooks.before on /passkey/delete-passkey)', () => {
+describe('passkey reachability policy and retired management routes', () => {
+  it('retires generic passkey management without disabling native sign-in challenges', async () => {
+    const { auth } = await import('../../src/index');
+    const { passkeyId, sessionCookie } = await signedInUserWithOnePasskey(
+      'retired-management@example.com',
+    );
+    for (const [path, method] of [
+      ['/passkey/list-user-passkeys', 'GET'],
+      ['/passkey/update-passkey', 'POST'],
+      ['/passkey/delete-passkey', 'POST'],
+    ] as const) {
+      const response = await auth.handler(
+        new Request(`http://localhost:4000/api/auth${path}`, {
+          method,
+          headers: {
+            cookie: sessionCookie,
+            origin: 'http://localhost:4000',
+            'content-type': 'application/json',
+          },
+          ...(method === 'POST'
+            ? { body: JSON.stringify({ id: passkeyId, name: 'New name' }) }
+            : {}),
+        }),
+      );
+      expect(response.status).toBe(404);
+    }
+    const challenge = await auth.handler(
+      new Request('http://localhost:4000/api/auth/passkey/generate-authenticate-options', {
+        headers: { origin: 'http://localhost:4000' },
+      }),
+    );
+    expect(challenge.status).toBe(200);
+  });
+
   beforeAll(async () => {
     // The preceding describe block's last test calls `vi.resetModules()`, which wipes the
     // migrated `@docket/db` module state for anything that runs after it in this file — re-migrate
@@ -1147,52 +1180,55 @@ describe('passkey lockout guard (hooks.before on /passkey/delete-passkey)', () =
   it('blocks removing the last passkey when the account has no other recovery path', async () => {
     const { db, twoFactor } = await import('@docket/db');
     const { eq } = await import('drizzle-orm');
-    const { userId, passkeyId, sessionCookie, post } = await signedInUserWithOnePasskey(
-      'lockout-blocked@example.com',
-    );
+    const { userId } = await signedInUserWithOnePasskey('lockout-blocked@example.com');
     // Simulate "no recovery codes" — generateRecoveryCodes (in the helper above) is only there to
     // get a signed-in session; remove its row so the guard sees exactly what it's meant to block.
     await db.delete(twoFactor).where(eq(twoFactor.userId, userId));
 
-    const res = await post('/passkey/delete-passkey', { id: passkeyId }, sessionCookie);
-
-    expect(res.status).not.toBe(200);
-    const body = (await res.json()) as { message?: string };
-    expect(body.message).toContain('recovery code');
+    const { canRemovePasskey } = await import('../../src/index');
+    expect(await canRemovePasskey(userId)).toBe(false);
   });
 
   it('allows removing the last passkey when recovery codes exist', async () => {
-    const { passkeyId, sessionCookie, post } = await signedInUserWithOnePasskey(
-      'lockout-has-codes@example.com',
-    );
+    const { userId } = await signedInUserWithOnePasskey('lockout-has-codes@example.com');
     // The helper's own generateRecoveryCodes call leaves the two_factor row in place (using one
     // code during sign-in doesn't delete it), so hasRecoveryCodes() is already true here.
 
-    const res = await post('/passkey/delete-passkey', { id: passkeyId }, sessionCookie);
+    const { canRemovePasskey } = await import('../../src/index');
+    expect(await canRemovePasskey(userId)).toBe(true);
+  });
 
-    expect(res.status).toBe(200);
+  it('does not treat exhausted recovery codes as a remaining sign-in path', async () => {
+    const { userId } = await signedInUserWithOnePasskey('lockout-exhausted-codes@example.com');
+    const { db, twoFactor } = await import('@docket/db');
+    const { eq } = await import('drizzle-orm');
+    const { symmetricEncrypt } = await import('better-auth/crypto');
+    const { env } = await import('@docket/env/api');
+    await db
+      .update(twoFactor)
+      .set({
+        backupCodes: await symmetricEncrypt({ key: env.BETTER_AUTH_SECRET, data: '[]' }),
+      })
+      .where(eq(twoFactor.userId, userId));
+    const { canRemovePasskey } = await import('../../src/index');
+    expect(await canRemovePasskey(userId)).toBe(false);
   });
 
   it('allows removing the last passkey when a linked sign-in provider exists', async () => {
     const { db, account, twoFactor } = await import('@docket/db');
     const { eq } = await import('drizzle-orm');
-    const { userId, passkeyId, sessionCookie, post } = await signedInUserWithOnePasskey(
-      'lockout-has-provider@example.com',
-    );
+    const { userId } = await signedInUserWithOnePasskey('lockout-has-provider@example.com');
     await db.delete(twoFactor).where(eq(twoFactor.userId, userId));
     await db.insert(account).values({ userId, providerId: 'google', accountId: 'google-lockout' });
 
-    const res = await post('/passkey/delete-passkey', { id: passkeyId }, sessionCookie);
-
-    expect(res.status).toBe(200);
+    const { canRemovePasskey } = await import('../../src/index');
+    expect(await canRemovePasskey(userId)).toBe(true);
   });
 
   it('allows removing a passkey when it is not the last one', async () => {
     const { db, passkey, twoFactor } = await import('@docket/db');
     const { eq } = await import('drizzle-orm');
-    const { userId, passkeyId, sessionCookie, post } = await signedInUserWithOnePasskey(
-      'lockout-has-second-passkey@example.com',
-    );
+    const { userId } = await signedInUserWithOnePasskey('lockout-has-second-passkey@example.com');
     await db.delete(twoFactor).where(eq(twoFactor.userId, userId));
     await db.insert(passkey).values({
       publicKey: 'test-public-key-2',
@@ -1203,22 +1239,16 @@ describe('passkey lockout guard (hooks.before on /passkey/delete-passkey)', () =
       backedUp: false,
     });
 
-    const res = await post('/passkey/delete-passkey', { id: passkeyId }, sessionCookie);
-
-    expect(res.status).toBe(200);
+    const { canRemovePasskey } = await import('../../src/index');
+    expect(await canRemovePasskey(userId)).toBe(true);
   });
 
-  it('never reaches the recovery-path check for a delete-passkey call with no session at all', async () => {
-    // With no session, the guard returns early (there is nothing to protect yet) rather than
-    // querying for the caller's remaining passkeys — Better Auth's own session requirement is
-    // what ultimately rejects this call, not our lockout message.
+  it('also retires generic deletion for unauthenticated callers', async () => {
     const { passkeyId, post } = await signedInUserWithOnePasskey('lockout-no-session@example.com');
 
     const res = await post('/passkey/delete-passkey', { id: passkeyId });
 
-    expect(res.status).not.toBe(200);
-    const body = (await res.json()) as { message?: string };
-    expect(body.message ?? '').not.toContain('recovery code');
+    expect(res.status).toBe(404);
   });
 
   it('refuses to sign out a different account than the one the browser action captured', async () => {

@@ -11,7 +11,7 @@ import { NotFoundError } from '../error';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { loadVisibleTaskContext } from './active-work-resource';
-import { authorize, jsonResult, runTool, scopedActor } from './result';
+import { jsonResult, runTool, scopedActor } from './result';
 import { requireScope } from './scope';
 
 const REVIEW_TIMEOUT_MS = 15_000;
@@ -220,14 +220,9 @@ export function registerWorkDestinationReviewTool(server: McpRegistrar, ctx: Mcp
     },
     (input) =>
       runTool(async () => {
-        const actor = await scopedActor(ctx, input.organizationId, 'agents:run');
+        await scopedActor(ctx, input.organizationId, 'agents:run');
         requireScope(ctx.scopes, 'work:read');
         if (ctx.principal.kind !== 'user') throw new NotFoundError('Task not found');
-        await authorize(actor, 'view', {
-          kind: 'task',
-          id: input.taskId,
-          orgId: input.organizationId,
-        });
         const taskContext = await loadVisibleTaskContext(ctx.principal.userId, input.taskId);
         if (taskContext?.organizationId !== input.organizationId) {
           throw new NotFoundError('Task not found');

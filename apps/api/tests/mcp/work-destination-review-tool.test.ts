@@ -4,6 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { Capability } from '@docket/identity-access/capabilities';
 import { assertDefined } from '@docket/test-utils';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -361,9 +362,37 @@ describe('review_work_destination', () => {
     expect(stream).not.toHaveBeenCalled();
   });
 
+  it('runs Athena for a non-guest who can read a public task without an explicit grant', async () => {
+    const workspace = await seedWorkspace();
+    const peer = await seedUnprivilegedPeer(workspace);
+    const client = await connect(peer);
+    const stream = vi.spyOn(getContainer().agentTurn, 'streamTurn').mockImplementation(
+      reviewTurn({
+        decision: 'deny',
+        reason: 'The destination does not support the task.',
+      }),
+    );
+
+    const result = await client.callTool({
+      name: 'review_work_destination',
+      arguments: request(
+        peer,
+        'I will compare TransitCenter posting cadence and record three patterns in the LVBT strategy document.',
+      ),
+    });
+
+    expect(asCallToolResult(result).isError).not.toBe(true);
+    expect(resultPayload(result)).toMatchObject({ decision: 'deny' });
+    expect(stream).toHaveBeenCalledOnce();
+  });
+
   it('does not run Athena for a same-workspace caller without view access', async () => {
     const workspace = await seedWorkspace();
     const peer = await seedUnprivilegedPeer(workspace);
+    await db
+      .update(schema.task)
+      .set({ visibility: 'private' })
+      .where(eq(schema.task.id, workspace.taskId));
     const client = await connect(peer);
     const stream = vi.spyOn(getContainer().agentTurn, 'streamTurn');
 

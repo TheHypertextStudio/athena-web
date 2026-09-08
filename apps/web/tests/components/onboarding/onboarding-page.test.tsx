@@ -58,6 +58,8 @@ function renderPage(ui: ReactElement): ReturnType<typeof render> {
   const config: PublicConfigOut = {
     appMode: 'local',
     oauthProviders: [],
+    appleAppClientId: null,
+    passkeyRpId: null,
     googleServerClientId: null,
     connectors: [],
     mcpUrl: null,

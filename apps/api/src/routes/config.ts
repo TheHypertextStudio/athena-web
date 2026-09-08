@@ -69,6 +69,14 @@ export function resolveGoogleServerClientId(
     : null;
 }
 
+/** Resolve the native Apple app identifier only when the Apple provider is fully configured. */
+export function resolveAppleAppClientId(
+  authEnv: Pick<AuthEnv, 'APPLE_APP_CLIENT_ID'>,
+  oauthProviders: readonly SignInProvider[],
+): string | null {
+  return oauthProviders.includes('apple') ? (authEnv.APPLE_APP_CLIENT_ID ?? null) : null;
+}
+
 const config = new Hono<AppEnv>().get(
   '/',
   apiDoc({
@@ -88,6 +96,8 @@ Carries nothing secret and requires no session. Related: the authenticated perso
     return ok(c, PublicConfigOut, {
       appMode: env.APP_MODE,
       oauthProviders,
+      appleAppClientId: resolveAppleAppClientId(env, oauthProviders),
+      passkeyRpId: env.BETTER_AUTH_PASSKEY_RP_ID,
       googleOAuthPublic: env.GOOGLE_OAUTH_PUBLIC,
       googleServerClientId: resolveGoogleServerClientId(env, oauthProviders),
       adminGoogleSso: env.ADMIN_GOOGLE_SSO_ENABLED && oauthProviders.includes('google'),

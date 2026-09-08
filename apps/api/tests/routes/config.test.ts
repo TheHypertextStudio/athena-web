@@ -22,9 +22,22 @@ describe('GET /config', () => {
     // no fabricated availability: the list reflects only real, configured providers.
     expect(body.appMode).toBe('test');
     expect(body.oauthProviders).toEqual([]);
+    expect(body.appleAppClientId).toBeNull();
+    expect(body.passkeyRpId).toBe('docket.localhost');
     expect(body.googleServerClientId).toBeNull();
     expect(body.connectors).toEqual([]);
     expect(body.stripePublishableKey).toBeNull();
+  });
+
+  it('exposes the native Apple app id only when Apple sign-in is configured', async () => {
+    const { resolveAppleAppClientId } = await import('../../src/routes/config');
+
+    expect(
+      resolveAppleAppClientId({ APPLE_APP_CLIENT_ID: 'studio.hypertext.docket' }, ['apple']),
+    ).toBe('studio.hypertext.docket');
+    expect(
+      resolveAppleAppClientId({ APPLE_APP_CLIENT_ID: 'studio.hypertext.docket' }, []),
+    ).toBeNull();
   });
 
   it('exposes the Google server client ID when native Google sign-in is offerable', async () => {

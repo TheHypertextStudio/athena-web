@@ -53,6 +53,18 @@ export const PublicConfigOut = z
         'The social providers a user can sign in with / link an identity from, derived from real server credentials: a provider appears here iff its OAuth client id + secret are configured. The sign-in page renders exactly these buttons. One of `google` | `github` | `linear` | `apple` (apple is sign-in only, not a linkable identity).',
       )
       .meta({ example: ['google', 'github'] }),
+    /** Native Apple app identifier accepted by the auth server, or null when unavailable. */
+    appleAppClientId: z
+      .string()
+      .nullable()
+      .describe(
+        'The native Apple app identifier accepted as a Sign in with Apple ID-token audience, or null when native Apple sign-in is unavailable.',
+      ),
+    /** WebAuthn relying-party identifier used by native passkey clients. */
+    passkeyRpId: z
+      .string()
+      .nullable()
+      .describe('The WebAuthn relying-party identifier, or null when passkeys are unavailable.'),
     /** Whether Google sign-in/linking is open beyond the production test-user allowlist. */
     googleOAuthPublic: z
       .boolean()

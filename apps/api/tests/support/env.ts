@@ -14,6 +14,7 @@ export const API_TEST_ENV = {
   // not. Missing it doesn't fail any assertion directly — SKIP_ENV_VALIDATION hides the gap from
   // zod — it fails the whole process with an unhandled rejection instead.
   BETTER_AUTH_URL: 'https://api.docket.localhost',
+  BETTER_AUTH_PASSKEY_RP_ID: 'docket.localhost',
   CRON_SECRET: 'test-cron-secret',
   // Both are required by the API's own env contract (`sharedServer`), and the host-config
   // contract reads every product host from its own variable — without WEB_URL, `apiHosts.app`

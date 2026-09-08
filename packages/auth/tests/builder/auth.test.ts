@@ -1855,6 +1855,23 @@ describe('buildAuthOptions env-gating', () => {
     expect(opts.account?.accountLinking?.trustedProviders).toEqual(['apple']);
   });
 
+  it('accepts the native Docket app id as a second Apple ID-token audience', async () => {
+    const { buildAuthOptions } = await import('../../src/index');
+    const opts = buildAuthOptions(
+      {
+        ...baseEnv,
+        ...APPLE_ENV,
+        APPLE_APP_CLIENT_ID: 'studio.hypertext.docket',
+      },
+      MAILER_DEPS,
+    );
+    const apple = opts.socialProviders?.apple;
+    if (apple === undefined || typeof apple === 'function') {
+      throw new Error('expected an Apple provider config object');
+    }
+    expect(apple.clientId).toEqual(['com.docket.web', 'studio.hypertext.docket']);
+  });
+
   it('does NOT mount Apple (and does not add its origin) when any APPLE_* var is missing', async () => {
     const { buildAuthOptions } = await import('../../src/index');
     // Missing the private key → provider off, appleid.apple.com NOT trusted.

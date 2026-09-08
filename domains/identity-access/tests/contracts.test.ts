@@ -96,6 +96,8 @@ describe('identity and access contracts', () => {
       PublicConfigOut.parse({
         appMode: 'production',
         oauthProviders: ['google'],
+        appleAppClientId: null,
+        passkeyRpId: 'hypertext.studio',
         googleServerClientId: null,
         connectors: ['calendar'],
         mcpUrl: null,

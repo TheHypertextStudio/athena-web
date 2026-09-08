@@ -8,6 +8,8 @@ function config(overrides: Partial<PublicConfigOut>): PublicConfigOut {
   return {
     appMode: 'production',
     oauthProviders: [],
+    appleAppClientId: null,
+    passkeyRpId: null,
     googleServerClientId: null,
     connectors: [],
     mcpUrl: null,

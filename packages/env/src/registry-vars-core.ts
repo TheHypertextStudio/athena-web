@@ -469,6 +469,16 @@ export const CORE_VARS: readonly VarSpec[] = [
       'Apple Services ID e.g. com.docket.web (Sign in with Apple → the OAuth client_id). Needs all four APPLE_* vars; absent → provider hidden.',
   },
   {
+    name: 'APPLE_APP_CLIENT_ID',
+    slice: 'auth',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: authServer.APPLE_APP_CLIENT_ID,
+    where:
+      'Native Apple app identifier e.g. studio.hypertext.docket; accepted as a Sign in with Apple ID-token audience',
+  },
+  {
     name: 'APPLE_TEAM_ID',
     slice: 'auth',
     scope: 'server',

@@ -106,6 +106,8 @@ export interface AuthEnv {
   readonly DISCORD_CLIENT_ID?: string | undefined;
   readonly DISCORD_CLIENT_SECRET?: string | undefined;
   readonly APPLE_CLIENT_ID?: string | undefined;
+  /** Native Docket bundle identifier accepted as an Apple ID-token audience. */
+  readonly APPLE_APP_CLIENT_ID?: string | undefined;
   readonly APPLE_TEAM_ID?: string | undefined;
   readonly APPLE_KEY_ID?: string | undefined;
   readonly APPLE_PRIVATE_KEY?: string | undefined;
@@ -353,6 +355,11 @@ function resolveAppleCredentials({
   return undefined;
 }
 
+/** Keep the web Services ID first while accepting the native app audience for ID-token exchange. */
+function resolveAppleClientIds(e: AuthEnv, webClientId: string): string | string[] {
+  return isRealValue(e.APPLE_APP_CLIENT_ID) ? [webClientId, e.APPLE_APP_CLIENT_ID] : webClientId;
+}
+
 /**
  * The social providers whose OAuth credentials are actually configured in this environment.
  *
@@ -531,7 +538,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
     // `response_mode=form_post`/client-secret-as-JWT handling that the built-in provider already
     // does correctly). Revisit on a future Better Auth upgrade.
     socialProviders.apple = {
-      clientId: appleCreds.clientId,
+      clientId: resolveAppleClientIds(e, appleCreds.clientId),
       clientSecret: generateAppleClientSecret(appleCreds),
     };
   }

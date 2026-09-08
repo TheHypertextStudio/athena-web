@@ -116,6 +116,7 @@ jobs:
           BETTER_AUTH_PASSKEY_RP_ID: "${{ vars.PASSKEY_RP_ID }}"
           BETTER_AUTH_PASSKEY_RP_NAME: Docket
           BETTER_AUTH_PASSKEY_NATIVE_ORIGINS: "${{ vars.PASSKEY_NATIVE_ORIGINS }}"
+          APPLE_APP_CLIENT_ID: "${{ vars.APPLE_APP_CLIENT_ID }}"
           GOOGLE_CALENDAR_WEBHOOK_URL: "${{ vars.API_URL }}/webhooks/calendar/google"
           GOOGLE_OAUTH_PUBLIC: "${{ vars.GOOGLE_OAUTH_PUBLIC }}"
           # Defaulted, unlike its neighbours: this flag is REQUIRED by the API's env contract, and

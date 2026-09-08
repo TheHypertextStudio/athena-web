@@ -203,6 +203,8 @@ export const authServer = {
    * real-shaped — absent ⇒ provider hidden. Web-only (no native iOS ID-token flow).
    */
   APPLE_CLIENT_ID: z.string().optional(),
+  /** Native Apple app identifier accepted as a Sign in with Apple token audience. */
+  APPLE_APP_CLIENT_ID: z.string().optional(),
   /** Apple 10-char Team ID — the `iss` of the client-secret JWT. Paired all-or-nothing with the other `APPLE_*` vars. */
   APPLE_TEAM_ID: z.string().optional(),
   /** Apple Sign-in key id (the `.p8` key's Key ID) — the `kid` JWT header. */

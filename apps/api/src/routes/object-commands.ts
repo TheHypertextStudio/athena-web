@@ -2428,10 +2428,12 @@ async function executeReplay(
         continue;
       }
       if (receipt.objectKind === 'task') {
-        effects.taskStateMutations.push({
+        const mutation = {
           before: before as typeof task.$inferSelect,
           after: updated as typeof task.$inferSelect,
-        });
+        };
+        effects.taskStateMutations.push(mutation);
+        effects.timerStops.push(...(await closeCompletingUserTaskTimers(tx, actorId, mutation)));
       } else {
         effects.projectStatusRows.push(updated as typeof project.$inferSelect);
       }

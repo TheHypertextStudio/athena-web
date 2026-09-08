@@ -110,14 +110,36 @@ describe('task completion and Time Ledger', () => {
 
     expect(completed.status).toBe(200);
     expect((await recordStatuses([record.id])).get(record.id)).toBe('closed');
+    const interval = one(
+      await db
+        .select({ startedAt: schema.timeInterval.startedAt, endedAt: schema.timeInterval.endedAt })
+        .from(schema.timeInterval)
+        .where(eq(schema.timeInterval.timeRecordId, record.id)),
+    );
+    expect(interval.endedAt).not.toBeNull();
+    if (!interval.endedAt) throw new Error('completed timer interval needs an end time');
     const timerStops = await db
-      .select({ detail: schema.event.detail, kind: schema.event.kind })
+      .select({
+        actor: schema.event.actor,
+        detail: schema.event.detail,
+        entity: schema.event.entity,
+        kind: schema.event.kind,
+        userId: schema.event.userId,
+      })
       .from(schema.event)
       .where(and(eq(schema.event.organizationId, orgId), eq(schema.event.kind, 'timer_stopped')));
     expect(timerStops).toEqual([
       {
+        actor: expect.objectContaining({ docketActorId: actorId }),
+        entity: expect.objectContaining({
+          docketEntityId: taskId,
+          externalId: taskId,
+          title: 'Ship the timer behavior',
+        }),
         kind: 'timer_stopped',
+        userId,
         detail: expect.objectContaining({
+          elapsedMs: interval.endedAt.getTime() - interval.startedAt.getTime(),
           schema: 'docket.timer',
           timeRecordId: record.id,
         }),

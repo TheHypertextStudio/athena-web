@@ -49,6 +49,9 @@ import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchUpsert } from '../search/write-through';
 import {
   applySubtaskCompletionPolicyForParents,
+  closeCompletingUserTaskTimers,
+  emitCompletedTaskTimerStops,
+  type CompletedTaskTimerStop,
   finishTaskStateTransition,
   type TaskStateMutation,
   writeTaskStateTransition,
@@ -323,7 +326,7 @@ const workStatuses = new Hono<AppEnv>()
       const { statusId } = c.req.valid('param');
       const body = c.req.valid('json');
 
-      const { updated, restamped, cascades } = await db.transaction(async (tx) => {
+      const { updated, restamped, timerStops, cascades } = await db.transaction(async (tx) => {
         const current = (
           await tx
             .select()
@@ -377,6 +380,7 @@ const workStatuses = new Hono<AppEnv>()
         // Moving a status across the terminal boundary changes what the work in it *is*, and
         // `completedAt`/`canceledAt` are what progress, capacity and throughput read.
         const restamped: TaskStateMutation[] = [];
+        const timerStops: CompletedTaskTimerStop[] = [];
         let cascades: TaskStateMutation[] = [];
         if (body.category !== undefined && body.category !== current.category) {
           if (current.entityType === 'task') {
@@ -395,7 +399,10 @@ const workStatuses = new Hono<AppEnv>()
                 canceledAt: stamps.canceledAt,
                 includeArchived: true,
               });
-              if (mutation) restamped.push(mutation);
+              if (mutation) {
+                restamped.push(mutation);
+                timerStops.push(...(await closeCompletingUserTaskTimers(tx, actorId, mutation)));
+              }
             }
             cascades = await applySubtaskCompletionPolicyForParents(
               tx,
@@ -406,12 +413,13 @@ const workStatuses = new Hono<AppEnv>()
           // Containers carry no terminal timestamps of their own: their progress is computed from
           // the work inside them, so moving the status between categories is the whole change.
         }
-        return { updated: row, restamped, cascades };
+        return { updated: row, restamped, timerStops, cascades };
       });
 
       for (const transition of restamped) {
         await finishTaskStateTransition({ actorId }, transition);
       }
+      await emitCompletedTaskTimerStops(timerStops);
       for (const cascade of cascades) {
         await finishTaskStateTransition({ actorId: null }, cascade);
       }
@@ -508,7 +516,7 @@ const workStatuses = new Hono<AppEnv>()
         ]);
       }
 
-      const { deleted, remappedCount, moved, movedKind, transitions, cascades } =
+      const { deleted, remappedCount, moved, movedKind, transitions, timerStops, cascades } =
         await db.transaction(async (tx) => {
           const current = (
             await tx
@@ -538,6 +546,7 @@ const workStatuses = new Hono<AppEnv>()
           const moveTo = { statusId: replacement.id, key: replacement.key };
           let movedIds: string[];
           const transitions: TaskStateMutation[] = [];
+          const timerStops: CompletedTaskTimerStop[] = [];
           let cascades: TaskStateMutation[] = [];
           let remapped: number;
           if (current.entityType === 'task') {
@@ -556,7 +565,10 @@ const workStatuses = new Hono<AppEnv>()
                 canceledAt: stamps.canceledAt,
                 includeArchived: true,
               });
-              if (mutation) transitions.push(mutation);
+              if (mutation) {
+                transitions.push(mutation);
+                timerStops.push(...(await closeCompletingUserTaskTimers(tx, actorId, mutation)));
+              }
             }
             movedIds = transitions.map((entry) => entry.after.id);
             remapped = transitions.length;
@@ -598,6 +610,7 @@ const workStatuses = new Hono<AppEnv>()
             moved: movedIds,
             movedKind: current.entityType,
             transitions,
+            timerStops,
             cascades,
           };
         });
@@ -611,6 +624,7 @@ const workStatuses = new Hono<AppEnv>()
       } else {
         for (const id of moved) await enqueueSearchUpsert(orgId, movedKind, id);
       }
+      await emitCompletedTaskTimerStops(timerStops);
       for (const cascade of cascades) {
         await finishTaskStateTransition({ actorId: null }, cascade);
       }

@@ -22,8 +22,16 @@ import {
 import { TimestampString } from '@docket/planning/date-time';
 import { defaultCycleName } from '@docket/work/cycle-contract';
 
-import { appWithActor, fakeSession, getDb, seedBaseOrg } from '../support/routes-harness';
+import {
+  appWithActor,
+  appWithSession,
+  fakeSession,
+  getDb,
+  seedBaseOrg,
+  seedUserWithHub,
+} from '../support/routes-harness';
 import type workViewRoutes from '../../src/routes/work-views';
+import type timeRouter from '../../src/routes/time';
 import type { queryWorkViewFacets as queryWorkViewFacetsFunction } from '../../src/lib/work-views/facets';
 import type { reorderWorkView as reorderWorkViewFunction } from '../../src/lib/work-views/order';
 import { programRequest, projectRequest, taskRequest } from '../work-views/request-fixtures';
@@ -34,12 +42,14 @@ const JSON_HEADERS = { 'content-type': 'application/json' };
 
 let schema!: typeof DbModule;
 let workViews!: typeof workViewRoutes;
+let time!: typeof timeRouter;
 let queryWorkViewFacets!: typeof queryWorkViewFacetsFunction;
 let reorderWorkView!: typeof reorderWorkViewFunction;
 
 beforeAll(async () => {
   schema = await getDb();
   workViews = (await import('../../src/routes/work-views')).default;
+  time = (await import('../../src/routes/time')).default;
   queryWorkViewFacets = (await import('../../src/lib/work-views/facets')).queryWorkViewFacets;
   reorderWorkView = (await import('../../src/lib/work-views/order')).reorderWorkView;
 });
@@ -2112,6 +2122,8 @@ describe('work-view routes', () => {
 
   it('emits the canonical Task status event for a status group drop', async () => {
     const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
+    const userId = await seedUserWithHub(schema.db, schema, 'Work view timer owner');
+    await schema.db.update(schema.actor).set({ userId }).where(eq(schema.actor.id, humanActorId));
     const [item] = await schema.db
       .insert(schema.task)
       .values({
@@ -2126,6 +2138,16 @@ describe('work-view routes', () => {
     if (!item) throw new Error('status seed failed');
     await grantOrganizationCapability(orgId, humanActorId, 'contribute');
     const app = appWithActor(workViews, orgId, ['contribute'], humanActorId);
+    const timer = appWithSession(time, fakeSession(userId));
+    const started = await timer.request('/records', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        context: { organizationId: orgId, taskId: item.id, label: 'Status event' },
+      }),
+    });
+    expect(started.status).toBe(200);
+    const record = (await started.json()) as { id: string };
     const response = await app.request('/order', {
       method: 'PATCH',
       headers: JSON_HEADERS,
@@ -2147,9 +2169,17 @@ describe('work-view routes', () => {
     expect(events).toContainEqual(
       expect.objectContaining({
         kind: 'completed',
-        detail: expect.objectContaining({ fromState: 'todo', toState: 'done' }),
+        detail: expect.objectContaining({ fromState: 'in_progress', toState: 'done' }),
       }),
     );
+    expect(
+      (
+        await schema.db
+          .select({ status: schema.timeRecord.status })
+          .from(schema.timeRecord)
+          .where(eq(schema.timeRecord.id, record.id))
+      )[0]?.status,
+    ).toBe('closed');
   });
 
   it('rejects a Task milestone from another Project', async () => {

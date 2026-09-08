@@ -6,6 +6,7 @@ import type * as DbModule from '@docket/db';
 
 import type objectCommandsRouter from '../../src/routes/object-commands';
 import type projectsRouter from '../../src/routes/projects';
+import type timeRouter from '../../src/routes/time';
 import type { AppEnv } from '../../src/context';
 import { MAX_OBJECT_COMMAND_BYTES } from '../../src/lib/http-limits';
 import { idempotency } from '../../src/lib/idempotency';
@@ -15,24 +16,29 @@ import { setEntityWriteBus } from '../../src/events/entity-write-registry';
 import { objectCommandChangeSetId } from '../../src/mcp/change-set';
 import {
   appWithActor,
+  appWithSession,
   fakeSession,
   getDb,
+  one,
   seedBaseOrg,
   seedProgram,
   seedProject,
   seedTaskAccessOrg,
+  seedUserWithHub,
 } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let objectCommands!: typeof objectCommandsRouter;
 let projects!: typeof projectsRouter;
+let time!: typeof timeRouter;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   objectCommands = (await import('../../src/routes/object-commands')).default;
   projects = (await import('../../src/routes/projects')).default;
+  time = (await import('../../src/routes/time')).default;
 });
 
 async function send(
@@ -1177,6 +1183,8 @@ describe('object commands', () => {
 
   it('stores canonical Task status fields and restores all terminal fields on undo', async () => {
     const seeded = await seedTaskAccessOrg(db, schema, 'contribute');
+    const userId = await seedUserWithHub(db, schema, 'Object command timer owner');
+    await db.update(schema.actor).set({ userId }).where(eq(schema.actor.id, seeded.humanActorId));
     const [row] = await db
       .insert(schema.task)
       .values({
@@ -1189,6 +1197,23 @@ describe('object commands', () => {
       .returning({ id: schema.task.id });
     if (!row) throw new Error('task insert returned no row');
     const app = appWithActor(objectCommands, seeded.orgId, ['contribute'], seeded.humanActorId);
+    const timerApp = appWithSession(time, fakeSession(userId));
+    const startTimer = async () => {
+      const response = await timerApp.request('/records', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          context: {
+            organizationId: seeded.orgId,
+            taskId: row.id,
+            label: 'Finish me',
+          },
+        }),
+      });
+      expect(response.status).toBe(200);
+      return (await response.json()) as { id: string };
+    };
+    const forwardTimer = await startTimer();
     const complete = await send(app, {
       commandId: 'complete-task',
       objectKind: 'task',
@@ -1212,6 +1237,14 @@ describe('object commands', () => {
       canceledAt: null,
     });
     expect(completed?.completedAt).toBeInstanceOf(Date);
+    expect(
+      one(
+        await db
+          .select({ status: schema.timeRecord.status })
+          .from(schema.timeRecord)
+          .where(eq(schema.timeRecord.id, forwardTimer.id)),
+      ).status,
+    ).toBe('closed');
 
     const undo = await send(app, {
       commandId: 'undo-complete-task',
@@ -1232,6 +1265,15 @@ describe('object commands', () => {
     };
     expect(undoPayload.conflictingIds).toEqual([]);
     expect(undoPayload.receipt.entries).toHaveLength(4);
+    const redoTimer = await startTimer();
+    expect(
+      one(
+        await db
+          .select({ status: schema.timeRecord.status })
+          .from(schema.timeRecord)
+          .where(eq(schema.timeRecord.id, redoTimer.id)),
+      ).status,
+    ).toBe('open');
     const redo = await send(app, {
       commandId: 'redo-complete-task',
       direction: 'redo',
@@ -1243,6 +1285,14 @@ describe('object commands', () => {
     };
     expect(redoPayload.conflictingIds).toEqual([]);
     expect(redoPayload.receipt.entries).toHaveLength(4);
+    expect(
+      one(
+        await db
+          .select({ status: schema.timeRecord.status })
+          .from(schema.timeRecord)
+          .where(eq(schema.timeRecord.id, redoTimer.id)),
+      ).status,
+    ).toBe('closed');
   });
 
   it('replays the canonical Project status tuple without self-conflicts', async () => {

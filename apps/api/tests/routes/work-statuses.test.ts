@@ -13,12 +13,22 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
+import type timeRouter from '../../src/routes/time';
+import {
+  appWithActor,
+  appWithSession,
+  fakeSession,
+  getDb,
+  one,
+  seedBaseOrg,
+  seedUserWithHub,
+} from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let statuses!: unknown;
 let forkRouter!: unknown;
+let time!: typeof timeRouter;
 
 beforeAll(async () => {
   schema = await getDb();
@@ -26,6 +36,7 @@ beforeAll(async () => {
   const router = await import('../../src/routes/work-statuses');
   statuses = router.default;
   forkRouter = router.teamStatusFork;
+  time = (await import('../../src/routes/time')).default;
 });
 
 const MISSING = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
@@ -360,6 +371,52 @@ describe('changing a status', () => {
     );
     expect(stream.kind).toBe('completed');
     expect(stream.actor).toMatchObject({ docketActorId: humanActorId });
+  });
+
+  it('closes the manager’s matching timer when a status category completes its tasks', async () => {
+    const { w, orgId, teamId, humanActorId, statusId } = await seed();
+    const userId = await seedUserWithHub(db, schema, 'Status category timer owner');
+    await db.update(schema.actor).set({ userId }).where(eq(schema.actor.id, humanActorId));
+    const taskRow = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Complete through a status category',
+          state: 'in_progress',
+          statusId: statusId('task', 'in_progress'),
+        })
+        .returning({ id: schema.task.id }),
+    );
+    const timer = appWithSession(time, fakeSession(userId));
+    const started = await timer.request('/records', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        context: { organizationId: orgId, taskId: taskRow.id, label: taskRow.id },
+      }),
+    });
+    expect(started.status).toBe(200);
+    const record = (await started.json()) as { id: string };
+
+    expect(
+      (
+        await w.request(`/${statusId('task', 'in_progress')}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ category: 'completed' }),
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      one(
+        await db
+          .select({ status: schema.timeRecord.status })
+          .from(schema.timeRecord)
+          .where(eq(schema.timeRecord.id, record.id)),
+      ).status,
+    ).toBe('closed');
   });
 
   it('moves the default rather than allowing two', async () => {
@@ -749,6 +806,50 @@ describe('deleting a status', () => {
       { method: 'DELETE' },
     );
     expect(res.status).toBe(422);
+  });
+
+  it('closes the manager’s matching timer when deleting and remapping into done', async () => {
+    const { w, orgId, teamId, humanActorId, statusId } = await seed();
+    const userId = await seedUserWithHub(db, schema, 'Status remap timer owner');
+    await db.update(schema.actor).set({ userId }).where(eq(schema.actor.id, humanActorId));
+    const taskRow = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Complete through a status remap',
+          state: 'in_progress',
+          statusId: statusId('task', 'in_progress'),
+        })
+        .returning({ id: schema.task.id }),
+    );
+    const timer = appWithSession(time, fakeSession(userId));
+    const started = await timer.request('/records', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        context: { organizationId: orgId, taskId: taskRow.id, label: taskRow.id },
+      }),
+    });
+    expect(started.status).toBe(200);
+    const record = (await started.json()) as { id: string };
+
+    expect(
+      (
+        await w.request(`/${statusId('task', 'in_progress')}?remapTo=${statusId('task', 'done')}`, {
+          method: 'DELETE',
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      one(
+        await db
+          .select({ status: schema.timeRecord.status })
+          .from(schema.timeRecord)
+          .where(eq(schema.timeRecord.id, record.id)),
+      ).status,
+    ).toBe('closed');
   });
 
   it('moves a project onto the replacement', async () => {

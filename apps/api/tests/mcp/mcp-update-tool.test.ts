@@ -12,17 +12,25 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
+import type timeRouter from '../../src/routes/time';
+import {
+  appWithSession,
+  fakeSession,
+  seedStatuses,
+  type StatusIdLookup,
+} from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let registerTools!: typeof RegisterTools;
+let time!: typeof timeRouter;
 
 beforeAll(async () => {
   schema = await getMigratedDb();
   db = schema.db;
   registerTools = (await import('../../src/mcp/tools')).registerTools;
+  time = (await import('../../src/routes/time')).default;
 });
 
 interface Seed {
@@ -376,6 +384,44 @@ describe('update by scope', () => {
       completedAt: null,
       autoCompletedBySubtasks: false,
     });
+  });
+
+  it('closes the MCP caller’s matching timer when it completes a task', async () => {
+    const s = await seedOrg(['contribute']);
+    const taskId = await seedTask(s, { title: 'Complete from MCP' });
+    if (s.ctx.principal.kind !== 'user') throw new Error('MCP fixture needs a user principal');
+    await db.insert(schema.hub).values({ userId: s.ctx.principal.userId });
+    const timer = appWithSession(time, fakeSession(s.ctx.principal.userId));
+    const started = await timer.request('/records', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        context: { organizationId: s.orgId, taskId, label: 'Complete from MCP' },
+      }),
+    });
+    expect(started.status).toBe(200);
+    const record = (await started.json()) as { id: string };
+    const client = await connect(s.ctx);
+
+    const result = (await client.callTool({
+      name: 'update',
+      arguments: {
+        orgId: s.orgId,
+        entity: 'task',
+        scope: { ids: [taskId] },
+        set: { state: 'done' },
+      },
+    })) as CallToolResult;
+
+    expect(result.isError).toBeFalsy();
+    expect(
+      (
+        await db
+          .select({ status: schema.timeRecord.status })
+          .from(schema.timeRecord)
+          .where(eq(schema.timeRecord.id, record.id))
+      )[0]?.status,
+    ).toBe('closed');
   });
 
   it('renames a project through the same `title` field a task uses', async () => {

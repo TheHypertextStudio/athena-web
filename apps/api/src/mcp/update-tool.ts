@@ -34,6 +34,8 @@ import { clearableTextPatch } from '../lib/clearable-text';
 import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
 import {
   applySubtaskCompletionPolicy,
+  closeCompletingUserTaskTimers,
+  emitCompletedTaskTimerStops,
   finishTaskStateTransition,
   writeTaskStateTransition,
 } from '../lib/task-state';
@@ -694,6 +696,11 @@ export function registerUpdateTool(
                 canceledAt: canceledAt as Date | null,
               });
               if (!mutation) return null;
+              const timerStops = await closeCompletingUserTaskTimers(
+                tx,
+                actorCtx.actorId,
+                mutation,
+              );
               const [after] =
                 Object.keys(remainingPatch).length === 0
                   ? [mutation.after]
@@ -707,11 +714,13 @@ export function registerUpdateTool(
               return {
                 after,
                 mutation: finalMutation,
+                timerStops,
                 cascades: await applySubtaskCompletionPolicy(tx, finalMutation),
               };
             });
             if (!result) continue;
             await finishTaskStateTransition({ actorId: actorCtx.actorId }, result.mutation);
+            await emitCompletedTaskTimerStops(result.timerStops);
             for (const cascade of result.cascades) {
               await finishTaskStateTransition({ actorId: null }, cascade);
             }

@@ -110,6 +110,19 @@ describe('task completion and Time Ledger', () => {
 
     expect(completed.status).toBe(200);
     expect((await recordStatuses([record.id])).get(record.id)).toBe('closed');
+    const timerStops = await db
+      .select({ detail: schema.event.detail, kind: schema.event.kind })
+      .from(schema.event)
+      .where(and(eq(schema.event.organizationId, orgId), eq(schema.event.kind, 'timer_stopped')));
+    expect(timerStops).toEqual([
+      {
+        kind: 'timer_stopped',
+        detail: expect.objectContaining({
+          schema: 'docket.timer',
+          timeRecordId: record.id,
+        }),
+      },
+    ]);
   });
 
   it('closes only the completing user’s paused matching record through the direct task route', async () => {

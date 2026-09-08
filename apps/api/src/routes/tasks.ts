@@ -63,6 +63,7 @@ import {
 import {
   applySubtaskCompletionPolicyForParents,
   closeCompletingUserTaskTimers,
+  emitCompletedTaskTimerStops,
   finishTaskStateTransition,
   setTaskState,
 } from '../lib/task-state';
@@ -1646,9 +1647,13 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
             ? current
             : (await tx.update(task).set(patch).where(where).returning())[0];
         if (!updated) throw new NotFoundError('Task not found');
-        if (statePatch !== undefined) {
-          await closeCompletingUserTaskTimers(tx, ctx.actorId, { before: current, after: updated });
-        }
+        const timerStops =
+          statePatch === undefined
+            ? []
+            : await closeCompletingUserTaskTimers(tx, ctx.actorId, {
+                before: current,
+                after: updated,
+              });
 
         const relatedActivity: { taskId: string; title: string; linked: boolean }[] = [];
         if (patchRelatedTaskIds !== undefined) {
@@ -1735,9 +1740,9 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
           ...(body.parentTaskId === undefined ? [] : [current.parentTaskId, updated.parentTaskId]),
         ];
         const cascades = await applySubtaskCompletionPolicyForParents(tx, orgId, parentTaskIds);
-        return { row: updated, cascades, relatedActivity };
+        return { row: updated, cascades, relatedActivity, timerStops };
       });
-      const { row, cascades, relatedActivity } = result;
+      const { row, cascades, relatedActivity, timerStops } = result;
 
       // Stream: a state transition (completed when it landed terminal) and/or a reassignment.
       const subject = { type: 'task', id: row.id, title: row.title };
@@ -1794,6 +1799,7 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
         });
       }
       await enqueueTaskSearchIndex(orgId, row.id);
+      await emitCompletedTaskTimerStops(timerStops);
       if (statePatch?.completedAt) {
         await advanceCompletedProcessTask(db, {
           organizationId: orgId,

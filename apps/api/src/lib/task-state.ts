@@ -15,9 +15,10 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { isTerminalCategory, type WorkStatusCategory } from '@docket/work/work-status-contract';
 
 import { resolveStateTransition } from '../routes/task-helpers';
-import { emitEvent, emitEventStrict } from '../routes/event-emit';
+import { emitEvent, emitEventStrict, emitTimerEvent } from '../routes/event-emit';
 import { enqueueSearchUpsert } from '../search/write-through';
 import { ConflictError, NotFoundError } from '../error';
+import { hydrateTimeRecords } from '../time/read-models';
 
 import {
   diffTaskFields,
@@ -47,6 +48,17 @@ type TaskStateTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export interface TaskStateMutation {
   readonly before: TaskRow;
   readonly after: TaskRow;
+}
+
+/** A closed timer whose canonical stop observation must wait for the task transaction to commit. */
+export interface CompletedTaskTimerStop {
+  readonly actorId: string;
+  readonly organizationId: string;
+  readonly taskId: string;
+  readonly taskTitle: string;
+  readonly userId: string;
+  readonly record: typeof timeRecord.$inferSelect;
+  readonly occurredAt: Date;
 }
 
 /** The task-row change caused by beginning a timer on existing work. */
@@ -115,13 +127,13 @@ export async function closeCompletingUserTaskTimers(
   tx: TaskStateTransaction,
   actorId: string | null,
   mutation: TaskStateMutation,
-): Promise<void> {
+): Promise<CompletedTaskTimerStop[]> {
   if (
     actorId === null ||
     mutation.before.completedAt !== null ||
     mutation.after.completedAt === null
   ) {
-    return;
+    return [];
   }
   const actorRows = await tx
     .select({ userId: actor.userId })
@@ -135,7 +147,7 @@ export async function closeCompletingUserTaskTimers(
     )
     .limit(1);
   const userId = actorRows[0]?.userId;
-  if (!userId) return;
+  if (!userId) return [];
 
   const records = await tx
     .select({ id: timeRecord.id })
@@ -149,7 +161,7 @@ export async function closeCompletingUserTaskTimers(
     )
     .for('update');
   const recordIds = records.map((record) => record.id);
-  if (recordIds.length === 0) return;
+  if (recordIds.length === 0) return [];
 
   const now = new Date();
   await tx
@@ -163,10 +175,41 @@ export async function closeCompletingUserTaskTimers(
         isNull(timeInterval.endedAt),
       ),
     );
-  await tx
+  const closed = await tx
     .update(timeRecord)
     .set({ status: 'closed', closedAt: now, endedAt: now })
-    .where(inArray(timeRecord.id, recordIds));
+    .where(inArray(timeRecord.id, recordIds))
+    .returning();
+  return closed.map((record) => ({
+    actorId,
+    organizationId: mutation.after.organizationId,
+    taskId: mutation.after.id,
+    taskTitle: mutation.after.title,
+    userId,
+    record,
+    occurredAt: now,
+  }));
+}
+
+/** Publish canonical timer-stop events after the enclosing task transaction commits. */
+export async function emitCompletedTaskTimerStops(
+  stops: readonly CompletedTaskTimerStop[],
+): Promise<void> {
+  for (const stop of stops) {
+    const [record] = await hydrateTimeRecords([stop.record], stop.userId, stop.occurredAt);
+    if (!record) continue;
+    await emitTimerEvent({
+      organizationId: stop.organizationId,
+      kind: 'timer_stopped',
+      userId: stop.userId,
+      actorId: stop.actorId,
+      occurredAt: stop.occurredAt,
+      tracked: { type: 'task', id: stop.taskId, title: stop.taskTitle },
+      timeRecordId: record.id,
+      elapsedMs: record.measures.humanEffortMs,
+      trackedLabel: record.title,
+    });
+  }
 }
 
 /**
@@ -495,12 +538,16 @@ export async function setTaskState(input: SetTaskStateInput): Promise<TaskRow | 
       canceledAt: transition.canceledAt,
     });
     if (!mutation) return null;
-    await closeCompletingUserTaskTimers(tx, input.actorId, mutation);
-    return { mutation, cascades: await applySubtaskCompletionPolicy(tx, mutation) };
+    return {
+      mutation,
+      timerStops: await closeCompletingUserTaskTimers(tx, input.actorId, mutation),
+      cascades: await applySubtaskCompletionPolicy(tx, mutation),
+    };
   });
   /* v8 ignore next -- @preserve defensive: the select above proved the row exists + is active */
   if (!result) return null;
   await finishTaskStateTransition({ actorId: input.actorId }, result.mutation);
+  await emitCompletedTaskTimerStops(result.timerStops);
   for (const cascade of result.cascades) {
     await finishTaskStateTransition({ actorId: null }, cascade);
   }

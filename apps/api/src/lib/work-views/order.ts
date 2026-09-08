@@ -16,6 +16,8 @@ import { rawResultRows } from '../raw-result';
 import { diffTaskFields, recordTaskChanges, resolveTaskChangeLabels } from '../task-audit';
 import {
   applySubtaskCompletionPolicy,
+  closeCompletingUserTaskTimers,
+  emitCompletedTaskTimerStops,
   finishTaskStateTransition,
   writeTaskStateTransition,
 } from '../task-state';
@@ -314,9 +316,11 @@ async function mutateGroup(
         canceledAt: transition.canceledAt,
       });
       if (!mutation) throw new NotFoundError('Work item not found');
+      const timerStops = await closeCompletingUserTaskTimers(tx, actorId, mutation);
       const cascades = await applySubtaskCompletionPolicy(tx, mutation);
       return async () => {
         await finishTaskStateTransition({ actorId }, mutation);
+        await emitCompletedTaskTimerStops(timerStops);
         for (const cascade of cascades) {
           await finishTaskStateTransition({ actorId: null }, cascade);
         }

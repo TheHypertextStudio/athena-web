@@ -8,6 +8,7 @@ import { CapabilityError, ConflictError, NotFoundError } from '../error';
 import {
   applySubtaskCompletionPolicy,
   closeCompletingUserTaskTimers,
+  emitCompletedTaskTimerStops,
   finishTaskStateTransition,
   writeTaskStateTransition,
 } from '../lib/task-state';
@@ -109,19 +110,21 @@ export async function completeTodayItem(
       canceledAt: null,
     });
     if (!mutation) throw new NotFoundError('Today item not found');
-    await closeCompletingUserTaskTimers(tx, membership.actor.id, mutation);
+    const timerStops = await closeCompletingUserTaskTimers(tx, membership.actor.id, mutation);
     await tx
       .update(dailyPlanItem)
       .set({ status: 'done' })
       .where(and(eq(dailyPlanItem.id, row.plan.id), eq(dailyPlanItem.hubId, owned.hubId)));
     return {
       mutation,
+      timerStops,
       cascades: await applySubtaskCompletionPolicy(tx, mutation),
       completedCategory: completedState.category,
     };
   });
 
   await finishTaskStateTransition({ actorId: membership.actor.id }, result.mutation);
+  await emitCompletedTaskTimerStops(result.timerStops);
   for (const cascade of result.cascades) {
     await finishTaskStateTransition({ actorId: null }, cascade);
   }

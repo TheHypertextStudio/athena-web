@@ -74,7 +74,12 @@ import {
   type RecordedChange,
 } from '../mcp/change-set';
 import { resolveContainerStatus, resolveTaskStatus } from '../lib/work-status';
-import type { TaskStateMutation } from '../lib/task-state';
+import {
+  closeCompletingUserTaskTimers,
+  emitCompletedTaskTimerStops,
+  type CompletedTaskTimerStop,
+  type TaskStateMutation,
+} from '../lib/task-state';
 import {
   diffTaskFields,
   resolveTaskChangeLabelGroups,
@@ -481,6 +486,7 @@ type Dbh = typeof db | Tx;
 
 interface CommandEffects {
   readonly taskStateMutations: TaskStateMutation[];
+  readonly timerStops: CompletedTaskTimerStop[];
   readonly taskFieldChanges: (RecordTaskChangesInput & { readonly assignmentChanged: boolean })[];
   readonly projectStatusRows: (typeof project.$inferSelect)[];
 }
@@ -989,6 +995,7 @@ async function executeForward(
   const apply = async (tx: Tx): Promise<CommandExecution> => {
     const effects: CommandEffects = {
       taskStateMutations: [],
+      timerStops: [],
       taskFieldChanges: [],
       projectStatusRows: [],
     };
@@ -1172,7 +1179,11 @@ async function executeForward(
           const updated = updatedById.get(write.id);
           if (!updated) throw new ConflictError('Task changed during update');
           if (property === 'state') {
-            effects.taskStateMutations.push({ before: write.before, after: updated });
+            const mutation = { before: write.before, after: updated };
+            effects.taskStateMutations.push(mutation);
+            effects.timerStops.push(
+              ...(await closeCompletingUserTaskTimers(tx, actorId, mutation)),
+            );
           } else {
             changedTasks.push({ before: write.before, after: updated });
           }
@@ -2145,6 +2156,7 @@ async function executeReplay(
   const apply = async (tx: Tx): Promise<CommandExecution> => {
     const effects: CommandEffects = {
       taskStateMutations: [],
+      timerStops: [],
       taskFieldChanges: [],
       projectStatusRows: [],
     };
@@ -2580,6 +2592,7 @@ const objectCommands = new Hono<AppEnv>()
           ? await executeReplay(orgId, actorId, request, idempotencyClaim)
           : await executeForward(orgId, actorId, request, idempotencyClaim);
       if (idempotencyClaim) c.set('idempotencyCompleted', true);
+      await emitCompletedTaskTimerStops(execution.effects.timerStops);
       scheduleCommandEffects();
       return ok(c, ObjectCommandResult, execution.result);
     },

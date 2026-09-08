@@ -24,6 +24,7 @@ import { resolveLandingTarget } from '../lib/task-landing';
 import {
   applySubtaskCompletionPolicy,
   closeCompletingUserTaskTimers,
+  emitCompletedTaskTimerStops,
   finishTaskStateTransition,
   writeTaskStateTransition,
 } from '../lib/task-state';
@@ -368,7 +369,7 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
         canceledAt: null,
       });
       if (!mutation) return null;
-      await closeCompletingUserTaskTimers(tx, actorId, mutation);
+      const timerStops = await closeCompletingUserTaskTimers(tx, actorId, mutation);
       const cascades = await applySubtaskCompletionPolicy(tx, mutation);
       const summary = `Closed “${match.title}”.`;
       const changeSetId = await recordChangeSetInTransaction(tx, {
@@ -384,10 +385,11 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
           after: trackedFields('task', change.after),
         })),
       });
-      return { mutation, cascades, summary, changeSetId };
+      return { mutation, timerStops, cascades, summary, changeSetId };
     });
     if (!completed) return { ok: false, summary: 'I could not close that task.' };
     await finishTaskStateTransition({ actorId }, completed.mutation);
+    await emitCompletedTaskTimerStops(completed.timerStops);
     for (const cascade of completed.cascades) {
       await finishTaskStateTransition({ actorId: null }, cascade);
     }

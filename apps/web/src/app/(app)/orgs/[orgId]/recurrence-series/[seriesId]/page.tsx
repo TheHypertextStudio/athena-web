@@ -10,6 +10,7 @@ import type {
   SeriesEdit,
 } from '../../../../../../lib/contracts/recurrence';
 import { Calendar, CheckCircle2, Pause, Play, RefreshCw, Stop } from '@docket/ui/icons';
+import { EmptyState } from '@docket/ui/components';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { useTypedRoute } from '@/lib/app-location';
@@ -380,7 +381,11 @@ export default function RecurrenceSeriesPage(): JSX.Element {
         {groups.history.length > 0 ? (
           <OccurrenceRows orgId={orgId} items={groups.history} />
         ) : (
-          <p className="text-body-small text-on-surface-variant">No occurrence history yet.</p>
+          <EmptyState
+            icon={CheckCircle2}
+            title="No occurrence history yet"
+            body="Occurrences move here once their scheduled date has passed."
+          />
         )}
       </section>
 

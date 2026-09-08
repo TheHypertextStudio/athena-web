@@ -6,9 +6,10 @@
  * @remarks
  * Lists the org's pending invitations (email + invited-at role + a Guest badge when invited as
  * a guest + relative expiry) and lets a manager revoke each one. Each revoke is a quiet outline
- * button that becomes a confirm/cancel pair on first click. When there are no pending
- * invitations the section renders nothing — the parent decides whether to show an empty state.
+ * button that becomes a confirm/cancel pair on first click. With no pending invitations it
+ * renders the shared `EmptyState` atom, unframed, since its SettingsGroup draws the frame.
  */
+import { EmptyState } from '@docket/ui/components';
 import { Badge, Button } from '@docket/ui/primitives';
 import { Inbox } from '@docket/ui/icons';
 import type { JSX } from 'react';
@@ -71,10 +72,14 @@ export function InvitationsList({
 }: InvitationsListProps): JSX.Element {
   if (invitations.length === 0) {
     return (
-      <div className="text-on-surface-variant text-body-medium flex items-center gap-2 px-3 py-6">
-        <Inbox aria-hidden="true" className="size-4" />
-        <span>No pending invitations.</span>
-      </div>
+      // `frame="none"`: this sits inside a `body="rows"` SettingsGroup that already draws the
+      // frame, so the atom supplies the treatment without painting a second one.
+      <EmptyState
+        icon={Inbox}
+        title="No pending invitations"
+        body="Invite someone and their invitation stays here until they accept it or it expires."
+        frame="none"
+      />
     );
   }
 

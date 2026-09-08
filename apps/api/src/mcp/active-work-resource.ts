@@ -14,9 +14,9 @@ import {
   timeRecord,
 } from '@docket/db';
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
-import { ActiveWorkOut } from '../contracts/active-work';
+import { ActiveWorkOut, type ActiveWorkOut as ActiveWorkPayload } from '../contracts/active-work';
 import { resourceAccessKey, resolveResourceAccess } from '../permissions/resource-access';
 import { buildTaskViewFilter } from '../routes/task-helpers';
 import type { McpContext } from './auth';
@@ -85,6 +85,209 @@ function uniqueReferences(references: readonly ActiveWorkReference[]): ActiveWor
   });
 }
 
+interface CurrentRecord {
+  readonly id: string;
+  readonly title: string;
+  readonly startedAt: Date | null;
+  readonly status: string;
+  readonly taskId: string | null;
+}
+
+/** Return the most relevant active record, prioritizing work that is still open. */
+async function currentRecord(userId: string): Promise<CurrentRecord | null> {
+  const [record] = await db
+    .select({
+      id: timeRecord.id,
+      title: timeRecord.title,
+      startedAt: timeRecord.startedAt,
+      status: timeRecord.status,
+      taskId: timeRecord.taskId,
+    })
+    .from(timeRecord)
+    .where(
+      and(eq(timeRecord.createdByUserId, userId), inArray(timeRecord.status, ['open', 'paused'])),
+    )
+    .orderBy(
+      sql`case when ${timeRecord.status} = 'open' then 0 else 1 end`,
+      desc(timeRecord.updatedAt),
+      desc(timeRecord.id),
+    )
+    .limit(1);
+  return record ?? null;
+}
+
+/** Convert a Time Ledger row into a response that has no task context. */
+function recordPayload(
+  record: CurrentRecord,
+  title: string | null = record.title,
+): ActiveWorkPayload {
+  return {
+    tracking: record.status === 'open' ? 'running' : 'paused',
+    record: { id: record.id, title, startedAt: record.startedAt?.toISOString() ?? null },
+    task: null,
+  };
+}
+
+/** Resolve visible task context and omit it when the caller cannot view the anchored task. */
+async function visibleTaskContext(
+  userId: string,
+  taskId: string,
+): Promise<ActiveWorkPayload['task']> {
+  const memberships = await activeMemberships(userId);
+  const membershipByWorkspace = new Map(
+    memberships.map((membership) => [membership.workspace.id, membership]),
+  );
+  if (membershipByWorkspace.size === 0) return null;
+
+  const [taskRow] = await db
+    .select({
+      id: task.id,
+      organizationId: task.organizationId,
+      title: task.title,
+      description: task.description,
+      externalUrl: task.externalUrl,
+      teamId: task.teamId,
+      projectId: task.projectId,
+      programId: task.programId,
+      visibility: task.visibility,
+    })
+    .from(task)
+    .where(
+      and(
+        eq(task.id, taskId),
+        inArray(task.organizationId, [...membershipByWorkspace.keys()]),
+        isNull(task.archivedAt),
+      ),
+    )
+    .limit(1);
+  const membership = taskRow ? membershipByWorkspace.get(taskRow.organizationId) : undefined;
+  if (!taskRow || !membership) return null;
+
+  const canViewTask = await buildTaskViewFilter(taskRow.organizationId, membership.actorId);
+  if (!canViewTask(taskRow)) return null;
+
+  const [projectRow] = taskRow.projectId
+    ? await db
+        .select({ id: project.id, name: project.name, organizationId: project.organizationId })
+        .from(project)
+        .where(
+          and(
+            eq(project.id, taskRow.projectId),
+            eq(project.organizationId, taskRow.organizationId),
+            isNull(project.archivedAt),
+          ),
+        )
+        .limit(1)
+    : [];
+  const canViewProject = projectRow
+    ? (
+        await resolveResourceAccess(userId, [
+          { organizationId: projectRow.organizationId, kind: 'project', id: projectRow.id },
+        ])
+      ).get(
+        resourceAccessKey({
+          organizationId: projectRow.organizationId,
+          kind: 'project',
+          id: projectRow.id,
+        }),
+      )?.canView === true
+    : false;
+  const visibleProject = canViewProject ? projectRow : null;
+
+  const [labels, taskAttachments, provenance, projectResources] = await Promise.all([
+    db
+      .select({ id: label.id, name: label.name, color: label.color })
+      .from(taskLabel)
+      .innerJoin(label, eq(label.id, taskLabel.labelId))
+      .where(
+        and(eq(taskLabel.taskId, taskRow.id), eq(taskLabel.organizationId, taskRow.organizationId)),
+      )
+      .orderBy(asc(label.name)),
+    db
+      .select({ url: attachment.url, title: attachment.title })
+      .from(attachment)
+      .where(
+        and(
+          eq(attachment.organizationId, taskRow.organizationId),
+          eq(attachment.subjectType, 'task'),
+          eq(attachment.subjectId, taskRow.id),
+          eq(attachment.kind, 'url'),
+        ),
+      )
+      .orderBy(asc(attachment.createdAt)),
+    db
+      .select({ sourceUrl: inboundTaskRoute.sourceUrl })
+      .from(inboundTaskRoute)
+      .where(
+        and(
+          eq(inboundTaskRoute.organizationId, taskRow.organizationId),
+          eq(inboundTaskRoute.taskId, taskRow.id),
+        ),
+      ),
+    visibleProject
+      ? db
+          .select({ url: attachment.url, title: attachment.title })
+          .from(attachment)
+          .where(
+            and(
+              eq(attachment.organizationId, taskRow.organizationId),
+              eq(attachment.subjectType, 'project'),
+              eq(attachment.subjectId, visibleProject.id),
+              eq(attachment.kind, 'url'),
+            ),
+          )
+          .orderBy(asc(attachment.createdAt))
+      : Promise.resolve([]),
+  ]);
+  const references = uniqueReferences([
+    ...taskAttachments.flatMap((reference) => {
+      const url = webUrl(reference.url);
+      return url ? [{ url, title: reference.title, source: 'task_attachment' as const }] : [];
+    }),
+    ...descriptionUrls(taskRow.description).map((url) => ({
+      url,
+      title: null,
+      source: 'task_description' as const,
+    })),
+    ...[taskRow.externalUrl, ...provenance.map((reference) => reference.sourceUrl)].flatMap(
+      (value) => {
+        const url = webUrl(value);
+        return url ? [{ url, title: null, source: 'task_provenance' as const }] : [];
+      },
+    ),
+    ...projectResources.flatMap((reference) => {
+      const url = webUrl(reference.url);
+      return url ? [{ url, title: reference.title, source: 'project_resource' as const }] : [];
+    }),
+  ]);
+
+  return {
+    id: taskRow.id,
+    title: taskRow.title,
+    workspace: membership.workspace,
+    project: visibleProject ? { id: visibleProject.id, name: visibleProject.name } : null,
+    labels,
+    references,
+  };
+}
+
+/** Read the caller's record without exposing its title until its anchored task is visible. */
+async function readActiveWork(ctx: McpContext): Promise<ActiveWorkPayload> {
+  requireScope(ctx.scopes, RESOURCE_READ_SCOPE);
+  if (ctx.principal.kind !== 'user') {
+    return { tracking: 'idle', record: null, task: null };
+  }
+
+  const record = await currentRecord(ctx.principal.userId);
+  if (!record) return { tracking: 'idle', record: null, task: null };
+  if (!record.taskId) return recordPayload(record);
+
+  const task = await visibleTaskContext(ctx.principal.userId, record.taskId);
+  return ActiveWorkOut.parse(
+    task ? { ...recordPayload(record), task } : recordPayload(record, null),
+  );
+}
+
 /** Register the authenticated static resource for the caller's current tracked work. */
 export function registerActiveWorkResource(server: McpRegistrar, ctx: McpContext): void {
   server.registerResource(
@@ -95,187 +298,7 @@ export function registerActiveWorkResource(server: McpRegistrar, ctx: McpContext
       description: "The caller's current Time Ledger record and visible task context.",
       mimeType: 'application/json',
     },
-    async (uri): Promise<ReadResourceResult> => {
-      requireScope(ctx.scopes, RESOURCE_READ_SCOPE);
-      if (ctx.principal.kind !== 'user') {
-        return jsonRead(uri, ActiveWorkOut.parse({ tracking: 'idle', record: null, task: null }));
-      }
-
-      const [record] = await db
-        .select({
-          id: timeRecord.id,
-          title: timeRecord.title,
-          startedAt: timeRecord.startedAt,
-          status: timeRecord.status,
-          taskId: timeRecord.taskId,
-        })
-        .from(timeRecord)
-        .where(
-          and(
-            eq(timeRecord.createdByUserId, ctx.principal.userId),
-            inArray(timeRecord.status, ['open', 'paused']),
-          ),
-        )
-        .orderBy(desc(timeRecord.updatedAt), desc(timeRecord.id))
-        .limit(1);
-      if (!record) {
-        return jsonRead(uri, ActiveWorkOut.parse({ tracking: 'idle', record: null, task: null }));
-      }
-
-      const base = {
-        tracking: record.status === 'open' ? ('running' as const) : ('paused' as const),
-        record: {
-          id: record.id,
-          title: record.title,
-          startedAt: record.startedAt?.toISOString() ?? null,
-        },
-      };
-      if (!record.taskId) return jsonRead(uri, ActiveWorkOut.parse({ ...base, task: null }));
-
-      const memberships = await activeMemberships(ctx.principal.userId);
-      const membershipByWorkspace = new Map(
-        memberships.map((membership) => [membership.workspace.id, membership]),
-      );
-      if (membershipByWorkspace.size === 0) {
-        return jsonRead(uri, ActiveWorkOut.parse({ ...base, task: null }));
-      }
-
-      const [taskRow] = await db
-        .select({
-          id: task.id,
-          organizationId: task.organizationId,
-          title: task.title,
-          description: task.description,
-          externalUrl: task.externalUrl,
-          teamId: task.teamId,
-          projectId: task.projectId,
-          programId: task.programId,
-          visibility: task.visibility,
-        })
-        .from(task)
-        .where(
-          and(
-            eq(task.id, record.taskId),
-            inArray(task.organizationId, [...membershipByWorkspace.keys()]),
-            isNull(task.archivedAt),
-          ),
-        )
-        .limit(1);
-      const membership = taskRow ? membershipByWorkspace.get(taskRow.organizationId) : undefined;
-      if (!taskRow || !membership) return jsonRead(uri, ActiveWorkOut.parse({ ...base, task: null }));
-
-      const canViewTask = await buildTaskViewFilter(taskRow.organizationId, membership.actorId);
-      if (!canViewTask(taskRow)) return jsonRead(uri, ActiveWorkOut.parse({ ...base, task: null }));
-
-      const [projectRow] = taskRow.projectId
-        ? await db
-            .select({ id: project.id, name: project.name, organizationId: project.organizationId })
-            .from(project)
-            .where(
-              and(
-                eq(project.id, taskRow.projectId),
-                eq(project.organizationId, taskRow.organizationId),
-                isNull(project.archivedAt),
-              ),
-            )
-            .limit(1)
-        : [];
-      const projectAccess = projectRow
-        ? await resolveResourceAccess(ctx.principal.userId, [
-            { organizationId: projectRow.organizationId, kind: 'project', id: projectRow.id },
-          ])
-        : new Map();
-      const visibleProject =
-        projectRow &&
-        projectAccess.get(
-          resourceAccessKey({
-            organizationId: projectRow.organizationId,
-            kind: 'project',
-            id: projectRow.id,
-          }),
-        )?.canView
-          ? projectRow
-          : null;
-
-      const [labels, taskAttachments, provenance, projectResources] = await Promise.all([
-        db
-          .select({ id: label.id, name: label.name, color: label.color })
-          .from(taskLabel)
-          .innerJoin(label, eq(label.id, taskLabel.labelId))
-          .where(and(eq(taskLabel.taskId, taskRow.id), eq(taskLabel.organizationId, taskRow.organizationId)))
-          .orderBy(asc(label.name)),
-        db
-          .select({ url: attachment.url, title: attachment.title })
-          .from(attachment)
-          .where(
-            and(
-              eq(attachment.organizationId, taskRow.organizationId),
-              eq(attachment.subjectType, 'task'),
-              eq(attachment.subjectId, taskRow.id),
-              eq(attachment.kind, 'url'),
-            ),
-          )
-          .orderBy(asc(attachment.createdAt)),
-        db
-          .select({ sourceUrl: inboundTaskRoute.sourceUrl })
-          .from(inboundTaskRoute)
-          .where(
-            and(
-              eq(inboundTaskRoute.organizationId, taskRow.organizationId),
-              eq(inboundTaskRoute.taskId, taskRow.id),
-            ),
-          ),
-        visibleProject
-          ? db
-              .select({ url: attachment.url, title: attachment.title })
-              .from(attachment)
-              .where(
-                and(
-                  eq(attachment.organizationId, taskRow.organizationId),
-                  eq(attachment.subjectType, 'project'),
-                  eq(attachment.subjectId, visibleProject.id),
-                  eq(attachment.kind, 'url'),
-                ),
-              )
-              .orderBy(asc(attachment.createdAt))
-          : Promise.resolve([]),
-      ]);
-      const references = uniqueReferences([
-        ...taskAttachments.flatMap((reference) => {
-          const url = webUrl(reference.url);
-          return url ? [{ url, title: reference.title, source: 'task_attachment' as const }] : [];
-        }),
-        ...descriptionUrls(taskRow.description).map((url) => ({
-          url,
-          title: null,
-          source: 'task_description' as const,
-        })),
-        ...[taskRow.externalUrl, ...provenance.map((reference) => reference.sourceUrl)].flatMap(
-          (value) => {
-            const url = webUrl(value);
-            return url ? [{ url, title: null, source: 'task_provenance' as const }] : [];
-          },
-        ),
-        ...projectResources.flatMap((reference) => {
-          const url = webUrl(reference.url);
-          return url ? [{ url, title: reference.title, source: 'project_resource' as const }] : [];
-        }),
-      ]);
-
-      return jsonRead(
-        uri,
-        ActiveWorkOut.parse({
-          ...base,
-          task: {
-            id: taskRow.id,
-            title: taskRow.title,
-            workspace: membership.workspace,
-            project: visibleProject ? { id: visibleProject.id, name: visibleProject.name } : null,
-            labels,
-            references,
-          },
-        }),
-      );
-    },
+    async (uri): Promise<ReadResourceResult> =>
+      jsonRead(uri, ActiveWorkOut.parse(await readActiveWork(ctx))),
   );
 }

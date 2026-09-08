@@ -20,7 +20,7 @@ const ActiveWorkTaskOut = z.object({
 
 const ActiveWorkRecordOut = z.object({
   id: z.string(),
-  title: z.string(),
+  title: z.string().nullable(),
   startedAt: z.iso.datetime().nullable(),
 });
 

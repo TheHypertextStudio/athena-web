@@ -1,7 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -51,10 +50,7 @@ async function seedWorkspace(): Promise<Seed> {
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId })
     .returning({ id: schema.actor.id });
   const actorId = assertDefined(actor).id;
-  const [hub] = await db
-    .insert(schema.hub)
-    .values({ userId })
-    .returning({ id: schema.hub.id });
+  const [hub] = await db.insert(schema.hub).values({ userId }).returning({ id: schema.hub.id });
   const [team] = await db
     .insert(schema.team)
     .values({ organizationId: orgId, name: 'Core', key: `C${slug.slice(-5)}` })
@@ -107,6 +103,7 @@ async function seedRecord(
   seed: Seed,
   taskId: string | null,
   status: 'open' | 'paused',
+  updatedAt?: Date,
 ): Promise<string> {
   const [row] = await db
     .insert(schema.timeRecord)
@@ -117,6 +114,7 @@ async function seedRecord(
       title: taskId ? 'Tracked task' : 'Unnamed work',
       status,
       startedAt: new Date('2026-09-07T12:00:00.000Z'),
+      ...(updatedAt ? { updatedAt } : {}),
     })
     .returning({ id: schema.timeRecord.id });
   return assertDefined(row).id;
@@ -133,7 +131,11 @@ async function connect(ctx: McpContext): Promise<Client> {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'client', version: '0.0.0' });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
-  connections.push({ close: async () => Promise.all([client.close(), server.close()]).then(() => {}) });
+  connections.push({
+    close: async () => {
+      await Promise.all([client.close(), server.close()]);
+    },
+  });
   return client;
 }
 
@@ -285,7 +287,7 @@ describe('docket://hub/active-work', () => {
         hubId: seed.hubId,
         createdByUserId: seed.userId,
         taskId: foreignTaskId,
-        title: 'Tracked task',
+        title: 'Private customer work',
         status: 'open',
         startedAt: new Date('2026-09-07T12:00:00.000Z'),
       })
@@ -293,8 +295,32 @@ describe('docket://hub/active-work', () => {
     const client = await connect(seed.ctx);
 
     const payload = await read(client);
-    expect(payload).toMatchObject({ tracking: 'running', record: { id: assertDefined(record).id }, task: null });
+    expect(payload).toMatchObject({
+      tracking: 'running',
+      record: { id: assertDefined(record).id, title: null },
+      task: null,
+    });
     expect(JSON.stringify(payload)).not.toContain(foreignTaskId);
     expect(JSON.stringify(payload)).not.toContain('Private customer work');
+  });
+
+  it('prefers an open record over a more recently updated paused record', async () => {
+    const seed = await seedWorkspace();
+    const runningTaskId = await seedTask(seed, { title: 'Continue the migration' });
+    const pausedTaskId = await seedTask(seed, { title: 'Review the brief' });
+    const runningRecordId = await seedRecord(
+      seed,
+      runningTaskId,
+      'open',
+      new Date('2026-09-07T12:00:00.000Z'),
+    );
+    await seedRecord(seed, pausedTaskId, 'paused', new Date('2026-09-07T13:00:00.000Z'));
+    const client = await connect(seed.ctx);
+
+    await expect(read(client)).resolves.toMatchObject({
+      tracking: 'running',
+      record: { id: runningRecordId },
+      task: { id: runningTaskId, title: 'Continue the migration' },
+    });
   });
 });

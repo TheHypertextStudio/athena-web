@@ -33,12 +33,14 @@ export const WorkDestinationReviewOut = z.discriminatedUnion('decision', [
 /** One valid task-scoped destination review result. */
 export type WorkDestinationReviewOut = z.infer<typeof WorkDestinationReviewOut>;
 
+const { oneOf: workDestinationReviewVariants } = z.toJSONSchema(WorkDestinationReviewOut);
+
 /**
  * The SDK-compatible object validator for the exact review result union.
  *
- * The MCP SDK accepts only object schemas at registration time. Its JSON Schema extension point
- * advertises the discriminated union. The reviewer parses {@link WorkDestinationReviewOut} before
- * it builds structured content, so this SDK-facing object never accepts an unchecked result.
+ * The MCP SDK accepts only object schemas at registration time. Its metadata advertises the
+ * discriminated union. Its refinement also applies the union's decision-specific requirements when
+ * callers parse this SDK-facing object.
  */
 export const WorkDestinationReviewMcpOut = z
   .object({
@@ -47,9 +49,10 @@ export const WorkDestinationReviewMcpOut = z
     scope: WorkDestinationScopeOut.optional(),
     question: z.string().trim().min(1).max(1_000).optional(),
   })
-  .strict();
-
-WorkDestinationReviewMcpOut._zod.toJSONSchema = () => ({
-  type: 'object',
-  ...z.toJSONSchema(WorkDestinationReviewOut),
-});
+  .strict()
+  .superRefine((value, context) => {
+    if (!WorkDestinationReviewOut.safeParse(value).success) {
+      context.addIssue({ code: 'custom', message: 'Invalid destination review decision.' });
+    }
+  })
+  .meta({ oneOf: workDestinationReviewVariants });

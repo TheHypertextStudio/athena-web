@@ -10,6 +10,7 @@ import type * as DbModule from '@docket/db';
 import type { TurnEvent, TurnInput } from '@docket/athena/turn';
 
 import { getContainer } from '../../src/container';
+import { WorkDestinationReviewMcpOut } from '../../src/contracts/work-destination-review';
 import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { getMigratedDb } from '../support/db';
@@ -187,6 +188,26 @@ function reviewTurn(result: unknown): (input: TurnInput) => AsyncIterable<TurnEv
         },
       ],
     };
+    yield { type: 'tool_use', id: 'review_result_1', name: 'review_result', input: result };
+    yield { type: 'turn_end', stopReason: 'tool_use', message };
+  };
+}
+
+function thinkingReviewTurn(result: unknown): (input: TurnInput) => AsyncIterable<TurnEvent> {
+  return async function* () {
+    const message = {
+      role: 'assistant' as const,
+      content: [
+        { type: 'thinking' as const, thinking: 'Checking the task context.', signature: 'sig_1' },
+        {
+          type: 'tool_use' as const,
+          id: 'review_result_1',
+          name: 'review_result',
+          input: result,
+        },
+      ],
+    };
+    yield { type: 'thinking', text: 'Checking the task context.' };
     yield { type: 'tool_use', id: 'review_result_1', name: 'review_result', input: result };
     yield { type: 'turn_end', stopReason: 'tool_use', message };
   };
@@ -391,6 +412,32 @@ describe('review_work_destination', () => {
     });
   });
 
+  it.each([
+    ['grant without scope', { decision: 'grant', reason: 'The task has a named output.' }],
+    [
+      'challenge without question',
+      { decision: 'challenge', reason: 'The task is underspecified.' },
+    ],
+    [
+      'deny with scope',
+      {
+        decision: 'deny',
+        reason: 'The destination does not support the task.',
+        scope: { kind: 'origin', value: 'https://www.instagram.com' },
+      },
+    ],
+    [
+      'deny with question',
+      {
+        decision: 'deny',
+        reason: 'The destination does not support the task.',
+        question: 'What will you produce?',
+      },
+    ],
+  ])('rejects %s through the registered-compatible result schema', (_label, value) => {
+    expect(WorkDestinationReviewMcpOut.safeParse(value).success).toBe(false);
+  });
+
   it('returns a bounded grant after Athena calls the one result tool', async () => {
     const seed = await seedWorkspace();
     const client = await connect(seed);
@@ -415,6 +462,28 @@ describe('review_work_destination', () => {
       reason: 'The research has a named output for this task.',
       scope: { kind: 'path_prefix', value: 'https://www.instagram.com/transitcenter' },
     });
+  });
+
+  it('accepts Athena thinking that accompanies the one review result', async () => {
+    const seed = await seedWorkspace();
+    const client = await connect(seed);
+    vi.spyOn(getContainer().agentTurn, 'streamTurn').mockImplementation(
+      thinkingReviewTurn({
+        decision: 'grant',
+        reason: 'The research has a named output for this task.',
+        scope: { kind: 'path_prefix', value: 'https://www.instagram.com/transitcenter' },
+      }),
+    );
+
+    const result = await client.callTool({
+      name: 'review_work_destination',
+      arguments: request(
+        seed,
+        'I will compare TransitCenter posting cadence and record three patterns in the LVBT strategy document.',
+      ),
+    });
+
+    expect(resultPayload(result)).toMatchObject({ decision: 'grant' });
   });
 
   it('denies Athena text that accompanies an otherwise valid review result', async () => {

@@ -495,8 +495,11 @@ describe('review_work_destination', () => {
 
   it.each([
     ['an equal path', '/transitcenter', '/transitcenter', 'grant'],
-    ['an equal path with a trailing slash', '/transitcenter', '/transitcenter/', 'grant'],
+    ['a trailing-slash scope above a slashless path', '/transitcenter', '/transitcenter/', 'deny'],
+    ['an equal path with a trailing slash', '/transitcenter/', '/transitcenter/', 'grant'],
+    ['a descendant of a trailing-slash scope', '/transitcenter/posts', '/transitcenter/', 'grant'],
     ['a parent prefix', '/transitcenter/posts/weekly', '/transitcenter', 'grant'],
+    ['a root prefix', '/transitcenter/posts/weekly', '/', 'grant'],
     ['a child prefix', '/transitcenter', '/transitcenter/posts', 'deny'],
     ['a partial path segment', '/transitcenter-archive', '/transitcenter', 'deny'],
   ])(

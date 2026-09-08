@@ -86,12 +86,8 @@ function coversDestination(
   try {
     const value = new URL(scope.value);
     if (value.origin !== destination.origin || value.search || value.hash) return false;
-    const scopePath =
-      value.pathname.length > 1 && value.pathname.endsWith('/')
-        ? value.pathname.slice(0, -1)
-        : value.pathname;
     const scopePathPrefix = value.pathname.endsWith('/') ? value.pathname : `${value.pathname}/`;
-    return destination.path === scopePath || destination.path.startsWith(scopePathPrefix);
+    return destination.path === value.pathname || destination.path.startsWith(scopePathPrefix);
   } catch {
     return false;
   }

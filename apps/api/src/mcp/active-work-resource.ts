@@ -12,6 +12,7 @@ import {
   task,
   taskLabel,
   timeRecord,
+  workStatus,
 } from '@docket/db';
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
@@ -87,8 +88,6 @@ function uniqueReferences(references: readonly ActiveWorkReference[]): ActiveWor
 
 interface CurrentRecord {
   readonly id: string;
-  readonly title: string;
-  readonly startedAt: Date | null;
   readonly status: string;
   readonly taskId: string | null;
 }
@@ -98,8 +97,6 @@ async function currentRecord(userId: string): Promise<CurrentRecord | null> {
   const [record] = await db
     .select({
       id: timeRecord.id,
-      title: timeRecord.title,
-      startedAt: timeRecord.startedAt,
       status: timeRecord.status,
       taskId: timeRecord.taskId,
     })
@@ -117,13 +114,12 @@ async function currentRecord(userId: string): Promise<CurrentRecord | null> {
 }
 
 /** Convert a Time Ledger row into a response that has no task context. */
-function recordPayload(
-  record: CurrentRecord,
-  title: string | null = record.title,
-): ActiveWorkPayload {
+function recordPayload(record: CurrentRecord, observedAt: string): ActiveWorkPayload {
   return {
+    schemaVersion: 'active-work/1',
+    observedAt,
     tracking: record.status === 'open' ? 'running' : 'paused',
-    record: { id: record.id, title, startedAt: record.startedAt?.toISOString() ?? null },
+    recordId: record.id,
     task: null,
   };
 }
@@ -145,6 +141,8 @@ async function visibleTaskContext(
       organizationId: task.organizationId,
       title: task.title,
       description: task.description,
+      statusId: task.statusId,
+      stateType: workStatus.category,
       externalUrl: task.externalUrl,
       teamId: task.teamId,
       projectId: task.projectId,
@@ -152,6 +150,7 @@ async function visibleTaskContext(
       visibility: task.visibility,
     })
     .from(task)
+    .innerJoin(workStatus, eq(workStatus.id, task.statusId))
     .where(
       and(
         eq(task.id, taskId),
@@ -168,7 +167,12 @@ async function visibleTaskContext(
 
   const [projectRow] = taskRow.projectId
     ? await db
-        .select({ id: project.id, name: project.name, organizationId: project.organizationId })
+        .select({
+          id: project.id,
+          name: project.name,
+          summary: project.summary,
+          organizationId: project.organizationId,
+        })
         .from(project)
         .where(
           and(
@@ -196,7 +200,7 @@ async function visibleTaskContext(
 
   const [labels, taskAttachments, provenance, projectResources] = await Promise.all([
     db
-      .select({ id: label.id, name: label.name, color: label.color })
+      .select({ id: label.id, name: label.name })
       .from(taskLabel)
       .innerJoin(label, eq(label.id, taskLabel.labelId))
       .where(
@@ -263,9 +267,14 @@ async function visibleTaskContext(
 
   return {
     id: taskRow.id,
+    organizationId: taskRow.organizationId,
     title: taskRow.title,
-    workspace: membership.workspace,
-    project: visibleProject ? { id: visibleProject.id, name: visibleProject.name } : null,
+    description: taskRow.description,
+    stateType: taskRow.stateType,
+    workspace: { id: membership.workspace.id, name: membership.workspace.name },
+    project: visibleProject
+      ? { id: visibleProject.id, name: visibleProject.name, summary: visibleProject.summary }
+      : null,
     labels,
     references,
   };
@@ -274,17 +283,32 @@ async function visibleTaskContext(
 /** Read the caller's record without exposing its title until its anchored task is visible. */
 async function readActiveWork(ctx: McpContext): Promise<ActiveWorkPayload> {
   requireScope(ctx.scopes, RESOURCE_READ_SCOPE);
+  const observedAt = new Date().toISOString();
   if (ctx.principal.kind !== 'user') {
-    return { tracking: 'idle', record: null, task: null };
+    return {
+      schemaVersion: 'active-work/1',
+      observedAt,
+      tracking: 'idle',
+      recordId: null,
+      task: null,
+    };
   }
 
   const record = await currentRecord(ctx.principal.userId);
-  if (!record) return { tracking: 'idle', record: null, task: null };
-  if (!record.taskId) return recordPayload(record);
+  if (!record) {
+    return {
+      schemaVersion: 'active-work/1',
+      observedAt,
+      tracking: 'idle',
+      recordId: null,
+      task: null,
+    };
+  }
+  if (!record.taskId) return recordPayload(record, observedAt);
 
   const task = await visibleTaskContext(ctx.principal.userId, record.taskId);
   return ActiveWorkOut.parse(
-    task ? { ...recordPayload(record), task } : recordPayload(record, null),
+    task ? { ...recordPayload(record, observedAt), task } : recordPayload(record, observedAt),
   );
 }
 

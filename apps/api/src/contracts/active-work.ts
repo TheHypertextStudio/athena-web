@@ -3,6 +3,8 @@
  */
 import { z } from 'zod';
 
+import { WorkStatusCategory } from '@docket/work/work-status-contract';
+
 const ActiveWorkReferenceOut = z.object({
   url: z.url(),
   title: z.string().nullable(),
@@ -11,32 +13,36 @@ const ActiveWorkReferenceOut = z.object({
 
 const ActiveWorkTaskOut = z.object({
   id: z.string(),
+  organizationId: z.string(),
   title: z.string(),
-  workspace: z.object({ id: z.string(), name: z.string(), slug: z.string() }),
-  project: z.object({ id: z.string(), name: z.string() }).nullable(),
-  labels: z.array(z.object({ id: z.string(), name: z.string(), color: z.string() })),
+  description: z.string().nullable(),
+  stateType: WorkStatusCategory,
+  workspace: z.object({ id: z.string(), name: z.string() }),
+  project: z
+    .object({ id: z.string(), name: z.string(), summary: z.string().nullable() })
+    .nullable(),
+  labels: z.array(z.object({ id: z.string(), name: z.string() })),
   references: z.array(ActiveWorkReferenceOut),
 });
 
-const ActiveWorkRecordOut = z.object({
-  id: z.string(),
-  title: z.string().nullable(),
-  startedAt: z.iso.datetime().nullable(),
+const ActiveWorkBaseOut = z.object({
+  schemaVersion: z.literal('active-work/1'),
+  observedAt: z.iso.datetime(),
 });
 
 /** The caller's current tracked work, or an explicit idle state when no record is live. */
 export const ActiveWorkOut = z.discriminatedUnion('tracking', [
-  z.object({
+  ActiveWorkBaseOut.extend({
     tracking: z.literal('running'),
-    record: ActiveWorkRecordOut,
+    recordId: z.string(),
     task: ActiveWorkTaskOut.nullable(),
   }),
-  z.object({
+  ActiveWorkBaseOut.extend({
     tracking: z.literal('paused'),
-    record: ActiveWorkRecordOut,
+    recordId: z.string(),
     task: ActiveWorkTaskOut.nullable(),
   }),
-  z.object({ tracking: z.literal('idle'), record: z.null(), task: z.null() }),
+  ActiveWorkBaseOut.extend({ tracking: z.literal('idle'), recordId: z.null(), task: z.null() }),
 ]);
 
 /** One valid active-work response. */

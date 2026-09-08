@@ -158,9 +158,21 @@ describe('docket://hub/active-work', () => {
     const client = await connect(seed.ctx);
 
     await expect(read(client)).resolves.toMatchObject({
+      schemaVersion: 'active-work/1',
+      observedAt: expect.any(String),
       tracking: 'running',
-      record: { id: recordId, title: 'Tracked task', startedAt: '2026-09-07T12:00:00.000Z' },
-      task: { id: taskId, title: 'Ship the browser client' },
+      recordId,
+      task: {
+        id: taskId,
+        organizationId: seed.orgId,
+        title: 'Ship the browser client',
+        description: null,
+        stateType: 'unstarted',
+        workspace: { id: seed.orgId, name: 'Active work' },
+        project: null,
+        labels: [],
+        references: [],
+      },
     });
   });
 
@@ -171,7 +183,10 @@ describe('docket://hub/active-work', () => {
     const client = await connect(seed.ctx);
 
     await expect(read(client)).resolves.toMatchObject({
+      schemaVersion: 'active-work/1',
+      observedAt: expect.any(String),
       tracking: 'paused',
+      recordId: expect.any(String),
       task: { id: taskId, title: 'Close the release' },
     });
   });
@@ -180,7 +195,13 @@ describe('docket://hub/active-work', () => {
     const seed = await seedWorkspace();
     const client = await connect(seed.ctx);
 
-    await expect(read(client)).resolves.toEqual({ tracking: 'idle', record: null, task: null });
+    await expect(read(client)).resolves.toEqual({
+      schemaVersion: 'active-work/1',
+      observedAt: expect.any(String),
+      tracking: 'idle',
+      recordId: null,
+      task: null,
+    });
   });
 
   it('keeps an unanchored record while withholding task context', async () => {
@@ -189,8 +210,10 @@ describe('docket://hub/active-work', () => {
     const client = await connect(seed.ctx);
 
     await expect(read(client)).resolves.toMatchObject({
+      schemaVersion: 'active-work/1',
+      observedAt: expect.any(String),
       tracking: 'running',
-      record: { id: recordId, title: 'Unnamed work' },
+      recordId,
       task: null,
     });
   });
@@ -202,6 +225,7 @@ describe('docket://hub/active-work', () => {
       .values({
         organizationId: seed.orgId,
         name: 'Browser integration',
+        summary: 'Deliver the browser integration.',
         status: 'planned',
         statusId: seed.statusId('project', 'planned'),
         createdBy: seed.actorId,
@@ -249,9 +273,16 @@ describe('docket://hub/active-work', () => {
     await expect(read(client)).resolves.toMatchObject({
       task: {
         id: taskId,
+        organizationId: seed.orgId,
+        description: 'Read https://example.com/task-description before you start.',
+        stateType: 'unstarted',
         workspace: { id: seed.orgId, name: 'Active work' },
-        project: { id: projectId, name: 'Browser integration' },
-        labels: [{ id: assertDefined(label).id, name: 'Security', color: 'red' }],
+        project: {
+          id: projectId,
+          name: 'Browser integration',
+          summary: 'Deliver the browser integration.',
+        },
+        labels: [{ id: assertDefined(label).id, name: 'Security' }],
         references: expect.arrayContaining([
           expect.objectContaining({
             url: 'https://example.com/task-attachment',
@@ -296,11 +327,12 @@ describe('docket://hub/active-work', () => {
 
     const payload = await read(client);
     expect(payload).toMatchObject({
+      schemaVersion: 'active-work/1',
+      observedAt: expect.any(String),
       tracking: 'running',
-      record: { id: assertDefined(record).id, title: null },
+      recordId: assertDefined(record).id,
       task: null,
     });
-    expect(JSON.stringify(payload)).not.toContain(foreignTaskId);
     expect(JSON.stringify(payload)).not.toContain('Private customer work');
   });
 
@@ -318,8 +350,10 @@ describe('docket://hub/active-work', () => {
     const client = await connect(seed.ctx);
 
     await expect(read(client)).resolves.toMatchObject({
+      schemaVersion: 'active-work/1',
+      observedAt: expect.any(String),
       tracking: 'running',
-      record: { id: runningRecordId },
+      recordId: runningRecordId,
       task: { id: runningTaskId, title: 'Continue the migration' },
     });
   });

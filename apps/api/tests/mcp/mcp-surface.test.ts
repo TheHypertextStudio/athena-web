@@ -1218,7 +1218,169 @@ describe('hydrated resources', () => {
     );
 
     expect(task['id']).toBe(s.taskId);
+    expect(task['archivedAt']).toBeNull();
   });
+
+  it('reads an authorized archived task by exact resource ID', async () => {
+    const s = await seedOrg(['view']);
+    const archivedAt = new Date('2026-09-08T12:00:00.000Z');
+    await db.update(schema.task).set({ archivedAt }).where(eq(schema.task.id, s.taskId));
+    const client = await connect(s.ctx);
+
+    const task = readJson(
+      (await client.readResource({ uri: `docket://${s.orgId}/task/${s.taskId}` })).contents,
+    );
+    expect(task).toMatchObject({ id: s.taskId, archivedAt: archivedAt.toISOString() });
+  });
+
+  it('returns archived state through the generic exact get tool', async () => {
+    const s = await seedOrg(['view']);
+    const archivedAt = new Date('2026-09-08T12:00:00.000Z');
+    await db.update(schema.task).set({ archivedAt }).where(eq(schema.task.id, s.taskId));
+    const client = await connect(s.ctx);
+
+    const result = (await client.callTool({
+      name: 'get',
+      arguments: { orgId: s.orgId, type: 'task', refs: [s.taskId] },
+    })) as CallToolResult;
+    expect(result.isError).not.toBe(true);
+    expect(payload(result)).toMatchObject({
+      items: [{ id: s.taskId, archivedAt: archivedAt.toISOString() }],
+      missing: [],
+    });
+  });
+
+  it('hides a private unshared archived task from exact reads', async () => {
+    const s = await seedOrg(['view']);
+    await db
+      .update(schema.grant)
+      .set({ cascades: false })
+      .where(eq(schema.grant.organizationId, s.orgId));
+    await db
+      .update(schema.task)
+      .set({ archivedAt: new Date(), visibility: 'private' })
+      .where(eq(schema.task.id, s.taskId));
+    const client = await connect(s.ctx);
+
+    await expect(
+      client.readResource({ uri: `docket://${s.orgId}/task/${s.taskId}` }),
+    ).rejects.toThrow('Not found');
+    const result = (await client.callTool({
+      name: 'get',
+      arguments: { orgId: s.orgId, type: 'task', refs: [s.taskId] },
+    })) as CallToolResult;
+    expect(payload(result)).toEqual({
+      items: [],
+      missing: [{ ref: s.taskId, reason: 'not_found' }],
+    });
+  });
+
+  it('requires work:read for archived exact task reads', async () => {
+    const s = await seedOrg(['view']);
+    await db
+      .update(schema.task)
+      .set({ archivedAt: new Date() })
+      .where(eq(schema.task.id, s.taskId));
+    const client = await connect({ ...s.ctx, scopes: [] });
+
+    await expect(
+      client.readResource({ uri: `docket://${s.orgId}/task/${s.taskId}` }),
+    ).rejects.toThrow();
+    const result = (await client.callTool({
+      name: 'get',
+      arguments: { orgId: s.orgId, type: 'task', refs: [s.taskId] },
+    })) as CallToolResult;
+    expect(payload(result)['items']).toEqual([]);
+  });
+
+  it('keeps comments on archived tasks hidden', async () => {
+    const s = await seedOrg(['view']);
+    const [comment] = await db
+      .insert(schema.comment)
+      .values({
+        organizationId: s.orgId,
+        authorId: s.actorId,
+        subjectType: 'task',
+        subjectId: s.taskId,
+        body: 'Archived task comment',
+        createdBy: s.actorId,
+      })
+      .returning({ id: schema.comment.id });
+    await db
+      .update(schema.task)
+      .set({ archivedAt: new Date() })
+      .where(eq(schema.task.id, s.taskId));
+    const client = await connect(s.ctx);
+
+    await expect(
+      client.readResource({ uri: `docket://${s.orgId}/comment/${assertDefined(comment).id}` }),
+    ).rejects.toThrow('Not found');
+  });
+
+  it('hides cross-organization archived tasks from exact reads', async () => {
+    const s = await seedOrg(['view']);
+    const foreign = await seedOrg(['view']);
+    await db
+      .update(schema.task)
+      .set({ archivedAt: new Date() })
+      .where(eq(schema.task.id, foreign.taskId));
+    const client = await connect(s.ctx);
+
+    for (const orgId of [s.orgId, foreign.orgId]) {
+      await expect(
+        client.readResource({ uri: `docket://${orgId}/task/${foreign.taskId}` }),
+      ).rejects.toThrow('Not found');
+    }
+  });
+
+  it.each(['blocking', 'blockedBy'] as const)(
+    'excludes archived %s tasks from hydrated relations and discovery',
+    async (direction) => {
+      const s = await seedOrg(['view']);
+      await db
+        .update(schema.task)
+        .set({ archivedAt: new Date(), parentTaskId: s.taskId, projectId: s.projectId })
+        .where(eq(schema.task.id, s.task2Id));
+      await db.insert(schema.taskDependency).values({
+        organizationId: s.orgId,
+        blockingTaskId: direction === 'blocking' ? s.taskId : s.task2Id,
+        blockedTaskId: direction === 'blocking' ? s.task2Id : s.taskId,
+      });
+      const client = await connect(s.ctx);
+      const task = readJson(
+        (await client.readResource({ uri: `docket://${s.orgId}/task/${s.taskId}` })).contents,
+      );
+      expect(task[direction]).toEqual([]);
+      expect(task['subtasks']).toEqual([]);
+      const project = readJson(
+        (await client.readResource({ uri: `docket://${s.orgId}/project/${s.projectId}` })).contents,
+      );
+      expect(project['tasks']).toEqual([]);
+      const completion = await client.complete({
+        ref: { type: 'ref/resource', uri: 'docket://{org}/{type}/{id}' },
+        argument: { name: 'id', value: '' },
+        context: { arguments: { org: s.orgId, type: 'task' } },
+      });
+      expect(completion.completion.values).toContain(s.taskId);
+      expect(completion.completion.values).not.toContain(s.task2Id);
+      const listed = (await client.callTool({
+        name: 'list_work',
+        arguments: { orgId: s.orgId, entity: 'task' },
+      })) as CallToolResult;
+      expect(JSON.stringify(payload(listed))).not.toContain(s.task2Id);
+
+      await db
+        .update(schema.task)
+        .set({ archivedAt: new Date() })
+        .where(eq(schema.task.id, s.taskId));
+      const archivedTask = readJson(
+        (await client.readResource({ uri: `docket://${s.orgId}/task/${s.taskId}` })).contents,
+      );
+      expect(archivedTask).toMatchObject({ id: s.taskId, archivedAt: expect.any(String) });
+      expect(archivedTask[direction]).toEqual([]);
+      expect(archivedTask['subtasks']).toEqual([]);
+    },
+  );
 
   it('omits ungranted private tasks from hydrated refs, rollups, sessions, and completion', async () => {
     const s = await seedOrg(['view']);

@@ -149,8 +149,13 @@ function authTargetId(type: ReadableType, orgId: string, id: string): string {
   return resourceKindOf(type) === 'organization' && type !== 'org' ? orgId : id;
 }
 
-/** Require canonical current-task visibility before projecting a task-bound resource. */
-async function assertTaskVisible(orgId: string, actorId: string, taskId: string): Promise<void> {
+/** Require canonical task visibility, keeping archived comment subjects hidden. */
+async function assertTaskVisible(
+  orgId: string,
+  actorId: string,
+  taskId: string,
+  includeArchived = false,
+): Promise<void> {
   const [target] = await db
     .select({
       id: task.id,
@@ -160,7 +165,13 @@ async function assertTaskVisible(orgId: string, actorId: string, taskId: string)
       visibility: task.visibility,
     })
     .from(task)
-    .where(and(eq(task.id, taskId), eq(task.organizationId, orgId), isNull(task.archivedAt)))
+    .where(
+      and(
+        eq(task.id, taskId),
+        eq(task.organizationId, orgId),
+        includeArchived ? undefined : isNull(task.archivedAt),
+      ),
+    )
     .limit(1);
   const canViewTask = await buildTaskViewFilter(orgId, actorId);
   if (!target || !canViewTask(target)) throw new NotFoundError();
@@ -194,7 +205,7 @@ export async function authorizeEntity(
   if (type === 'task') {
     // Tasks have a deliberately richer read rule than the generic grant cascade: a public task
     // is visible to non-guests, and private tasks can be shared directly.
-    await assertTaskVisible(orgId, actorCtx.actorId, id);
+    await assertTaskVisible(orgId, actorCtx.actorId, id, true);
     return actorCtx;
   }
 

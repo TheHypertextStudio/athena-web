@@ -60,7 +60,7 @@ export async function latestUpdateFor(
   return { id: u.id, health: u.health, body: u.body, createdAt: u.createdAt.toISOString() };
 }
 
-/** Full task: state, refs, dependencies (blocking + blocked-by), subtasks. */
+/** Exact task read with archive state and only active, visible related tasks. */
 export async function hydrateTask(
   orgId: string,
   id: string,
@@ -69,7 +69,7 @@ export async function hydrateTask(
   const rows = await db
     .select()
     .from(task)
-    .where(and(eq(task.id, id), eq(task.organizationId, orgId), isNull(task.archivedAt)))
+    .where(and(eq(task.id, id), eq(task.organizationId, orgId)))
     .limit(1);
   const t = rows[0];
   if (!t) throw new NotFoundError();
@@ -88,12 +88,24 @@ export async function hydrateTask(
       .select(cols)
       .from(taskDependency)
       .innerJoin(task, eq(taskDependency.blockedTaskId, task.id))
-      .where(and(eq(taskDependency.blockingTaskId, id), eq(taskDependency.organizationId, orgId))),
+      .where(
+        and(
+          eq(taskDependency.blockingTaskId, id),
+          eq(taskDependency.organizationId, orgId),
+          isNull(task.archivedAt),
+        ),
+      ),
     db
       .select(cols)
       .from(taskDependency)
       .innerJoin(task, eq(taskDependency.blockingTaskId, task.id))
-      .where(and(eq(taskDependency.blockedTaskId, id), eq(taskDependency.organizationId, orgId))),
+      .where(
+        and(
+          eq(taskDependency.blockedTaskId, id),
+          eq(taskDependency.organizationId, orgId),
+          isNull(task.archivedAt),
+        ),
+      ),
     db
       .select(cols)
       .from(task)
@@ -133,6 +145,7 @@ export async function hydrateTask(
     parentTaskId: t.parentTaskId,
     estimate: t.estimate,
     dueDate: t.dueDate?.toISOString() ?? null,
+    archivedAt: t.archivedAt?.toISOString() ?? null,
     provenance: {
       source: t.source,
       externalId: t.externalId,

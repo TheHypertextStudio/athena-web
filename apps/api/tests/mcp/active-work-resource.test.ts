@@ -1,6 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -151,6 +152,20 @@ async function read(client: Client): Promise<Record<string, unknown>> {
 }
 
 describe('docket://hub/active-work', () => {
+  it('keeps the record but omits an archived anchored task', async () => {
+    const seed = await seedWorkspace();
+    const taskId = await seedTask(seed, { title: 'Archived retained task' });
+    const recordId = await seedRecord(seed, taskId, 'open');
+    await db.update(schema.task).set({ archivedAt: new Date() }).where(eq(schema.task.id, taskId));
+    const client = await connect(seed.ctx);
+
+    await expect(read(client)).resolves.toMatchObject({
+      tracking: 'running',
+      recordId,
+      task: null,
+    });
+  });
+
   it('returns the running record and visible task context', async () => {
     const seed = await seedWorkspace();
     const taskId = await seedTask(seed, { title: 'Ship the browser client' });

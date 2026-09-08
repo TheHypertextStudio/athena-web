@@ -7,6 +7,39 @@
 
 ## Active Tasks
 
+### [NATIVE-APPLE-AUTH-001] Add native Apple authentication and shell foundations
+
+- **Status**: BLOCKED
+- **Started**: 2026-09-07
+- **Priority**: P1
+- **Description**: Docket needs an iOS, iPadOS, and macOS 26 client that signs new and returning
+  users in with passkeys, Sign in with Apple, or Google Sign-In. The client reuses the Better Auth
+  session boundary and presents a working Home and account shell without placeholder destinations.
+- **Completed implementation**: The API accepts the native Apple audience and publishes native
+  provider configuration. The website artifact publishes the matching AASA record. The app
+  implements native passkey sign-in and verified-email enrollment, Apple nonce ID-token exchange,
+  Google ID-token exchange, Keychain session restoration, offline retention, stale-request
+  suppression, local-first sign-out, and adaptive Home and Account shells. Development, staging,
+  and production builds isolate their Keychain accounts. The real `athena-services` Google Cloud
+  project now has a Docket iOS OAuth client for `studio.hypertext.docket`, and the native build uses
+  that client with the existing production web client as its server audience.
+- **Validation**: The rebased server packages pass typecheck and lint. Focused validation passes 80
+  auth tests, 161 environment tests, 3 identity contract tests, 5 API config tests, and 28 web
+  consumer tests. Twenty native auth and HTTP-contract tests pass on macOS and iOS 26.5. Seven UI
+  tests pass on both iPhone and iPad. Development and production-mode iOS Simulator and arm64 macOS
+  builds pass with two Xcode jobs. The Release app contains the exact Google values returned by the
+  provider console. Light and dark simulator evidence covers iPhone and iPad.
+- **Blocker**: Apple Developer shows `willieechalmers@gmail.com` as a free account and offers
+  enrollment in the $99/year Apple Developer Program. Xcode refuses to provision Associated
+  Domains and Sign in with Apple for team `39AB9DY3K8`. Paid enrollment and Apple's agreements are
+  required before Docket can create its App ID, associate a Services ID, obtain signing profiles,
+  or run physical-device passkey and Apple credential ceremonies. An agent cannot authorize that
+  purchase or accept those agreements for the user.
+- **Notes**: The original Apple checkout's untracked `Athena/Task.swift` and `README.md` remain
+  untouched.
+
+---
+
 ### [WEB-ROSTER-ACCEPTANCE-001] Make group recovery acceptance follow loaded rows
 
 - **Completed**: 2026-09-08

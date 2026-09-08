@@ -88,8 +88,11 @@ async function expectDrawerContentContained(page: Page, drawer: Locator): Promis
     drawer.getByRole('button', { name: 'Close calendar item' }),
     drawer.getByLabel('Starts'),
     drawer.getByLabel('Ends'),
-    drawer.getByRole('button', { name: 'Create task', exact: true }),
-    drawer.getByRole('button', { name: 'Link task', exact: true }),
+    // The arc replaced the "Create task" and "Link task" pair with one add affordance per band,
+    // named for what the band holds — "Add work to this event" when nothing is attached yet. The
+    // pattern matches whichever the item's own arc produces, so this stays a geometry check.
+    drawer.getByRole('button', { name: /^Add / }).first(),
+    drawer.getByRole('button', { name: 'Have Athena handle this' }),
   ]) {
     await expect(control).toBeVisible();
     await control.scrollIntoViewIfNeeded();

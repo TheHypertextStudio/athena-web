@@ -17,6 +17,7 @@ import {
   attachCalendarScreenshot,
   dragScheduleItemToLane,
   dragScheduleResizeGrip,
+  openScheduleItemDetail,
   scheduleItem,
   scheduleViewport,
   waitForSheetCompositorStability,
@@ -238,12 +239,13 @@ test.describe('fluid scheduling interaction contract', () => {
     await installCalendarRoutes(page, state);
     await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
 
-    const { card, body } = scheduleItem(page, item.id);
+    const { card } = scheduleItem(page, item.id);
     await expect(card.getByText('Read-only', { exact: true })).toBeVisible();
     await expect(card.getByRole('button', { name: `Move ${item.title}` })).toHaveCount(0);
     await expect(card.locator('[data-schedule-resize-target]')).toHaveCount(0);
-    await body.click();
-    const drawer = page.getByRole('dialog');
+    // The drawer this measures is what the peek's Open escalates to. Reaching for `getByRole
+    // ('dialog')` straight after the click lands on the peek, which has no Title field to disable.
+    const drawer = await openScheduleItemDetail(page, item.id);
     await expect(drawer.getByText(/^Read-only/)).toBeVisible();
     await expect(drawer.getByLabel('Title')).toBeDisabled();
     await expectDrawerContentContained(page, drawer);

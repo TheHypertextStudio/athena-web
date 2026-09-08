@@ -48,11 +48,18 @@ const PUBLIC_ROUTES = new Set(['GET /v1/config']);
  */
 const PUBLIC_CONFIG_KEYS = new Set([
   'appMode',
+  // The Apple Sign In client identifier, resolved on the line beside `googleServerClientId` in
+  // `routes/config.ts`. A provider client id is public by construction — the browser hands it to
+  // the provider — which is why its Google counterpart is already here.
+  'appleAppClientId',
   'connectors',
   'googleOAuthPublic',
   'googleServerClientId',
   'mcpUrl',
   'oauthProviders',
+  // The WebAuthn relying-party id, which is the deployment's domain. A passkey ceremony cannot
+  // start without the browser knowing it.
+  'passkeyRpId',
   'stripePublishableKey',
 ]);
 

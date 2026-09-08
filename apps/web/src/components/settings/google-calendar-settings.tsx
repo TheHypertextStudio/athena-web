@@ -44,6 +44,7 @@ import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from 
 import { EmptyState, RelativeTime } from '@docket/ui/components';
 import { relativeTime } from './format-time';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 
 const STATUS_LABEL: Record<
   CalendarConnectionStatus,
@@ -264,6 +265,7 @@ function ConnectionSettingsGroup({
   return (
     <SettingsGroup
       title={connection.accountEmail ?? connection.accountName ?? 'Google account'}
+      discoverable={false}
       description={
         <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <span>
@@ -364,11 +366,7 @@ function CalendarGroups({
         </SettingsGroup>
       ))}
       {groups.length > 0 ? (
-        <SettingsGroup
-          title="Calendars"
-          description="Choose which logical calendars appear across Docket."
-          body="rows"
-        >
+        <SettingsGroup capability={SETTINGS_NODES.connectionsDocketCalendars} body="rows">
           {groups.map((group) => (
             <LogicalCalendarRow
               key={group.id}

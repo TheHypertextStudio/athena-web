@@ -125,8 +125,8 @@ export const SETTINGS_NODES = {
     ...personalNode(
       'connections-docket-calendars',
       'connections',
-      'Docket calendars',
-      'Choose which Docket calendars sync to a connected Google account.',
+      'Calendars',
+      'Choose which logical calendars appear across Docket.',
       ['Google Calendar'],
     ),
     nestedPath: 'connections/google-calendar',

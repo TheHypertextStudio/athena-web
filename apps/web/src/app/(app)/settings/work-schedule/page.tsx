@@ -516,7 +516,7 @@ export default function WorkScheduleSettingsPage(): JSX.Element {
       action: 'ignore' | 'keep_docket' | 'use_provider';
     }) =>
       noContent(() =>
-        api.v1.me['work-location'].changes[':id'].resolve.$post({
+        api.v1.me['work-location'].changes[':id'].$patch({
           param: { id },
           json: { action },
         }),

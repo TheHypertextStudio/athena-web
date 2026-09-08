@@ -238,8 +238,8 @@ const workLocation = new Hono<AppEnv>()
     async (c) =>
       ok(c, WorkScheduleChangeListOut, await listWorkScheduleChanges(db, await callerHub(c))),
   )
-  .post(
-    '/changes/:id/resolve',
+  .patch(
+    '/changes/:id',
     apiDoc({
       tag: 'Work location',
       summary: 'Resolve one work-schedule change',

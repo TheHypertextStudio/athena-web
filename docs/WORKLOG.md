@@ -75,7 +75,9 @@
   390 by 844, plus empty and loading states at 320 and 390 pixels wide. The hosted web gate exposed
   policy coverage missing from the focused local suites. The follow-up moves all three schedule
   dates onto the shared picker, records its clock fields in the picker audit, and regenerates the
-  offline route table for the two replacement settings routes.
+  offline route table for the two replacement settings routes. The hosted API gate then exposed a
+  procedure verb in the change-resolution URL. Resolution now updates the change resource through
+  `PATCH /changes/:id`.
 - **Learnings**: Provider work-location rows cannot carry the product's full schedule model. Stable
   projection keys and account-scoped place aliases let Docket preserve one schedule while it still
   accepts provider changes. Drizzle does not generate the non-overlap trigger, so the migration

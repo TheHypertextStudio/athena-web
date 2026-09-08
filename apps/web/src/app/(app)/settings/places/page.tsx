@@ -527,7 +527,7 @@ export default function PlacesSettingsPage(): JSX.Element {
     }) =>
       noContent(
         () =>
-          api.v1.me['work-location'].changes[':id'].resolve.$post({
+          api.v1.me['work-location'].changes[':id'].$patch({
             param: { id },
             json: resolution,
           }),

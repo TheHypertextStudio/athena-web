@@ -116,7 +116,7 @@ test('a person resolves an unmatched connected-account place name', async ({ pag
       }),
     });
   });
-  await page.route('**/v1/me/work-location/changes/*/resolve', async (route) => {
+  await page.route('**/v1/me/work-location/changes/*', async (route) => {
     resolution = route.request().postDataJSON();
     resolved = true;
     await route.fulfill({ status: 204 });

@@ -242,8 +242,8 @@ describe('/v1/me/work-location routes', () => {
       ],
     });
 
-    const linked = await app.request(`/changes/${changes[0]?.id}/resolve`, {
-      method: 'POST',
+    const linked = await app.request(`/changes/${changes[0]?.id}`, {
+      method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ action: 'link_place', placeId: place.id }),
     });
@@ -255,15 +255,15 @@ describe('/v1/me/work-location routes', () => {
         .where(eq(schema.workPlaceAlias.normalizedLabel, 'decatur cafe')),
     ).toEqual([expect.objectContaining({ placeId: place.id, connectionId })]);
 
-    const ignored = await app.request(`/changes/${changes[1]?.id}/resolve`, {
-      method: 'POST',
+    const ignored = await app.request(`/changes/${changes[1]?.id}`, {
+      method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ action: 'ignore' }),
     });
     expect(ignored.status).toBe(204);
 
-    const keptDocket = await app.request(`/changes/${changes[3]?.id}/resolve`, {
-      method: 'POST',
+    const keptDocket = await app.request(`/changes/${changes[3]?.id}`, {
+      method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ action: 'keep_docket' }),
     });
@@ -281,8 +281,8 @@ describe('/v1/me/work-location routes', () => {
       }),
     ]);
 
-    const usedProvider = await app.request(`/changes/${changes[2]?.id}/resolve`, {
-      method: 'POST',
+    const usedProvider = await app.request(`/changes/${changes[2]?.id}`, {
+      method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ action: 'use_provider' }),
     });

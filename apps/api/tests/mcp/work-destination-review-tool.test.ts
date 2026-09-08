@@ -464,6 +464,91 @@ describe('review_work_destination', () => {
     });
   });
 
+  it.each([
+    ['an equal path', '/transitcenter', '/transitcenter', 'grant'],
+    ['an equal path with a trailing slash', '/transitcenter', '/transitcenter/', 'grant'],
+    ['a parent prefix', '/transitcenter/posts/weekly', '/transitcenter', 'grant'],
+    ['a child prefix', '/transitcenter', '/transitcenter/posts', 'deny'],
+    ['a partial path segment', '/transitcenter-archive', '/transitcenter', 'deny'],
+  ])(
+    'handles %s for destination %s and scope %s',
+    async (_case, destinationPath, scopePath, expectedDecision) => {
+      const seed = await seedWorkspace();
+      const client = await connect(seed);
+      vi.spyOn(getContainer().agentTurn, 'streamTurn').mockImplementation(
+        reviewTurn({
+          decision: 'grant',
+          reason: 'The research has a named output for this task.',
+          scope: {
+            kind: 'path_prefix',
+            value: `https://www.instagram.com${scopePath}`,
+          },
+        }),
+      );
+
+      const result = await client.callTool({
+        name: 'review_work_destination',
+        arguments: {
+          ...request(
+            seed,
+            'I will compare TransitCenter posting cadence and record three patterns in the LVBT strategy document.',
+          ),
+          destination: { origin: 'https://www.instagram.com', path: destinationPath },
+        },
+      });
+
+      expect(resultPayload(result)).toMatchObject({ decision: expectedDecision });
+    },
+  );
+
+  it.each([
+    ['the requested origin', 'https://www.instagram.com', 'grant'],
+    ['another origin', 'https://example.com', 'deny'],
+  ])('handles %s with scope %s', async (_case, scopeOrigin, expectedDecision) => {
+    const seed = await seedWorkspace();
+    const client = await connect(seed);
+    vi.spyOn(getContainer().agentTurn, 'streamTurn').mockImplementation(
+      reviewTurn({
+        decision: 'grant',
+        reason: 'The research has a named output for this task.',
+        scope: { kind: 'origin', value: scopeOrigin },
+      }),
+    );
+
+    const result = await client.callTool({
+      name: 'review_work_destination',
+      arguments: request(
+        seed,
+        'I will compare TransitCenter posting cadence and record three patterns in the LVBT strategy document.',
+      ),
+    });
+
+    expect(resultPayload(result)).toMatchObject({ decision: expectedDecision });
+  });
+
+  it('rejects an unnormalized destination path before Athena runs', async () => {
+    const seed = await seedWorkspace();
+    const client = await connect(seed);
+    const stream = vi.spyOn(getContainer().agentTurn, 'streamTurn');
+
+    const result = await client.callTool({
+      name: 'review_work_destination',
+      arguments: {
+        ...request(
+          seed,
+          'I will compare TransitCenter posting cadence and record three patterns in the LVBT strategy document.',
+        ),
+        destination: {
+          origin: 'https://www.instagram.com',
+          path: '/transitcenter/../privacy',
+        },
+      },
+    });
+
+    expect(asCallToolResult(result).isError).toBe(true);
+    expect(stream).not.toHaveBeenCalled();
+  });
+
   it('accepts Athena thinking that accompanies the one review result', async () => {
     const seed = await seedWorkspace();
     const client = await connect(seed);

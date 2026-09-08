@@ -86,8 +86,12 @@ function coversDestination(
   try {
     const value = new URL(scope.value);
     if (value.origin !== destination.origin || value.search || value.hash) return false;
-    const prefix = destination.path.endsWith('/') ? destination.path : `${destination.path}/`;
-    return value.pathname === destination.path || value.pathname.startsWith(prefix);
+    const scopePath =
+      value.pathname.length > 1 && value.pathname.endsWith('/')
+        ? value.pathname.slice(0, -1)
+        : value.pathname;
+    const scopePathPrefix = value.pathname.endsWith('/') ? value.pathname : `${value.pathname}/`;
+    return destination.path === scopePath || destination.path.startsWith(scopePathPrefix);
   } catch {
     return false;
   }
@@ -100,7 +104,7 @@ function reviewerPrompt(input: ReviewInput, taskContext: unknown): string {
     'Grant only when the justification names a concrete action, a named output, and why this destination helps the current task.',
     '"I need Instagram for social media" is vague and must not receive a grant.',
     '"I will compare TransitCenter\'s posting cadence and record three patterns in the LVBT strategy document" may receive a bounded grant.',
-    'A grant must use the requested origin or a path prefix at or below the requested path. Never broaden the destination.',
+    'A grant must use the requested origin or a path prefix that contains the requested path. A path prefix may equal the requested path or name one of its parent paths, and it must end at a path-segment boundary.',
     'Return exactly one call to review_result. Do not emit text. If a challenge answer is present, return grant or deny, never challenge.',
     `Task context: ${JSON.stringify(taskContext)}`,
     `Request: ${JSON.stringify(input)}`,

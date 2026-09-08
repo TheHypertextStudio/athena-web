@@ -131,6 +131,25 @@ export function parseTrustedOrigins(raw: string | undefined): string[] {
   );
 }
 
+/** Derive the associated-domain origin used by Apple passkeys outside local development. */
+function applePasskeyOrigins(rpID: string): string[] {
+  return /(^|\.)localhost$/.test(rpID) ? [] : [new URL(`https://${rpID}`).origin];
+}
+
+/** Keep the passkey plugin and Better Auth's request-origin gate on one origin set. */
+function resolvePasskeyOrigins(
+  browserOrigins: readonly string[],
+  nativeOrigins: readonly string[],
+  rpID: string,
+): { pluginOrigins: string[] | undefined; trustedOrigins: string[] } {
+  const appleOrigins = applePasskeyOrigins(rpID);
+  const trustedOrigins = [...new Set([...browserOrigins, ...appleOrigins, ...nativeOrigins])];
+  return {
+    pluginOrigins: appleOrigins.length > 0 || nativeOrigins.length > 0 ? trustedOrigins : undefined,
+    trustedOrigins,
+  };
+}
+
 /** Whether a Docket account may start Google OAuth at the current release stage. */
 export function canUseGoogleOAuth(
   e: Pick<AuthEnv, 'APP_MODE' | 'GOOGLE_OAUTH_PUBLIC' | 'GOOGLE_OAUTH_TEST_EMAILS'>,
@@ -569,10 +588,16 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
 
   const browserTrustedOrigins = parseTrustedOrigins(e.BETTER_AUTH_TRUSTED_ORIGINS);
   const nativePasskeyOrigins = parseTrustedOrigins(e.BETTER_AUTH_PASSKEY_NATIVE_ORIGINS);
-  const passkeyOrigins =
-    nativePasskeyOrigins.length > 0
-      ? [...new Set([...browserTrustedOrigins, ...nativePasskeyOrigins])]
-      : undefined;
+  // Authentication Services represents an Apple-platform passkey ceremony as the HTTPS origin of
+  // its associated relying-party domain. Derive that origin from the RP ID so signing and server
+  // verification cannot drift through a second deployment variable. Localhost has no associated
+  // domain and keeps Better Auth's browser-origin fallback.
+  const passkeyOriginConfig = resolvePasskeyOrigins(
+    browserTrustedOrigins,
+    nativePasskeyOrigins,
+    e.BETTER_AUTH_PASSKEY_RP_ID,
+  );
+  const passkeyOrigins = passkeyOriginConfig.pluginOrigins;
 
   const plugins: BetterAuthPlugin[] = [
     passkey({
@@ -780,7 +805,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
   // Apple posts its OAuth callback (form_post) from `appleid.apple.com`, so that origin must be
   // trusted or Better Auth rejects the callback. Added ONLY when Apple is configured — unset ⇒ the
   // trusted-origins list is byte-identical to the CSV env value.
-  const trustedOrigins = [...new Set([...browserTrustedOrigins, ...nativePasskeyOrigins])];
+  const trustedOrigins = [...passkeyOriginConfig.trustedOrigins];
   if (appleCreds !== undefined) trustedOrigins.push('https://appleid.apple.com');
 
   return {

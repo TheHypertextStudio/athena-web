@@ -1515,7 +1515,30 @@ describe('buildAuthOptions env-gating', () => {
     ]);
   });
 
-  it('allows the configured Android origin through the real request-origin gate', async () => {
+  it('allows the Apple platform origin derived from the passkey RP ID', async () => {
+    const { buildAuthOptions } = await import('../../src/index');
+    const opts = buildAuthOptions(
+      {
+        ...baseEnv,
+        BETTER_AUTH_PASSKEY_RP_ID: 'hypertext.studio',
+        BETTER_AUTH_TRUSTED_ORIGINS: 'https://docket.hypertext.studio',
+      },
+      MAILER_DEPS,
+    );
+    const pk = (opts.plugins ?? []).find((plugin) => plugin.id === 'passkey');
+    const pkOptions = (pk as { options?: Record<string, unknown> }).options ?? {};
+
+    expect(pkOptions['origin']).toEqual([
+      'https://docket.hypertext.studio',
+      'https://hypertext.studio',
+    ]);
+    expect(opts.trustedOrigins).toEqual([
+      'https://docket.hypertext.studio',
+      'https://hypertext.studio',
+    ]);
+  });
+
+  it('allows configured Apple and Android origins through the real request-origin gate', async () => {
     const { buildAuthOptions } = await import('../../src/index');
     const { betterAuth } = await import('better-auth');
     const nativeOrigin = 'android:apk-key-hash:3zJp1NzJxP5y_mFioPTp7l8EFEfcs472qSV2_DiQ28c';
@@ -1550,9 +1573,11 @@ describe('buildAuthOptions env-gating', () => {
         }),
       );
 
-    const allowed = await verify(nativeOrigin);
-    expect(allowed.status).toBe(400);
-    expect(await allowed.json()).toMatchObject({ code: 'CHALLENGE_NOT_FOUND' });
+    for (const allowedOrigin of ['https://hypertext.studio', nativeOrigin]) {
+      const allowed = await verify(allowedOrigin);
+      expect(allowed.status).toBe(400);
+      expect(await allowed.json()).toMatchObject({ code: 'CHALLENGE_NOT_FOUND' });
+    }
 
     const rejected = await verify('android:apk-key-hash:unlisted');
     expect(rejected.status).toBe(403);

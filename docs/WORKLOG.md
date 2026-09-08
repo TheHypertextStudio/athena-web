@@ -22,8 +22,9 @@
   suppression, local-first sign-out, and adaptive Home and Account shells. Development, staging,
   and production builds isolate their Keychain accounts. The real `athena-services` Google Cloud
   project now has a Docket iOS OAuth client for `studio.hypertext.docket`, and the native build uses
-  that client with the existing production web client as its server audience.
-- **Validation**: The rebased server packages pass typecheck and lint. Focused validation passes 80
+  that client with the existing production web client as its server audience. Better Auth derives
+  the Apple passkey origin from the production RP ID so the client and server cannot drift.
+- **Validation**: The rebased server packages pass typecheck and lint. Focused validation passes 178
   auth tests, 161 environment tests, 3 identity contract tests, 5 API config tests, and 28 web
   consumer tests. Twenty native auth and HTTP-contract tests pass on macOS and iOS 26.5. Seven UI
   tests pass on both iPhone and iPad. Development and production-mode iOS Simulator and arm64 macOS

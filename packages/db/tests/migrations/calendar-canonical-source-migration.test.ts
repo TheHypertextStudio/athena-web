@@ -11,7 +11,7 @@ import { fullSchema } from '../../src/client';
 import { account, calendarConnection, calendarItem, calendarLayer, user } from '../../src/schema';
 
 const migration = readFileSync(
-  resolve(import.meta.dirname, '../../drizzle/0126_classy_sage.sql'),
+  resolve(import.meta.dirname, '../../drizzle/0128_bitter_cloak.sql'),
   'utf8',
 );
 const executableSql = migration.replace(/^--.*$/gm, '');

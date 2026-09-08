@@ -7,6 +7,44 @@
 
 ## Active Tasks
 
+### [CAL-CANONICAL-001] Treat duplicate account calendars as one source
+
+- **Status**: REVIEW
+- **Started**: 2026-09-05
+- **Priority**: P1
+- **Description**: Calendar and Agenda must render one logical calendar when a personal Google
+  calendar is connected directly and also exposed through a work account. Shared contracts and
+  storage must remain provider-neutral for a future Microsoft adapter.
+- **Approach**: Provider adapters emit namespaced source, event, and occurrence identities. The API
+  owns exact grouping, conservative suggestions, explicit merge and separation, preferred-source
+  selection, source removal, and canonical event reads. The database retains every account source
+  for sync and provenance while source groups provide the stable product identity.
+- **Subtasks**:
+  - [x] Add provider-neutral identities and server-owned grouping.
+  - [x] Preserve task links, relations, visibility, and write-back across source copies.
+  - [x] Add safe subscribed-source removal with incremental-consent recovery.
+  - [x] Rebase onto the current migration chain as `0128_bitter_cloak`.
+  - [ ] Capture an authenticated two-account Google check with one shared personal calendar.
+- **Files changed**: The planning domain owns canonical identity rules. The Google adapter maps
+  provider ids into that contract. Calendar API routes and sync code own grouping and mutation.
+  Calendar settings and scheduling surfaces consume the canonical response. Migration 0128 adds
+  source groups, identity columns, and backfills.
+- **Validation**: The final rebased tree passes 23 database schema and migration tests, 140 calendar
+  API tests, and 66 calendar web tests. Before the last upstream migration rebase, the complete
+  database suite passed 242 tests at 94.15% statement coverage. The repository typecheck passed 27
+  tasks, lint passed 26 tasks, and the production build passed all four deployable tasks with 89 web
+  routes. The full local coverage graph passed 23 tasks before concurrent PGlite contention; the
+  failed three-test suite passed alone. The isolated API coverage run entered existing MCP setup
+  timeouts after 65 minutes, so the hosted release gate must finish the application matrix.
+- **Learnings**: Calendar titles cannot identify a source. An iCal UID identifies a recurring event
+  only when the provider also supplies the original occurrence time. Server-side deduplication gives
+  every client the same identity, preferred source, and write target.
+- **Blockers**: The final browser check needs two authenticated Google connections that expose the
+  same personal calendar. Tests cover that shape, but production policy forbids synthetic accounts
+  or calendar data.
+
+---
+
 ### [WORK-SCHEDULE-001] Replace imported location rows with one owned schedule
 
 - **Completed**: 2026-09-07

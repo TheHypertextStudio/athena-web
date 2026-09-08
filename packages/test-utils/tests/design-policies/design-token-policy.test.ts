@@ -194,12 +194,13 @@ describe('design token policy', () => {
       'rounded-t',
     ]);
 
-    // The same text outside the rules' roots must produce nothing. `packages/ui/src` is outside
-    // both, which is what makes this a scope proof rather than a restatement.
+    // The same text outside `ad-hoc-border`'s roots must produce nothing. `packages/ui/src` is the
+    // one enforced root the rule does not cover, which makes this a scope proof rather than a
+    // restatement. `raw-radius-utility` has no RULE_ROOTS entry and so runs everywhere, which is
+    // why it is excluded from this assertion rather than asserted alongside.
     expect(
       scanDesignTokens(resolve(WORKSPACE_ROOT, 'packages/ui/src/fixture.ts'), borderFixture).filter(
-        (violation) =>
-          violation.rule === 'ad-hoc-border' || violation.rule === 'raw-radius-utility',
+        (violation) => violation.rule === 'ad-hoc-border',
       ),
     ).toEqual([]);
 

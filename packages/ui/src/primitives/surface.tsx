@@ -83,12 +83,19 @@ export function surfaceToneVariable(tone: SurfaceTone): string {
 const surfaceVariants = cva('min-w-0', {
   variants: {
     tone: SURFACE_TONE,
-    /** Corner radius, from the MD3 shape scale. `none` is for full-bleed regions such as a band. */
+    /**
+     * Corner radius. `none` is for full-bleed regions such as a band.
+     *
+     * @remarks
+     * `large` was `rounded-2xl`, Tailwind's stock 16px, which is on neither of the design system's
+     * radius scales. `rounded-corner-lg` is the MD3 token for exactly 16px, so this is the same
+     * pixel with a name the scale owns.
+     */
     shape: {
       none: 'rounded-none',
       small: 'rounded-lg',
       medium: 'rounded-xl',
-      large: 'rounded-2xl',
+      large: 'rounded-corner-lg',
     },
     /** Internal inset. Kept to three steps so surfaces do not each invent their own padding. */
     pad: {

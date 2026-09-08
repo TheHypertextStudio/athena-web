@@ -48,7 +48,7 @@ export type DragHandleProps = React.ButtonHTMLAttributes<HTMLButtonElement>;
 
 /** The grip's own classes; see the module remarks for why each group is here. */
 const DRAG_HANDLE_CLASS = [
-  'inline-flex size-6 shrink-0 cursor-grab items-center justify-center rounded-sm',
+  'inline-flex size-6 shrink-0 cursor-grab items-center justify-center rounded-md',
   'text-on-surface-variant hover:text-on-surface active:cursor-grabbing',
   'opacity-0 transition-opacity',
   'group-hover/row:opacity-100 focus-visible:opacity-100 aria-pressed:opacity-100',

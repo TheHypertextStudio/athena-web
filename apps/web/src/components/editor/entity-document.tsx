@@ -203,7 +203,12 @@ export function EntityDocument({
         ) : null}
         <div
           ref={rootRef}
-          className="entity-document bg-surface-container-low flex min-h-56 w-full max-w-[calc(75ch+2rem)] flex-1 flex-col rounded-xl p-4 sm:min-w-[32rem] print:bg-transparent print:p-0"
+          // `min-h-32` (128px), not `min-h-56` (224px). The floor exists so a click-to-edit body is
+          // an obvious target rather than a single bare line, and 128px is four lines of
+          // `body-medium` plus the padding — comfortably that. At 224px a one-line description
+          // rendered inside an empty box two-thirds of it tall, which reads as a loading state
+          // that never resolved; it was the largest empty region on the task detail page.
+          className="entity-document bg-surface-container-low flex min-h-32 w-full max-w-[calc(75ch+2rem)] flex-1 flex-col rounded-xl p-4 sm:min-w-[32rem] print:bg-transparent print:p-0"
         >
           <EditableFreeformText
             value={value}

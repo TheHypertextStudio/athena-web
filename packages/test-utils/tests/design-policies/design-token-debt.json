@@ -46,6 +46,9 @@
   "apps/web/src/app/(app)/settings/calendar/page.tsx": {
     "raw-type-utility": 1
   },
+  "apps/web/src/app/(app)/settings/work-schedule/page.tsx": {
+    "ad-hoc-border": 2
+  },
   "apps/web/src/app/(app)/tasks/all-tasks-client.tsx": {
     "ad-hoc-border": 2
   },
@@ -504,6 +507,9 @@
   },
   "apps/web/src/components/settings/export-request-form.tsx": {
     "raw-radius-utility": 3
+  },
+  "apps/web/src/components/settings/google-calendar-settings.tsx": {
+    "ad-hoc-border": 2
   },
   "apps/web/src/components/settings/invite-form.tsx": {
     "raw-radius-utility": 1

@@ -171,7 +171,7 @@ export function LabelChip({
           type="button"
           onClick={onRemove}
           aria-label={removeLabel ?? `Remove label ${name}`}
-          className="-mr-1 shrink-0 rounded-sm p-0.5 opacity-60 outline-none hover:opacity-100 focus-visible:opacity-100"
+          className="rounded-corner-xs -mr-1 shrink-0 p-0.5 opacity-60 outline-none hover:opacity-100 focus-visible:opacity-100"
         >
           <svg viewBox="0 0 16 16" className="size-3" aria-hidden="true">
             <path

@@ -221,7 +221,7 @@ function EntityTableCells<T>({
         if (linked && renderRowLink) {
           cellContent = renderRowLink({
             href,
-            className: 'min-w-0 truncate rounded-sm outline-none focus-visible:ring-2',
+            className: 'min-w-0 truncate rounded-md outline-none focus-visible:ring-2',
             onClick: () => {
               onActivate?.();
             },
@@ -235,7 +235,7 @@ function EntityTableCells<T>({
           cellContent = (
             <a
               href={href}
-              className="min-w-0 truncate rounded-sm outline-none focus-visible:ring-2"
+              className="min-w-0 truncate rounded-md outline-none focus-visible:ring-2"
               onClick={() => onActivate?.()}
               onMouseEnter={onRowPrefetch}
               onFocus={onRowPrefetch}

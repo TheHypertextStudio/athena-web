@@ -393,7 +393,7 @@ function EntityTableContinuationEntry({
           disabled={loading}
           aria-disabled={loading ? 'true' : undefined}
           aria-busy={loading ? 'true' : undefined}
-          className="text-label-medium text-primary rounded-sm px-2 py-1 text-left outline-none hover:underline disabled:cursor-wait disabled:no-underline"
+          className="text-label-medium text-primary rounded-md px-2 py-1 text-left outline-none hover:underline disabled:cursor-wait disabled:no-underline"
           onClick={loading ? undefined : onActivate}
         >
           {entry.continuation.label}

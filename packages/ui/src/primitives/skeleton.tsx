@@ -61,7 +61,9 @@ export function SkeletonText({
   ...props
 }: SkeletonTextProps): React.JSX.Element {
   // placeholder: one line of text the caller names in its own annotation.
-  return <Skeleton className={cn(TEXT_SCALE_HEIGHT[scale], 'rounded', className)} {...props} />;
+  // `rounded-lg` rather than a bare `rounded`: `--radius` is 0.625rem, so `rounded-lg` resolves to
+  // the identical 10px while naming a step the scale owns.
+  return <Skeleton className={cn(TEXT_SCALE_HEIGHT[scale], 'rounded-lg', className)} {...props} />;
 }
 
 /**

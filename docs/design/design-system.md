@@ -818,25 +818,31 @@ and `rounded-[inherit]`, which defer to a token or to the parent rather than pic
 #### Per-rule scope
 
 Every rule runs across all of `ENFORCED_ROOTS` except where `RULE_ROOTS` in `design-token-scan.ts`
-narrows it. Two rules are narrowed, both to `apps/admin/src` and `apps/web/src`:
-**`ad-hoc-border`** and **`raw-radius-utility`**.
+narrows it. One rule is narrowed: **`ad-hoc-border`**, to `apps/admin/src` and `apps/web/src`.
+`raw-radius-utility` runs everywhere, `packages/ui/src` included.
 
 `ad-hoc-border` was admin-only until 2026-09-07. The cost of that scope was not less debt but
 invisible debt: the web app had reached 519 border utilities against a §8 that says grouping is a
 tonal step and not a drawn line, and nothing counted them, so nothing could shrink them. They are
 now seeded and ratcheted like everything else.
 
-Neither rule reaches `packages/ui/src`, and that is deliberate rather than pending. Rule 4 below
-holds that tree to zero with no ledger entries permitted, so covering it would demand every
+`ad-hoc-border` does not reach `packages/ui/src`, and that is deliberate rather than pending. Rule
+4 below holds that tree to zero with no ledger entries permitted, so covering it would demand every
 violation come out in the same change — and in the primitives a border is frequently the correct
 answer, being the field's editable affordance, a separator's whole purpose, or a control's outline.
 The rule has no vocabulary for those exemptions, so applying it there would force removals that
-make the components wrong. `packages/ui/src` also carries 22 off-scale radii, including a 2px
-checkbox corner and a `rounded-[0.1875rem]` that exist for optical reasons a regex cannot judge.
-Giving the border rule an exemption vocabulary, and settling those 22 corners, is the work that has
-to happen before either rule widens again.
+make the components wrong. Giving it that vocabulary is the work that has to happen first.
 
-Widening the rule to another root is a migration commitment: drive that root to zero in the same
+`raw-radius-utility` had the same shape of problem and it turned out to be smaller than it looked.
+Nine corners in the design system were off both scales, not the 22 a raw grep suggested — the rest
+were the word "rounded" in prose. All nine are resolved: `rounded-2xl` on `Surface`'s `large` shape
+and a bare `rounded` on the text skeleton were exact renames (16px is `corner-lg`, and `--radius`
+is 10px, which is `rounded-lg`), the checkbox's `rounded-[0.1875rem]` moved one pixel onto
+`corner-xs`, and six `rounded-sm` controls took the 8px control radius or, for a chip's remove
+mark, `corner-xs`. A corner is never load-bearing the way a field's outline is, so there was
+nothing to scope around once those were settled, and the rule now runs on every enforced root.
+
+Widening a rule to another root is a migration commitment: drive that root to zero in the same
 change, or seed it into the ledger.
 
 ### The ratchet

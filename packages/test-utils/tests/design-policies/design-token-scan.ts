@@ -86,17 +86,16 @@ export const DESIGN_TOKEN_RULES: readonly DesignTokenRule[] = [
  * has no exemption for those, so applying it there would force removals that make the components
  * wrong. Giving the rule that vocabulary is its own piece of work.
  *
+ * `raw-radius-utility` deliberately has **no entry here** and so runs on every enforced root,
+ * `packages/ui/src` included. Corners have no equivalent of the border rule's three exemptions —
+ * a radius is never load-bearing the way a field's outline is — so there was nothing to scope
+ * around once the nine off-scale corners in the design system were resolved onto the two scales.
+ *
  * Widening this to another root is a migration commitment: drive that root to zero first, or seed
  * it into the ledger in the same change.
  */
 export const RULE_ROOTS: Partial<Record<DesignTokenRule, readonly string[]>> = {
   'ad-hoc-border': ['apps/admin/src', 'apps/web/src'],
-  // `raw-radius-utility` is scoped to the product apps for the same reason `ad-hoc-border` is:
-  // `packages/ui/src` carries 22 off-scale radii and permits no ledger entries, so covering it
-  // here would demand all 22 change in this commit — including a 2px checkbox corner and a
-  // `rounded-[0.1875rem]` that exist for optical reasons a scan cannot judge. Closing those, then
-  // widening this, is the follow-up.
-  'raw-radius-utility': ['apps/admin/src', 'apps/web/src'],
 };
 
 /** One flagged value, located precisely enough to fix without searching. */

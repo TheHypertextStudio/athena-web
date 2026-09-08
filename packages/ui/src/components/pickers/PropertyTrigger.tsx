@@ -132,7 +132,7 @@ export const PropertyTrigger = React.forwardRef<HTMLButtonElement, PropertyTrigg
                   tabIndex={0}
                   aria-label={ariaLabel}
                   className={cn(
-                    'text-on-surface-variant text-body-medium inline-flex items-center rounded-sm',
+                    'text-on-surface-variant text-body-medium inline-flex items-center rounded-md',
                     focusRing,
                     className,
                   )}

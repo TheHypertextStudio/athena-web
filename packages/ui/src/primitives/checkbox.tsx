@@ -78,7 +78,10 @@ export function Checkbox({
           else if (ref) ref.current = node;
         }}
         className={cn(
-          'peer border-outline size-4 shrink-0 appearance-none rounded-[0.1875rem] border-2 bg-transparent transition-colors',
+          // `corner-xs` (4px), not an arbitrary 3px. MD3 specs the checkbox at a 2px corner and
+          // this sat between that and the scale; 4px is the smallest corner the system names, and
+          // one pixel on a 16px box is not a distinction worth an off-scale value.
+          'peer border-outline rounded-corner-xs size-4 shrink-0 appearance-none border-2 bg-transparent transition-colors',
           'checked:border-primary checked:bg-primary indeterminate:border-primary indeterminate:bg-primary',
           'disabled:cursor-not-allowed disabled:opacity-50',
           focusRing,

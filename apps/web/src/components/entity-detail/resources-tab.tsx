@@ -6,6 +6,7 @@ import { type AttachmentOut } from '@docket/work/attachment-contract';
 import { type EntityMention } from '../../lib/contracts/mention';
 import { formatBytes } from '@docket/ui';
 import { Calendar, FileText, Link as LinkIcon, Mail, Plus, Trash2 } from '@docket/ui/icons';
+import { EmptyState } from '@docket/ui/components';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useMemo, useState } from 'react';
@@ -307,9 +308,11 @@ export function ResourcesTab({
           })}
         </ul>
       ) : hasDerived ? null : (
-        <p className="text-on-surface-variant bg-surface-container-low text-body-small rounded-xl px-4 py-8 text-center">
-          No linked resources yet.
-        </p>
+        <EmptyState
+          icon={LinkIcon}
+          title="No linked resources yet"
+          body="Attach a file, a link, or a document so the work and the material it depends on sit together."
+        />
       )}
       {canEdit && onUpload ? (
         <label className="text-primary text-body-small hover:bg-surface-container-high flex min-h-10 w-fit cursor-pointer items-center rounded-md px-3">

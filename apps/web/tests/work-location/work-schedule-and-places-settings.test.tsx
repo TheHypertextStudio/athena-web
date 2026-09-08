@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { TooltipProvider } from '@docket/ui/primitives';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +13,14 @@ const { mutate, mutateAsync, queryState, refetch } = vi.hoisted(() => ({
 
 const PLACE_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const PLAN_ID = '01BX5ZZKBKACTAV9WEVGEMMVS0';
+
+/** Choose a schedule day through the shared date picker. */
+function pickDay(field: string, iso: string): void {
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${field} —`) }));
+  const grid = screen.getByRole('grid', { name: field });
+  fireEvent.click(within(grid).getByRole('button', { name: iso }));
+}
+
 const places = {
   items: [
     {
@@ -226,9 +234,7 @@ describe('WorkScheduleSettingsPage', () => {
     renderPage(<WorkScheduleSettingsPage />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit default schedule' }));
-    fireEvent.change(screen.getByLabelText('Schedule applies from'), {
-      target: { value: '2026-09-15' },
-    });
+    pickDay('Schedule applies from', '2026-09-15');
     fireEvent.click(screen.getByRole('button', { name: 'Save schedule' }));
 
     expect(mutate).toHaveBeenCalledWith(
@@ -272,8 +278,11 @@ describe('WorkScheduleSettingsPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Add date change' }));
 
-    expect(screen.getByLabelText('Date')).toHaveAttribute('min', '2026-09-10');
-    expect(screen.getByLabelText('Date')).toHaveValue('2026-09-10');
+    const trigger = screen.getByRole('button', { name: /^Date change —/ });
+    expect(trigger).toHaveTextContent('Sep 10, 2026');
+    fireEvent.click(trigger);
+    const grid = screen.getByRole('grid', { name: 'Date change' });
+    expect(within(grid).getByRole('button', { name: '2026-09-09' })).toBeDisabled();
   });
 
   it('keeps past date changes behind a history disclosure', () => {

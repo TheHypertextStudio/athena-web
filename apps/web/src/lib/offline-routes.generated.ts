@@ -278,6 +278,10 @@ export const OFFLINE_ROUTES = [
     load: async () => (await import('@/app/(app)/settings/notifications/page')).default,
   },
   {
+    pattern: '/settings/places',
+    load: async () => (await import('@/app/(app)/settings/places/page')).default,
+  },
+  {
     pattern: '/settings/profile',
     load: async () => (await import('@/app/(app)/settings/profile/page')).default,
   },
@@ -286,8 +290,8 @@ export const OFFLINE_ROUTES = [
     load: async () => (await import('@/app/(app)/settings/security/page')).default,
   },
   {
-    pattern: '/settings/work-locations',
-    load: async () => (await import('@/app/(app)/settings/work-locations/page')).default,
+    pattern: '/settings/work-schedule',
+    load: async () => (await import('@/app/(app)/settings/work-schedule/page')).default,
   },
   {
     pattern: '/stream',

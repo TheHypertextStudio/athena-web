@@ -72,7 +72,10 @@
   full typecheck passes 27 tasks. The full lint graph passes 26 tasks. The production build passes
   all four deployable packages and generates 91 web routes, including `/settings/work-schedule`
   and `/settings/places`. The design audit includes dark and light screenshots at 1440 by 900 and
-  390 by 844, plus empty and loading states at 320 and 390 pixels wide.
+  390 by 844, plus empty and loading states at 320 and 390 pixels wide. The hosted web gate exposed
+  policy coverage missing from the focused local suites. The follow-up moves all three schedule
+  dates onto the shared picker, records its clock fields in the picker audit, and regenerates the
+  offline route table for the two replacement settings routes.
 - **Learnings**: Provider work-location rows cannot carry the product's full schedule model. Stable
   projection keys and account-scoped place aliases let Docket preserve one schedule while it still
   accepts provider changes. Drizzle does not generate the non-overlap trigger, so the migration

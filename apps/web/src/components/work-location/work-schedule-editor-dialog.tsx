@@ -31,6 +31,8 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX, type SubmitEventHandler, useEffect, useState } from 'react';
 
+import { DatePicker } from '@/components/date-picker';
+
 const DAY_MINUTES = 1_440;
 const MAX_DURATION_MINUTES = DAY_MINUTES * 7;
 const WEEKDAY = new Intl.DateTimeFormat(undefined, { weekday: 'long', timeZone: 'UTC' });
@@ -227,29 +229,31 @@ export function WorkScheduleEditorDialog({
                   }}
                 />
               </label>
-              <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
-                Schedule applies from
-                <Input
-                  aria-label="Schedule applies from"
-                  type="date"
+              <div className="text-on-surface-variant text-label-medium flex flex-col gap-1">
+                <span>Schedule applies from</span>
+                <DatePicker
+                  ariaLabel="Schedule applies from"
                   min={nextVersionStart(plan)}
-                  value={effectiveFrom}
-                  onChange={(event) => {
-                    setEffectiveFrom(event.target.value);
+                  placeholder="Pick a day"
+                  triggerVariant="outline"
+                  value={effectiveFrom || null}
+                  onChange={(value) => {
+                    setEffectiveFrom(value ?? '');
                   }}
                 />
-              </label>
-              <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
-                Cycle starts
-                <Input
-                  aria-label="Cycle starts"
-                  type="date"
-                  value={anchorDate}
-                  onChange={(event) => {
-                    setAnchorDate(event.target.value);
+              </div>
+              <div className="text-on-surface-variant text-label-medium flex flex-col gap-1">
+                <span>Cycle starts</span>
+                <DatePicker
+                  ariaLabel="Cycle starts"
+                  placeholder="Pick a day"
+                  triggerVariant="outline"
+                  value={anchorDate || null}
+                  onChange={(value) => {
+                    setAnchorDate(value ?? '');
                   }}
                 />
-              </label>
+              </div>
               <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
                 Time zone
                 <Input
@@ -678,17 +682,19 @@ export function WorkScheduleDateDialog({
         </DialogHeader>
         <form className="contents" onSubmit={submit}>
           <DialogBody className="flex flex-col gap-4">
-            <label className="text-on-surface-variant text-label-medium flex max-w-56 flex-col gap-1">
-              Date
-              <Input
-                type="date"
+            <div className="text-on-surface-variant text-label-medium flex max-w-56 flex-col gap-1">
+              <span>Date</span>
+              <DatePicker
+                ariaLabel="Date change"
                 min={minimumDate}
-                value={date}
-                onChange={(event) => {
-                  setDate(event.target.value);
+                placeholder="Pick a day"
+                triggerVariant="outline"
+                value={date || null}
+                onChange={(value) => {
+                  setDate(value ?? '');
                 }}
               />
-            </label>
+            </div>
             {segments.length === 0 ? (
               <div className="bg-surface-container rounded-xl p-4">
                 <Text token="title-small">Not working</Text>

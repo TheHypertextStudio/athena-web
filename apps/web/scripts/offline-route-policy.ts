@@ -40,6 +40,7 @@ export const APP_GROUP = join(WEB_ROOT, 'src/app/(app)');
 export const ROUTES_NOT_IN_TABLE: Readonly<Record<string, string>> = {
   '/orgs/[orgId]': 'redirects to /orgs/[orgId]/my-work',
   '/settings': 'redirects to /settings/profile',
+  '/settings/work-locations': 'redirects to /settings/work-schedule',
 };
 
 /** One route the generator resolved. */

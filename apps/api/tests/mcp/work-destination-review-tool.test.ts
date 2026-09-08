@@ -86,6 +86,43 @@ async function seedWorkspace(capabilities: readonly Capability[] = ['view']): Pr
   return { organizationId, actorId, userId, email, taskId: assertDefined(task).id };
 }
 
+async function seedUnprivilegedPeer(workspace: Seed): Promise<Seed> {
+  const slug = `destination-review-peer-${Math.random().toString(36).slice(2, 10)}`;
+  const [role] = await db
+    .insert(schema.role)
+    .values({
+      organizationId: workspace.organizationId,
+      key: slug,
+      name: 'Observer',
+      capabilities: [],
+    })
+    .returning({ id: schema.role.id });
+  const email = `${slug}@example.com`;
+  const [user] = await db
+    .insert(schema.user)
+    .values({ name: 'Bea', email })
+    .returning({ id: schema.user.id });
+  const userId = assertDefined(user).id;
+  const [actor] = await db
+    .insert(schema.actor)
+    .values({
+      organizationId: workspace.organizationId,
+      kind: 'human',
+      displayName: 'Bea',
+      userId,
+      roleId: assertDefined(role).id,
+    })
+    .returning({ id: schema.actor.id });
+  await db.insert(schema.hub).values({ userId });
+  return {
+    organizationId: workspace.organizationId,
+    actorId: assertDefined(actor).id,
+    userId,
+    email,
+    taskId: workspace.taskId,
+  };
+}
+
 const connections: { close(): Promise<void> }[] = [];
 
 async function connect(seed: Seed, scopes = ['agents:run', 'work:read']): Promise<Client> {
@@ -163,6 +200,65 @@ function textTurn(): (input: TurnInput) => AsyncIterable<TurnEvent> {
     };
     yield { type: 'text', text: 'Grant it.' };
     yield { type: 'turn_end', stopReason: 'end_turn', message };
+  };
+}
+
+function mixedTextReviewTurn(result: unknown): (input: TurnInput) => AsyncIterable<TurnEvent> {
+  return async function* () {
+    const message = {
+      role: 'assistant' as const,
+      content: [
+        { type: 'text' as const, text: 'This is justified.' },
+        {
+          type: 'tool_use' as const,
+          id: 'review_result_1',
+          name: 'review_result',
+          input: result,
+        },
+      ],
+    };
+    yield { type: 'text', text: 'This is justified.' };
+    yield { type: 'tool_use', id: 'review_result_1', name: 'review_result', input: result };
+    yield { type: 'turn_end', stopReason: 'tool_use', message };
+  };
+}
+
+function unrelatedToolReviewTurn(result: unknown): (input: TurnInput) => AsyncIterable<TurnEvent> {
+  return async function* () {
+    const message = {
+      role: 'assistant' as const,
+      content: [
+        { type: 'tool_use' as const, id: 'other_1', name: 'other_tool', input: {} },
+        {
+          type: 'tool_use' as const,
+          id: 'review_result_1',
+          name: 'review_result',
+          input: result,
+        },
+      ],
+    };
+    yield { type: 'tool_use', id: 'other_1', name: 'other_tool', input: {} };
+    yield { type: 'tool_use', id: 'review_result_1', name: 'review_result', input: result };
+    yield { type: 'turn_end', stopReason: 'tool_use', message };
+  };
+}
+
+function terminalTextReviewTurn(result: unknown): (input: TurnInput) => AsyncIterable<TurnEvent> {
+  return async function* () {
+    const message = {
+      role: 'assistant' as const,
+      content: [
+        { type: 'text' as const, text: 'This should not be present.' },
+        {
+          type: 'tool_use' as const,
+          id: 'review_result_1',
+          name: 'review_result',
+          input: result,
+        },
+      ],
+    };
+    yield { type: 'tool_use', id: 'review_result_1', name: 'review_result', input: result };
+    yield { type: 'turn_end', stopReason: 'tool_use', message };
   };
 }
 
@@ -244,6 +340,57 @@ describe('review_work_destination', () => {
     expect(stream).not.toHaveBeenCalled();
   });
 
+  it('does not run Athena for a same-workspace caller without view access', async () => {
+    const workspace = await seedWorkspace();
+    const peer = await seedUnprivilegedPeer(workspace);
+    const client = await connect(peer);
+    const stream = vi.spyOn(getContainer().agentTurn, 'streamTurn');
+
+    const result = await client.callTool({
+      name: 'review_work_destination',
+      arguments: request(
+        peer,
+        'I will compare TransitCenter posting cadence and record three patterns in the LVBT strategy document.',
+      ),
+    });
+
+    expect(asCallToolResult(result).isError).toBe(true);
+    expect(stream).not.toHaveBeenCalled();
+  });
+
+  it('advertises decision-specific output variants that reject missing required fields', async () => {
+    const seed = await seedWorkspace();
+    const client = await connect(seed);
+    const { tools } = await client.listTools();
+    const review = tools.find((tool) => tool.name === 'review_work_destination');
+
+    expect(review?.outputSchema).toMatchObject({
+      oneOf: expect.arrayContaining([
+        expect.objectContaining({
+          properties: expect.objectContaining({
+            decision: expect.objectContaining({ const: 'grant' }),
+          }),
+          required: expect.arrayContaining(['decision', 'reason', 'scope']),
+          additionalProperties: false,
+        }),
+        expect.objectContaining({
+          properties: expect.objectContaining({
+            decision: expect.objectContaining({ const: 'challenge' }),
+          }),
+          required: expect.arrayContaining(['decision', 'reason', 'question']),
+          additionalProperties: false,
+        }),
+        expect.objectContaining({
+          properties: expect.objectContaining({
+            decision: expect.objectContaining({ const: 'deny' }),
+          }),
+          required: expect.arrayContaining(['decision', 'reason']),
+          additionalProperties: false,
+        }),
+      ]),
+    });
+  });
+
   it('returns a bounded grant after Athena calls the one result tool', async () => {
     const seed = await seedWorkspace();
     const client = await connect(seed);
@@ -268,6 +415,72 @@ describe('review_work_destination', () => {
       reason: 'The research has a named output for this task.',
       scope: { kind: 'path_prefix', value: 'https://www.instagram.com/transitcenter' },
     });
+  });
+
+  it('denies Athena text that accompanies an otherwise valid review result', async () => {
+    const seed = await seedWorkspace();
+    const client = await connect(seed);
+    vi.spyOn(getContainer().agentTurn, 'streamTurn').mockImplementation(
+      mixedTextReviewTurn({
+        decision: 'grant',
+        reason: 'The research has a named output for this task.',
+        scope: { kind: 'path_prefix', value: 'https://www.instagram.com/transitcenter' },
+      }),
+    );
+
+    const result = await client.callTool({
+      name: 'review_work_destination',
+      arguments: request(
+        seed,
+        'I will compare TransitCenter posting cadence and record three patterns in the LVBT strategy document.',
+      ),
+    });
+
+    expect(resultPayload(result)).toMatchObject({ decision: 'deny' });
+  });
+
+  it('denies another Athena tool use that accompanies a valid review result', async () => {
+    const seed = await seedWorkspace();
+    const client = await connect(seed);
+    vi.spyOn(getContainer().agentTurn, 'streamTurn').mockImplementation(
+      unrelatedToolReviewTurn({
+        decision: 'grant',
+        reason: 'The research has a named output for this task.',
+        scope: { kind: 'path_prefix', value: 'https://www.instagram.com/transitcenter' },
+      }),
+    );
+
+    const result = await client.callTool({
+      name: 'review_work_destination',
+      arguments: request(
+        seed,
+        'I will compare TransitCenter posting cadence and record three patterns in the LVBT strategy document.',
+      ),
+    });
+
+    expect(resultPayload(result)).toMatchObject({ decision: 'deny' });
+  });
+
+  it('denies assistant text contained only in Athena’s terminal transcript', async () => {
+    const seed = await seedWorkspace();
+    const client = await connect(seed);
+    vi.spyOn(getContainer().agentTurn, 'streamTurn').mockImplementation(
+      terminalTextReviewTurn({
+        decision: 'grant',
+        reason: 'The research has a named output for this task.',
+        scope: { kind: 'path_prefix', value: 'https://www.instagram.com/transitcenter' },
+      }),
+    );
+
+    const result = await client.callTool({
+      name: 'review_work_destination',
+      arguments: request(
+        seed,
+        'I will compare TransitCenter posting cadence and record three patterns in the LVBT strategy document.',
+      ),
+    });
+
+    expect(resultPayload(result)).toMatchObject({ decision: 'deny' });
   });
 
   it('returns a targeted challenge when more task detail is needed', async () => {

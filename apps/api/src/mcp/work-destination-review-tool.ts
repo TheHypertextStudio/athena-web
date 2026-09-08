@@ -1,8 +1,11 @@
 /** Review whether one destination supports a task the caller can read. */
-import type { TurnInput, TurnToolDef } from '@docket/athena/turn';
+import type { TurnInput, TurnMessage, TurnToolDef } from '@docket/athena/turn';
 import { z } from 'zod';
 
-import { WorkDestinationReviewOut } from '../contracts/work-destination-review';
+import {
+  WorkDestinationReviewMcpOut,
+  WorkDestinationReviewOut,
+} from '../contracts/work-destination-review';
 import { getContainer } from '../container';
 import { NotFoundError } from '../error';
 import type { McpContext } from './auth';
@@ -104,16 +107,38 @@ function reviewerPrompt(input: ReviewInput, taskContext: unknown): string {
   ].join('\n\n');
 }
 
+function hasOnlyReviewResult(message: TurnMessage): boolean {
+  let resultCalls = 0;
+  for (const block of message.content) {
+    if (block.type === 'thinking') continue;
+    if (block.type !== 'tool_use' || block.name !== RESULT_TOOL_NAME) return false;
+    resultCalls += 1;
+  }
+  return resultCalls === 1;
+}
+
 async function collectReview(
   input: TurnInput,
-): Promise<{ readonly calls: readonly unknown[]; readonly completed: boolean }> {
+): Promise<{ readonly calls: readonly unknown[]; readonly valid: boolean }> {
   const calls: unknown[] = [];
-  let completed = false;
+  let terminal = false;
+  let valid = true;
   for await (const event of getContainer().agentTurn.streamTurn(input)) {
-    if (event.type === 'tool_use' && event.name === RESULT_TOOL_NAME) calls.push(event.input);
-    if (event.type === 'turn_end') completed = true;
+    if (terminal) {
+      valid = false;
+      continue;
+    }
+    if (event.type === 'text') {
+      valid = false;
+    } else if (event.type === 'tool_use') {
+      if (event.name === RESULT_TOOL_NAME) calls.push(event.input);
+      else valid = false;
+    } else if (event.type === 'turn_end') {
+      terminal = true;
+      if (event.stopReason !== 'tool_use' || !hasOnlyReviewResult(event.message)) valid = false;
+    }
   }
-  return { calls, completed };
+  return { calls, valid: valid && terminal };
 }
 
 async function collectBeforeDeadline(
@@ -148,7 +173,7 @@ async function reviewDestination(
       messages: [{ role: 'user', content: [{ type: 'text', text: 'Review this destination.' }] }],
       tools: [resultTool],
     });
-    if (!outcome.completed || outcome.calls.length !== 1) {
+    if (!outcome.valid || outcome.calls.length !== 1) {
       return deny('Athena did not return exactly one valid review result.');
     }
     const result = WorkDestinationReviewOut.safeParse(outcome.calls[0]);
@@ -181,12 +206,7 @@ export function registerWorkDestinationReviewTool(server: McpRegistrar, ctx: Mcp
       title: 'Review work destination',
       description: 'Review whether one web destination is needed to complete a readable task.',
       inputSchema: reviewInputSchema,
-      outputSchema: {
-        decision: z.enum(['grant', 'challenge', 'deny']),
-        reason: z.string(),
-        scope: z.object({ kind: z.enum(['origin', 'path_prefix']), value: z.string() }).optional(),
-        question: z.string().optional(),
-      },
+      outputSchema: WorkDestinationReviewMcpOut,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,

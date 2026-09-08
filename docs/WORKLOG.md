@@ -9,7 +9,7 @@
 
 ### [CAL-CANONICAL-001] Treat duplicate account calendars as one source
 
-- **Status**: REVIEW
+- **Completed**: 2026-09-07
 - **Started**: 2026-09-05
 - **Priority**: P1
 - **Description**: Calendar and Agenda must render one logical calendar when a personal Google
@@ -24,7 +24,7 @@
   - [x] Preserve task links, relations, visibility, and write-back across source copies.
   - [x] Add safe subscribed-source removal with incremental-consent recovery.
   - [x] Rebase onto the current migration chain as `0128_bitter_cloak`.
-  - [ ] Capture an authenticated two-account Google check with one shared personal calendar.
+  - [x] Capture an authenticated two-account Google check with one shared personal calendar.
 - **Files changed**: The planning domain owns canonical identity rules. The Google adapter maps
   provider ids into that contract. Calendar API routes and sync code own grouping and mutation.
   Calendar settings and scheduling surfaces consume the canonical response. Migration 0128 adds
@@ -35,13 +35,16 @@
   tasks, lint passed 26 tasks, and the production build passed all four deployable tasks with 89 web
   routes. The full local coverage graph passed 23 tasks before concurrent PGlite contention; the
   failed three-test suite passed alone. The isolated API coverage run entered existing MCP setup
-  timeouts after 65 minutes, so the hosted release gate must finish the application matrix.
+  timeouts after 65 minutes. The hosted release gate then passed for the deployed main branch. An
+  authenticated production check used the `Willie @ Hypertext Studio` logical calendar, which
+  contains the direct personal-account source and the copy exposed through the Hypertext Studio
+  account. Settings showed both sources, one preferred source, and a reversible source-removal
+  action. The same September 8 provider event appeared exactly once in Calendar and exactly once in
+  Agenda.
 - **Learnings**: Calendar titles cannot identify a source. An iCal UID identifies a recurring event
   only when the provider also supplies the original occurrence time. Server-side deduplication gives
   every client the same identity, preferred source, and write target.
-- **Blockers**: The final browser check needs two authenticated Google connections that expose the
-  same personal calendar. Tests cover that shape, but production policy forbids synthetic accounts
-  or calendar data.
+- **Blockers**: None.
 
 ---
 

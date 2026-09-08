@@ -137,13 +137,20 @@ main() {
     postgres:17-alpine >/dev/null
   CONTAINER_STARTED=true
 
+  postgres_ready=false
   for _ in $(seq 1 60); do
-    if docker exec "${CONTAINER_NAME}" pg_isready -U docket -d "${DATABASE_NAME}" >/dev/null 2>&1; then
-      break
+    if docker exec "${CONTAINER_NAME}" psql -U docket -d "${DATABASE_NAME}" -tAc 'SELECT 1' \
+      >/dev/null 2>&1; then
+      sleep 1
+      if docker exec "${CONTAINER_NAME}" psql -U docket -d "${DATABASE_NAME}" -tAc 'SELECT 1' \
+        >/dev/null 2>&1; then
+        postgres_ready=true
+        break
+      fi
     fi
     sleep 1
   done
-  if ! docker exec "${CONTAINER_NAME}" pg_isready -U docket -d "${DATABASE_NAME}" >/dev/null 2>&1; then
+  if [[ "${postgres_ready}" != true ]]; then
     docker logs "${CONTAINER_NAME}" >&2 || true
     return 1
   fi

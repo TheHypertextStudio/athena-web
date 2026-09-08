@@ -1,11 +1,47 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-09-07
+> **Last Updated**: 2026-09-08
 
 ---
 
 ## Active Tasks
+
+### [WEB-ROSTER-ACCEPTANCE-001] Make group recovery acceptance follow loaded rows
+
+- **Completed**: 2026-09-08
+- **Started**: 2026-09-07
+- **Priority**: P1
+- **Description**: The release browser gate must prove that a failed grouped-roster continuation
+  retains an initiative from the loaded page. It must not infer cursor order from fixture title
+  order.
+- **Approach**: Capture a mounted Proposed initiative at the group boundary before the forced 503.
+  Assert that the same row remains after the retry state appears, then let the existing retry check
+  prove that the owning path can recover.
+- **Subtasks**:
+  - [x] Reproduce the failure twice at the same commit and inspect its trace and screenshots.
+  - [x] Replace the seed-order guess with a row selected from the loaded page.
+  - [x] Make the local release harness wait for the final PostgreSQL server.
+  - [x] Run the production-mode browser gate and focused static checks.
+- **Files changed**: The grouped-roster release journey now retains the identity of a mounted row
+  before it forces the continuation error. The release harness verifies two stable database queries
+  one second apart so the PostgreSQL image's temporary initialization server cannot satisfy its
+  readiness check.
+- **Validation**: GitHub run `34191122680` reproduced the old title-order failure on both attempts
+  at commit `667f156c8`. The corrected local production-mode release harness passed all five browser
+  journeys before the rebase. The complete harness passed all five journeys again after rebasing
+  onto the shared-table changes in `main`. It passed again after the next `main` update changed the
+  Agenda surface; the final roster journey passed in 28.5 seconds. Bash syntax validation, the
+  complete 27-task TypeScript graph with a bounded 4 GB heap, no-cache lint for the whole web
+  package, and the diff whitespace check all passed. The cached lint graph replayed stale
+  type-resolution errors in an untouched Work schedule client, while the same source passed the
+  no-cache lint run.
+- **Learnings**: Fixture insertion order does not define cursor order when every row shares the same
+  sort fields. A container image can also expose a temporary database server while its entrypoint
+  initializes the final database.
+- **Blockers**: None.
+
+---
 
 ### [CAL-CANONICAL-001] Treat duplicate account calendars as one source
 

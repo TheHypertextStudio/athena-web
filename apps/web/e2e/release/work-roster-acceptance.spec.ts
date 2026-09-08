@@ -170,30 +170,6 @@ async function revealAtVirtualEnd(grid: Locator, target: Locator): Promise<void>
   await expect(target).toBeVisible();
 }
 
-/** Walk a virtualized grid from its start until a retained row is mounted and visible. */
-async function revealVirtualTarget(grid: Locator, target: Locator): Promise<void> {
-  await grid.evaluate((element) => {
-    element.scrollTop = 0;
-    element.dispatchEvent(new Event('scroll'));
-  });
-  await expect
-    .poll(
-      async () => {
-        if (await target.isVisible()) return true;
-        await grid.evaluate((element) => {
-          element.scrollTop = Math.min(
-            element.scrollTop + Math.max(element.clientHeight * 0.75, 1),
-            element.scrollHeight - element.clientHeight,
-          );
-          element.dispatchEvent(new Event('scroll'));
-        });
-        return target.isVisible();
-      },
-      { timeout: TIMEOUTS.pageReady },
-    )
-    .toBe(true);
-}
-
 /** Return one virtualized grid to its first mounted rows. */
 async function revealAtVirtualStart(grid: Locator, target: Locator): Promise<void> {
   await grid.evaluate((element) => {
@@ -262,22 +238,24 @@ async function exerciseGroupRecovery(page: Page, fixture: WorkRosterFixture): Pr
     .poll(() => rootOccurrences.count(), { timeout: TIMEOUTS.pageReady })
     .toBeGreaterThanOrEqual(2);
   const loadMore = grid.getByRole('button', { name: /Load more Proposed/iu });
-  const retainedTitle = fixture.bulkTitles.at(-3);
-  if (retainedTitle === undefined) throw new Error('The Proposed continuation fixture is empty.');
-  const retainedRow = grid.getByRole('link', { name: retainedTitle, exact: true });
-  await revealVirtualTarget(grid, retainedRow);
   await revealAtVirtualEnd(grid, loadMore);
+  const mountedBulkRows = grid.getByRole('link', {
+    name: /^Release acceptance Initiative \d{3}$/u,
+  });
+  const retainedCandidate = mountedBulkRows.last();
+  await expect(retainedCandidate).toBeVisible();
+  const retainedTitle = (await retainedCandidate.textContent())?.trim();
+  if (!retainedTitle) throw new Error('The loaded Proposed page has no retainable initiative.');
+  const retainedRow = grid.getByRole('link', { name: retainedTitle, exact: true });
   await loadMore.click();
   const retry = grid.getByRole('button', { name: /Retry Proposed/iu });
   await expect(retry).toBeVisible();
-  await revealVirtualTarget(grid, retainedRow);
+  await expect(retainedRow).toBeVisible();
   await revealAtVirtualEnd(grid, retry);
   rejectContinuation = false;
   await retry.click();
   await expect(retry).toHaveCount(0);
-  await expect(grid.getByText(fixture.bulkTitles.at(-1) ?? '')).toBeVisible({
-    timeout: TIMEOUTS.pageReady,
-  });
+  await expect(retainedRow).toBeVisible({ timeout: TIMEOUTS.pageReady });
   await page.unroute(`**/v1/orgs/${fixture.organizationId}/work-views/query`);
   return grid;
 }

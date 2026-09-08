@@ -26,8 +26,10 @@
   the Apple passkey origin from the production RP ID so the client and server cannot drift. The
   signed-out shell also requires the live RP ID to match the build's WebAuthn origin before it
   enables either passkey action. The Apple exchange rejects an empty identity token or raw nonce
-  before the token can leave the device. The Apple target uses the web design source's layered
-  `Docket.icon` package, so Xcode 26 compiles the
+  before the token can leave the device. Cancelling a passkey or Google chooser returns to the
+  signed-out shell without presenting a false failure. A cancelled enrollment closes its sheet
+  because the one-use email intent may already have been consumed. The Apple target uses the web
+  design source's layered `Docket.icon` package, so Xcode 26 compiles the
   same Liquid Glass artwork for iOS, iPadOS, and macOS instead of using a flattened PWA export. The
   production Google web client retains the legacy origin and callback while also accepting the new
   apex callback and the canonical API-host callback required after `API_URL` moves.
@@ -47,10 +49,14 @@
   new RP, after which it will redirect to the new apex.
 - **Validation**: The rebased server packages pass typecheck and lint. Focused validation passes 178
   auth tests, 161 environment tests, 3 identity contract tests, 5 API config tests, and 28 web
-  consumer tests. Twenty-one native auth and HTTP-contract tests pass on macOS and iOS 26.5. Seven
-  UI tests pass on both iPhone and iPad. The latest iPhone UI run passed all seven tests on one
-  simulator clone; Xcode also logged failed runner launches for two redundant clones, so those
-  launches do not count as test evidence. Development and production-mode iOS Simulator and arm64
+  consumer tests. Twenty-six native auth and HTTP-contract tests pass on macOS and a signed iOS
+  26.5 simulator. The suite now exercises the real Keychain vault plus passkey registration payload
+  and request mapping. The expanded iPhone UI suite passes nine tests with no failures or skips,
+  including account sign-out plus retained signed-in and signed-out captures. The prior seven-test
+  suite passes on iPad. A new macOS keyboard sign-out test compiles, but the Mac runner cannot start:
+  Xcode requires a paid-team development profile for the entitled app, and the unsigned
+  runner exited before bootstrapping while the desktop was locked. Neither attempt counts as macOS
+  UI evidence. Development and production-mode iOS Simulator and arm64
   macOS builds pass with two Xcode jobs. The Release app contains the exact Google values returned
   by the provider console. The macOS Release build compiles `Docket.icon` into `Docket.icns` and
   names it as the app icon in the built bundle. A rendered 256-pixel representation shows the

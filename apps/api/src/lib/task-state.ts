@@ -10,8 +10,8 @@
  * or `status_change` with a `docket.state_change` detail; the automation engine's depth-1
  * cascade cap keeps a rule-triggered transition from re-firing rules.
  */
-import { db, organization, task } from '@docket/db';
-import { and, eq, isNull } from 'drizzle-orm';
+import { actor, db, organization, task, timeInterval, timeRecord } from '@docket/db';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { isTerminalCategory, type WorkStatusCategory } from '@docket/work/work-status-contract';
 
 import { resolveStateTransition } from '../routes/task-helpers';
@@ -101,6 +101,72 @@ export async function writeTaskStateTransition(
     .returning();
   const after = updated[0];
   return after ? { before: input.before, after } : null;
+}
+
+/**
+ * Close Time Ledger records that the completing person anchored to a newly completed task.
+ *
+ * The ledger belongs to a user while task state belongs to an organization actor. Resolving the
+ * actor inside this transaction keeps that ownership boundary intact and makes completion and
+ * timer closure atomic. Automation and agent actors have no user id, so they cannot close a
+ * person's timer. A record on another task or another user's matching task stays untouched.
+ */
+export async function closeCompletingUserTaskTimers(
+  tx: TaskStateTransaction,
+  actorId: string | null,
+  mutation: TaskStateMutation,
+): Promise<void> {
+  if (
+    actorId === null ||
+    mutation.before.completedAt !== null ||
+    mutation.after.completedAt === null
+  ) {
+    return;
+  }
+  const actorRows = await tx
+    .select({ userId: actor.userId })
+    .from(actor)
+    .where(
+      and(
+        eq(actor.id, actorId),
+        eq(actor.organizationId, mutation.after.organizationId),
+        eq(actor.kind, 'human'),
+      ),
+    )
+    .limit(1);
+  const userId = actorRows[0]?.userId;
+  if (!userId) return;
+
+  const records = await tx
+    .select({ id: timeRecord.id })
+    .from(timeRecord)
+    .where(
+      and(
+        eq(timeRecord.createdByUserId, userId),
+        eq(timeRecord.taskId, mutation.after.id),
+        inArray(timeRecord.status, ['open', 'paused']),
+      ),
+    )
+    .for('update');
+  const recordIds = records.map((record) => record.id);
+  if (recordIds.length === 0) return;
+
+  const now = new Date();
+  await tx
+    .update(timeInterval)
+    .set({ endedAt: now, closedAt: now })
+    .where(
+      and(
+        inArray(timeInterval.timeRecordId, recordIds),
+        eq(timeInterval.userId, userId),
+        eq(timeInterval.mode, 'human_active'),
+        isNull(timeInterval.endedAt),
+      ),
+    );
+  await tx
+    .update(timeRecord)
+    .set({ status: 'closed', closedAt: now, endedAt: now })
+    .where(inArray(timeRecord.id, recordIds));
 }
 
 /**
@@ -429,6 +495,7 @@ export async function setTaskState(input: SetTaskStateInput): Promise<TaskRow | 
       canceledAt: transition.canceledAt,
     });
     if (!mutation) return null;
+    await closeCompletingUserTaskTimers(tx, input.actorId, mutation);
     return { mutation, cascades: await applySubtaskCompletionPolicy(tx, mutation) };
   });
   /* v8 ignore next -- @preserve defensive: the select above proved the row exists + is active */

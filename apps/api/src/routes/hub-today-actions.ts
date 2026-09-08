@@ -7,6 +7,7 @@ import type { z } from 'zod';
 import { CapabilityError, ConflictError, NotFoundError } from '../error';
 import {
   applySubtaskCompletionPolicy,
+  closeCompletingUserTaskTimers,
   finishTaskStateTransition,
   writeTaskStateTransition,
 } from '../lib/task-state';
@@ -108,6 +109,7 @@ export async function completeTodayItem(
       canceledAt: null,
     });
     if (!mutation) throw new NotFoundError('Today item not found');
+    await closeCompletingUserTaskTimers(tx, membership.actor.id, mutation);
     await tx
       .update(dailyPlanItem)
       .set({ status: 'done' })

@@ -62,6 +62,7 @@ import {
 } from '../lib/task-audit';
 import {
   applySubtaskCompletionPolicyForParents,
+  closeCompletingUserTaskTimers,
   finishTaskStateTransition,
   setTaskState,
 } from '../lib/task-state';
@@ -1645,6 +1646,9 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
             ? current
             : (await tx.update(task).set(patch).where(where).returning())[0];
         if (!updated) throw new NotFoundError('Task not found');
+        if (statePatch !== undefined) {
+          await closeCompletingUserTaskTimers(tx, ctx.actorId, { before: current, after: updated });
+        }
 
         const relatedActivity: { taskId: string; title: string; linked: boolean }[] = [];
         if (patchRelatedTaskIds !== undefined) {

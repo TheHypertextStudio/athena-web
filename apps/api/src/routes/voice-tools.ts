@@ -23,6 +23,7 @@ import { encodeListCursor, seekAfter } from '../lib/list-cursor';
 import { resolveLandingTarget } from '../lib/task-landing';
 import {
   applySubtaskCompletionPolicy,
+  closeCompletingUserTaskTimers,
   finishTaskStateTransition,
   writeTaskStateTransition,
 } from '../lib/task-state';
@@ -367,6 +368,7 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
         canceledAt: null,
       });
       if (!mutation) return null;
+      await closeCompletingUserTaskTimers(tx, actorId, mutation);
       const cascades = await applySubtaskCompletionPolicy(tx, mutation);
       const summary = `Closed “${match.title}”.`;
       const changeSetId = await recordChangeSetInTransaction(tx, {

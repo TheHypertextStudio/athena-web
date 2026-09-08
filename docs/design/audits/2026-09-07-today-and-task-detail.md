@@ -68,11 +68,14 @@ Gates: A11y ✅ · Responsive ✅ · Theme parity ✅ · No placeholder ✅ · S
 3. **The recovery-codes nudge occupies the sidebar's whole lower third.** Visible in every shot at
    1440×900. It is correct copy and a real prompt, but it is the largest single block in the chrome
    and outweighs the navigation it sits under.
-4. **The row meta strip has no columns.** `EntityListRow`'s meta slot is a right-packed
-   `flex … gap-x-4`, so each row's estimate, date and workspace land wherever that row's own content
-   widths put them. `⏱ 60 min` and `⏱ 240 min` do not share a left edge and the clock glyphs jitter
-   about 12px down the list. Fixing it properly means giving the meta slot fixed columns, which
-   changes the shared component's API and every consumer of it — not a Today-local change.
+4. **The row meta strip has no columns — now partly fixed.** `EntityListRow`'s meta slot is a
+   right-packed `flex … gap-x-4`, so each row's estimate, date and workspace landed wherever that
+   row's own content widths put them, and the clock glyphs jittered about 12px down the list.
+   `hub-task-row` now gives the estimate and due slots fixed widths (`w-20`, `w-12`), which holds
+   the column for every row carrying the same slots. A row that also carries `Blocked` still
+   shifts, because the band is right-packed and only the list can reserve a track that every row
+   respects. Closing that means `EntityList` owning the meta grid, which changes the shared
+   component's API and every consumer of it.
 5. **519 borders and 112 off-scale corners are now counted but not paid down.** Widening
    `ad-hoc-border` and adding `raw-radius-utility` made the debt visible and ratcheted; removing it
    is separate work, and on these two surfaces specifically it is what stands between detail craft
@@ -93,6 +96,8 @@ tests, and none of them by screenshot:
 - The day-context chips were a hand-rolled pill on `surfaceToneColor('floating')` — an overlay role,
   three ramp steps above the rail. They are `Badge variant="secondary"` now.
 - `SchedulingCanvasNotice` was `rounded-2xl`, which is on neither radius scale. It is `rounded-lg`.
+- The Today row meta's estimate and due slots take fixed widths, so the clock column stops jittering
+  between a `60 min` row and a `240 min` one. See finding 4 for what this does not fix.
 
 **The screenshots in this directory are from before those five changes.** Re-shooting needs a dev
 stack, and the machine's agent-forest memory ceiling (40% of 16GB, shared across every agent

@@ -134,13 +134,18 @@ export default function HubTaskRow({
             {plan && plan.dependencyImpact > 0 ? (
               <RowMeta tabular>Unblocks {String(plan.dependencyImpact)}</RowMeta>
             ) : null}
+            {/* Fixed widths, not content widths. The meta band is a right-packed flex, so an
+                estimate of `240 min` and one of `60 min` put their clock glyphs on different
+                axes and the column jitters down the list. Reserving the box stops that for every
+                row carrying the same slots; a row that also carries `Blocked` still shifts,
+                because true columns need the list to own the tracks rather than each row. */}
             {time ? (
-              <RowMeta tabular>
+              <RowMeta tabular className="w-20">
                 <AlarmClock aria-hidden="true" className="size-3.5" /> {time}
               </RowMeta>
             ) : null}
             {due ? (
-              <RowMeta tabular {...(overdue ? { className: 'text-error' } : {})}>
+              <RowMeta tabular className={overdue ? 'text-error w-12' : 'w-12'}>
                 {due}
               </RowMeta>
             ) : null}

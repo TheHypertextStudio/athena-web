@@ -1,8 +1,12 @@
 {
+  "apps/web/src/app/(app)/billing/start/page.tsx": {
+    "ad-hoc-border": 2
+  },
   "apps/web/src/app/(app)/exports/[exportId]/page.tsx": {
     "raw-type-utility": 2
   },
   "apps/web/src/app/(app)/inbox/inbox-client.tsx": {
+    "ad-hoc-border": 2,
     "raw-type-utility": 5
   },
   "apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx": {
@@ -14,8 +18,20 @@
   "apps/web/src/app/(app)/orgs/[orgId]/programs/[programId]/program-detail-client.tsx": {
     "raw-type-utility": 3
   },
+  "apps/web/src/app/(app)/orgs/[orgId]/recurrence-series/[seriesId]/page.tsx": {
+    "ad-hoc-border": 9
+  },
   "apps/web/src/app/(app)/orgs/[orgId]/sessions/[sessionId]/page.tsx": {
+    "ad-hoc-border": 5,
+    "raw-radius-utility": 1,
     "raw-type-utility": 3
+  },
+  "apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx": {
+    "ad-hoc-border": 5
+  },
+  "apps/web/src/app/(app)/orgs/[orgId]/teams/[teamId]/team-detail-client.tsx": {
+    "ad-hoc-border": 2,
+    "raw-radius-utility": 6
   },
   "apps/web/src/app/(app)/orgs/[orgId]/teams/teams-client.tsx": {
     "raw-type-utility": 3
@@ -24,18 +40,29 @@
     "raw-type-utility": 3
   },
   "apps/web/src/app/(app)/portfolio/portfolio-client.tsx": {
+    "ad-hoc-border": 10,
     "raw-type-utility": 1
   },
   "apps/web/src/app/(app)/settings/calendar/page.tsx": {
     "raw-type-utility": 1
   },
+  "apps/web/src/app/(app)/tasks/all-tasks-client.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/app/(app)/today/page.tsx": {
+    "ad-hoc-border": 2
+  },
   "apps/web/src/app/(app)/workspaces/new/page.tsx": {
     "raw-type-utility": 6
+  },
+  "apps/web/src/app/(auth)/_components/auth-feedback.tsx": {
+    "ad-hoc-border": 2
   },
   "apps/web/src/app/(auth)/_components/auth-shell.tsx": {
     "raw-type-utility": 1
   },
   "apps/web/src/app/(auth)/oauth/authorize/page.tsx": {
+    "ad-hoc-border": 6,
     "raw-type-utility": 7
   },
   "apps/web/src/app/(auth)/recover/page.tsx": {
@@ -51,18 +78,23 @@
     "raw-type-utility": 3
   },
   "apps/web/src/app/(marketing)/pricing/page.tsx": {
+    "ad-hoc-border": 2,
     "raw-type-utility": 5
   },
   "apps/web/src/app/(marketing)/privacy/page.tsx": {
+    "ad-hoc-border": 2,
     "raw-type-utility": 6
   },
   "apps/web/src/app/(marketing)/problems/[code]/page.tsx": {
+    "ad-hoc-border": 2,
     "raw-type-utility": 10
   },
   "apps/web/src/app/(marketing)/problems/page.tsx": {
+    "ad-hoc-border": 3,
     "raw-type-utility": 7
   },
   "apps/web/src/app/(marketing)/terms/page.tsx": {
+    "ad-hoc-border": 2,
     "raw-type-utility": 6
   },
   "apps/web/src/app/layout.tsx": {
@@ -74,13 +106,21 @@
   "apps/web/src/components/account-menu.tsx": {
     "raw-type-utility": 5
   },
+  "apps/web/src/components/agenda/agenda-entry-card.tsx": {
+    "raw-radius-utility": 3
+  },
   "apps/web/src/components/agents/activity-item.tsx": {
+    "ad-hoc-border": 11,
+    "raw-radius-utility": 1,
     "raw-type-utility": 13
   },
   "apps/web/src/components/agents/approval-status-badge.tsx": {
+    "ad-hoc-border": 4,
     "raw-type-utility": 1
   },
   "apps/web/src/components/agents/proposal-group-card.tsx": {
+    "ad-hoc-border": 9,
+    "raw-radius-utility": 1,
     "raw-type-utility": 5
   },
   "apps/web/src/components/agents/session-filter.tsx": {
@@ -90,78 +130,212 @@
     "raw-type-utility": 5
   },
   "apps/web/src/components/agents/session-sidebar.tsx": {
+    "ad-hoc-border": 7,
     "raw-type-utility": 15
   },
   "apps/web/src/components/agents/session-status.tsx": {
+    "ad-hoc-border": 8,
     "raw-type-utility": 2
   },
   "apps/web/src/components/agents/trust-dial.tsx": {
+    "ad-hoc-border": 2,
     "raw-type-utility": 3,
     "shadow-outside-overlay": 1
   },
+  "apps/web/src/components/app-content-fallback.tsx": {
+    "ad-hoc-border": 2
+  },
   "apps/web/src/components/app-shell-frame.tsx": {
+    "raw-radius-utility": 3,
     "raw-type-utility": 1
+  },
+  "apps/web/src/components/athena/athena-conversation-browser.tsx": {
+    "raw-radius-utility": 1
   },
   "apps/web/src/components/athena/athena-conversation.tsx": {
+    "ad-hoc-border": 4,
+    "raw-radius-utility": 3,
     "raw-type-utility": 1
   },
+  "apps/web/src/components/athena/athena-panel-provider.tsx": {
+    "ad-hoc-border": 6
+  },
   "apps/web/src/components/athena/athena-workbench.tsx": {
+    "ad-hoc-border": 18,
     "raw-type-utility": 26
   },
   "apps/web/src/components/athena/athena-workspace.tsx": {
+    "ad-hoc-border": 25,
     "raw-type-utility": 32
   },
+  "apps/web/src/components/athena/elicitation-control.tsx": {
+    "ad-hoc-border": 3
+  },
+  "apps/web/src/components/athena/mail-inbox.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/athena/mcp-app-view.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/athena/voice-phone-numbers.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/billing/billing-recovery.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/calendar/calendar-create-failure-notice.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/calendar/calendar-item-card.tsx": {
+    "ad-hoc-border": 2,
+    "raw-radius-utility": 3
+  },
+  "apps/web/src/components/calendar/calendar-timezone-dialog.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/calendar/create-block-form.tsx": {
+    "ad-hoc-border": 3
+  },
+  "apps/web/src/components/calendar/item-drawer/linked-task-row.tsx": {
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/calendar/item-drawer/relation-row.tsx": {
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/canvas/canvas-inspector.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/canvas/canvas-properties-editor.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/canvas/graph-inspector-host.tsx": {
+    "ad-hoc-border": 2
+  },
   "apps/web/src/components/canvas/group-node.tsx": {
+    "ad-hoc-border": 2,
     "raw-type-utility": 2
   },
   "apps/web/src/components/canvas/node-peek.tsx": {
+    "raw-radius-utility": 1,
     "raw-type-utility": 3
   },
+  "apps/web/src/components/canvas/project-node.tsx": {
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/canvas/task-branch-node.tsx": {
+    "ad-hoc-border": 3
+  },
+  "apps/web/src/components/canvas/task-graph-panel.tsx": {
+    "raw-radius-utility": 1
+  },
   "apps/web/src/components/canvas/task-node.tsx": {
+    "ad-hoc-border": 6,
+    "raw-radius-utility": 4,
     "raw-type-utility": 9
   },
+  "apps/web/src/components/clipboard/clipboard-provider.tsx": {
+    "ad-hoc-border": 2
+  },
   "apps/web/src/components/command-palette/command-palette-trigger.tsx": {
+    "ad-hoc-border": 3,
+    "raw-radius-utility": 1,
     "raw-type-utility": 2
   },
   "apps/web/src/components/command-palette/command-palette.tsx": {
+    "ad-hoc-border": 6,
     "raw-type-utility": 1
   },
   "apps/web/src/components/command-palette/scope-toggle.tsx": {
+    "ad-hoc-border": 2,
+    "raw-radius-utility": 2,
     "raw-type-utility": 4
   },
   "apps/web/src/components/composer/composer-shell.tsx": {
+    "ad-hoc-border": 2,
     "raw-type-utility": 5
+  },
+  "apps/web/src/components/composer/template-menu.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/cycles/carryover-row.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/cycles/close-cycle-dialog.tsx": {
+    "ad-hoc-border": 4
   },
   "apps/web/src/components/cycles/cycle-row.tsx": {
     "raw-type-utility": 4
   },
+  "apps/web/src/components/editor/code-block-frame.tsx": {
+    "ad-hoc-border": 4
+  },
+  "apps/web/src/components/editor/document-figure-node-view.tsx": {
+    "ad-hoc-border": 5
+  },
   "apps/web/src/components/editor/freeform-text.tsx": {
+    "ad-hoc-border": 14,
+    "raw-radius-utility": 2,
     "raw-type-utility": 2
   },
+  "apps/web/src/components/editor/static-markdown.tsx": {
+    "ad-hoc-border": 8,
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/editor/table-controls.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/entity-detail/latest-update-summary.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/entity-detail/resources-tab.tsx": {
+    "ad-hoc-border": 4
+  },
+  "apps/web/src/components/entity-detail/updates-panel.tsx": {
+    "ad-hoc-border": 8
+  },
   "apps/web/src/components/entity-display/entity-icon-picker-loaded.tsx": {
+    "ad-hoc-border": 2,
     "hardcoded-color": 1
+  },
+  "apps/web/src/components/in-page-search/in-page-search-field.tsx": {
+    "ad-hoc-border": 4,
+    "raw-radius-utility": 1
   },
   "apps/web/src/components/inbox/activity-row.tsx": {
     "raw-type-utility": 3
   },
   "apps/web/src/components/inbox/notification-row.tsx": {
+    "ad-hoc-border": 2,
+    "raw-radius-utility": 1,
     "raw-type-utility": 6
   },
   "apps/web/src/components/inbox/segmented-tabs.tsx": {
     "raw-type-utility": 2
   },
   "apps/web/src/components/initiatives/associations-panel.tsx": {
+    "ad-hoc-border": 4,
+    "raw-radius-utility": 1,
     "raw-type-utility": 6
   },
   "apps/web/src/components/initiatives/distribution-bar.tsx": {
     "raw-type-utility": 2
   },
+  "apps/web/src/components/initiatives/initiative-hierarchy-picker-overlay.tsx": {
+    "ad-hoc-border": 6
+  },
   "apps/web/src/components/initiatives/initiative-relationship-panels.tsx": {
     "raw-type-utility": 2
   },
   "apps/web/src/components/initiatives/roadmap.tsx": {
+    "ad-hoc-border": 16,
     "raw-type-utility": 16,
     "shadow-outside-overlay": 1
+  },
+  "apps/web/src/components/marketing/agents-strip.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/marketing/feature-band.tsx": {
+    "ad-hoc-border": 2
   },
   "apps/web/src/components/marketing/hero.tsx": {
     "raw-type-utility": 2
@@ -169,22 +343,38 @@
   "apps/web/src/components/marketing/marketing-cta.tsx": {
     "raw-type-utility": 1
   },
+  "apps/web/src/components/marketing/pricing-products.tsx": {
+    "ad-hoc-border": 5
+  },
+  "apps/web/src/components/marketing/product-screenshot.tsx": {
+    "ad-hoc-border": 3
+  },
+  "apps/web/src/components/marketing/secondary-list.tsx": {
+    "ad-hoc-border": 4
+  },
   "apps/web/src/components/marketing/site-footer.tsx": {
+    "ad-hoc-border": 4,
     "raw-type-utility": 7
   },
   "apps/web/src/components/marketing/site-header.tsx": {
+    "ad-hoc-border": 2,
     "raw-type-utility": 4
   },
   "apps/web/src/components/mentions/link-upgrade.ts": {
+    "raw-radius-utility": 1,
     "raw-type-utility": 1
   },
   "apps/web/src/components/mentions/mention-chip.tsx": {
     "raw-type-utility": 2
   },
+  "apps/web/src/components/mentions/mention-hovercard.tsx": {
+    "ad-hoc-border": 4
+  },
   "apps/web/src/components/mentions/mention-menu.tsx": {
     "raw-type-utility": 1
   },
   "apps/web/src/components/my-work/live-session-pill.tsx": {
+    "ad-hoc-border": 6,
     "raw-type-utility": 2
   },
   "apps/web/src/components/my-work/split-tabs.tsx": {
@@ -194,13 +384,16 @@
     "raw-type-utility": 1
   },
   "apps/web/src/components/offline-state.tsx": {
+    "ad-hoc-border": 2,
     "raw-type-utility": 1
   },
   "apps/web/src/components/onboarding/selectable-card.tsx": {
+    "ad-hoc-border": 10,
     "raw-type-utility": 4,
     "shadow-outside-overlay": 2
   },
   "apps/web/src/components/onboarding/step-connect-provider-row.tsx": {
+    "ad-hoc-border": 8,
     "raw-type-utility": 8
   },
   "apps/web/src/components/onboarding/wizard-shell.tsx": {
@@ -209,23 +402,160 @@
   "apps/web/src/components/org-chip.tsx": {
     "raw-type-utility": 1
   },
+  "apps/web/src/components/pickers/label-picker-overlay.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/pickers/relation-target-picker-overlay.tsx": {
+    "ad-hoc-border": 2
+  },
   "apps/web/src/components/portfolio/org-filter-chips.tsx": {
+    "ad-hoc-border": 3,
     "raw-type-utility": 2
   },
   "apps/web/src/components/programs/flow-snapshot.tsx": {
+    "ad-hoc-border": 4,
     "raw-type-utility": 4
+  },
+  "apps/web/src/components/programs/program-projects-panel.tsx": {
+    "ad-hoc-border": 5
+  },
+  "apps/web/src/components/project-detail/agent-activity-feed.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/project-detail/agents-strip.tsx": {
+    "ad-hoc-border": 4
+  },
+  "apps/web/src/components/project-detail/milestone-tasks.tsx": {
+    "ad-hoc-border": 3
+  },
+  "apps/web/src/components/project-detail/overview-summary.tsx": {
+    "ad-hoc-border": 6
+  },
+  "apps/web/src/components/project-detail/project-dependencies.tsx": {
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/project-detail/project-milestones.tsx": {
+    "ad-hoc-border": 5
   },
   "apps/web/src/components/projects/project-catalog.ts": {
     "raw-type-utility": 1
   },
+  "apps/web/src/components/property-pickers/property-panel.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/publishing/brief-document.tsx": {
+    "ad-hoc-border": 4
+  },
   "apps/web/src/components/rail/day-tasks-panel.tsx": {
     "raw-type-utility": 1
   },
+  "apps/web/src/components/recurrence/plan-work-for-event-form.tsx": {
+    "ad-hoc-border": 4
+  },
+  "apps/web/src/components/recurrence/repeat-project-dialog.tsx": {
+    "ad-hoc-border": 12
+  },
+  "apps/web/src/components/recurrence/repeat-task-control.tsx": {
+    "ad-hoc-border": 4
+  },
+  "apps/web/src/components/scheduling/scheduling-all-day-edit-controls.tsx": {
+    "raw-radius-utility": 3
+  },
+  "apps/web/src/components/scheduling/scheduling-all-day-item.tsx": {
+    "ad-hoc-border": 5,
+    "raw-radius-utility": 9
+  },
+  "apps/web/src/components/scheduling/scheduling-all-day-lane.tsx": {
+    "raw-radius-utility": 2
+  },
+  "apps/web/src/components/scheduling/scheduling-canvas.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/scheduling/scheduling-item-body.tsx": {
+    "raw-radius-utility": 2
+  },
+  "apps/web/src/components/scheduling/scheduling-item-card.tsx": {
+    "ad-hoc-border": 5,
+    "raw-radius-utility": 8
+  },
+  "apps/web/src/components/scheduling/scheduling-region-preview.tsx": {
+    "ad-hoc-border": 7,
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/scheduling/scheduling-relation-slot-lane.tsx": {
+    "ad-hoc-border": 3
+  },
+  "apps/web/src/components/scheduling/scheduling-time-grid.tsx": {
+    "ad-hoc-border": 5
+  },
   "apps/web/src/components/search/search-client.tsx": {
+    "ad-hoc-border": 8,
+    "raw-radius-utility": 2,
     "raw-type-utility": 13
   },
+  "apps/web/src/components/settings/automations-tab.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/settings/billing-discounts-section.tsx": {
+    "ad-hoc-border": 4
+  },
+  "apps/web/src/components/settings/billing-settings.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/settings/export-request-form.tsx": {
+    "raw-radius-utility": 3
+  },
+  "apps/web/src/components/settings/invite-form.tsx": {
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/settings/mcp-setup-panels.tsx": {
+    "raw-radius-utility": 2
+  },
+  "apps/web/src/components/settings/product-required-notice.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/stream/stream-episode.tsx": {
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/stream/stream-event-detail.tsx": {
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/stream/stream-view.tsx": {
+    "ad-hoc-border": 2,
+    "raw-radius-utility": 4
+  },
+  "apps/web/src/components/task-detail/PriorityGlyph.tsx": {
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/task-detail/Subtasks.tsx": {
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/task-detail/task-activity-feed.tsx": {
+    "ad-hoc-border": 2,
+    "raw-radius-utility": 2
+  },
+  "apps/web/src/components/task-detail/task-properties-rail.tsx": {
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/tasks/quick-add-task-row.tsx": {
+    "ad-hoc-border": 6
+  },
+  "apps/web/src/components/tasks/task-hierarchy-drop.ts": {
+    "ad-hoc-border": 3
+  },
+  "apps/web/src/components/tasks/task-hierarchy-picker-overlay.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/team-detail/capacity-chart.tsx": {
+    "raw-radius-utility": 1
+  },
   "apps/web/src/components/teams/create-team.tsx": {
+    "ad-hoc-border": 3,
+    "raw-radius-utility": 1,
     "raw-type-utility": 4
+  },
+  "apps/web/src/components/teams/team-card.tsx": {
+    "raw-radius-utility": 1
   },
   "apps/web/src/components/teams/team-list-ui.tsx": {
     "raw-type-utility": 4
@@ -233,23 +563,89 @@
   "apps/web/src/components/teams/team-picker.tsx": {
     "raw-type-utility": 1
   },
+  "apps/web/src/components/time-tracking/focus-immersive.tsx": {
+    "ad-hoc-border": 3
+  },
+  "apps/web/src/components/time-tracking/focus-session.tsx": {
+    "raw-radius-utility": 2
+  },
+  "apps/web/src/components/time-tracking/focus-task-context.tsx": {
+    "ad-hoc-border": 4
+  },
+  "apps/web/src/components/time-tracking/focus-task-queue.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/time-tracking/focus-today.tsx": {
+    "ad-hoc-border": 2,
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/time-tracking/time-record-dialog.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/time-tracking/time-session-list.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/timeline/timeline-bar.tsx": {
+    "ad-hoc-border": 2,
+    "raw-radius-utility": 2
+  },
+  "apps/web/src/components/timeline/timeline-tint.ts": {
+    "ad-hoc-border": 4
+  },
+  "apps/web/src/components/today/focus-card.tsx": {
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/today/suggested-tasks.tsx": {
+    "raw-radius-utility": 1
+  },
   "apps/web/src/components/triage/source-tag.tsx": {
     "raw-type-utility": 2
   },
   "apps/web/src/components/triage/suggestions-lane.tsx": {
+    "ad-hoc-border": 5,
     "raw-type-utility": 17
   },
   "apps/web/src/components/triage/triage-row.tsx": {
     "raw-type-utility": 2
   },
+  "apps/web/src/components/views/detail-print-summary.tsx": {
+    "ad-hoc-border": 1
+  },
   "apps/web/src/components/views/entity-detail-layout.tsx": {
     "raw-type-utility": 1
+  },
+  "apps/web/src/components/views/filter-toolbar.tsx": {
+    "ad-hoc-border": 2,
+    "raw-radius-utility": 1
   },
   "apps/web/src/components/views/page-layout.tsx": {
     "raw-type-utility": 1
   },
+  "apps/web/src/components/views/view-list.tsx": {
+    "ad-hoc-border": 3
+  },
   "apps/web/src/components/wordmark.tsx": {
     "raw-type-utility": 3
+  },
+  "apps/web/src/components/work-location/place-map-picker.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/work-location/work-location-calendar-components.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/work-views/filter-builder.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/work-views/work-board.tsx": {
+    "ad-hoc-border": 7,
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/work-views/work-list-columns.tsx": {
+    "raw-radius-utility": 1
+  },
+  "apps/web/src/components/work-views/work-view-page.tsx": {
+    "ad-hoc-border": 2,
+    "raw-radius-utility": 13
   },
   "apps/web/src/components/workspace-creation/workspace-name-field.tsx": {
     "raw-type-utility": 2

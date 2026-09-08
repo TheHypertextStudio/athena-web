@@ -301,10 +301,11 @@ export function TodayPrompt({
   const hiddenFiles = files.slice(VISIBLE_FILES);
 
   return (
-    // 600px, centred. This is the entry point to every kind of work the page can start — a task, a
-    // scheduling request, an interactive planning session — so it sits on the page's axis at a
-    // width you can read a sentence in, rather than stretching to whatever the column happens to be.
-    <Stack gap={2} className="mx-auto w-full max-w-[600px]">
+    // Capped at 600px — about 75ch at `body-large`, where the page column is nearer 88 — but left
+    // on the column's own edge rather than centred. Centring bought the measure and cost the
+    // alignment: the box sat 52px inside every heading and card on the page, so the one element
+    // people type into was the one element that shared no edge with anything.
+    <Stack gap={2} className="w-full max-w-[600px]">
       {/* No heading and no explainer above the box. What used to sit here — a rhetorical
           "What's on your plate?" over two sentences describing what pasting does — was the field
           narrating itself to the person already using it. */}

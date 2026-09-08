@@ -1,7 +1,6 @@
 'use client';
 
 /** `agenda/agenda-canvas` — list and shared-fluid-canvas arrangements of one agenda. */
-import Link from '@/components/docket-link';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -83,6 +82,35 @@ export default function AgendaCanvas(): JSX.Element {
         }}
       />
     </>
+  );
+}
+
+/**
+ * Announce an empty day without drawing anything.
+ *
+ * @remarks
+ * The rail deliberately renders no visual empty state — the notice pinned itself to the viewport's
+ * bottom edge and floated a pill over whatever hour was in view, restating what an empty timeline
+ * already says. That leaves a gap for anyone who cannot see the timeline, which this closes.
+ *
+ * It owns its own branching rather than taking a single `show` boolean, because the three
+ * conditions counted against {@link TimelineArrangement}'s complexity budget where they were.
+ */
+function AgendaEmptyStatus({
+  loading,
+  itemCount,
+  error,
+}: {
+  readonly loading: boolean;
+  readonly itemCount: number;
+  readonly error: string | null | undefined;
+}): JSX.Element | null {
+  if (loading || itemCount > 0) return null;
+  if (error !== null && error !== undefined && error.length > 0) return null;
+  return (
+    <p role="status" className="sr-only">
+      Nothing scheduled.
+    </p>
   );
 }
 
@@ -340,14 +368,14 @@ function TimelineArrangement({
               </Button>
             ) : null
           }
-          emptyMessage={loading ? '' : 'Nothing scheduled.'}
-          emptyAction={
-            loading ? null : (
-              <Button asChild variant="outline" size="sm">
-                <Link href="/calendar">Plan in the calendar</Link>
-              </Button>
-            )
-          }
+          // No visual empty state in the rail. The notice pins itself to the viewport's bottom
+          // edge, so on an empty day it floated a pill over whatever hour you happened to be
+          // scrolled to, restating what an empty timeline already says. The ghost grammar's rule 6
+          // is the standard here — a lane with nothing to show renders nothing. The calendar page
+          // keeps its own notice, because there the empty grid is the whole screen rather than a
+          // supplemental panel, and "Plan in the calendar" is not a route out of the calendar.
+          // The state is still announced; see the live region below.
+          emptyMessage=""
           onOpenItem={({ item, anchor }) => {
             const entry = entryById.get(item.id);
             if (!entry) return;
@@ -367,6 +395,7 @@ function TimelineArrangement({
           }}
         />
       )}
+      <AgendaEmptyStatus loading={loading} itemCount={lane.items.length} error={error} />
       {workLocationComposition?.overlays}
       <CreateBlockForm
         presentation="agenda"

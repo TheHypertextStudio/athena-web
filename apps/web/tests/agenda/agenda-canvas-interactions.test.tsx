@@ -413,14 +413,19 @@ describe('Agenda scheduling interactions', () => {
     );
   });
 
-  it('teaches the next action when the timeline has no entries', () => {
+  it('announces an empty timeline without drawing anything over it', () => {
     renderAgenda();
 
-    // The sentence used to carry the whole instruction — `Use the calendar to plan this day` —
-    // which named a destination and left the reader to go find it. The action is a control now,
-    // so the prose only has to state the situation.
-    expect(canvasProps().emptyMessage).toBe('Nothing scheduled.');
-    expect(canvasProps().emptyAction).not.toBeNull();
+    // The timeline draws no visual empty state. `SchedulingCanvasNotice` pins itself to the
+    // viewport's bottom edge, so on an empty day it floated a pill over whatever hour happened to
+    // be in view — unanchored to any lane, and restating what an empty grid already says. The
+    // ghost grammar's rule 6 is the standard: a lane with nothing to show renders nothing.
+    expect(canvasProps().emptyMessage).toBe('');
+    expect(canvasProps().emptyAction).toBeUndefined();
+
+    // Silence is only correct for a reader who can see the grid, so the state is still announced.
+    expect(screen.getByRole('status')).toHaveTextContent('Nothing scheduled.');
+    expect(screen.queryByRole('link', { name: 'Plan in the calendar' })).not.toBeInTheDocument();
   });
 
   it('passes degraded agenda reads and their recovery action to the timeline', () => {

@@ -797,6 +797,7 @@ against its own edge at any size. A test asserts this over the whole scale.
 | Rule                        | Fails on                                                                                                                            |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `raw-type-utility`          | `text-xs`, `text-2xl`, `text-[13px]`, `font-semibold`, `leading-tight`, `leading-[1.1]`, `tracking-widest`, `tracking-[-0.015em]`   |
+| `raw-radius-utility`        | `rounded`, `rounded-t`, `rounded-sm`, `rounded-2xl`, `rounded-[3px]` — corners outside the two scales in §1                         |
 | `size-changing-interaction` | `hover:scale-105`, `active:scale-[0.99]`, `group-hover:h-10`, `hover:p-3`, `focus:text-lg`                                          |
 | `shadow-outside-overlay`    | any `shadow-*` outside the allow-set above                                                                                          |
 | `raw-shadow-on-overlay`     | `shadow-md`, `shadow-lg`, `shadow-2xl` _inside_ an allow-set overlay — a float names an MD3 level (`shadow-level0`–`shadow-level5`) |
@@ -809,17 +810,31 @@ Legal near-misses the scanner deliberately spares: `text-on-surface-variant` (a 
 resize), any static size no interaction changes, and — for `ad-hoc-border` — `border-none`,
 `border-0`, `border-transparent`, the table-layout utilities (`border-collapse`, `border-separate`,
 `border-spacing-*`), and any border behind an interaction variant, since a focus indicator is one
-of the three things §8 says earns a border.
+of the three things §8 says earns a border. For `raw-radius-utility`: both scales on any side
+(`rounded-md`, `rounded-t-xl`, `rounded-b-corner-md`, `rounded-full`), `rounded-none` — which
+asserts there is no corner the way `border-0` asserts there is no border — and `rounded-[var(--x)]`
+and `rounded-[inherit]`, which defer to a token or to the parent rather than picking a value.
 
 #### Per-rule scope
 
 Every rule runs across all of `ENFORCED_ROOTS` except where `RULE_ROOTS` in `design-token-scan.ts`
-narrows it. Today that holds one entry: **`ad-hoc-border` applies only to `apps/admin/src`**, the
-surface currently being migrated. `apps/web/src` carries roughly 601 border utilities across 154
-files, and seeding those into the ledger would add hundreds of entries nobody intends to pay down
-yet. The scope also keeps the rule clear of `packages/ui/src/primitives/**`, which rule 4 below
-holds to zero with no ledger entries permitted — and where a border is often correct, being the
-field's editable affordance, a separator's whole purpose, or a control's outline.
+narrows it. Two rules are narrowed, both to `apps/admin/src` and `apps/web/src`:
+**`ad-hoc-border`** and **`raw-radius-utility`**.
+
+`ad-hoc-border` was admin-only until 2026-09-07. The cost of that scope was not less debt but
+invisible debt: the web app had reached 519 border utilities against a §8 that says grouping is a
+tonal step and not a drawn line, and nothing counted them, so nothing could shrink them. They are
+now seeded and ratcheted like everything else.
+
+Neither rule reaches `packages/ui/src`, and that is deliberate rather than pending. Rule 4 below
+holds that tree to zero with no ledger entries permitted, so covering it would demand every
+violation come out in the same change — and in the primitives a border is frequently the correct
+answer, being the field's editable affordance, a separator's whole purpose, or a control's outline.
+The rule has no vocabulary for those exemptions, so applying it there would force removals that
+make the components wrong. `packages/ui/src` also carries 22 off-scale radii, including a 2px
+checkbox corner and a `rounded-[0.1875rem]` that exist for optical reasons a regex cannot judge.
+Giving the border rule an exemption vocabulary, and settling those 22 corners, is the work that has
+to happen before either rule widens again.
 
 Widening the rule to another root is a migration commitment: drive that root to zero in the same
 change, or seed it into the ledger.
@@ -829,7 +844,15 @@ change, or seed it into the ledger.
 At the time this landed there were **1,394 pre-existing violations across 244 files**, 1,344 of them
 raw type utilities. Failing on all of them at once would have meant a red CI that everyone building
 screens in parallel would have had to disable, which is how enforcement dies. So the current state
-is recorded in `design-token-debt.json` and the gate is one-way:
+is recorded in `design-token-debt.json` and the gate is one-way.
+
+The count is not monotonic across time, and it should not be read as a score. Type debt has come
+down from 1,344 to 379, while widening `ad-hoc-border` and adding `raw-radius-utility` on
+2026-09-07 seeded 519 borders and 112 corners that had always been there and had never been
+counted. The ledger measures what is enforced, so it rises whenever enforcement catches up with the
+contract and falls only when someone pays it down. It stands at **1,019 across 193 files**.
+
+The rules:
 
 1. A file with **no ledger entry** must have **zero** violations. New files, and every file someone
    finishes migrating, are held to the real standard.

@@ -45,6 +45,7 @@ import { relativeToWorkspaceRoot } from '../workspace';
 /** The rule identifiers the scanner can report. */
 export type DesignTokenRule =
   | 'raw-type-utility'
+  | 'raw-radius-utility'
   | 'size-changing-interaction'
   | 'shadow-outside-overlay'
   | 'raw-shadow-on-overlay'
@@ -55,6 +56,7 @@ export type DesignTokenRule =
 /** Every rule the scanner implements, for exhaustive reporting and ledger validation. */
 export const DESIGN_TOKEN_RULES: readonly DesignTokenRule[] = [
   'raw-type-utility',
+  'raw-radius-utility',
   'size-changing-interaction',
   'shadow-outside-overlay',
   'raw-shadow-on-overlay',
@@ -70,20 +72,31 @@ export const DESIGN_TOKEN_RULES: readonly DesignTokenRule[] = [
  * A rule with no entry here runs everywhere the scanner walks. An entry restricts the rule to
  * files whose workspace-relative path begins with one of the listed prefixes.
  *
- * `ad-hoc-border` is scoped to the admin console because that is the surface being migrated. The
- * scope is a deliberate limit on blast radius, not a claim that borders are fine elsewhere:
- * `apps/web/src` carries roughly 601 border utilities across 154 files, and seeding all of them
- * into the ledger would add hundreds of entries nobody currently intends to pay down. The scope
- * also keeps the rule away from `packages/ui/src/primitives/**`, which ratchet rule 4 holds to
- * zero with *no ledger entries permitted at all* — and where a border is frequently the correct
- * answer, because it is the field's editable affordance (`field.tsx`), a divider that is the
- * component's whole purpose (`separator.tsx`), or a control's outline (`checkbox.tsx`).
+ * `ad-hoc-border` now covers `apps/web/src` as well as the admin console. It was admin-only, and
+ * the cost of that was invisible debt rather than no debt: the web app had accumulated roughly 500
+ * border utilities across 146 files against a design system whose §8 says grouping is a tonal step
+ * and not a drawn line. Nothing counted them, so nothing could shrink them. Widening the rule and
+ * seeding the current count makes it a one-way ratchet like every other rule here.
+ *
+ * It stays away from `packages/ui/src`, and that is not an oversight. Ratchet rule 4 holds that
+ * tree to zero with *no ledger entries permitted at all*, so widening the rule there would demand
+ * the borders come out in the same change — and in the primitives a border is frequently the
+ * correct answer, being the field's editable affordance (`field.tsx`), a divider that is the
+ * component's whole purpose (`separator.tsx`), or a control's outline (`checkbox.tsx`). The rule
+ * has no exemption for those, so applying it there would force removals that make the components
+ * wrong. Giving the rule that vocabulary is its own piece of work.
  *
  * Widening this to another root is a migration commitment: drive that root to zero first, or seed
  * it into the ledger in the same change.
  */
 export const RULE_ROOTS: Partial<Record<DesignTokenRule, readonly string[]>> = {
-  'ad-hoc-border': ['apps/admin/src'],
+  'ad-hoc-border': ['apps/admin/src', 'apps/web/src'],
+  // `raw-radius-utility` is scoped to the product apps for the same reason `ad-hoc-border` is:
+  // `packages/ui/src` carries 22 off-scale radii and permits no ledger entries, so covering it
+  // here would demand all 22 change in this commit — including a 2px checkbox corner and a
+  // `rounded-[0.1875rem]` that exist for optical reasons a scan cannot judge. Closing those, then
+  // widening this, is the follow-up.
+  'raw-radius-utility': ['apps/admin/src', 'apps/web/src'],
 };
 
 /** One flagged value, located precisely enough to fix without searching. */
@@ -157,6 +170,22 @@ const STOCK_FONT_WEIGHTS = 'thin|extralight|light|normal|medium|semibold|bold|ex
 /** Tailwind line-height and letter-spacing utilities from the stock scale. */
 const STOCK_LEADING = 'none|tight|snug|normal|relaxed|loose|3|4|5|6|7|8|9|10';
 const STOCK_TRACKING = 'tighter|tight|normal|wide|wider|widest';
+
+/**
+ * Tailwind corner utilities that sit on neither of the design system's two radius scales.
+ *
+ * @remarks
+ * The product scale is `rounded-md` (8px, every control), `rounded-lg` (10px, floating
+ * containers), `rounded-xl` (14px, cards and dialogs) and `rounded-full` (avatars and `Badge`).
+ * The MD3 scale is `rounded-corner-xs` … `rounded-corner-full`, for components whose spec names an
+ * exact corner token. Everything here is outside both: `sm` and a bare `rounded` are Tailwind's
+ * 4px, which is a second spelling of `corner-xs`, and `2xl` and up are sizes the product has no
+ * use for. Two names for one corner is how the palette ran two vocabularies for a year.
+ */
+const STOCK_RADII = 'xs|sm|2xl|3xl|4xl';
+
+/** The corner sides Tailwind allows between `rounded` and its value. */
+const RADIUS_SIDES = 't|r|b|l|tl|tr|br|bl|s|e|ss|se|es|ee';
 
 /**
  * Geometry-affecting utility prefixes that must never appear behind an interaction variant.
@@ -277,6 +306,23 @@ const RULE_PATTERNS: readonly {
   {
     rule: 'hardcoded-color',
     pattern: /(?:#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b|\b(?:rgba?|hsla?)\()/g,
+  },
+  {
+    rule: 'raw-radius-utility',
+    // A corner utility outside both radius scales: a bare `rounded` (or a bare side, `rounded-t`),
+    // one of the stock sizes the scales do not use, or an arbitrary value.
+    //
+    // Deliberately legal:
+    // - the product scale and the MD3 scale, on any side: `rounded-md`, `rounded-t-xl`,
+    //   `rounded-b-corner-md`, `rounded-full`.
+    // - `rounded-none`, which asserts that there is no corner, the way `border-0` does for borders.
+    // - `rounded-[var(--x)]` and `rounded-[inherit]`, which defer to a token or to the parent
+    //   rather than choosing a value.
+    pattern: new RegExp(
+      String.raw`(?<![\w-])rounded(?:-(?:${RADIUS_SIDES}))?` +
+        String.raw`(?:-(?:${STOCK_RADII})|-\[(?!var\(|--|inherit\])[^\]]*\])?(?![\w-])`,
+      'g',
+    ),
   },
   {
     rule: 'ad-hoc-border',

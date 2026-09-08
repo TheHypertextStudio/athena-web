@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 
-import { surfaceToneColor } from '@docket/ui/primitives';
+import { Badge } from '@docket/ui/primitives';
 
 import type { AgendaDayContext } from './agenda-day-context';
 
@@ -21,10 +21,15 @@ export default function AgendaDayContextStrip({
       aria-label="Day context"
       className="flex min-w-0 flex-wrap items-center gap-1.5 px-3 pb-2"
     >
+      {/* `Badge`, not a hand-rolled pill. These are round, non-interactive and read rather than
+          pressed, which is Badge's whole definition. The hand-rolled version reached for the
+          `floating` surface role — three ramp steps above the rail it sits on, and a role that
+          belongs to overlays — where `secondary` is the resting step the primitive already owns. */}
       {items.map((item) => (
-        <span
+        <Badge
           key={item.id}
-          className={`${surfaceToneColor('floating')} text-label-medium inline-flex min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1`}
+          variant="secondary"
+          className="min-w-0 gap-1.5"
           data-agenda-day-context={item.kind}
         >
           <span
@@ -33,7 +38,7 @@ export default function AgendaDayContextStrip({
             style={{ backgroundColor: item.color ?? 'var(--color-outline)' }}
           />
           <span className="truncate">{item.label}</span>
-        </span>
+        </Badge>
       ))}
     </div>
   );

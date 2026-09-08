@@ -81,7 +81,10 @@ export function FocusCard({
 }: FocusCardProps): JSX.Element {
   const time = timing(item, displayTimezone);
   return (
-    <Card role="article" aria-label={`Now: ${item.title}`} className="p-4 @xl:p-5">
+    // `p-5` at every width, not `p-4 @xl:p-5`: the list below is `EntityList`'s `p-2` plus each
+    // row's `px-3`, which is 20px always. At the smaller step this card's content sat 4px inside
+    // the rows it stacks with.
+    <Card role="article" aria-label={`Now: ${item.title}`} className="p-5">
       {/* One Stack owns the vertical rhythm. This was four separate `mt-*` values — one per block —
           so the spacing between any two lines depended on which block happened to follow which. */}
       <Stack gap={3}>

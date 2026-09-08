@@ -64,7 +64,10 @@ export function SchedulingCanvasNotice({
       <div
         role={hasError ? 'alert' : 'status'}
         aria-busy={loading || undefined}
-        className={`text-body-medium flex max-w-full flex-col items-center gap-1.5 rounded-2xl px-3 py-1.5 text-center text-balance ${
+        // `rounded-lg` is the container radius for a floating surface. This was `rounded-2xl`,
+        // which is Tailwind's stock 16px and is on neither of the design system's two radius
+        // scales.
+        className={`text-body-medium flex max-w-full flex-col items-center gap-1.5 rounded-lg px-3 py-1.5 text-center text-balance ${
           hasError
             ? 'bg-error-container text-on-error-container'
             : 'bg-surface-container-high text-on-surface-variant'

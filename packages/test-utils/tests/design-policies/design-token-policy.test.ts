@@ -131,9 +131,9 @@ describe('design token policy', () => {
       'shadow-md',
     ]);
 
-    // `ad-hoc-border` is scoped by RULE_ROOTS to `apps/admin/src`, so it needs its own fixture
-    // scanned at an admin path. Scanning the identical text at a web path below proves the scope
-    // is real rather than incidental.
+    // `ad-hoc-border` and `raw-radius-utility` are scoped by RULE_ROOTS to the product apps, so
+    // they need their own fixture scanned at an app path. Scanning the identical text at a
+    // `packages/ui` path below proves the scope is real rather than incidental.
     const borderFixture = `
       const drawn = 'border border-l border-b border-2 border-dashed border-outline-variant';
       const tinted = 'border-error/40';
@@ -148,12 +148,29 @@ describe('design token policy', () => {
         'border-collapse border-separate border-spacing-2 ' +
         'focus:border-primary focus-visible:border-primary focus-within:border-primary ' +
         'group-focus-visible:border-primary rounded-xl';
+
+      // Corners outside both radius scales: a bare rounded, a bare side, the stock sizes the
+      // scales skip, and an arbitrary value.
+      const corners = 'rounded rounded-t rounded-sm rounded-2xl rounded-br-sm rounded-[3px]';
+
+      // Legal corners: both scales on any side, the no-corner assertion, and the two deferrals.
+      const legalCorners =
+        'rounded-md rounded-lg rounded-xl rounded-full rounded-none ' +
+        'rounded-corner-xs rounded-corner-full rounded-t-xl rounded-b-corner-md ' +
+        'rounded-[var(--radix-x)] rounded-[inherit]';
     `;
     const borderViolations = scanDesignTokens(
       resolve(WORKSPACE_ROOT, 'apps/admin/src/fixture.ts'),
       borderFixture,
-    ).filter((violation) => violation.rule === 'ad-hoc-border');
-    expect(borderViolations.map((violation) => violation.value).sort()).toEqual([
+    ).filter(
+      (violation) => violation.rule === 'ad-hoc-border' || violation.rule === 'raw-radius-utility',
+    );
+    expect(
+      borderViolations
+        .filter((violation) => violation.rule === 'ad-hoc-border')
+        .map((violation) => violation.value)
+        .sort(),
+    ).toEqual([
       'border',
       'border-2',
       'border-b',
@@ -163,11 +180,26 @@ describe('design token policy', () => {
       'border-outline',
       'border-outline-variant',
     ]);
-
-    // The same text outside the rule's roots must produce nothing.
     expect(
-      scanDesignTokens(resolve(WORKSPACE_ROOT, 'apps/web/src/fixture.ts'), borderFixture).filter(
-        (violation) => violation.rule === 'ad-hoc-border',
+      borderViolations
+        .filter((violation) => violation.rule === 'raw-radius-utility')
+        .map((violation) => violation.value)
+        .sort(),
+    ).toEqual([
+      'rounded',
+      'rounded-2xl',
+      'rounded-[3px]',
+      'rounded-br-sm',
+      'rounded-sm',
+      'rounded-t',
+    ]);
+
+    // The same text outside the rules' roots must produce nothing. `packages/ui/src` is outside
+    // both, which is what makes this a scope proof rather than a restatement.
+    expect(
+      scanDesignTokens(resolve(WORKSPACE_ROOT, 'packages/ui/src/fixture.ts'), borderFixture).filter(
+        (violation) =>
+          violation.rule === 'ad-hoc-border' || violation.rule === 'raw-radius-utility',
       ),
     ).toEqual([]);
 
@@ -201,6 +233,10 @@ describe('design token policy', () => {
       'border-l',
       'border-dashed',
       'border-outline-variant',
+      'rounded',
+      'rounded-sm',
+      'rounded-2xl',
+      'rounded-[3px]',
     ]) {
       expect(values, `expected the scanner to flag ${expected}`).toContain(expected);
     }
@@ -232,6 +268,17 @@ describe('design token policy', () => {
       'border-collapse',
       'border-spacing-2',
       'focus-within:border-primary',
+      'rounded-md',
+      'rounded-lg',
+      'rounded-xl',
+      'rounded-full',
+      'rounded-none',
+      'rounded-corner-xs',
+      'rounded-corner-full',
+      'rounded-t-xl',
+      'rounded-b-corner-md',
+      'rounded-[var(--radix-x)]',
+      'rounded-[inherit]',
     ]) {
       expect(values, `expected the scanner to allow ${legal}`).not.toContain(legal);
     }

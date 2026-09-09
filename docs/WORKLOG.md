@@ -29,7 +29,10 @@
   Complete integrations and environment coverage checks pass. Production browser execution reaches
   the real Docket sign-in boundary: a normally authenticated test session remains necessary before
   claiming native authorization or inference acceptance. The GitHub production issuer/gateway
-  variables now contain the same deployment endpoints previously embedded in the workflow.
+  variables now contain the same deployment endpoints previously embedded in the workflow. CI run
+  `34299543123` exposed one obsolete null fallback after the issuer became a required config field;
+  the API lint command reproduces that single error before the repair and passes after the route
+  consumes the required issuer directly.
 - **Migration safeguard**: New encrypted attempts and token records retain their originating
   client ID. Exchange and refresh use it; unversioned records use the explicitly configured old
   public client identity. Changing the current client to CIMD therefore preserves existing grants

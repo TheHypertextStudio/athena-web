@@ -55,6 +55,9 @@ const PUBLIC_CONFIG_KEYS = new Set([
   'connectors',
   'googleOAuthPublic',
   'googleServerClientId',
+  // The temporary old relying-party id is public for the same reason as the current id. Native
+  // clients need both hostnames before they can offer the passkey replacement ceremony.
+  'legacyPasskeyRpId',
   'mcpUrl',
   'oauthProviders',
   // The WebAuthn relying-party id, which is the deployment's domain. A passkey ceremony cannot

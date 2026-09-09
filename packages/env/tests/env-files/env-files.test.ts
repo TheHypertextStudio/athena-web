@@ -217,11 +217,13 @@ function cloudRunEnvNames(): string[] {
   return names;
 }
 
-/** The `KEY=` names in the `.env.local` skeleton `pnpm bootstrap` writes for a fresh machine. */
+/** The `KEY=` names in the `.env.local` source that bootstrap reconciles for a fresh machine. */
 function bootstrapSkeletonKeys(): Set<string> {
   const script = working('scripts/bootstrap.ts');
-  const skeleton = script.split('const content = `')[1]?.split('\n`;')[0] ?? '';
-  return assignedKeys(skeleton);
+  const usesExampleSource =
+    script.includes('reconcileLocalConfig({') &&
+    script.includes("examplePath: resolve(ROOT, '.env.example')");
+  return usesExampleSource ? assignedKeys(working('.env.example')) : new Set();
 }
 
 /**

@@ -28,7 +28,7 @@
  */
 import { cn, focusRing } from '@docket/ui';
 import { SETTINGS_GROUP_ATTR, settingsGroupId } from './settings-outline';
-import { ControlGroup, Surface, Text } from '@docket/ui/primitives';
+import { CONTROL_RADIUS, ControlGroup, Surface, Text } from '@docket/ui/primitives';
 import type * as React from 'react';
 import type { JSX, ReactNode } from 'react';
 import type { SettingsNodeDefinition } from './settings-capabilities';
@@ -129,7 +129,7 @@ export function SettingsGroup({
                 id={headingId}
                 tabIndex={capability ? -1 : undefined}
                 {...{ [SETTINGS_GROUP_ATTR]: '' }}
-                className={cn('flex items-center gap-2 rounded-sm', focusRing)}
+                className={cn('flex items-center gap-2', CONTROL_RADIUS, focusRing)}
               >
                 {icon ? (
                   <span className="text-on-surface-variant flex shrink-0 items-center">{icon}</span>

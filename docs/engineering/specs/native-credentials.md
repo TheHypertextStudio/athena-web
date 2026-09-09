@@ -1,14 +1,15 @@
-# Native credentials: what the Android client needs from Docket's auth server
+# Native credentials: what native clients need from Docket's auth server
 
-> **Status**: Current as of 2026-09-06
+> **Status**: Current as of 2026-09-09
 > **Owner**: auth
 > **Decision record**: `docs/engineering/DECISIONS.md` — "Android restore credentials are
 > system-managed records, never ordinary passkeys"
 
 Docket stays passwordless on every client. A phone signs in with a passkey or a social provider, and
 it keeps the person signed in across reinstalls and device migrations without asking again. This
-document describes the three server-side contracts that make that possible for Docket Android, how
-each one keeps older clients working, and where the guards live.
+document tells native-client and auth maintainers which server contracts they must preserve. It
+describes the three contracts that support Docket Android and the temporary Apple-platform bridge
+that moves passkeys from `docket.hypertext.studio` to `clearthedocket.com`.
 
 ## 1. The three contracts
 
@@ -127,7 +128,108 @@ credential id (unique), signature counter, device type, backed-up flag, transpor
 three timezone-aware timestamps: created, updated (auto-bumped), and last used. Rows cascade with
 the owning user. The same migration adds `passkey.last_used_at`.
 
-## 5. Compatibility and rollout
+## 5. Apple passkey relying-party migration
+
+A WebAuthn credential belongs to the relying-party ID that created it. Changing Docket's production
+RP from `docket.hypertext.studio` to `clearthedocket.com` cannot rename or silently copy an existing
+passkey. The new native client must prove possession of the old credential and then create a new
+credential under the new RP. Email verification does not meet that bar, and the existing sign-up
+resolver must continue rejecting attempts to attach a new passkey to an account that already has a
+passkey or linked social account.
+
+### Chosen bridge
+
+The API exposes a temporary legacy assertion ceremony when
+`BETTER_AUTH_PASSKEY_LEGACY_RP_ID=docket.hypertext.studio`. `GET
+/api/auth/passkey-migration/generate-authenticate-options` creates a discoverable authentication
+challenge for that RP. `POST /api/auth/passkey-migration/verify-authentication` verifies the old
+assertion and issues the same Better Auth session cookie used by every other sign-in method.
+
+The verifier accepts only the HTTPS origin derived from the configured legacy RP. It requires user
+verification, consumes a signed one-use challenge before verification, looks up the existing
+credential by its WebAuthn ID, enforces its stored signature counter, and advances the counter plus
+`last_used_at` with a compare-and-update. A missing credential, wrong RP, wrong origin, absent user
+verification, expired challenge, replayed challenge, deleted credential, concurrent counter advance,
+or missing owner fails before the API issues a session. Unexpected errors become one
+application-owned response and must not log credential payloads, cookies, account data, or provider
+details.
+
+After the old assertion succeeds, the native client keeps the returned session in memory. It calls
+the existing session-bound `passkey/generate-register-options` and
+`passkey/verify-registration` routes for `clearthedocket.com`, combining the normal session cookie
+with the registration challenge cookie. The client writes the session and identity to Keychain only
+after the replacement registration succeeds. Cancellation or failure leaves the person signed out,
+although the short-lived server session may expire normally. The old credential remains available
+during the transition and can be removed through ordinary passkey management after the replacement
+has proved usable.
+
+The following sequence diagram shows the two ceremonies. The first ceremony authenticates the old
+credential. The second ceremony binds a replacement to the already-authenticated account.
+
+```mermaid
+sequenceDiagram
+    actor Person
+    participant App as Docket native app
+    participant API as Docket auth API
+    participant OS as Authentication Services
+
+    Person->>App: Choose Move an existing Docket passkey
+    App->>API: Request legacy assertion options
+    API-->>App: Old RP challenge and signed challenge cookie
+    App->>OS: Assert for docket.hypertext.studio
+    OS->>Person: Verify with device authentication
+    OS-->>App: Legacy WebAuthn assertion
+    App->>API: Verify assertion and challenge cookie
+    API-->>App: Normal session cookie and identity
+    App->>API: Request current-RP registration with session
+    API-->>App: clearthedocket.com challenge and challenge cookie
+    App->>OS: Create replacement passkey
+    OS->>Person: Confirm passkey creation
+    OS-->>App: Registration response
+    App->>API: Verify registration with both cookies
+    API-->>App: Registration confirmed
+    App->>App: Save session and identity in Keychain
+```
+
+### Discovery and domain contracts
+
+`GET /v1/config` publishes `legacyPasskeyRpId: string | null`. It is non-null only when the legacy
+bridge is configured and the value differs from `passkeyRpId`. The native signed-out screen keeps
+current passkey sign-in as its primary action and shows **Move an existing Docket passkey** only when
+that field is non-null.
+
+The Apple target claims both `webcredentials:clearthedocket.com` and
+`webcredentials:docket.hypertext.studio` while migration is available. Each domain must return an
+AASA document with `T95VDD3A4W.studio.hypertext.docket` directly at
+`/.well-known/apple-app-site-association`. The old host may redirect every other path to
+`clearthedocket.com`, but Apple does not accept a redirect for the AASA path.
+
+### Rollout and removal
+
+The rollout order is strict:
+
+1. Publish the non-redirecting AASA response on both domains and deploy the legacy API ceremony.
+2. Distribute a signed native build with both associated domains and the migration control.
+3. Use a canary old passkey to prove legacy assertion, replacement registration, a fresh current-RP
+   assertion, session restoration, and sign-out.
+4. Keep the bridge enabled while supported clients still need migration.
+5. Clear `BETTER_AUTH_PASSKEY_LEGACY_RP_ID` to hide the control and unmount the legacy ceremony after
+   the support window. Remove the old associated domain and AASA exception in a later client release.
+
+Clearing the environment value is the rollback. It removes public discovery and the migration
+endpoints without changing current passkeys or sessions. The passkey table needs no migration because
+the assertion's RP and origin determine which credential can be presented; credential IDs remain
+globally unique across the old and new RPs.
+
+### Rejected approaches
+
+A web-only cross-domain handoff would require a second migration UI and a signed redirect token. It
+would also keep more of the old web application live. Social-provider or recovery-code bootstrap
+would reuse existing sign-in methods, but it would strand passkey-only accounts. Email verification
+alone is rejected because it would turn inbox access into authority to add a credential to an
+existing account.
+
+## 6. Compatibility and rollout
 
 - Current web and Android clients remain compatible. New fields are nullable and ceremony route
   shapes are unchanged; ordinary passkey authenticators must satisfy the already-present biometric,
@@ -137,8 +239,10 @@ the owning user. The same migration adds `passkey.last_used_at`.
   Android client that uses it.
 - `BETTER_AUTH_PASSKEY_NATIVE_ORIGINS` is a deployment fact (which APK signatures may talk to this
   server), which is why it is an environment variable rather than an admin setting.
+- `BETTER_AUTH_PASSKEY_LEGACY_RP_ID` is a temporary deployment fact. An unset value removes the
+  migration surface instead of leaving a dormant endpoint that accepts an obsolete RP.
 
-## 6. Files
+## 7. Files
 
 | File                                                          | Role                                           |
 | ------------------------------------------------------------- | ---------------------------------------------- |
@@ -151,3 +255,5 @@ the owning user. The same migration adds `passkey.last_used_at`.
 | `packages/db/src/schema/auth.ts`                              | `restore_credential`, `passkey.last_used_at`   |
 | `packages/db/drizzle/0123_native_credentials.sql`             | The additive migration                         |
 | `apps/web/src/components/settings/passkeys-section.tsx`       | Web Security surface on the typed routes       |
+| `packages/auth/src/passkey-migration.ts`                      | Temporary legacy-RP assertion ceremony         |
+| `apps/api/src/routes/config.ts`                               | Publishes the gated legacy RP                  |

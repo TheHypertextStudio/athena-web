@@ -15,8 +15,11 @@ after formatting, lint, types, tests, build, and browser E2E are green.
 | `docket-api`   | `api.clearthedocket.com`   | Cloud Run | Hono API, Better Auth, MCP, webhooks, cron endpoints    |
 | `docket-admin` | `admin.clearthedocket.com` | Cloud Run | Next.js operator back office                            |
 
-**Passkey RP ID:** `clearthedocket.com`. Existing credentials remain bound to the old RP and need
-the recovery flow described in [the domain cutover runbook](./domain-cutover.md).
+**Passkey RP ID target:** `clearthedocket.com`. Until the account-holder recovery ceremony in
+[the domain cutover runbook](./domain-cutover.md) succeeds, production API and Vercel builds must
+both remain on `hypertext.studio`, and `docket.hypertext.studio` must stay assigned to the Docket
+project without a domain redirect. Existing credentials cannot authenticate after either side moves
+to the new RP early.
 
 All services use `--max-instances=10` and `--memory=512Mi`. Services scale to zero by default.
 `docket-api` keeps one warm instance while `LINEAR_AGENT_ENABLED=true` so Linear's five-second

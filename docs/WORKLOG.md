@@ -81,7 +81,15 @@
   MCP, and immutable-asset checks. The legacy-host routing regression first failed two focused
   proxy tests by rewriting the security page as a public brief. The corrected suite passes 54
   tests. Web lint passes, and web typecheck passes in isolation with a 3 GB heap after the first
-  concurrent run exhausted Node's default 2 GB heap.
+  concurrent run exhausted Node's default 2 GB heap. CI run `34294013287` passes the complete graph
+  at `29b99a37b`, and deploy run `34296114126` successfully updates the production services and
+  public documentation checks at the same SHA. Vercel's project-domain record initially redirected
+  `docket.hypertext.studio` to the new apex, while its production build also used the new RP before
+  the recovery ceremony. The domain remains verified on the `docket` project, but now has no
+  redirect, and the production build again uses `hypertext.studio` to match the live API. A clean
+  production rebuild promotes those values. The legacy security URL now returns HTTP 307 to its
+  own `/sign-in?callbackURL=%2Fsettings%2Fsecurity` route, and the canonical production verifier
+  passes every app, documentation, API, OpenAPI, OAuth, MCP, and immutable-asset check afterward.
 - **Domain validation**: Verisign RDAP records the `clearthedocket.com` registration on 2026-09-08
   and delegates it to `candy.ns.cloudflare.com` and `ricardo.ns.cloudflare.com`. Vercel accepted
   `clearthedocket.com` and `www.clearthedocket.com` for project `docket` and requires an apex A

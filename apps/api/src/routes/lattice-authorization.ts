@@ -140,7 +140,7 @@ export async function startLatticeAuthorizationAttempt(
     expiresAt,
   });
 
-  const issuer = (config.issuer ?? '').replace(/\/+$/, '');
+  const issuer = config.issuer.replace(/\/+$/, '');
   return {
     attemptId,
     expiresAt: expiresAt.toISOString(),

@@ -75,11 +75,18 @@ const COMPOSERS: readonly ComposerCase[] = [
 ];
 
 async function openComposer(page: Page, orgId: string, item: ComposerCase): Promise<Locator> {
-  await page.goto(item.path(orgId), { waitUntil: 'domcontentloaded', timeout: TIMEOUTS.pageReady });
+  const path = item.path(orgId);
+  const trigger = page.getByRole('button', { name: item.trigger }).first();
+  // A first dev navigation can fall through to the service worker's offline shell while Next
+  // compiles the route. Retry the navigation itself so the now-warm route replaces that shell.
+  await expect(async () => {
+    await page.goto(path, { waitUntil: 'domcontentloaded', timeout: TIMEOUTS.pageReady });
+    await expect(trigger).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: TIMEOUTS.sweep });
   const dialog = page.getByRole('dialog', { name: item.dialog });
   await expect(async () => {
     if (!(await dialog.isVisible())) {
-      await page.getByRole('button', { name: item.trigger }).first().click();
+      await trigger.click();
     }
     await expect(dialog).toBeVisible({ timeout: 5_000 });
   }).toPass({ timeout: TIMEOUTS.pageReady });
@@ -110,22 +117,41 @@ async function expectNoPageOverflow(page: Page): Promise<void> {
   expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
 }
 
+async function expectMobileViewportComposer(dialog: Locator, page: Page): Promise<void> {
+  await dialog.evaluate(async (node) => {
+    await Promise.allSettled(
+      node.getAnimations({ subtree: true }).map(async (animation) => animation.finished),
+    );
+  });
+  const [dialogBox, viewport] = await Promise.all([
+    dialog.evaluate((node) => node.getBoundingClientRect()),
+    page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight })),
+  ]);
+  expect(dialogBox.x).toBe(0);
+  expect(dialogBox.y).toBe(0);
+  expect(dialogBox.width).toBe(viewport.width);
+  expect(dialogBox.height).toBe(viewport.height);
+  await expect(dialog.getByRole('button', { name: 'Expand editor' })).toBeHidden();
+}
+
 async function expectCoarsePointerGeometry(dialog: Locator, item: ComposerCase): Promise<void> {
   await dialog.evaluate(async (node) => {
-    await Promise.all(
+    await Promise.allSettled(
       node.getAnimations({ subtree: true }).map(async (animation) => animation.finished),
     );
   });
   const close = dialog.getByRole('button', { name: 'Close' });
   const expand = dialog.getByRole('button', { name: 'Expand editor' });
+  await expect(close).toHaveCSS('width', '40px');
+  const closeBox = await close.boundingBox();
+  expect(closeBox).not.toBeNull();
+  if (!closeBox) throw new Error('Composer close control has no layout box.');
+  expect(closeBox.width).toBeGreaterThanOrEqual(40);
   if ((await expand.count()) > 0) {
-    await expect(close).toHaveCSS('width', '40px');
     await expect(expand).toHaveCSS('width', '40px');
-    const [closeBox, expandBox] = await Promise.all([close.boundingBox(), expand.boundingBox()]);
-    expect(closeBox).not.toBeNull();
+    const expandBox = await expand.boundingBox();
     expect(expandBox).not.toBeNull();
-    if (!closeBox || !expandBox) throw new Error('Composer header controls have no layout box.');
-    expect(closeBox.width).toBeGreaterThanOrEqual(40);
+    if (!expandBox) throw new Error('Composer expand control has no layout box.');
     expect(expandBox.width).toBeGreaterThanOrEqual(40);
     expect(expandBox.x + expandBox.width).toBeLessThanOrEqual(closeBox.x);
   }
@@ -155,7 +181,7 @@ async function expectCoarsePointerGeometry(dialog: Locator, item: ComposerCase):
   }
 }
 
-test('create composers keep one compact shell and two explicit footer rows', async ({ page }) => {
+test('create composers fill phones and keep two explicit footer rows', async ({ page }) => {
   test.setTimeout(900_000);
   mkdirSync(SHOT_DIR, { recursive: true });
   const { orgId } = await signUpAndOnboard(page, 'CreateComposers');
@@ -172,6 +198,7 @@ test('create composers keep one compact shell and two explicit footer rows', asy
 
     await page.setViewportSize({ width: 390, height: 844 });
     await setColorScheme(page, 'light');
+    await expectMobileViewportComposer(dialog, page);
     await expectTwoFooterRows(dialog, item);
     await expectNoPageOverflow(page);
     await capture(page, `${item.slug}-mobile-light`);
@@ -195,6 +222,7 @@ test('create composers keep one compact shell and two explicit footer rows', asy
   await capture(page, 'initiative-expanded-desktop-dark');
   await page.setViewportSize({ width: 390, height: 844 });
   await setColorScheme(page, 'light');
+  await expectMobileViewportComposer(dialog, page);
   await expectTwoFooterRows(dialog, initiative);
   await capture(page, 'initiative-expanded-mobile-light');
   await setColorScheme(page, 'dark');
@@ -205,7 +233,8 @@ test('create composers keep one compact shell and two explicit footer rows', asy
   await setColorScheme(page, 'light');
   const task = COMPOSERS[0];
   if (!task) throw new Error('Task composer case is missing.');
-  await openComposer(page, orgId, task);
+  const mobileDialog = await openComposer(page, orgId, task);
+  await expectMobileViewportComposer(mobileDialog, page);
   await expectNoPageOverflow(page);
   await capture(page, 'task-320-light');
 });

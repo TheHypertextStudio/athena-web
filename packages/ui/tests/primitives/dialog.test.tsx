@@ -269,6 +269,77 @@ describe('Dialog family', () => {
     expect(await screen.findByTestId('two-control-header')).toHaveClass('pr-20');
   });
 
+  it('uses compact phone insets and standard panel insets for responsive dialog regions', async () => {
+    render(
+      <Dialog defaultOpen>
+        <DialogContent>
+          <DialogTitle>Responsive regions</DialogTitle>
+          <DialogHeader inset="responsive" data-testid="responsive-dialog-header">
+            Header
+          </DialogHeader>
+          <DialogBody inset="responsive" data-testid="responsive-dialog-body">
+            Body
+          </DialogBody>
+          <DialogFooter inset="responsive" data-testid="responsive-dialog-footer">
+            Footer
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    const header = await screen.findByTestId('responsive-dialog-header');
+    const body = await screen.findByTestId('responsive-dialog-body');
+    const footer = await screen.findByTestId('responsive-dialog-footer');
+
+    for (const region of [header, body, footer]) {
+      expect(region).toHaveClass('pl-[max(1rem,env(safe-area-inset-left))]', 'sm:px-6', 'sm:py-4');
+    }
+    expect(header).toHaveClass('pt-[max(0.75rem,env(safe-area-inset-top))]', 'pb-3');
+    expect(body).toHaveClass('py-3', 'pr-[max(1rem,env(safe-area-inset-right))]');
+    expect(footer).toHaveClass('pt-3', 'pb-[max(0.75rem,env(safe-area-inset-bottom))]');
+  });
+
+  it('reserves the second header control only when a responsive dialog becomes a panel', async () => {
+    render(
+      <Dialog defaultOpen>
+        <DialogContent>
+          <DialogTitle>Responsive controls</DialogTitle>
+          <DialogHeader
+            inset="responsive"
+            controls="responsive-two"
+            data-testid="responsive-control-header"
+          >
+            Composer context
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    expect(await screen.findByTestId('responsive-control-header')).toHaveClass(
+      'pr-[max(3rem,calc(env(safe-area-inset-right)+2rem))]',
+      'coarse:pr-[max(3.75rem,calc(env(safe-area-inset-right)+2.75rem))]',
+      'sm:pr-20',
+      'sm:coarse:pr-[6.5rem]',
+    );
+  });
+
+  it('keeps responsive full-screen close controls outside phone safe areas', async () => {
+    render(
+      <Dialog defaultOpen>
+        <DialogContent presentation={{ kind: 'responsive-fullscreen' }}>
+          <DialogTitle>Safe close control</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Close' })).toHaveClass(
+      'top-[max(1rem,env(safe-area-inset-top))]',
+      'right-[max(1rem,env(safe-area-inset-right))]',
+      'sm:top-4',
+      'sm:right-4',
+    );
+  });
+
   it.each([
     {
       kind: 'fullscreen' as const,

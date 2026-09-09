@@ -72,7 +72,7 @@ function renderEditor(ui: ReactElement): void {
 }
 
 describe('composer body editor parity', () => {
-  it('uses the compact shell, two stable footer rows, and shared control geometry', async () => {
+  it('uses the full phone viewport, compact desktop shell, and shared responsive regions', async () => {
     const user = userEvent.setup();
     renderEditor(
       <ComposerShell
@@ -107,24 +107,47 @@ describe('composer body editor parity', () => {
     const expand = screen.getByRole('button', { name: 'Expand editor' });
     const createMore = screen.getByRole('switch', { name: 'Create more' });
 
-    expect(dialog).toHaveClass('max-w-2xl', 'h-[min(60dvh,36rem)]');
+    expect(dialog).toHaveClass(
+      'inset-0',
+      'h-[100dvh]',
+      'w-[100vw]',
+      'max-w-2xl',
+      'sm:h-[min(60dvh,36rem)]',
+    );
     expect(title).toHaveClass('text-headline-small');
     expect(title).not.toHaveClass('text-lg', 'font-medium', 'tracking-tight');
     expect(summary).toHaveClass('text-body-large');
     expect(actionRow).toHaveClass('w-full');
-    expect(footer).toHaveClass('sm:flex-col', 'sm:items-stretch', 'sm:justify-start');
+    expect(footer).toHaveClass(
+      'pl-[max(1rem,env(safe-area-inset-left))]',
+      'pr-[max(1rem,env(safe-area-inset-right))]',
+      'pt-3',
+      'pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+      'sm:px-6',
+      'sm:py-4',
+      'sm:flex-col',
+      'sm:items-stretch',
+      'sm:justify-start',
+    );
     expect(create).toHaveClass(
       'disabled:bg-surface-container-highest',
       'disabled:text-on-surface-variant',
       'disabled:opacity-100',
     );
-    expect(expand).toHaveClass('h-7', 'w-7', 'coarse:h-10', 'coarse:w-10');
+    expect(expand).toHaveClass(
+      'hidden',
+      'h-7',
+      'w-7',
+      'sm:inline-flex',
+      'coarse:h-10',
+      'coarse:w-10',
+    );
     expect(createMore).toHaveClass('coarse:min-h-10');
     expect(expand.querySelector('[data-testid="OpenInFullIcon"]')).not.toBeNull();
 
     await user.click(expand);
 
-    expect(dialog).toHaveClass('max-w-5xl', 'h-[min(80dvh,48rem)]');
+    expect(dialog).toHaveClass('max-w-5xl', 'sm:h-[min(80dvh,48rem)]');
     expect(screen.getByRole('button', { name: 'Collapse editor' })).toContainElement(
       document.querySelector('[data-testid="CloseFullscreenIcon"]'),
     );

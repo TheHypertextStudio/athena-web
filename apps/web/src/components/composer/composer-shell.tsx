@@ -45,7 +45,7 @@ import { EntityMetadataRow } from '@/components/views/entity-detail-layout';
 
 function composerPresentation(expanded: boolean): DialogPresentation {
   return {
-    kind: 'centered',
+    kind: 'responsive-fullscreen',
     size: expanded ? 'detail' : 'large',
     height: expanded ? 'tall' : 'medium',
   };
@@ -316,7 +316,7 @@ export function ComposerShell({
             onClick={() => {
               setExpanded((current) => !current);
             }}
-            className="coarse:right-[3.75rem] absolute top-4 right-12 z-10"
+            className="coarse:right-[3.75rem] absolute top-4 right-12 z-10 hidden sm:inline-flex"
           >
             {expanded ? <Minimize aria-hidden="true" /> : <Maximize aria-hidden="true" />}
           </Button>
@@ -332,8 +332,8 @@ export function ComposerShell({
           className="contents"
         >
           <DialogHeader
-            inset="standard"
-            controls={bodyPlaceholder !== undefined ? 'two' : 'one'}
+            inset="responsive"
+            controls={bodyPlaceholder !== undefined ? 'responsive-two' : 'one'}
             className="min-w-0"
           >
             {contextRow !== undefined ? (
@@ -407,7 +407,7 @@ export function ComposerShell({
             </div>
           </DialogHeader>
 
-          <DialogBody inset="standard" className="flex flex-col gap-4">
+          <DialogBody inset="responsive" className="flex flex-col gap-4">
             {bodyEditor !== null ? (
               <>
                 {/*
@@ -438,7 +438,7 @@ export function ComposerShell({
            *  scrolling body so a long AI-drafted description can never carry them out of view or
            *  interleave them with its own text. */}
           <DialogFooter
-            inset="standard"
+            inset="responsive"
             className="flex-col gap-3 sm:flex-col sm:items-stretch sm:justify-start"
           >
             {!confirmingDiscard && propertyLayout === 'compact' ? (

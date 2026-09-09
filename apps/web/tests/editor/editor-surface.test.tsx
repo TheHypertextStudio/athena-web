@@ -281,7 +281,8 @@ describe('clicking an editor-shaped surface', () => {
     const scrollOwner = body.closest('[data-overlay-scroll-owner]');
 
     expect(dialog).toHaveClass(
-      'h-[min(60dvh,36rem)]',
+      'h-[100dvh]',
+      'sm:h-[min(60dvh,36rem)]',
       'max-w-2xl',
       'overflow-hidden',
       'duration-(--dur-slow)',
@@ -305,7 +306,7 @@ describe('clicking an editor-shaped surface', () => {
 
     expect(screen.getByRole('textbox', { name: 'Add description' })).toBe(bodyNode);
     expect(bodyNode).toHaveTextContent('A durable draft');
-    expect(dialog).toHaveClass('h-[min(80dvh,48rem)]', 'max-w-5xl');
+    expect(dialog).toHaveClass('h-[100dvh]', 'sm:h-[min(80dvh,48rem)]', 'max-w-5xl');
     expect(dialog).not.toHaveClass('max-w-4xl');
     expect(screen.getByRole('button', { name: 'Collapse editor' })).toHaveFocus();
   });

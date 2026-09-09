@@ -66,6 +66,9 @@ import type {
 } from './overlay-contract';
 import { useOverlayFocusRestore } from './use-overlay-focus-restore';
 
+/** Insets for dialog regions, including compact phone spacing that expands with the panel. */
+export type DialogInset = OverlayInset | 'responsive';
+
 /**
  * Root controller for an open/closed dialog (Radix passthrough).
  *
@@ -201,6 +204,16 @@ function hostedDialogInteractivityClass(
   return hosted ? 'pointer-events-auto absolute' : 'fixed';
 }
 
+function dialogClosePositionClass(presentation: DialogPresentation | undefined): string {
+  if (presentation?.kind === 'fullscreen') {
+    return 'top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))]';
+  }
+  if (presentation?.kind === 'responsive-fullscreen') {
+    return 'top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))] sm:top-4 sm:right-4';
+  }
+  return 'top-4 right-4';
+}
+
 /** Render a focus-trapped dialog panel with one shared presentation contract. */
 export function DialogContent({
   className,
@@ -255,7 +268,8 @@ export function DialogContent({
             aria-label={closeLabel}
             className={cn(
               controlChrome('sm', { iconOnly: true }),
-              'text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface absolute top-4 right-4 z-10 opacity-70 transition-colors transition-opacity hover:opacity-100',
+              'text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface absolute z-10 opacity-70 transition-colors transition-opacity hover:opacity-100',
+              dialogClosePositionClass(presentation),
               focusRing,
             )}
           >
@@ -280,9 +294,9 @@ export function DialogHeader({
   controls = 'one',
   ...props
 }: React.ComponentProps<'div'> & {
-  readonly inset?: OverlayInset | undefined;
+  readonly inset?: DialogInset | undefined;
   /** Reserve the end gutter for the built-in close control or for close plus one extra control. */
-  readonly controls?: 'one' | 'two' | undefined;
+  readonly controls?: 'one' | 'two' | 'responsive-two' | undefined;
 }): React.JSX.Element {
   return (
     <div
@@ -290,8 +304,8 @@ export function DialogHeader({
         // DialogContent's shared close control sits at the top-right edge. Reserve that column
         // here so titles never rely on a caller-specific right-padding repair.
         'flex shrink-0 flex-col gap-1.5 text-left',
-        overlayInsetClass(inset),
-        controls === 'two' ? 'coarse:pr-[6.5rem] pr-20' : 'coarse:pr-[3.75rem] pr-12',
+        overlayInsetClass(inset, 'header'),
+        dialogHeaderControlClass(inset, controls),
         className,
       )}
       {...props}
@@ -306,14 +320,14 @@ export function DialogBody({
   scroll = 'auto',
   ...props
 }: React.ComponentProps<'div'> & {
-  readonly inset?: OverlayInset | undefined;
+  readonly inset?: DialogInset | undefined;
   readonly scroll?: 'auto' | 'visible' | undefined;
 }): React.JSX.Element {
   return (
     <div
       className={cn(
         'min-h-0 flex-1',
-        overlayInsetClass(inset),
+        overlayInsetClass(inset, 'body'),
         scroll === 'auto' && 'overflow-y-auto overscroll-contain',
         className,
       )}
@@ -334,12 +348,12 @@ export function DialogFooter({
   className,
   inset = 'standard',
   ...props
-}: React.ComponentProps<'div'> & { readonly inset?: OverlayInset | undefined }): React.JSX.Element {
+}: React.ComponentProps<'div'> & { readonly inset?: DialogInset | undefined }): React.JSX.Element {
   return (
     <div
       className={cn(
         'flex shrink-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end',
-        overlayInsetClass(inset),
+        overlayInsetClass(inset, 'footer'),
         className,
       )}
       {...props}
@@ -347,10 +361,41 @@ export function DialogFooter({
   );
 }
 
-function overlayInsetClass(inset: OverlayInset): string {
+type DialogRegion = 'header' | 'body' | 'footer';
+
+function overlayInsetClass(inset: DialogInset, region: DialogRegion): string {
   if (inset === 'none') return '';
   if (inset === 'compact') return 'px-4 py-3';
+  if (inset === 'responsive') {
+    const horizontal =
+      'pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:px-6';
+    if (region === 'header')
+      return `${horizontal} pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 sm:py-4`;
+    if (region === 'footer')
+      return `${horizontal} pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:py-4`;
+    return `${horizontal} py-3 sm:py-4`;
+  }
   return 'px-6 py-4';
+}
+
+function dialogHeaderControlClass(
+  inset: DialogInset,
+  controls: 'one' | 'two' | 'responsive-two',
+): string {
+  if (inset !== 'responsive') {
+    if (controls === 'two') return 'coarse:pr-[6.5rem] pr-20';
+    if (controls === 'responsive-two')
+      return 'coarse:pr-[3.75rem] sm:coarse:pr-[6.5rem] pr-12 sm:pr-20';
+    return 'coarse:pr-[3.75rem] pr-12';
+  }
+
+  if (controls === 'two') {
+    return 'pr-[max(5rem,calc(env(safe-area-inset-right)+4rem))] coarse:pr-[max(6.5rem,calc(env(safe-area-inset-right)+5.5rem))] sm:pr-20 sm:coarse:pr-[6.5rem]';
+  }
+  const phoneSafeArea =
+    'pr-[max(3rem,calc(env(safe-area-inset-right)+2rem))] coarse:pr-[max(3.75rem,calc(env(safe-area-inset-right)+2.75rem))]';
+  if (controls === 'responsive-two') return `${phoneSafeArea} sm:pr-20 sm:coarse:pr-[6.5rem]`;
+  return `${phoneSafeArea} sm:pr-12 sm:coarse:pr-[3.75rem]`;
 }
 
 /**

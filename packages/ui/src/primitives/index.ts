@@ -81,6 +81,7 @@ export {
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  type DialogInset,
   DialogOverlay,
   DialogPortal,
   DialogTitle,

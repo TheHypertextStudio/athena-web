@@ -287,6 +287,11 @@ describe('generated deployment manifests', () => {
     expect(present.has('LATTICE_CLIENT_ID')).toBe(true);
   });
 
+  it('passes the temporary legacy passkey RP into Cloud Run', () => {
+    const present = new Set(cloudRunEnvNames());
+    expect(present.has('BETTER_AUTH_PASSKEY_LEGACY_RP_ID')).toBe(true);
+  });
+
   it('gives the bootstrap skeleton every required var', () => {
     const present = bootstrapSkeletonKeys();
     expect(present.has('APP_MODE')).toBe(true);

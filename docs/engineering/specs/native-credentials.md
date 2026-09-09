@@ -131,7 +131,7 @@ the owning user. The same migration adds `passkey.last_used_at`.
 ## 5. Apple passkey relying-party migration
 
 A WebAuthn credential belongs to the relying-party ID that created it. Changing Docket's production
-RP from `docket.hypertext.studio` to `clearthedocket.com` cannot rename or silently copy an existing
+RP from `hypertext.studio` to `clearthedocket.com` cannot rename or silently copy an existing
 passkey. The new native client must prove possession of the old credential and then create a new
 credential under the new RP. Email verification does not meet that bar, and the existing sign-up
 resolver must continue rejecting attempts to attach a new passkey to an account that already has a
@@ -140,7 +140,7 @@ passkey or linked social account.
 ### Chosen bridge
 
 The API exposes a temporary legacy assertion ceremony when
-`BETTER_AUTH_PASSKEY_LEGACY_RP_ID=docket.hypertext.studio`. `GET
+`BETTER_AUTH_PASSKEY_LEGACY_RP_ID=hypertext.studio`. `GET
 /api/auth/passkey-migration/generate-authenticate-options` creates a discoverable authentication
 challenge for that RP. `POST /api/auth/passkey-migration/verify-authentication` verifies the old
 assertion and issues the same Better Auth session cookie used by every other sign-in method.
@@ -176,7 +176,7 @@ sequenceDiagram
     Person->>App: Choose Move an existing Docket passkey
     App->>API: Request legacy assertion options
     API-->>App: Old RP challenge and signed challenge cookie
-    App->>OS: Assert for docket.hypertext.studio
+    App->>OS: Assert for hypertext.studio
     OS->>Person: Verify with device authentication
     OS-->>App: Legacy WebAuthn assertion
     App->>API: Verify assertion and challenge cookie
@@ -199,10 +199,9 @@ current passkey sign-in as its primary action and shows **Move an existing Docke
 that field is non-null.
 
 The Apple target claims both `webcredentials:clearthedocket.com` and
-`webcredentials:docket.hypertext.studio` while migration is available. Each domain must return an
+`webcredentials:hypertext.studio` while migration is available. Each domain must return an
 AASA document with `T95VDD3A4W.studio.hypertext.docket` directly at
-`/.well-known/apple-app-site-association`. The old host may redirect every other path to
-`clearthedocket.com`, but Apple does not accept a redirect for the AASA path.
+`/.well-known/apple-app-site-association`. Apple does not accept a redirect for either AASA path.
 
 ### Rollout and removal
 

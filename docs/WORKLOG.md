@@ -88,6 +88,7 @@
   `docket.hypertext.studio` host remains live until the recovery ceremony succeeds on the new RP,
   after which it will redirect to the new apex.
 - **Passkey migration approach**: Add a temporary legacy-RP assertion ceremony for
+  `hypertext.studio`. Production used the studio apex as the RP ID even though the Web app ran at
   `docket.hypertext.studio`. A successful old-passkey assertion issues the normal Better Auth
   session, and the native app immediately uses that session to register a replacement for
   `clearthedocket.com`. The app stores the session only after replacement registration succeeds.
@@ -161,13 +162,19 @@
   production web build passes and emits a host-scoped 308 whose negative lookahead excludes only
   `/.well-known/apple-app-site-association`.
   CI run `34404409208` passes the full release graph at `00528188a`. Deploy run `34406866665`
-  publishes the migration API, and live configuration reports `clearthedocket.com` plus the legacy
-  `docket.hypertext.studio` RP. The live legacy challenge returns the old RP, required user
+  publishes the migration API, and live configuration reports `clearthedocket.com` plus an incorrect
+  legacy `docket.hypertext.studio` RP. The live legacy challenge returns that incorrect RP, required user
   verification, an empty discoverable credential list, and a signed five-minute cookie. Vercel's
   build of the same commit exposed a missing delivery contract: strict Turbo environment filtering
   removed `BETTER_AUTH_PASSKEY_LEGACY_RP_ID` because the Web build did not declare it. A repository
   regression test now pins that environment input, and the focused Web configuration, typecheck,
-  and lint checks pass after declaring it.
+  and lint checks pass after declaring it. WilliePad then completed current-RP passkey sign-in through
+  the cross-device QR flow, and a forced app restart restored the session directly to Home. The
+  migration control failed before replacement registration because its configured legacy RP did not
+  match the historical `hypertext.studio` production value. The repair changes the deployment value
+  and native entitlement to the real historical RP. The live `hypertext.studio` AASA endpoint still
+  names personal-team application identifier `39AB9DY3K8.studio.hypertext.docket`; migration remains
+  blocked until its owning deployment publishes `T95VDD3A4W.studio.hypertext.docket` without a redirect.
 - **Domain validation**: Verisign RDAP records the `clearthedocket.com` registration on 2026-09-08
   and delegates it to `candy.ns.cloudflare.com` and `ricardo.ns.cloudflare.com`. Vercel accepted
   `clearthedocket.com` and `www.clearthedocket.com` for project `docket` and requires an apex A

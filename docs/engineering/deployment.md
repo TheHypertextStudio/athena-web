@@ -16,10 +16,10 @@ after formatting, lint, types, tests, build, and browser E2E are green.
 | `docket-admin` | `admin.clearthedocket.com` | Cloud Run | Next.js operator back office                            |
 
 **Passkey RP ID:** `clearthedocket.com`. During the native passkey migration window,
-`BETTER_AUTH_PASSKEY_LEGACY_RP_ID=docket.hypertext.studio` mounts a separate assertion-only bridge
-for credentials enrolled on the old RP. Vercel must keep `docket.hypertext.studio` assigned directly
-to the Docket project so its AASA file returns without a redirect. The web app redirects every other
-old-host path to `clearthedocket.com`. Remove the legacy variable and old associated-domain
+`BETTER_AUTH_PASSKEY_LEGACY_RP_ID=hypertext.studio` mounts a separate assertion-only bridge
+for credentials enrolled on the old RP. The Hypertext Studio site must publish the paid-team Docket
+identifier directly from `hypertext.studio/.well-known/apple-app-site-association`. The old Docket
+Web host can redirect because it is not the historical RP ID. Remove the legacy variable and old associated-domain
 entitlement only after the signed-device migration canary and migration window finish. The full
 security and removal contract lives in [Native credential integration](./specs/native-credentials.md).
 

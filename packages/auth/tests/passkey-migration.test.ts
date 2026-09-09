@@ -17,7 +17,7 @@ import {
   type PasskeyMigrationWebAuthn,
 } from '../src/passkey-migration';
 
-const LEGACY_RP = 'docket.hypertext.studio';
+const LEGACY_RP = 'hypertext.studio';
 const LEGACY_ORIGIN = `https://${LEGACY_RP}`;
 const CURRENT_ORIGIN = 'https://clearthedocket.com';
 const env: AuthEnv = {

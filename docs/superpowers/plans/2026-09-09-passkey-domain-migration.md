@@ -92,7 +92,7 @@ Use the same native `AuthorizationController` as normal passkey sign-in. Add an 
 keep the control reachable at accessibility text sizes without horizontal scrolling. Do not change the
 primary current-passkey action.
 
-Add `webcredentials:docket.hypertext.studio` beside `webcredentials:clearthedocket.com` in
+Add `webcredentials:hypertext.studio` beside `webcredentials:clearthedocket.com` in
 `Athena/Athena.entitlements`. Update `docs/native-build-environments.md` to state that the legacy domain
 is temporary and only migration uses it. Update the UI-test configuration fixture so normal signed-out
 coverage includes the migration control without enabling it in production before the server advertises
@@ -102,24 +102,21 @@ Run the macOS UI suite, iPhone simulator UI suite, and iPad simulator UI suite w
 light and dark signed-out evidence at macOS, iPhone, and iPad widths. Inspect every capture for clipped
 text, disabled provider controls, incorrect domain copy, and the Liquid Glass icon.
 
-## Task 6: Serve both AASA records without weakening the canonical redirect
+## Task 6: Serve both RP AASA records without redirects
 
-Write a web configuration test that distinguishes the AASA path from every other legacy-host path.
-Keep `apps/web/public/.well-known/apple-app-site-association` as the one source document and preserve
-`T95VDD3A4W.studio.hypertext.docket`. Configure Vercel so
-`https://docket.hypertext.studio/.well-known/apple-app-site-association` returns that JSON directly
-with HTTP 200 and no redirect while every other legacy path returns the canonical redirect to
-`https://clearthedocket.com`.
+Keep the current-RP AASA document at `clearthedocket.com`. Update the Hypertext Studio website's
+separate AASA document at `hypertext.studio`. Both documents must publish
+`T95VDD3A4W.studio.hypertext.docket` directly with HTTP 200 and no redirect. The old
+`docket.hypertext.studio` Web host may redirect because it is not the historical RP ID.
 
-Verify both live hosts with `curl --max-redirs 0`, content type, response body, and redirect location.
-Do not treat a local Next.js rule as proof because the current redirect can occur at Vercel's domain
-layer before Next.js runs.
+Verify both live RP hosts with `curl --max-redirs 0`, content type, and response body. Verify the old
+Docket Web host's canonical redirect separately.
 
 ## Task 7: Deploy the bridge and run the signed-device canary
 
 Deploy the server variable and auth build before distributing the native build. Confirm live
 `GET /v1/config` publishes both `passkeyRpId=clearthedocket.com` and
-`legacyPasskeyRpId=docket.hypertext.studio`. Build the production iOS and macOS targets with automatic
+`legacyPasskeyRpId=hypertext.studio`. Build the production iOS and macOS targets with automatic
 signing under Hypertext Studio team `T95VDD3A4W`. Inspect the signed application identifier, both
 associated domains, Sign in with Apple entitlement, environment marker, API base URL, WebAuthn origin,
 Google client IDs, and Liquid Glass icon assets.

@@ -6,8 +6,10 @@
  * invents a session, replaces navigator.credentials.get, or substitutes provider responses.
  * LATTICE_TEST_ACCOUNT_EMAIL selects an account when the native chooser offers several.
  * New consent is approved only with the operator's explicit LATTICE_TEST_ALLOW_CONSENT=true.
+ * LATTICE_TEST_CONSENT_ORIGIN must identify the provider's trusted Accounts UI for that approval.
  */
 import { chromium, type Page, type CDPSession, type BrowserContext } from '@playwright/test';
+import { isProviderConsentUrl } from './consent-policy';
 
 interface NativeDialog {
   readonly dialogId: string;
@@ -51,10 +53,17 @@ async function selectNativeAccount(cdp: CDPSession, dialog: NativeDialog): Promi
 
 /** Approve only the selected provider's real continuation popup. */
 async function approveProviderConsent(popup: Page, providerOrigin: string): Promise<void> {
-  await popup.waitForURL((url) => url.origin === providerOrigin, { timeout: 30_000 });
   if (process.env['LATTICE_TEST_ALLOW_CONSENT'] !== 'true') {
     throw new Error('Provider consent requires operator approval.');
   }
+  const configuredConsentOrigin = process.env['LATTICE_TEST_CONSENT_ORIGIN'];
+  if (!configuredConsentOrigin) {
+    throw new Error('LATTICE_TEST_CONSENT_ORIGIN is required before approving consent.');
+  }
+  const consentOrigin = new URL(configuredConsentOrigin).origin;
+  await popup.waitForURL((url) => isProviderConsentUrl(url, providerOrigin, consentOrigin), {
+    timeout: 30_000,
+  });
   await popup.getByRole('button', { name: 'Allow Access', exact: true }).click({ timeout: 30_000 });
 }
 

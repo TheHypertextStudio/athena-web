@@ -37,6 +37,11 @@
   client ID. Exchange and refresh use it; unversioned records use the explicitly configured old
   public client identity. Changing the current client to CIMD therefore preserves existing grants
   and in-flight authorization. This adds no database migration and stores no client secret.
+- **Release boundary**: Production remains on its existing registered client identity. The public
+  metadata is passive until an explicit client-ID switch; that switch is held while Lovelace's
+  independent production deployment freeze is resolved. The headless harness validates a configured
+  Accounts UI origin and its exact return to the selected identity provider before any operator-
+  approved new consent. This matches the real provider's cross-origin consent-page redirect.
 
 ### [NATIVE-APPLE-AUTH-001] Add native Apple authentication and shell foundations
 

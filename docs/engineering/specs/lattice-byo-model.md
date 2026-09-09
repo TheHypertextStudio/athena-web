@@ -302,7 +302,9 @@ headless mode, including code exchange and Docket's authenticated Lattice device
 `APP_URL` and, when needed, `LATTICE_BROWSER_STORAGE_STATE` from a normal authenticated test browser
 export. It never reads browser cookie databases or replaces provider responses. A new consent
 requires the operator to explicitly set `LATTICE_TEST_ALLOW_CONSENT=true`; otherwise the harness
-leaves that approval incomplete. `LATTICE_TEST_ACCOUNT_EMAIL` selects the intended account when the
+leaves that approval incomplete. Approval also requires `LATTICE_TEST_CONSENT_ORIGIN` identifying
+the provider's trusted Accounts UI origin; the harness verifies the exact return to the selected
+provider's continuation bridge before clicking. `LATTICE_TEST_ACCOUNT_EMAIL` selects the intended account when the
 chooser offers more than one. A successful device request proves the grant reaches Lattice, but
 does not replace the separate real inference acceptance gate.
 

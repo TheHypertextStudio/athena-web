@@ -51,6 +51,11 @@ export {
   type RestoreWebAuthn,
 } from './restore-credential';
 export {
+  passkeyMigrationPlugin,
+  type PasskeyMigrationDatabase,
+  type PasskeyMigrationWebAuthn,
+} from './passkey-migration';
+export {
   adminGoogleSsoEnabled,
   buildAuthOptions,
   canRemovePasskey,

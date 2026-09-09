@@ -41,6 +41,11 @@ import { syncStaffOnSignIn } from './staff-google-sync';
 import { getRecoveryCodeStatus } from './backup-codes';
 import { changeEmailConfirmationEmail, recoveryCodeUsedEmail } from './emails';
 import { derivePasskeyLabel } from './passkey-label';
+import {
+  passkeyMigrationPlugin,
+  type PasskeyMigrationDatabase,
+  type PasskeyMigrationWebAuthn,
+} from './passkey-migration';
 import { recoveryChallenge } from './recovery-challenge';
 import {
   restoreCredentialPlugin,
@@ -79,6 +84,10 @@ export interface AuthDeps {
   readonly restoreWebAuthn?: RestoreWebAuthn | undefined;
   /** Test seam for Restore Credentials persistence faults; production uses the shared client. */
   readonly restoreDatabase?: RestoreDatabase | undefined;
+  /** Test seam for deterministic old-RP migration assertions. */
+  readonly migrationWebAuthn?: PasskeyMigrationWebAuthn | undefined;
+  /** Test seam for old-RP migration persistence faults. */
+  readonly migrationDatabase?: PasskeyMigrationDatabase | undefined;
 }
 
 /**
@@ -491,6 +500,17 @@ export async function canRemovePasskey(
   return (codes?.remaining ?? 0) > 0 || linkedAccounts.length > 0;
 }
 
+/** Return the temporary old-RP plugin only while migration names a distinct source RP. */
+function configuredPasskeyMigration(e: AuthEnv, deps: AuthDeps): BetterAuthPlugin[] {
+  if (
+    !e.BETTER_AUTH_PASSKEY_LEGACY_RP_ID ||
+    e.BETTER_AUTH_PASSKEY_LEGACY_RP_ID === e.BETTER_AUTH_PASSKEY_RP_ID
+  ) {
+    return [];
+  }
+  return [passkeyMigrationPlugin(e, deps.migrationWebAuthn, deps.migrationDatabase)];
+}
+
 /**
  * Build the Better Auth configuration from the validated environment + injected boundaries.
  *
@@ -693,6 +713,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       ...(deps.devEchoSignupCode ? { devEchoCode: true } : {}),
     }),
     restoreCredentialPlugin(e, deps.restoreWebAuthn, deps.restoreDatabase),
+    ...configuredPasskeyMigration(e, deps),
   ];
 
   // A REAL OAuth 2.0 client provider (Better Auth's `genericOAuth` plugin) that performs a

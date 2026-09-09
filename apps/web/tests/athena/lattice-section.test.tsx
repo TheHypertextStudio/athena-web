@@ -397,15 +397,13 @@ describe('LatticeSection ceremony feedback', () => {
         unavailableReason: null,
       }),
     );
-    devicePost
-      .mockReset()
-      .mockResolvedValue(
-        okResponse({
-          ...UNCONNECTED,
-          connected: true,
-          unavailableReason: 'device_missing' as const,
-        }),
-      );
+    devicePost.mockReset().mockResolvedValue(
+      okResponse({
+        ...UNCONNECTED,
+        connected: true,
+        unavailableReason: 'device_missing' as const,
+      }),
+    );
     renderSection();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Use this' }));

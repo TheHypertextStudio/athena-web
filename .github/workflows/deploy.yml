@@ -132,6 +132,7 @@ jobs:
           # Public OAuth client registration shared by the deployment. Each person still grants
           # and selects their own Lattice device; this value does not choose a backend globally.
           LATTICE_CLIENT_ID: "${{ vars.LATTICE_CLIENT_ID }}"
+          LATTICE_LEGACY_CLIENT_ID: "${{ vars.LATTICE_LEGACY_CLIENT_ID }}"
           AGENT_MAX_TURNS: "${{ vars.AGENT_MAX_TURNS }}"
           ATHENA_ASYNC_RUNNER_ENABLED: "false"
           LATTICE_ACCOUNTS_ISSUER: "${{ vars.LATTICE_ACCOUNTS_ISSUER }}"

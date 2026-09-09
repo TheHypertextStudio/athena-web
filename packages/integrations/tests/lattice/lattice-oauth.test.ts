@@ -132,6 +132,44 @@ describe('beginLatticeAuthorization', () => {
 });
 
 describe('completeLatticeAuthorization', () => {
+  it('finishes an in-flight attempt under its originating client after a deployment switch', async () => {
+    const { fetch, forms } = tokenFetch(200, { access_token: 'at_transition' });
+    const current = config({
+      clientId: 'https://app.example.test/client.json',
+      legacyClientId: 'legacy-client',
+      fetch,
+    });
+    const begun = beginLatticeAuthorization(
+      config({ clientId: 'original-client' }),
+      'state',
+      fixedRandom,
+    );
+    const credential = await completeLatticeAuthorization(current, {
+      authorizationCode: 'code_transition',
+      credential: begun.credential,
+    });
+    expect(forms[0]?.get('client_id')).toBe('original-client');
+    expect(credential.clientId).toBe('original-client');
+  });
+
+  it('uses the explicit legacy identity only for an old attempt that has no identity recorded', async () => {
+    const { fetch, forms } = tokenFetch(200, { access_token: 'at_legacy' });
+    await completeLatticeAuthorization(
+      config({ clientId: 'new-client', legacyClientId: 'legacy-client', fetch }),
+      {
+        authorizationCode: 'code_legacy',
+        credential: { kind: 'lattice_oauth_pending', codeVerifier: 'verifier' },
+      },
+    );
+    expect(forms[0]?.get('client_id')).toBe('legacy-client');
+    expect(
+      beginLatticeAuthorization(
+        config({ clientId: 'new-client', legacyClientId: 'legacy-client' }),
+        'state',
+      ).credential.clientId,
+    ).toBe('new-client');
+  });
+
   it('exchanges the code with the verifier and the client credentials', async () => {
     const { fetch, forms, urls } = tokenFetch(200, {
       access_token: 'at_1',
@@ -328,6 +366,26 @@ describe('refreshLatticeCredential', () => {
     scope: LATTICE_SCOPES.join(' '),
     obtainedAt: '2026-08-02T00:00:00.000Z',
   };
+
+  it('refreshes old grants under their recorded client rather than the new deployment client', async () => {
+    const { fetch, forms } = tokenFetch(200, { access_token: 'at_rotated' });
+    const refreshed = await refreshLatticeCredential(
+      config({ clientId: 'new-client', legacyClientId: 'legacy-client', fetch }),
+      { ...stored, clientId: 'original-client' },
+    );
+    expect(forms[0]?.get('client_id')).toBe('original-client');
+    expect(refreshed.clientId).toBe('original-client');
+  });
+
+  it('preserves unversioned grants through an explicit legacy client migration', async () => {
+    const { fetch, forms } = tokenFetch(200, { access_token: 'at_rotated' });
+    const refreshed = await refreshLatticeCredential(
+      config({ clientId: 'new-client', legacyClientId: 'legacy-client', fetch }),
+      stored,
+    );
+    expect(forms[0]?.get('client_id')).toBe('legacy-client');
+    expect(refreshed.clientId).toBe('legacy-client');
+  });
 
   it('carries the previous refresh token forward when the issuer does not rotate it', async () => {
     const { fetch, forms } = tokenFetch(200, { access_token: 'at_new', expires_in: 3600 });

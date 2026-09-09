@@ -86,6 +86,8 @@ export interface LatticeOAuthClientConfig {
   readonly issuer: string;
   /** The registered OAuth client id. */
   readonly clientId: string;
+  /** Previously deployed public client used only by legacy records without a recorded identity. */
+  readonly legacyClientId?: string;
   /** The registered client secret, when Docket is deployed as a confidential client. */
   readonly clientSecret?: string | undefined;
   /** The callback Lovelace redirects the browser back to. */
@@ -102,6 +104,8 @@ export interface PendingLatticeCredential {
   readonly kind: 'lattice_oauth_pending';
   /** The PKCE verifier whose challenge went out on the authorization request. */
   readonly codeVerifier: string;
+  /** Client identity that originated the attempt; absent only on older encrypted records. */
+  readonly clientId?: string;
 }
 
 /** Encrypted-at-rest credential for an approved Lattice grant. */
@@ -110,6 +114,8 @@ export interface LatticeCredentialRecord {
   readonly kind: 'lattice_oauth';
   /** The bearer token gateway calls are made with. */
   readonly accessToken: string;
+  /** Client identity that owns this grant; retained when deployment onboarding changes. */
+  readonly clientId?: string;
   /** The refresh token, when the issuer returned one. */
   readonly refreshToken: string | null;
   /** Lifetime the issuer reported, in seconds. */
@@ -221,7 +227,7 @@ export function beginLatticeAuthorization(
   return {
     authorizationUrl: url.toString(),
     codeChallenge,
-    credential: { kind: 'lattice_oauth_pending', codeVerifier },
+    credential: { kind: 'lattice_oauth_pending', codeVerifier, clientId: config.clientId },
   };
 }
 
@@ -290,6 +296,7 @@ async function postToken(
 
   return {
     kind: 'lattice_oauth',
+    clientId: config.clientId,
     accessToken: parsed.access_token,
     refreshToken: typeof parsed.refresh_token === 'string' ? parsed.refresh_token : null,
     expiresInSeconds: typeof parsed.expires_in === 'number' ? parsed.expires_in : null,
@@ -312,12 +319,16 @@ export async function completeLatticeAuthorization(
   config: LatticeOAuthClientConfig,
   input: { readonly authorizationCode: string; readonly credential: PendingLatticeCredential },
 ): Promise<LatticeCredentialRecord> {
-  return await postToken(config, {
-    grant_type: 'authorization_code',
-    code: input.authorizationCode,
-    redirect_uri: config.redirectUri,
-    code_verifier: input.credential.codeVerifier,
-  });
+  const clientId = input.credential.clientId ?? config.legacyClientId ?? config.clientId;
+  return await postToken(
+    { ...config, clientId },
+    {
+      grant_type: 'authorization_code',
+      code: input.authorizationCode,
+      redirect_uri: config.redirectUri,
+      code_verifier: input.credential.codeVerifier,
+    },
+  );
 }
 
 /**
@@ -341,10 +352,14 @@ export async function refreshLatticeCredential(
   if (!credential.refreshToken) {
     throw new LatticeOAuthError('invalid_grant', 'stored Lattice credential has no refresh token');
   }
-  const refreshed = await postToken(config, {
-    grant_type: 'refresh_token',
-    refresh_token: credential.refreshToken,
-  });
+  const clientId = credential.clientId ?? config.legacyClientId ?? config.clientId;
+  const refreshed = await postToken(
+    { ...config, clientId },
+    {
+      grant_type: 'refresh_token',
+      refresh_token: credential.refreshToken,
+    },
+  );
   return {
     ...refreshed,
     refreshToken: refreshed.refreshToken ?? credential.refreshToken,

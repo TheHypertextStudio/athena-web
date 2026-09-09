@@ -266,13 +266,14 @@ reaches the fallback's normal configuration error.
 
 ## 9. Environment
 
-| Var                       | Required    | Meaning                                                                                     |
-| ------------------------- | ----------- | ------------------------------------------------------------------------------------------- |
-| `LATTICE_CLIENT_ID`       | for Lattice | Registered client ID or the web origin's `/.well-known/lattice-client.json` URL.            |
-| `LATTICE_CLIENT_SECRET`   | no          | Legacy confidential-client compatibility only. The public FedCM/PKCE client uses no secret. |
-| `LATTICE_ACCOUNTS_ISSUER` | for Lattice | Explicit authorization-server issuer; no implicit provider host.                            |
-| `LATTICE_GATEWAY_URL`     | for Lattice | Explicit callable gateway URL; no implicit provider host.                                   |
-| `LATTICE_RESOURCE_URL`    | no          | OAuth resource identifier when different from the configured gateway URL.                   |
+| Var                        | Required       | Meaning                                                                                           |
+| -------------------------- | -------------- | ------------------------------------------------------------------------------------------------- |
+| `LATTICE_CLIENT_ID`        | for Lattice    | Registered client ID or the web origin's `/.well-known/lattice-client.json` URL.                  |
+| `LATTICE_LEGACY_CLIENT_ID` | migration only | Prior public client ID for old encrypted grants and pending attempts without a recorded identity. |
+| `LATTICE_CLIENT_SECRET`    | no             | Legacy confidential-client compatibility only. The public FedCM/PKCE client uses no secret.       |
+| `LATTICE_ACCOUNTS_ISSUER`  | for Lattice    | Explicit authorization-server issuer; no implicit provider host.                                  |
+| `LATTICE_GATEWAY_URL`      | for Lattice    | Explicit callable gateway URL; no implicit provider host.                                         |
+| `LATTICE_RESOURCE_URL`     | no             | OAuth resource identifier when different from the configured gateway URL.                         |
 
 The OAuth client identifies Docket during consent; it is application infrastructure, not the model
 credential. Every model grant, device choice, and enablement state still belongs to the individual
@@ -288,6 +289,13 @@ supports authorization code plus refresh. Its resource list is an explicit Lovel
 Deploy and publicly verify the document before changing `LATTICE_CLIENT_ID` to its URL. Existing
 registered clients remain usable during this transition. No vendor source entry is needed for
 Docket or its deployment hosts.
+
+Before switching the client ID, set `LATTICE_LEGACY_CLIENT_ID` to the previously deployed public
+client identity. Every newly created attempt and token record now stores its originating client
+ID inside the existing encrypted payload. Exchange and refresh honor that identity; old records
+use the explicit legacy value. This prevents a deployment's CIMD migration from invalidating
+previously authorized grants or the short-lived attempts already in flight. Keep the legacy value
+until old grants have been refreshed into the new record shape or replaced through reauthorization.
 
 `apps/web/e2e/lattice/verify-fedcm-live.ts` runs the real Chromium FedCM dialog through CDP in
 headless mode, including code exchange and Docket's authenticated Lattice device request. Supply

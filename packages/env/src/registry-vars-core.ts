@@ -329,6 +329,16 @@ export const CORE_VARS: readonly VarSpec[] = [
       'Lovelace OAuth app client id (developer.uselovelace.com) — lets a person authorize Athena to run model turns on their own Lattice devices. Absent → the Lattice settings section is unavailable.',
   },
   {
+    name: 'LATTICE_LEGACY_CLIENT_ID',
+    slice: 'auth',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: authServer.LATTICE_LEGACY_CLIENT_ID,
+    where:
+      'Previous public OAuth client identity used only for encrypted legacy grants and attempts.',
+  },
+  {
     name: 'LATTICE_CLIENT_SECRET',
     slice: 'auth',
     scope: 'server',

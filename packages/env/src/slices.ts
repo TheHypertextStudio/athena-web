@@ -142,6 +142,8 @@ export const authServer = {
    * appears; Athena stays on the routed default backend for everyone.
    */
   LATTICE_CLIENT_ID: z.string().optional(),
+  /** Previous public client ID for encrypted grants and attempts created before identity recording. */
+  LATTICE_LEGACY_CLIENT_ID: z.string().optional(),
   /** Lovelace OAuth app client secret — paired with `LATTICE_CLIENT_ID`. */
   LATTICE_CLIENT_SECRET: z.string().optional(),
   /**

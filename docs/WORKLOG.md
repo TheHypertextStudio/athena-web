@@ -30,6 +30,10 @@
   the real Docket sign-in boundary: a normally authenticated test session remains necessary before
   claiming native authorization or inference acceptance. The GitHub production issuer/gateway
   variables now contain the same deployment endpoints previously embedded in the workflow.
+- **Migration safeguard**: New encrypted attempts and token records retain their originating
+  client ID. Exchange and refresh use it; unversioned records use the explicitly configured old
+  public client identity. Changing the current client to CIMD therefore preserves existing grants
+  and in-flight authorization. This adds no database migration and stores no client secret.
 
 ### [NATIVE-APPLE-AUTH-001] Add native Apple authentication and shell foundations
 

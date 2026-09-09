@@ -78,6 +78,7 @@ export function latticeOAuthConfig(): LatticeOAuthClientConfig {
   return {
     issuer,
     clientId,
+    ...(env.LATTICE_LEGACY_CLIENT_ID ? { legacyClientId: env.LATTICE_LEGACY_CLIENT_ID } : {}),
     ...(env.LATTICE_CLIENT_SECRET ? { clientSecret: env.LATTICE_CLIENT_SECRET } : {}),
     redirectUri: latticeRedirectUri(),
     resource: env.LATTICE_RESOURCE_URL ?? gatewayUrl,

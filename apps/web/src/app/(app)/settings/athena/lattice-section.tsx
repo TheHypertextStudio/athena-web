@@ -1,24 +1,14 @@
 'use client';
 
 /**
- * `settings/athena` — run models on your own computer.
+ * `settings/athena` — run models on your own computer via Lovelace Lattice.
  *
  * @remarks
- * The whole management surface for the Lovelace Lattice backend: connect, see which of your
- * computers is answering and whether it is awake, switch computers, turn it off, disconnect.
- *
- * ## The two design rules this section is built around
- *
- * 1. **Every state says something true and something you can do.** There is no dead read-only row
- *    here. "Asleep" is followed by "wake it and make sure Lattice is running"; "not connected" is
- *    followed by a Connect button. Reasons arrive from the API as stable codes and are turned into
- *    words by {@link LATTICE_REASON_COPY} — no gateway text is ever rendered.
- * 2. **Turnkey means three clicks.** Connect → approve on Lovelace → pick a computer. There is no
- *    field anywhere in this section for a URL, a key, or a token, and nothing asks anyone to open a
- *    terminal.
+ * Turnkey in three clicks: connect, approve on Lovelace, pick a computer. No URL, key, or token
+ * field anywhere in this section.
  */
 import { CheckCircle2, CircleDashed, CloudOff, Computer, XCircle } from '@docket/ui/icons';
-import { ConfirmDestructiveDialog } from '@docket/ui/components';
+import { ConfirmDestructiveDialog, EmptyState } from '@docket/ui/components';
 import {
   Button,
   Chip,
@@ -39,7 +29,7 @@ import { firstWriteError, WriteError } from '@/components/settings/write-error';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SettingRow } from '@/components/settings/setting-row';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
-import { userErrorMessage } from '@/lib/problem';
+import { UserFacingError, userErrorMessage } from '@/lib/problem';
 import {
   apiQueryOptions,
   queryKeys,
@@ -53,11 +43,9 @@ import {
   LATTICE_DEPLOYMENT_COPY,
   LATTICE_DEVICE_STATUS_COPY,
   LATTICE_FEDCM_FALLBACK_COPY,
-  LATTICE_REASON_COPY,
-  LATTICE_RETURN_COPY,
+  LATTICE_SETUP_URL,
   type LatticeAuthorizationOutcome,
   type LatticeDeploymentReason,
-  type LatticeReason,
 } from './lattice-copy';
 import {
   requestLatticeFedCM,
@@ -67,6 +55,27 @@ import {
 
 /** The device states the API reports. */
 type DeviceStatus = 'unpaired' | 'reachable' | 'offline' | 'revoked';
+
+/** The two ceremony-in-flight labels shared by the connected and unconnected live regions. */
+const OPENING_LOVELACE = 'Opening Lovelace…';
+const PREPARING_LOVELACE = 'Preparing Lovelace…';
+
+/** Whether the OAuth callback's `lattice` URL flag is one of the outcomes this section knows how to say. */
+function isLatticeAuthorizationOutcome(value: string | null): value is LatticeAuthorizationOutcome {
+  return value === 'connected' || value === 'declined' || value === 'error' || value === 'scopes';
+}
+
+/** Message for a ceremony that didn't connect. */
+function ceremonyIssueMessage(outcome: Exclude<LatticeAuthorizationOutcome, 'connected'>): string {
+  switch (outcome) {
+    case 'declined':
+      return 'You declined the connection.';
+    case 'scopes':
+      return 'Approve all the permissions Athena asks for.';
+    case 'error':
+      return 'That connection attempt failed.';
+  }
+}
 
 /** The leading glyph for one device state, plus the tone to frame it in when that state is worth calling out. */
 function deviceIcon(status: DeviceStatus): typeof CheckCircle2 {
@@ -90,39 +99,12 @@ const DEVICE_ICON_TONE: Readonly<Record<DeviceStatus, string>> = {
   revoked: 'bg-error/12 text-error',
 };
 
-/** Whether the OAuth callback's `lattice` URL flag is one of the outcomes this section knows how to say. */
-function isLatticeAuthorizationOutcome(value: string | null): value is LatticeAuthorizationOutcome {
-  return value === 'connected' || value === 'declined' || value === 'error' || value === 'scopes';
-}
-
-/** One line of state plus the action that resolves it. */
-function ReasonNote({ reason }: { readonly reason: LatticeReason }): JSX.Element {
-  const copy = LATTICE_REASON_COPY[reason];
-  return (
-    <Stack gap={1}>
-      <Text token="body-medium" role="status">
-        {copy.title}
-      </Text>
-      <Text token="body-small" tone="muted">
-        {copy.action}
-      </Text>
-    </Stack>
-  );
-}
-
 /**
  * The redirect transport, offered as a deliberate second click after an invoked FedCM dialog.
  *
  * @remarks
- * Never rendered as a loose line of muted text beside the button that just failed: two
- * same-weight buttons in one card read as two ways to do the same thing, and a muted sentence
- * reads as an aside rather than as the way forward. The offer is one flat band — a heading, a
- * sentence describing what the click does, and a single filled action — at the group's own tonal
- * step, not a second nested card floating inside the group's own `Surface`.
- *
- * @param props - The redirect target for this attempt.
- * @param props.authorizationUrl - Lovelace's authorization URL for the pending attempt.
- * @returns The flat fallback band.
+ * Rendered as one flat band — heading, sentence, single filled action — never a second button
+ * beside the one that just failed.
  */
 function AuthorizationFallback({
   authorizationUrl,
@@ -167,11 +149,9 @@ interface PendingAuthorizationCeremony {
  * Own the native-first ceremony and its explicit redirect-fallback state.
  *
  * @param enabled - Whether a server attempt should be prepared eagerly.
- * @param onCompleted - Called synchronously, inside the completion mutation's own `onSuccess`,
- * the instant an outcome is known — before this hook's own state commits. A caller that needs to
- * patch other state (e.g. the connection query's cache) in the same render as the outcome must do
- * it here; reacting to the returned `authorizationOutcome` from a `useEffect` one render later
- * reopens the same kind of race this hook exists to close.
+ * @param onCompleted - Called synchronously inside the completion mutation's `onSuccess`, before
+ * this hook's own state commits, so a caller patching other state (e.g. the connection query's
+ * cache) does it in the same render as the outcome rather than a `useEffect` later.
  */
 function useLatticeAuthorization(
   enabled: boolean,
@@ -181,7 +161,6 @@ function useLatticeAuthorization(
     typeof useApiMutation<AuthorizationAction, PendingAuthorizationCeremony>
   >;
   readonly prepare: ReturnType<typeof useApiMutation<LatticeAuthorizationStart, number>>;
-  readonly authorizationOutcome: LatticeAuthorizationOutcome | null;
   readonly authorizationReady: boolean;
   readonly fallbackUrl: string | null;
   readonly resetAuthorization: () => void;
@@ -189,8 +168,6 @@ function useLatticeAuthorization(
 } {
   const [started, setStarted] = useState<LatticeAuthorizationStart | null>(null);
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
-  const [authorizationOutcome, setAuthorizationOutcome] =
-    useState<LatticeAuthorizationOutcome | null>(null);
   const prepareGeneration = useRef(0);
 
   const prepare = useApiMutation<LatticeAuthorizationStart, number>({
@@ -238,7 +215,6 @@ function useLatticeAuthorization(
       // Authorization attempts are single-use. Prepare a fresh one for a later reconnect instead
       // of retaining the completed PKCE state in this mounted settings section.
       setStarted(null);
-      setAuthorizationOutcome(data.status);
       onCompleted?.(data.status);
     },
     invalidateKeys: [queryKeys.latticeConnection(), queryKeys.latticeDevices()],
@@ -247,7 +223,6 @@ function useLatticeAuthorization(
   return {
     authorize,
     prepare,
-    authorizationOutcome,
     authorizationReady: started !== null,
     fallbackUrl,
     resetAuthorization: () => {
@@ -255,12 +230,10 @@ function useLatticeAuthorization(
       prepare.reset();
       setStarted(null);
       setFallbackUrl(null);
-      setAuthorizationOutcome(null);
     },
     startAuthorization: () => {
       if (!started) return;
       setFallbackUrl(null);
-      setAuthorizationOutcome(null);
       // Active-mode FedCM requires transient user activation. Calling the browser boundary here,
       // before React Query or another network round trip, keeps it on the original click stack.
       const result = requestLatticeFedCM(started);
@@ -269,54 +242,22 @@ function useLatticeAuthorization(
   };
 }
 
-/**
- * The one "you just did something" line for this card. Tone follows what's actually true:
- * `connected` is good news; `declined` changed nothing, so it stays quiet; `scopes`/`error` leave
- * Athena unable to use Lovelace, which is worth an alert. Same rendering regardless of which
- * branch of the section is showing, at the same position (first), so the two branches never
- * disagree about where or how this reads.
- */
-function LatticeNotice({
-  outcome,
-}: {
-  readonly outcome: LatticeAuthorizationOutcome | null;
-}): JSX.Element | null {
-  if (!outcome) return null;
-  const text = LATTICE_RETURN_COPY[outcome];
-  switch (outcome) {
-    case 'connected':
-      return (
-        <Text token="body-medium" role="status" className="text-primary px-4 pb-3">
-          {text}
-        </Text>
-      );
-    case 'declined':
-      return (
-        <Text token="body-medium" tone="muted" role="status" className="px-4 pb-3">
-          {text}
-        </Text>
-      );
-    case 'scopes':
-    case 'error':
-      return (
-        <Text token="body-medium" role="alert" className="text-error px-4 pb-3">
-          {text}
-        </Text>
-      );
-  }
+/** The unconnected branch's own live-region status line. */
+function unconnectedStatusCopy(authorizePending: boolean, authorizationReady: boolean): string {
+  if (authorizePending) return OPENING_LOVELACE;
+  if (authorizationReady) return '';
+  return PREPARING_LOVELACE;
 }
 
 /** Render the connect ceremony before an approved Lovelace grant exists. */
 function UnconnectedLatticeSection({
   actionError,
-  notice,
   authorizePending,
   authorizationReady,
   fallbackUrl,
   startAuthorization,
 }: {
   readonly actionError: string | null;
-  readonly notice: LatticeAuthorizationOutcome | null;
   readonly authorizePending: boolean;
   readonly authorizationReady: boolean;
   readonly fallbackUrl: string | null;
@@ -324,7 +265,6 @@ function UnconnectedLatticeSection({
 }): JSX.Element {
   return (
     <SettingsGroup capability={SETTINGS_NODES.athenaLattice} body="rows">
-      <LatticeNotice outcome={notice} />
       <SettingRow
         leading={<DecorativeIcon icon={Computer} />}
         label="Lattice"
@@ -350,7 +290,7 @@ function UnconnectedLatticeSection({
         </div>
       ) : null}
       <Text token="body-small" tone="muted" role="status" aria-live="polite" className="px-4">
-        {authorizePending ? 'Opening Lovelace…' : authorizationReady ? '' : 'Preparing Lovelace…'}
+        {unconnectedStatusCopy(authorizePending, authorizationReady)}
       </Text>
     </SettingsGroup>
   );
@@ -366,8 +306,8 @@ interface LatticePendingActionState {
 
 /** Return the one operation label shown in the section's polite live region. */
 function pendingActionCopy(state: LatticePendingActionState): string {
-  if (state.preparingAuthorization) return 'Preparing Lovelace…';
-  if (state.authorizing) return 'Opening Lovelace…';
+  if (state.preparingAuthorization) return PREPARING_LOVELACE;
+  if (state.authorizing) return OPENING_LOVELACE;
   if (state.choosingDevice) return 'Switching computers…';
   if (state.settingEnabled || state.disconnecting) return 'Saving…';
   return '';
@@ -382,6 +322,20 @@ export function LatticeSection(): JSX.Element {
   const searchParams = useAppSearchParams();
   const returned = searchParams.get('lattice');
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  // Seeded once from the redirect-return URL flag (the full-page OAuth transport has no other way
+  // to report a non-connected outcome, since the component remounts from scratch). Also set from
+  // the in-page FedCM ceremony below. Cleared the moment a new attempt starts.
+  const [ceremonyIssue, setCeremonyIssue] = useState<string | null>(() =>
+    isLatticeAuthorizationOutcome(returned) && returned !== 'connected'
+      ? ceremonyIssueMessage(returned)
+      : null,
+  );
+  useEffect(() => {
+    if (!window.location.search.includes('lattice=')) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('lattice');
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  }, []);
   const queryClient = useQueryClient();
   // Named so its `.queryKey` can be reused for a direct cache write below — the definition, not
   // just the key, is what keeps the write type-checked against what this read returns.
@@ -397,20 +351,26 @@ export function LatticeSection(): JSX.Element {
   const {
     authorize,
     prepare,
-    authorizationOutcome,
     authorizationReady,
     fallbackUrl,
     resetAuthorization,
     startAuthorization,
   } = useLatticeAuthorization(status?.available === true, (outcome) => {
-    if (outcome !== 'connected') return;
-    // The invalidated refetch below will land moments later with the authoritative row (device,
-    // enabled, etc.); this only needs to flip `connected` in the same tick as `authorizationOutcome`
-    // committing, so the section never paints the unconnected branch beside a "connected" notice.
+    if (outcome !== 'connected') {
+      setCeremonyIssue(ceremonyIssueMessage(outcome));
+      return;
+    }
+    // The invalidated refetch below will land moments later with the authoritative row
+    // (device, enabled, etc.); this only needs to flip `connected` in the same tick so the
+    // section never paints the unconnected branch a moment after the ceremony succeeded.
     queryClient.setQueryData(latticeConnectionDef.queryKey, (prev) =>
       prev ? { ...prev, connected: true } : prev,
     );
   });
+  const handleStartAuthorization = (): void => {
+    setCeremonyIssue(null);
+    startAuthorization();
+  };
 
   // Devices are only asked for once a grant exists — there is nothing to list before that, and
   // asking would spend a gateway round trip to learn what the status already said.
@@ -424,20 +384,34 @@ export function LatticeSection(): JSX.Element {
   );
 
   const chooseDevice = useApiMutation<unknown, string>({
-    mutationFn: (deviceId) =>
-      unwrap(
+    mutationFn: async (deviceId) => {
+      const result = await unwrap(
         () => api.v1.me.athena.lattice.device.$post({ json: { deviceId } }),
         'Could not switch Athena to that computer.',
-      ),
+      );
+      // A 200 can still be a refusal (the device is no longer on the account) — treat it as a
+      // failure so it surfaces the same way a rejected request would.
+      if (result.unavailableReason) {
+        throw new UserFacingError(
+          'That computer is no longer available. Refresh the list and try again.',
+        );
+      }
+      return result;
+    },
     invalidateKeys: [queryKeys.latticeConnection(), queryKeys.latticeDevices()],
   });
 
   const setEnabled = useApiMutation<unknown, boolean>({
-    mutationFn: (enabled) =>
-      unwrap(
+    mutationFn: async (enabled) => {
+      const result = await unwrap(
         () => api.v1.me.athena.lattice.$patch({ json: { enabled } }),
         'Could not change where Athena runs.',
-      ),
+      );
+      if (result.unavailableReason === 'no_device_selected') {
+        throw new UserFacingError('Choose a computer before turning this on.');
+      }
+      return result;
+    },
     invalidateKeys: [queryKeys.latticeConnection()],
   });
 
@@ -451,12 +425,13 @@ export function LatticeSection(): JSX.Element {
   // driven by a single control) and separate lines would reserve space that's almost always
   // empty. Disconnect's failure surfaces inside its own confirmation dialog instead — it is
   // already the one place a person is looking when that write can fail.
-  const actionError = firstWriteError([
-    [prepare, 'Could not prepare the Lovelace connection.'],
-    [authorize, 'Could not start the Lovelace connection.'],
-    [chooseDevice, 'Could not switch Athena to that computer.'],
-    [setEnabled, 'Could not change where Athena runs.'],
-  ]);
+  const actionError =
+    firstWriteError([
+      [prepare, 'Could not prepare the Lovelace connection.'],
+      [authorize, 'Could not start the Lovelace connection.'],
+      [chooseDevice, 'Could not switch Athena to that computer.'],
+      [setEnabled, 'Could not change where Athena runs.'],
+    ]) ?? ceremonyIssue;
   const actionStatus = pendingActionCopy({
     preparingAuthorization: prepare.isPending,
     authorizing: authorize.isPending,
@@ -499,49 +474,25 @@ export function LatticeSection(): JSX.Element {
     );
   }
 
-  // The outcome of a just-finished ceremony, whichever transport carried it: the FedCM hook's own
-  // state when the browser stayed on this page, or the `lattice` URL flag when a redirect brought
-  // it back. Suppressed once its instruction has plainly been carried out — a device already
-  // chosen under "choose which computer" reads as a broken screen, not a stale one.
-  const notice: LatticeAuthorizationOutcome | null =
-    authorizationOutcome ??
-    (isLatticeAuthorizationOutcome(returned) && !(returned === 'connected' && status.deviceId)
-      ? returned
-      : null);
-
   // Before anyone has connected, this is an integration like any other: one row naming the
   // service, a sentence on what it gives you, and the single action that starts it. The device
-  // list and its states only become meaningful once a grant exists.
+  // list only becomes meaningful once a grant exists.
   if (!connected) {
     return (
       <UnconnectedLatticeSection
         actionError={actionError}
-        notice={notice}
         authorizePending={prepare.isPending || authorize.isPending}
         authorizationReady={authorizationReady}
         fallbackUrl={fallbackUrl}
-        startAuthorization={startAuthorization}
+        startAuthorization={handleStartAuthorization}
       />
     );
   }
 
   const devices = devicesQ.data?.devices ?? [];
-  const listReason: LatticeReason | null = devicesQ.data?.unavailableReason ?? null;
-  const statusReason: LatticeReason | null = status.unavailableReason ?? null;
-  // The chosen device's own live state is a reason in its own right. Without this, picking a
-  // machine that happens to be asleep leaves the section silently claiming Athena runs there.
-  const chosen = devices.find((device) => device.id === status.deviceId) ?? null;
-  const chosenReason: LatticeReason | null =
-    chosen && !chosen.ready
-      ? chosen.status === 'revoked'
-        ? 'device_revoked'
-        : chosen.status === 'unpaired'
-          ? 'device_unpaired'
-          : 'device_offline'
-      : null;
-  const reason =
-    listReason ?? chosenReason ?? statusReason ?? (status.deviceId ? null : 'no_device_selected');
-  const runningHere = status.enabled && status.deviceId !== null && chosenReason === null;
+  // A standing reason means Athena can't run turns right now, even though the device list below
+  // may still look fine — reconnecting is the fix, so the button uses `secondary`, not `ghost`.
+  const needsReconnect = status.unavailableReason !== null;
 
   return (
     <>
@@ -551,8 +502,8 @@ export function LatticeSection(): JSX.Element {
         action={
           <ControlGroup>
             <Button
-              variant="ghost"
-              onClick={startAuthorization}
+              variant={needsReconnect ? 'secondary' : 'ghost'}
+              onClick={handleStartAuthorization}
               disabled={prepare.isPending || authorize.isPending || !authorizationReady}
             >
               Reconnect Lovelace
@@ -569,8 +520,6 @@ export function LatticeSection(): JSX.Element {
           </ControlGroup>
         }
       >
-        <LatticeNotice outcome={notice} />
-
         {fallbackUrl ? <AuthorizationFallback authorizationUrl={fallbackUrl} /> : null}
 
         {devicesQ.isPending ? (
@@ -580,15 +529,35 @@ export function LatticeSection(): JSX.Element {
             <Skeleton className="h-24 rounded-xl" />
           </div>
         ) : devices.length === 0 ? (
-          <Stack gap={1} role="status" className="px-4 pb-4">
-            <Text token="body-medium">No computers are paired yet</Text>
-            <Text token="body-small" tone="muted">
-              Install Lattice on the computer you want Athena to use. It appears here once it
-              connects.
-            </Text>
-          </Stack>
+          // EmptyState itself carries no live-region role (most of its 13+ other callers render
+          // on first paint, where one would just announce the initial page); this transition can
+          // happen live (a person's last device drops off mid-session), so it's added locally.
+          <div role="status">
+            {devicesQ.data?.unavailableReason ? (
+              <EmptyState
+                icon={Computer}
+                title="Could not load your computers"
+                body="Try again in a moment, or reconnect Lovelace if this keeps happening."
+                frame="none"
+              />
+            ) : (
+              <EmptyState
+                icon={Computer}
+                title="No computers paired"
+                body="Install Lattice on a computer to pair it here."
+                frame="none"
+                action={
+                  <Button asChild variant="outline">
+                    <a href={LATTICE_SETUP_URL} target="_blank" rel="noopener noreferrer">
+                      Set up Lattice
+                    </a>
+                  </Button>
+                }
+              />
+            )}
+          </div>
         ) : (
-          <ul className="flex flex-col">
+          <ul className="flex flex-col" aria-live="polite" aria-atomic="false">
             {devices.map((device) => (
               <SettingRow
                 key={device.id}
@@ -634,28 +603,6 @@ export function LatticeSection(): JSX.Element {
           </ul>
         )}
 
-        {runningHere ? (
-          <Text token="body-small" tone="muted" className="px-4">
-            Athena answers only from {status.deviceName ?? 'your computer'} — if it&apos;s
-            unavailable, you&apos;ll see that instead of a reply.
-          </Text>
-        ) : status.enabled && status.deviceId ? (
-          <Text token="body-small" tone="muted" className="px-4">
-            Athena will use {status.deviceName ?? 'your computer'} as soon as it is reachable. It
-            will not fall back to a cloud model in the meantime.
-          </Text>
-        ) : (
-          <Text token="body-small" tone="muted" className="px-4">
-            Athena is using Docket&apos;s standard model service right now.
-          </Text>
-        )}
-
-        {reason ? (
-          <div className="px-4 pb-4">
-            <ReasonNote reason={reason} />
-          </div>
-        ) : null}
-
         {actionError ? (
           <div className="px-4 pb-4">
             <WriteError message={actionError} />
@@ -683,6 +630,7 @@ export function LatticeSection(): JSX.Element {
               // Disconnect deletes all server-side authorization attempts. Discard the eagerly
               // prepared reconnect attempt too so an immediate reconnect cannot reuse a dead ID.
               resetAuthorization();
+              setCeremonyIssue(null);
               setConfirmDisconnect(false);
             },
           });

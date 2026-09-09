@@ -26,7 +26,7 @@
  * are building instead of leaving each call site to add or omit padding by eye — the specific way
  * the old `p-3`/`p-4`/`p-5`/`p-6` split arose.
  */
-import { cn } from '@docket/ui';
+import { cn, focusRing } from '@docket/ui';
 import { SETTINGS_GROUP_ATTR, settingsGroupId } from './settings-outline';
 import { ControlGroup, Surface, Text } from '@docket/ui/primitives';
 import type * as React from 'react';
@@ -129,7 +129,7 @@ export function SettingsGroup({
                 id={headingId}
                 tabIndex={capability ? -1 : undefined}
                 {...{ [SETTINGS_GROUP_ATTR]: '' }}
-                className="flex items-center gap-2"
+                className={cn('flex items-center gap-2 rounded-sm', focusRing)}
               >
                 {icon ? (
                   <span className="text-on-surface-variant flex shrink-0 items-center">{icon}</span>

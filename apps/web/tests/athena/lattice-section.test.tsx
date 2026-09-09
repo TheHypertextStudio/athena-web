@@ -14,6 +14,7 @@ const {
   devicePost,
   devicesGet,
   requestLatticeFedCM,
+  useAppSearchParams,
 } = vi.hoisted(() => ({
   authorizePost: vi.fn(),
   completePost: vi.fn(),
@@ -23,6 +24,7 @@ const {
   devicePost: vi.fn(),
   devicesGet: vi.fn(),
   requestLatticeFedCM: vi.fn(),
+  useAppSearchParams: vi.fn(() => new URLSearchParams()),
 }));
 
 vi.mock('../../src/lib/api', () => ({
@@ -52,16 +54,19 @@ vi.mock('../../src/components/authentication-interlock', () => ({
   useOptionalAuthenticationRecovery: () => (action: () => Promise<unknown>) => action(),
 }));
 
-vi.mock('../../src/lib/app-location', () => ({
-  useAppSearchParams: () => new URLSearchParams(),
-}));
-
 vi.mock('../../src/app/(app)/settings/athena/lattice-fedcm', () => ({
   requestLatticeFedCM,
 }));
 
+vi.mock('../../src/lib/app-location', () => ({
+  useAppSearchParams,
+}));
+
 import { LatticeSection } from '../../src/app/(app)/settings/athena/lattice-section';
-import { LATTICE_FEDCM_FALLBACK_COPY } from '../../src/app/(app)/settings/athena/lattice-copy';
+import {
+  LATTICE_FEDCM_FALLBACK_COPY,
+  LATTICE_SETUP_URL,
+} from '../../src/app/(app)/settings/athena/lattice-copy';
 
 const AUTHORIZATION_URL = 'https://auth.uselovelace.com/oauth/authorize?state=signed';
 const STARTED = {
@@ -110,7 +115,13 @@ let assignMock = vi.fn();
 beforeEach(() => {
   assignMock = vi.fn();
   Object.defineProperty(window, 'location', {
-    value: { assign: assignMock },
+    value: {
+      assign: assignMock,
+      href: 'http://localhost:3000/settings/athena',
+      pathname: '/settings/athena',
+      search: '',
+      hash: '',
+    },
     writable: true,
     configurable: true,
   });
@@ -122,6 +133,7 @@ beforeEach(() => {
   connectionPatch.mockReset().mockResolvedValue(okResponse(UNCONNECTED));
   devicePost.mockReset().mockResolvedValue(okResponse(UNCONNECTED));
   requestLatticeFedCM.mockReset();
+  useAppSearchParams.mockReset().mockReturnValue(new URLSearchParams());
 });
 
 afterEach(cleanup);
@@ -202,9 +214,8 @@ describe('LatticeSection FedCM-first authorization', () => {
       authorizationCode: 'code_from_fedcm',
     });
     // The connection query must report the server truth once the ceremony completes, or this
-    // test cannot tell the difference between "the connected branch actually rendered" and "the
-    // notice rendered beside the still-unconnected Connect button" — the exact contradiction this
-    // suite exists to catch.
+    // test cannot tell the difference between the connected branch actually rendering and the
+    // still-unconnected Connect button lingering.
     connectionGet
       .mockReset()
       .mockResolvedValueOnce(okResponse(UNCONNECTED))
@@ -219,7 +230,9 @@ describe('LatticeSection FedCM-first authorization', () => {
       });
     });
     expect(assignMock).not.toHaveBeenCalled();
-    expect(await screen.findByText(/Lattice connected/i)).toBeInTheDocument();
+    // The connected branch replaces the single Connect row with its own header actions — that
+    // structural change is the confirmation; there's no separate "you're connected" sentence.
+    expect(await screen.findByRole('button', { name: 'Reconnect Lovelace' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Connect with Lovelace' })).not.toBeInTheDocument();
     await waitFor(() => {
       expect(authorizePost).toHaveBeenCalledTimes(2);
@@ -255,5 +268,150 @@ describe('LatticeSection FedCM-first authorization', () => {
       expect(authorizePost).toHaveBeenCalledTimes(2);
       expect(requestLatticeFedCM).toHaveBeenCalledWith(RESTARTED);
     });
+  });
+});
+
+describe('LatticeSection carries no supplemental status text', () => {
+  it('shows only the device list and header actions, even when the API reports a problem', async () => {
+    connectionGet.mockReset().mockResolvedValue(
+      okResponse({
+        ...UNCONNECTED,
+        connected: true,
+        enabled: true,
+        deviceId: 'd1',
+        deviceName: 'Mac Studio',
+        deviceStatus: 'reachable' as const,
+        // A non-terminal reason: the backend can genuinely report this while still connected.
+        // ('authorization_expired' cannot — recording it always flips status to 'error'.)
+        unavailableReason: 'gateway_unreachable' as const,
+      }),
+    );
+    devicesGet.mockReset().mockResolvedValue(
+      okResponse({
+        devices: [
+          {
+            id: 'd1',
+            name: 'Mac Studio',
+            status: 'reachable' as const,
+            ready: true,
+            lastSeenAt: null,
+            executionBackend: 'lattice',
+            selected: true,
+          },
+        ],
+        unavailableReason: null,
+      }),
+    );
+    renderSection();
+
+    // The device row itself, not a separate sentence, is what's on screen.
+    expect(await screen.findByText('Mac Studio')).toBeInTheDocument();
+    // No narration anywhere — not a top banner, not a reason footer, not a status line.
+    expect(screen.queryByText(/answers only from/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/standard models/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    // Structure carries the signal instead: Reconnect Lovelace is the filled, weighted action
+    // rather than its usual quiet ghost treatment, because reconnecting is actually needed here.
+    const reconnect = screen.getByRole('button', { name: 'Reconnect Lovelace' });
+    expect(reconnect.className).toContain('bg-secondary-container');
+  });
+
+  it("links to Lovelace's own Lattice setup docs when no computers are paired", async () => {
+    connectionGet.mockReset().mockResolvedValue(okResponse({ ...UNCONNECTED, connected: true }));
+    // devicesGet already defaults to an empty list in beforeEach.
+    renderSection();
+
+    expect(await screen.findByText('No computers paired')).toBeInTheDocument();
+    const setup = screen.getByRole('link', { name: 'Set up Lattice' });
+    expect(setup).toHaveAttribute('href', LATTICE_SETUP_URL);
+    expect(setup).toHaveAttribute('target', '_blank');
+  });
+
+  it('gives an honest reason when the computer list itself failed to load', async () => {
+    connectionGet.mockReset().mockResolvedValue(okResponse({ ...UNCONNECTED, connected: true }));
+    devicesGet
+      .mockReset()
+      .mockResolvedValue(
+        okResponse({ devices: [], unavailableReason: 'gateway_unreachable' as const }),
+      );
+    renderSection();
+
+    expect(await screen.findByText('Could not load your computers')).toBeInTheDocument();
+    // Not the same empty state a genuinely unpaired account gets, and no "Set up Lattice" link,
+    // since the account may already have a paired computer that the list just failed to read.
+    expect(screen.queryByText('No computers paired')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Set up Lattice' })).not.toBeInTheDocument();
+  });
+});
+
+describe('LatticeSection ceremony feedback', () => {
+  it('tells you a declined in-page ceremony did not connect, and lets you retry', async () => {
+    requestLatticeFedCM.mockResolvedValue({ kind: 'code', authorizationCode: 'code_from_fedcm' });
+    completePost.mockResolvedValue(okResponse({ status: 'declined' }));
+    renderSection();
+
+    fireEvent.click(await preparedConnectButton());
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('You declined the connection.');
+    // The button re-arms for another attempt instead of staying stuck.
+    await waitFor(() => {
+      expect(authorizePost).toHaveBeenCalledTimes(2);
+    });
+    expect(await preparedConnectButton()).toBeEnabled();
+  });
+
+  it('tells you what to do differently when the ceremony reports insufficient scopes', async () => {
+    requestLatticeFedCM.mockResolvedValue({ kind: 'code', authorizationCode: 'code_from_fedcm' });
+    completePost.mockResolvedValue(okResponse({ status: 'scopes' }));
+    renderSection();
+
+    fireEvent.click(await preparedConnectButton());
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Approve all the permissions Athena asks for.',
+    );
+  });
+
+  it('shows the same feedback for a declined ceremony that returns via full-page redirect', async () => {
+    useAppSearchParams.mockReturnValue(new URLSearchParams('lattice=declined'));
+    renderSection();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('You declined the connection.');
+  });
+
+  it('surfaces a silently-refused device switch as a write error', async () => {
+    connectionGet.mockReset().mockResolvedValue(okResponse({ ...UNCONNECTED, connected: true }));
+    devicesGet.mockReset().mockResolvedValue(
+      okResponse({
+        devices: [
+          {
+            id: 'd1',
+            name: 'Mac Studio',
+            status: 'reachable' as const,
+            ready: true,
+            lastSeenAt: null,
+            executionBackend: 'lattice',
+            selected: false,
+          },
+        ],
+        unavailableReason: null,
+      }),
+    );
+    devicePost
+      .mockReset()
+      .mockResolvedValue(
+        okResponse({
+          ...UNCONNECTED,
+          connected: true,
+          unavailableReason: 'device_missing' as const,
+        }),
+      );
+    renderSection();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Use this' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'That computer is no longer available. Refresh the list and try again.',
+    );
   });
 });

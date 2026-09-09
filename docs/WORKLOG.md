@@ -97,9 +97,9 @@
 - **Implementation plan**: `docs/superpowers/plans/2026-09-09-passkey-domain-migration.md` records the
   test-first server, client, deployment, and signed-device sequence.
 - **Passkey migration subtasks**:
-  - [ ] Add the gated legacy assertion plugin, public configuration field, and server tests.
-  - [ ] Preserve the old host's AASA path while redirecting its other routes.
-  - [ ] Add both associated domains and the native migration ceremony.
+  - [x] Add the gated legacy assertion plugin, public configuration field, and server tests.
+  - [x] Preserve the old host's AASA path while redirecting its other routes.
+  - [x] Add both associated domains and the native migration ceremony.
   - [ ] Validate legacy assertion, replacement registration, current assertion, restoration, and
         sign-out on signed Apple hardware.
   - [ ] Deploy the bridge before enabling the native migration control.
@@ -153,7 +153,13 @@
   The installed bundle identifies production, points at `https://api.clearthedocket.com`, uses
   `https://clearthedocket.com` as its WebAuthn origin, and carries the paid-team Sign in with Apple,
   associated-domain, and Keychain entitlements. The production macOS Release build also passes
-  signature verification and renders the signed-out shell in a native window.
+  signature verification and renders the signed-out shell in a native window. The migration bridge
+  now passes the complete 205-test auth suite with 100 percent statement, branch, function, and line
+  coverage. The affected environment suites pass 104 tests, the API config suite passes six tests,
+  the identity contract passes three tests, and the affected web suites pass 33 tests. The four
+  affected packages pass all nine Turbo typecheck and lint tasks with two-way concurrency. A
+  production web build passes and emits a host-scoped 308 whose negative lookahead excludes only
+  `/.well-known/apple-app-site-association`.
 - **Domain validation**: Verisign RDAP records the `clearthedocket.com` registration on 2026-09-08
   and delegates it to `candy.ns.cloudflare.com` and `ricardo.ns.cloudflare.com`. Vercel accepted
   `clearthedocket.com` and `www.clearthedocket.com` for project `docket` and requires an apex A
@@ -167,12 +173,14 @@
   `770668668034-ur7mk3bikrbdkvaomkjrruhkgmkp99vl.apps.googleusercontent.com` now persists
   `https://clearthedocket.com` as a JavaScript origin plus callbacks on both
   `https://clearthedocket.com` and `https://api.clearthedocket.com`; the legacy entries remain.
+  Vercel's project-domain API now assigns `docket.hypertext.studio` directly to project `docket`
+  without a platform redirect. The live legacy AASA URL returns HTTP 200 with `application/json`,
+  no redirect, and the same paid-team application identifier as the canonical domain.
 - **Blockers**: Apple Developer still needs an authenticated portal session to confirm the Docket
   App ID as the primary Sign in with Apple identifier, associate the existing web Services ID, and
-  create or select the Sign in with Apple key. The old host redirects its AASA request, so an Apple
-  client cannot claim `docket.hypertext.studio` until the migration exception deploys. Production
-  keeps Apple and Google hidden until the physical Apple/passkey ceremonies and full Google ID-token
-  exchange, session restoration, and sign-out canaries pass.
+  create or select the Sign in with Apple key. Production keeps Apple and Google hidden until the
+  physical Apple/passkey ceremonies and full Google ID-token exchange, session restoration, and
+  sign-out canaries pass.
 - **Notes**: The original Apple checkout's untracked `Athena/Task.swift` and `README.md` remain
   untouched.
 

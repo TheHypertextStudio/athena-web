@@ -1,6 +1,8 @@
+import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { resolve } from 'node:path';
 
 import { assertDefined } from '@docket/test-utils';
+import { isoCBOR } from '@simplewebauthn/server/helpers';
 import { betterAuth } from 'better-auth';
 import { eq, like } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/pglite/migrator';
@@ -17,6 +19,7 @@ import {
 
 const LEGACY_RP = 'docket.hypertext.studio';
 const LEGACY_ORIGIN = `https://${LEGACY_RP}`;
+const CURRENT_ORIGIN = 'https://clearthedocket.com';
 const env: AuthEnv = {
   APP_MODE: 'test',
   BETTER_AUTH_SECRET: 'migration-test-secret-at-least-32-characters',
@@ -56,7 +59,7 @@ function harness(
   });
   return (path, init = {}) => {
     const headers = new Headers(init.headers);
-    headers.set('origin', LEGACY_ORIGIN);
+    if (!headers.has('origin')) headers.set('origin', LEGACY_ORIGIN);
     return auth.handler(new Request(`http://localhost:4000/api/auth${path}`, { ...init, headers }));
   };
 }
@@ -81,10 +84,10 @@ function acceptingWebAuthn(
 }
 
 /** A JSON POST carrying the given cookie header. */
-function json(cookie: string, body: unknown): RequestInit {
+function json(cookie: string, body: unknown, origin?: string): RequestInit {
   return {
     method: 'POST',
-    headers: { 'content-type': 'application/json', cookie },
+    headers: { 'content-type': 'application/json', cookie, ...(origin ? { origin } : {}) },
     body: JSON.stringify(body),
   };
 }
@@ -120,6 +123,81 @@ async function seedPasskey(
     })
     .returning({ id: passkey.id });
   return { id: assertDefined(stored).id, userId };
+}
+
+/** Create a software P-256 credential that exercises the stock SimpleWebAuthn verifier. */
+function virtualCurrentPasskey() {
+  const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  const jwk = publicKey.export({ format: 'jwk' });
+  const credentialID = createHash('sha256').update(`current-${Math.random()}`).digest();
+  const encodedCredentialID = credentialID.toString('base64url');
+  const rpHash = createHash('sha256').update('clearthedocket.com').digest();
+  const counter = Buffer.alloc(4);
+
+  function clientData(type: 'webauthn.create' | 'webauthn.get', challenge: string): Buffer {
+    return Buffer.from(JSON.stringify({ type, challenge, origin: CURRENT_ORIGIN }));
+  }
+
+  return {
+    credentialID: encodedCredentialID,
+    registration(challenge: string) {
+      const coseKey = isoCBOR.encode(
+        new Map<number, number | Uint8Array>([
+          [1, 2],
+          [3, -7],
+          [-1, 1],
+          [-2, Buffer.from(assertDefined(jwk.x), 'base64url')],
+          [-3, Buffer.from(assertDefined(jwk.y), 'base64url')],
+        ]),
+      );
+      const credentialLength = Buffer.alloc(2);
+      credentialLength.writeUInt16BE(credentialID.length);
+      const authenticatorData = Buffer.concat([
+        rpHash,
+        Buffer.from([0x45]),
+        counter,
+        Buffer.alloc(16),
+        credentialLength,
+        credentialID,
+        Buffer.from(coseKey),
+      ]);
+      const attestationObject = isoCBOR.encode(
+        new Map<string, string | Map<string, never> | Uint8Array>([
+          ['fmt', 'none'],
+          ['attStmt', new Map<string, never>()],
+          ['authData', authenticatorData],
+        ]),
+      );
+      return {
+        id: encodedCredentialID,
+        rawId: encodedCredentialID,
+        type: 'public-key',
+        response: {
+          clientDataJSON: clientData('webauthn.create', challenge).toString('base64url'),
+          attestationObject: Buffer.from(attestationObject).toString('base64url'),
+          transports: ['internal'],
+        },
+        clientExtensionResults: {},
+        authenticatorAttachment: 'platform',
+      };
+    },
+    assertion(challenge: string) {
+      const data = clientData('webauthn.get', challenge);
+      const authenticatorData = Buffer.concat([rpHash, Buffer.from([0x05]), counter]);
+      const signed = Buffer.concat([authenticatorData, createHash('sha256').update(data).digest()]);
+      return {
+        id: encodedCredentialID,
+        rawId: encodedCredentialID,
+        type: 'public-key',
+        response: {
+          authenticatorData: authenticatorData.toString('base64url'),
+          clientDataJSON: data.toString('base64url'),
+          signature: sign('sha256', signed, privateKey).toString('base64url'),
+          userHandle: null,
+        },
+      };
+    },
+  };
 }
 
 describe('passkey migration plugin', () => {
@@ -191,6 +269,86 @@ describe('passkey migration plugin', () => {
     );
     expect(replay.status).toBe(400);
     expect(responseCookies(replay)).not.toContain('session_token');
+  });
+
+  it('uses the migration session to register and authenticate a current-RP passkey', async () => {
+    const { db, passkey } = await import('@docket/db');
+    const stored = await seedPasskey('old-passkey-for-replacement');
+    const request = harness(env, acceptingWebAuthn());
+    const currentPasskey = virtualCurrentPasskey();
+
+    const legacyOptions = await request('/passkey-migration/generate-authenticate-options');
+    const migrated = await request(
+      '/passkey-migration/verify-authentication',
+      json(responseCookies(legacyOptions), { id: 'old-passkey-for-replacement' }),
+    );
+    expect(migrated.status).toBe(200);
+    const sessionCookie = responseCookies(migrated);
+
+    const registrationOptions = await request('/passkey/generate-register-options', {
+      headers: { cookie: sessionCookie, origin: CURRENT_ORIGIN },
+    });
+    expect(registrationOptions.status).toBe(200);
+    const registrationBody = (await registrationOptions.json()) as {
+      challenge: string;
+      rp: { id: string };
+    };
+    expect(registrationBody).toMatchObject({
+      rp: { id: 'clearthedocket.com' },
+    });
+    const registrationCookie = responseCookies(registrationOptions);
+    const registered = await request(
+      '/passkey/verify-registration',
+      json(
+        `${sessionCookie}; ${registrationCookie}`,
+        {
+          response: currentPasskey.registration(registrationBody.challenge),
+        },
+        CURRENT_ORIGIN,
+      ),
+    );
+    expect(registered.status).toBe(200);
+    const credentials = await db.select().from(passkey).where(eq(passkey.userId, stored.userId));
+    expect(credentials.map((credential) => credential.credentialID).sort()).toEqual(
+      ['old-passkey-for-replacement', currentPasskey.credentialID].sort(),
+    );
+
+    const currentOptions = await request('/passkey/generate-authenticate-options', {
+      headers: { origin: CURRENT_ORIGIN },
+    });
+    const currentBody = (await currentOptions.json()) as { challenge: string };
+    const currentSession = await request(
+      '/passkey/verify-authentication',
+      json(
+        responseCookies(currentOptions),
+        {
+          response: currentPasskey.assertion(currentBody.challenge),
+        },
+        CURRENT_ORIGIN,
+      ),
+    );
+    expect(currentSession.status).toBe(200);
+    expect(responseCookies(currentSession)).toContain('better-auth.session_token');
+  });
+
+  it('creates no replacement when the client abandons registration', async () => {
+    const { db, passkey } = await import('@docket/db');
+    const stored = await seedPasskey('old-passkey-abandoned');
+    const request = harness(env, acceptingWebAuthn());
+    const legacyOptions = await request('/passkey-migration/generate-authenticate-options');
+    const migrated = await request(
+      '/passkey-migration/verify-authentication',
+      json(responseCookies(legacyOptions), { id: 'old-passkey-abandoned' }),
+    );
+    const registrationOptions = await request('/passkey/generate-register-options', {
+      headers: { cookie: responseCookies(migrated), origin: CURRENT_ORIGIN },
+    });
+    expect(registrationOptions.status).toBe(200);
+
+    const credentials = await db.select().from(passkey).where(eq(passkey.userId, stored.userId));
+    expect(credentials.map((credential) => credential.credentialID)).toEqual([
+      'old-passkey-abandoned',
+    ]);
   });
 
   it('requires authenticator user verification even when the signature is valid', async () => {

@@ -44,9 +44,13 @@
   owns `briefs.clearthedocket.com` on the `docket` project, and Cloudflare publishes its required
   DNS-only CNAME to `2a70dcb5fd25748c.vercel-dns-017.com`. Vercel issued a valid certificate for
   that host. The publishing app still leaves root requests open on both the old and new publishing
-  hosts, so that application defect is independent of the DNS and certificate cutover.
-  The old `docket.hypertext.studio` host remains live until the recovery ceremony succeeds on the
-  new RP, after which it will redirect to the new apex.
+  hosts, so that application defect is independent of the DNS and certificate cutover. The web
+  proxy now derives `docket.<current-rp-id>` as a temporary application host when the configured RP
+  differs from the canonical app host. This keeps the old security page usable for recovery-code
+  generation without turning every RP subdomain into an application host. The exception removes
+  itself when production changes the RP to `clearthedocket.com`. The old
+  `docket.hypertext.studio` host remains live until the recovery ceremony succeeds on the new RP,
+  after which it will redirect to the new apex.
 - **Validation**: The rebased server packages pass typecheck and lint. Focused validation passes 178
   auth tests, 161 environment tests, 3 identity contract tests, 5 API config tests, and 28 web
   consumer tests. Twenty-six native auth and HTTP-contract tests pass on macOS and a signed iOS
@@ -74,7 +78,10 @@
   and Google hidden behind their existing release gates. The production verifier now probes the
   canonical web and API hosts. Its focused 12-test suite and a live `pnpm launch:verify-docs` run
   pass. The live run settles on its first attempt and passes all app, documentation, API, OAuth,
-  MCP, and immutable-asset checks.
+  MCP, and immutable-asset checks. The legacy-host routing regression first failed two focused
+  proxy tests by rewriting the security page as a public brief. The corrected suite passes 54
+  tests. Web lint passes, and web typecheck passes in isolation with a 3 GB heap after the first
+  concurrent run exhausted Node's default 2 GB heap.
 - **Domain validation**: Verisign RDAP records the `clearthedocket.com` registration on 2026-09-08
   and delegates it to `candy.ns.cloudflare.com` and `ricardo.ns.cloudflare.com`. Vercel accepted
   `clearthedocket.com` and `www.clearthedocket.com` for project `docket` and requires an apex A

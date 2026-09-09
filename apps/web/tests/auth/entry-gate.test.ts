@@ -490,6 +490,7 @@ describe('proxy: public brief host rewrite', () => {
     search?: string;
     host: string;
     headers?: Record<string, string>;
+    cookies?: { name: string; value: string }[];
   }): Parameters<typeof proxy>[0] {
     const url = new URL(`https://${options.host}${options.pathname}${options.search ?? ''}`);
     const nextUrl = Object.assign(url, {
@@ -498,9 +499,58 @@ describe('proxy: public brief host rewrite', () => {
     return {
       nextUrl,
       headers: new Headers(options.headers ?? {}),
-      cookies: { getAll: () => [] },
+      cookies: { getAll: () => options.cookies ?? [] },
     } as unknown as Parameters<typeof proxy>[0];
   }
+
+  it('keeps the transitional passkey recovery host on application routing', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://clearthedocket.com');
+    vi.stubEnv('NEXT_PUBLIC_PASSKEY_RP_ID', 'hypertext.studio');
+    vi.stubEnv('NEXT_PUBLIC_BRIEF_HOST', 'briefs.clearthedocket.com');
+
+    const response = proxy(
+      request({
+        host: 'docket.hypertext.studio',
+        pathname: '/settings/security',
+        cookies: [{ name: '__Secure-better-auth.session_token', value: 'opaque' }],
+      }),
+    );
+
+    expect(response.headers.get('x-middleware-rewrite')).toBeNull();
+    expect(response.headers.get('location')).toBeNull();
+    expect(response.headers.get('x-middleware-request-x-docket-pathname')).toBe(
+      '/settings/security',
+    );
+  });
+
+  it('stops treating the old host as an application host after the RP cutover', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://clearthedocket.com');
+    vi.stubEnv('NEXT_PUBLIC_PASSKEY_RP_ID', 'clearthedocket.com');
+    vi.stubEnv('NEXT_PUBLIC_BRIEF_HOST', 'briefs.clearthedocket.com');
+
+    const response = proxy(
+      request({ host: 'docket.hypertext.studio', pathname: '/settings/security' }),
+    );
+
+    expect(response.headers.get('x-middleware-rewrite')).toBe(
+      'https://docket.hypertext.studio/briefs/domain/settings/security',
+    );
+  });
+
+  it('gates a cookieless transitional passkey recovery request on its own host', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://clearthedocket.com');
+    vi.stubEnv('NEXT_PUBLIC_PASSKEY_RP_ID', 'hypertext.studio');
+    vi.stubEnv('NEXT_PUBLIC_BRIEF_HOST', 'briefs.clearthedocket.com');
+
+    const response = proxy(
+      request({ host: 'docket.hypertext.studio', pathname: '/settings/security' }),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(
+      `https://docket.hypertext.studio/sign-in?callbackURL=${encodeURIComponent('/settings/security')}`,
+    );
+  });
 
   it('rewrites a request on the shared brief host to the workspace-segment internal route', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example');

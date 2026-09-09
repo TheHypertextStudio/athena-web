@@ -129,6 +129,28 @@ function briefHostname(): string | undefined {
 }
 
 /**
+ * The legacy application host that must remain reachable while passkeys still use the old RP.
+ *
+ * @remarks
+ * A passkey can only authenticate on its original relying-party domain. During an RP migration,
+ * the old Docket host therefore remains an application host long enough for a signed-in person to
+ * generate recovery codes. Deriving the host from the configured RP avoids a permanent legacy-host
+ * exception: once the RP matches the canonical application host, this function returns
+ * `undefined` and the old host returns to normal custom-domain routing.
+ *
+ * The `docket.` prefix is deliberately narrow. Treating every RP subdomain as an application host
+ * would misclassify the shared brief host after the migration.
+ *
+ * @returns The temporary legacy application hostname, or `undefined` outside an RP migration.
+ */
+function transitionalPasskeyRecoveryHostname(): string | undefined {
+  const rpId = process.env.NEXT_PUBLIC_PASSKEY_RP_ID;
+  const canonicalHost = ownHostname();
+  if (!rpId || canonicalHost === undefined || rpId === canonicalHost) return undefined;
+  return `docket.${rpId}`;
+}
+
+/**
  * Whether `host` is a Portless hostname that routes to this local product stack.
  *
  * @remarks
@@ -144,6 +166,21 @@ function briefHostname(): string | undefined {
  */
 function isPortlessAppHost(host: string): boolean {
   return host === 'docket.localhost' || host.endsWith('.docket.localhost');
+}
+
+/**
+ * Whether a host belongs to the application rather than a published public brief.
+ *
+ * @param host - The browser-facing hostname without a port.
+ * @param canonicalHost - The configured canonical application hostname.
+ * @returns `true` for canonical, local, and temporary passkey-recovery application hosts.
+ */
+function isApplicationHost(host: string, canonicalHost: string): boolean {
+  return (
+    host === canonicalHost ||
+    host === transitionalPasskeyRecoveryHostname() ||
+    isPortlessAppHost(host)
+  );
 }
 
 /**
@@ -188,10 +225,11 @@ function isPortlessAppHost(host: string): boolean {
  * distinguish a valid session from a stale one, so an optimistic redirect here paired with the
  * layout's authoritative one would bounce a stale cookie between the two forever.
  *
- * **Public brief addresses.** A request arriving on any host other than the product's own is, by
+ * **Public brief addresses.** A request arriving on any host other than an application host is, by
  * construction, either Docket's shared brief host or a workspace's verified custom domain — DNS
- * only routes those hosts to this deployment at all when a brief needs serving. The two are
- * rewritten to two different internal shapes:
+ * only routes those hosts to this deployment at all when a brief needs serving. During a passkey
+ * RP migration, the old `docket.<rp-id>` host remains an application host until recovery codes can
+ * move the account to the new RP. Public brief hosts are rewritten to two internal shapes:
  * - **shared brief host** (`host === briefHostname()`): many workspaces coexist there, so the
  *   short address still needs a workspace segment — `<briefHost>/<workspace>/<slug>` rewrites to
  *   `/briefs/<workspace>/<slug>` (`app/(public)/briefs/[workspace]/[slug]/page.tsx`).
@@ -200,9 +238,8 @@ function isPortlessAppHost(host: string): boolean {
  *   (`app/(public)/briefs/domain/[slug]/page.tsx`) — no workspace segment to carry.
  *
  * Either way the rewrite returns immediately, before any of the app's own routing or auth logic
- * runs — none of it applies to a public, unauthenticated read. The product's own routes are only
- * ever requested on its own canonical host, so this can never intercept them; see
- * {@link ownHostname}.
+ * runs — none of it applies to a public, unauthenticated read. See {@link isApplicationHost} for
+ * the hosts that bypass this rewrite.
  *
  * @param request - The incoming request.
  * @returns The sign-in redirect, the public-brief rewrite, or a `next()` carrying any rewritten
@@ -211,7 +248,7 @@ function isPortlessAppHost(host: string): boolean {
 export function proxy(request: NextRequest): NextResponse {
   const own = ownHostname();
   const host = requestHost(request).split(':')[0];
-  if (own !== undefined && host !== undefined && host !== own && !isPortlessAppHost(host)) {
+  if (own !== undefined && host !== undefined && !isApplicationHost(host, own)) {
     const briefUrl = request.nextUrl.clone();
     // Bare root (`/`) must not become a trailing-slash target (`/briefs/`): Next's own
     // trailing-slash redirect never resolves for a path that arrived via `rewrite()` rather than a

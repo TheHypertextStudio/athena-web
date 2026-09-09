@@ -94,6 +94,8 @@
   Both domains must serve the paid-team AASA record without redirecting that path. Email verification
   remains a sign-up proof and cannot attach a credential to an existing account. The complete
   security and removal contract lives in `docs/engineering/specs/native-credentials.md`.
+- **Implementation plan**: `docs/superpowers/plans/2026-09-09-passkey-domain-migration.md` records the
+  test-first server, client, deployment, and signed-device sequence.
 - **Passkey migration subtasks**:
   - [ ] Add the gated legacy assertion plugin, public configuration field, and server tests.
   - [ ] Preserve the old host's AASA path while redirecting its other routes.

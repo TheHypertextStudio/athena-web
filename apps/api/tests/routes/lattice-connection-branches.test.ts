@@ -32,7 +32,7 @@ vi.hoisted(() => {
 });
 
 import type * as DbModule from '@docket/db';
-import { LOVELACE_ACCOUNTS_ISSUER, type LatticeCredentialRecord } from '@docket/integrations';
+import { type LatticeCredentialRecord } from '@docket/integrations';
 import { assertDefined } from '@docket/test-utils';
 
 import { env } from '../../src/env';
@@ -673,21 +673,16 @@ describe('a deployment without a registered Lovelace client', () => {
   });
 });
 
-describe('the deployment’s defaults', () => {
-  it('sends the browser to Lovelace’s own accounts host when no issuer is configured', async () => {
+describe('the deployment’s explicit endpoints', () => {
+  it('does not offer authorization when no issuer is configured', async () => {
     const owner = await seedOwner('DefaultIssuer');
     mutableEnv.LATTICE_ACCOUNTS_ISSUER = undefined;
 
-    const { status, body } = await callAs(owner)('/lattice/authorize', { method: 'POST' });
-
-    expect(status).toBe(200);
-    const url = new URL(String(body['authorizationUrl']));
-    expect(url.origin).toBe(LOVELACE_ACCOUNTS_ISSUER);
-    expect(url.pathname).toBe('/oauth/authorize');
-    expect(url.searchParams.get('client_id')).toBe('client_docket_test');
+    const { status } = await callAs(owner)('/lattice/authorize', { method: 'POST' });
+    expect(status).toBe(409);
   });
 
-  it('calls Lattice’s own gateway when no gateway override is configured', async () => {
+  it('never sends a stored credential to an implicit gateway', async () => {
     const owner = await seedOwner('DefaultGateway');
     const connection = await seedConnection(owner);
     await seedCredential(connection.id, owner, grant('fresh', 'at_context'));
@@ -697,9 +692,9 @@ describe('the deployment’s defaults', () => {
     expect(overridden).toEqual({ accessToken: 'at_context', baseUrl: gatewayOrigin });
 
     mutableEnv.LATTICE_GATEWAY_URL = undefined;
-    const defaulted = await connectionModule.latticeGatewayContext(row);
-    expect(defaulted).toEqual({ accessToken: 'at_context' });
-    expect(Object.hasOwn(defaulted, 'baseUrl')).toBe(false);
+    await expect(connectionModule.latticeGatewayContext(row)).rejects.toMatchObject({
+      reason: 'not_connected',
+    });
   });
 });
 

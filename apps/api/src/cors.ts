@@ -28,6 +28,7 @@ const PUBLIC_OAUTH_PATHS: ReadonlySet<string> = new Set([
   '/.well-known/oauth-authorization-server',
   '/.well-known/oauth-authorization-server/api/auth',
   '/.well-known/mcp-client.json',
+  '/.well-known/lattice-client.json',
   '/api/auth/oauth2/register',
   '/api/auth/oauth2/token',
   '/api/auth/oauth2/introspect',

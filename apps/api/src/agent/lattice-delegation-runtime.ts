@@ -5,14 +5,13 @@ import {
   toSurfaceWorkState,
 } from '@lovelace-ai/lattice-relay-client';
 import { generateWorkKey, openWork, sealWork } from '@lovelace-ai/lattice-relay-crypto';
-import { LATTICE_GATEWAY_BASE_URL } from '@docket/integrations';
 
 import { latticeGatewayContext, type LatticeConnectionRow } from '../routes/lattice-connection';
 import type { LatticeDelegationDependencies } from './lattice-delegations';
 
 async function clientFor(connection: LatticeConnectionRow): Promise<RelayControllerClient> {
   const gateway = await latticeGatewayContext(connection);
-  const gatewayBase = (gateway.baseUrl ?? LATTICE_GATEWAY_BASE_URL).replace(/\/$/u, '');
+  const gatewayBase = gateway.baseUrl.replace(/\/$/u, '');
   return new RelayControllerClient({
     baseUrl: `${gatewayBase}/v1/personal-relay`,
     getToken: () => gateway.accessToken,

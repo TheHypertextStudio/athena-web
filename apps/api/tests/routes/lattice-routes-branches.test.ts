@@ -26,6 +26,8 @@ vi.hoisted(() => {
   // A registered client is what makes the deployment able to offer Lattice at all; the
   // "not configured" cases below take it away again for the duration of one describe block.
   process.env['LATTICE_CLIENT_ID'] = 'client_docket_test';
+  process.env['LATTICE_ACCOUNTS_ISSUER'] = 'https://auth.uselovelace.com';
+  process.env['LATTICE_GATEWAY_URL'] = 'https://lattice.uselovelace.com';
 });
 
 const { listLatticeDevices } = vi.hoisted(() => ({ listLatticeDevices: vi.fn() }));

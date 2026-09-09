@@ -345,8 +345,7 @@ export const CORE_VARS: readonly VarSpec[] = [
     targets: ['api'],
     required: false,
     zod: authServer.LATTICE_ACCOUNTS_ISSUER,
-    where:
-      'Lovelace accounts issuer origin; defaults to https://auth.uselovelace.com. Set only to target a staging Lovelace.',
+    where: 'Explicit Lovelace accounts issuer URL. Required to offer Lattice; no default host.',
   },
   {
     name: 'LATTICE_GATEWAY_URL',
@@ -356,7 +355,16 @@ export const CORE_VARS: readonly VarSpec[] = [
     required: false,
     zod: authServer.LATTICE_GATEWAY_URL,
     where:
-      'Lattice gateway origin; defaults to https://lattice.uselovelace.com. Set only to target a staging or local gateway.',
+      'Explicit Lattice gateway and OAuth resource URL. Required to offer Lattice; no default host.',
+  },
+  {
+    name: 'LATTICE_RESOURCE_URL',
+    slice: 'auth',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: authServer.LATTICE_RESOURCE_URL,
+    where: 'OAuth resource identifier when it differs from the explicitly configured gateway URL.',
   },
   {
     name: 'NOTION_CLIENT_ID',

@@ -266,17 +266,37 @@ reaches the fallback's normal configuration error.
 
 ## 9. Environment
 
-| Var                       | Required | Meaning                                                                                                |
-| ------------------------- | -------- | ------------------------------------------------------------------------------------------------------ |
-| `LATTICE_CLIENT_ID`       | no       | Lovelace OAuth client. Absent ⇒ the section renders as unavailable and no Connect control appears.     |
-| `LATTICE_CLIENT_SECRET`   | no       | Optional compatibility value. Production `docket-athena` is a public PKCE client and does not set one. |
-| `LATTICE_ACCOUNTS_ISSUER` | no       | Defaults to `https://auth.uselovelace.com`.                                                            |
-| `LATTICE_GATEWAY_URL`     | no       | Defaults to `https://lattice.uselovelace.com`.                                                         |
+| Var                       | Required    | Meaning                                                                                     |
+| ------------------------- | ----------- | ------------------------------------------------------------------------------------------- |
+| `LATTICE_CLIENT_ID`       | for Lattice | Registered client ID or the web origin's `/.well-known/lattice-client.json` URL.            |
+| `LATTICE_CLIENT_SECRET`   | no          | Legacy confidential-client compatibility only. The public FedCM/PKCE client uses no secret. |
+| `LATTICE_ACCOUNTS_ISSUER` | for Lattice | Explicit authorization-server issuer; no implicit provider host.                            |
+| `LATTICE_GATEWAY_URL`     | for Lattice | Explicit callable gateway URL; no implicit provider host.                                   |
+| `LATTICE_RESOURCE_URL`    | no          | OAuth resource identifier when different from the configured gateway URL.                   |
 
 The OAuth client identifies Docket during consent; it is application infrastructure, not the model
 credential. Every model grant, device choice, and enablement state still belongs to the individual
 user. The user never enters a gateway URL, API key, or token. A deployment that sets none of these
 OAuth values keeps Lattice unavailable.
+
+Docket publishes its public client metadata at `/.well-known/lattice-client.json`. The web app
+proxies that path to the API without redirecting it, so the verified client identifier belongs to
+the same origin as the FedCM relying party. `WEB_URL` supplies that identity and `API_URL` supplies
+the exact callback; the document requests the same four scopes and resource as authorization.
+The document contains no credential or user data, uses `token_endpoint_auth_method: none`, and
+supports authorization code plus refresh. Its resource list is an explicit Lovelace extension.
+Deploy and publicly verify the document before changing `LATTICE_CLIENT_ID` to its URL. Existing
+registered clients remain usable during this transition. No vendor source entry is needed for
+Docket or its deployment hosts.
+
+`apps/web/e2e/lattice/verify-fedcm-live.ts` runs the real Chromium FedCM dialog through CDP in
+headless mode, including code exchange and Docket's authenticated Lattice device request. Supply
+`APP_URL` and, when needed, `LATTICE_BROWSER_STORAGE_STATE` from a normal authenticated test browser
+export. It never reads browser cookie databases or replaces provider responses. A new consent
+requires the operator to explicitly set `LATTICE_TEST_ALLOW_CONSENT=true`; otherwise the harness
+leaves that approval incomplete. `LATTICE_TEST_ACCOUNT_EMAIL` selects the intended account when the
+chooser offers more than one. A successful device request proves the grant reaches Lattice, but
+does not replace the separate real inference acceptance gate.
 
 The Lovelace OAuth registration must be a public client that requires PKCE, allow Docket's exact
 web origin for FedCM, allow the exact Docket callback URI for redirect OAuth, and allow only the

@@ -22,6 +22,7 @@ vi.hoisted(() => {
   process.env['LATTICE_CLIENT_ID'] = 'client_docket';
   process.env['LATTICE_CLIENT_SECRET'] = 'secret_docket';
   process.env['LATTICE_ACCOUNTS_ISSUER'] = 'https://lovelace-accounts.test';
+  process.env['LATTICE_GATEWAY_URL'] = 'https://lattice.test';
 });
 
 import type * as DbModule from '@docket/db';

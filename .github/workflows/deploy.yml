@@ -70,11 +70,13 @@ jobs:
       - name: Validate Lattice production configuration
         env:
           LATTICE_CLIENT_ID: ${{ vars.LATTICE_CLIENT_ID }}
+          LATTICE_ACCOUNTS_ISSUER: ${{ vars.LATTICE_ACCOUNTS_ISSUER }}
+          LATTICE_GATEWAY_URL: ${{ vars.LATTICE_GATEWAY_URL }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "${LATTICE_CLIENT_ID//[[:space:]]/}" ]]; then
-            echo 'LATTICE_CLIENT_ID is required: production cannot serve Lattice without the Lovelace OAuth client.' >&2
+          if [[ -z "${LATTICE_CLIENT_ID//[[:space:]]/}" || -z "$LATTICE_ACCOUNTS_ISSUER" || -z "$LATTICE_GATEWAY_URL" ]]; then
+            echo 'LATTICE_CLIENT_ID, LATTICE_ACCOUNTS_ISSUER and LATTICE_GATEWAY_URL are required for Lattice.' >&2
             exit 1
           fi
 
@@ -132,8 +134,9 @@ jobs:
           LATTICE_CLIENT_ID: "${{ vars.LATTICE_CLIENT_ID }}"
           AGENT_MAX_TURNS: "${{ vars.AGENT_MAX_TURNS }}"
           ATHENA_ASYNC_RUNNER_ENABLED: "false"
-          LATTICE_ACCOUNTS_ISSUER: "https://auth.uselovelace.com"
-          LATTICE_GATEWAY_URL: "https://lattice.uselovelace.com"
+          LATTICE_ACCOUNTS_ISSUER: "${{ vars.LATTICE_ACCOUNTS_ISSUER }}"
+          LATTICE_GATEWAY_URL: "${{ vars.LATTICE_GATEWAY_URL }}"
+          LATTICE_RESOURCE_URL: "${{ vars.LATTICE_RESOURCE_URL }}"
           BILLING_CANARY_EMAILS: "${{ vars.BILLING_CANARY_EMAILS }}"
           BILLING_ENABLED: "${{ vars.BILLING_ENABLED }}"
           BILLING_RECONCILIATION_MODE: "${{ vars.BILLING_RECONCILIATION_MODE }}"

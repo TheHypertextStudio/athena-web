@@ -11,7 +11,6 @@ import { createHash } from 'node:crypto';
 
 import {
   LATTICE_SCOPES,
-  LOVELACE_ACCOUNTS_ISSUER,
   LatticeOAuthError,
   beginLatticeAuthorization,
   codeChallengeFor,
@@ -115,9 +114,10 @@ describe('beginLatticeAuthorization', () => {
     expect(begun.authorizationUrl).not.toContain(verifier);
   });
 
-  it('defaults to the real Lovelace accounts issuer', () => {
+  it('uses an explicitly configured issuer without a production fallback', () => {
     const begun = beginLatticeAuthorization(
       {
+        issuer: 'https://issuer.example.test',
         clientId: 'c',
         redirectUri: 'https://r.test/cb',
         resource: 'https://lattice.uselovelace.com',
@@ -125,7 +125,7 @@ describe('beginLatticeAuthorization', () => {
       'st',
       fixedRandom,
     );
-    expect(begun.authorizationUrl.startsWith(`${LOVELACE_ACCOUNTS_ISSUER}/oauth/authorize`)).toBe(
+    expect(begun.authorizationUrl.startsWith('https://issuer.example.test/oauth/authorize')).toBe(
       true,
     );
   });

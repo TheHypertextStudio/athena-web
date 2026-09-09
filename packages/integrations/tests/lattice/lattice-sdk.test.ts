@@ -7,7 +7,6 @@
  * keep the package boundary honest when Lovelace changes its implementation.
  */
 import {
-  LATTICE_GATEWAY_BASE_URL,
   LatticeClient,
   LatticeError,
   PersonalRuntimeRequiresUserTokenError,
@@ -126,7 +125,7 @@ describe('LatticeClient wire contract', () => {
       credential: { kind: 'oauth', accessToken: 't' },
       fetch,
     }).listPersonalRuntimes();
-    expect(calls[0]?.url).toBe(`${LATTICE_GATEWAY_BASE_URL}/v1/personal-runtimes`);
+    expect(calls[0]?.url).toBe('https://lattice.uselovelace.com/v1/personal-runtimes');
   });
 
   it('refuses device dispatch on a developer key before any network call', async () => {

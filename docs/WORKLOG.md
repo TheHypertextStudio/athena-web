@@ -7,6 +7,30 @@
 
 ## Active Tasks
 
+### [LATTICE-FEDCM-DELIVERY] Publish environment-owned OAuth client identity
+
+- **Status**: REVIEW
+- **Started**: 2026-09-08
+- **Priority**: P0
+- **Description**: Complete the existing FedCM connection using a public Docket-hosted client
+  metadata document, explicit provider endpoints, and the existing code-exchange and runtime paths.
+- **Approach**: Keep the public SDK already in use; expose the client document through the web
+  origin to bind the browser origin without vendor-side application configuration. Validate the
+  metadata and existing authorization flow headlessly, then deploy the coherent change.
+- **Blockers**: Google CLI credentials require reauthentication; GitHub deployment identity remains
+  available. Upstream's ongoing native credential work is isolated from this worktree.
+- **Implemented**: Docket's web origin serves public CIMD through the existing API proxy. Provider
+  endpoints are explicit deployment values, and a distinct resource identifier is supported.
+  Existing OAuth attempts, encrypted credentials, native FedCM and explicit redirect fallback are
+  preserved. The live headless probe uses the actual Chromium FedCM domain and requires explicit
+  operator approval before any new provider consent.
+- **Validation**: API production build and API/web/integrations/environment typechecks pass.
+  Focused authorization, metadata, connection, CORS, FedCM UI, and web configuration checks pass.
+  Complete integrations and environment coverage checks pass. Production browser execution reaches
+  the real Docket sign-in boundary: a normally authenticated test session remains necessary before
+  claiming native authorization or inference acceptance. The GitHub production issuer/gateway
+  variables now contain the same deployment endpoints previously embedded in the workflow.
+
 ### [NATIVE-APPLE-AUTH-001] Add native Apple authentication and shell foundations
 
 - **Status**: IN_PROGRESS

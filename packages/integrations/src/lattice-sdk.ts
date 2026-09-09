@@ -27,6 +27,3 @@ export {
   type PersonalLatticeRuntimeResource,
   type PersonalLatticeRuntimeStatus,
 } from '@lovelace-ai/compute';
-
-/** Production gateway default used in Docket-owned assertions and operator output. */
-export const LATTICE_GATEWAY_BASE_URL = 'https://lattice.uselovelace.com';

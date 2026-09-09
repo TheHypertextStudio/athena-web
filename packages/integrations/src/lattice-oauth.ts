@@ -27,16 +27,6 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 
-/**
- * The Lovelace accounts issuer Docket authorizes against.
- *
- * @remarks
- * Documented by the `lattice-start` skill (step 4.1) and by
- * `lovelace:docs/platform/lattice-cloud/guides/personal-runtime-relay.md` §1. Overridable per
- * deployment so a staging Lovelace can be pointed at without a code change.
- */
-export const LOVELACE_ACCOUNTS_ISSUER = 'https://auth.uselovelace.com';
-
 /** Authorization endpoint path on the accounts issuer. */
 export const LOVELACE_AUTHORIZE_PATH = '/oauth/authorize';
 
@@ -92,8 +82,8 @@ const REFRESH_SKEW_MS = 60_000;
 
 /** Where a flow talks to, and as whom. */
 export interface LatticeOAuthClientConfig {
-  /** The accounts issuer origin; defaults to {@link LOVELACE_ACCOUNTS_ISSUER}. */
-  readonly issuer?: string | undefined;
+  /** The explicitly configured accounts issuer origin. */
+  readonly issuer: string;
   /** The registered OAuth client id. */
   readonly clientId: string;
   /** The registered client secret, when Docket is deployed as a confidential client. */
@@ -196,7 +186,7 @@ export function codeChallengeFor(codeVerifier: string): string {
 
 /** The issuer origin a config resolves to, with no trailing slash. */
 function issuerOrigin(config: LatticeOAuthClientConfig): string {
-  return (config.issuer ?? LOVELACE_ACCOUNTS_ISSUER).replace(/\/+$/, '');
+  return config.issuer.replace(/\/+$/, '');
 }
 
 /**

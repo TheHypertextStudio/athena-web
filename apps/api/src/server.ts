@@ -50,6 +50,7 @@ import integrationsGithub from './routes/integrations-github';
 import integrationsLinearAgentOAuth from './routes/integrations-linear-agent-oauth';
 import integrationsMcpOAuth from './routes/integrations-mcp-oauth';
 import latticeOAuth from './routes/lattice-oauth';
+import { latticeClientMetadata } from './routes/lattice-client-metadata';
 import webhooks from './routes/webhooks';
 import oauthStubProvider from './lib/oauth-stub-provider';
 
@@ -135,6 +136,7 @@ server.get('/.well-known/oauth-authorization-server/api/auth', authorizationServ
 // so it never sees `serverInfo.icons` and guesses `/favicon.ico` — which this server answered with
 // a 405. See `routes/brand-icons.ts`.
 server.route('/', brandIcons);
+server.route('/', latticeClientMetadata);
 // URL-form client identifiers (CIMD) are the current MCP OAuth preference. This document is
 // public and contains no tenant, user, or credential data; authorization servers fetch it while
 // connecting any remote MCP server to Athena.

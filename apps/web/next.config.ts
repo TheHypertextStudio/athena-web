@@ -225,6 +225,10 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     return [
+      {
+        source: '/.well-known/lattice-client.json',
+        destination: `${API_ORIGIN}/.well-known/lattice-client.json`,
+      },
       { source: '/v1/:path*', destination: `${API_ORIGIN}/v1/:path*` },
       { source: '/api/auth/:path*', destination: `${API_ORIGIN}/api/auth/:path*` },
       {

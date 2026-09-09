@@ -16,9 +16,7 @@
  */
 import { db, latticeConnection, latticeCredential } from '@docket/db';
 import {
-  LATTICE_GATEWAY_BASE_URL,
   LatticeUnavailableError,
-  LOVELACE_ACCOUNTS_ISSUER,
   latticeCredentialNeedsRefresh,
   parseLatticeCredential,
   refreshLatticeCredential,
@@ -52,7 +50,11 @@ export function latticeConfigured(): boolean {
     typeof env.LATTICE_CLIENT_ID === 'string' && env.LATTICE_CLIENT_ID.trim().length > 0;
   // Starting a flow stores a sealed PKCE verifier, so a deployment without a
   // sealing key cannot offer Lattice however complete its OAuth client is.
-  return hasClientId && credentialSealingConfigured();
+  return (
+    hasClientId &&
+    Boolean(env.LATTICE_ACCOUNTS_ISSUER && env.LATTICE_GATEWAY_URL) &&
+    credentialSealingConfigured()
+  );
 }
 
 /** The callback Lovelace returns the browser to; must match the registered redirect URI. */
@@ -68,15 +70,17 @@ export function latticeRedirectUri(): string {
  */
 export function latticeOAuthConfig(): LatticeOAuthClientConfig {
   const clientId = env.LATTICE_CLIENT_ID;
-  if (!clientId) {
-    throw new LatticeUnavailableError('not_connected', 'LATTICE_CLIENT_ID is not configured');
+  const issuer = env.LATTICE_ACCOUNTS_ISSUER;
+  const gatewayUrl = env.LATTICE_GATEWAY_URL;
+  if (!clientId || !issuer || !gatewayUrl) {
+    throw new LatticeUnavailableError('not_connected', 'Lattice OAuth configuration is incomplete');
   }
   return {
-    issuer: env.LATTICE_ACCOUNTS_ISSUER ?? LOVELACE_ACCOUNTS_ISSUER,
+    issuer,
     clientId,
     ...(env.LATTICE_CLIENT_SECRET ? { clientSecret: env.LATTICE_CLIENT_SECRET } : {}),
     redirectUri: latticeRedirectUri(),
-    resource: env.LATTICE_GATEWAY_URL ?? LATTICE_GATEWAY_BASE_URL,
+    resource: env.LATTICE_RESOURCE_URL ?? gatewayUrl,
   };
 }
 
@@ -226,10 +230,14 @@ export async function loadUsableLatticeCredential(
  */
 export async function latticeGatewayContext(
   connection: LatticeConnectionRow,
-): Promise<LatticeGatewayContext> {
+): Promise<LatticeGatewayContext & { readonly baseUrl: string }> {
   const credential = await loadUsableLatticeCredential(connection);
+  const baseUrl = env.LATTICE_GATEWAY_URL;
+  if (!baseUrl) {
+    throw new LatticeUnavailableError('not_connected', 'Lattice gateway URL is not configured');
+  }
   return {
     accessToken: credential.accessToken,
-    ...(env.LATTICE_GATEWAY_URL ? { baseUrl: env.LATTICE_GATEWAY_URL } : {}),
+    baseUrl,
   };
 }

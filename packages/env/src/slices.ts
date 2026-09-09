@@ -145,15 +145,15 @@ export const authServer = {
   /** Lovelace OAuth app client secret — paired with `LATTICE_CLIENT_ID`. */
   LATTICE_CLIENT_SECRET: z.string().optional(),
   /**
-   * Lovelace accounts issuer origin. Defaults to `https://auth.uselovelace.com`; set only to
-   * point a non-production Docket at a staging Lovelace.
+   * Explicit Lovelace accounts issuer URL. Required before Lattice can be offered.
    */
-  LATTICE_ACCOUNTS_ISSUER: z.string().optional(),
+  LATTICE_ACCOUNTS_ISSUER: z.url().optional(),
   /**
-   * Lattice gateway origin. Defaults to `https://lattice.uselovelace.com`; set only to point a
-   * non-production Docket at a staging or local gateway.
+   * Explicit Lattice resource and gateway URL. Required before Lattice can be offered.
    */
-  LATTICE_GATEWAY_URL: z.string().optional(),
+  LATTICE_GATEWAY_URL: z.url().optional(),
+  /** OAuth resource identifier when it differs from the callable gateway URL. */
+  LATTICE_RESOURCE_URL: z.url().optional(),
   /**
    * Notion public-integration OAuth client id. Funds BOTH sign-in linking and the Notion
    * connector's API calls — Notion's grant is a single workspace bot token with read+write, so

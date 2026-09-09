@@ -175,8 +175,8 @@ describe('production Lattice deployment contract', () => {
 
   it('passes the public PKCE client configuration and no build-time run controls', () => {
     expect(workflow).toContain('LATTICE_CLIENT_ID: "${{ vars.LATTICE_CLIENT_ID }}"');
-    expect(workflow).toContain('LATTICE_ACCOUNTS_ISSUER: "https://auth.uselovelace.com"');
-    expect(workflow).toContain('LATTICE_GATEWAY_URL: "https://lattice.uselovelace.com"');
+    expect(workflow).toContain('LATTICE_ACCOUNTS_ISSUER: "${{ vars.LATTICE_ACCOUNTS_ISSUER }}"');
+    expect(workflow).toContain('LATTICE_GATEWAY_URL: "${{ vars.LATTICE_GATEWAY_URL }}"');
     // Submissions and polling move with the operator's admin-console decision, so shipping
     // either of them as a deployed value would put the running service behind a redeploy again.
     expect(workflow).not.toContain('ATHENA_LATTICE_SUBMISSIONS_ENABLED');

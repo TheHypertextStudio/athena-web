@@ -1,0 +1,18 @@
+stateDiagram-v2
+  [*] --> unavailable: rollout denied or provider incomplete
+  [*] --> starting: account admitted and provider ready
+  starting --> awaiting_code: Twilio accepts the SMS
+  starting --> delivery_unknown: request times out or process deadline passes
+  starting --> delivery_failed: Twilio rejects the request
+  awaiting_code --> awaiting_code: wrong code with attempts left
+  awaiting_code --> verified: Twilio approves the code
+  awaiting_code --> expired: local or Twilio expiry
+  awaiting_code --> attempts_exhausted: local or Twilio attempt limit
+  awaiting_code --> delivery_failed: canceled, deleted, or failed at Twilio
+  delivery_unknown --> verified: Twilio approves an accepted code
+  delivery_unknown --> awaiting_code: resend after 60 seconds
+  delivery_unknown --> expired: challenge lifetime ends
+  delivery_failed --> starting: request a new code
+  expired --> starting: request a new code
+  attempts_exhausted --> starting: request a new code
+  verified --> [*]

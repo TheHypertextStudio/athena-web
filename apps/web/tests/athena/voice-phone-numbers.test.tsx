@@ -91,7 +91,8 @@ function phoneNumber({
 /** Challenge limits, expired-cooldown by default so the resend button is live. */
 function challengeSummary(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    expiresAt: '2026-08-15T09:10:00.000Z',
+    state: 'awaiting_code',
+    expiresAt: '2099-08-15T09:10:00.000Z',
     attemptsRemaining: 5,
     resendAvailableAt: '2000-01-01T00:00:00.000Z',
     deliveryFailed: false,
@@ -100,7 +101,19 @@ function challengeSummary(overrides: Record<string, unknown> = {}): Record<strin
 }
 
 function listing(...items: Record<string, unknown>[]): unknown {
-  return okResponse({ athenaNumber: '+17025550100', items });
+  return okResponse({
+    athenaNumber: '+17025550100',
+    verification: { available: true, reason: null },
+    items,
+  });
+}
+
+function unavailableListing(reason: 'rollout_restricted' | 'temporarily_unavailable'): unknown {
+  return okResponse({
+    athenaNumber: '+17025550100',
+    verification: { available: false, reason },
+    items: [],
+  });
 }
 
 function renderSection(): ReturnType<typeof render> {
@@ -245,6 +258,123 @@ describe('VoicePhoneNumbers', () => {
       expect(addForm()).not.toBeNull();
     });
     expect(verifyForm()).toBeNull();
+  });
+
+  it('shows an unavailable state instead of a form for an account outside the rollout', async () => {
+    numbersGet.mockResolvedValue(unavailableListing('rollout_restricted'));
+
+    renderSection();
+
+    expect(await screen.findByText(/phone verification is not available/i)).toBeInTheDocument();
+    expect(addForm()).toBeNull();
+    expect(verifyForm()).toBeNull();
+  });
+
+  it('keeps an unknown delivery verifiable after reload', async () => {
+    numbersGet.mockResolvedValue(
+      listing(
+        phoneNumber({
+          challenge: challengeSummary({ state: 'delivery_unknown' }),
+        }),
+      ),
+    );
+
+    renderSection();
+
+    expect((await screen.findAllByText(/may still arrive/i)).length).toBeGreaterThan(0);
+    expect(verifyForm()).not.toBeNull();
+  });
+
+  it.each(['delivery_failed', 'expired', 'attempts_exhausted'] as const)(
+    'offers a new code instead of code entry for %s',
+    async (state) => {
+      numbersGet.mockResolvedValue(
+        listing(phoneNumber({ challenge: challengeSummary({ state }) })),
+      );
+
+      renderSection();
+
+      await waitFor(() => {
+        expect(rowAction('pn-1', 'resend')).not.toBeNull();
+      });
+      expect(verifyForm()).toBeNull();
+      expect(rowAction('pn-1', 'resend')).toHaveTextContent(/new code/i);
+    },
+  );
+
+  it('locks both phone fields while the send is pending', async () => {
+    const pending = deferred<unknown>();
+    bindPost.mockReturnValue(pending.promise);
+    renderSection();
+    await waitFor(() => {
+      expect(addForm()).not.toBeNull();
+    });
+
+    await userEvent.type(field('national-number'), '4155550123');
+    await userEvent.click(control(action('bind'), 'bind'));
+
+    expect(field('national-number')).toBeDisabled();
+    expect(screen.getByLabelText('Country calling code')).toBeDisabled();
+    await act(async () => {
+      pending.resolve(
+        okResponse({ phoneNumber: phoneNumber({ id: 'pn-1' }), ...challengeSummary() }),
+      );
+    });
+  });
+
+  it('moves focus to the code field after Twilio accepts the send', async () => {
+    numbersGet
+      .mockResolvedValueOnce(listing())
+      .mockResolvedValue(listing(phoneNumber({ id: 'pn-1' })));
+    bindPost.mockResolvedValue(
+      okResponse({ phoneNumber: phoneNumber({ id: 'pn-1' }), ...challengeSummary() }),
+    );
+    renderSection();
+    await waitFor(() => {
+      expect(addForm()).not.toBeNull();
+    });
+
+    await userEvent.type(field('national-number'), '4155550123');
+    await userEvent.click(control(action('bind'), 'bind'));
+
+    await waitFor(() => expect(field('code')).toHaveFocus());
+  });
+
+  it('moves an awaiting challenge to expired when its deadline passes', async () => {
+    vi.useFakeTimers();
+    try {
+      const expiresAt = new Date(Date.now() + 1_000).toISOString();
+      numbersGet.mockResolvedValue(
+        listing(phoneNumber({ id: 'pn-1', challenge: challengeSummary({ expiresAt }) })),
+      );
+      renderSection();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(verifyForm()).not.toBeNull();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_001);
+      });
+      expect(screen.getByText('Expired')).toBeInTheDocument();
+      expect(verifyForm()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('moves secondary row actions into an overflow menu at narrow widths', async () => {
+    numbersGet.mockResolvedValue(
+      listing(phoneNumber({ id: 'pn-1', status: 'verified', callingEnabled: true })),
+    );
+    renderSection();
+
+    await waitFor(() => {
+      expect(rowAction('pn-1', 'more')).not.toBeNull();
+    });
+    expect(rowAction('pn-1', 'more')).toHaveClass('sm:hidden');
+    expect(rowAction('pn-1', 'disable-calling')).toHaveClass('sm:inline-flex');
+    expect(rowAction('pn-1', 'remove')).toHaveClass('sm:inline-flex');
   });
 
   it('does not expose the add form until the phone-number list loads', async () => {
@@ -448,7 +578,12 @@ describe('VoicePhoneNumbers', () => {
   it('reports a code the server could not deliver, read straight off the listed number', async () => {
     // No mutation ran here — this is the reload case, where the only source is the listed row.
     numbersGet.mockResolvedValue(
-      listing(phoneNumber({ id: 'pn-1', challenge: challengeSummary({ deliveryFailed: true }) })),
+      listing(
+        phoneNumber({
+          id: 'pn-1',
+          challenge: challengeSummary({ state: 'delivery_failed', deliveryFailed: true }),
+        }),
+      ),
     );
     renderSection();
 
@@ -456,7 +591,7 @@ describe('VoicePhoneNumbers', () => {
   });
 
   it('reports a resent code that could not be delivered', async () => {
-    const failed = challengeSummary({ deliveryFailed: true });
+    const failed = challengeSummary({ state: 'delivery_failed', deliveryFailed: true });
     numbersGet.mockResolvedValue(listing(phoneNumber({ id: 'pn-1' })));
     resendPost.mockResolvedValue(
       okResponse({
@@ -557,7 +692,7 @@ describe('VoicePhoneNumbers', () => {
   });
 
   it('describes the code’s real expiry rather than a fixed sentence', async () => {
-    const expiresAt = '2026-08-15T09:37:00.000Z';
+    const expiresAt = '2099-08-15T09:37:00.000Z';
     numbersGet.mockResolvedValue(
       listing(phoneNumber({ id: 'pn-1', challenge: challengeSummary({ expiresAt }) })),
     );

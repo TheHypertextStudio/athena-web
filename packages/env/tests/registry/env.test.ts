@@ -55,6 +55,7 @@ function validApiEnv(): Record<string, string> {
     ADMIN_GOOGLE_SSO_ENABLED: 'false',
     WORK_LOCATION_PROJECTION_ENABLED: 'false',
     LINEAR_AGENT_ENABLED: 'false',
+    PHONE_VERIFICATION_ENABLED: 'false',
     AGENT_MAX_TURNS: '24',
     ATHENA_ASYNC_RUNNER_ENABLED: 'false',
     CRON_SECRET: 'test-cron-secret',
@@ -433,6 +434,66 @@ describe('api composition', () => {
     expect(mod.env.MCP_ISSUER_URL).toBe('http://localhost:4000');
     expect(mod.env.MCP_RESOURCE_URL).toBe('http://localhost:4000/mcp');
     expect(mod.env.OIDC_LOGIN_PAGE_URL).toBe('http://localhost:3000/sign-in');
+  });
+
+  it('requires complete Verify credentials when the canary is enabled', async () => {
+    for (const [key, value] of Object.entries({
+      ...validApiEnv(),
+      PHONE_VERIFICATION_CANARY_EMAILS: 'owner@example.com',
+      TWILIO_VERIFY_API_KEY_SID: 'SK_test',
+      TWILIO_VERIFY_SERVICE_SID: 'VA_test',
+    })) {
+      vi.stubEnv(key, value);
+    }
+
+    await expect(import('../../src/api')).rejects.toThrow(
+      'PHONE_VERIFICATION_CANARY_EMAILS requires TWILIO_VERIFY_API_KEY_SECRET',
+    );
+  });
+
+  it('requires complete Verify credentials when public access is enabled', async () => {
+    for (const [key, value] of Object.entries({
+      ...validApiEnv(),
+      PHONE_VERIFICATION_ENABLED: 'true',
+      TWILIO_VERIFY_API_KEY_SECRET: 'secret',
+      TWILIO_VERIFY_SERVICE_SID: 'VA_test',
+    })) {
+      vi.stubEnv(key, value);
+    }
+
+    await expect(import('../../src/api')).rejects.toThrow(
+      'PHONE_VERIFICATION_ENABLED=true requires TWILIO_VERIFY_API_KEY_SID',
+    );
+  });
+
+  it('accepts a complete owner-only Verify canary while public access stays disabled', async () => {
+    for (const [key, value] of Object.entries({
+      ...validApiEnv(),
+      PHONE_VERIFICATION_CANARY_EMAILS: 'owner@example.com',
+      TWILIO_VERIFY_API_KEY_SID: 'SK_test',
+      TWILIO_VERIFY_API_KEY_SECRET: 'secret',
+      TWILIO_VERIFY_SERVICE_SID: 'VA_test',
+    })) {
+      vi.stubEnv(key, value);
+    }
+
+    const mod = await import('../../src/api');
+
+    expect(mod.env.PHONE_VERIFICATION_ENABLED).toBe(false);
+    expect(mod.env.PHONE_VERIFICATION_CANARY_EMAILS).toBe('owner@example.com');
+  });
+
+  it('rejects a partial Verify credential group even while rollout is closed', async () => {
+    for (const [key, value] of Object.entries({
+      ...validApiEnv(),
+      TWILIO_VERIFY_SERVICE_SID: 'VA_test',
+    })) {
+      vi.stubEnv(key, value);
+    }
+
+    await expect(import('../../src/api')).rejects.toThrow(
+      'Twilio Verify credentials must be configured together',
+    );
   });
 
   it('derives MCP OAuth URLs from API_URL and WEB_URL while preserving explicit overrides', async () => {

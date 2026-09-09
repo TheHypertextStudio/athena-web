@@ -259,6 +259,7 @@ describe('guided integration bootstrap contracts', () => {
       'apple',
       'stripe',
       'anthropic',
+      'twilio-verify',
       'email',
       'observability',
     ]);

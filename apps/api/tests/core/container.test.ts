@@ -230,26 +230,24 @@ describe('buildAppContainer', () => {
     expect(container.blob).toBeDefined();
   });
 
-  it('requires the complete Twilio phone configuration before either production adapter runs', () => {
-    const partial = buildAppContainer({
+  it('configures Verify independently from the voice phone number', () => {
+    const verifyOnly = buildAppContainer({
       APP_MODE: 'production',
-      TWILIO_ACCOUNT_SID: 'AC_test',
-      TWILIO_AUTH_TOKEN: 'secret',
+      TWILIO_VERIFY_API_KEY_SID: 'SK_test',
+      TWILIO_VERIFY_API_KEY_SECRET: 'secret',
       TWILIO_VERIFY_SERVICE_SID: 'VA_test',
     });
-    expect(() => partial.phoneVerification).toThrow(
-      'Missing required production config: TWILIO_PHONE_NUMBER',
-    );
+    expect(verifyOnly.phoneVerification).toBeInstanceOf(TwilioVerifyProvider);
+    expect(() => verifyOnly.telephony).toThrow('Missing required production config');
 
-    const configured = buildAppContainer({
+    const voiceOnly = buildAppContainer({
       APP_MODE: 'production',
       TWILIO_ACCOUNT_SID: 'AC_test',
       TWILIO_AUTH_TOKEN: 'secret',
-      TWILIO_VERIFY_SERVICE_SID: 'VA_test',
       TWILIO_PHONE_NUMBER: '+17025550100',
     });
-    expect(configured.phoneVerification).toBeInstanceOf(TwilioVerifyProvider);
-    expect(configured.telephony).toBeInstanceOf(TwilioTelephony);
+    expect(voiceOnly.telephony).toBeInstanceOf(TwilioTelephony);
+    expect(() => voiceOnly.phoneVerification).toThrow('TWILIO_VERIFY_API_KEY_SID');
   });
 
   it('uses Stripe test mode for an explicitly enabled local billing run', () => {

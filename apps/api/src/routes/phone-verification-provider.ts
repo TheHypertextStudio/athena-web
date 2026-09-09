@@ -7,12 +7,13 @@
  */
 
 /** Provider states that affect Docket's verification state machine. */
-export type PhoneVerificationProviderStatus = 'pending' | 'approved' | 'failed';
+export type PhoneVerificationProviderStatus =
+  'pending' | 'approved' | 'canceled' | 'max_attempts_reached' | 'deleted' | 'failed' | 'expired';
 
 /** Provider-owned result from starting or checking one verification. */
 export interface PhoneVerificationProviderResult {
   /** Opaque provider identifier used only for support correlation. */
-  readonly providerChallengeId: string;
+  readonly providerChallengeId: string | null;
   /** Normalized state that never exposes provider copy to the caller. */
   readonly status: PhoneVerificationProviderStatus;
 }
@@ -29,10 +30,12 @@ export interface PhoneVerificationProvider {
 
 /** Configuration needed by {@link TwilioVerifyProvider}. */
 export interface TwilioVerifyProviderConfig {
-  readonly accountSid: string;
-  readonly authToken: string;
+  readonly apiKeySid: string;
+  readonly apiKeySecret: string;
   readonly serviceSid: string;
   readonly fetch?: typeof globalThis.fetch;
+  /** Maximum time to wait for Twilio before the delivery result becomes unknown. */
+  readonly timeoutMs?: number;
 }
 
 interface TwilioVerifyResponse {
@@ -44,36 +47,43 @@ interface TwilioVerifyResponse {
 export class TwilioVerifyProvider implements PhoneVerificationProvider {
   readonly kind = 'twilio_verify' as const;
   private readonly request: typeof globalThis.fetch;
+  private readonly timeoutMs: number;
 
   constructor(private readonly config: TwilioVerifyProviderConfig) {
     this.request = config.fetch ?? globalThis.fetch;
+    this.timeoutMs = config.timeoutMs ?? 10_000;
   }
 
   /** Start an SMS verification through the configured Verify service. */
   async start(to: string): Promise<PhoneVerificationProviderResult> {
-    return await this.post('Verifications', { To: to, Channel: 'sms' });
+    return await this.post('Verifications', { To: to, Channel: 'sms' }, false);
   }
 
   /** Check a code through the configured Verify service. */
   async check(to: string, code: string): Promise<PhoneVerificationProviderResult> {
-    return await this.post('VerificationCheck', { To: to, Code: code });
+    return await this.post('VerificationCheck', { To: to, Code: code }, true);
   }
 
   private async post(
     resource: 'Verifications' | 'VerificationCheck',
     fields: Readonly<Record<string, string>>,
+    allowNotFound: boolean,
   ): Promise<PhoneVerificationProviderResult> {
     const response = await this.request(
       `https://verify.twilio.com/v2/Services/${encodeURIComponent(this.config.serviceSid)}/${resource}`,
       {
         method: 'POST',
         headers: {
-          authorization: `Basic ${Buffer.from(`${this.config.accountSid}:${this.config.authToken}`).toString('base64')}`,
+          authorization: `Basic ${Buffer.from(`${this.config.apiKeySid}:${this.config.apiKeySecret}`).toString('base64')}`,
           'content-type': 'application/x-www-form-urlencoded',
         },
         body: new URLSearchParams(fields),
+        signal: AbortSignal.timeout(this.timeoutMs),
       },
     );
+    if (allowNotFound && response.status === 404) {
+      return { providerChallengeId: null, status: 'deleted' };
+    }
     if (!response.ok) throw new Error('phone verification provider unavailable');
     const payload = (await response.json()) as TwilioVerifyResponse;
     if (typeof payload.sid !== 'string' || typeof payload.status !== 'string') {
@@ -115,7 +125,16 @@ export class CapturePhoneVerificationProvider implements PhoneVerificationProvid
 }
 
 function normalizeTwilioStatus(status: string): PhoneVerificationProviderStatus {
-  if (status === 'approved') return 'approved';
-  if (status === 'pending') return 'pending';
+  if (
+    status === 'approved' ||
+    status === 'pending' ||
+    status === 'canceled' ||
+    status === 'max_attempts_reached' ||
+    status === 'deleted' ||
+    status === 'failed' ||
+    status === 'expired'
+  ) {
+    return status;
+  }
   return 'failed';
 }

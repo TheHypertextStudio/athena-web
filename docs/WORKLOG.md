@@ -40,7 +40,7 @@
 
 ### [NATIVE-APPLE-AUTH-001] Add native Apple authentication and shell foundations
 
-- **Status**: IN_PROGRESS
+- **Status**: REVIEW
 - **Started**: 2026-09-07
 - **Priority**: P1
 - **Description**: Docket needs an iOS, iPadOS, and macOS 26 client that signs new and returning
@@ -1730,6 +1730,44 @@ tokens) exceeds the available context size (32768 tokens)`. An Athena turn ships
   decision: `pip`, `_meta.ui.domain` origins, host `sampling`. The `ATH-12` ledger row's
   "athena-conversation is dead code" evidence was already stale before this task (the component
   is mounted from Today) and is untouched here.
+
+### [PHONE-VERIFY-RELIABILITY-001] Ship recoverable Twilio phone verification
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-09-08
+- **Priority**: P0
+- **Description**: Replace the local challenge sender with Twilio Verify. Reject unavailable
+  provider configuration before a pending phone row is stored. Give every recoverable delivery
+  state one usable action in Settings so a crash, timeout, reload, failed delivery, expired code,
+  or exhausted challenge cannot strand the person.
+- **Approach**: Keep the public rollout disabled while admitting only
+  `willie@hypertext.studio`. Authenticate Twilio Verify with a restricted API key. Persist the
+  normalized challenge delivery state. Treat a provider timeout or a stale `starting` row as
+  `delivery_unknown`, which accepts a received code and permits a resend after the existing
+  60-second cooldown. Derive the form and status presentation from server state instead of local
+  notices.
+- **Subtasks**:
+  - [x] Add the provider readiness and rollout gates before persistence.
+  - [x] Persist and migrate the normalized challenge state.
+  - [x] Map Twilio terminal states and preserve unknown delivery recovery.
+  - [x] Replace the independent client notices with one server-derived state presentation.
+  - [x] Add API, component, deployment, migration, and release regressions.
+  - [x] Create the Twilio Verify service and its restricted API key.
+  - [x] Store the Verify service SID and validate the complete production binding.
+  - [ ] Deploy once and complete the wrong-code, correct-code, reload, and log canary.
+- **Validation**: After rebasing onto current `origin/main`, the focused API phone slice passed 98
+  tests, the Settings component passed 29 tests, the environment package passed 165 tests at 100%
+  coverage, and the repository tooling suite passed 345 tests. API type checking passed alone with
+  a 4 GB heap after
+  the watchdog killed the same check at the default 2 GB limit during a concurrent graph run. Web
+  lint then passed alone. The production release command passed the PostgreSQL migration, both
+  application builds, all five release journeys, and the phone journey that enters one wrong code
+  before the correct code. The larger API and Web test graph was stopped after 18 minutes and is
+  not counted as passing.
+- **Blockers**: Google Secret Manager has enabled version 1 for the API key SID, API key secret,
+  and Verify service SID. GitHub's production environment has the closed public flag, the canary
+  email, and all three secret bindings. Production deployment and the real-handset evidence remain
+  open until the validated commit reaches `main`.
 
 ### [TEST-STABILITY-001] Repair the two suites that raced the host machine
 

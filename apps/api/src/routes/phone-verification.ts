@@ -99,6 +99,20 @@ export interface PhoneVerificationDeps {
   readonly generateCode?: () => string;
 }
 
+interface ChallengeDelivery {
+  readonly providerChallengeId: string | null;
+  readonly providerStatus: string;
+  readonly deliveryFailed: boolean;
+  readonly deliveryState: PhoneVerificationRow['deliveryState'];
+}
+
+type CodeEvaluation =
+  | { readonly matches: boolean }
+  | {
+      readonly refusal: VerificationRefusal;
+      readonly attemptsRemaining: number;
+    };
+
 /** Hash a one-time code for storage and comparison. */
 function hashCode(code: string): Buffer {
   return createHash('sha256').update(code, 'utf8').digest();
@@ -121,6 +135,137 @@ export function verificationMessage(code: string): string {
   return `${code} is your Docket verification code. It lets Athena recognize this phone number when you call. It expires in 10 minutes.`;
 }
 
+async function deliverManagedChallenge(
+  provider: PhoneVerificationProvider,
+  e164: string,
+): Promise<ChallengeDelivery> {
+  try {
+    const started = await provider.start(e164);
+    const accepted = started.status === 'pending';
+    return {
+      providerChallengeId: started.providerChallengeId,
+      providerStatus: started.status,
+      deliveryFailed: !accepted,
+      deliveryState: accepted ? 'awaiting_code' : 'delivery_failed',
+    };
+  } catch (error) {
+    const timedOut = isTimeoutError(error);
+    return {
+      providerChallengeId: null,
+      providerStatus: timedOut ? 'starting' : 'failed',
+      deliveryFailed: !timedOut,
+      deliveryState: timedOut ? 'delivery_unknown' : 'delivery_failed',
+    };
+  }
+}
+
+async function deliverLegacyChallenge(
+  sms: () => SmsSender,
+  e164: string,
+  code: string,
+): Promise<ChallengeDelivery> {
+  try {
+    await sms().send({ to: e164, body: verificationMessage(code) });
+    return {
+      providerChallengeId: null,
+      providerStatus: 'pending',
+      deliveryFailed: false,
+      deliveryState: 'awaiting_code',
+    };
+  } catch {
+    return {
+      providerChallengeId: null,
+      providerStatus: 'failed',
+      deliveryFailed: true,
+      deliveryState: 'delivery_failed',
+    };
+  }
+}
+
+async function deliverChallenge(
+  deps: PhoneVerificationDeps,
+  provider: PhoneVerificationProvider | undefined,
+  e164: string,
+  legacyCode: string | null,
+): Promise<ChallengeDelivery> {
+  if (provider) return await deliverManagedChallenge(provider, e164);
+  if (!deps.sms) throw new Error('phone verification provider is not configured');
+  if (!legacyCode) throw new Error('legacy phone verification code is missing');
+  return await deliverLegacyChallenge(deps.sms, e164, legacyCode);
+}
+
+async function evaluateManagedCode(
+  provider: PhoneVerificationProvider,
+  number: PhoneNumberRow,
+  challenge: PhoneVerificationRow,
+  code: string,
+  now: Date,
+): Promise<CodeEvaluation> {
+  try {
+    const checked = await provider.check(number.e164, code);
+    await db
+      .update(phoneVerification)
+      .set({
+        providerChallengeId: checked.providerChallengeId ?? challenge.providerChallengeId,
+        providerStatus: checked.status,
+      })
+      .where(eq(phoneVerification.id, challenge.id));
+    if (checked.status === 'expired') {
+      await db
+        .update(phoneVerification)
+        .set({ expiresAt: now })
+        .where(eq(phoneVerification.id, challenge.id));
+      return { refusal: 'expired', attemptsRemaining: 0 };
+    }
+    if (checked.status === 'max_attempts_reached') {
+      await db
+        .update(phoneVerification)
+        .set({ attempts: challenge.maxAttempts })
+        .where(eq(phoneVerification.id, challenge.id));
+      return { refusal: 'attempts-exhausted', attemptsRemaining: 0 };
+    }
+    if (
+      checked.status === 'canceled' ||
+      checked.status === 'deleted' ||
+      checked.status === 'failed'
+    ) {
+      await db
+        .update(phoneVerification)
+        .set({ deliveryFailed: true, deliveryState: 'delivery_failed' })
+        .where(eq(phoneVerification.id, challenge.id));
+      return { refusal: 'no-challenge', attemptsRemaining: 0 };
+    }
+    return { matches: checked.status === 'approved' };
+  } catch {
+    await db
+      .update(phoneVerification)
+      .set({ attempts: sql`greatest(${phoneVerification.attempts} - 1, 0)` })
+      .where(eq(phoneVerification.id, challenge.id));
+    return {
+      refusal: 'provider-unavailable',
+      attemptsRemaining: challenge.maxAttempts - challenge.attempts,
+    };
+  }
+}
+
+async function evaluateCode(
+  deps: PhoneVerificationDeps,
+  number: PhoneNumberRow,
+  challenge: PhoneVerificationRow,
+  code: string,
+  now: Date,
+): Promise<CodeEvaluation> {
+  if (challenge.provider === 'legacy_sms') {
+    return {
+      matches:
+        challenge.codeHash !== null &&
+        timingSafeEqual(hashCode(code), Buffer.from(challenge.codeHash, 'hex')),
+    };
+  }
+  if (!deps.provider) return { matches: false };
+  return await evaluateManagedCode(deps.provider(), number, challenge, code, now);
+}
+
 /**
  * Issues, resends and checks the one-time codes that turn a typed number into a verified one.
  *
@@ -135,6 +280,19 @@ export class PhoneVerificationService {
   constructor(private readonly deps: PhoneVerificationDeps) {
     this.now = deps.now ?? (() => new Date());
     this.generateCode = deps.generateCode ?? randomCode;
+  }
+
+  /** Resolve the configured transport before any phone-number row is created. */
+  assertAvailable(): void {
+    if (this.deps.provider) {
+      this.deps.provider();
+      return;
+    }
+    if (this.deps.sms) {
+      this.deps.sms();
+      return;
+    }
+    throw new Error('phone verification provider is not configured');
   }
 
   /**
@@ -229,38 +387,11 @@ export class PhoneVerificationService {
     });
     if (!reserved.ok) return reserved;
 
-    let deliveryFailed = false;
-    let providerChallengeId: string | null = null;
-    let providerStatus = 'pending';
-    if (adapter) {
-      try {
-        const started = await adapter.start(number.e164);
-        providerChallengeId = started.providerChallengeId;
-        providerStatus = started.status;
-        deliveryFailed = started.status !== 'pending';
-      } catch {
-        deliveryFailed = true;
-        providerStatus = 'failed';
-      }
-    } else {
-      try {
-        if (!this.deps.sms) throw new Error('phone verification provider is not configured');
-        if (!legacyCode) throw new Error('legacy phone verification code is missing');
-        await this.deps.sms().send({ to: number.e164, body: verificationMessage(legacyCode) });
-      } catch {
-        // The provider's own words never reach a person or a log line here; the fact of failure is
-        // what the caller needs, and it is carried as a boolean.
-        deliveryFailed = true;
-      }
-    }
+    const delivery = await deliverChallenge(this.deps, adapter, number.e164, legacyCode);
 
     const [challenge] = await db
       .update(phoneVerification)
-      .set({
-        providerChallengeId,
-        providerStatus,
-        deliveryFailed,
-      })
+      .set(delivery)
       .where(eq(phoneVerification.id, reserved.challenge.id))
       .returning();
     if (!challenge) throw new Error('phone verification reservation disappeared');
@@ -292,10 +423,6 @@ export class PhoneVerificationService {
     const challenge = await outstandingChallenge(number.id);
     if (!challenge) return { ok: false, refusal: 'no-challenge', attemptsRemaining: 0 };
     if (challenge.expiresAt.getTime() <= now.getTime()) {
-      await db
-        .update(phoneVerification)
-        .set({ invalidatedAt: now })
-        .where(eq(phoneVerification.id, challenge.id));
       return { ok: false, refusal: 'expired', attemptsRemaining: 0 };
     }
     if (challenge.attempts >= challenge.maxAttempts) {
@@ -319,42 +446,10 @@ export class PhoneVerificationService {
     }
     const attempts = counted.attempts;
 
-    let matches = false;
-    if (challenge.provider === 'legacy_sms') {
-      matches =
-        challenge.codeHash !== null &&
-        timingSafeEqual(hashCode(code), Buffer.from(challenge.codeHash, 'hex'));
-    } else if (this.deps.provider) {
-      try {
-        const checked = await this.deps.provider().check(number.e164, code);
-        await db
-          .update(phoneVerification)
-          .set({
-            providerChallengeId: checked.providerChallengeId,
-            providerStatus: checked.status,
-          })
-          .where(eq(phoneVerification.id, challenge.id));
-        matches = checked.status === 'approved';
-      } catch {
-        await db
-          .update(phoneVerification)
-          .set({ attempts: sql`greatest(${phoneVerification.attempts} - 1, 0)` })
-          .where(eq(phoneVerification.id, challenge.id));
-        return {
-          ok: false,
-          refusal: 'provider-unavailable',
-          attemptsRemaining: challenge.maxAttempts - challenge.attempts,
-        };
-      }
-    }
-    if (!matches) {
+    const evaluation = await evaluateCode(this.deps, number, challenge, code, now);
+    if ('refusal' in evaluation) return { ok: false, ...evaluation };
+    if (!evaluation.matches) {
       const remaining = Math.max(0, challenge.maxAttempts - attempts);
-      if (remaining === 0) {
-        await db
-          .update(phoneVerification)
-          .set({ invalidatedAt: now })
-          .where(eq(phoneVerification.id, challenge.id));
-      }
       return { ok: false, refusal: 'wrong-code', attemptsRemaining: remaining };
     }
 
@@ -379,6 +474,12 @@ export class PhoneVerificationService {
       throw error;
     }
   }
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return (
+    error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError')
+  );
 }
 
 /**

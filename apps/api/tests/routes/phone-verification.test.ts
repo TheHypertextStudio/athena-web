@@ -23,11 +23,13 @@ import { getDb, seedUserWithHub } from '../support/routes-harness';
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let PhoneVerificationService!: typeof PhoneVerificationModule.PhoneVerificationService;
+let outstandingChallenge!: typeof PhoneVerificationModule.outstandingChallenge;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  ({ PhoneVerificationService } = await import('../../src/routes/phone-verification'));
+  ({ PhoneVerificationService, outstandingChallenge } =
+    await import('../../src/routes/phone-verification'));
 });
 
 const CODE = '314159';
@@ -246,6 +248,10 @@ describe('phone verification', () => {
     clock.advance(PHONE_VERIFICATION_TTL_MS + 1);
 
     expect(await service.submit(row, CODE)).toMatchObject({ ok: false, refusal: 'expired' });
+    expect(await outstandingChallenge(row.id)).toMatchObject({
+      id: expect.any(String),
+      invalidatedAt: null,
+    });
     const [still] = await db
       .select()
       .from(schema.phoneNumber)
@@ -253,7 +259,7 @@ describe('phone verification', () => {
     expect(still?.status).toBe('pending');
   });
 
-  it('destroys the challenge once the attempt budget is spent', async () => {
+  it('keeps an exhausted challenge so reloads can explain the next action', async () => {
     const sms = new CaptureSmsSender();
     const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
     const service = new PhoneVerificationService({
@@ -274,8 +280,15 @@ describe('phone verification', () => {
       refusal: 'wrong-code',
       attemptsRemaining: 0,
     });
-    // …and the right code no longer helps, because the challenge is gone.
-    expect(await service.submit(row, CODE)).toMatchObject({ ok: false, refusal: 'no-challenge' });
+    // …and the right code no longer helps, while the exhausted state remains reportable.
+    expect(await service.submit(row, CODE)).toMatchObject({
+      ok: false,
+      refusal: 'attempts-exhausted',
+    });
+    expect(await outstandingChallenge(row.id)).toMatchObject({
+      attempts: PHONE_VERIFICATION_MAX_ATTEMPTS,
+      invalidatedAt: null,
+    });
   });
 
   it('rate limits resends and then the hourly send budget', async () => {
@@ -343,7 +356,78 @@ describe('phone verification', () => {
 
     const result = await service.issueChallenge(row);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.challenge.deliveryFailed).toBe(true);
+    if (result.ok) {
+      expect(result.challenge.deliveryFailed).toBe(true);
+      expect(result.challenge.deliveryState).toBe('delivery_failed');
+    }
+  });
+
+  it('records an unknown delivery when the provider request times out', async () => {
+    const service = new PhoneVerificationService({
+      provider: () => ({
+        kind: 'twilio_verify',
+        start: () => Promise.reject(new DOMException('timed out', 'TimeoutError')),
+        check: () => Promise.reject(new Error('not reached')),
+      }),
+    });
+    const { row } = await seedNumber('VerifyDeliveryUnknown');
+
+    const result = await service.issueChallenge(row);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.challenge.deliveryFailed).toBe(false);
+      expect(result.challenge.deliveryState).toBe('delivery_unknown');
+    }
+  });
+
+  it.each(['canceled', 'deleted', 'failed'] as const)(
+    'turns a provider %s result into a recoverable delivery failure',
+    async (status) => {
+      const service = new PhoneVerificationService({
+        provider: () => ({
+          kind: 'twilio_verify',
+          start: async () => ({ providerChallengeId: 'VE_terminal', status }),
+          check: async () => ({ providerChallengeId: 'VE_terminal', status }),
+        }),
+      });
+      const { row } = await seedNumber(`VerifyTerminal${status}`);
+
+      const result = await service.issueChallenge(row);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.challenge.deliveryState).toBe('delivery_failed');
+    },
+  );
+
+  it.each([
+    ['expired', 'expired'],
+    ['max_attempts_reached', 'attempts-exhausted'],
+    ['canceled', 'no-challenge'],
+    ['deleted', 'no-challenge'],
+    ['failed', 'no-challenge'],
+  ] as const)('maps a provider %s check to %s', async (status, refusal) => {
+    const service = new PhoneVerificationService({
+      provider: () => ({
+        kind: 'twilio_verify',
+        start: async () => ({ providerChallengeId: 'VE_pending', status: 'pending' }),
+        check: async () => ({ providerChallengeId: 'VE_checked', status }),
+      }),
+    });
+    const { row } = await seedNumber(`VerifyCheck${status}`);
+    await service.issueChallenge(row);
+
+    expect(await service.submit(row, CODE)).toMatchObject({ ok: false, refusal });
+    const persisted = await outstandingChallenge(row.id);
+    expect(persisted).not.toBeNull();
+    if (status === 'expired')
+      expect(persisted?.expiresAt.getTime()).toBeLessThanOrEqual(Date.now());
+    if (status === 'max_attempts_reached') {
+      expect(persisted?.attempts).toBe(PHONE_VERIFICATION_MAX_ATTEMPTS);
+    }
+    if (status === 'canceled' || status === 'deleted' || status === 'failed') {
+      expect(persisted?.deliveryState).toBe('delivery_failed');
+    }
   });
 
   it('refuses to re-verify a number that is already verified', async () => {
@@ -378,9 +462,7 @@ describe('phone verification', () => {
     );
   });
 
-  it('destroys the challenge on the wrong code that spends the last attempt', async () => {
-    // Exercises the branch `submit` takes only when this guess brings remaining tries to zero:
-    // the challenge is invalidated immediately rather than left to expire on its own.
+  it('preserves the challenge on the wrong code that spends the last attempt', async () => {
     const sms = new CaptureSmsSender();
     const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
     const service = new PhoneVerificationService({
@@ -398,9 +480,9 @@ describe('phone verification', () => {
     const last = await service.submit(row, '000000');
     expect(last).toMatchObject({ ok: false, refusal: 'wrong-code', attemptsRemaining: 0 });
 
-    // The challenge is gone, not merely spent: submitting the real code now finds none at all.
+    // Reloads and later submissions can still distinguish exhaustion from a missing challenge.
     const after = await service.submit(row, CODE);
-    expect(after).toMatchObject({ ok: false, refusal: 'no-challenge' });
+    expect(after).toMatchObject({ ok: false, refusal: 'attempts-exhausted' });
   });
 
   it('refuses a code once the attempt budget was already spent by an earlier submit', async () => {

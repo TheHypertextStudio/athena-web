@@ -54,7 +54,7 @@ async function harness(label: string) {
   const userId = await seedUserWithHub(db, schema, label);
   const sms = new CaptureSmsSender();
   const telephony = new CaptureTelephonyProvider();
-  const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
+  const clock = fixedClock(Date.now());
   const createVerification = () =>
     new PhoneVerificationService({
       sms: () => sms,
@@ -70,6 +70,8 @@ async function harness(label: string) {
 }
 
 interface ChallengeSummaryWire {
+  readonly state:
+    'awaiting_code' | 'delivery_unknown' | 'delivery_failed' | 'expired' | 'attempts_exhausted';
   readonly expiresAt: string;
   readonly attemptsRemaining: number;
   readonly resendAvailableAt: string;
@@ -89,10 +91,19 @@ interface PhoneNumberWire {
 
 interface ChallengeWire {
   readonly phoneNumber: PhoneNumberWire;
+  readonly state: ChallengeSummaryWire['state'];
   readonly expiresAt: string;
   readonly attemptsRemaining: number;
   readonly resendAvailableAt: string;
   readonly deliveryFailed: boolean;
+}
+
+interface PhoneNumberListWire {
+  readonly verification: {
+    readonly available: boolean;
+    readonly reason: 'rollout_restricted' | 'temporarily_unavailable' | null;
+  };
+  readonly items: PhoneNumberWire[];
 }
 
 describe('phone number routes', () => {
@@ -202,12 +213,78 @@ describe('phone number routes', () => {
     });
     expect(challenge.phoneNumber.masked).not.toContain('4155550123');
     expect(challenge.attemptsRemaining).toBeGreaterThan(0);
+    expect(challenge.state).toBe('awaiting_code');
     expect(sms.outbox).toHaveLength(1);
     expect(sms.outbox[0]?.body).toContain(CODE);
 
     const list = await body<{ items: PhoneNumberWire[] }>(await app.request('/'));
     expect(list.items).toHaveLength(1);
     expect(list.items[0]?.id).toBe(challenge.phoneNumber.id);
+  });
+
+  it('refuses an unavailable provider before it creates a pending phone row', async () => {
+    const userId = await seedUserWithHub(db, schema, 'PhoneCreateUnavailable');
+    const routes = createPhoneNumberRoutes(() => {
+      throw new Error('Missing required production config: TWILIO_VERIFY_API_KEY_SID');
+    });
+    const app = appWithSession(routes, fakeSession(userId));
+
+    const response = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ country: 'US', dialCode: '1', nationalNumber: '4155550181' }),
+    });
+
+    expect(response.status).toBe(503);
+    expect(await body<{ code: string }>(response)).toMatchObject({
+      code: 'phone_verification_unavailable',
+    });
+    const rows = await db
+      .select()
+      .from(schema.phoneNumber)
+      .where(eq(schema.phoneNumber.userId, userId));
+    expect(rows).toEqual([]);
+  });
+
+  it('reports whether the signed-in account may start verification', async () => {
+    const userId = await seedUserWithHub(db, schema, 'PhoneAvailability');
+    const routes = createPhoneNumberRoutes(
+      () =>
+        new PhoneVerificationService({
+          sms: () => new CaptureSmsSender(),
+          generateCode: () => CODE,
+        }),
+      {
+        telephony: () => new CaptureTelephonyProvider(),
+        athenaNumber: () => null,
+        verificationAvailability: () => ({
+          available: false,
+          reason: 'rollout_restricted',
+        }),
+      },
+    );
+    const app = appWithSession(routes, fakeSession(userId));
+
+    const response = await app.request('/');
+
+    expect(response.status).toBe(200);
+    expect((await body<PhoneNumberListWire>(response)).verification).toEqual({
+      available: false,
+      reason: 'rollout_restricted',
+    });
+
+    const create = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ country: 'US', dialCode: '1', nationalNumber: '4155550182' }),
+    });
+    expect(create.status).toBe(503);
+    expect(await body<{ code: string }>(create)).toMatchObject({
+      code: 'phone_verification_unavailable',
+    });
+    expect(
+      await db.select().from(schema.phoneNumber).where(eq(schema.phoneNumber.userId, userId)),
+    ).toEqual([]);
   });
 
   it('starts an authenticated callback only to the stored verified number', async () => {
@@ -359,6 +436,7 @@ describe('phone number routes', () => {
     const pending = listed.items.find((item) => item.id === created.phoneNumber.id);
     expect(pending?.status).toBe('pending');
     expect(pending?.challenge).toMatchObject({
+      state: 'awaiting_code',
       expiresAt: created.expiresAt,
       attemptsRemaining: created.attemptsRemaining,
       resendAvailableAt: created.resendAvailableAt,
@@ -375,6 +453,25 @@ describe('phone number routes', () => {
     const verified = afterVerify.items.find((item) => item.id === created.phoneNumber.id);
     expect(verified?.status).toBe('verified');
     expect(verified?.challenge).toBeNull();
+  });
+
+  it('recovers a stale starting row as unknown delivery after the provider deadline', async () => {
+    const { app } = await harness('PhoneStaleStarting');
+    const created = await body<ChallengeWire>(
+      await app.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({ country: 'US', dialCode: '1', nationalNumber: '4155550171' }),
+      }),
+    );
+    await db
+      .update(schema.phoneVerification)
+      .set({ deliveryState: 'starting', createdAt: new Date(Date.now() - 11_000) })
+      .where(eq(schema.phoneVerification.phoneNumberId, created.phoneNumber.id));
+
+    const listed = await body<PhoneNumberListWire>(await app.request('/'));
+
+    expect(listed.items[0]?.challenge?.state).toBe('delivery_unknown');
   });
 
   it('lists numbers on a deploy that cannot send SMS at all', async () => {
@@ -519,6 +616,10 @@ describe('phone number routes', () => {
     );
 
     clock.advance(PHONE_VERIFICATION_TTL_MS + 1_000);
+    await db
+      .update(schema.phoneVerification)
+      .set({ expiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(schema.phoneVerification.phoneNumberId, created.phoneNumber.id));
     const late = await app.request(`/${created.phoneNumber.id}/verify`, {
       method: 'POST',
       headers: J,
@@ -530,6 +631,7 @@ describe('phone number routes', () => {
     // The number is still pending, so it can be rescued with a fresh code rather than re-added.
     const list = await body<{ items: PhoneNumberWire[] }>(await app.request('/'));
     expect(list.items[0]?.status).toBe('pending');
+    expect(list.items[0]?.challenge?.state).toBe('expired');
   });
 
   it('hides another caller’s number behind 404 for every owned action', async () => {

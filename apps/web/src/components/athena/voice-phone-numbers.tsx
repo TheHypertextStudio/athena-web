@@ -34,15 +34,20 @@ import { DEFAULT_DIAL_CODE, SUPPORTED_PHONE_COUNTRIES } from '@docket/athena/pho
 import type {
   PhoneCallOut,
   PhoneChallengeOut,
+  PhoneChallengeState,
   PhoneNumberListOut,
   PhoneNumberOut,
   PhoneNumberStatus,
 } from '@docket/athena/phone';
-import { Check, Phone, PhoneOff, Trash2 } from '@docket/ui/icons';
+import { Check, Ellipsis, Phone, PhoneOff, Trash2 } from '@docket/ui/icons';
 import {
   Badge,
   Button,
   ControlGroup,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Field,
   Input,
   Select,
@@ -51,7 +56,7 @@ import {
   Text,
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import { type JSX, useEffect, useMemo, useState } from 'react';
+import { type JSX, useEffect, useMemo, useRef, useState } from 'react';
 
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
@@ -73,6 +78,7 @@ import {
 
 /** The country preselected when nothing has been bound yet. */
 const DEFAULT_COUNTRY = 'US';
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 /** What each lifecycle state is called here. Application-owned copy, one label per state. */
 const STATUS_LABEL: Record<PhoneNumberStatus, string> = {
@@ -80,6 +86,11 @@ const STATUS_LABEL: Record<PhoneNumberStatus, string> = {
   verified: 'Verified',
   blocked: 'Not usable',
 };
+
+interface Feedback {
+  readonly tone: 'error' | 'success';
+  readonly copy: string;
+}
 
 /**
  * Which number the code box is pointed at.
@@ -100,8 +111,36 @@ function cooldownEnd(number: PhoneNumberOut): number {
   return number.challenge ? Date.parse(number.challenge.resendAvailableAt) : Infinity;
 }
 
+/** Apply the client clock to a server state so expiry changes without a reload. */
+function liveChallengeState(
+  number: PhoneNumberOut,
+  now: number | null,
+): PhoneChallengeState | null {
+  if (!number.challenge) return null;
+  if (now !== null && Date.parse(number.challenge.expiresAt) <= now) return 'expired';
+  return number.challenge.state;
+}
+
+function acceptsCode(state: PhoneChallengeState | null): boolean {
+  return state === 'awaiting_code' || state === 'delivery_unknown';
+}
+
 /** Shown when the transport could not deliver a code, whoever asked for it. */
-const UNDELIVERED_MESSAGE = 'We couldn’t deliver the code to that number. Check it and try again.';
+const STATE_MESSAGE: Partial<Record<PhoneChallengeState, Feedback>> = {
+  delivery_unknown: {
+    tone: 'error',
+    copy: 'Delivery could not be confirmed. The code may still arrive, or you can send a new one.',
+  },
+  delivery_failed: {
+    tone: 'error',
+    copy: 'We couldn’t deliver the code to that number. Check it and send a new one.',
+  },
+  expired: { tone: 'error', copy: 'That code expired. Send a new one to continue.' },
+  attempts_exhausted: {
+    tone: 'error',
+    copy: 'That code used all of its tries. Send a new one to continue.',
+  },
+};
 
 /** Format the public Athena destination without exposing a linked caller number. */
 function formatDestination(e164: string): string {
@@ -116,6 +155,162 @@ const COUNTRY_OPTIONS = SUPPORTED_PHONE_COUNTRIES.map((option) => (
   </option>
 ));
 
+function phoneStatusLabel(number: PhoneNumberOut, now: number | null): string {
+  if (number.status === 'verified' && !number.callingEnabled) return 'Calls paused';
+  if (number.status !== 'pending' || !number.challenge) return STATUS_LABEL[number.status];
+  const state = liveChallengeState(number, now) ?? 'awaiting_code';
+  return {
+    awaiting_code: 'Code sent',
+    delivery_unknown: 'Delivery unknown',
+    delivery_failed: 'Send failed',
+    expired: 'Expired',
+    attempts_exhausted: 'Tries used',
+  }[state];
+}
+
+interface PhoneNumberRowViewProps {
+  readonly number: PhoneNumberOut;
+  readonly now: number | null;
+  readonly verifyingId: string | null;
+  readonly coolingDown: boolean;
+  readonly resendPending: boolean;
+  readonly callingPending: boolean;
+  readonly callPending: boolean;
+  readonly onEnterCode: () => void;
+  readonly onResend: () => void;
+  readonly onCall: () => void;
+  readonly onToggleCalling: () => void;
+  readonly onRemove: () => void;
+}
+
+function PhoneNumberRowView({
+  number,
+  now,
+  verifyingId,
+  coolingDown,
+  resendPending,
+  callingPending,
+  callPending,
+  onEnterCode,
+  onResend,
+  onCall,
+  onToggleCalling,
+  onRemove,
+}: PhoneNumberRowViewProps): JSX.Element {
+  const challengeState = liveChallengeState(number, now);
+  return (
+    <Surface
+      as="li"
+      tone="canvas"
+      shape="small"
+      pad="comfortable"
+      className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+      data-phone-number-row
+      data-phone-number-id={number.id}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <span aria-hidden="true" className="text-on-surface-variant shrink-0">
+          {number.status === 'verified' ? (
+            <Phone className="size-4.5" />
+          ) : (
+            <PhoneOff className="size-4.5" />
+          )}
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <Text token="body-medium" numeric className="truncate">
+            {number.masked}
+          </Text>
+          {number.lastCalledAt ? (
+            <Text token="body-small" tone="muted">
+              Last call{' '}
+              <time dateTime={number.lastCalledAt}>{formatClock(number.lastCalledAt)}</time>
+            </Text>
+          ) : null}
+        </span>
+        <Badge variant={number.status === 'verified' ? 'secondary' : 'outline'}>
+          {phoneStatusLabel(number, now)}
+        </Badge>
+      </div>
+      <ControlGroup controlSize="sm" className="shrink-0 flex-nowrap justify-end">
+        {number.status === 'pending' ? (
+          <>
+            {acceptsCode(challengeState) && number.id !== verifyingId ? (
+              <Button variant="ghost" data-phone-action="enter-code" onClick={onEnterCode}>
+                Enter code
+              </Button>
+            ) : null}
+            <Button
+              variant="ghost"
+              data-phone-action="resend"
+              disabled={resendPending || coolingDown}
+              onClick={onResend}
+            >
+              {acceptsCode(challengeState) ? 'Send a new code' : 'Try a new code'}
+            </Button>
+          </>
+        ) : null}
+        {number.status === 'verified' ? (
+          <>
+            {number.callingEnabled ? (
+              <Button
+                variant="ghost"
+                data-phone-action="call"
+                disabled={callPending}
+                onClick={onCall}
+              >
+                Call me
+              </Button>
+            ) : null}
+            <Button
+              variant="ghost"
+              className="hidden sm:inline-flex"
+              data-phone-action={number.callingEnabled ? 'disable-calling' : 'enable-calling'}
+              disabled={callingPending}
+              onClick={onToggleCalling}
+            >
+              {number.callingEnabled ? 'Pause calls' : 'Enable calls'}
+            </Button>
+          </>
+        ) : null}
+        <Button
+          variant="ghost"
+          iconOnly
+          className="hidden size-10 sm:inline-flex"
+          data-phone-action="remove"
+          aria-label={`Remove ${number.masked}`}
+          onClick={onRemove}
+        >
+          <Trash2 aria-hidden="true" />
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              iconOnly
+              className="size-10 sm:hidden"
+              data-phone-action="more"
+              aria-label={`More options for ${number.masked}`}
+            >
+              <Ellipsis aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {number.status === 'verified' ? (
+              <DropdownMenuItem disabled={callingPending} onSelect={onToggleCalling}>
+                {number.callingEnabled ? 'Pause calls' : 'Enable calls'}
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem destructive onSelect={onRemove}>
+              Remove number
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </ControlGroup>
+    </Surface>
+  );
+}
+
 /**
  * The caller-owned phone numbers section.
  *
@@ -129,11 +324,11 @@ export function VoicePhoneNumbers(): JSX.Element {
   const [nationalNumber, setNationalNumber] = useState('');
   const [code, setCode] = useState('');
   const [target, setTarget] = useState<CodeTarget>({ kind: 'auto' });
-  const [notice, setNotice] = useState<string | null>(null);
-  const [confirmation, setConfirmation] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [removeTarget, setRemoveTarget] = useState<PhoneNumberOut | null>(null);
   const queryClient = useQueryClient();
   const reauth = useReauth();
+  const codeInputRef = useRef<HTMLInputElement>(null);
 
   const dialCode = useMemo(
     () =>
@@ -175,7 +370,7 @@ export function VoicePhoneNumbers(): JSX.Element {
   const pointAt = (next: CodeTarget): void => {
     setTarget(next);
     setCode('');
-    setNotice(null);
+    setFeedback(null);
   };
 
   /**
@@ -192,6 +387,9 @@ export function VoicePhoneNumbers(): JSX.Element {
   };
 
   const bind = useApiMutation<PhoneChallengeOut, undefined>({
+    onMutate: () => {
+      setFeedback(null);
+    },
     mutationFn: () =>
       withFreshSession<PhoneChallengeOut>(
         () =>
@@ -204,14 +402,21 @@ export function VoicePhoneNumbers(): JSX.Element {
     onSuccess: (result) => {
       acceptChallenge(result);
       setNationalNumber('');
-      setConfirmation('Docket sent a verification code.');
+      setFeedback(
+        result.state === 'awaiting_code'
+          ? { tone: 'success', copy: 'Docket sent a verification code.' }
+          : null,
+      );
     },
     onError: (error) => {
-      setNotice(userErrorMessage(error, 'Could not send the code.'));
+      setFeedback({ tone: 'error', copy: userErrorMessage(error, 'Could not send the code.') });
     },
   });
 
   const verify = useApiMutation<PhoneNumberOut, string>({
+    onMutate: () => {
+      setFeedback(null);
+    },
     mutationFn: (id) =>
       withFreshSession<PhoneNumberOut>(
         () => api.v1.me['phone-numbers'][':id'].verify.$post({ param: { id }, json: { code } }),
@@ -220,21 +425,25 @@ export function VoicePhoneNumbers(): JSX.Element {
     invalidateKeys: [queryKeys.phoneNumbers()],
     onSuccess: () => {
       pointAt({ kind: 'auto' });
-      setConfirmation('Your phone number is verified.');
+      setFeedback({ tone: 'success', copy: 'Your phone number is verified.' });
     },
     onError: (error) => {
-      setNotice(
-        userErrorMessage(
+      setFeedback({
+        tone: 'error',
+        copy: userErrorMessage(
           error,
           error instanceof UserFacingError && error.status === 503
             ? 'Docket could not check that code. Try again.'
             : 'That code didn’t work.',
         ),
-      );
+      });
     },
   });
 
   const resend = useApiMutation<PhoneChallengeOut, string>({
+    onMutate: () => {
+      setFeedback(null);
+    },
     mutationFn: (id) =>
       unwrap(
         () => api.v1.me['phone-numbers'][':id'].resend.$post({ param: { id } }),
@@ -243,9 +452,19 @@ export function VoicePhoneNumbers(): JSX.Element {
     // The new code resets this number's expiry, tries, and cooldown — all of which now live on the
     // listed row, so the list has to be refetched for the section to stop describing the old code.
     invalidateKeys: [queryKeys.phoneNumbers()],
-    onSuccess: acceptChallenge,
+    onSuccess: (result) => {
+      acceptChallenge(result);
+      setFeedback(
+        result.state === 'awaiting_code'
+          ? { tone: 'success', copy: 'Docket sent a new verification code.' }
+          : null,
+      );
+    },
     onError: (error) => {
-      setNotice(userErrorMessage(error, 'Could not send another code.'));
+      setFeedback({
+        tone: 'error',
+        copy: userErrorMessage(error, 'Could not send another code.'),
+      });
     },
   });
 
@@ -253,6 +472,9 @@ export function VoicePhoneNumbers(): JSX.Element {
     PhoneNumberOut,
     { readonly id: string; readonly enabled: boolean }
   >({
+    onMutate: () => {
+      setFeedback(null);
+    },
     mutationFn: ({ id, enabled }) => {
       const request = (): Promise<RpcResponse<PhoneNumberOut>> =>
         api.v1.me['phone-numbers'][':id'].calling.$post({
@@ -265,15 +487,24 @@ export function VoicePhoneNumbers(): JSX.Element {
     },
     invalidateKeys: [queryKeys.phoneNumbers()],
     onSuccess: (result, input) => {
-      setConfirmation(input.enabled ? 'Athena calls are enabled.' : 'Athena calls are paused.');
+      setFeedback({
+        tone: 'success',
+        copy: input.enabled ? 'Athena calls are enabled.' : 'Athena calls are paused.',
+      });
       seedListItem(queryClient, queryKeys.phoneNumbers(), result);
     },
     onError: (error) => {
-      setNotice(userErrorMessage(error, 'Could not change phone calling.'));
+      setFeedback({
+        tone: 'error',
+        copy: userErrorMessage(error, 'Could not change phone calling.'),
+      });
     },
   });
 
   const call = useApiMutation<PhoneCallOut, string>({
+    onMutate: () => {
+      setFeedback(null);
+    },
     mutationFn: (id) =>
       unwrap(
         () => api.v1.me['phone-numbers'][':id'].call.$post({ param: { id } }),
@@ -281,16 +512,20 @@ export function VoicePhoneNumbers(): JSX.Element {
       ),
     invalidateKeys: [queryKeys.phoneNumbers()],
     onSuccess: () => {
-      setNotice(null);
-      setConfirmation('Athena is calling your verified number. Press 1 when asked to connect.');
+      setFeedback({
+        tone: 'success',
+        copy: 'Athena is calling your verified number. Press 1 when asked to connect.',
+      });
     },
     onError: (error) => {
-      setConfirmation(null);
-      setNotice(userErrorMessage(error, 'Could not start the call.'));
+      setFeedback({ tone: 'error', copy: userErrorMessage(error, 'Could not start the call.') });
     },
   });
 
   const remove = useApiMutation<PhoneNumberOut, string>({
+    onMutate: () => {
+      setFeedback(null);
+    },
     mutationFn: (id) =>
       withFreshSession<PhoneNumberOut>(
         () => api.v1.me['phone-numbers'][':id'].$delete({ param: { id } }),
@@ -300,17 +535,24 @@ export function VoicePhoneNumbers(): JSX.Element {
     onSuccess: () => {
       pointAt({ kind: 'auto' });
       setRemoveTarget(null);
-      setConfirmation('The phone number was removed.');
+      setFeedback({ tone: 'success', copy: 'The phone number was removed.' });
     },
     onError: (error) => {
-      setNotice(userErrorMessage(error, 'Could not remove that number.'));
+      setFeedback({
+        tone: 'error',
+        copy: userErrorMessage(error, 'Could not remove that number.'),
+      });
     },
   });
 
+  const [now, setNow] = useState<number | null>(null);
   const items = numbersQ.data?.items ?? [];
 
   /** Every number that can take a code right now. The cached list is the only source. */
-  const verifiable = items.filter((number) => number.status === 'pending');
+  const verifiable = items.filter(
+    (number) => number.status === 'pending' && acceptsCode(liveChallengeState(number, now)),
+  );
+  const pendingNumbers = items.filter((number) => number.status === 'pending');
 
   const verifying =
     target.kind === 'add'
@@ -330,8 +572,6 @@ export function VoicePhoneNumbers(): JSX.Element {
    * Nothing reads as cooling down until a real client clock exists, which is also the honest
    * reading — a server prerender cannot know how long ago the code was sent.
    */
-  const [now, setNow] = useState<number | null>(null);
-
   /** Whether this number's own cooldown has yet to elapse. */
   const isCoolingDown = (number: PhoneNumberOut): boolean =>
     now !== null && cooldownEnd(number) > now;
@@ -339,10 +579,14 @@ export function VoicePhoneNumbers(): JSX.Element {
   // The soonest moment any row's button should come back. Every pending row owns a cooldown, not
   // just the one being verified — a row the code box is not pointed at is equally capable of
   // having had a code sent moments ago.
-  const nextResendAt = verifiable.reduce(
-    (soonest, number) => Math.min(soonest, cooldownEnd(number)),
-    Infinity,
-  );
+  const renderedAt = now ?? Date.now();
+  const nextStateAt = pendingNumbers.reduce((soonest, number) => {
+    const deadlines = [
+      cooldownEnd(number),
+      number.challenge ? Date.parse(number.challenge.expiresAt) : Infinity,
+    ].filter((deadline) => deadline > renderedAt);
+    return Math.min(soonest, ...deadlines);
+  }, Infinity);
 
   useEffect(() => {
     // Re-check exactly when the earliest cooldown expires rather than polling: the deadline is
@@ -351,20 +595,232 @@ export function VoicePhoneNumbers(): JSX.Element {
     setNow(Date.now());
     // `Infinity` when nothing is pending, `NaN` if a row carried an unparseable timestamp: either
     // way there is no moment to wake up for.
-    if (!Number.isFinite(nextResendAt)) return undefined;
-    const delay = nextResendAt - Date.now();
+    if (!Number.isFinite(nextStateAt)) return undefined;
+    const delay = nextStateAt - Date.now();
     if (delay <= 0) return undefined;
-    const timer = setTimeout(() => {
-      setNow(Date.now());
-    }, delay);
+    const timer = setTimeout(
+      () => {
+        setNow(Date.now());
+      },
+      Math.min(delay, MAX_TIMER_DELAY_MS),
+    );
     return () => {
       clearTimeout(timer);
     };
-  }, [nextResendAt]);
+  }, [nextStateAt]);
 
-  // A code that was never delivered is reported whether this session sent it or read it back, so
-  // the warning survives the reload that the rest of this section's state now survives.
-  const alert = notice ?? (challenge?.deliveryFailed ? UNDELIVERED_MESSAGE : null);
+  useEffect(() => {
+    if (verifying) codeInputRef.current?.focus();
+  }, [verifying?.id]);
+
+  const statefulNumber =
+    verifying ?? pendingNumbers.find((number) => liveChallengeState(number, now) !== null) ?? null;
+  const challengeFeedback = statefulNumber
+    ? (STATE_MESSAGE[liveChallengeState(statefulNumber, now) ?? 'awaiting_code'] ?? null)
+    : null;
+  const visibleFeedback = feedback ?? challengeFeedback ?? null;
+
+  const renderLoaded = (): JSX.Element | null => {
+    const data = numbersQ.data;
+    if (!data) return null;
+    return (
+      <>
+        {data.athenaNumber ? (
+          <div className="border-outline-variant flex min-w-0 flex-col gap-1 border-b pb-3">
+            <Text token="body-medium">
+              Call{' '}
+              <a
+                className="text-primary whitespace-nowrap underline-offset-2 hover:underline"
+                data-native-navigation
+                href={`tel:${data.athenaNumber}`}
+              >
+                {formatDestination(data.athenaNumber)}
+              </a>
+            </Text>
+            <Text token="body-small" tone="muted">
+              Calls your carrier can verify connect directly. Athena calls your verified number back
+              when the carrier cannot verify the call.
+            </Text>
+          </div>
+        ) : null}
+        {items.length > 0 ? (
+          <ul className="flex flex-col gap-2" data-phone-number-list>
+            {items.map((number) => (
+              <PhoneNumberRowView
+                key={number.id}
+                number={number}
+                now={now}
+                verifyingId={verifying?.id ?? null}
+                coolingDown={isCoolingDown(number)}
+                resendPending={resend.isPending}
+                callingPending={calling.isPending}
+                callPending={call.isPending}
+                onEnterCode={() => {
+                  pointAt({ kind: 'number', id: number.id });
+                }}
+                onResend={() => {
+                  pointAt({ kind: 'number', id: number.id });
+                  resend.mutate(number.id);
+                }}
+                onCall={() => {
+                  call.mutate(number.id);
+                }}
+                onToggleCalling={() => {
+                  calling.mutate({ id: number.id, enabled: !number.callingEnabled });
+                }}
+                onRemove={() => {
+                  setRemoveTarget(number);
+                }}
+              />
+            ))}
+          </ul>
+        ) : null}
+
+        {verifying ? (
+          <form
+            className="flex flex-col gap-3"
+            data-phone-verify-form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (code.length === 6 && !verify.isPending) verify.mutate(verifying.id);
+            }}
+          >
+            <Field
+              label="Enter the 6-digit code"
+              description={
+                challenge ? (
+                  <>
+                    {liveChallengeState(verifying, now) === 'delivery_unknown'
+                      ? `A code may still arrive at ${verifying.masked}. It works until `
+                      : `We texted it to ${verifying.masked}. It works until `}
+                    <time dateTime={challenge.expiresAt}>{formatClock(challenge.expiresAt)}</time>,
+                    and you have {String(challenge.attemptsRemaining)} tries.
+                  </>
+                ) : (
+                  <>Enter the code we texted to {verifying.masked}, or ask for a new one above.</>
+                )
+              }
+            >
+              <Input
+                ref={codeInputRef}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={code}
+                onChange={(event) => {
+                  setCode(event.target.value.replace(/\D/g, ''));
+                }}
+                placeholder="000000"
+                data-phone-field="code"
+              />
+            </Field>
+            <ControlGroup>
+              <Button
+                type="submit"
+                data-phone-action="verify"
+                disabled={code.length !== 6 || verify.isPending}
+              >
+                <Check aria-hidden="true" />
+                {verify.isPending ? 'Verifying…' : 'Verify'}
+              </Button>
+              {/* Not "Cancel": the pending number survives this, and calling it cancellation is what
+                used to send people back to the add form to retype a number already on file. */}
+              <Button
+                type="button"
+                variant="ghost"
+                data-phone-action="add-different"
+                onClick={() => {
+                  pointAt({ kind: 'add' });
+                }}
+              >
+                Add a different number
+              </Button>
+            </ControlGroup>
+          </form>
+        ) : data.verification.available &&
+          (target.kind === 'add' || pendingNumbers.length === 0) ? (
+          <form
+            className="flex flex-col gap-3"
+            data-phone-add-form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (nationalNumber.trim().length >= 4 && !bind.isPending) bind.mutate(undefined);
+            }}
+          >
+            <ControlGroup controlSize="lg" wrap className="items-end">
+              <Field label="Country">
+                <Select
+                  disabled={bind.isPending}
+                  value={country}
+                  onChange={(event) => {
+                    setCountry(event.target.value);
+                  }}
+                  aria-label="Country calling code"
+                >
+                  {COUNTRY_OPTIONS}
+                </Select>
+              </Field>
+              <Field label="Phone number">
+                <Input
+                  disabled={bind.isPending}
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel-national"
+                  value={nationalNumber}
+                  onChange={(event) => {
+                    setNationalNumber(event.target.value);
+                  }}
+                  placeholder="415 555 0123"
+                  data-phone-field="national-number"
+                />
+              </Field>
+            </ControlGroup>
+            <ControlGroup>
+              <Button
+                type="submit"
+                data-phone-action="bind"
+                disabled={nationalNumber.trim().length < 4 || bind.isPending}
+              >
+                <Phone aria-hidden="true" />
+                {bind.isPending ? 'Sending code…' : 'Send me a code'}
+              </Button>
+              {verifiable.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  data-phone-action="back-to-code"
+                  onClick={() => {
+                    pointAt({ kind: 'auto' });
+                  }}
+                >
+                  Enter the code instead
+                </Button>
+              ) : null}
+            </ControlGroup>
+          </form>
+        ) : data.verification.available ? null : (
+          <Text token="body-small" tone="muted">
+            Phone verification is not available for this account right now.
+          </Text>
+        )}
+
+        {visibleFeedback ? (
+          <p
+            role={visibleFeedback.tone === 'error' ? 'alert' : 'status'}
+            aria-live="polite"
+            className={visibleFeedback.tone === 'error' ? 'text-error' : undefined}
+          >
+            <Text
+              token="body-small"
+              tone={visibleFeedback.tone === 'error' ? 'inherit' : undefined}
+            >
+              {visibleFeedback.copy}
+            </Text>
+          </p>
+        ) : null}
+      </>
+    );
+  };
 
   return (
     <SettingsGroup capability={SETTINGS_NODES.athenaPhone} data-phone-numbers-section>
@@ -389,273 +845,7 @@ export function VoicePhoneNumbers(): JSX.Element {
           </Button>
         </div>
       ) : null}
-      {numbersQ.data ? (
-        <>
-          {numbersQ.data.athenaNumber ? (
-            <div className="border-outline-variant flex min-w-0 flex-col gap-1 border-b pb-3">
-              <Text token="body-medium">
-                Call{' '}
-                <a
-                  className="text-primary whitespace-nowrap underline-offset-2 hover:underline"
-                  data-native-navigation
-                  href={`tel:${numbersQ.data.athenaNumber}`}
-                >
-                  {formatDestination(numbersQ.data.athenaNumber)}
-                </a>
-              </Text>
-              <Text token="body-small" tone="muted">
-                Calls your carrier can verify connect directly. Athena calls your verified number
-                back when the carrier cannot verify the call.
-              </Text>
-            </div>
-          ) : null}
-          {items.length > 0 ? (
-            <ul className="flex flex-col gap-2" data-phone-number-list>
-              {items.map((number) => (
-                <Surface
-                  as="li"
-                  tone="canvas"
-                  shape="small"
-                  pad="comfortable"
-                  key={number.id}
-                  className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-                  data-phone-number-row
-                  data-phone-number-id={number.id}
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span aria-hidden="true" className="text-on-surface-variant shrink-0">
-                      {number.status === 'verified' ? (
-                        <Phone className="size-4.5" />
-                      ) : (
-                        <PhoneOff className="size-4.5" />
-                      )}
-                    </span>
-                    <span className="flex min-w-0 flex-col">
-                      <Text token="body-medium" numeric className="truncate">
-                        {number.masked}
-                      </Text>
-                      {number.lastCalledAt ? (
-                        <Text token="body-small" tone="muted">
-                          Last call{' '}
-                          <time dateTime={number.lastCalledAt}>
-                            {formatClock(number.lastCalledAt)}
-                          </time>
-                        </Text>
-                      ) : null}
-                    </span>
-                    <Badge variant={number.status === 'verified' ? 'secondary' : 'outline'}>
-                      {number.status === 'verified' && !number.callingEnabled
-                        ? 'Calls paused'
-                        : STATUS_LABEL[number.status]}
-                    </Badge>
-                  </div>
-                  <ControlGroup controlSize="sm" className="shrink-0 flex-nowrap justify-end">
-                    {/* Gated on `pending`, not on "not verified": a blocked number is refused by the
-                    server, so offering it a resend would be an invitation to a guaranteed error. */}
-                    {number.status === 'pending' ? (
-                      <>
-                        {number.id === verifying?.id ? null : (
-                          <Button
-                            variant="ghost"
-                            data-phone-action="enter-code"
-                            onClick={() => {
-                              pointAt({ kind: 'number', id: number.id });
-                            }}
-                          >
-                            Enter code
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          data-phone-action="resend"
-                          disabled={resend.isPending || isCoolingDown(number)}
-                          onClick={() => {
-                            pointAt({ kind: 'number', id: number.id });
-                            resend.mutate(number.id);
-                          }}
-                        >
-                          Send a new code
-                        </Button>
-                      </>
-                    ) : null}
-                    {number.status === 'verified' ? (
-                      <>
-                        {number.callingEnabled ? (
-                          <Button
-                            variant="ghost"
-                            data-phone-action="call"
-                            disabled={call.isPending}
-                            onClick={() => {
-                              call.mutate(number.id);
-                            }}
-                          >
-                            Call me
-                          </Button>
-                        ) : null}
-                        <Button
-                          variant="ghost"
-                          data-phone-action={
-                            number.callingEnabled ? 'disable-calling' : 'enable-calling'
-                          }
-                          disabled={calling.isPending}
-                          onClick={() => {
-                            calling.mutate({ id: number.id, enabled: !number.callingEnabled });
-                          }}
-                        >
-                          {number.callingEnabled ? 'Pause calls' : 'Enable calls'}
-                        </Button>
-                      </>
-                    ) : null}
-                    <Button
-                      variant="ghost"
-                      iconOnly
-                      className="size-10"
-                      data-phone-action="remove"
-                      aria-label={`Remove ${number.masked}`}
-                      onClick={() => {
-                        setRemoveTarget(number);
-                      }}
-                    >
-                      <Trash2 aria-hidden="true" />
-                    </Button>
-                  </ControlGroup>
-                </Surface>
-              ))}
-            </ul>
-          ) : null}
-
-          {verifying ? (
-            <form
-              className="flex flex-col gap-3"
-              data-phone-verify-form
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (code.length === 6 && !verify.isPending) verify.mutate(verifying.id);
-              }}
-            >
-              <Field
-                label="Enter the 6-digit code"
-                description={
-                  challenge ? (
-                    <>
-                      We texted it to {verifying.masked}. It works until{' '}
-                      <time dateTime={challenge.expiresAt}>{formatClock(challenge.expiresAt)}</time>
-                      , and you have {String(challenge.attemptsRemaining)} tries.
-                    </>
-                  ) : (
-                    <>Enter the code we texted to {verifying.masked}, or ask for a new one above.</>
-                  )
-                }
-              >
-                <Input
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  value={code}
-                  onChange={(event) => {
-                    setCode(event.target.value.replace(/\D/g, ''));
-                  }}
-                  placeholder="000000"
-                  data-phone-field="code"
-                />
-              </Field>
-              <ControlGroup>
-                <Button
-                  type="submit"
-                  data-phone-action="verify"
-                  disabled={code.length !== 6 || verify.isPending}
-                >
-                  <Check aria-hidden="true" />
-                  {verify.isPending ? 'Verifying…' : 'Verify'}
-                </Button>
-                {/* Not "Cancel": the pending number survives this, and calling it cancellation is what
-                used to send people back to the add form to retype a number already on file. */}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  data-phone-action="add-different"
-                  onClick={() => {
-                    pointAt({ kind: 'add' });
-                  }}
-                >
-                  Add a different number
-                </Button>
-              </ControlGroup>
-            </form>
-          ) : (
-            <form
-              className="flex flex-col gap-3"
-              data-phone-add-form
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (nationalNumber.trim().length >= 4 && !bind.isPending) bind.mutate(undefined);
-              }}
-            >
-              <ControlGroup controlSize="lg" wrap className="items-end">
-                <Field label="Country">
-                  <Select
-                    value={country}
-                    onChange={(event) => {
-                      setCountry(event.target.value);
-                    }}
-                    aria-label="Country calling code"
-                  >
-                    {COUNTRY_OPTIONS}
-                  </Select>
-                </Field>
-                <Field label="Phone number">
-                  <Input
-                    type="tel"
-                    inputMode="tel"
-                    autoComplete="tel-national"
-                    value={nationalNumber}
-                    onChange={(event) => {
-                      setNationalNumber(event.target.value);
-                    }}
-                    placeholder="415 555 0123"
-                    data-phone-field="national-number"
-                  />
-                </Field>
-              </ControlGroup>
-              <ControlGroup>
-                <Button
-                  type="submit"
-                  data-phone-action="bind"
-                  disabled={nationalNumber.trim().length < 4 || bind.isPending}
-                >
-                  <Phone aria-hidden="true" />
-                  {bind.isPending ? 'Sending code…' : 'Send me a code'}
-                </Button>
-                {verifiable.length > 0 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    data-phone-action="back-to-code"
-                    onClick={() => {
-                      pointAt({ kind: 'auto' });
-                    }}
-                  >
-                    Enter the code instead
-                  </Button>
-                ) : null}
-              </ControlGroup>
-            </form>
-          )}
-
-          {alert ? (
-            <p role="alert" className="text-error">
-              <Text token="body-small" tone="inherit">
-                {alert}
-              </Text>
-            </p>
-          ) : null}
-          {confirmation ? (
-            <p role="status" aria-live="polite">
-              <Text token="body-small">{confirmation}</Text>
-            </p>
-          ) : null}
-        </>
-      ) : null}
+      {renderLoaded()}
       <ConfirmDestructiveDialog
         open={removeTarget !== null}
         onOpenChange={(open) => {
@@ -669,10 +859,10 @@ export function VoicePhoneNumbers(): JSX.Element {
         }
         confirmLabel="Remove phone number"
         pending={remove.isPending}
-        error={removeTarget ? notice : null}
+        error={removeTarget && feedback?.tone === 'error' ? feedback.copy : null}
         onConfirm={() => {
           if (!removeTarget) return;
-          setNotice(null);
+          setFeedback(null);
           remove.mutate(removeTarget.id);
         }}
       />

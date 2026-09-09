@@ -24,6 +24,7 @@ import connectedApps from './routes/connected-apps';
 import { createContactPointRoutes } from './routes/contact-points';
 import { createPhoneNumberRoutes } from './routes/phone-numbers';
 import { PhoneVerificationService } from './routes/phone-verification';
+import { phoneVerificationEnabled } from './services/phone-verification-rollout';
 import { createVoiceRoutes } from './routes/voice-sessions';
 import { getContainer } from './container';
 import { env } from './env';
@@ -178,6 +179,31 @@ const notificationContactPoints = new NotificationContactPointService(db);
 const createPhoneVerification = () =>
   new PhoneVerificationService({ provider: () => getContainer().phoneVerification });
 
+function verificationAvailability(identity: {
+  readonly email: string;
+  readonly emailVerified: boolean;
+}): {
+  readonly available: boolean;
+  readonly reason: 'rollout_restricted' | 'temporarily_unavailable' | null;
+} {
+  if (
+    env.APP_MODE === 'production' &&
+    !phoneVerificationEnabled(
+      env.PHONE_VERIFICATION_ENABLED,
+      env.PHONE_VERIFICATION_CANARY_EMAILS,
+      identity,
+    )
+  ) {
+    return { available: false, reason: 'rollout_restricted' };
+  }
+  try {
+    createPhoneVerification().assertAvailable();
+    return { available: true, reason: null };
+  } catch {
+    return { available: false, reason: 'temporarily_unavailable' };
+  }
+}
+
 /** The chained route tree; its type is the public RPC contract (consumed only via `typeof`). */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const routes = app
@@ -206,6 +232,7 @@ const routes = app
     createPhoneNumberRoutes(createPhoneVerification, {
       telephony: () => getContainer().telephony,
       athenaNumber: () => env.TWILIO_PHONE_NUMBER ?? null,
+      verificationAvailability,
     }),
   )
   // Registered before `/me/athena` so the more specific voice prefix is matched first.

@@ -133,6 +133,13 @@ export class BillingUnavailableError extends ApiError {
   }
 }
 
+/** 503 — phone verification is disabled or its provider is not ready. */
+export class PhoneVerificationUnavailableError extends ApiError {
+  constructor(message = 'Phone verification is not available') {
+    super(503, 'phone_verification_unavailable', message);
+  }
+}
+
 /** 409 — another Checkout request is still creating the organization session. */
 export class CheckoutPendingError extends ApiError {
   constructor(message = 'Checkout is already being prepared') {

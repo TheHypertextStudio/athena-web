@@ -78,6 +78,7 @@ export type ProviderId =
   | 'apple'
   | 'stripe'
   | 'anthropic'
+  | 'twilio-verify'
   | 'email'
   | 'observability';
 
@@ -846,6 +847,37 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       '2) Ensure the workspace has billing/credits (Settings → Billing).',
       '3) Settings → "API keys" → "Create Key".',
       `4) Name it "${appName(env)}" → Create. The key starts with sk-ant-… and is shown once.`,
+    ],
+  },
+  {
+    id: 'twilio-verify',
+    title: 'Twilio Verify Set-up (optional)',
+    label: 'Twilio Verify',
+    optional: true,
+    consoleUrl: 'https://console.twilio.com/us1/develop/verify/services',
+    vars: [
+      'TWILIO_VERIFY_SERVICE_SID',
+      'TWILIO_VERIFY_API_KEY_SID',
+      'TWILIO_VERIFY_API_KEY_SECRET',
+      'PHONE_VERIFICATION_ENABLED',
+      'PHONE_VERIFICATION_CANARY_EMAILS',
+    ],
+    requiredVars: [
+      'TWILIO_VERIFY_SERVICE_SID',
+      'TWILIO_VERIFY_API_KEY_SID',
+      'TWILIO_VERIFY_API_KEY_SECRET',
+    ],
+    policyVars: ['PHONE_VERIFICATION_ENABLED', 'PHONE_VERIFICATION_CANARY_EMAILS'],
+    cloudVariables: ['PHONE_VERIFICATION_ENABLED', 'PHONE_VERIFICATION_CANARY_EMAILS'],
+    instructions: () => [
+      'Twilio Verify owns verification codes and SMS delivery. It does not use the Athena voice',
+      'number or the account Auth Token.',
+      '',
+      '1) Create a Verify service named "Docket phone verification" with Fraud Guard enabled.',
+      '2) Limit SMS delivery to the United States while the service remains in trial.',
+      '3) Create a standard API key and enter its SID and one-time secret below.',
+      '4) Keep PHONE_VERIFICATION_ENABLED false during the owner canary.',
+      '5) Set PHONE_VERIFICATION_CANARY_EMAILS to the verified owner account email.',
     ],
   },
   {

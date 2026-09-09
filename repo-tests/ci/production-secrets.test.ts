@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  PHONE_VERIFICATION_PRODUCTION_SECRET_ENV_NAMES,
   parseSecretBindings,
   requiredProductionSecretEnvNames,
   validateSecretBindings,
@@ -67,6 +68,15 @@ describe('requiredProductionSecretEnvNames', () => {
 
   it('includes the Linear Agent secrets when the feature is enabled', () => {
     expect(requiredProductionSecretEnvNames(true)).toContain('LINEAR_AGENT_CLIENT_ID');
+  });
+
+  it('requires all scoped Twilio Verify credentials when the rollout has an audience', () => {
+    expect(requiredProductionSecretEnvNames(false, false)).not.toContain(
+      'TWILIO_VERIFY_SERVICE_SID',
+    );
+    expect(requiredProductionSecretEnvNames(false, true)).toEqual(
+      expect.arrayContaining([...PHONE_VERIFICATION_PRODUCTION_SECRET_ENV_NAMES]),
+    );
   });
 });
 

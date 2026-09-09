@@ -48,6 +48,7 @@
     "bootstrap:local": "scripts/bootstrap-local",
     "bootstrap:verify": "scripts/bootstrap-verify",
     "integrations": "tsx scripts/integrations-setup.ts",
+    "phone:verify:canary": "tsx scripts/twilio-verify-canary.ts",
     "linear-agent:sandbox-check": "tsx scripts/linear-agent-sandbox-check.ts",
     "env:check": "tsx scripts/env-check.ts",
     "domain:check": "tsx scripts/domain-check.ts",

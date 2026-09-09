@@ -71,6 +71,8 @@ import { resolveVoiceProvider, type VoiceRealtimeProvider } from './routes/voice
 /** Runtime configuration values used to choose local mocks or production services. */
 export interface AppRuntimeEnv {
   readonly APP_MODE?: 'local' | 'test' | 'production';
+  readonly PHONE_VERIFICATION_ENABLED?: boolean;
+  readonly PHONE_VERIFICATION_CANARY_EMAILS?: string;
   readonly BILLING_ENABLED?: boolean;
   readonly BILLING_CANARY_EMAILS?: string;
   readonly STRIPE_SECRET_KEY?: string;
@@ -118,6 +120,8 @@ export interface AppRuntimeEnv {
   readonly TWILIO_ACCOUNT_SID?: string;
   readonly TWILIO_AUTH_TOKEN?: string;
   readonly TWILIO_PHONE_NUMBER?: string;
+  readonly TWILIO_VERIFY_API_KEY_SID?: string;
+  readonly TWILIO_VERIFY_API_KEY_SECRET?: string;
   readonly TWILIO_VERIFY_SERVICE_SID?: string;
 }
 
@@ -187,6 +191,10 @@ export function anthropicConfigFromEnv(runtimeEnv: AppRuntimeEnv): AnthropicClie
 export function toAppRuntimeEnv(): AppRuntimeEnv {
   return {
     APP_MODE: env.APP_MODE,
+    PHONE_VERIFICATION_ENABLED: env.PHONE_VERIFICATION_ENABLED,
+    ...(env.PHONE_VERIFICATION_CANARY_EMAILS
+      ? { PHONE_VERIFICATION_CANARY_EMAILS: env.PHONE_VERIFICATION_CANARY_EMAILS }
+      : {}),
     BILLING_ENABLED: env.BILLING_ENABLED,
     ...(env.BILLING_CANARY_EMAILS ? { BILLING_CANARY_EMAILS: env.BILLING_CANARY_EMAILS } : {}),
     ...(env.STRIPE_SECRET_KEY ? { STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY } : {}),
@@ -254,9 +262,7 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
     ...(env.TWILIO_ACCOUNT_SID ? { TWILIO_ACCOUNT_SID: env.TWILIO_ACCOUNT_SID } : {}),
     ...(env.TWILIO_AUTH_TOKEN ? { TWILIO_AUTH_TOKEN: env.TWILIO_AUTH_TOKEN } : {}),
     ...(env.TWILIO_PHONE_NUMBER ? { TWILIO_PHONE_NUMBER: env.TWILIO_PHONE_NUMBER } : {}),
-    ...(env.TWILIO_VERIFY_SERVICE_SID
-      ? { TWILIO_VERIFY_SERVICE_SID: env.TWILIO_VERIFY_SERVICE_SID }
-      : {}),
+    ...toPhoneVerificationRuntimeEnv(),
     ...(env.GITHUB_API_BASE ? { GITHUB_API_BASE: env.GITHUB_API_BASE } : {}),
     ...(env.LINEAR_API_BASE ? { LINEAR_API_BASE: env.LINEAR_API_BASE } : {}),
     ...(env.GOOGLE_GMAIL_API_BASE ? { GOOGLE_GMAIL_API_BASE: env.GOOGLE_GMAIL_API_BASE } : {}),
@@ -264,6 +270,20 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
       ? { GOOGLE_CALENDAR_API_BASE: env.GOOGLE_CALENDAR_API_BASE }
       : {}),
     ...(env.GOOGLE_TASKS_API_BASE ? { GOOGLE_TASKS_API_BASE: env.GOOGLE_TASKS_API_BASE } : {}),
+  };
+}
+
+function toPhoneVerificationRuntimeEnv(): Partial<AppRuntimeEnv> {
+  return {
+    ...(env.TWILIO_VERIFY_API_KEY_SID
+      ? { TWILIO_VERIFY_API_KEY_SID: env.TWILIO_VERIFY_API_KEY_SID }
+      : {}),
+    ...(env.TWILIO_VERIFY_API_KEY_SECRET
+      ? { TWILIO_VERIFY_API_KEY_SECRET: env.TWILIO_VERIFY_API_KEY_SECRET }
+      : {}),
+    ...(env.TWILIO_VERIFY_SERVICE_SID
+      ? { TWILIO_VERIFY_SERVICE_SID: env.TWILIO_VERIFY_SERVICE_SID }
+      : {}),
   };
 }
 
@@ -474,17 +494,17 @@ function buildSmsSender(runtimeEnv: AppRuntimeEnv): SmsSender {
 
 function buildPhoneVerificationProvider(runtimeEnv: AppRuntimeEnv): PhoneVerificationProvider {
   if (localMode(runtimeEnv)) return new CapturePhoneVerificationProvider();
-  const config = twilioPhoneConfig(runtimeEnv);
+  const config = twilioVerifyConfig(runtimeEnv);
   return new TwilioVerifyProvider({
-    accountSid: config.accountSid,
-    authToken: config.authToken,
-    serviceSid: config.verifyServiceSid,
+    apiKeySid: config.apiKeySid,
+    apiKeySecret: config.apiKeySecret,
+    serviceSid: config.serviceSid,
   });
 }
 
 function buildTelephonyProvider(runtimeEnv: AppRuntimeEnv): TelephonyProvider {
   if (localMode(runtimeEnv)) return new CaptureTelephonyProvider();
-  const config = twilioPhoneConfig(runtimeEnv);
+  const config = twilioVoiceConfig(runtimeEnv);
   return new TwilioTelephony({
     accountSid: config.accountSid,
     authToken: config.authToken,
@@ -492,18 +512,29 @@ function buildTelephonyProvider(runtimeEnv: AppRuntimeEnv): TelephonyProvider {
   });
 }
 
-/** Validate phone linking and calling as one production feature configuration. */
-function twilioPhoneConfig(runtimeEnv: AppRuntimeEnv): {
+/** Validate the production voice configuration independently from Verify. */
+function twilioVoiceConfig(runtimeEnv: AppRuntimeEnv): {
   readonly accountSid: string;
   readonly authToken: string;
-  readonly verifyServiceSid: string;
   readonly phoneNumber: string;
 } {
   return {
     accountSid: required('TWILIO_ACCOUNT_SID', runtimeEnv.TWILIO_ACCOUNT_SID),
     authToken: required('TWILIO_AUTH_TOKEN', runtimeEnv.TWILIO_AUTH_TOKEN),
-    verifyServiceSid: required('TWILIO_VERIFY_SERVICE_SID', runtimeEnv.TWILIO_VERIFY_SERVICE_SID),
     phoneNumber: required('TWILIO_PHONE_NUMBER', runtimeEnv.TWILIO_PHONE_NUMBER),
+  };
+}
+
+/** Validate the production Verify credentials without requiring a voice number. */
+function twilioVerifyConfig(runtimeEnv: AppRuntimeEnv): {
+  readonly apiKeySid: string;
+  readonly apiKeySecret: string;
+  readonly serviceSid: string;
+} {
+  return {
+    apiKeySid: required('TWILIO_VERIFY_API_KEY_SID', runtimeEnv.TWILIO_VERIFY_API_KEY_SID),
+    apiKeySecret: required('TWILIO_VERIFY_API_KEY_SECRET', runtimeEnv.TWILIO_VERIFY_API_KEY_SECRET),
+    serviceSid: required('TWILIO_VERIFY_SERVICE_SID', runtimeEnv.TWILIO_VERIFY_SERVICE_SID),
   };
 }
 

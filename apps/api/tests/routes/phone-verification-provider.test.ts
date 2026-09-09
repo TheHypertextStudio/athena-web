@@ -13,8 +13,8 @@ describe('TwilioVerifyProvider', () => {
       { sid: 'VE_check', status: 'approved' },
     ];
     const provider = new TwilioVerifyProvider({
-      accountSid: 'AC_docket',
-      authToken: 'secret',
+      apiKeySid: 'SK_docket',
+      apiKeySecret: 'secret',
       serviceSid: 'VA_docket',
       fetch: async (input, init) => {
         requests.push({
@@ -39,7 +39,7 @@ describe('TwilioVerifyProvider', () => {
       'https://verify.twilio.com/v2/Services/VA_docket/VerificationCheck',
     ]);
     expect(requests[0]?.init.headers).toMatchObject({
-      authorization: `Basic ${Buffer.from('AC_docket:secret').toString('base64')}`,
+      authorization: `Basic ${Buffer.from('SK_docket:secret').toString('base64')}`,
       'content-type': 'application/x-www-form-urlencoded',
     });
     expect(requests[0]?.init.body).toBeInstanceOf(URLSearchParams);
@@ -50,6 +50,37 @@ describe('TwilioVerifyProvider', () => {
     expect((requests[1]?.init.body as URLSearchParams | undefined)?.toString()).toBe(
       'To=%2B14155550123&Code=123456',
     );
+  });
+
+  it.each(['canceled', 'max_attempts_reached', 'deleted', 'failed', 'expired'] as const)(
+    'preserves the Twilio %s terminal state',
+    async (status) => {
+      const provider = new TwilioVerifyProvider({
+        apiKeySid: 'SK_docket',
+        apiKeySecret: 'secret',
+        serviceSid: 'VA_docket',
+        fetch: async () => Response.json({ sid: 'VE_terminal', status }),
+      });
+
+      await expect(provider.start('+14155550123')).resolves.toEqual({
+        providerChallengeId: 'VE_terminal',
+        status,
+      });
+    },
+  );
+
+  it('maps a missing Twilio check to the deleted terminal state', async () => {
+    const provider = new TwilioVerifyProvider({
+      apiKeySid: 'SK_docket',
+      apiKeySecret: 'secret',
+      serviceSid: 'VA_docket',
+      fetch: async () => Response.json({ code: 20404 }, { status: 404 }),
+    });
+
+    await expect(provider.check('+14155550123', '123456')).resolves.toEqual({
+      providerChallengeId: null,
+      status: 'deleted',
+    });
   });
 
   it('captures local challenges without sending an external request', async () => {

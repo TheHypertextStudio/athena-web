@@ -51,6 +51,7 @@
         "RESEND_API_KEY",
         "MAIL_FROM",
         "VOICE_*",
+        "PHONE_*",
         "TWILIO_*",
         "STAFF_BOOTSTRAP_EMAILS"
       ]

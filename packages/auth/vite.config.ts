@@ -20,6 +20,7 @@ export default docketVitest({
     BILLING_ENABLED: 'false',
     BILLING_RECONCILIATION_MODE: 'off',
     WORK_LOCATION_PROJECTION_ENABLED: 'false',
+    PHONE_VERIFICATION_ENABLED: 'false',
     MCP_TASKS_ENABLED: 'false',
     // Required by `@docket/env/api`, which the builder reaches through `backup-codes.ts`. They
     // live here rather than at the top of one test file so ANY test importing the builder gets a

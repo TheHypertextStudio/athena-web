@@ -46,6 +46,10 @@ export type VoiceSessionStatus = 'active' | 'ended';
 /** Verification backend recorded for one challenge. */
 export type PhoneVerificationProvider = 'legacy_sms' | 'twilio_verify' | 'capture';
 
+/** Durable delivery state for a phone-verification challenge. */
+export type PhoneVerificationDeliveryState =
+  'starting' | 'awaiting_code' | 'delivery_unknown' | 'delivery_failed';
+
 /** Origin of a durable callback authorization. */
 export type PhoneCallAuthorizationSource = 'weak_inbound' | 'docket';
 
@@ -155,6 +159,11 @@ export const phoneVerification = pgTable(
     providerChallengeId: text('provider_challenge_id'),
     /** Last normalized provider state, never raw provider copy. */
     providerStatus: text('provider_status'),
+    /** Docket-owned delivery state used to recover after provider and process failures. */
+    deliveryState: text('delivery_state')
+      .$type<PhoneVerificationDeliveryState>()
+      .notNull()
+      .default('starting'),
     /** SHA-256 of a legacy 6-digit code. Managed providers never expose a code to Docket. */
     codeHash: text('code_hash'),
     expiresAt: timestamp('expires_at').notNull(),
@@ -179,6 +188,10 @@ export const phoneVerification = pgTable(
     check(
       'phone_verification_provider_check',
       sql`${t.provider} in ('legacy_sms','twilio_verify','capture')`,
+    ),
+    check(
+      'phone_verification_delivery_state_check',
+      sql`${t.deliveryState} in ('starting','awaiting_code','delivery_unknown','delivery_failed')`,
     ),
   ],
 );

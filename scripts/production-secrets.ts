@@ -46,11 +46,23 @@ export const LINEAR_AGENT_PRODUCTION_SECRET_ENV_NAMES = [
   'LINEAR_AGENT_WEBHOOK_SECRET',
 ] as const;
 
+/** The scoped credentials required before Twilio Verify may accept a production request. */
+export const PHONE_VERIFICATION_PRODUCTION_SECRET_ENV_NAMES = [
+  'TWILIO_VERIFY_API_KEY_SID',
+  'TWILIO_VERIFY_API_KEY_SECRET',
+  'TWILIO_VERIFY_SERVICE_SID',
+] as const;
+
 /** Build the production secret gate for the active feature set. */
-export function requiredProductionSecretEnvNames(linearAgentEnabled: boolean): readonly string[] {
-  return linearAgentEnabled
-    ? [...REQUIRED_PRODUCTION_SECRET_ENV_NAMES, ...LINEAR_AGENT_PRODUCTION_SECRET_ENV_NAMES]
-    : REQUIRED_PRODUCTION_SECRET_ENV_NAMES;
+export function requiredProductionSecretEnvNames(
+  linearAgentEnabled: boolean,
+  phoneVerificationConfigured = false,
+): readonly string[] {
+  return [
+    ...REQUIRED_PRODUCTION_SECRET_ENV_NAMES,
+    ...(linearAgentEnabled ? LINEAR_AGENT_PRODUCTION_SECRET_ENV_NAMES : []),
+    ...(phoneVerificationConfigured ? PHONE_VERIFICATION_PRODUCTION_SECRET_ENV_NAMES : []),
+  ];
 }
 
 /** Parse the multiline `API_SECRET_BINDINGS` format without accepting shell syntax. */
@@ -148,7 +160,11 @@ function main(): void {
   const issues = validateSecretBindings(
     bindings,
     (binding) => readSecretManagerValue(binding, project),
-    requiredProductionSecretEnvNames(process.env['LINEAR_AGENT_ENABLED'] === 'true'),
+    requiredProductionSecretEnvNames(
+      process.env['LINEAR_AGENT_ENABLED'] === 'true',
+      process.env['PHONE_VERIFICATION_ENABLED'] === 'true' ||
+        (process.env['PHONE_VERIFICATION_CANARY_EMAILS']?.trim().length ?? 0) > 0,
+    ),
   );
   if (issues.length > 0) {
     console.error('Production secret validation failed:');

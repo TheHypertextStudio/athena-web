@@ -2,7 +2,7 @@
 
 > **Status**: implemented (browser channel and telephony front door), pending a live provisioned number
 > **Owner**: Athena / channels
-> **Last updated**: 2026-08-30
+> **Last updated**: 2026-09-08
 
 Athena can be spoken to. In a browser, and on the telephone. Both are the **same conversation** —
 the one `agent_session` of kind `chat` that `GET /v1/me/athena/chat` returns — and both run on the
@@ -353,6 +353,10 @@ Three properties, each tested:
 
 - Production starts and checks codes through the Twilio Verify REST API. Docket never generates or
   stores a new production code. Local development and tests use a capture provider.
+- The API checks account rollout access and all three Verify credentials before it inserts a phone
+  row. A closed rollout or incomplete provider returns `phone_verification_unavailable` with 503.
+- `PHONE_VERIFICATION_ENABLED` opens the public rollout. A verified email in
+  `PHONE_VERIFICATION_CANARY_EMAILS` can enter while the public flag remains false.
 - Each attempt stores `userId` and normalized `e164` independently of the deletable phone binding.
   Deleting and re-adding a pending number therefore does not reset the send history.
 - A durable row keyed by normalized E.164 is locked before a send is reserved. The reservation
@@ -363,12 +367,23 @@ Three properties, each tested:
   challenge created after deployment is provider-owned.
 - A provider outage while checking a code does not spend one of the person's five code guesses.
   Docket rolls back the reserved check attempt and returns an application-owned retry failure.
+- A provider start request has a ten-second deadline. A timeout becomes `delivery_unknown` because
+  Twilio may have accepted the request. A `starting` row that survives past the same deadline also
+  becomes `delivery_unknown`, so a process exit cannot strand the account.
 - Docket applies the table below before the provider call. Twilio may reject sooner.
+
+The state machine lives in
+[`diagrams/phone-verification-state-machine.mmd`](diagrams/phone-verification-state-machine.mmd).
+Every recoverable state names one next action. `awaiting_code` accepts a code.
+`delivery_unknown` accepts a code and permits resend after the cooldown. `delivery_failed`,
+`expired`, and `attempts_exhausted` request a new challenge. Twilio `canceled`, `deleted`, and
+`failed` map to `delivery_failed`. Twilio `max_attempts_reached` and `expired` retain their distinct
+terminal states. Twilio `approved` verifies the number.
 
 | limit          | value           | why                                                                                      |
 | -------------- | --------------- | ---------------------------------------------------------------------------------------- |
 | code lifetime  | 10 minutes      | long enough to walk to the other room, short enough that a shoulder-surfed code is stale |
-| wrong attempts | 5 per challenge | 5 tries against a 6-digit space is 1-in-200 000, and the challenge is destroyed after    |
+| wrong attempts | 5 per challenge | 5 tries against a 6-digit space is 1-in-200 000; exhaustion stays visible after reload   |
 | resend gap     | 60 seconds      | stops "resend" becoming an SMS cannon aimed at somebody else's phone                     |
 | sends per hour | 5 per number    | caps the cost and the harassment of enumerating numbers                                  |
 
@@ -436,9 +451,14 @@ All optional; absent means the doubles run.
 | `TWILIO_AUTH_TOKEN`                             | the key every inbound webhook signature is verified against                                   |
 | `TWILIO_PHONE_NUMBER`                           | the number people call                                                                        |
 | `TWILIO_VERIFY_SERVICE_SID`                     | the Verify service that owns production SMS challenges                                        |
+| `TWILIO_VERIFY_API_KEY_SID`                     | the scoped API key identity used by Verify                                                    |
+| `TWILIO_VERIFY_API_KEY_SECRET`                  | the one-time secret paired with the scoped Verify key                                         |
+| `PHONE_VERIFICATION_ENABLED`                    | the public verification rollout gate                                                          |
+| `PHONE_VERIFICATION_CANARY_EMAILS`              | verified account emails admitted while the public gate is closed                              |
 
-Production validates the two Twilio credentials, the Verify service SID, and the Docket phone
-number as one feature configuration before either production phone adapter can run.
+Production validates voice and verification as independent provider configurations. Voice uses
+the account SID, Auth Token, and Docket phone number. Verify uses only its service SID and scoped
+API key. A partial Verify configuration fails deployment validation before Cloud Run starts.
 
 ---
 

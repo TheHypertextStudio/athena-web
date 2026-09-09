@@ -143,6 +143,38 @@ export function isOwnHost(host: string): boolean {
   return OWN_HOSTS.includes(host);
 }
 
+function failCrossField(message: string): never {
+  throw new Error(`Invalid environment (cross-field): ${message}`);
+}
+
+function assertPhoneVerificationConfig(e: typeof env): void {
+  const canaryEnabled =
+    e.PHONE_VERIFICATION_CANARY_EMAILS?.split(',').some((email) => email.trim().length > 0) ??
+    false;
+  const values = [
+    e.TWILIO_VERIFY_API_KEY_SID,
+    e.TWILIO_VERIFY_API_KEY_SECRET,
+    e.TWILIO_VERIFY_SERVICE_SID,
+  ];
+  if (!e.PHONE_VERIFICATION_ENABLED && !canaryEnabled) {
+    if (values.some(Boolean) && !values.every(Boolean)) {
+      failCrossField('Twilio Verify credentials must be configured together.');
+    }
+    return;
+  }
+
+  const rolloutSetting = e.PHONE_VERIFICATION_ENABLED
+    ? 'PHONE_VERIFICATION_ENABLED=true'
+    : 'PHONE_VERIFICATION_CANARY_EMAILS';
+  const required = [
+    ['TWILIO_VERIFY_API_KEY_SID', e.TWILIO_VERIFY_API_KEY_SID],
+    ['TWILIO_VERIFY_API_KEY_SECRET', e.TWILIO_VERIFY_API_KEY_SECRET],
+    ['TWILIO_VERIFY_SERVICE_SID', e.TWILIO_VERIFY_SERVICE_SID],
+  ] as const;
+  const missing = required.find(([, value]) => !value)?.[0];
+  if (missing) failCrossField(`${rolloutSetting} requires ${missing}.`);
+}
+
 /**
  * Cross-field invariants that a per-var schema cannot express. Runs at module load
  * so a misconfigured contract fails fast, the same as a missing required var.
@@ -150,9 +182,9 @@ export function isOwnHost(host: string): boolean {
  * @throws {Error} when a paired/conditional var group is half-configured.
  */
 function assertCrossFieldRules(e: typeof env): void {
-  const fail = (msg: string): never => {
-    throw new Error(`Invalid environment (cross-field): ${msg}`);
-  };
+  const fail = failCrossField;
+
+  assertPhoneVerificationConfig(e);
 
   const billingCanaryEnabled =
     e.BILLING_CANARY_EMAILS?.split(',').some((email) => email.trim().length > 0) ?? false;

@@ -30,6 +30,7 @@ import {
 } from '../../scripts/integrations-setup';
 import {
   LINEAR_AGENT_PRODUCTION_SECRET_ENV_NAMES,
+  PHONE_VERIFICATION_PRODUCTION_SECRET_ENV_NAMES,
   requiredProductionSecretEnvNames,
   validateSecretBindings,
 } from '../../scripts/production-secrets';
@@ -123,6 +124,14 @@ describe('Linear Agent production secret gate', () => {
     );
   });
 
+  it('requires Twilio Verify credentials when the owner canary is configured', () => {
+    const enabled = requiredProductionSecretEnvNames(false, true);
+
+    expect(enabled).toEqual(
+      expect.arrayContaining([...PHONE_VERIFICATION_PRODUCTION_SECRET_ENV_NAMES]),
+    );
+  });
+
   it('passes the production feature flag into the deployment secret validator', () => {
     const workflow = readFileSync(
       resolve(import.meta.dirname, '../../.github/workflows/deploy.yml'),
@@ -130,6 +139,10 @@ describe('Linear Agent production secret gate', () => {
     );
 
     expect(workflow).toContain("LINEAR_AGENT_ENABLED: ${{ vars.LINEAR_AGENT_ENABLED || 'false' }}");
+    expect(workflow).toContain(
+      "PHONE_VERIFICATION_ENABLED: ${{ vars.PHONE_VERIFICATION_ENABLED || 'false' }}",
+    );
+    expect(workflow).toContain('PHONE_VERIFICATION_CANARY_EMAILS:');
   });
 });
 
@@ -144,6 +157,7 @@ describe('mandatory production provider catalog', () => {
       'apple',
       'stripe',
       'anthropic',
+      'twilio-verify',
       'email',
       'observability',
     ]);

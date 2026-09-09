@@ -83,6 +83,8 @@ run_browser_checks() {
     return
   fi
   run_release_env pnpm --filter @docket/web test:e2e:release
+  run_release_env pnpm --filter @docket/web exec playwright test \
+    e2e/settings/phone-verification.spec.ts --workers=1
 }
 
 wait_for_health() {
@@ -99,6 +101,25 @@ wait_for_health() {
 
   echo "${name} did not become healthy at ${url}." >&2
   tail -n 100 -- "${log_file}" >&2 || true
+  return 1
+}
+
+wait_for_postgres() {
+  local successful_queries=0
+
+  for _ in $(seq 1 60); do
+    if [[ "$(docker exec "${CONTAINER_NAME}" psql -U docket -d "${DATABASE_NAME}" -Atqc 'SELECT 1' 2>/dev/null)" == 1 ]]; then
+      successful_queries=$((successful_queries + 1))
+      if [[ "${successful_queries}" == 2 ]]; then
+        return 0
+      fi
+    else
+      successful_queries=0
+    fi
+    sleep 1
+  done
+
+  docker logs "${CONTAINER_NAME}" >&2 || true
   return 1
 }
 
@@ -137,21 +158,7 @@ main() {
     postgres:17-alpine >/dev/null
   CONTAINER_STARTED=true
 
-  postgres_ready=false
-  for _ in $(seq 1 60); do
-    if docker exec "${CONTAINER_NAME}" psql -U docket -d "${DATABASE_NAME}" -tAc 'SELECT 1' \
-      >/dev/null 2>&1; then
-      sleep 1
-      if docker exec "${CONTAINER_NAME}" psql -U docket -d "${DATABASE_NAME}" -tAc 'SELECT 1' \
-        >/dev/null 2>&1; then
-        postgres_ready=true
-        break
-      fi
-    fi
-    sleep 1
-  done
-  if [[ "${postgres_ready}" != true ]]; then
-    docker logs "${CONTAINER_NAME}" >&2 || true
+  if ! wait_for_postgres; then
     return 1
   fi
 

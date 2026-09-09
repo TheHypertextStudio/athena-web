@@ -23,19 +23,20 @@ import {
   PhoneVerifyBody,
   SUPPORTED_PHONE_COUNTRIES,
 } from '@docket/athena/phone';
-import type { PhoneChallengeSummary } from '@docket/athena/phone';
+import type { PhoneChallengeSummary, PhoneVerificationAvailability } from '@docket/athena/phone';
 import { and, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
+import type { ApiError } from '../error';
 import {
-  ApiError,
   AuthError,
   ConflictError,
   NotFoundError,
   ReauthRequiredError,
+  PhoneVerificationUnavailableError,
   ValidationError,
 } from '../error';
 import { ok } from '../lib/ok';
@@ -113,11 +114,29 @@ function toChallengeSummary(
   challenge: PhoneVerificationRow,
 ): z.input<typeof PhoneChallengeSummary> {
   return {
+    state: challengeState(challenge),
     expiresAt: challenge.expiresAt.toISOString(),
     attemptsRemaining: attemptsRemaining(challenge),
     resendAvailableAt: resendAvailableAt(challenge, challenge.createdAt).toISOString(),
     deliveryFailed: challenge.deliveryFailed,
   };
+}
+
+/** Derive time and attempt terminal states over the persisted delivery result. */
+function challengeState(
+  challenge: PhoneVerificationRow,
+): z.input<typeof PhoneChallengeSummary>['state'] {
+  const now = Date.now();
+  if (challenge.expiresAt.getTime() <= now) return 'expired';
+  if (attemptsRemaining(challenge) === 0) return 'attempts_exhausted';
+  if (challenge.deliveryState === 'delivery_failed') return 'delivery_failed';
+  if (
+    challenge.deliveryState === 'delivery_unknown' ||
+    (challenge.deliveryState === 'starting' && challenge.createdAt.getTime() + 10_000 <= now)
+  ) {
+    return 'delivery_unknown';
+  }
+  return 'awaiting_code';
 }
 
 /** Runtime dependencies for caller-owned phone-number routes. */
@@ -126,6 +145,11 @@ export interface PhoneNumberRouteDeps {
   readonly telephony: () => TelephonyProvider;
   /** Docket-owned destination displayed in Settings. */
   readonly athenaNumber: () => string | null;
+  /** Account-specific rollout and provider readiness. */
+  readonly verificationAvailability?: (identity: {
+    readonly email: string;
+    readonly emailVerified: boolean;
+  }) => z.input<typeof PhoneVerificationAvailability>;
 }
 
 /**
@@ -151,6 +175,7 @@ export function createPhoneNumberRoutes(
       }),
       async (c) => {
         const userId = requireUserId(c);
+        const verification = availability(c, deps);
         const rows = await db
           .select()
           .from(phoneNumber)
@@ -161,6 +186,7 @@ export function createPhoneNumberRoutes(
         // zero or one extra query, issued concurrently — not a fan-out worth batching.
         return ok(c, PhoneNumberListOut, {
           athenaNumber: deps?.athenaNumber() ?? null,
+          verification,
           items: await Promise.all(rows.map(phoneNumberOut)),
         });
       },
@@ -178,6 +204,15 @@ export function createPhoneNumberRoutes(
       async (c) => {
         requireFreshSession(c);
         const userId = requireUserId(c);
+        const currentAvailability = availability(c, deps);
+        if (!currentAvailability.available) throw new PhoneVerificationUnavailableError();
+        let verification: PhoneVerificationService;
+        try {
+          verification = createVerification();
+          verification.assertAvailable();
+        } catch {
+          throw new PhoneVerificationUnavailableError();
+        }
         const input = c.req.valid('json');
         const expectedDialCode = DIAL_CODE_BY_COUNTRY.get(input.country.toUpperCase());
         if (!expectedDialCode || expectedDialCode !== input.dialCode.replace(/\D/g, '')) {
@@ -217,7 +252,7 @@ export function createPhoneNumberRoutes(
           )[0];
         if (!row) throw new Error('phone number insert returned no row');
 
-        return ok(c, PhoneChallengeOut, await issue(createVerification(), row));
+        return ok(c, PhoneChallengeOut, await issue(verification, row));
       },
     )
     .post(
@@ -263,11 +298,19 @@ export function createPhoneNumberRoutes(
       zParam(idParam),
       async (c) => {
         const userId = requireUserId(c);
+        requireVerificationAvailable(c, deps);
         const row = await requireOwned(userId, c.req.valid('param').id);
         if (row.status !== 'pending') {
           throw new ConflictError('This number is not awaiting verification.');
         }
-        return ok(c, PhoneChallengeOut, await issue(createVerification(), row));
+        let verification: PhoneVerificationService;
+        try {
+          verification = createVerification();
+          verification.assertAvailable();
+        } catch {
+          throw new PhoneVerificationUnavailableError();
+        }
+        return ok(c, PhoneChallengeOut, await issue(verification, row));
       },
     )
     .post(
@@ -391,7 +434,7 @@ function refusalToError(
           : `That code is not right. ${String(remaining)} tries left.`,
       );
     case 'provider-unavailable':
-      return new ApiError(503, 'internal', 'Docket could not check that code. Try again.');
+      return new PhoneVerificationUnavailableError();
   }
 }
 
@@ -431,3 +474,24 @@ function requireFreshSession(c: Context<AppEnv>): void {
 }
 
 export default createPhoneNumberRoutes;
+
+function availability(
+  c: Context<AppEnv>,
+  deps: PhoneNumberRouteDeps | undefined,
+): z.input<typeof PhoneVerificationAvailability> {
+  const user = c.get('session')?.user;
+  if (!user) throw new AuthError('Authentication required.');
+  return (
+    deps?.verificationAvailability?.({
+      email: user.email,
+      emailVerified: user.emailVerified,
+    }) ?? { available: true, reason: null }
+  );
+}
+
+function requireVerificationAvailable(
+  c: Context<AppEnv>,
+  deps: PhoneNumberRouteDeps | undefined,
+): void {
+  if (!availability(c, deps).available) throw new PhoneVerificationUnavailableError();
+}

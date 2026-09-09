@@ -28,6 +28,7 @@ function validApiEnv(): Record<string, string> {
     ATHENA_ASYNC_RUNNER_ENABLED: 'false',
     CRON_SECRET: 'test-cron-secret',
     BILLING_ENABLED: 'false',
+    PHONE_VERIFICATION_ENABLED: 'false',
     BILLING_RECONCILIATION_MODE: 'off',
     MCP_TASKS_ENABLED: 'false',
   };

@@ -310,6 +310,10 @@ export const agentServer = {
  * unauthenticated telephony webhook lets anyone on the internet impersonate a caller.
  */
 export const voiceServer = {
+  /** Public phone-verification release gate. Credentials never override this flag. */
+  PHONE_VERIFICATION_ENABLED: boolFromString(),
+  /** CSV of verified Better Auth emails admitted before public verification opens. */
+  PHONE_VERIFICATION_CANARY_EMAILS: z.string().optional(),
   /** Realtime speech credential for the browser voice channel (ephemeral secrets are minted from it). */
   OPENAI_API_KEY: z.string().min(1).optional(),
   /** Realtime model id; defaults to the adapter's pinned model when absent. */
@@ -324,6 +328,10 @@ export const voiceServer = {
   TWILIO_PHONE_NUMBER: z.string().min(1).optional(),
   /** Verify service that owns phone-linking codes and fraud controls. */
   TWILIO_VERIFY_SERVICE_SID: z.string().min(1).optional(),
+  /** Scoped API key SID used only for managed phone verification. */
+  TWILIO_VERIFY_API_KEY_SID: z.string().min(1).optional(),
+  /** Secret paired with the scoped Verify API key. */
+  TWILIO_VERIFY_API_KEY_SECRET: z.string().min(1).optional(),
 };
 
 /** Cron secret, observability, blob/export storage, and transactional email. */

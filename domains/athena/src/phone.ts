@@ -352,8 +352,22 @@ export function maskE164(e164: string, dialCode?: string): string {
  * settings, and comes back to read the SMS still needs to be told when the code dies and how many
  * tries are left — and a client that only learned them from its own `POST` response cannot say.
  */
+/** Server-owned state of a pending phone verification challenge. */
+export const PhoneChallengeState = z.enum([
+  'awaiting_code',
+  'delivery_unknown',
+  'delivery_failed',
+  'expired',
+  'attempts_exhausted',
+]);
+/** Phone-challenge-state value. */
+export type PhoneChallengeState = z.infer<typeof PhoneChallengeState>;
+
+/** Live expiry, retry, and delivery state for an outstanding verification challenge. */
 export const PhoneChallengeSummary = z
   .object({
+    /** One durable state that determines the next action the client may offer. */
+    state: PhoneChallengeState,
     /** When the outstanding code stops being accepted. */
     expiresAt: z.string(),
     /** Wrong-code submissions still allowed before the challenge is destroyed. */
@@ -397,11 +411,21 @@ export const PhoneNumberOut = z
 /** Phone-number-out value. */
 export type PhoneNumberOut = z.infer<typeof PhoneNumberOut>;
 
+/** Whether the signed-in account may start a phone verification. */
+export const PhoneVerificationAvailability = z.object({
+  available: z.boolean(),
+  reason: z.enum(['rollout_restricted', 'temporarily_unavailable']).nullable(),
+});
+/** Phone-verification-availability value. */
+export type PhoneVerificationAvailability = z.infer<typeof PhoneVerificationAvailability>;
+
 /** The caller's bound phone numbers. */
 export const PhoneNumberListOut = z
   .object({
     /** Docket-owned destination people call, or null while telephony is unavailable. */
     athenaNumber: E164.nullable(),
+    /** Account-specific rollout and provider readiness for starting a verification. */
+    verification: PhoneVerificationAvailability,
     items: z.array(PhoneNumberOut),
   })
   .meta({ id: 'PhoneNumberListOut', description: 'Phone numbers bound to the account.' });

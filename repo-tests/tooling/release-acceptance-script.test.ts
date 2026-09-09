@@ -52,6 +52,8 @@ describe('release acceptance runner', () => {
     expect(source).not.toMatch(/docker run[^\n]+--rm/);
     expect(source).toContain('127.0.0.1::5432');
     expect(source).toContain('docker port');
+    expect(source).toContain('psql -U docket -d "${DATABASE_NAME}" -Atqc \'SELECT 1\'');
+    expect(source).toContain('"${successful_queries}" == 2');
     expect(source).toContain('unused_loopback_port');
     expect(source).toContain('NODE_ENV=production');
     expect(source).toContain('NODE_OPTIONS=--max-old-space-size=4096');

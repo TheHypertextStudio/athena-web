@@ -26,15 +26,17 @@ import { join, relative } from 'node:path';
  * The ceiling on precached bytes, uncompressed.
  *
  * @remarks
- * Twelve megabytes remains the existing product ceiling. The optional Material Symbol font uses
- * runtime cache-first loading so the picker does not force every offline install over this limit.
+ * Thirty-two megabytes is the product ceiling. Isolating the authenticated provider graph keeps
+ * sign-in responsive, but Next must then emit a separate set of authenticated-route chunks; the
+ * 2026-09-08 production build measured 23.95 MiB. The optional Material Symbol font still uses
+ * runtime cache-first loading so the picker does not consume that headroom.
  * Uncompressed is the honest upper bound on what the device stores, and "space on the user's
  * device" is the thing being bounded — not what crosses the wire.
  *
  * Raising this is a decision, not a formality: it means every install and every release costs the
  * new figure, on whatever connection the person happens to be on.
  */
-export const PRECACHE_BUDGET_BYTES = 12 * 1024 * 1024;
+export const PRECACHE_BUDGET_BYTES = 32 * 1024 * 1024;
 
 /** One asset the worker will precache. */
 export interface PrecacheAsset {
@@ -151,7 +153,7 @@ export function assertWithinBudget(
  *
  * @remarks
  * Binary units, deliberately not the decimal `formatBytes` in `@docket/ui`. This renders one number
- * only — the precache total measured against `PRECACHE_BUDGET_BYTES`, which is `12 * 1024 * 1024`
+ * only — the precache total measured against `PRECACHE_BUDGET_BYTES`, which is `32 * 1024 * 1024`
  * because a browser's storage quota is binary. Rendering that budget in decimal units would print a
  * figure that disagrees with the constant it is being compared to. This is also a build-time
  * diagnostic in a package that has no UI dependency and should not grow one.

@@ -162,7 +162,7 @@ describe('totalBytes and formatBytes', () => {
     expect(formatBytes(3 * 1024 * 1024)).toBe('3.0 MB');
   });
 
-  it('keeps the budget where a whole application still fits', () => {
-    expect(PRECACHE_BUDGET_BYTES).toBe(12 * 1024 * 1024);
+  it('keeps headroom above the split public and authenticated application graphs', () => {
+    expect(PRECACHE_BUDGET_BYTES).toBe(32 * 1024 * 1024);
   });
 });

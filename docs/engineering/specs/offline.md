@@ -121,10 +121,13 @@ route carries its own server-prefetched data and hydrates against its own tree.
 **Precache anything that will not take a surprising amount of space on the device.** That is a
 measured byte budget checked at build time, not a curated route list.
 
-Measured against the 2026-09-05 production build, the worker precaches **294 assets and 11.6 MB on
-disk**. That set contains every route's code, every stylesheet, and the ordinary application fonts.
-`PRECACHE_BUDGET_BYTES` remains 12 MB. Exceeding it **fails the build** with the ten largest assets
-named. The collector never drops an asset based on its size.
+Measured against the 2026-09-08 production build, the worker precaches **590 assets and 23.95 MiB
+on disk**. That set contains every route's code, every stylesheet, and the ordinary application
+fonts. The increase from the previous 11.6 MiB build is deliberate: public authentication no
+longer imports the authenticated provider graph, so sign-in stays responsive and Next emits the
+two route graphs independently. `PRECACHE_BUDGET_BYTES` is 32 MiB, leaving measured headroom while
+still making an accidental large dependency a release-blocking event. Exceeding it **fails the
+build** with the ten largest assets named. The collector never drops an asset based on its size.
 
 There are two named runtime-only exceptions. MapLibre supports a map whose tiles already require a
 network connection. The generated Material and emoji picker datasets support a mutation that cannot

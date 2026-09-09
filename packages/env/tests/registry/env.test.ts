@@ -102,11 +102,11 @@ describe('registry', () => {
     });
   });
 
-  it('registers the optional legacy passkey RP for the API', () => {
+  it('registers the optional legacy passkey RP for the API and web edge', () => {
     expect(findVar('BETTER_AUTH_PASSKEY_LEGACY_RP_ID')).toMatchObject({
       slice: 'auth',
       scope: 'server',
-      targets: ['api'],
+      targets: ['api', 'web'],
       required: false,
       sensitive: false,
     });

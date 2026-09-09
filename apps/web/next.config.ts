@@ -26,6 +26,37 @@ assertPublishingHostConfigured(process.env['VERCEL_ENV'], process.env['NEXT_PUBL
  */
 const LEGACY_ATHENA_HOST = 'athena\\.hypertext\\.studio';
 
+/** Every path except Apple's extensionless associated-domain trust document. */
+const NON_AASA_ROUTES = '/:path((?!\\.well-known/apple-app-site-association$).*)';
+
+/**
+ * The temporary passkey relying party that must keep serving Apple's trust document.
+ *
+ * @remarks
+ * Vercel host matchers treat the value as a regular expression. The API and web deployment receive
+ * the same migration variable, so removing it unmounts the legacy assertion and removes this host
+ * redirect exception together. The value must be a bare lower-case hostname because a malformed
+ * relying-party identifier must stop a release instead of widening a redirect rule.
+ *
+ * @returns The escaped host matcher, or `undefined` when no distinct legacy RP is configured.
+ * @throws When the migration value is not a bare lower-case hostname.
+ */
+function legacyPasskeyHostMatcher(): string | undefined {
+  const legacy = process.env['BETTER_AUTH_PASSKEY_LEGACY_RP_ID'];
+  if (!legacy) return undefined;
+  const canonical = new URL(process.env['NEXT_PUBLIC_APP_URL'] ?? '').hostname;
+  if (legacy === canonical) return undefined;
+  const parsed = new URL(`https://${legacy}`);
+  if (
+    legacy !== legacy.toLowerCase() ||
+    parsed.hostname !== legacy ||
+    parsed.origin !== `https://${legacy}`
+  ) {
+    throw new Error('BETTER_AUTH_PASSKEY_LEGACY_RP_ID must be a bare lower-case hostname.');
+  }
+  return legacy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * The rewrites that put the public documentation site (`apps/docs`) under `/docs` on this origin.
  *
@@ -166,7 +197,18 @@ const nextConfig: NextConfig = {
     ];
   },
   async redirects() {
+    const legacyPasskeyHost = legacyPasskeyHostMatcher();
     return [
+      ...(legacyPasskeyHost
+        ? [
+            {
+              source: NON_AASA_ROUTES,
+              has: [{ type: 'host' as const, value: legacyPasskeyHost }],
+              destination: `${process.env['NEXT_PUBLIC_APP_URL']}/:path*`,
+              permanent: true,
+            },
+          ]
+        : []),
       // Redirects run before rewrites, so this prevents the legacy alias from reaching the
       // `/api/auth/*` proxy and lets Docket choose the canonical GitHub callback origin instead.
       {

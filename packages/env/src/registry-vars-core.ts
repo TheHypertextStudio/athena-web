@@ -137,11 +137,11 @@ export const CORE_VARS: readonly VarSpec[] = [
     name: 'BETTER_AUTH_PASSKEY_LEGACY_RP_ID',
     slice: 'auth',
     scope: 'server',
-    targets: ['api'],
+    targets: ['api', 'web'],
     required: false,
     zod: authServer.BETTER_AUTH_PASSKEY_LEGACY_RP_ID,
     where:
-      'Previous WebAuthn relying-party id accepted only by the temporary native passkey migration ceremony',
+      'Previous WebAuthn relying-party id accepted by the temporary native migration ceremony and its web trust-document redirect exception',
     sensitive: false,
   },
   {

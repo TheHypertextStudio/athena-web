@@ -545,12 +545,11 @@ raise the API minimum instance count for Slack. Re-enabling it requires an expli
 that restores the provider catalog, runtime routes, setup flow, deployment configuration, and tests
 together.
 
-### Sign in with Apple (web) — differs from the three above
+### Sign in with Apple — web and native
 
-Apple is a fourth social provider (sign-in only, web-only). It does **not** follow the id+secret
-pattern, and — unlike the six vars above — **its secrets are not yet created in Secret Manager nor
-referenced in `deploy.yml`**, so wiring it is a two-part operator task (create secrets **and** add
-the `deploy.yml` lines), not just "replace a placeholder".
+Apple is a sign-in provider for the web and native clients. It does **not** follow the id+secret
+pattern. The native app sends Apple's ID token and its raw nonce to Better Auth, while the web flow
+uses the Services ID and callback. Both paths use the same Docket account and session.
 
 Two things make Apple different:
 
@@ -563,29 +562,96 @@ Two things make Apple different:
   from `appleid.apple.com`; `buildAuthOptions` adds that origin to `trustedOrigins` automatically
   when Apple is configured, so no extra origin var is needed.
 
-Register in the **Apple Developer** console (App ID with "Sign in with Apple" → a **Services ID** →
-a **Sign in with Apple key** `.p8` + your **Team ID**), with return URL
-`https://clearthedocket.com/api/auth/callback/apple`. Then wire the four vars:
+Use the provider-only bootstrap path for an existing production deployment:
 
 ```bash
-# 1) Create the four Secret Manager secrets (seed real values, or 'placeholder' to stay dormant):
-printf '%s' 'com.docket.web'  | gcloud secrets create docket-apple-client-id   --project=athena-services --replication-policy=automatic --data-file=-
+gcloud auth login
+gh auth status
+pnpm integrations -- --env production --provider apple
+```
+
+The wizard confirms the Google Cloud account, project, GitHub account, repository, and environment
+before it writes anything. Complete the Apple console checkpoint in this order:
+
+1. Open **Certificates, Identifiers & Profiles → Identifiers → App IDs**. Create or open the
+   explicit App ID `studio.hypertext.docket`. Enable **Associated Domains** and **Sign in with
+   Apple**. Open the Sign in with Apple configuration and select **Enable as a primary App ID**.
+2. Open **Identifiers → Services IDs**. Create `studio.hypertext.docket.web`. Enable **Sign in with
+   Apple**, select `studio.hypertext.docket` as the primary App ID, and register the bare web and API
+   hostnames. Production uses `clearthedocket.com` and `api.clearthedocket.com`.
+3. Register both production return URLs:
+   `https://clearthedocket.com/api/auth/callback/apple` and
+   `https://api.clearthedocket.com/api/auth/callback/apple`. Save the modal, continue, and save the
+   Services ID itself. Staging needs its own HTTPS hostnames and callback URLs on the same Services
+   ID before a staging canary can work.
+4. Open **Keys**, create a key named `Docket Sign In`, enable **Sign in with Apple**, configure it
+   for the `studio.hypertext.docket` primary App ID, and register it. Record the 10-character Key ID
+   and download the `.p8` immediately. Apple permits one download. Keep the file outside the
+   repository.
+5. Open **Services → Sign in with Apple for Email Communication**. Register the domain that sends
+   production account mail. Docket currently uses `service.hypertext.studio`; Apple must report its
+   existing SPF or DKIM record before private-relay addresses can receive Docket mail.
+6. Give the wizard `studio.hypertext.docket.web` as `APPLE_CLIENT_ID`, `studio.hypertext.docket` as
+   `APPLE_APP_CLIENT_ID`, the paid team's 10-character Team ID as `APPLE_TEAM_ID`, the new Key ID as
+   `APPLE_KEY_ID`, and the complete `.p8` contents as `APPLE_PRIVATE_KEY`.
+7. Review the wizard's write summary. It creates or rotates the four server secrets in Secret
+   Manager, grants the Cloud Run runtime access to each secret, writes `APPLE_APP_CLIENT_ID` as a
+   GitHub environment variable, and regenerates `API_SECRET_BINDINGS`. Do not hand-edit the binding
+   manifest for a normal setup.
+8. Deploy a validated `main` commit. Confirm that `GET /v1/config` lists `apple` and returns
+   `appleAppClientId: "studio.hypertext.docket"`. Then test web sign-in and native sign-in on signed
+   hardware. Apple returns name and email only on the first authorization, so use a fresh canary or
+   revoke Docket under Apple Account sign-in settings when the first-use payload must be retested.
+
+The bootstrap stores these four server values:
+
+```bash
+# Emergency manual recovery only. Prefer `pnpm integrations` above.
+printf '%s' 'studio.hypertext.docket.web' | gcloud secrets create docket-apple-client-id --project=athena-services --replication-policy=automatic --data-file=-
 printf '%s' '<TEAM_ID>'       | gcloud secrets create docket-apple-team-id     --project=athena-services --replication-policy=automatic --data-file=-
 printf '%s' '<KEY_ID>'        | gcloud secrets create docket-apple-key-id      --project=athena-services --replication-policy=automatic --data-file=-
 # The .p8 is multiline; store it verbatim (a file), NOT one line — Cloud Run injects it as-is:
 gcloud secrets create docket-apple-private-key --project=athena-services --replication-policy=automatic --data-file=AuthKey_XXXX.p8
 
-# 2) Add these four lines to the `secrets:` block of the `deploy-api` job in .github/workflows/deploy.yml:
+# Add these lines to the production `API_SECRET_BINDINGS` GitHub environment variable:
 #      APPLE_CLIENT_ID=docket-apple-client-id:latest
 #      APPLE_TEAM_ID=docket-apple-team-id:latest
 #      APPLE_KEY_ID=docket-apple-key-id:latest
 #      APPLE_PRIVATE_KEY=docket-apple-private-key:latest
-# 3) Push to main (or re-run the deploy workflow) so Cloud Run mounts them.
+# Deploy main so Cloud Run mounts them.
 ```
 
-> Adding the `deploy.yml` lines **before** the secrets exist breaks the deploy (Cloud Run cannot
-> mount a missing secret) — create the secrets first. Apple returns the user's email only on the
-> first authorization; Better Auth persists it then.
+> Publishing `API_SECRET_BINDINGS` **before** the secrets exist breaks the deploy because Cloud Run
+> cannot mount a missing secret. Create the secrets first. Apple returns the user's email only on
+> the first authorization; Better Auth persists it then.
+
+### Native Google Sign-In
+
+`pnpm integrations -- --env production --provider google` creates or imports the web OAuth client.
+That web client ID is also `GIDServerClientID`, because Better Auth verifies it as the native ID
+token audience. The iOS app also needs a public iOS OAuth client in the same Google Cloud project:
+
+1. Open **Google Auth Platform → Clients** in the project selected by the bootstrap preflight.
+2. Create an **iOS** client named `Docket iOS` with bundle ID `studio.hypertext.docket`. Google does
+   not issue a client secret for this client.
+3. Copy its client ID into `GOOGLE_IOS_CLIENT_ID`. Derive `GOOGLE_REVERSED_CLIENT_ID` by reversing
+   the dot-separated client ID exactly as Google shows in its downloaded plist. Set
+   `GOOGLE_SERVER_CLIENT_ID` to the web client ID that the bootstrap stored as `GOOGLE_CLIENT_ID`.
+4. Supply all three values together when building a different environment. The wrapper rejects a
+   partial override:
+
+   ```bash
+   GOOGLE_IOS_CLIENT_ID='<ios-client>.apps.googleusercontent.com' \
+   GOOGLE_REVERSED_CLIENT_ID='com.googleusercontent.apps.<ios-client>' \
+   GOOGLE_SERVER_CLIENT_ID='<web-client>.apps.googleusercontent.com' \
+   scripts/build-environment.sh staging -destination 'platform=iOS Simulator,name=iPhone 17'
+   ```
+
+5. Keep `GOOGLE_OAUTH_PUBLIC=false` until the native canary is ready. A signed-out native client
+   cannot apply an email allowlist before Google identifies the person, so production will not
+   publish `googleServerClientId` under that gate. Set `GOOGLE_OAUTH_PUBLIC=true`, deploy, confirm
+   `/v1/config` returns the web client ID, and run the Google ID-token, restoration, and sign-out
+   canaries. Set the gate back to `false` immediately if the exchange fails.
 
 ### Scheduled jobs (Cloud Scheduler)
 

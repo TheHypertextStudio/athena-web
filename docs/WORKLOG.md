@@ -103,7 +103,7 @@
   - [x] Add both associated domains and the native migration ceremony.
   - [ ] Validate legacy assertion, replacement registration, current assertion, restoration, and
         sign-out on signed Apple hardware.
-  - [ ] Deploy the bridge before enabling the native migration control.
+  - [x] Deploy the bridge before enabling the native migration control.
 - **Validation**: The rebased server packages pass typecheck and lint. Focused validation passes 178
   auth tests, 161 environment tests, 3 identity contract tests, 5 API config tests, and 28 web
   consumer tests. Forty-three native auth and HTTP-contract tests pass on macOS. Signed iOS 26.5
@@ -172,9 +172,17 @@
   the cross-device QR flow, and a forced app restart restored the session directly to Home. The
   migration control failed before replacement registration because its configured legacy RP did not
   match the historical `hypertext.studio` production value. The repair changes the deployment value
-  and native entitlement to the real historical RP. The live `hypertext.studio` AASA endpoint still
-  names personal-team application identifier `39AB9DY3K8.studio.hypertext.docket`; migration remains
-  blocked until its owning deployment publishes `T95VDD3A4W.studio.hypertext.docket` without a redirect.
+  and native entitlement to the real historical RP. The live API now returns `hypertext.studio` as
+  the legacy RP, and its migration challenge returns that RP with required user verification. The
+  `hypertext.studio` origin and Apple's associated-domain CDN both publish
+  `T95VDD3A4W.studio.hypertext.docket` without a redirect. The corrected Release build succeeds for
+  WilliePad, carries both associated domains, installs, and launches. Apple Developer now has the
+  Docket App ID as a primary Sign in with Apple identifier, a linked
+  `studio.hypertext.docket.web` Services ID, and a dedicated Sign in with Apple key. The four server
+  values are stored in Secret Manager, and the production binding manifest mounts them. Apple's
+  relay service also accepts production mail from `service.hypertext.studio`. Production Google
+  sign-in is public through the existing provider gate. The next production deployment will expose
+  both native providers through `/v1/config`.
 - **Domain validation**: Verisign RDAP records the `clearthedocket.com` registration on 2026-09-08
   and delegates it to `candy.ns.cloudflare.com` and `ricardo.ns.cloudflare.com`. Vercel accepted
   `clearthedocket.com` and `www.clearthedocket.com` for project `docket` and requires an apex A
@@ -191,11 +199,9 @@
   Vercel's project-domain API now assigns `docket.hypertext.studio` directly to project `docket`
   without a platform redirect. The live legacy AASA URL returns HTTP 200 with `application/json`,
   no redirect, and the same paid-team application identifier as the canonical domain.
-- **Blockers**: Apple Developer still needs an authenticated portal session to confirm the Docket
-  App ID as the primary Sign in with Apple identifier, associate the existing web Services ID, and
-  create or select the Sign in with Apple key. Production keeps Apple and Google hidden until the
-  physical Apple/passkey ceremonies and full Google ID-token exchange, session restoration, and
-  sign-out canaries pass.
+- **Blockers**: The legacy-passkey replacement ceremony, native Apple ID-token exchange, and native
+  Google ID-token exchange still need signed-hardware canaries. Each canary must also prove session
+  restoration and local-first sign-out before release sign-off.
 - **Notes**: The original Apple checkout's untracked `Athena/Task.swift` and `README.md` remain
   untouched.
 

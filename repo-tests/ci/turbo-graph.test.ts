@@ -11,6 +11,11 @@ const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 interface DryRunTask {
   readonly taskId: string;
   readonly command: string;
+  readonly environmentVariables: {
+    readonly specified: {
+      readonly env: readonly string[];
+    };
+  };
 }
 
 /** The subset of `turbo run --dry=json` output this suite asserts over. */
@@ -39,7 +44,7 @@ const NO_SCRIPT = '<NONEXISTENT>';
  * @param filter - A turbo filter expression, e.g. `...@docket/ui`
  * @returns The affected package set and the tasks turbo would execute
  */
-function planBuild(filter: string): { packages: string[]; executed: string[] } {
+function dryBuild(filter: string): DryRun {
   const stdout = execFileSync(
     join(REPO_ROOT, 'node_modules', '.bin', 'turbo'),
     ['run', 'build', '--dry=json', `--filter=${filter}`],
@@ -52,7 +57,11 @@ function planBuild(filter: string): { packages: string[]; executed: string[] } {
       env: { ...process.env, SKIP_ENV_VALIDATION: '1' },
     },
   );
-  const plan = JSON.parse(stdout) as DryRun;
+  return JSON.parse(stdout) as DryRun;
+}
+
+function planBuild(filter: string): { packages: string[]; executed: string[] } {
+  const plan = dryBuild(filter);
   return {
     packages: [...plan.packages].sort(),
     executed: plan.tasks
@@ -105,5 +114,14 @@ describe('turbo build affected sets', () => {
     expect(web.packages).not.toContain('@docket/admin');
     expect(web.executed).not.toContain('@docket/admin#build');
     expect(ui.packages.length).toBeGreaterThan(web.packages.length);
+  });
+
+  it('passes the legacy passkey relying party into the web production build', () => {
+    const plan = dryBuild('@docket/web');
+    const webBuild = plan.tasks.find((task) => task.taskId === '@docket/web#build');
+
+    expect(webBuild?.environmentVariables.specified.env).toContain(
+      'BETTER_AUTH_PASSKEY_LEGACY_RP_ID',
+    );
   });
 });

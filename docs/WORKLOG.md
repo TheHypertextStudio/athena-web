@@ -160,6 +160,14 @@
   affected packages pass all nine Turbo typecheck and lint tasks with two-way concurrency. A
   production web build passes and emits a host-scoped 308 whose negative lookahead excludes only
   `/.well-known/apple-app-site-association`.
+  CI run `34404409208` passes the full release graph at `00528188a`. Deploy run `34406866665`
+  publishes the migration API, and live configuration reports `clearthedocket.com` plus the legacy
+  `docket.hypertext.studio` RP. The live legacy challenge returns the old RP, required user
+  verification, an empty discoverable credential list, and a signed five-minute cookie. Vercel's
+  build of the same commit exposed a missing delivery contract: strict Turbo environment filtering
+  removed `BETTER_AUTH_PASSKEY_LEGACY_RP_ID` because the Web build did not declare it. A repository
+  regression test now pins that environment input, and the focused Web configuration, typecheck,
+  and lint checks pass after declaring it.
 - **Domain validation**: Verisign RDAP records the `clearthedocket.com` registration on 2026-09-08
   and delegates it to `candy.ns.cloudflare.com` and `ricardo.ns.cloudflare.com`. Vercel accepted
   `clearthedocket.com` and `www.clearthedocket.com` for project `docket` and requires an apex A

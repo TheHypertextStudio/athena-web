@@ -5,9 +5,9 @@
   // the intent token with `BETTER_AUTH_SECRET` (read from `process.env`, not via `@docket/env`).
   "tasks": {
     "build": {
-      // `DOCS_MINTLIFY_ORIGIN` decides whether `next.config.ts` emits the five `/docs` rewrites,
-      // so it changes build output and belongs in the cache key rather than `passThroughEnv`.
-      "env": ["NEXT_PUBLIC_*", "DOCS_MINTLIFY_ORIGIN"],
+      // These values decide whether `next.config.ts` emits host-specific redirects and rewrites,
+      // so they change build output and belong in the cache key rather than `passThroughEnv`.
+      "env": ["NEXT_PUBLIC_*", "DOCS_MINTLIFY_ORIGIN", "BETTER_AUTH_PASSKEY_LEGACY_RP_ID"],
       // Set on the Vercel project and read only at runtime by the server routes. Passed through
       // rather than declared in `env` so rotating the blob token does not bust the build cache.
       "passThroughEnv": ["BLOB_READ_WRITE_TOKEN"],

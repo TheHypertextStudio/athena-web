@@ -41,6 +41,7 @@ function config(overrides: Partial<PublicConfigOut> = {}): PublicConfigOut {
     oauthProviders: [],
     appleAppClientId: null,
     passkeyRpId: null,
+    legacyPasskeyRpId: null,
     googleServerClientId: null,
     connectors: [],
     mcpUrl: null,

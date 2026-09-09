@@ -65,6 +65,13 @@ export const PublicConfigOut = z
       .string()
       .nullable()
       .describe('The WebAuthn relying-party identifier, or null when passkeys are unavailable.'),
+    /** Previous WebAuthn RP exposed only while native passkey migration is available. */
+    legacyPasskeyRpId: z
+      .string()
+      .nullable()
+      .describe(
+        'The previous WebAuthn relying-party identifier accepted by the temporary native migration ceremony, or null when migration is unavailable.',
+      ),
     /** Whether Google sign-in/linking is open beyond the production test-user allowlist. */
     googleOAuthPublic: z
       .boolean()

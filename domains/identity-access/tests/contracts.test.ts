@@ -92,17 +92,18 @@ describe('identity and access contracts', () => {
     expect(OAuthClientMetadataOut.parse({ name: 'Claude', icon: null }).name).toBe('Claude');
     expect(OAUTH_ISSUABLE_SCOPES).toContain(OFFLINE_ACCESS_SCOPE);
     expect(SignInProvider.parse('apple')).toBe('apple');
-    expect(
-      PublicConfigOut.parse({
-        appMode: 'production',
-        oauthProviders: ['google'],
-        appleAppClientId: null,
-        passkeyRpId: 'hypertext.studio',
-        googleServerClientId: null,
-        connectors: ['calendar'],
-        mcpUrl: null,
-      }).connectors,
-    ).toEqual(['calendar']);
+    const publicConfig = PublicConfigOut.parse({
+      appMode: 'production',
+      oauthProviders: ['google'],
+      appleAppClientId: null,
+      passkeyRpId: 'hypertext.studio',
+      legacyPasskeyRpId: null,
+      googleServerClientId: null,
+      connectors: ['calendar'],
+      mcpUrl: null,
+    });
+    expect(publicConfig.connectors).toEqual(['calendar']);
+    expect(publicConfig.legacyPasskeyRpId).toBeNull();
 
     const session = SessionOut.parse({
       id: ID,

@@ -60,6 +60,7 @@ function renderPage(ui: ReactElement): ReturnType<typeof render> {
     oauthProviders: [],
     appleAppClientId: null,
     passkeyRpId: null,
+    legacyPasskeyRpId: null,
     googleServerClientId: null,
     connectors: [],
     mcpUrl: null,

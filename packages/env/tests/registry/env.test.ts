@@ -102,6 +102,16 @@ describe('registry', () => {
     });
   });
 
+  it('registers the optional legacy passkey RP for the API', () => {
+    expect(findVar('BETTER_AUTH_PASSKEY_LEGACY_RP_ID')).toMatchObject({
+      slice: 'auth',
+      scope: 'server',
+      targets: ['api'],
+      required: false,
+      sensitive: false,
+    });
+  });
+
   it('keeps the Lattice run controls out of the environment and OAuth availability optional', () => {
     // Submissions and polling are operator-owned service settings read from the database at
     // sweep time, so a deployment can never pin them to a build value.
@@ -226,6 +236,11 @@ describe('slices', () => {
     expect(authServer.BETTER_AUTH_URL.parse('http://localhost:4000')).toBe('http://localhost:4000');
     expect(() => authServer.BETTER_AUTH_PASSKEY_RP_ID.parse(undefined)).toThrow();
     expect(authServer.BETTER_AUTH_PASSKEY_RP_ID.parse('localhost')).toBe('localhost');
+    expect(authServer.BETTER_AUTH_PASSKEY_LEGACY_RP_ID.parse(undefined)).toBeUndefined();
+    expect(authServer.BETTER_AUTH_PASSKEY_LEGACY_RP_ID.parse('docket.hypertext.studio')).toBe(
+      'docket.hypertext.studio',
+    );
+    expect(() => authServer.BETTER_AUTH_PASSKEY_LEGACY_RP_ID.parse('')).toThrow();
     expect(() => authServer.BETTER_AUTH_PASSKEY_RP_NAME.parse(undefined)).toThrow();
     expect(authServer.BETTER_AUTH_PASSKEY_RP_NAME.parse('Docket')).toBe('Docket');
     expect(authServer.BETTER_AUTH_PASSKEY_NATIVE_ORIGINS.parse(undefined)).toBeUndefined();

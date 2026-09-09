@@ -65,6 +65,8 @@ export const authServer = {
   BETTER_AUTH_ALLOWED_HOSTS: z.string().optional(),
   BETTER_AUTH_COOKIE_DOMAIN: z.string().optional(),
   BETTER_AUTH_PASSKEY_RP_ID: z.string().min(1),
+  /** Temporary previous RP accepted only by the native passkey migration ceremony. */
+  BETTER_AUTH_PASSKEY_LEGACY_RP_ID: z.string().min(1).optional(),
   BETTER_AUTH_PASSKEY_RP_NAME: z.string().min(1),
   /** CSV of Android application origins accepted by the passkey verifier. */
   BETTER_AUTH_PASSKEY_NATIVE_ORIGINS: nativePasskeyOrigins.optional(),

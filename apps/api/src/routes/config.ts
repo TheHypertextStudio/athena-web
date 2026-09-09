@@ -77,6 +77,14 @@ export function resolveAppleAppClientId(
   return oauthProviders.includes('apple') ? (authEnv.APPLE_APP_CLIENT_ID ?? null) : null;
 }
 
+/** Expose the previous passkey RP only while it names a distinct migration source. */
+export function resolveLegacyPasskeyRpId(
+  authEnv: Pick<AuthEnv, 'BETTER_AUTH_PASSKEY_RP_ID' | 'BETTER_AUTH_PASSKEY_LEGACY_RP_ID'>,
+): string | null {
+  const legacy = authEnv.BETTER_AUTH_PASSKEY_LEGACY_RP_ID;
+  return legacy && legacy !== authEnv.BETTER_AUTH_PASSKEY_RP_ID ? legacy : null;
+}
+
 const config = new Hono<AppEnv>().get(
   '/',
   apiDoc({
@@ -98,6 +106,7 @@ Carries nothing secret and requires no session. Related: the authenticated perso
       oauthProviders,
       appleAppClientId: resolveAppleAppClientId(env, oauthProviders),
       passkeyRpId: env.BETTER_AUTH_PASSKEY_RP_ID,
+      legacyPasskeyRpId: resolveLegacyPasskeyRpId(env),
       googleOAuthPublic: env.GOOGLE_OAUTH_PUBLIC,
       googleServerClientId: resolveGoogleServerClientId(env, oauthProviders),
       adminGoogleSso: env.ADMIN_GOOGLE_SSO_ENABLED && oauthProviders.includes('google'),

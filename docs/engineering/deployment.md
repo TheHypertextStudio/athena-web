@@ -122,6 +122,7 @@ Set by `pnpm bootstrap`. Add missing ones with `gh variable set NAME --body "VAL
 | `GCP_SERVICE_ACCOUNT`              | bootstrap            | Full SA email: `docket-deploy@<project>.iam.gserviceaccount.com`                                                          |
 | `GCP_WIF_PROVIDER`                 | bootstrap            | Full WIF provider resource name: `projects/<num>/locations/global/workloadIdentityPools/github/providers/github-actions`  |
 | `PASSKEY_RP_ID`                    | bootstrap/manual     | WebAuthn relying-party domain. Production uses `clearthedocket.com`.                                                      |
+| `BETTER_AUTH_PASSKEY_LEGACY_RP_ID` | manual               | Temporary previous RP for native passkey migration. Unset removes the bridge.                                             |
 | `NEON_PROJECT_ID`                  | bootstrap            | Neon project ID (from Neon console)                                                                                       |
 | `API_URL`                          | manual (post-deploy) | Public custom-domain origin of `docket-api`                                                                               |
 | `WEB_URL`                          | manual (post-deploy) | Public custom-domain origin of the Vercel web app                                                                         |

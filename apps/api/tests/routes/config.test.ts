@@ -24,6 +24,7 @@ describe('GET /config', () => {
     expect(body.oauthProviders).toEqual([]);
     expect(body.appleAppClientId).toBeNull();
     expect(body.passkeyRpId).toBe('docket.localhost');
+    expect(body.legacyPasskeyRpId).toBeNull();
     expect(body.googleServerClientId).toBeNull();
     expect(body.connectors).toEqual([]);
     expect(body.stripePublishableKey).toBeNull();
@@ -37,6 +38,28 @@ describe('GET /config', () => {
     ).toBe('studio.hypertext.docket');
     expect(
       resolveAppleAppClientId({ APPLE_APP_CLIENT_ID: 'studio.hypertext.docket' }, []),
+    ).toBeNull();
+  });
+
+  it('exposes a distinct configured legacy passkey RP and hides every inactive value', async () => {
+    const { resolveLegacyPasskeyRpId } = await import('../../src/routes/config');
+
+    expect(
+      resolveLegacyPasskeyRpId({
+        BETTER_AUTH_PASSKEY_RP_ID: 'clearthedocket.com',
+        BETTER_AUTH_PASSKEY_LEGACY_RP_ID: 'docket.hypertext.studio',
+      }),
+    ).toBe('docket.hypertext.studio');
+    expect(
+      resolveLegacyPasskeyRpId({
+        BETTER_AUTH_PASSKEY_RP_ID: 'clearthedocket.com',
+        BETTER_AUTH_PASSKEY_LEGACY_RP_ID: 'clearthedocket.com',
+      }),
+    ).toBeNull();
+    expect(
+      resolveLegacyPasskeyRpId({
+        BETTER_AUTH_PASSKEY_RP_ID: 'clearthedocket.com',
+      }),
     ).toBeNull();
   });
 

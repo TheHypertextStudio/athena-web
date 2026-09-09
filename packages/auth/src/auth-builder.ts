@@ -98,6 +98,7 @@ export interface AuthEnv {
   readonly BETTER_AUTH_ALLOWED_HOSTS?: string | undefined;
   readonly BETTER_AUTH_COOKIE_DOMAIN?: string | undefined;
   readonly BETTER_AUTH_PASSKEY_RP_ID: string;
+  readonly BETTER_AUTH_PASSKEY_LEGACY_RP_ID?: string | undefined;
   readonly BETTER_AUTH_PASSKEY_RP_NAME: string;
   readonly BETTER_AUTH_PASSKEY_NATIVE_ORIGINS?: string | undefined;
   readonly GOOGLE_CLIENT_ID?: string | undefined;

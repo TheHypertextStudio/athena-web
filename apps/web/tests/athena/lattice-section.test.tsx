@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { makeQueryWrapper, okResponse } from '../support/query';
+import { makeQueryWrapper, okResponse, problemResponse } from '../support/query';
 
 const {
   authorizePost,
@@ -66,6 +66,7 @@ import { LatticeSection } from '../../src/app/(app)/settings/athena/lattice-sect
 import {
   LATTICE_FEDCM_FALLBACK_COPY,
   LATTICE_SETUP_URL,
+  LATTICE_UNAVAILABLE_REASON_MESSAGE,
 } from '../../src/app/(app)/settings/athena/lattice-copy';
 
 const AUTHORIZATION_URL = 'https://auth.uselovelace.com/oauth/authorize?state=signed';
@@ -143,7 +144,7 @@ function renderSection(): void {
 }
 
 async function preparedConnectButton(): Promise<HTMLElement> {
-  const connect = await screen.findByRole('button', { name: 'Connect with Lovelace' });
+  const connect = await screen.findByRole('button', { name: 'Connect' });
   await waitFor(() => {
     expect(connect).toBeEnabled();
   });
@@ -232,8 +233,8 @@ describe('LatticeSection FedCM-first authorization', () => {
     expect(assignMock).not.toHaveBeenCalled();
     // The connected branch replaces the single Connect row with its own header actions — that
     // structural change is the confirmation; there's no separate "you're connected" sentence.
-    expect(await screen.findByRole('button', { name: 'Reconnect Lovelace' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Connect with Lovelace' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
     await waitFor(() => {
       expect(authorizePost).toHaveBeenCalledTimes(2);
     });
@@ -286,6 +287,37 @@ describe('LatticeSection carries no supplemental status text', () => {
         unavailableReason: 'gateway_unreachable' as const,
       }),
     );
+    // The devices read reflects the same ongoing outage — a successful devices read always clears
+    // this same reason server-side, so a status-only reason with a healthy devices read is not a
+    // state that persists; this fixture keeps both endpoints honest about one real outage.
+    devicesGet
+      .mockReset()
+      .mockResolvedValue(
+        okResponse({ devices: [], unavailableReason: 'gateway_unreachable' as const }),
+      );
+    renderSection();
+
+    // No narration anywhere — not a top banner, not a reason footer, not a status line.
+    expect(await screen.findByText('Could not load your computers')).toBeInTheDocument();
+    expect(screen.queryByText(/answers only from/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/standard models/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    // Structure carries the signal instead: Reconnect is the filled, weighted action rather than
+    // its usual quiet ghost treatment, because reconnecting is actually needed here.
+    const reconnect = screen.getByRole('button', { name: 'Reconnect' });
+    expect(reconnect.className).toContain('bg-secondary-container');
+  });
+
+  it('clears a stale standing reason once the device list itself recovers', async () => {
+    connectionGet.mockReset().mockResolvedValue(
+      okResponse({
+        ...UNCONNECTED,
+        connected: true,
+        // A reason cached from before the gateway recovered — the connection status query has no
+        // way to know that on its own.
+        unavailableReason: 'gateway_unreachable' as const,
+      }),
+    );
     devicesGet.mockReset().mockResolvedValue(
       okResponse({
         devices: [
@@ -296,6 +328,43 @@ describe('LatticeSection carries no supplemental status text', () => {
             ready: true,
             lastSeenAt: null,
             executionBackend: 'lattice',
+            selected: false,
+          },
+        ],
+        unavailableReason: null,
+      }),
+    );
+    renderSection();
+
+    await screen.findByText('Mac Studio');
+    await waitFor(() => {
+      const reconnect = screen.getByRole('button', { name: 'Reconnect' });
+      expect(reconnect.className).not.toContain('bg-secondary-container');
+    });
+  });
+
+  it('leaves Reconnect quiet when only the chosen device is asleep, not the account', async () => {
+    connectionGet.mockReset().mockResolvedValue(
+      okResponse({
+        ...UNCONNECTED,
+        connected: true,
+        enabled: true,
+        deviceId: 'd1',
+        deviceName: 'Mac Studio',
+        deviceStatus: 'offline' as const,
+        unavailableReason: null,
+      }),
+    );
+    devicesGet.mockReset().mockResolvedValue(
+      okResponse({
+        devices: [
+          {
+            id: 'd1',
+            name: 'Mac Studio',
+            status: 'offline' as const,
+            ready: false,
+            lastSeenAt: null,
+            executionBackend: 'lattice',
             selected: true,
           },
         ],
@@ -304,16 +373,20 @@ describe('LatticeSection carries no supplemental status text', () => {
     );
     renderSection();
 
-    // The device row itself, not a separate sentence, is what's on screen.
-    expect(await screen.findByText('Mac Studio')).toBeInTheDocument();
-    // No narration anywhere — not a top banner, not a reason footer, not a status line.
-    expect(screen.queryByText(/answers only from/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/standard models/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    // Structure carries the signal instead: Reconnect Lovelace is the filled, weighted action
-    // rather than its usual quiet ghost treatment, because reconnecting is actually needed here.
-    const reconnect = screen.getByRole('button', { name: 'Reconnect Lovelace' });
-    expect(reconnect.className).toContain('bg-secondary-container');
+    await screen.findByText('Mac Studio');
+    // Reconnecting Lovelace never wakes a sleeping computer, so the button's weight stays scoped
+    // to account-level reasons; the device row's own "Asleep" label already carries this one.
+    const reconnect = screen.getByRole('button', { name: 'Reconnect' });
+    expect(reconnect.className).not.toContain('bg-secondary-container');
+  });
+
+  it('gives an honest reason when the computer list request itself fails outright', async () => {
+    connectionGet.mockReset().mockResolvedValue(okResponse({ ...UNCONNECTED, connected: true }));
+    devicesGet.mockReset().mockResolvedValue(problemResponse('boom', 500));
+    renderSection();
+
+    expect(await screen.findByText('Could not load your computers')).toBeInTheDocument();
+    expect(screen.queryByText('No computers paired')).not.toBeInTheDocument();
   });
 
   it("links to Lovelace's own Lattice setup docs when no computers are paired", async () => {
@@ -379,6 +452,14 @@ describe('LatticeSection ceremony feedback', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('You declined the connection.');
   });
 
+  it('ignores a prototype-chain property name in the URL flag instead of crashing', async () => {
+    useAppSearchParams.mockReturnValue(new URLSearchParams('lattice=constructor'));
+    renderSection();
+
+    await preparedConnectButton();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('surfaces a silently-refused device switch as a write error', async () => {
     connectionGet.mockReset().mockResolvedValue(okResponse({ ...UNCONNECTED, connected: true }));
     devicesGet.mockReset().mockResolvedValue(
@@ -409,7 +490,87 @@ describe('LatticeSection ceremony feedback', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Use this' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'That computer is no longer available. Refresh the list and try again.',
+      LATTICE_UNAVAILABLE_REASON_MESSAGE.device_missing,
     );
+  });
+
+  it('surfaces a silently-refused enable toggle for a standing reason other than a missing device', async () => {
+    connectionGet.mockReset().mockResolvedValue(
+      okResponse({
+        ...UNCONNECTED,
+        connected: true,
+        deviceId: 'd1',
+        deviceName: 'Mac Studio',
+        deviceStatus: 'offline' as const,
+      }),
+    );
+    devicesGet.mockReset().mockResolvedValue(
+      okResponse({
+        devices: [
+          {
+            id: 'd1',
+            name: 'Mac Studio',
+            status: 'offline' as const,
+            ready: false,
+            lastSeenAt: null,
+            executionBackend: 'lattice',
+            selected: true,
+          },
+        ],
+        unavailableReason: null,
+      }),
+    );
+    connectionPatch.mockReset().mockResolvedValue(
+      okResponse({
+        ...UNCONNECTED,
+        connected: true,
+        deviceId: 'd1',
+        deviceName: 'Mac Studio',
+        enabled: true,
+        unavailableReason: 'device_offline' as const,
+      }),
+    );
+    renderSection();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn on' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      LATTICE_UNAVAILABLE_REASON_MESSAGE.device_offline,
+    );
+  });
+
+  it('clears a stale ceremony message once an unrelated write succeeds', async () => {
+    useAppSearchParams.mockReturnValue(new URLSearchParams('lattice=declined'));
+    connectionGet.mockReset().mockResolvedValue(okResponse({ ...UNCONNECTED, connected: true }));
+    devicesGet.mockReset().mockResolvedValue(
+      okResponse({
+        devices: [
+          {
+            id: 'd1',
+            name: 'Mac Studio',
+            status: 'reachable' as const,
+            ready: true,
+            lastSeenAt: null,
+            executionBackend: 'lattice',
+            selected: false,
+          },
+        ],
+        unavailableReason: null,
+      }),
+    );
+    devicePost
+      .mockReset()
+      .mockResolvedValue(
+        okResponse({ ...UNCONNECTED, connected: true, deviceId: 'd1', deviceName: 'Mac Studio' }),
+      );
+    renderSection();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('You declined the connection.');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Use this' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
   });
 });

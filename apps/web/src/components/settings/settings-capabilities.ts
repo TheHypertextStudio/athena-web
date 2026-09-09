@@ -85,9 +85,9 @@ export const SETTINGS_NODES = {
   athenaLattice: personalNode(
     'athena-lattice',
     'athena',
-    'Athena model backend',
+    'Local models',
     'Use local models for Athena by connecting Lattice.',
-    ['lattice', 'local'],
+    ['lattice', 'local', 'backend'],
   ),
   connectionsTools: personalNode(
     'connections-tools',

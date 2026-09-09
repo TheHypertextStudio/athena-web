@@ -1,7 +1,11 @@
 import type { JSX, ReactNode } from 'react';
 
-import { Text } from '@docket/ui/primitives';
+import { cn, focusRing } from '@docket/ui';
+import { CONTROL_RADIUS, Text } from '@docket/ui/primitives';
 import type { SettingsNodeDefinition } from './settings-capabilities';
+
+/** Static heading className, hoisted so it isn't recomputed by `cn()` on every render. */
+const HEADING_CLASS = cn(CONTROL_RADIUS, focusRing);
 
 /** Props for {@link SettingsSubsection}. */
 export interface SettingsSubsectionProps {
@@ -50,6 +54,7 @@ export function SettingsSubsection({
       tone="muted"
       id={capability ? `settings-${capability.id}` : undefined}
       tabIndex={capability ? -1 : undefined}
+      className={HEADING_CLASS}
     >
       {resolvedTitle}
     </Text>

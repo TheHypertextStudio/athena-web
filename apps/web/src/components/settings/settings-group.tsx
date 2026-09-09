@@ -69,6 +69,9 @@ export interface SettingsGroupProps extends Omit<
   readonly className?: string;
 }
 
+/** Static heading className, hoisted so it isn't recomputed by `cn()` on every render. */
+const HEADING_CLASS = cn('flex items-center gap-2', CONTROL_RADIUS, focusRing);
+
 /**
  * A named tonal group: one card step above the settings content pane, with no border and no shadow.
  *
@@ -129,7 +132,7 @@ export function SettingsGroup({
                 id={headingId}
                 tabIndex={capability ? -1 : undefined}
                 {...{ [SETTINGS_GROUP_ATTR]: '' }}
-                className={cn('flex items-center gap-2', CONTROL_RADIUS, focusRing)}
+                className={HEADING_CLASS}
               >
                 {icon ? (
                   <span className="text-on-surface-variant flex shrink-0 items-center">{icon}</span>

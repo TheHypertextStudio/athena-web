@@ -29,6 +29,45 @@ export const LATTICE_DEVICE_STATUS_COPY: Readonly<
 /** The outcome flag the OAuth callback puts on the return URL. */
 export type LatticeAuthorizationOutcome = 'connected' | 'declined' | 'error' | 'scopes';
 
+/** Every reason a Lattice write can be refused, mirroring `LatticeUnavailableReason` in `@docket/integrations`. */
+export type LatticeUnavailableReason =
+  | 'not_connected'
+  | 'no_device_selected'
+  | 'device_offline'
+  | 'device_unpaired'
+  | 'device_revoked'
+  | 'device_missing'
+  | 'authorization_expired'
+  | 'insufficient_scopes'
+  | 'gateway_unreachable'
+  | 'gateway_error';
+
+/**
+ * What to do when a click (switch computers, turn on) gets refused for a stable reason.
+ *
+ * @remarks
+ * Acute feedback for a write that just failed, not the persistent standing notice this section
+ * deliberately does not carry — it renders once, next to the control that was clicked, through the
+ * same slot as any other write error.
+ */
+export const LATTICE_UNAVAILABLE_REASON_MESSAGE: Readonly<
+  Record<LatticeUnavailableReason, string>
+> = {
+  not_connected: 'Connect Lattice to use local models for Athena.',
+  no_device_selected: 'Choose a computer before turning this on.',
+  device_offline:
+    'That computer is not reachable. Wake it and make sure Lattice is running, then try again.',
+  device_unpaired:
+    'That computer has not finished pairing. Finish setup on the computer, then try again.',
+  device_revoked: 'That computer was disabled in your Lovelace account. Choose a different one.',
+  device_missing:
+    'That computer is no longer on your Lovelace account. Refresh the list and try again.',
+  authorization_expired: 'Reconnect Lovelace to restore access.',
+  insufficient_scopes: 'Reconnect Lovelace and approve all the requested permissions.',
+  gateway_unreachable: 'Could not reach Lovelace. Check your connection and try again.',
+  gateway_error: 'Lovelace could not complete that request. Try again in a moment.',
+};
+
 /**
  * Lovelace's own setup docs for the local Lattice daemon.
  *

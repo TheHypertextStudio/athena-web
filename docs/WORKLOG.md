@@ -14671,3 +14671,106 @@ needs.still-latest.outputs.proceed == 'true'` clause in `if:` only needed to exp
 - Vite/Vitest's `mergeConfig` concatenates array-valued fields rather than replacing them; overriding
   an array-valued option cleanly requires the option to be threaded through the config factory
   itself, not merged in after the fact.
+
+---
+
+### [LATTICE-CONNECTION-HONESTY-001] Make the Lattice connection card tell the truth about its own state
+
+- **Completed**: 2026-09-09
+- **Summary**: Reworked `lattice-section.tsx`'s failure and recovery handling end to end. A
+  declined/scopes/error authorization ceremony now surfaces as acute feedback next to the button
+  that started it, instead of resetting silently. A write that 200s but is actually a refusal
+  (device removed from the account, gateway unreachable, no device selected, the account's
+  authorization expired) is treated as a failure with a reason-specific message, not silent
+  success. The empty-devices state distinguishes "nothing paired yet" from "the list failed to
+  load." A disconnect can no longer be undone moments later by a reconnect ceremony that was still
+  in flight when it fired. Two rounds of `/code-review xhigh`, a `/simplify` pass, and a live
+  click-through against a real (locally stubbed) Lovelace OAuth flow together found and fixed 10
+  further defects — including a prototype-pollution crash the review's own fix introduced, and a
+  cache-staleness bug that only a real browser session surfaced.
+
+- **Approach**: The card had drifted through several rounds of product direction inside this same
+  session — a full reason/notice system (`LATTICE_REASON_COPY`, `ReasonNote`, `LatticeNotice`) was
+  removed in favor of showing state through structure alone (a device row's own status word, which
+  buttons are present), per explicit instruction that the UX should not require "advanced logic" or
+  supplemental narration to understand. What remained was audited by two independent `/code-review
+xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) against
+  `lattice-section.tsx`, `lattice-copy.ts`, `settings-group.tsx`, and their tests, plus a
+  `/simplify` pass for reuse/simplification/efficiency/altitude cleanup. Findings were fixed
+  directly rather than deferred, each with a regression test that was confirmed to fail on the
+  pre-fix code and pass after. The most load-bearing fixes: `chooseDevice`/`setEnabled` now share a
+  `requireLatticeSuccess` helper keyed off a `LATTICE_UNAVAILABLE_REASON_MESSAGE` lookup covering
+  all ten backend-defined reasons (previously `chooseDevice` gave one fixed message for every
+  reason including ones with nothing to do with the device, and `setEnabled` recognized only one of
+  ten); the `authorize` mutation gained the same generation-guard `prepare` already had, so a
+  disconnect that lands while a reconnect ceremony is still in flight can no longer let a stale
+  response resurrect `connected: true`; and the empty-devices branch now checks `devicesQ.isError`,
+  not just a reason field, so an outright failed request doesn't read as an empty account.
+
+  After the findings were fixed, the card was actually run: `scripts/dev-stack.sh` with
+  `LATTICE_CLIENT_ID`/`LATTICE_ACCOUNTS_ISSUER`/`LATTICE_GATEWAY_URL` pointed at
+  `apps/api/tests/lattice/local-lovelace-stub.ts` (a real OAuth consent screen and a two-device
+  gateway stand-in, one online and one offline), driven with Playwright against the actual
+  authenticated session. This caught two defects no mock-based test had: the "Reconnect Lovelace"
+  button lighting up for a merely-asleep chosen device — technically accurate but pointed at the
+  wrong remedy, since reconnecting never wakes a sleeping computer, only the device row's own
+  status word does that job — and a stale `unavailableReason` cached on the connection status query
+  sitting urgent-styled after the device list itself had already recovered, because nothing had
+  told the status query to look again. The first was fixed by narrowing `needsReconnect` back to
+  account-level reasons only (and reverting an in-session "fix" that had made it worse); the second
+  by clearing the status query's cached reason whenever the device list itself succeeds, since a
+  successful device read is proof the same gateway and grant the status reason was complaining
+  about are reachable right now.
+
+  One more gap surfaced by using the disconnect flow with an actual Lovelace-identity mental model
+  in mind, not a mock: the confirmation dialog said Athena falls back to Docket's standard models,
+  but never that the grant in the person's own Lovelace account is untouched — a person who runs
+  both Docket and Lattice would reasonably expect "Disconnect" here to mean "revoked everywhere."
+  The dialog now says so and points at Lovelace as the place to finish that if wanted.
+
+- **Files changed**: `apps/web/src/app/(app)/settings/athena/lattice-section.tsx`,
+  `apps/web/src/app/(app)/settings/athena/lattice-copy.ts`,
+  `apps/web/src/components/settings/settings-group.tsx`,
+  `apps/web/src/components/settings/settings-subsection.tsx`,
+  `apps/web/tests/athena/lattice-section.test.tsx`.
+
+- **Validation**: `pnpm typecheck` and `pnpm lint` clean across all 27/26 packages. 18 tests in
+  `lattice-section.test.tsx`, 325 across the combined `tests/athena` + `tests/components/settings`
+  suites, and the 14 `@docket/api` Lattice tests all pass (`pnpm db:reset` run first, since the live
+  browser session against the dev stack shares the PGlite database with the API test suite). Live
+  verification: full OAuth ceremony (redirect fallback → real consent screen → callback), device
+  selection against a genuinely offline device, the enable/disable toggle, disconnect, and a
+  simulated gateway outage (killing the stub mid-session) — each screenshotted at 1440×900 and
+  mobile widths, light and dark, via `capture-shots.ts`, with its overflow check passing at every
+  width down to 320px. The external `LATTICE_SETUP_URL` link was curled directly and returns 200.
+
+- **Learnings**:
+  - A mocked unit test encodes an assumption about what the backend can return; two of this pass's
+    real bugs (the button pointed at the wrong remedy, the stale cached reason) were only visible by
+    running the actual app, because both depend on the _relationship_ between two independently
+    fetched queries over time, not on any single response shape a mock would think to vary.
+  - A code-review fix can itself introduce a bug the review didn't check for: collapsing two
+    hand-written outcome lists into one lookup and an `in` check replaced an enumerable `===` chain
+    with a check that also walks the prototype chain, turning `?lattice=constructor` into a crash.
+    Caught by a gap-sweep pass explicitly told what was already fixed and asked to look for what
+    wasn't, not by the original review.
+  - A UI cross-check that is technically accurate can still be the wrong fix if the control it
+    weights doesn't actually address the condition it's reacting to — "something needs attention"
+    and "here is the specific action that fixes it" are different claims, and conflating them (an
+    urgent-styled "Reconnect Lovelace" for a problem reconnecting can't solve) is worse than the gap
+    it was meant to close.
+
+- **Follow-up (same day)**: A cold read of the screenshots above — as a first-time user, not as the
+  person who built the feature — found that the unconnected view puts two unfamiliar proper nouns
+  in front of a newcomer in one glance ("Lattice" as the row name, "Connect with Lovelace" as the
+  button), and that the section's own nav label ("Athena model backend") uses a word a prosumer
+  audience shouldn't need. Fixed by matching this app's own established integration-row convention
+  instead of inventing new wording: every other provider row in `apps/web/src/components/settings/`
+  (Google Calendar, Linear, the generic OAuth providers) pairs a bare "Connect"/"Reconnect" button
+  with a row that already names the provider, never repeating the name in the button — confirmed by
+  grep, not assumed. `lattice-section.tsx`'s buttons now read "Connect" / "Reconnect"; Lovelace's
+  name is introduced naturally on its own consent page instead of before it means anything. The nav
+  label moved from "Athena model backend" to "Local models" in `settings-capabilities.ts` (`backend`
+  kept as a search alias so existing muscle memory still finds it), and the disconnect dialog's copy
+  was rewritten shorter and plainer. No behavior changed, labels only — reverified with the same
+  typecheck/lint/test suite, all green.

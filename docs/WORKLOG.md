@@ -540,6 +540,7 @@
   debrief shows its meeting nowhere.
 
 ---
+
 ### [REPO-BOOTSTRAP-001] Turn a fresh clone into a verified Docket environment
 
 - **Status**: COMPLETED
@@ -557,10 +558,11 @@
   authentication, producing proxy 404s even though the direct upstream remained healthy. The
   canonical bootstrap stack now uses deterministic adjacent HTTP ports and a scoped supervisor,
   keeping Portless optional for provider callbacks and tunnels. The web sign-in and onboarding
-  boundary no longer imports the authenticated application provider graph. `./bootstrap verify
-  local --non-interactive` brought up web, API, admin, OIDC, and runner health checks and completed
-  the real Playwright passkey sign-in journey against a temporary PGlite database. Repeated local
-  configuration and Git-guardrail reconciliation preserved file hashes and mtimes.
+  boundary no longer imports the authenticated application provider graph. Running
+  `./bootstrap verify local --non-interactive` brought up web, API, admin, OIDC, and runner health
+  checks and completed the real Playwright passkey sign-in journey against a temporary PGlite
+  database. Repeated local configuration and Git-guardrail reconciliation preserved file hashes
+  and mtimes.
 - **Files changed**: Root `bootstrap` and README; local, production, verification, stack, and Git
   guardrail scripts; public/authenticated web provider boundaries and focused UI subpath exports;
   tooling and web regressions; local-development, UI-verification, bootstrap specification, and

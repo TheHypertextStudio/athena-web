@@ -15,11 +15,13 @@ after formatting, lint, types, tests, build, and browser E2E are green.
 | `docket-api`   | `api.clearthedocket.com`   | Cloud Run | Hono API, Better Auth, MCP, webhooks, cron endpoints    |
 | `docket-admin` | `admin.clearthedocket.com` | Cloud Run | Next.js operator back office                            |
 
-**Passkey RP ID target:** `clearthedocket.com`. Until the account-holder recovery ceremony in
-[the domain cutover runbook](./domain-cutover.md) succeeds, production API and Vercel builds must
-both remain on `hypertext.studio`, and `docket.hypertext.studio` must stay assigned to the Docket
-project without a domain redirect. Existing credentials cannot authenticate after either side moves
-to the new RP early.
+**Passkey RP ID:** `clearthedocket.com`. During the native passkey migration window,
+`BETTER_AUTH_PASSKEY_LEGACY_RP_ID=docket.hypertext.studio` mounts a separate assertion-only bridge
+for credentials enrolled on the old RP. Vercel must keep `docket.hypertext.studio` assigned directly
+to the Docket project so its AASA file returns without a redirect. The web app redirects every other
+old-host path to `clearthedocket.com`. Remove the legacy variable and old associated-domain
+entitlement only after the signed-device migration canary and migration window finish. The full
+security and removal contract lives in [Native credential integration](./specs/native-credentials.md).
 
 All services use `--max-instances=10` and `--memory=512Mi`. Services scale to zero by default.
 `docket-api` keeps one warm instance while `LINEAR_AGENT_ENABLED=true` so Linear's five-second
@@ -191,7 +193,8 @@ guided GitHub App flow rotates them to canonical secret names.
 
 `NODE_ENV`, `APP_MODE`, `API_URL`, `WEB_URL`, `BETTER_AUTH_URL`,
 `BETTER_AUTH_TRUSTED_ORIGINS`, `BETTER_AUTH_ALLOWED_HOSTS`,
-`BETTER_AUTH_PASSKEY_RP_ID`, `BETTER_AUTH_PASSKEY_RP_NAME`,
+`BETTER_AUTH_PASSKEY_RP_ID`, `BETTER_AUTH_PASSKEY_LEGACY_RP_ID`,
+`BETTER_AUTH_PASSKEY_RP_NAME`,
 `APPLE_APP_CLIENT_ID`,
 `GOOGLE_CALENDAR_WEBHOOK_URL`, `GOOGLE_OAUTH_PUBLIC`, `GOOGLE_OAUTH_TEST_EMAILS`,
 `ADMIN_GOOGLE_SSO_ENABLED`, `ADMIN_GOOGLE_GROUP_ROLES`, `GOOGLE_WORKSPACE_DOMAIN`,

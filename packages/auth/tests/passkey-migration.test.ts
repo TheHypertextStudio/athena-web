@@ -216,6 +216,32 @@ describe('passkey migration plugin', () => {
     ).not.toContain('passkey-migration');
   });
 
+  it('rejects direct plugin construction without a valid distinct legacy RP', () => {
+    expect(() =>
+      passkeyMigrationPlugin(
+        { ...env, BETTER_AUTH_PASSKEY_LEGACY_RP_ID: env.BETTER_AUTH_PASSKEY_RP_ID },
+        acceptingWebAuthn(),
+      ),
+    ).toThrow('Passkey migration requires a distinct legacy RP.');
+    expect(() =>
+      passkeyMigrationPlugin(
+        { ...env, BETTER_AUTH_PASSKEY_LEGACY_RP_ID: 'Docket.hypertext.studio' },
+        acceptingWebAuthn(),
+      ),
+    ).toThrow('The legacy passkey RP must be a bare lowercase hostname.');
+  });
+
+  it('rejects verification without the signed challenge cookie', async () => {
+    const request = harness(env, acceptingWebAuthn());
+    const response = await request(
+      '/passkey-migration/verify-authentication',
+      json('', { id: 'legacy-passkey' }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(responseCookies(response)).not.toContain('session_token');
+  });
+
   it('verifies the old RP and origin, advances the counter, and issues a normal session', async () => {
     const { db, passkey } = await import('@docket/db');
     const stored = await seedPasskey('legacy-passkey');

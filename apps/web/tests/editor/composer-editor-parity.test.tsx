@@ -101,6 +101,8 @@ describe('composer body editor parity', () => {
     const dialog = await screen.findByRole('dialog', { name: 'New initiative' });
     const title = screen.getByRole('textbox', { name: 'Initiative name' });
     const summary = screen.getByRole('textbox', { name: 'One-sentence summary' });
+    const editor = screen.getByRole('textbox', { name: 'Add a description' });
+    const dialogBody = editor.closest('[data-overlay-scroll-owner]');
     const create = screen.getByRole('button', { name: 'Create Initiative' });
     const actionRow = create.parentElement;
     const footer = actionRow?.parentElement;
@@ -117,6 +119,14 @@ describe('composer body editor parity', () => {
     expect(title).toHaveClass('text-headline-small');
     expect(title).not.toHaveClass('text-lg', 'font-medium', 'tracking-tight');
     expect(summary).toHaveClass('text-body-large');
+    expect(title.parentElement).not.toHaveClass('pb-3');
+    expect(editor.closest('[data-editor-surface]')).not.toHaveClass('mt-3');
+    expect(dialogBody).toHaveClass(
+      'pl-[max(1rem,env(safe-area-inset-left))]',
+      'pr-[max(1rem,env(safe-area-inset-right))]',
+      'sm:px-6',
+    );
+    expect(dialogBody).not.toHaveClass('py-3', 'sm:py-4');
     expect(actionRow).toHaveClass('w-full');
     expect(footer).toHaveClass(
       'pl-[max(1rem,env(safe-area-inset-left))]',

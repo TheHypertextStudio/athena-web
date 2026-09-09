@@ -117,6 +117,17 @@ async function expectNoPageOverflow(page: Page): Promise<void> {
   expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
 }
 
+async function expectSingleTitleToEditorGap(dialog: Locator): Promise<void> {
+  const editor = dialog.locator('[data-editor-surface]');
+  if ((await editor.count()) === 0) return;
+  const titleBlock = dialog.getByRole('textbox').first().locator('..');
+  const [titleBox, editorBox] = await Promise.all([titleBlock.boundingBox(), editor.boundingBox()]);
+  expect(titleBox).not.toBeNull();
+  expect(editorBox).not.toBeNull();
+  if (!titleBox || !editorBox) throw new Error('Composer title or editor has no layout box.');
+  expect(editorBox.y - (titleBox.y + titleBox.height)).toBeLessThanOrEqual(16);
+}
+
 async function expectMobileViewportComposer(dialog: Locator, page: Page): Promise<void> {
   await dialog.evaluate(async (node) => {
     await Promise.allSettled(
@@ -199,6 +210,7 @@ test('create composers fill phones and keep two explicit footer rows', async ({ 
     await page.setViewportSize({ width: 390, height: 844 });
     await setColorScheme(page, 'light');
     await expectMobileViewportComposer(dialog, page);
+    await expectSingleTitleToEditorGap(dialog);
     await expectTwoFooterRows(dialog, item);
     await expectNoPageOverflow(page);
     await capture(page, `${item.slug}-mobile-light`);

@@ -79,6 +79,7 @@ export {
   DialogContent,
   type DialogContentProps,
   DialogDescription,
+  type DialogBodyInset,
   DialogFooter,
   DialogHeader,
   type DialogInset,

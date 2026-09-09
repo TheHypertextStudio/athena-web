@@ -299,6 +299,26 @@ describe('Dialog family', () => {
     expect(footer).toHaveClass('pt-3', 'pb-[max(0.75rem,env(safe-area-inset-bottom))]');
   });
 
+  it('keeps adjacent responsive bodies inline with the panel without adding a second block gap', async () => {
+    render(
+      <Dialog defaultOpen>
+        <DialogContent>
+          <DialogTitle>Joined regions</DialogTitle>
+          <DialogBody inset="responsive-inline" data-testid="responsive-inline-body">
+            Body
+          </DialogBody>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    expect(await screen.findByTestId('responsive-inline-body')).toHaveClass(
+      'pl-[max(1rem,env(safe-area-inset-left))]',
+      'pr-[max(1rem,env(safe-area-inset-right))]',
+      'sm:px-6',
+    );
+    expect(screen.getByTestId('responsive-inline-body')).not.toHaveClass('py-3', 'sm:py-4');
+  });
+
   it('reserves the second header control only when a responsive dialog becomes a panel', async () => {
     render(
       <Dialog defaultOpen>

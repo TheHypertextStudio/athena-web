@@ -69,6 +69,9 @@ import { useOverlayFocusRestore } from './use-overlay-focus-restore';
 /** Insets for dialog regions, including compact phone spacing that expands with the panel. */
 export type DialogInset = OverlayInset | 'responsive';
 
+/** Insets for dialog bodies, including inline-only spacing beside an adjacent header. */
+export type DialogBodyInset = DialogInset | 'responsive-inline';
+
 /**
  * Root controller for an open/closed dialog (Radix passthrough).
  *
@@ -320,7 +323,7 @@ export function DialogBody({
   scroll = 'auto',
   ...props
 }: React.ComponentProps<'div'> & {
-  readonly inset?: DialogInset | undefined;
+  readonly inset?: DialogBodyInset | undefined;
   readonly scroll?: 'auto' | 'visible' | undefined;
 }): React.JSX.Element {
   return (
@@ -363,12 +366,13 @@ export function DialogFooter({
 
 type DialogRegion = 'header' | 'body' | 'footer';
 
-function overlayInsetClass(inset: DialogInset, region: DialogRegion): string {
+function overlayInsetClass(inset: DialogBodyInset, region: DialogRegion): string {
   if (inset === 'none') return '';
   if (inset === 'compact') return 'px-4 py-3';
-  if (inset === 'responsive') {
+  if (inset === 'responsive' || inset === 'responsive-inline') {
     const horizontal =
       'pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:px-6';
+    if (inset === 'responsive-inline') return horizontal;
     if (region === 'header')
       return `${horizontal} pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 sm:py-4`;
     if (region === 'footer')

@@ -9401,6 +9401,135 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [CREATE-COMPOSERS-003] Remove the stacked title-to-editor gap
+
+- **Completed**: 2026-09-08
+- **Started**: 2026-09-08
+- **Priority**: P1
+- **Summary**: Every create composer now uses one title-to-editor spacing step instead of stacking
+  four 12px margins and insets into a 48px gap.
+- **Approach**: Add the shared `responsive-inline` dialog inset for an adjacent scrolling body.
+  Keep safe-area-aware inline padding in `@docket/ui`, remove block padding from that body variant,
+  and remove the legacy title and editor margins. The responsive header now owns the only vertical
+  gap at this boundary.
+- **Validation**: The red shared-dialog test received the old `px-6 py-4` body inset. The red
+  composer test found the legacy `pb-3` title padding and `mt-3` editor margin. The focused green
+  suites passed 23 shared-dialog assertions and 22 composer/editor assertions. The full shared-UI
+  coverage suite passed 773 tests at 94.89% statement coverage. The full web coverage suite passed
+  3,850 tests at 95.98% statement coverage. The authenticated browser matrix passed 2 tests in 1.4
+  minutes across all five product composers. It enforced a title-to-editor gap of no more than 16px
+  and refreshed 30 screenshots at desktop, 390px, 320px, light, dark, fine-pointer, and touch
+  modes. UI and web typecheck and lint passed, and the production web build generated 91 pages and
+  its service worker.
+- **Learnings**: The visible 48px gap came from four independent 12px sources: title bottom
+  padding, responsive header bottom padding, responsive body top padding, and editor top margin.
+  Removing one margin would have left the same ownership bug in place. A shared inline-only body
+  inset preserves safe areas without adding a second vertical rhythm.
+- **Blockers**: None. Ports 1355 through 1358 belonged to a sibling worktree, so the final browser
+  run used the existing `DOCKET_DEV_PORT` override at ports 1455 through 1458. A first alternate-port
+  run lost its child processes when the startup shell ended and did not count as evidence.
+
+---
+
+### [CREATE-COMPOSERS-002] Give create composers a mobile-native surface
+
+- **Completed**: 2026-09-08
+- **Started**: 2026-09-08
+- **Priority**: P1
+- **Summary**: Phone-sized create composers now fill `100dvh` instead of reusing the centered
+  `60dvh` desktop panel. Desktop composers retain their 42rem compact width, 64rem expanded width,
+  and existing height rules.
+- **Approach**: Use the shared `responsive-fullscreen` dialog presentation and add typed
+  `responsive` inset and `responsive-two` header-control contracts to `@docket/ui`. Every composer
+  now gets phone insets that respect device safe areas and 24px panel insets from the same
+  primitive. The shared shell hides the redundant expand action below the `sm` breakpoint because
+  the phone surface already fills the viewport.
+- **Files changed**: The shared dialog regions now expose responsive inset and header-control
+  options. The shared composer applies those options to every product composer. Its editor fills
+  the space between the header and the pinned two-row footer. The browser evidence helper retries
+  navigation after a documented cold-route service-worker fallback and tolerates cancelled
+  viewport animations while it waits for the final frame.
+- **Validation**: The red tests failed on the missing shared responsive contracts and the old
+  centered composer presentation. The focused green runs passed 22 shared-dialog assertions and
+  22 editor and composer assertions. The final rebased browser matrix passed two tests in 36.5
+  seconds across all five product composers. It checked the close target while the phone layout hid
+  the expand target and captured 30 screenshots at 320px, 390px, and desktop widths in light, dark,
+  fine-pointer, and touch modes. The shared-UI coverage suite passed 772 tests at 94.89% statement
+  coverage. The web coverage suite passed 3,850 tests at 95.98% statement coverage. The full
+  typecheck graph passed 26 tasks. After review, the affected typecheck and lint graphs each passed
+  3 tasks, and the production build passed its API and web tasks. The repository format check and
+  whitespace check passed. A direct build invocation did not load `API_URL` and failed before
+  compilation. The documented dotenv-backed production build then passed, so that environment
+  invocation does not count as product evidence. A combined post-rebase check exhausted the
+  default 2 GB Node heap while web typecheck competed with lint and API generation. The isolated
+  web typecheck passed with a 4 GB heap, and the sequential lint and production build passed. A
+  post-fix review found no remaining Critical or Important issues.
+- **Learnings**: A percentage-height centered desktop dialog is the wrong phone composition. The
+  existing full-screen presentation works when the dialog primitive also owns responsive region
+  spacing and control gutters. The dev stack must stay attached to the shell that runs the browser
+  test. Cold development routes need navigation retry, and viewport changes can cancel active
+  animations without indicating a failed final frame. The keep-ours merge driver drops work-log
+  additions during a rebase, so the final tree needs an explicit work-log check.
+- **Blockers**: None. The resource watchdog helper documented in the repository is not installed at
+  `~/.claude/resource-limits/agentctl`. Turbo and Vitest commands used at most two workers. The Next
+  production build internally used seven page-data workers.
+
+---
+
+### [CREATE-COMPOSERS-001] Make create composers scan as two clear rows
+
+- **Completed**: 2026-09-08
+- **Started**: 2026-09-08
+- **Priority**: P1
+- **Description**: The six create composers used a dialog that was wider than the editor, weakened
+  the title hierarchy, and let the metadata and action controls collapse into one crowded footer
+  row. The shared composer had to keep its current height while the compact dialog hugged the
+  editor, the expanded dialog gained useful width, and the footer remained two stable rows at every
+  width.
+- **Approach**: Change the shared composer shell and existing picker extension points instead of
+  building entity-specific layouts. Preserve the workspace and owner breadcrumb. Normalize empty
+  property copy, align the dialog controls with the shared small control geometry, and keep the
+  primary fill off disabled submit buttons. Integrate the separately completed empty-description
+  prompt work after the composer slice passes focused tests.
+- **Subtasks**:
+  - [x] Add behavior and geometry coverage for the shared dialog, footer, and empty labels.
+  - [x] Implement the compact and expanded widths, type hierarchy, two-row footer, and controls.
+  - [x] Integrate the completed template-prompt commits without folding their history into this fix.
+  - [x] Capture every product-reachable composer at desktop and mobile widths in both themes.
+  - [x] Run focused and repository validation and record the design audit.
+- **Files changed**: The shared shell now uses a 42rem compact width and a 64rem expanded width
+  without changing its height. It gives metadata and actions separate footer rows, keeps the
+  breadcrumb, uses the shared small-control geometry for close and expand controls, and contains
+  editor overscroll. Coarse pointers keep a 4px gap between 40px header targets, and the metadata
+  fitter reserves the real overflow target width. Task recurrence now participates in measured
+  metadata overflow instead of clipping beside the ellipsis. Nullable property controls now use
+  `No ...` copy. The description template action begins below the empty prompt. Shared date and
+  estimate pickers accept caller-owned empty labels.
+- **Validation**: The rebased production release harness applied fresh disposable PostgreSQL
+  migrations and built the API and web app. It passed four composer browser tests, including fine
+  and touch pointer design matrices, the empty prompt case, and the evidence-only composer check.
+  The browser matrix captured 30 create-composer screenshots at 1440x900 and 390x844 in both
+  themes, plus a 320x844 overflow probe and a touch-emulated 390x844 pass for all five reachable
+  composers. The empty-prompt check captured three more screenshots. Focused shared-UI tests passed
+  97 assertions, and the post-review Task, Cycle, metadata, and shell regressions passed 52
+  assertions. The full shared-UI coverage suite passed 769 tests at 94.88% statement coverage. The
+  exact rebased full web coverage suite passed 3,850 tests at 95.98% statement coverage. The full
+  database coverage package passed 247 tests at 95.36% statement coverage. The complete repository
+  coverage graph reached 23 successful tasks before one unrelated database migration test exceeded
+  its 30-second timeout under API contention. The same two migration assertions passed alone in
+  3.29 seconds. A final review found no remaining Critical or Important issues.
+- **Learnings**: The editor surface must own both `overflow-y-auto` and `overscroll-contain`.
+  Giving overflow only to the surrounding dialog body still lets wheel input escape at the editor
+  boundary. Source-reading tests must follow shared control geometry instead of requiring an old
+  utility string. Cycle creation has no product entry point, so its current evidence remains at the
+  shared-shell component boundary instead of a fake browser route. A narrow viewport does not
+  activate coarse-pointer CSS in Playwright. Touch-target audits must set `hasTouch: true` and
+  measure the rendered hit boxes.
+- **Blockers**: None. The resource watchdog helper documented in the repository is not installed at
+  `~/.claude/resource-limits/agentctl`, so every validation command used at most two workers.
+
+---
+
 ### [TYPE-SCALE-001] Close the gaps between the design system and its enforcement
 
 - **Completed**: 2026-09-08

@@ -236,7 +236,7 @@ export function ComposerShell({
         onSubmit={() => {
           if (canSubmit && !creating) onSubmit();
         }}
-        className="bg-surface-container-low mt-3 flex min-h-28 flex-1 flex-col overflow-y-auto overscroll-contain rounded-lg p-3 [&>div]:flex-1"
+        className="bg-surface-container-low flex min-h-28 flex-1 flex-col overflow-y-auto overscroll-contain rounded-lg p-3 [&>div]:flex-1"
       />
     );
 
@@ -377,7 +377,7 @@ export function ComposerShell({
               ) : null}
 
               {/* Header block: the title, and — when opted in — an inline subtitle, read as one document. */}
-              <div className="flex flex-col gap-1 pb-3">
+              <div className="flex flex-col gap-1">
                 <input
                   aria-label={titlePlaceholder}
                   placeholder={titlePlaceholder}
@@ -407,7 +407,7 @@ export function ComposerShell({
             </div>
           </DialogHeader>
 
-          <DialogBody inset="responsive" className="flex flex-col gap-4">
+          <DialogBody inset="responsive-inline" className="flex flex-col gap-4">
             {bodyEditor !== null ? (
               <>
                 {/*

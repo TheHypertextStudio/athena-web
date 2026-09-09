@@ -93,6 +93,7 @@ export { default as LogOut } from '@mui/icons-material/Logout';
 export { default as Mail } from '@mui/icons-material/Mail';
 export { default as MapPin } from '@mui/icons-material/PlaceOutlined';
 export { default as Maximize } from '@mui/icons-material/OpenInFull';
+export { default as Minimize } from '@mui/icons-material/CloseFullscreen';
 export { default as Menu } from '@mui/icons-material/Menu';
 export { default as Minus } from '@mui/icons-material/Remove';
 export { default as OpenBook } from '@mui/icons-material/MenuBookOutlined';

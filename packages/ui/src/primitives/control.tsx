@@ -367,7 +367,11 @@ export function useControlMetrics(explicit?: ControlSize): ControlMetrics {
  *
  * `xl` is already 40px, so the floor is a no-op there and is applied unconditionally.
  */
-export const COARSE_FLOOR = { fixed: 'coarse:h-10', growable: 'coarse:min-h-10' } as const;
+export const COARSE_FLOOR = {
+  fixed: 'coarse:h-10',
+  growable: 'coarse:min-h-10',
+  width: 'coarse:w-10',
+} as const;
 
 /**
  * The shared chrome every control renders: box model, alignment, motion, and disabled treatment.
@@ -397,7 +401,7 @@ export function controlChrome(
     options?.growable === true
       ? cn(metrics.minHeight, COARSE_FLOOR.growable)
       : cn(metrics.height, COARSE_FLOOR.fixed),
-    options?.iconOnly === true ? cn(metrics.width, 'px-0') : metrics.paddingX,
+    options?.iconOnly === true ? cn(metrics.width, COARSE_FLOOR.width, 'px-0') : metrics.paddingX,
     metrics.gap,
     CONTROL_RADIUS,
     typeClass(metrics.labelToken),

@@ -176,7 +176,10 @@ describe('Dialog family', () => {
     fireEvent.click(screen.getByText('Open dialog'));
     await screen.findByRole('dialog');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    const close = screen.getByRole('button', { name: 'Close' });
+    expect(close).toHaveClass('h-7', 'w-7', 'coarse:h-10', 'coarse:w-10');
+    expect(close).toHaveClass('[&_svg]:size-4!');
+    fireEvent.click(close);
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -249,6 +252,21 @@ describe('Dialog family', () => {
     expect(overlay).not.toBeNull();
     expect(overlay).toHaveClass('bg-scrim/40', 'z-[110]');
     expect(screen.getByRole('dialog')).toHaveClass('z-[110]');
+  });
+
+  it('reserves the shared two-control gutter when a dialog adds header chrome', async () => {
+    render(
+      <Dialog defaultOpen>
+        <DialogContent>
+          <DialogTitle>Two controls</DialogTitle>
+          <DialogHeader controls="two" data-testid="two-control-header">
+            Composer context
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    expect(await screen.findByTestId('two-control-header')).toHaveClass('pr-20');
   });
 
   it.each([

@@ -294,7 +294,7 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
                 onChange={(next) => {
                   setField('ownerId', next);
                 }}
-                placeholder="Set owner"
+                placeholder="No owner"
                 clearLabel="No owner"
                 ariaLabel="Owner"
                 disabled={creating || !destinationReady}

@@ -230,6 +230,37 @@ describe('EntityMetadataRow', () => {
     expect(within(overflow).getByRole('button', { name: 'Lead' })).toBeVisible();
   });
 
+  it('uses intrinsic content width when a picker overflows its measured wrapper', () => {
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.getAttribute('data-entity-metadata-priority') === '2' ? 200 : 0;
+    });
+    render(
+      <EntityMetadataRow ariaLabel="Task properties">
+        <EntityMetadataItem priority={0}>
+          <button type="button">Status</button>
+        </EntityMetadataItem>
+        <EntityMetadataItem priority={1}>
+          <button type="button">Priority</button>
+        </EntityMetadataItem>
+        <EntityMetadataItem priority={2}>
+          <button type="button">Repeat</button>
+        </EntityMetadataItem>
+      </EntityMetadataRow>,
+    );
+
+    resizeRow(350);
+
+    const row = screen.getByRole('group', { name: 'Task properties' });
+    const inline = within(
+      assertDefined(row.querySelector<HTMLElement>('[data-entity-metadata-inline]')),
+    );
+    expect(inline.getByRole('button', { name: 'Status' })).toBeVisible();
+    expect(inline.getByRole('button', { name: 'Priority' })).toBeVisible();
+    expect(inline.queryByRole('button', { name: 'Repeat' })).not.toBeInTheDocument();
+  });
+
   it('uses measured control widths instead of hiding properties at fixed page breakpoints', () => {
     expect(
       fitEntityMetadataPriority({
@@ -248,6 +279,21 @@ describe('EntityMetadataRow', () => {
         overflowWidth: 28,
       }),
     ).toBe(7);
+  });
+
+  it('reserves the coarse-pointer width when the overflow control is required', () => {
+    expect(
+      fitEntityMetadataPriority({
+        availableWidth: 130,
+        itemWidths: [
+          { priority: 0, width: 50 },
+          { priority: 1, width: 30 },
+          { priority: 2, width: 50 },
+        ],
+        gap: 6,
+        overflowWidth: 40,
+      }),
+    ).toBe(0);
   });
 
   it('removes the overflow trigger when every declared property fits', () => {

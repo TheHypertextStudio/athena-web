@@ -33,6 +33,8 @@ export interface EstimatePickerProps {
   disabled?: boolean;
   /** Extra classes for the trigger. */
   triggerClassName?: string;
+  /** Empty-state copy for the trigger. */
+  placeholder?: string;
 }
 
 /** The task estimate picker, scoped to the workspace's configured {@link EstimationScale}. */
@@ -43,6 +45,7 @@ export function EstimatePicker({
   readOnly,
   disabled,
   triggerClassName,
+  placeholder = 'Set estimate',
 }: EstimatePickerProps): JSX.Element {
   const options: readonly PickerOption[] = ESTIMATION_SCALES[scale].map((option) => ({
     value: String(option.value),
@@ -56,7 +59,7 @@ export function EstimatePicker({
       onChange={(next) => {
         onChange(next !== null ? Number(next) : null);
       }}
-      placeholder="Set estimate"
+      placeholder={placeholder}
       clearLabel="None"
       ariaLabel="Estimate"
       readOnly={readOnly}

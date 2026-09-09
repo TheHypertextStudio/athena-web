@@ -592,15 +592,17 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
           setField('estimate', next);
         }}
       />
-      <RepeatTaskControl
-        value={draft.repeat}
-        onChange={(next) => {
-          setField('repeat', next);
-        }}
-        today={todayIso()}
-        timezone={Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}
-        disabled={creating}
-      />
+      <EntityMetadataItem priority={7}>
+        <RepeatTaskControl
+          value={draft.repeat}
+          onChange={(next) => {
+            setField('repeat', next);
+          }}
+          today={todayIso()}
+          timezone={Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}
+          disabled={creating}
+        />
+      </EntityMetadataItem>
     </ComposerShell>
   );
 });

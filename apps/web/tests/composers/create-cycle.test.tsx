@@ -106,4 +106,37 @@ describe('CreateCycleDialog continuation', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(screen.getByRole('status')).toHaveTextContent('Cycle created. Ready to create another.');
   });
+
+  it('shows calm empty-state copy after either date bound is cleared', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CreateCycleDialog
+          orgId={ORG_ID}
+          cycleNoun="Cycle"
+          teams={[TEAM]}
+          defaultTeamId={TEAM_ID}
+          teamsLoading={false}
+          nextNumberForTeam={() => 7}
+          open
+          onOpenChange={vi.fn()}
+          onCreated={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Dates Starts/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear' }));
+    expect(screen.getByRole('button', { name: 'Dates Starts — not set' })).toHaveTextContent(
+      'No start date',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Dates Ends/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear' }));
+    expect(screen.getByRole('button', { name: 'Dates Ends — not set' })).toHaveTextContent(
+      'No end date',
+    );
+  });
 });

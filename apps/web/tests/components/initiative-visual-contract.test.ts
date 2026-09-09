@@ -204,7 +204,9 @@ describe('Initiative visual contract', () => {
     expect(button).toContain("icon: 'xl'");
     expect(control).toMatch(/xl:\s*\{[^}]*height: 'h-10'/);
     expect(control).toMatch(/xl:\s*\{[^}]*width: 'w-10'/);
-    expect(dialog).toContain('h-10 w-10');
+    expect(control).toContain("fixed: 'coarse:h-10'");
+    expect(control).toContain("width: 'coarse:w-10'");
+    expect(dialog).toContain("controlChrome('sm', { iconOnly: true })");
     expect(workPage).toContain('icon: Target');
     expect(picker).toContain('props.size ?? 32');
     expect(picker).toContain('Math.max(40, size)');

@@ -511,6 +511,17 @@ function projectTemplate(
 }
 
 describe('CreateProjectDialog — robust composer', () => {
+  it('states empty project properties as current values', () => {
+    renderComposer();
+
+    expect(screen.getByText('No health')).toBeVisible();
+    expect(screen.getByText('No lead')).toBeVisible();
+    expect(screen.getByText('No program')).toBeVisible();
+    expect(screen.getByText('No start')).toBeVisible();
+    expect(screen.getByText('No target')).toBeVisible();
+    expect(screen.getByText('No initiatives')).toBeVisible();
+  });
+
   it('keeps properties on one measured row and moves later controls into More', async () => {
     let propertiesResize: ResizeObserverCallback | undefined;
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (

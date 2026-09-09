@@ -32,8 +32,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  type DialogPresentation,
 } from '@docket/ui/primitives';
-import { Maximize } from '@docket/ui/icons';
+import { Maximize, Minimize } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type ReactNode, type RefObject, useId, useState } from 'react';
 
@@ -41,6 +42,14 @@ import { FreeformTextEditor } from '@/components/editor/freeform-text';
 import type { EditorContribution } from '@/components/editor/editor-contribution';
 import MentionHydrationProvider from '@/components/mentions/mention-hydration';
 import { EntityMetadataRow } from '@/components/views/entity-detail-layout';
+
+function composerPresentation(expanded: boolean): DialogPresentation {
+  return {
+    kind: 'centered',
+    size: expanded ? 'detail' : 'large',
+    height: expanded ? 'tall' : 'medium',
+  };
+}
 
 /** The shared controls for submitting a composer and keeping it open. */
 export interface ComposerContinuation {
@@ -227,7 +236,7 @@ export function ComposerShell({
         onSubmit={() => {
           if (canSubmit && !creating) onSubmit();
         }}
-        className="bg-surface-container-low mt-3 flex min-h-28 flex-1 flex-col rounded-lg p-3 [&>div]:flex-1"
+        className="bg-surface-container-low mt-3 flex min-h-28 flex-1 flex-col overflow-y-auto overscroll-contain rounded-lg p-3 [&>div]:flex-1"
       />
     );
 
@@ -256,7 +265,7 @@ export function ComposerShell({
       }}
     >
       <DialogContent
-        presentation={{ kind: 'centered', size: 'wide', height: expanded ? 'tall' : 'medium' }}
+        presentation={composerPresentation(expanded)}
         aria-describedby={undefined}
         // The whole form goes inert while a create is in flight. Without this, assistive tech has
         // no way to tell that apart from a form that is simply not editable.
@@ -300,16 +309,16 @@ export function ComposerShell({
             type="button"
             variant="ghost"
             iconOnly
-            controlSize="lg"
+            controlSize="sm"
             aria-label={expanded ? 'Collapse editor' : 'Expand editor'}
             aria-pressed={expanded}
             disabled={editDisabled}
             onClick={() => {
               setExpanded((current) => !current);
             }}
-            className="absolute top-4 right-14 z-10"
+            className="coarse:right-[3.75rem] absolute top-4 right-12 z-10"
           >
-            <Maximize aria-hidden="true" className={expanded ? 'rotate-180' : undefined} />
+            {expanded ? <Minimize aria-hidden="true" /> : <Maximize aria-hidden="true" />}
           </Button>
         ) : null}
 
@@ -322,7 +331,11 @@ export function ComposerShell({
           }}
           className="contents"
         >
-          <DialogHeader inset="standard" className="min-w-0">
+          <DialogHeader
+            inset="standard"
+            controls={bodyPlaceholder !== undefined ? 'two' : 'one'}
+            className="min-w-0"
+          >
             {contextRow !== undefined ? (
               <div data-composer-context-row="" className="min-w-0">
                 <EntityMetadataRow
@@ -375,7 +388,7 @@ export function ComposerShell({
                   onChange={(event) => {
                     onTitleChange(event.target.value);
                   }}
-                  className="placeholder:text-on-surface-variant text-on-surface w-full bg-transparent text-lg font-medium tracking-tight outline-none disabled:opacity-50"
+                  className="placeholder:text-on-surface-variant text-on-surface text-headline-small w-full bg-transparent outline-none disabled:opacity-50"
                 />
                 {onSummaryChange ? (
                   <input
@@ -387,7 +400,7 @@ export function ComposerShell({
                     onChange={(event) => {
                       onSummaryChange(event.target.value);
                     }}
-                    className="placeholder:text-on-surface-variant text-on-surface-variant w-full bg-transparent text-base outline-none disabled:opacity-50"
+                    className="placeholder:text-on-surface-variant text-on-surface-variant text-body-large w-full bg-transparent outline-none disabled:opacity-50"
                   />
                 ) : null}
               </div>
@@ -424,7 +437,10 @@ export function ComposerShell({
           {/* Action bar: pills, then error, then the single primary action — all pinned below the
            *  scrolling body so a long AI-drafted description can never carry them out of view or
            *  interleave them with its own text. */}
-          <DialogFooter inset="standard" className="flex-col gap-3">
+          <DialogFooter
+            inset="standard"
+            className="flex-col gap-3 sm:flex-col sm:items-stretch sm:justify-start"
+          >
             {!confirmingDiscard && propertyLayout === 'compact' ? (
               <PropertyStrip ariaLabel={propertyAriaLabel}>{children}</PropertyStrip>
             ) : null}
@@ -494,7 +510,7 @@ function ComposerActionRow({
 }: ComposerActionRowProps): JSX.Element {
   if (confirmingDiscard) {
     return (
-      <div className="flex flex-row items-center gap-2">
+      <div className="flex w-full flex-row items-center gap-2">
         <span className="text-on-surface-variant text-body-medium mr-auto">
           Discard this draft?
         </span>
@@ -509,7 +525,7 @@ function ComposerActionRow({
   }
 
   return (
-    <div className="flex flex-row items-center gap-2">
+    <div className="flex w-full flex-row items-center gap-2">
       {continuation ? (
         <button
           type="button"
@@ -519,7 +535,7 @@ function ComposerActionRow({
           onClick={() => {
             continuation.onCheckedChange(!continuation.checked);
           }}
-          className="text-on-surface-variant hover:bg-surface-container-high text-label-large mr-auto inline-flex h-8 items-center gap-2 rounded-md px-2 disabled:opacity-50"
+          className="text-on-surface-variant hover:bg-surface-container-high text-label-large coarse:min-h-10 mr-auto inline-flex h-8 items-center gap-2 rounded-md px-2 whitespace-nowrap disabled:opacity-50"
         >
           <span
             aria-hidden="true"
@@ -540,7 +556,10 @@ function ComposerActionRow({
         // first one is under way, so the state is announced rather than merely drawn.
         disabled={creating || !canSubmit}
         aria-busy={creating}
-        className={continuation ? undefined : 'ml-auto'}
+        className={cn(
+          'disabled:bg-surface-container-highest disabled:text-on-surface-variant disabled:opacity-100',
+          !continuation && 'ml-auto',
+        )}
       >
         {creating ? 'Creating…' : submitLabel}
       </Button>

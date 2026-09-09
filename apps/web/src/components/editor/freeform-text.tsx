@@ -136,7 +136,7 @@ function EmptyDocumentPrompt({
   return (
     <div
       data-editor-empty-actions=""
-      className="text-on-surface-variant text-body-medium z-10 flex w-fit max-w-full flex-wrap items-center gap-1.5 self-start"
+      className="text-on-surface-variant text-body-medium z-10 flex w-fit max-w-full flex-col items-start gap-1.5 self-start"
       onMouseDown={(event) => {
         if (
           event.target instanceof Element &&

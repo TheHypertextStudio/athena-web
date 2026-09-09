@@ -126,7 +126,7 @@ export function InitiativeComposerPickers({
             options={actorOptions}
             value={ownerId ?? null}
             onChange={onOwnerChange}
-            placeholder="Set owner"
+            placeholder="No owner"
             clearLabel="No owner"
             ariaLabel="Owner"
             disabled={disabled}
@@ -149,6 +149,7 @@ export function InitiativeComposerPickers({
         <EntityMetadataItem priority={2}>
           <TimeframePicker
             label="Initiative target"
+            placeholder="No target"
             value={targetTimeframe ?? null}
             fiscalYearStartMonth={fiscalYearStartMonth}
             edge="target"
@@ -162,7 +163,7 @@ export function InitiativeComposerPickers({
           options={HEALTH_OPTIONS}
           value={health}
           onChange={onHealthChange}
-          placeholder="Set health"
+          placeholder="No health"
           triggerIcon={<Activity className="text-on-surface-variant size-4" />}
           clearLabel="No health"
           ariaLabel="Health"

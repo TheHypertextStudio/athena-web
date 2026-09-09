@@ -130,7 +130,7 @@ export function ProjectComposerPickers({
           options={HEALTH_OPTIONS}
           value={health}
           onChange={onHealthChange}
-          placeholder="Set health"
+          placeholder="No health"
           triggerIcon={<Activity className="text-on-surface-variant size-4" />}
           clearLabel="No health"
           ariaLabel="Health"
@@ -152,7 +152,7 @@ export function ProjectComposerPickers({
               options={references.actorOptions}
               value={references.leadId}
               onChange={references.onLeadChange}
-              placeholder="Set lead"
+              placeholder="No lead"
               clearLabel="No lead"
               ariaLabel="Lead"
               disabled={disabled}
@@ -164,7 +164,7 @@ export function ProjectComposerPickers({
                 options={references.programOptions}
                 value={references.programId}
                 onChange={references.onProgramChange}
-                placeholder={`Set ${programLabel.toLowerCase()}`}
+                placeholder={`No ${programLabel.toLowerCase()}`}
                 triggerIcon={<Layers className="text-on-surface-variant size-4" />}
                 clearLabel={`No ${programLabel.toLowerCase()}`}
                 searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
@@ -180,7 +180,9 @@ export function ProjectComposerPickers({
               onChange={references.onTimelineChange}
               ariaLabel="Timeline"
               startLabel="Project start"
+              startPlaceholder="No start"
               targetLabel="Project target"
+              targetPlaceholder="No target"
               disabled={disabled || references.planningCalendarLoading}
             />
           </EntityMetadataItem>
@@ -189,7 +191,7 @@ export function ProjectComposerPickers({
               options={references.initiativeOptions}
               value={references.initiativeIds}
               onToggle={references.onInitiativeToggle}
-              placeholder={`Link ${initiativeNoun.toLowerCase()}s`}
+              placeholder={`No ${initiativeNoun.toLowerCase()}s`}
               triggerIcon={<Target className="text-on-surface-variant size-4" />}
               searchPlaceholder={`Search ${initiativeNoun.toLowerCase()}s…`}
               emptyText={`No ${initiativeNoun.toLowerCase()}s`}

@@ -74,7 +74,7 @@ export function ProgramComposerPickers({
             options={actorOptions}
             value={ownerId ?? null}
             onChange={onOwnerChange}
-            placeholder="Set owner"
+            placeholder="No owner"
             clearLabel="No owner"
             ariaLabel="Owner"
             disabled={disabled}
@@ -98,7 +98,7 @@ export function ProgramComposerPickers({
           options={HEALTH_OPTIONS}
           value={health}
           onChange={onHealthChange}
-          placeholder="Set health"
+          placeholder="No health"
           triggerIcon={<Activity className="text-on-surface-variant size-4" />}
           clearLabel="No health"
           ariaLabel="Health"

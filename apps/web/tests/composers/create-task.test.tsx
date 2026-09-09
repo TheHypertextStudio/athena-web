@@ -513,6 +513,23 @@ function taskTemplate(
 }
 
 describe('CreateTaskDialog — robust composer', () => {
+  it('states empty task properties as current values', async () => {
+    workStructureGet.mockResolvedValue(jsonResponse(true, { estimationScale: 'fibonacci' }));
+    renderComposer();
+
+    expect(screen.getByText('Unassigned')).toBeVisible();
+    expect(screen.getByText('No project')).toBeVisible();
+    expect(screen.getByText('No start date')).toBeVisible();
+    expect(screen.getByText('No due date')).toBeVisible();
+    expect(screen.getByText('No labels')).toBeVisible();
+    expect(await screen.findByText('No estimate')).toBeVisible();
+    expect(
+      screen
+        .getByRole('button', { name: 'Repeat — Does not repeat' })
+        .closest('[data-entity-metadata-item]'),
+    ).toHaveAttribute('data-entity-metadata-priority', '7');
+  });
+
   it('renders Start from template inside the empty editor after the task title', async () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {

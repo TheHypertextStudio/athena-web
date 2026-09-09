@@ -264,7 +264,7 @@ describe('Create composer draft lifetime', () => {
     fireEvent.click(await screen.findByText('Grace Hopper'));
     // The lead pill now reads the chosen actor rather than its placeholder.
     await waitFor(() => {
-      expect(screen.queryByText('Set lead')).toBeNull();
+      expect(screen.queryByText('No lead')).toBeNull();
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
@@ -277,7 +277,7 @@ describe('Create composer draft lifetime', () => {
 
     openComposer();
     // The pill is back to its placeholder — the previous draft's lead did not survive the create.
-    expect(screen.getByText('Set lead')).toBeTruthy();
+    expect(screen.getByText('No lead')).toBeTruthy();
     expect(screen.queryByText('Grace Hopper')).toBeNull();
   });
 });

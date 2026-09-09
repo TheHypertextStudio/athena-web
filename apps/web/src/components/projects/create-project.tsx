@@ -399,7 +399,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
                 onChange={(next) => {
                   setField('programId', next);
                 }}
-                placeholder={`Set ${programNoun.toLowerCase()}`}
+                placeholder={`No ${programNoun.toLowerCase()}`}
                 triggerIcon={<Layers className="text-on-surface-variant size-4" />}
                 clearLabel={`No ${programNoun.toLowerCase()}`}
                 searchPlaceholder={`Search ${programNoun.toLowerCase()}s…`}

@@ -56,6 +56,7 @@ import * as React from 'react';
 import { X } from '../icons/x';
 
 import { cn } from '../lib/utils';
+import { controlChrome } from './control';
 import { focusRing } from './focus';
 import type {
   DialogHeight,
@@ -253,7 +254,8 @@ export function DialogContent({
           <DialogPrimitive.Close
             aria-label={closeLabel}
             className={cn(
-              'text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface absolute top-4 right-4 inline-flex h-10 w-10 items-center justify-center rounded-md opacity-70 transition-colors transition-opacity hover:opacity-100 disabled:pointer-events-none [&_svg]:size-6',
+              controlChrome('sm', { iconOnly: true }),
+              'text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface absolute top-4 right-4 z-10 opacity-70 transition-colors transition-opacity hover:opacity-100',
               focusRing,
             )}
           >
@@ -275,15 +277,21 @@ export function DialogContent({
 export function DialogHeader({
   className,
   inset = 'standard',
+  controls = 'one',
   ...props
-}: React.ComponentProps<'div'> & { readonly inset?: OverlayInset | undefined }): React.JSX.Element {
+}: React.ComponentProps<'div'> & {
+  readonly inset?: OverlayInset | undefined;
+  /** Reserve the end gutter for the built-in close control or for close plus one extra control. */
+  readonly controls?: 'one' | 'two' | undefined;
+}): React.JSX.Element {
   return (
     <div
       className={cn(
         // DialogContent's shared close control sits at the top-right edge. Reserve that column
         // here so titles never rely on a caller-specific right-padding repair.
-        'flex shrink-0 flex-col gap-1.5 pr-12 text-left',
+        'flex shrink-0 flex-col gap-1.5 text-left',
         overlayInsetClass(inset),
+        controls === 'two' ? 'coarse:pr-[6.5rem] pr-20' : 'coarse:pr-[3.75rem] pr-12',
         className,
       )}
       {...props}

@@ -183,9 +183,47 @@ describe('TimeframePicker', () => {
     );
     expect(screen.getByRole('button', { name: 'Target date — not set' })).toBeDisabled();
   });
+
+  it('uses host-owned empty-state copy without changing the accessible field name', () => {
+    render(
+      <TimeframePicker
+        label="Initiative target"
+        placeholder="No target"
+        value={null}
+        fiscalYearStartMonth={0}
+        edge="target"
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Initiative target — not set' })).toHaveTextContent(
+      'No target',
+    );
+  });
 });
 
 describe('TimeframeRangePicker', () => {
+  it('forwards independent empty-state copy to both timeline controls', () => {
+    render(
+      <TimeframeRangePicker
+        value={{ start: null, target: null }}
+        fiscalYearStartMonth={0}
+        onChange={vi.fn()}
+        startLabel="Project start"
+        startPlaceholder="No start"
+        targetLabel="Project target"
+        targetPlaceholder="No target"
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Project start — not set' })).toHaveTextContent(
+      'No start',
+    );
+    expect(screen.getByRole('button', { name: 'Project target — not set' })).toHaveTextContent(
+      'No target',
+    );
+  });
+
   it('rejects an inverted range and describes both controls with the error', async () => {
     const onChange = vi.fn();
     render(

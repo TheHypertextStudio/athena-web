@@ -72,6 +72,64 @@ function renderEditor(ui: ReactElement): void {
 }
 
 describe('composer body editor parity', () => {
+  it('uses the compact shell, two stable footer rows, and shared control geometry', async () => {
+    const user = userEvent.setup();
+    renderEditor(
+      <ComposerShell
+        open
+        onOpenChange={vi.fn()}
+        heading="New initiative"
+        title=""
+        onTitleChange={vi.fn()}
+        titlePlaceholder="Initiative name"
+        summary=""
+        onSummaryChange={vi.fn()}
+        summaryPlaceholder="One-sentence summary"
+        body=""
+        onBodyChange={vi.fn()}
+        bodyPlaceholder="Add a description"
+        continuation={{ checked: false, onCheckedChange: vi.fn(), onSubmit: vi.fn() }}
+        creating={false}
+        canSubmit={false}
+        onSubmit={vi.fn()}
+        submitLabel="Create Initiative"
+      >
+        <button type="button">No health</button>
+      </ComposerShell>,
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'New initiative' });
+    const title = screen.getByRole('textbox', { name: 'Initiative name' });
+    const summary = screen.getByRole('textbox', { name: 'One-sentence summary' });
+    const create = screen.getByRole('button', { name: 'Create Initiative' });
+    const actionRow = create.parentElement;
+    const footer = actionRow?.parentElement;
+    const expand = screen.getByRole('button', { name: 'Expand editor' });
+    const createMore = screen.getByRole('switch', { name: 'Create more' });
+
+    expect(dialog).toHaveClass('max-w-2xl', 'h-[min(60dvh,36rem)]');
+    expect(title).toHaveClass('text-headline-small');
+    expect(title).not.toHaveClass('text-lg', 'font-medium', 'tracking-tight');
+    expect(summary).toHaveClass('text-body-large');
+    expect(actionRow).toHaveClass('w-full');
+    expect(footer).toHaveClass('sm:flex-col', 'sm:items-stretch', 'sm:justify-start');
+    expect(create).toHaveClass(
+      'disabled:bg-surface-container-highest',
+      'disabled:text-on-surface-variant',
+      'disabled:opacity-100',
+    );
+    expect(expand).toHaveClass('h-7', 'w-7', 'coarse:h-10', 'coarse:w-10');
+    expect(createMore).toHaveClass('coarse:min-h-10');
+    expect(expand.querySelector('[data-testid="OpenInFullIcon"]')).not.toBeNull();
+
+    await user.click(expand);
+
+    expect(dialog).toHaveClass('max-w-5xl', 'h-[min(80dvh,48rem)]');
+    expect(screen.getByRole('button', { name: 'Collapse editor' })).toContainElement(
+      document.querySelector('[data-testid="CloseFullscreenIcon"]'),
+    );
+  });
+
   it('renders a composer contribution in the shared inline empty state', async () => {
     renderEditor(
       <ComposerShell
@@ -103,6 +161,7 @@ describe('composer body editor parity', () => {
     const emptyState = action.closest('[data-editor-empty-actions]');
     expect(emptyState).toHaveTextContent('Add a description');
     expect(emptyState).toContainElement(action);
+    expect(emptyState).toHaveClass('flex-col', 'items-start');
   });
 
   it('keeps slash commands enabled inside the shared composer', async () => {

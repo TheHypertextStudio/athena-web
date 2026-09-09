@@ -422,9 +422,11 @@ export function EntityMetadataRow({
       fitEntityMetadataPriority({
         availableWidth: availableWidth.current,
         itemWidths: inlineMeasurements,
-        // The row inherits the shared `sm` control step: 6px gap and a 28px icon control.
+        // Reserve the shared icon control's 40px coarse-pointer floor. The extra 12px on fine
+        // pointers keeps the fit conservative and prevents a pointer-mode change from clipping a
+        // property before ResizeObserver reports another row width.
         gap: 6,
-        overflowWidth: 28,
+        overflowWidth: 40,
       }),
     );
   }, []);
@@ -432,7 +434,9 @@ export function EntityMetadataRow({
   const declareItem = useCallback(
     (priority: EntityMetadataPriority, element: HTMLElement, overflowOnly: boolean) => {
       const measure = (): void => {
-        const width = element.getBoundingClientRect().width;
+        // A picker can keep its own intrinsic width while its wrapper is clipped by the inline
+        // lane. Measure both boxes so the fitter never treats clipped content as free space.
+        const width = Math.max(element.getBoundingClientRect().width, element.scrollWidth);
         if (width <= 0 && !overflowOnly) return;
         itemMeasurements.current.set(element, { priority, width, overflowOnly });
         recomputeVisibility();

@@ -125,7 +125,7 @@ export function TaskComposerPickers({
           options={actorOptions}
           value={assigneeId}
           onChange={onAssigneeChange}
-          placeholder="Assignee"
+          placeholder="Unassigned"
           clearLabel="Unassigned"
           ariaLabel="Assignee"
           disabled={creating}
@@ -136,7 +136,7 @@ export function TaskComposerPickers({
           options={projectOptions}
           value={projectId}
           onChange={onProjectChange}
-          placeholder={`Set ${projectNounLower}`}
+          placeholder={`No ${projectNounLower}`}
           triggerIcon={<FolderKanban className="text-on-surface-variant size-4" />}
           clearLabel={`No ${projectNounLower}`}
           searchPlaceholder={`Search ${projectNounLower}s…`}
@@ -149,7 +149,7 @@ export function TaskComposerPickers({
           options={milestoneOptionsForProject}
           value={milestoneId}
           onChange={onMilestoneChange}
-          placeholder={projectId ? 'Set milestone' : `Set a ${projectNounLower} first`}
+          placeholder={projectId ? 'No milestone' : `Set a ${projectNounLower} first`}
           triggerIcon={<Flag className="text-on-surface-variant size-4" />}
           clearLabel="No milestone"
           searchPlaceholder="Search milestones…"
@@ -166,7 +166,7 @@ export function TaskComposerPickers({
             options={cycleOptionsForTeam}
             value={cycleId}
             onChange={onCycleChange}
-            placeholder={`Set ${cycleNounLower}`}
+            placeholder={`No ${cycleNounLower}`}
             triggerIcon={<RefreshCw className="text-on-surface-variant size-4" />}
             clearLabel={`No ${cycleNounLower}`}
             searchPlaceholder={`Search ${cycleNounLower}s…`}
@@ -179,7 +179,7 @@ export function TaskComposerPickers({
         <DatePicker
           value={startDate}
           onChange={onStartDateChange}
-          placeholder="Anticipated start"
+          placeholder="No start date"
           formatLabel={triggerDate}
           ariaLabel="Anticipated start"
           disabled={creating}
@@ -189,7 +189,7 @@ export function TaskComposerPickers({
         <DatePicker
           value={dueDate}
           onChange={onDueDateChange}
-          placeholder="Due date"
+          placeholder="No due date"
           formatLabel={triggerDate}
           ariaLabel="Due date"
           disabled={creating}
@@ -200,7 +200,7 @@ export function TaskComposerPickers({
           options={labelOptions}
           value={labelIds}
           onToggle={onLabelToggle}
-          placeholder="Labels"
+          placeholder="No labels"
           ariaLabel="Labels"
           disabled={creating}
         />
@@ -211,6 +211,7 @@ export function TaskComposerPickers({
             scale={estimationScale}
             value={estimate}
             onChange={onEstimateChange}
+            placeholder="No estimate"
             disabled={creating}
           />
         </EntityMetadataItem>

@@ -87,6 +87,7 @@ describe('control-height scale', () => {
   it('swaps padding for a fixed width when the control is icon-only', () => {
     const chrome = controlChrome('md', { iconOnly: true });
     expect(chrome).toContain('w-8');
+    expect(chrome).toContain('coarse:w-10');
     expect(chrome).toContain('px-0');
     expect(chrome).not.toContain('px-3');
   });

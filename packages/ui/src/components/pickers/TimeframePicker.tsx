@@ -60,10 +60,16 @@ function modeLabel(mode: DateResolution): string {
   return PRECISION_OPTIONS.find((option) => option.value === mode)?.label ?? mode;
 }
 
+function emptyTimeframeLabel(label: string, placeholder: string | undefined): string {
+  return placeholder ?? `Set ${label.toLocaleLowerCase()}`;
+}
+
 /** Props for {@link TimeframePicker}. */
 export interface TimeframePickerProps {
   /** Human-readable field name, such as `Target date`. */
   readonly label: string;
+  /** Empty-state copy. Defaults to `Set` plus the lower-cased label. */
+  readonly placeholder?: string | undefined;
   /** Current precise or broad planning value. */
   readonly value: PlanningTimeframe | null;
   /** Zero-based month used for new broad selections. */
@@ -100,6 +106,7 @@ export interface TimeframePickerProps {
  */
 export function TimeframePicker({
   label,
+  placeholder: placeholderOverride,
   value,
   fiscalYearStartMonth,
   edge,
@@ -119,7 +126,7 @@ export function TimeframePicker({
   const [windowOffset, setWindowOffset] = React.useState(0);
   const precisionRef = React.useRef<HTMLDivElement | null>(null);
   const visibleLabel = savedLabel(value);
-  const placeholder = `Set ${label.toLocaleLowerCase()}`;
+  const placeholder = emptyTimeframeLabel(label, placeholderOverride);
   const broadOptions =
     mode === 'day'
       ? []
@@ -347,8 +354,12 @@ export interface TimeframeRangePickerProps {
   readonly ariaLabel?: string | undefined;
   /** Label for the start field. Defaults to the group label plus `start`. */
   readonly startLabel?: string | undefined;
+  /** Empty-state copy for the start field. */
+  readonly startPlaceholder?: string | undefined;
   /** Label for the target field. Defaults to the group label plus `target`. */
   readonly targetLabel?: string | undefined;
+  /** Empty-state copy for the target field. */
+  readonly targetPlaceholder?: string | undefined;
 }
 
 /**
@@ -367,7 +378,9 @@ export function TimeframeRangePicker({
   triggerClassName,
   ariaLabel = 'Timeline',
   startLabel = `${ariaLabel} start`,
+  startPlaceholder,
   targetLabel = `${ariaLabel} target`,
+  targetPlaceholder,
 }: TimeframeRangePickerProps): React.JSX.Element {
   const [error, setError] = React.useState<string | null>(null);
   const errorId = React.useId();
@@ -386,6 +399,7 @@ export function TimeframeRangePicker({
       <div role="group" aria-label={ariaLabel} className="flex max-w-full flex-nowrap gap-2">
         <TimeframePicker
           label={startLabel}
+          placeholder={startPlaceholder}
           value={value.start}
           fiscalYearStartMonth={fiscalYearStartMonth}
           edge="start"
@@ -401,6 +415,7 @@ export function TimeframeRangePicker({
         />
         <TimeframePicker
           label={targetLabel}
+          placeholder={targetPlaceholder}
           value={value.target}
           fiscalYearStartMonth={fiscalYearStartMonth}
           edge="target"

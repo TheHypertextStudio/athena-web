@@ -266,6 +266,13 @@ function programTemplate(
 }
 
 describe('CreateProgramDialog — visibility picker', () => {
+  it('states empty program properties as current values', () => {
+    renderGlobalProgram();
+
+    expect(screen.getByText('No owner')).toBeVisible();
+    expect(screen.getByText('No health')).toBeVisible();
+  });
+
   it('renders Workspace, Owner, then Start from template above the title without a duplicate Owner', async () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {

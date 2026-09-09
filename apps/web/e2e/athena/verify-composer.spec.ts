@@ -61,12 +61,21 @@ test.describe('new-task composer', () => {
     await expect(templateButton).toBeVisible();
     await expect(templateButton).not.toHaveCSS('text-decoration-line', 'underline');
     await expect(templateButton).toHaveCSS('border-top-width', '1px');
-    await expect(emptyState).toHaveText('Add a description or Start from template');
+    await expect(emptyState).toContainText('Add a description');
+    await expect(emptyState).toContainText('Start from template');
     const [editorBounds, emptyBounds] = await Promise.all([
       editorSurface.evaluate((node) => node.getBoundingClientRect()),
       emptyState.evaluate((node) => node.getBoundingClientRect()),
     ]);
     expect(emptyBounds.left).toBeGreaterThan(editorBounds.left);
+    const [placeholderBounds, templateBounds] = await Promise.all([
+      emptyState
+        .locator(':scope > span')
+        .first()
+        .evaluate((node) => node.getBoundingClientRect()),
+      templateButton.evaluate((node) => node.getBoundingClientRect()),
+    ]);
+    expect(templateBounds.top).toBeGreaterThanOrEqual(placeholderBounds.bottom);
     await expect(propertyStrip).toHaveCSS('flex-wrap', 'nowrap');
     await expect(propertyStrip).toHaveJSProperty(
       'scrollWidth',

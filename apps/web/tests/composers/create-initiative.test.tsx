@@ -238,6 +238,14 @@ function initiativeTemplate(
 }
 
 describe('GlobalInitiativeComposer', () => {
+  it('states empty initiative properties as current values', () => {
+    renderGlobalInitiative();
+
+    expect(screen.getByText('No owner')).toBeVisible();
+    expect(screen.getByText('No target')).toBeVisible();
+    expect(screen.getByText('No health')).toBeVisible();
+  });
+
   it('renders Workspace, Owner, then Start from template above the title with no duplicate Owner', async () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {

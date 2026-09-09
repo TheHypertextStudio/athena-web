@@ -75,6 +75,17 @@ test('an unwritten description prompts on the line the first character will occu
   await expect(prompt).toHaveText(/^Describe this initiative….*Start from template$/);
   await expect(page.locator('[data-editor-insert]')).toHaveCount(0);
 
+  const [placeholderBox, templateBox] = await Promise.all([
+    prompt
+      .locator(':scope > span')
+      .first()
+      .evaluate((node) => node.getBoundingClientRect()),
+    prompt
+      .getByRole('button', { name: 'Start from template' })
+      .evaluate((node) => node.getBoundingClientRect()),
+  ]);
+  expect(templateBox.top).toBeGreaterThanOrEqual(placeholderBox.bottom);
+
   const aligned = await prompt.evaluate((row) => {
     const surface = row.closest('[data-editor-surface]');
     const editable = surface?.querySelector('.ProseMirror');

@@ -89,18 +89,15 @@
   after which it will redirect to the new apex.
 - **Validation**: The rebased server packages pass typecheck and lint. Focused validation passes 178
   auth tests, 161 environment tests, 3 identity contract tests, 5 API config tests, and 28 web
-  consumer tests. Twenty-six native auth and HTTP-contract tests pass on macOS and a signed iOS
-  26.5 simulator. The suite now exercises the real Keychain vault plus passkey registration payload
-  and request mapping. The expanded iPhone UI suite passes nine tests with no failures or skips,
-  including account sign-out plus retained signed-in and signed-out captures. The prior seven-test
-  suite passes on iPad. A new macOS keyboard sign-out test compiles, but the Mac runner cannot start:
-  Xcode requires a paid-team development profile for the entitled app, and the unsigned
-  runner exited before bootstrapping while the desktop was locked. Neither attempt counts as macOS
-  UI evidence. Development and production-mode iOS Simulator and arm64
-  macOS builds pass with two Xcode jobs. The Release app contains the exact Google values returned
-  by the provider console. The macOS Release build compiles `Docket.icon` into `Docket.icns` and
-  names it as the app icon in the built bundle. A rendered 256-pixel representation shows the
-  expected blue translucent three-bar mark. Light and dark simulator evidence covers iPhone and iPad.
+  consumer tests. Forty-three native auth and HTTP-contract tests pass on macOS. Signed iOS 26.5
+  simulator suites pass all nine UI tests on both iPhone and iPad, including account sign-out plus
+  retained signed-in and signed-out captures. The suite exercises the real Keychain vault plus
+  passkey registration payload and request mapping. Development and production-mode iOS Simulator
+  and arm64 macOS builds pass with two Xcode jobs. The Release app contains the exact Google values
+  returned by the provider console. The macOS Release build compiles `Docket.icon` into
+  `Docket.icns` and names it as the app icon in the built bundle. A rendered 256-pixel
+  representation shows the expected blue translucent three-bar mark. Light and dark simulator
+  evidence covers iPhone and iPad.
   `scripts/build-environment.sh staging` also produces a Release-optimized macOS app when given an
   explicit staging API URL. Inspection of that built app confirms the `staging` environment, the
   supplied API origin, the production WebAuthn origin, and both real Google client identifiers.
@@ -126,11 +123,19 @@
   production rebuild promotes those values. The legacy security URL now returns HTTP 307 to its
   own `/sign-in?callbackURL=%2Fsettings%2Fsecurity` route, and the canonical production verifier
   passes every app, documentation, API, OpenAPI, OAuth, MCP, and immutable-asset check afterward.
+  Xcode now signs Docket with the paid Hypertext Studio team `T95VDD3A4W`. A signed macOS build
+  carries `T95VDD3A4W.studio.hypertext.docket`, Sign in with Apple, the
+  `webcredentials:clearthedocket.com` associated domain, and the expected Keychain access group.
+  CI run `34316653894` passes the full graph at `a9ac33aeb`. Deploy run `34318062219` attempt 3
+  passes the API, admin, scheduler, and documentation jobs after the production secret-binding
+  manifest was restored from the last successful deployment and extended with the three Twilio
+  Verify bindings. The live API reports `clearthedocket.com` as its passkey RP, and the live AASA
+  response now matches the paid-team application identifier.
 - **Domain validation**: Verisign RDAP records the `clearthedocket.com` registration on 2026-09-08
   and delegates it to `candy.ns.cloudflare.com` and `ricardo.ns.cloudflare.com`. Vercel accepted
   `clearthedocket.com` and `www.clearthedocket.com` for project `docket` and requires an apex A
   record to `76.76.21.21`. The live apex returns HTTP 200 for the AASA path with
-  `application/json`, no redirect, and the exact `39AB9DY3K8.studio.hypertext.docket` application
+  `application/json`, no redirect, and the exact `T95VDD3A4W.studio.hypertext.docket` application
   identifier. Public resolvers and both authoritative Cloudflare nameservers return
   `ghs.googlehosted.com` for the API and admin CNAMEs. CI run `34277685985` and production deploy
   run `34279696697` pass at commit `4a808e60f`. The production Better Auth host allowlist contains
@@ -139,16 +144,13 @@
   `770668668034-ur7mk3bikrbdkvaomkjrruhkgmkp99vl.apps.googleusercontent.com` now persists
   `https://clearthedocket.com` as a JavaScript origin plus callbacks on both
   `https://clearthedocket.com` and `https://api.clearthedocket.com`; the legacy entries remain.
-- **Blockers**: The account holder must generate and save ten recovery codes through a fresh
-  passkey ceremony on `docket.hypertext.studio` before production can change its passkey RP ID.
-  The account holder must then consume one code at `https://clearthedocket.com/recover` and create
-  the first `clearthedocket.com` passkey on real hardware. Apple Developer shows
-  `willieechalmers@gmail.com` as a free account and offers
-  enrollment in the $99/year Apple Developer Program. Xcode refuses to provision Associated
-  Domains and Sign in with Apple for team `39AB9DY3K8`. Paid enrollment and Apple's agreements are
-  required before Docket can create its App ID, associate a Services ID, obtain signing profiles,
-  or run physical-device passkey and Apple credential ceremonies. An agent cannot authorize that
-  purchase or accept those agreements for the user.
+- **Blockers**: Apple Developer still needs an authenticated portal session to confirm the Docket
+  App ID as the primary Sign in with Apple identifier, associate the existing web Services ID, and
+  create or select the Sign in with Apple key. The paired `WilliePad` has Developer Mode enabled,
+  but it is locked, so CoreDevice cannot mount its developer disk image or install the signed app.
+  The Mac is also locked, which prevents the portal configuration and signed macOS visual check.
+  Production keeps Apple and Google hidden until the physical Apple/passkey ceremonies and full
+  Google ID-token exchange, session restoration, and sign-out canaries pass.
 - **Notes**: The original Apple checkout's untracked `Athena/Task.swift` and `README.md` remain
   untouched.
 

@@ -110,12 +110,12 @@ API but is reached **same-origin** through each Next app's `/api/auth/*` rewrite
 (which the OAuth `redirect_uri` + session cookie are built from) resolves to the browser's host. So
 the redirect URI you register with each provider is the _product_ origin, per frontend:
 
-| Provider | Dev redirect URI (per frontend)                     | Prod redirect URI                                          |
-| -------- | --------------------------------------------------- | ---------------------------------------------------------- |
-| Google   | `https://docket.localhost/api/auth/callback/google` | `https://docket.hypertext.studio/api/auth/callback/google` |
-| GitHub   | `https://docket.localhost/api/auth/callback/github` | `https://docket.hypertext.studio/api/auth/callback/github` |
-| Linear   | `https://docket.localhost/api/auth/callback/linear` | `https://docket.hypertext.studio/api/auth/callback/linear` |
-| Apple    | _n/a — Apple rejects `localhost`/non-HTTPS_         | `https://docket.hypertext.studio/api/auth/callback/apple`  |
+| Provider | Dev redirect URI (per frontend)                     | Prod redirect URI                                     |
+| -------- | --------------------------------------------------- | ----------------------------------------------------- |
+| Google   | `https://docket.localhost/api/auth/callback/google` | `https://clearthedocket.com/api/auth/callback/google` |
+| GitHub   | `https://docket.localhost/api/auth/callback/github` | `https://clearthedocket.com/api/auth/callback/github` |
+| Linear   | `https://docket.localhost/api/auth/callback/linear` | `https://clearthedocket.com/api/auth/callback/linear` |
+| Apple    | _n/a — Apple rejects `localhost`/non-HTTPS_         | `https://clearthedocket.com/api/auth/callback/apple`  |
 
 Register the same set for **each** signing-in frontend (web + `admin.…`). The GitHub App also gets
 a connect callback `…/internal/integrations/github/callback` (browser-facing → product origin) per

@@ -75,7 +75,9 @@ test('captures the selected saved-place picker at both widths and in both themes
   const marker = dialog.locator('.maplibregl-marker');
   await expect(marker).toBeVisible({ timeout: TIMEOUTS.pageReady });
   await marker.hover();
-  await expect(dialog.locator('.maplibregl-ctrl-attrib')).toContainText('OpenFreeMap');
+  await expect(dialog.locator('.maplibregl-ctrl-attrib')).toHaveCount(0);
+  await expect(dialog.getByRole('link', { name: 'OpenMapTiles' })).toBeVisible();
+  await expect(dialog.getByRole('link', { name: 'OpenStreetMap' })).toBeVisible();
 
   for (const viewport of [
     { label: '1440x900', width: 1440, height: 900 },

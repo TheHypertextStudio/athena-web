@@ -114,6 +114,22 @@ describe('PlaceMapPicker', () => {
     );
   });
 
+  it('uses short visible map credits instead of MapLibre attribution', async () => {
+    render(<PlaceMapPicker value={null} onChange={vi.fn()} />);
+    await screen.findByRole('region', { name: 'Place map' });
+
+    expect(runtime.maps[0]?.options['attributionControl']).toBe(false);
+    expect(screen.getByRole('link', { name: 'OpenMapTiles' })).toHaveAttribute(
+      'href',
+      'https://openmaptiles.org/',
+    );
+    expect(screen.getByRole('link', { name: 'OpenStreetMap' })).toHaveAttribute(
+      'href',
+      'https://www.openstreetmap.org/copyright',
+    );
+    expect(screen.queryByText('OpenFreeMap')).not.toBeInTheDocument();
+  });
+
   it('uses OpenFreeMap Dark when the browser prefers dark mode', async () => {
     runtime.dark = true;
     render(<PlaceMapPicker value={null} onChange={vi.fn()} />);

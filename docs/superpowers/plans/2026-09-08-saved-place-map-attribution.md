@@ -50,7 +50,7 @@ it('uses short visible map credits instead of MapLibre attribution', async () =>
 Run:
 
 ```bash
-pnpm --filter @docket/web test -- tests/work-location/place-map-picker.test.tsx --maxWorkers=1
+pnpm --filter @docket/web exec vitest run tests/work-location/place-map-picker.test.tsx --maxWorkers=1
 ```
 
 Expected result: The new test fails because `attributionControl` is `{}` and neither short credit link exists.
@@ -88,10 +88,10 @@ Keep the links in the current tab. That behavior avoids an unrequested new-windo
 Run:
 
 ```bash
-pnpm --filter @docket/web test -- tests/work-location/place-map-picker.test.tsx --maxWorkers=1
+pnpm --filter @docket/web exec vitest run tests/work-location/place-map-picker.test.tsx --maxWorkers=1
 ```
 
-Expected result: The `PlaceMapPicker` test file passes with nine tests.
+Expected result: The `PlaceMapPicker` test file passes with 11 tests.
 
 - [ ] **Step 5: Update the browser assertion**
 
@@ -108,7 +108,7 @@ await expect(dialog.getByRole('link', { name: 'OpenStreetMap' })).toBeVisible();
 Read `docs/engineering/ui-verification.md`, then use its existing development stack and session flow. Run the shot test with one worker:
 
 ```bash
-pnpm --filter @docket/web test:e2e -- e2e/settings/saved-place-picker-shots.spec.ts --workers=1
+E2E_EVIDENCE=1 pnpm --filter @docket/web exec playwright test settings/saved-place-picker-shots.spec.ts --workers=1
 ```
 
 Expected result: One Playwright test passes. The command replaces all four screenshots. Each image shows a single-line credit without the long OpenFreeMap banner or horizontal overflow.

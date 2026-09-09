@@ -94,7 +94,7 @@ export function PlaceMapPicker({ value, onChange }: PlaceMapPickerProps): JSX.El
           style: colorScheme.matches ? DARK_STYLE : LIGHT_STYLE,
           center,
           zoom: initialValue ? 15 : 2.5,
-          attributionControl: {},
+          attributionControl: false,
         });
         mapRef.current = map;
 
@@ -200,6 +200,22 @@ export function PlaceMapPicker({ value, onChange }: PlaceMapPickerProps): JSX.El
             </Button>
           </div>
         ) : null}
+        <p
+          aria-label="Map data attribution"
+          className="bg-surface/85 text-on-surface-variant text-label-small absolute right-1 bottom-1 z-10 inline-flex items-center gap-1 rounded px-1.5 py-0.5 whitespace-nowrap backdrop-blur-sm"
+        >
+          <span aria-hidden="true">©</span>
+          <a className="underline-offset-2 hover:underline" href="https://openmaptiles.org/">
+            OpenMapTiles
+          </a>
+          <span aria-hidden="true">· ©</span>
+          <a
+            className="underline-offset-2 hover:underline"
+            href="https://www.openstreetmap.org/copyright"
+          >
+            OpenStreetMap
+          </a>
+        </p>
       </div>
       <div className="flex min-h-10 flex-wrap items-center justify-end gap-2">
         {message !== null || !value ? (

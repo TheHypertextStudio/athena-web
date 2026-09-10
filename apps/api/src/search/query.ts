@@ -148,7 +148,7 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
 
   const cursor = decodeCursor(input.params.cursor);
   const rankedAt = cursor?.rankedAt ?? input.rankedAt ?? Date.now();
-  const { scored, facets } = await scanRankedCandidates({
+  const { scored: rankedScored, facets } = await scanRankedCandidates({
     ownerUserId,
     orgIds: accessibleOrgIds,
     query,
@@ -163,6 +163,7 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
     limit,
     signal: input.signal,
   });
+  const scored = collapseActivityRows(rankedScored);
 
   const surfaced =
     input.params.surface === 'palette' && !cursor
@@ -947,6 +948,39 @@ function relationshipBoost(
     boost += 12;
   }
   return boost;
+}
+
+/**
+ * Collapse per-event `activity` rows into their subject when that subject is already a result.
+ *
+ * @remarks
+ * Every domain event (a project renamed, a status changed) is indexed as its own `activity`
+ * search document, and its title falls back to the subject's own title whenever the event has no
+ * distinct summary of its own (see the `TaskActivityChange` producer in `event-emit.ts`). A
+ * project that already matches a query therefore also surfaces every activity row about it, each
+ * showing the exact same title as the project — the same entity, several times over, with nothing
+ * to tell the rows apart. `rows` is already sorted by {@link compareScoredRows}, so keeping the
+ * first activity row seen per subject keeps the best-scored one.
+ *
+ * @param rows - Scored, sorted candidates for one search response.
+ * @returns `rows` with redundant activity rows removed.
+ */
+function collapseActivityRows(rows: readonly ScoredRow[]): ScoredRow[] {
+  const subjectHasOwnRow = new Set<string>();
+  for (const { row } of rows) {
+    if (row.organizationId)
+      subjectHasOwnRow.add(`${row.organizationId}:${row.kind}:${row.entityId}`);
+  }
+  const keptSubjects = new Set<string>();
+  return rows.filter((scored) => {
+    const { row } = scored;
+    if (row.kind !== 'activity' || !row.subjectKind || !row.subjectId) return true;
+    const subjectKey = `${row.organizationId}:${row.subjectKind}:${row.subjectId}`;
+    if (subjectHasOwnRow.has(subjectKey)) return false;
+    if (keptSubjects.has(subjectKey)) return false;
+    keptSubjects.add(subjectKey);
+    return true;
+  });
 }
 
 function applyPaletteDiversityCap(rows: readonly ScoredRow[], limit: number): ScoredRow[] {

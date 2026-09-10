@@ -7,6 +7,44 @@
 
 ## Active Tasks
 
+### [SEARCH-ACTIVITY-DUPES-001] Stop one entity from filling the palette with itself
+
+- **Completed**: 2026-09-10
+- **Priority**: P2
+- **Summary**: Searching the command palette for a project's title returned that project once and
+  then five more rows underneath it, all sharing the same title, distinguishable only by a repeated
+  glyph. Every domain event (a rename, a status change) is indexed as its own `activity` search
+  document, and an event's title falls back to its subject's own title whenever the event carries no
+  distinct summary — so a project that matches a query surfaces alongside every activity row about
+  it, each one an unlabeled restatement of the same name. Nothing downstream collapsed them: the
+  palette's family-diversity cap groups by `family`, not by the entity a row is actually about, and
+  `SearchResult.subject.title` is hardcoded to `null`, so there was no display-layer signal a client
+  could have used to fold the rows back together even if it tried.
+- **Approach**: Added `collapseActivityRows` in `apps/api/src/search/query.ts`, run on the full
+  scored candidate set before the palette diversity cap and pagination. It drops an `activity` row
+  outright when the subject it points at (`subjectKind`/`subjectId`) already has its own row in the
+  same result set, and otherwise keeps only the single best-scored activity row per subject.
+  Scoped to `kind === 'activity'` specifically — comments and updates carry real authored content
+  and titles of their own (`Comment on {subject}` / `Update on {subject}`), so they were never the
+  source of the duplication and are left to surface as their own distinct hits.
+- **Files Changed**: `apps/api/src/search/query.ts` (`collapseActivityRows`, wired into
+  `searchWorkspace`), `apps/api/tests/search/query.test.ts` (two new cases: collapsing into a
+  present subject, and picking the best of several activity rows when the subject itself is not a
+  result).
+- **Validation**: New tests written first and watched fail against the unmodified query service
+  before implementing the collapse. `pnpm vitest run tests/search/` plus the search route suites
+  — 132/132 passing. `tsc --noEmit` and `eslint` on the touched files clean; `prettier --check`
+  clean after a format pass.
+- **Learnings**: The duplication was never a client bug — the frontend keys palette rows by
+  `kind:org:entityId`, which is legitimately different for every event, so no client-side dedupe by
+  `id` could ever have caught this. The fix belongs where the rows are minted from one corpus of
+  independent source objects into a page of results a person reads as "things," which is the ranking
+  step, not the presentation layer.
+- **Follow-ups**: Browse mode (an empty query, ordered by recency) can show the same duplication —
+  this fix only covers the ranked-search path the command palette and page search use with a query.
+
+---
+
 ### [LATTICE-FEDCM-DELIVERY] Publish environment-owned OAuth client identity
 
 - **Status**: REVIEW

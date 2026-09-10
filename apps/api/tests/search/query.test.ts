@@ -1701,4 +1701,98 @@ describe('search query service', () => {
     ).toBeNull();
     expect(result.items.find((item) => item.kind === 'comment')?.display).toBeNull();
   });
+
+  it('collapses activity rows into their subject when the subject is already a result', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchActivityCollapseUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    const title = 'Week Without Driving 2026';
+    await db.insert(schema.searchDocument).values([
+      {
+        id: `project:${orgId}:collapse_project`,
+        organizationId: orgId,
+        kind: 'project',
+        family: 'work',
+        sourceTable: 'project',
+        entityId: 'collapse_project',
+        title,
+        facet: {},
+        route: entityRoute(orgId, 'project', 'collapse_project'),
+        visibility: { mode: 'org_members' },
+        baseRank: 50,
+      },
+      ...Array.from({ length: 4 }, (_, index) => ({
+        id: `activity:${orgId}:collapse_event_${index}`,
+        organizationId: orgId,
+        kind: 'activity' as const,
+        family: 'activity' as const,
+        sourceTable: 'event',
+        entityId: `collapse_event_${index}`,
+        subjectKind: 'project',
+        subjectId: 'collapse_project',
+        title,
+        facet: {},
+        route: {
+          type: 'activity',
+          organizationId: orgId,
+          eventId: `collapse_event_${index}`,
+          href: `/orgs/${orgId}/stream?eventId=collapse_event_${index}`,
+        },
+        visibility: { mode: 'org_members' },
+        baseRank: 30 - index,
+      })),
+    ]);
+
+    const result = await searchWorkspace({
+      scope: 'hub',
+      caller: { kind: 'user', userId },
+      params: { q: 'Week Without Driving', surface: 'palette' },
+    });
+
+    expect(result.items.map((item) => item.id)).toEqual([`project:${orgId}:collapse_project`]);
+  });
+
+  it('keeps only the best-scored activity row about a subject that is not itself a result', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchActivityCollapseNoParentUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    const title = 'Orphaned Widget Rollout';
+    await db.insert(schema.searchDocument).values(
+      Array.from({ length: 3 }, (_, index) => ({
+        id: `activity:${orgId}:orphan_event_${index}`,
+        organizationId: orgId,
+        kind: 'activity' as const,
+        family: 'activity' as const,
+        sourceTable: 'event',
+        entityId: `orphan_event_${index}`,
+        subjectKind: 'project',
+        subjectId: 'orphan_project',
+        title,
+        facet: {},
+        route: {
+          type: 'activity',
+          organizationId: orgId,
+          eventId: `orphan_event_${index}`,
+          href: `/orgs/${orgId}/stream?eventId=orphan_event_${index}`,
+        },
+        visibility: { mode: 'org_members' },
+        // Index 0 outscores the others so the surviving row is deterministic.
+        baseRank: 30 - index,
+      })),
+    );
+
+    const result = await searchWorkspace({
+      scope: 'hub',
+      caller: { kind: 'user', userId },
+      params: { q: 'Orphaned Widget Rollout' },
+    });
+
+    expect(result.items.map((item) => item.id)).toEqual([`activity:${orgId}:orphan_event_0`]);
+  });
 });

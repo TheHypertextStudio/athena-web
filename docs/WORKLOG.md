@@ -181,8 +181,9 @@
   `studio.hypertext.docket.web` Services ID, and a dedicated Sign in with Apple key. The four server
   values are stored in Secret Manager, and the production binding manifest mounts them. Apple's
   relay service also accepts production mail from `service.hypertext.studio`. Production Google
-  sign-in is public through the existing provider gate. The next production deployment will expose
-  both native providers through `/v1/config`.
+  sign-in is public through the existing provider gate. Live `/v1/config` exposes both native
+  providers, the `studio.hypertext.docket` Apple audience, and the production Google web-client
+  audience.
 - **Domain validation**: Verisign RDAP records the `clearthedocket.com` registration on 2026-09-08
   and delegates it to `candy.ns.cloudflare.com` and `ricardo.ns.cloudflare.com`. Vercel accepted
   `clearthedocket.com` and `www.clearthedocket.com` for project `docket` and requires an apex A
@@ -199,6 +200,18 @@
   Vercel's project-domain API now assigns `docket.hypertext.studio` directly to project `docket`
   without a platform redirect. The live legacy AASA URL returns HTTP 200 with `application/json`,
   no redirect, and the same paid-team application identifier as the canonical domain.
+- **Latest native verification**: The migration client sent the legacy assertion inside Better
+  Auth's standard `{ response: ... }` envelope, while the dedicated migration route accepts the
+  WebAuthn credential at the JSON root. A request-contract regression test failed on the old shape
+  and passes after the correction. All 51 native unit and request-contract tests pass. A signed
+  production build passes strict signature verification, carries both associated domains plus Sign
+  in with Apple, installs on WilliePad, and launches against the live canonical API. A fresh staging
+  Release build also embeds its supplied HTTPS API origin, its isolated `staging` session namespace,
+  the canonical WebAuthn origin, and both real Google client identifiers. The complete web push gate
+  later hit a 30-second timeout in the drag source-policy scan after 3,878 web tests passed. The scan
+  parsed every TypeScript source file even when its text could not contain a forbidden construct.
+  Candidate filtering cuts its isolated assertion time from 1.54 seconds to 648 milliseconds while
+  preserving the three behavior checks; focused lint and web typecheck pass.
 - **Blockers**: The legacy-passkey replacement ceremony, native Apple ID-token exchange, and native
   Google ID-token exchange still need signed-hardware canaries. Each canary must also prove session
   restoration and local-first sign-out before release sign-off.

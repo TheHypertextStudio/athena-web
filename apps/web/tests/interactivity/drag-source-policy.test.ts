@@ -46,6 +46,12 @@ function sources(directory: string): readonly SourceFile[] {
 
 /** Report transport imports and native object drags outside the interaction boundary. */
 function violations(source: SourceFile): readonly string[] {
+  const canContainViolation =
+    source.text.includes('@dnd-kit/') ||
+    source.text.includes('draggable') ||
+    LEGACY_MODULES.some((legacy) => source.text.includes(legacy));
+  if (!canContainViolation) return [];
+
   const file = ts.createSourceFile(
     source.path,
     source.text,

@@ -1607,6 +1607,58 @@ describe('buildAuthOptions env-gating', () => {
     ]);
   });
 
+  it('allows the legacy Apple passkey origin through the real request-origin gate', async () => {
+    const { buildAuthOptions } = await import('../../src/index');
+    const { betterAuth } = await import('better-auth');
+    const options = buildAuthOptions(
+      {
+        ...baseEnv,
+        BETTER_AUTH_URL: 'https://api.clearthedocket.com',
+        BETTER_AUTH_PASSKEY_RP_ID: 'clearthedocket.com',
+        BETTER_AUTH_PASSKEY_LEGACY_RP_ID: 'hypertext.studio',
+        BETTER_AUTH_TRUSTED_ORIGINS: 'https://clearthedocket.com',
+      },
+      MAILER_DEPS,
+    );
+    const passkeyPlugin = (options.plugins ?? []).find((plugin) => plugin.id === 'passkey');
+    const passkeyOptions = (passkeyPlugin as { options?: Record<string, unknown> }).options ?? {};
+    expect(passkeyOptions['origin']).toEqual(['https://clearthedocket.com']);
+    expect(options.trustedOrigins).toEqual([
+      'https://clearthedocket.com',
+      'https://hypertext.studio',
+    ]);
+    const instance = betterAuth({
+      ...options,
+      advanced: {
+        ...options.advanced,
+        disableOriginCheck: false,
+        disableCSRFCheck: false,
+      },
+    });
+    const challenge = await instance.handler(
+      new Request(
+        'https://api.clearthedocket.com/api/auth/passkey-migration/generate-authenticate-options',
+      ),
+    );
+    const response = await instance.handler(
+      new Request(
+        'https://api.clearthedocket.com/api/auth/passkey-migration/verify-authentication',
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            cookie: applySetCookieHeaders('', challenge.headers.getSetCookie()),
+            origin: 'https://hypertext.studio',
+          },
+          body: JSON.stringify({ id: 'legacy-origin-probe' }),
+        },
+      ),
+    );
+
+    expect([400, 401]).toContain(response.status);
+    expect(await response.json()).not.toMatchObject({ code: 'INVALID_ORIGIN' });
+  });
+
   it('allows configured Apple and Android origins through the real request-origin gate', async () => {
     const { buildAuthOptions } = await import('../../src/index');
     const { betterAuth } = await import('better-auth');

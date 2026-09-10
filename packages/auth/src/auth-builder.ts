@@ -171,6 +171,15 @@ function resolvePasskeyOrigins(
   };
 }
 
+/** Derive the temporary Apple-platform origin admitted only while old-RP migration is mounted. */
+function legacyPasskeyOrigins(
+  e: Pick<AuthEnv, 'BETTER_AUTH_PASSKEY_LEGACY_RP_ID' | 'BETTER_AUTH_PASSKEY_RP_ID'>,
+): string[] {
+  const legacyRpId = e.BETTER_AUTH_PASSKEY_LEGACY_RP_ID;
+  if (!legacyRpId || legacyRpId === e.BETTER_AUTH_PASSKEY_RP_ID) return [];
+  return applePasskeyOrigins(legacyRpId);
+}
+
 /** Whether a Docket account may start Google OAuth at the current release stage. */
 export function canUseGoogleOAuth(
   e: Pick<AuthEnv, 'APP_MODE' | 'GOOGLE_OAUTH_PUBLIC' | 'GOOGLE_OAUTH_TEST_EMAILS'>,
@@ -637,6 +646,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
     e.BETTER_AUTH_PASSKEY_RP_ID,
   );
   const passkeyOrigins = passkeyOriginConfig.pluginOrigins;
+  const legacyOrigins = legacyPasskeyOrigins(e);
 
   const plugins: BetterAuthPlugin[] = [
     passkey({
@@ -848,7 +858,9 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
   // Apple posts its OAuth callback (form_post) from `appleid.apple.com`, so that origin must be
   // trusted or Better Auth rejects the callback. Added ONLY when Apple is configured — unset ⇒ the
   // trusted-origins list is byte-identical to the CSV env value.
-  const trustedOrigins = [...passkeyOriginConfig.trustedOrigins];
+  // The migration plugin verifies its own old-RP clientData origin. Better Auth's outer request
+  // gate must admit that same HTTP Origin first or no signed legacy assertion can reach it.
+  const trustedOrigins = [...new Set([...passkeyOriginConfig.trustedOrigins, ...legacyOrigins])];
   if (appleCreds !== undefined) trustedOrigins.push('https://appleid.apple.com');
 
   return {

@@ -212,6 +212,14 @@
   parsed every TypeScript source file even when its text could not contain a forbidden construct.
   Candidate filtering cuts its isolated assertion time from 1.54 seconds to 648 milliseconds while
   preserving the three behavior checks; focused lint and web typecheck pass.
+  A read-only live migration probe then exposed a second boundary failure: production returned HTTP
+  403 `INVALID_ORIGIN` for `https://hypertext.studio` before the custom migration verifier ran.
+  Better Auth's outer request-origin gate now admits the configured distinct legacy RP origin while
+  the current passkey plugin keeps its narrower current-RP origin list. The real-handler regression
+  fails with the production configuration and passes after this split. The complete auth package
+  passes 206 tests with 100 percent statement, branch, function, and line coverage; auth typecheck
+  and lint pass. Production still needs this server correction deployed before the signed-device
+  migration canary can succeed.
 - **Blockers**: The legacy-passkey replacement ceremony, native Apple ID-token exchange, and native
   Google ID-token exchange still need signed-hardware canaries. Each canary must also prove session
   restoration and local-first sign-out before release sign-off.

@@ -218,8 +218,14 @@
   the current passkey plugin keeps its narrower current-RP origin list. The real-handler regression
   fails with the production configuration and passes after this split. The complete auth package
   passes 206 tests with 100 percent statement, branch, function, and line coverage; auth typecheck
-  and lint pass. Production still needs this server correction deployed before the signed-device
-  migration canary can succeed.
+  and lint pass. Production deployed that origin correction, and WilliePad then reached the legacy
+  verifier but received `MIGRATION-VERIFY-HTTP-401`. Historical passkey rows may contain the same
+  credential bytes in padded standard-base64 form while Authentication Services always returns
+  canonical unpadded base64url. The migration lookup now derives the finite equivalent encodings,
+  retains the asserted canonical ID for signature verification, and updates the matched historical
+  row. A regression test failed with the former exact-string lookup and passes with the compatible
+  lookup. The auth package passes all 207 tests plus typecheck and lint with concurrency limited to
+  two.
 - **Blockers**: The legacy-passkey replacement ceremony, native Apple ID-token exchange, and native
   Google ID-token exchange still need signed-hardware canaries. Each canary must also prove session
   restoration and local-first sign-out before release sign-off.

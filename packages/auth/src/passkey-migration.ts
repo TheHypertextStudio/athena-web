@@ -6,7 +6,7 @@ import {
   generateAuthenticationOptions,
 } from '@simplewebauthn/server';
 import { db, passkey } from '@docket/db';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { type BetterAuthPlugin } from 'better-auth';
 import { APIError, createAuthEndpoint, type getSessionFromCtx } from 'better-auth/api';
 import { expireCookie, setSessionCookie } from 'better-auth/cookies';
@@ -93,6 +93,21 @@ function legacyOrigin(rpId: string): string {
   return url.origin;
 }
 
+/** Match base64url assertions against credentials written by older base64 encoders. */
+function credentialIdCandidates(assertedId: string): string[] {
+  const bytes = Buffer.from(assertedId, 'base64url');
+  if (bytes.toString('base64url') !== assertedId) return [assertedId];
+  const standard = bytes.toString('base64');
+  return [
+    ...new Set([
+      assertedId,
+      `${assertedId}${'='.repeat((4 - (assertedId.length % 4)) % 4)}`,
+      standard,
+      standard.replace(/=+$/, ''),
+    ]),
+  ];
+}
+
 /** The signed cookie that names one outstanding legacy assertion challenge. */
 function challengeCookie(ctx: EndpointContext): ReturnType<typeof ctx.context.createAuthCookie> {
   return ctx.context.createAuthCookie(CHALLENGE_COOKIE_NAME, { maxAge: CHALLENGE_TTL_S });
@@ -168,7 +183,7 @@ export function passkeyMigrationPlugin(
           const [record] = await database
             .select()
             .from(passkey)
-            .where(eq(passkey.credentialID, ctx.body.id))
+            .where(inArray(passkey.credentialID, credentialIdCandidates(ctx.body.id)))
             .limit(1);
           if (!record) {
             throw new PasskeyMigrationError('UNAUTHORIZED', {
@@ -181,7 +196,7 @@ export function passkeyMigrationPlugin(
             expectedOrigin,
             expectedRPID: rpId,
             credential: {
-              id: record.credentialID,
+              id: ctx.body.id,
               publicKey: Buffer.from(record.publicKey, 'base64url'),
               counter: record.counter,
               transports: record.transports?.split(',') as never,

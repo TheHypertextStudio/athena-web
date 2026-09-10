@@ -297,6 +297,25 @@ describe('passkey migration plugin', () => {
     expect(responseCookies(replay)).not.toContain('session_token');
   });
 
+  it('recognizes a historical credential stored with padded base64 encoding', async () => {
+    const canonicalID = Buffer.from([251, 255, 239, 1]).toString('base64url');
+    const historicalID = Buffer.from([251, 255, 239, 1]).toString('base64');
+    await seedPasskey(historicalID);
+    const webAuthn = acceptingWebAuthn();
+    const request = harness(env, webAuthn);
+
+    const options = await request('/passkey-migration/generate-authenticate-options');
+    const verified = await request(
+      '/passkey-migration/verify-authentication',
+      json(responseCookies(options), { id: canonicalID }),
+    );
+
+    expect(verified.status).toBe(200);
+    expect(webAuthn.verifyAuthenticationResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ credential: expect.objectContaining({ id: canonicalID }) }),
+    );
+  });
+
   it('uses the migration session to register and authenticate a current-RP passkey', async () => {
     const { db, passkey } = await import('@docket/db');
     const stored = await seedPasskey('old-passkey-for-replacement');

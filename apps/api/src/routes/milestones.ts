@@ -72,13 +72,17 @@ async function assertProject(orgId: string, id: string): Promise<void> {
  * @param projectId - The Project from the path.
  * @param milestoneId - The milestone from the path.
  * @returns the milestone row.
- * @throws NotFoundError when the milestone is absent, cross-tenant, or belongs to another Project.
+ * @throws NotFoundError when the Project or the milestone is absent or cross-tenant, or when the
+ *   milestone belongs to a different Project than the path names.
  */
 async function loadMilestone(
   orgId: string,
   projectId: string,
   milestoneId: string,
 ): Promise<MilestoneRow> {
+  // The parent first, on the same terms the collection routes use — otherwise a milestone under an
+  // archived project stays editable while its own list 404s.
+  await assertProject(orgId, projectId);
   const rows = await db
     .select()
     .from(milestone)

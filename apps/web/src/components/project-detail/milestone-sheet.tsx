@@ -20,7 +20,7 @@
  * second read would only be a slower copy of what the caller is holding.
  */
 import type { MilestoneOut } from '@docket/work/milestone-contract';
-import { DatePicker } from '@docket/ui/components';
+import { ConfirmDestructiveDialog, DatePicker } from '@docket/ui/components';
 import { Flag, Trash2 } from '@docket/ui/icons';
 import {
   Button,
@@ -30,7 +30,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@docket/ui/primitives';
-import { type JSX } from 'react';
+import { type JSX, useState } from 'react';
 
 import { EditableFreeformText } from '@/components/editor/freeform-text';
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -66,6 +66,7 @@ export function MilestoneSheet({
   if (milestone === null) return null;
   return (
     <MilestoneSheetBody
+      key={milestone.id}
       orgId={orgId}
       projectId={projectId}
       milestone={milestone}
@@ -100,6 +101,7 @@ function MilestoneSheetBody({
   canEdit,
   onClose,
 }: MilestoneSheetBodyProps): JSX.Element {
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   // The hook derives the Project's work key itself — the same read this panel was opened from.
   const { patch, remove, mutationError } = useMilestoneDetail(
     orgId,
@@ -118,17 +120,22 @@ function MilestoneSheetBody({
     >
       <SheetContent side="right" size="wide">
         <SheetHeader inset="standard" className="flex-col gap-3">
-          <SheetTitle asChild>
-            <EditableTitle
-              value={milestone.name}
-              onSave={(name) => {
-                patch({ name });
-              }}
-              canEdit={canEdit}
-              ariaLabel="Milestone name"
-              className="text-title-large text-on-surface"
-            />
-          </SheetTitle>
+          {/*
+           * The dialog's accessible name, never shown. It cannot be the editable field itself:
+           * Radix names the dialog by pointing `aria-labelledby` at the id it generates for its
+           * `Title`, and `EditableTitle` forwards neither props nor ref, so `asChild` would leave
+           * that id on no element at all and the panel unnamed.
+           */}
+          <SheetTitle className="sr-only">{milestone.name}</SheetTitle>
+          <EditableTitle
+            value={milestone.name}
+            onSave={(name) => {
+              patch({ name });
+            }}
+            canEdit={canEdit}
+            ariaLabel="Milestone name"
+            className="text-title-large text-on-surface"
+          />
           <div className="flex flex-wrap items-center gap-3">
             <DatePicker
               value={targetDate}
@@ -169,7 +176,7 @@ function MilestoneSheetBody({
               variant="ghost-destructive"
               className="self-start"
               onClick={() => {
-                remove();
+                setConfirmDeleteOpen(true);
               }}
             >
               <Trash2 className="size-4" />
@@ -178,6 +185,22 @@ function MilestoneSheetBody({
           ) : null}
         </SheetBody>
       </SheetContent>
+
+      {/*
+       * Confirmed here, unlike the inline remove on the list row. There the target is the row under
+       * the pointer and nothing else is at stake; here the button sits directly beneath the note
+       * the person may have just written, and deleting takes it with the milestone.
+       */}
+      <ConfirmDestructiveDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Delete milestone"
+        description={`${milestone.name} will be removed. Its ${taskNoun}s stay in the project and lose their milestone.`}
+        confirmLabel="Delete milestone"
+        onConfirm={() => {
+          remove();
+        }}
+      />
     </Sheet>
   );
 }

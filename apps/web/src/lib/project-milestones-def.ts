@@ -45,6 +45,6 @@ export function projectMilestonesDef(
         param: { orgId, id: projectId ?? '' },
       }),
     'Could not load milestones.',
-    { enabled: (enabled ?? true) && (projectId ?? null) !== null, staleTime: STALE.static },
+    { enabled: (enabled ?? true) && Boolean(projectId), staleTime: STALE.static },
   );
 }

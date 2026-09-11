@@ -154,6 +154,28 @@ describe('ProjectMilestonesPanel', () => {
     expect(within(editor).getByRole('textbox', { name: 'Milestone name' })).toBeTruthy();
   });
 
+  it('confirms before deleting from the editor, unlike the inline row remove', async () => {
+    milestonesDelete.mockResolvedValue(jsonResponse(true, { id: MILESTONE_1 }));
+    renderPanel({ milestones: [milestone({ id: MILESTONE_1, name: 'Beta' })] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
+    const editor = await screen.findByRole('dialog');
+    fireEvent.click(within(editor).getByRole('button', { name: 'Delete milestone' }));
+
+    // The button sits directly beneath the note, so it asks first and writes nothing until it is
+    // answered — the row's own remove is adjacent and obviously scoped, so it does not.
+    expect(milestonesDelete).not.toHaveBeenCalled();
+    // Exactly one such button is reachable: the confirmation's. The editor's trigger is hidden
+    // from the accessibility tree while the modal sits over it, which is why this is unambiguous.
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete milestone' }));
+
+    await waitFor(() => {
+      expect(milestonesDelete).toHaveBeenCalledWith({
+        param: { orgId: ORG_ID, id: PROJECT_ID, milestoneId: MILESTONE_1 },
+      });
+    });
+  });
+
   it('orders rows by sort, not by the order they arrive in', () => {
     renderPanel({
       milestones: [

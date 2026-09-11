@@ -121,6 +121,38 @@ describe('milestones detail: a milestone is reachable only through its own proje
   });
 });
 
+describe('milestones detail: an archived project hides its milestones consistently', () => {
+  it('404s every route once the project is archived, not just the list', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
+    const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
+    const milestoneId = await seedMilestone(orgId, projectId, humanActorId);
+
+    await db
+      .update(schema.project)
+      .set({ archivedAt: new Date() })
+      .where(eq(schema.project.id, projectId));
+
+    // The member routes read the parent on the same terms the collection does, so a milestone is
+    // never simultaneously unlistable and editable.
+    expect((await writer.request(`/${projectId}/milestones`)).status).toBe(404);
+    expect((await writer.request(`/${projectId}/milestones/${milestoneId}`)).status).toBe(404);
+    expect(
+      (
+        await writer.request(`/${projectId}/milestones/${milestoneId}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 'x' }),
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (await writer.request(`/${projectId}/milestones/${milestoneId}`, { method: 'DELETE' }))
+        .status,
+    ).toBe(404);
+  });
+});
+
 describe('milestones detail: delete nulls referencing tasks', () => {
   it("deleting a milestone sets referencing tasks' milestone_id to null (FK on delete)", async () => {
     const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);

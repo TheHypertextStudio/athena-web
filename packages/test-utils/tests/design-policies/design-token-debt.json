@@ -437,9 +437,6 @@
   "apps/web/src/components/project-detail/project-dependencies.tsx": {
     "raw-radius-utility": 1
   },
-  "apps/web/src/components/project-detail/project-milestones.tsx": {
-    "ad-hoc-border": 5
-  },
   "apps/web/src/components/projects/project-catalog.ts": {
     "raw-type-utility": 1
   },
@@ -543,9 +540,6 @@
   "apps/web/src/components/task-detail/task-properties-rail.tsx": {
     "raw-radius-utility": 1
   },
-  "apps/web/src/components/tasks/quick-add-task-row.tsx": {
-    "ad-hoc-border": 6
-  },
   "apps/web/src/components/tasks/task-hierarchy-drop.ts": {
     "ad-hoc-border": 3
   },
@@ -623,6 +617,9 @@
   "apps/web/src/components/views/filter-toolbar.tsx": {
     "ad-hoc-border": 2,
     "raw-radius-utility": 1
+  },
+  "apps/web/src/components/views/quick-add-row.tsx": {
+    "ad-hoc-border": 6
   },
   "apps/web/src/components/views/page-layout.tsx": {
     "raw-type-utility": 1

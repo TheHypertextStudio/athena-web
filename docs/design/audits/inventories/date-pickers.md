@@ -54,7 +54,7 @@ delegation are asserted in `apps/web/tests/pickers/timeframe-picker-contract.tes
 | 11  | Search → date facet                       | `apps/web/src/components/search/search-client.tsx`                          | From, To                                 | **Migrated** from a raw `<input type="date">` |
 | 12  | Athena conversation browser → search lens | `apps/web/src/components/athena/athena-conversation-browser.tsx`            | From, To                                 | **Migrated** from a raw `<input type="date">` |
 | 13  | Calendar → item drawer, all-day item      | `apps/web/src/components/calendar/item-drawer/event-core-fields.tsx`        | Starts, Ends                             | **Migrated** from a raw `<input type="date">` |
-| 14  | Project detail → Milestones panel         | `apps/web/src/components/project-detail/project-milestones.tsx`             | Target date                              | Shared picker                                 |
+| 14  | Project detail → Milestone editor panel   | `apps/web/src/components/project-detail/milestone-sheet.tsx`                | Target date                              | Shared picker                                 |
 | 15  | Project create/edit composer → pickers    | `apps/web/src/components/projects/project-form-pickers.tsx`                 | Timeline (start → target)                | Planning picker                               |
 | 16  | Initiative create/edit composer → pickers | `apps/web/src/components/initiatives/initiative-form-pickers.tsx`           | Target date                              | Planning picker                               |
 | 17  | Agenda → quick create an all-day item     | `apps/web/src/components/calendar/create-block-form.tsx`                    | Starts, Ends                             | Shared picker                                 |
@@ -67,6 +67,7 @@ delegation are asserted in `apps/web/tests/pickers/timeframe-picker-contract.tes
 | 24  | Canvas → bulk Properties editor           | `apps/web/src/components/canvas/canvas-properties-editor.tsx`               | Task start/due, Project timeframes       | Shared and planning pickers                   |
 | 25  | Time → custom review range                | `apps/web/src/components/time-tracking/time-analytics.tsx`                  | From, Through                            | Shared range picker                           |
 | 26  | Admin → private partner discount          | `apps/admin/src/app/(admin)/orgs/[id]/page.tsx`                             | Award end date                           | Shared picker with a 24-month maximum         |
+| 27  | Project create composer → Milestones      | `apps/web/src/components/projects/project-milestones-field.tsx`             | Target date, per drafted milestone       | Shared picker                                 |
 
 Before this pass, rows 9–12 each hosted their own `<input type="date">`, so four surfaces had four
 different behaviours and none of them had bounds. Rows 1–8 already shared a component, but that

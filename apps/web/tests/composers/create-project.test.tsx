@@ -60,8 +60,10 @@ vi.mock('../../src/lib/api', () => ({
     v1: {
       orgs: {
         ':orgId': {
-          projects: { $post: projectPost },
-          milestones: { $post: milestonePost },
+          projects: Object.assign(
+            { $post: projectPost },
+            { ':id': { milestones: { $post: milestonePost } } },
+          ),
           members: { $get: membersGet },
           agents: { $get: agentsGet },
           initiatives: { $get: initiativesGet },
@@ -995,10 +997,15 @@ describe('CreateProjectDialog — robust composer', () => {
     await waitFor(() => {
       expect(milestonePost).toHaveBeenCalledTimes(2);
     });
-    // `sort` is the position in the list, so the order survives however the requests settle.
+    // `sort` is the position in the list, so the order survives however the requests settle. The
+    // parent rides in the path now, not the body.
     expect(milestonePost.mock.calls.map((call) => call[0].json)).toEqual([
-      { projectId: 'proj_ms', name: 'Beta', sort: 0 },
-      { projectId: 'proj_ms', name: 'Launch', sort: 1 },
+      { name: 'Beta', sort: 0 },
+      { name: 'Launch', sort: 1 },
+    ]);
+    expect(milestonePost.mock.calls.map((call) => call[0].param.id)).toEqual([
+      'proj_ms',
+      'proj_ms',
     ]);
     expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'proj_ms' }));
   });
@@ -1045,10 +1052,9 @@ describe('CreateProjectDialog — robust composer', () => {
     // Beta landed the first time; only Launch is sent again, and it keeps the position it was
     // first attempted at — restarting at 0 would collide with the Beta that already saved.
     expect(milestonePost).toHaveBeenCalledTimes(3);
-    expect(milestonePost.mock.calls[2]?.[0].json).toEqual({
-      projectId: 'proj_retry',
-      name: 'Launch',
-      sort: 1,
+    expect(milestonePost.mock.calls[2]?.[0]).toMatchObject({
+      param: { id: 'proj_retry' },
+      json: { name: 'Launch', sort: 1 },
     });
   });
 

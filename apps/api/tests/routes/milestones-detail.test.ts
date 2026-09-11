@@ -64,17 +64,18 @@ describe('milestones detail: tenant isolation', () => {
     // An actor scoped to org B must not see org A's milestone, even with manage-level caps.
     const writerB = appWithActor(milestones, orgB.orgId, ['contribute'], orgB.humanActorId);
 
-    expect((await writerB.request(`/${idInA}`, { method: 'GET' })).status).toBe(404);
+    const path = `/${projA}/milestones/${idInA}`;
+    expect((await writerB.request(path, { method: 'GET' })).status).toBe(404);
     expect(
       (
-        await writerB.request(`/${idInA}`, {
+        await writerB.request(path, {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ name: 'hijack' }),
         })
       ).status,
     ).toBe(404);
-    expect((await writerB.request(`/${idInA}`, { method: 'DELETE' })).status).toBe(404);
+    expect((await writerB.request(path, { method: 'DELETE' })).status).toBe(404);
 
     // The row in org A is untouched (the cross-tenant writes never landed).
     const stillThere = await db
@@ -91,26 +92,32 @@ describe('milestones detail: tenant isolation', () => {
     const projA = await seedProject(orgA.statusId, orgA.orgId, orgA.teamId, orgA.humanActorId);
     await seedMilestone(orgA.orgId, projA, orgA.humanActorId);
 
-    // Org B starts empty and stays empty regardless of org A's rows.
+    // Naming org A's project from org B hides its existence rather than leaking its milestones.
     const readerB = appWithActor(milestones, orgB.orgId, ['view'], orgB.humanActorId);
-    const listed = await readerB.request('/', { method: 'GET' });
-    expect(listed.status).toBe(200);
-    expect((await json<{ items: unknown[] }>(listed)).items).toHaveLength(0);
+    const listed = await readerB.request(`/${projA}/milestones`, { method: 'GET' });
+    expect(listed.status).toBe(404);
   });
 });
 
-describe('milestones detail: list project filter is org-scoped', () => {
-  it("filtering by a foreign org's projectId returns nothing for the caller's org", async () => {
-    const orgA = await seedBaseOrg(db, schema);
-    const orgB = await seedBaseOrg(db, schema);
-    const projA = await seedProject(orgA.statusId, orgA.orgId, orgA.teamId, orgA.humanActorId);
-    await seedMilestone(orgA.orgId, projA, orgA.humanActorId);
+describe('milestones detail: a milestone is reachable only through its own project', () => {
+  it("404s when the path names a sibling project instead of the milestone's own", async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
+    const owning = await seedProject(statusId, orgId, teamId, humanActorId);
+    const sibling = await seedProject(statusId, orgId, teamId, humanActorId);
+    const milestoneId = await seedMilestone(orgId, owning, humanActorId);
 
-    // Even naming org A's projectId, org B's scope yields zero rows.
-    const readerB = appWithActor(milestones, orgB.orgId, ['view'], orgB.humanActorId);
-    const filtered = await readerB.request(`/?projectId=${projA}`, { method: 'GET' });
-    expect(filtered.status).toBe(200);
-    expect((await json<{ items: unknown[] }>(filtered)).items).toHaveLength(0);
+    // Same org, real project, real milestone — but the two are unrelated, so guessing an id
+    // through a project the caller happens to know must not reach it.
+    expect(
+      (await writer.request(`/${sibling}/milestones/${milestoneId}`, { method: 'GET' })).status,
+    ).toBe(404);
+    expect(
+      (await writer.request(`/${sibling}/milestones/${milestoneId}`, { method: 'DELETE' })).status,
+    ).toBe(404);
+    expect(
+      (await writer.request(`/${owning}/milestones/${milestoneId}`, { method: 'GET' })).status,
+    ).toBe(200);
   });
 });
 
@@ -136,7 +143,9 @@ describe('milestones detail: delete nulls referencing tasks', () => {
       .returning({ id: schema.task.id });
     const taskId = assertDefined(t).id;
 
-    const deleted = await writer.request(`/${milestoneId}`, { method: 'DELETE' });
+    const deleted = await writer.request(`/${projectId}/milestones/${milestoneId}`, {
+      method: 'DELETE',
+    });
     expect(deleted.status).toBe(200);
     expect((await json<{ id: string }>(deleted)).id).toBe(milestoneId);
 
@@ -153,16 +162,16 @@ describe('milestones detail: description field', () => {
     const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
     const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
 
-    const created = await writer.request('/', {
+    const created = await writer.request(`/${projectId}/milestones`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ projectId, name: 'Beta', description: 'Some notes' }),
+      body: JSON.stringify({ name: 'Beta', description: 'Some notes' }),
     });
     expect(created.status).toBe(201);
     const body = await json<{ id: string; description: string | null }>(created);
     expect(body.description).toBe('Some notes');
 
-    const fetched = await writer.request(`/${body.id}`, { method: 'GET' });
+    const fetched = await writer.request(`/${projectId}/milestones/${body.id}`, { method: 'GET' });
     expect((await json<{ description: string | null }>(fetched)).description).toBe('Some notes');
   });
 
@@ -171,10 +180,10 @@ describe('milestones detail: description field', () => {
     const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
     const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
 
-    const created = await writer.request('/', {
+    const created = await writer.request(`/${projectId}/milestones`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ projectId, name: 'Beta' }),
+      body: JSON.stringify({ name: 'Beta' }),
     });
     expect((await json<{ description: string | null }>(created)).description).toBeNull();
   });
@@ -185,12 +194,12 @@ describe('milestones detail: description field', () => {
     const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
     const milestoneId = await seedMilestone(orgId, projectId, humanActorId);
 
-    await writer.request(`/${milestoneId}`, {
+    await writer.request(`/${projectId}/milestones/${milestoneId}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ description: 'Has notes' }),
     });
-    const cleared = await writer.request(`/${milestoneId}`, {
+    const cleared = await writer.request(`/${projectId}/milestones/${milestoneId}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ description: null }),
@@ -204,12 +213,12 @@ describe('milestones detail: description field', () => {
     const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
     const milestoneId = await seedMilestone(orgId, projectId, humanActorId);
 
-    await writer.request(`/${milestoneId}`, {
+    await writer.request(`/${projectId}/milestones/${milestoneId}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ description: 'Keep me' }),
     });
-    const renamed = await writer.request(`/${milestoneId}`, {
+    const renamed = await writer.request(`/${projectId}/milestones/${milestoneId}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'Renamed' }),
@@ -222,10 +231,10 @@ describe('milestones detail: invalid input', () => {
   it('422s on an empty name in the create body (rejected before any db work)', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
-    const res = await writer.request('/', {
+    const res = await writer.request('/p/milestones', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ projectId: 'p', name: '' }),
+      body: JSON.stringify({ name: '' }),
     });
     expect(res.status).toBe(422);
   });
@@ -234,10 +243,10 @@ describe('milestones detail: invalid input', () => {
     const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
     const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
-    const res = await writer.request('/', {
+    const res = await writer.request(`/${projectId}/milestones`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ projectId, name: 'M', sort: 'not-a-number' }),
+      body: JSON.stringify({ name: 'M', sort: 'not-a-number' }),
     });
     expect(res.status).toBe(422);
   });

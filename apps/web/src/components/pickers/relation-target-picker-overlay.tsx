@@ -68,6 +68,7 @@ export function RelationTargetPickerOverlay({
     organizationId,
     composerKind === null ? [] : [composerKind],
     composerKind !== null,
+    null,
   );
   const tasksQ = useApiListQuery(
     apiQueryOptions(

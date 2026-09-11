@@ -30,6 +30,7 @@ import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
+import { projectMilestonesDef } from './project-milestones-def';
 import {
   taskDetailAggregateDef,
   terminalDetailFailure,
@@ -161,13 +162,10 @@ export function useTaskDetail(
       { enabled: options.activityOpen ?? false, staleTime: STALE.static },
     ),
   );
+  // The task's own project's milestones, not the org's: the server refuses a milestone from any
+  // other project, so a wider list could only offer options that cannot be saved.
   const milestonesQ = useApiQuery(
-    apiQueryOptions(
-      ['org', orgId, 'milestones'],
-      () => api.v1.orgs[':orgId'].milestones.$get({ param: { orgId }, query: {} }),
-      'Could not load milestones.',
-      { enabled: options.milestonesOpen ?? false, staleTime: STALE.static },
-    ),
+    projectMilestonesDef(orgId, task?.projectId, options.milestonesOpen),
   );
   const cyclesQ = useApiQuery(
     apiQueryOptions(

@@ -58,6 +58,7 @@ import { capabilityGuard } from '../permissions/capability-guard';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { emitEvent } from './event-emit';
+import milestones from './milestones';
 import { projectDependencyRoutes } from './project-dependency-routes';
 import { buildTaskViewCondition, buildTaskViewFilter } from './task-helpers';
 
@@ -985,6 +986,8 @@ const projects = new Hono<AppEnv>()
       return ok(c, ProjectProgress, computeProgress(taskRows.filter(canView)));
     },
   )
-  .route('/', projectDependencyRoutes);
+  .route('/', projectDependencyRoutes)
+  // A milestone is addressed through its Project; see the router's own header and §3.5.
+  .route('/', milestones);
 
 export default projects;

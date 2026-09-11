@@ -247,7 +247,7 @@ product rather than about the enum.
 
 ### 3.5 `projects` (bounded) + Milestones
 
-Mounted `/orgs/:orgId/projects`. Milestones are nested (data-model: own table, conceptually a Project attribute).
+Mounted `/orgs/:orgId/projects`. Milestones are nested (data-model: own table, conceptually a Project attribute), so the parent is a path segment and never a body field — `MilestoneCreate` carries no `projectId`, and every member route 404s when the milestone belongs to a different Project than the path names.
 
 | Method + Path | Input | Output | Auth | Capability |
 | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ---------------- | ---------- |
@@ -257,9 +257,10 @@ Mounted `/orgs/:orgId/projects`. Milestones are nested (data-model: own table, c
 | `PATCH /:projectId` | `json: ProjectUpdate{ name?, description?, leadId?, programId?, status?, startDate?, targetDate?, teamId? }` | `ProjectOut` | org | `org:contribute` |
 | `DELETE /:projectId` | `param` | `{ id, archivedAt }` | org | `org:manage` |
 | `GET /:projectId/tasks` | `query: ListQuery & { groupBy?: "status"                                                                                           | "milestone", state?, assigneeId? }` | `{ groups: TaskGroup[] }` (default group-by-Milestone per product §8.4) | org | `org:view` |
-| `GET /:projectId/milestones` | `param` | `Milestone[]{ id, projectId, name, targetDate?, sort }` | org | `org:view` |
-| `POST /:projectId/milestones` | `json: MilestoneCreate{ name, targetDate?, sort? }` | `Milestone` | org | `org:contribute` |
-| `PATCH /:projectId/milestones/:milestoneId` | `json: MilestoneUpdate{ name?, targetDate?, sort? }` | `Milestone` | org | `org:contribute` |
+| `GET /:projectId/milestones` | `param` | `Milestone[]{ id, projectId, name, description?, targetDate?, sort }` | org | `org:view` |
+| `POST /:projectId/milestones` | `json: MilestoneCreate{ name, description?, targetDate?, sort? }` | `Milestone` | org | `org:contribute` |
+| `GET /:projectId/milestones/:milestoneId` | `param` | `Milestone` | org | `org:view` |
+| `PATCH /:projectId/milestones/:milestoneId` | `json: MilestoneUpdate{ name?, description?, targetDate?, sort? }` | `Milestone` | org | `org:contribute` |
 | `DELETE /:projectId/milestones/:milestoneId` | `param` | `{ id, removed: true }` (tasks' `milestone_id` nulled) | org | `org:contribute` |
 | `GET /:projectId/updates` | `query: ListQuery` | `Page<UpdateOut>` | org | `org:view` |
 | `GET /:projectId/agents` | `param` | `{ agents: AgentRef[], lastSession?: SessionSummary, pendingApprovals: number }` (the "agents here" strip) | org | `org:view` |

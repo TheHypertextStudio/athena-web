@@ -8,8 +8,8 @@
  * what the Project Overview's Milestones list needs, which is adding one to the end and removing
  * one from the middle.
  *
- * The create input is {@link MilestoneCreate} minus `projectId`, taken from the contract rather than
- * retyped, so a field added to the wire contract cannot silently go missing here.
+ * The create input is {@link MilestoneCreate} itself: the parent is a path segment, not a field, so
+ * there is nothing to subtract.
  */
 import type { MilestoneCreate, MilestoneOut } from '@docket/work/milestone-contract';
 import type { QueryKey } from '@tanstack/react-query';
@@ -18,8 +18,8 @@ import { api } from './api';
 import { userErrorMessage } from './problem';
 import { unwrap, useApiMutation } from './query';
 
-/** Fields settable on milestone create; `projectId` is fixed by the caller, not the form. */
-export type CreateMilestoneInput = Omit<MilestoneCreate, 'projectId'>;
+/** Fields settable on milestone create; the parent Project is the path, not a field. */
+export type CreateMilestoneInput = MilestoneCreate;
 
 /** Create/delete actions for one Project's milestones. */
 export interface ProjectMilestonesMutations {
@@ -50,9 +50,9 @@ export function useProjectMilestones(
     mutationFn: (input) =>
       unwrap(
         () =>
-          api.v1.orgs[':orgId'].milestones.$post({
-            param: { orgId },
-            json: { projectId, ...input },
+          api.v1.orgs[':orgId'].projects[':id'].milestones.$post({
+            param: { orgId, id: projectId },
+            json: input,
           }),
         'Could not create the milestone.',
       ),
@@ -62,7 +62,10 @@ export function useProjectMilestones(
   const removeMutation = useApiMutation<MilestoneOut, string>({
     mutationFn: (id) =>
       unwrap(
-        () => api.v1.orgs[':orgId'].milestones[':id'].$delete({ param: { orgId, id } }),
+        () =>
+          api.v1.orgs[':orgId'].projects[':id'].milestones[':milestoneId'].$delete({
+            param: { orgId, id: projectId, milestoneId: id },
+          }),
         'Could not remove the milestone.',
       ),
     invalidateKeys: [projectDetailKey],

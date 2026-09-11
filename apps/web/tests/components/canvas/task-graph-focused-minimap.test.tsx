@@ -52,13 +52,14 @@ vi.mock('../../../src/components/create-object/create-object-provider', () => ({
 }));
 vi.mock('../../../src/lib/query', () => ({
   apiQueryOptions: () => ({}),
+  // `projectMilestonesDef` reads it for the milestone list's staleness.
+  STALE: { static: 0 },
   queryKeys: {
     members: () => ['members'],
     agents: () => ['agents'],
     projects: () => ['projects'],
     roles: () => ['roles'],
     teams: () => ['teams'],
-    milestones: () => ['milestones'],
     taskGraph: () => ['task-graph'],
     tasks: () => ['tasks'],
   },

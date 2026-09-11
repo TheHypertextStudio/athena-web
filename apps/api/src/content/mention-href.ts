@@ -32,8 +32,10 @@ export function entityMentionHref(orgId: string, ref: EntityMentionRef): string 
       return `${base}/initiatives/${ref.entityId}`;
     case 'cycle':
       return `${base}/cycles/${ref.entityId}`;
+    // A milestone has no page of its own — it is edited on its Project. Without the parent in the
+    // ref there is nothing better to offer than the Projects list.
     case 'milestone':
-      return `${base}/milestones/${ref.entityId}`;
+      return `${base}/projects`;
     case 'team':
       return `${base}/teams/${ref.entityId}`;
     case 'actor':

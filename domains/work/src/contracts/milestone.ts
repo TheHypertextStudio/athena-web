@@ -6,23 +6,16 @@ import { z } from 'zod';
 import { MilestoneId, ProjectId } from '../ids';
 import { OrganizationId } from '@docket/identity-access/ids';
 
-/** Query params for listing Milestones (optionally narrowed to one Project). */
-export const MilestoneListQuery = z
-  .object({
-    projectId: ProjectId.optional().describe(
-      'Narrow the list to a single Project’s milestones. Omit to list every milestone in the organization. When supplied, only milestones whose `projectId` matches are returned, still ordered by `sort` ascending.',
-    ),
-  })
-  .meta({ id: 'MilestoneListQuery', description: 'Filter milestones by project.' });
-/** Validated milestone-list query value. */
-export type MilestoneListQuery = z.infer<typeof MilestoneListQuery>;
-
-/** Body for creating a Milestone (organizationId comes from the path, never the body). */
+/**
+ * Body for creating a Milestone.
+ *
+ * @remarks
+ * Carries no `projectId`: a milestone is created at its Project's own collection, so the parent
+ * comes from the path, exactly as the organization does. The parent is fixed at creation —
+ * `MilestoneUpdate` has no `projectId` either, so a milestone cannot be re-parented.
+ */
 export const MilestoneCreate = z
   .object({
-    projectId: ProjectId.describe(
-      'The parent Project this milestone belongs to (required). Re-validated to live in the caller’s org before insert (404 when cross-tenant). Fixed at creation — a milestone cannot be re-parented later.',
-    ),
     name: z
       .string()
       .min(1)

@@ -17,7 +17,6 @@ import type { QueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { initiativeRecordDef, programRecordDef, projectRecordDef } from '@/lib/entity-records';
 import { peekNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
-import { milestoneDetailDef } from '@/lib/use-milestone-detail';
 import { taskDetailDef } from '@/lib/use-task-detail';
 
 import type { TabRef } from './types';
@@ -61,8 +60,6 @@ export function titleFromCache(queryClient: QueryClient, ref: TabRef): string | 
       return nameOf(queryClient.getQueryData(programRecordDef(orgId, id).queryKey));
     case 'initiative':
       return nameOf(queryClient.getQueryData(initiativeRecordDef(orgId, id).queryKey));
-    case 'milestone':
-      return nameOf(queryClient.getQueryData(milestoneDetailDef(orgId, id).queryKey));
     default:
       return null;
   }
@@ -91,10 +88,9 @@ export function titleFromNavigationSnapshot(ref: TabRef): string | null {
         ? snapshot.name
         : null;
     }
-    // A cycle, milestone or session is never seeded into the navigation snapshot store; their tabs
-    // resolve by cache or by request instead.
+    // A cycle or session is never seeded into the navigation snapshot store; their tabs resolve by
+    // cache or by request instead.
     case 'cycle':
-    case 'milestone':
     case 'session':
       return null;
   }
@@ -163,11 +159,6 @@ export async function resolveTabTitle(ref: TabRef): Promise<string | null> {
         // `displayName` is the author's name when set, else the cycle's window — never the
         // stored `number`, which is the auto-roll idempotency key and read as "Cycle 1000137".
         if (res.ok) return (await res.json()).displayName;
-        break;
-      }
-      case 'milestone': {
-        const res = await api.v1.orgs[':orgId'].milestones[':id'].$get({ param: { orgId, id } });
-        if (res.ok) return (await res.json()).name;
         break;
       }
       case 'session':

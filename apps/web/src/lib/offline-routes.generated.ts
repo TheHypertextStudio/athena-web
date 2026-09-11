@@ -90,12 +90,6 @@ export const OFFLINE_ROUTES = [
     load: async () => (await import('@/app/(app)/orgs/[orgId]/library/library-client')).default,
   },
   {
-    pattern: '/orgs/[orgId]/milestones/[milestoneId]',
-    load: async () =>
-      (await import('@/app/(app)/orgs/[orgId]/milestones/[milestoneId]/milestone-detail-client'))
-        .default,
-  },
-  {
     pattern: '/orgs/[orgId]/my-work',
     load: async () => (await import('@/app/(app)/orgs/[orgId]/my-work/my-work-client')).default,
   },

@@ -78,6 +78,9 @@ function workDocument(
   } = {},
 ): SearchDocumentDraft {
   const facet = options.facet ?? {};
+  const routeFacet = Object.fromEntries(
+    Object.entries(facet).map(([key, value]) => [key, typeof value === 'string' ? value : null]),
+  );
   return {
     id: searchDocumentId(kind, row.organizationId, row.id),
     organizationId: row.organizationId,
@@ -94,7 +97,7 @@ function workDocument(
     summary: cleanText(options.summary),
     body: cleanText(options.body),
     facet,
-    route: entityRoute(row.organizationId, kind, row.id),
+    route: entityRoute(row.organizationId, kind, row.id, routeFacet),
     visibility: workVisibility({ id: row.id, visibility: options.visibility }, kind),
     baseRank: baseRankFor(kind),
     occurredAt: null,

@@ -31,6 +31,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { api } from '@/lib/api';
+import { projectMilestonesDef } from '@/lib/project-milestones-def';
 import { useAppPathname } from '@/lib/app-location';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
@@ -185,13 +186,8 @@ export default function TaskGraphPanel({
       'Could not load teams.',
     ),
   );
-  const milestonesQ = useApiListQuery(
-    apiQueryOptions(
-      queryKeys.milestones(orgId),
-      () => api.v1.orgs[':orgId'].milestones.$get({ param: { orgId }, query: {} }),
-      'Could not load milestones.',
-    ),
-  );
+  // Milestones belong to a project, so only a project-scoped graph has a set to offer.
+  const milestonesQ = useApiListQuery(projectMilestonesDef(orgId, scope.projectId));
 
   const members = membersQ.data?.items;
   const agents = agentsQ.data?.items;

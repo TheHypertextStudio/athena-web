@@ -20,7 +20,6 @@ import type { ProgramOut } from '@docket/work/program-contract';
 import type { RoleOut } from './contracts/role';
 import type { TaskOut } from '@docket/work/task-model';
 import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
-import { ProjectId } from '@docket/work/ids';
 import { ProjectSubjectRef } from '@docket/work/subject-ref-contract';
 
 import type { AgentHere } from '@/components/project-detail/agents-strip';
@@ -114,9 +113,8 @@ export function fetchProjectDetail(
       api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
       api.v1.orgs[':orgId'].projects[':id'].progress.$get({ param: { orgId, id: projectId } }),
       api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: {} }),
-      api.v1.orgs[':orgId'].milestones.$get({
-        param: { orgId },
-        query: { projectId: ProjectId.parse(projectId) },
+      api.v1.orgs[':orgId'].projects[':id'].milestones.$get({
+        param: { orgId, id: projectId },
       }),
       api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
       api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),

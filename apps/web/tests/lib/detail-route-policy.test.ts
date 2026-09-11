@@ -8,7 +8,6 @@ const details = [
   'src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx',
   'src/app/(app)/orgs/[orgId]/programs/[programId]/program-detail-client.tsx',
   'src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx',
-  'src/app/(app)/orgs/[orgId]/milestones/[milestoneId]/milestone-detail-client.tsx',
 ] as const;
 
 describe('detail route ownership', () => {
@@ -80,7 +79,12 @@ describe('detail route ownership', () => {
     expect(source).toContain('enabled: options.projectsOpen ?? false');
     expect(source).toContain('enabled: options.programsOpen ?? false');
     expect(source).toContain('enabled: options.membersOpen ?? false');
-    expect(source).toContain('enabled: options.milestonesOpen ?? false');
+    // Dormant until the picker opens, and then scoped to the task's own project — a milestone from
+    // any other project is refused by the server, so a wider read could only offer dead options.
+    // `projectMilestonesDef` owns both gates; passing the task's project is what keeps it narrow.
+    expect(source).toContain(
+      'projectMilestonesDef(orgId, task?.projectId, options.milestonesOpen)',
+    );
     expect(source).toContain('enabled: options.cyclesOpen ?? false');
     expect(source).toContain('enabled: options.activityOpen ?? false');
   });

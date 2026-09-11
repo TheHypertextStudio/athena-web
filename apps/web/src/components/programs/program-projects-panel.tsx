@@ -46,7 +46,7 @@ export function ProgramProjectsPanel({
   const projectNounLower = projectNoun.toLowerCase();
   const statusOf = useWorkStatusResolver('project');
   const { openCreate } = useCreateObject();
-  const options = useComposerOptions(orgId, ['projects'], true);
+  const options = useComposerOptions(orgId, ['projects'], true, null);
   const { attach, detach, pending, mutationError } = useProgramProjects(orgId, programId);
 
   const filed = useMemo<readonly ProjectOut[]>(

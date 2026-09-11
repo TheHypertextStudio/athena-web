@@ -137,11 +137,10 @@ async function createDraftMilestones(
     const sort = milestone.sort ?? index;
     const attempted = { ...milestone, sort };
     try {
-      const res = await api.v1.orgs[':orgId'].milestones.$post({
-        param: { orgId },
+      const res = await api.v1.orgs[':orgId'].projects[':id'].milestones.$post({
+        // Already branded: this id came back from the create, it was not typed by anyone.
+        param: { orgId, id: projectId },
         json: {
-          // Already branded: this id came back from the create, it was not typed by anyone.
-          projectId,
           name: milestone.name,
           ...(note.length > 0 ? { description: note } : {}),
           ...(milestone.targetDate ? { targetDate: milestone.targetDate } : {}),
@@ -322,7 +321,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
     globalCreation.targetWorkspaceId === globalCreation.initialWorkspaceId;
   const destinationReady = globalCreation?.ready ?? true;
 
-  const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady);
+  const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady, null);
   const planningCalendar = useFiscalYearStartMonth(orgId, open && destinationReady);
   const { draft, setField, updateDraft } = useComposerDraft<ProjectDraft>({
     name: '',

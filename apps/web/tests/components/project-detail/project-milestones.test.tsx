@@ -16,7 +16,7 @@ import { OrganizationId, TeamId } from '@docket/identity-access/ids';
 import { type MilestoneOut } from '@docket/work/milestone-contract';
 import { type TaskOut } from '@docket/work/task-model';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Hoisted so the mock factory (lifted above imports) can reference them.
@@ -31,10 +31,14 @@ vi.mock('../../../src/lib/api', () => ({
     v1: {
       orgs: {
         ':orgId': {
-          milestones: Object.assign(
-            { ':id': { $delete: milestonesDelete } },
-            { $post: milestonesPost },
-          ),
+          projects: {
+            ':id': {
+              milestones: Object.assign(
+                { ':milestoneId': { $delete: milestonesDelete } },
+                { $post: milestonesPost },
+              ),
+            },
+          },
           display: { ':subjectType': { $get: displayGet } },
         },
       },
@@ -106,6 +110,7 @@ function renderPanel(overrides: Partial<Parameters<typeof ProjectMilestonesPanel
         projectDetailKey={['org', ORG_ID, 'project', PROJECT_ID]}
         milestones={[]}
         milestoneTasks={[]}
+        taskNoun="task"
         canEdit
         {...overrides}
       />
@@ -136,19 +141,17 @@ describe('ProjectMilestonesPanel', () => {
     expect(screen.getByRole('progressbar')).toBeTruthy();
   });
 
-  it('links each milestone row to its own detail page', () => {
+  it('opens the milestone editor in place rather than navigating away', async () => {
     renderPanel({
-      milestones: [
-        milestone({ id: MILESTONE_1, name: 'Beta', sort: 0 }),
-        milestone({ id: MILESTONE_2, name: 'Launch', sort: 1 }),
-      ],
+      milestones: [milestone({ id: MILESTONE_1, name: 'Beta', sort: 0 })],
     });
 
-    const rows = screen.getAllByRole('link');
-    expect(rows.map((row) => row.getAttribute('href'))).toEqual([
-      `/orgs/${ORG_ID}/milestones/${MILESTONE_1}`,
-      `/orgs/${ORG_ID}/milestones/${MILESTONE_2}`,
-    ]);
+    // A milestone has no address of its own; it is edited on the project it belongs to.
+    expect(screen.queryByRole('link', { name: 'Beta' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
+
+    const editor = await screen.findByRole('dialog');
+    expect(within(editor).getByRole('textbox', { name: 'Milestone name' })).toBeTruthy();
   });
 
   it('orders rows by sort, not by the order they arrive in', () => {
@@ -159,9 +162,8 @@ describe('ProjectMilestonesPanel', () => {
       ],
     });
 
-    const hrefs = screen.getAllByRole('link').map((row) => row.getAttribute('href'));
-    expect(hrefs[0]).toContain(MILESTONE_1);
-    expect(hrefs[1]).toContain(MILESTONE_2);
+    const names = screen.getAllByRole('button').map((row) => row.textContent);
+    expect(names.indexOf('Beta')).toBeLessThan(names.indexOf('Launch'));
   });
 
   it('hides the progress bar when a milestone has no tasks', () => {
@@ -178,12 +180,11 @@ describe('ProjectMilestonesPanel', () => {
       canEdit: false,
     });
 
-    // No quick-add row and no remove button — but the row itself still links out, because
-    // reading a milestone is not a mutation.
+    // No quick-add row and no remove button — but the milestone still opens, because reading one
+    // is not a mutation.
     expect(screen.queryByPlaceholderText('Add a milestone…')).toBeNull();
     expect(screen.queryByRole('button', { name: /Remove Beta/ })).toBeNull();
-    expect(screen.getByRole('link')).toBeTruthy();
-    expect(screen.getByText('Beta')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Beta' })).toBeTruthy();
   });
 
   it('removes a milestone with no confirmation dialog', async () => {
@@ -196,7 +197,7 @@ describe('ProjectMilestonesPanel', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     await waitFor(() => {
       expect(milestonesDelete).toHaveBeenCalledWith({
-        param: { orgId: ORG_ID, id: MILESTONE_1 },
+        param: { orgId: ORG_ID, id: PROJECT_ID, milestoneId: MILESTONE_1 },
       });
     });
   });
@@ -213,8 +214,8 @@ describe('ProjectMilestonesPanel', () => {
 
     await waitFor(() => {
       expect(milestonesPost).toHaveBeenCalledWith({
-        param: { orgId: ORG_ID },
-        json: { projectId: PROJECT_ID, name: 'Launch', sort: 0 },
+        param: { orgId: ORG_ID, id: PROJECT_ID },
+        json: { name: 'Launch', sort: 0 },
       });
     });
     // The input clears so the next entry can flow straight in.

@@ -193,7 +193,6 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
     globalCreation.targetWorkspaceId === globalCreation.initialWorkspaceId;
   const destinationReady = globalCreation?.ready ?? true;
 
-  const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady);
   const { scale: estimationScale } = useEstimationScale(orgId, open && destinationReady);
   const { draft, setField, updateDraft } = useComposerDraft<TaskDraft>({
     title: '',
@@ -211,6 +210,14 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
     estimate: null,
     repeat: { kind: 'none' },
   });
+
+  // The milestone picker follows the chosen Project: a task's milestone must belong to it.
+  const options = useComposerOptions(
+    orgId,
+    COMPOSER_INCLUDE,
+    open && destinationReady,
+    draft.projectId,
+  );
 
   const [workflowStates, setWorkflowStates] = useState<readonly WorkflowState[]>([]);
   const [creating, setCreating] = useState(false);

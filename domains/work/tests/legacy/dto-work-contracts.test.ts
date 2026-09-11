@@ -49,12 +49,7 @@ import {
   normalizeLabelName,
 } from '@docket/work/label-contract';
 
-import {
-  MilestoneCreate,
-  MilestoneListQuery,
-  MilestoneOut,
-  MilestoneUpdate,
-} from '@docket/work/milestone-contract';
+import { MilestoneCreate, MilestoneOut, MilestoneUpdate } from '@docket/work/milestone-contract';
 
 import {
   DEFAULT_PROGRAM_STATUS_KEYS,
@@ -559,15 +554,12 @@ describe('cycle DTOs', () => {
 });
 
 describe('milestone DTOs', () => {
-  it('MilestoneListQuery parses with and without projectId', () => {
-    expect(MilestoneListQuery.parse({}).projectId).toBeUndefined();
-    expect(MilestoneListQuery.parse({ projectId: ID }).projectId).toBe(ID);
+  it('MilestoneCreate carries no parent — the Project comes from the path', () => {
+    expect('projectId' in MilestoneCreate.shape).toBe(false);
   });
   it('MilestoneCreate parses + rejects empty name', () => {
-    expect(
-      MilestoneCreate.parse({ projectId: ID, name: 'M', targetDate: '2026-01-01', sort: 1 }).sort,
-    ).toBe(1);
-    expect(MilestoneCreate.safeParse({ projectId: ID, name: '' }).success).toBe(false);
+    expect(MilestoneCreate.parse({ name: 'M', targetDate: '2026-01-01', sort: 1 }).sort).toBe(1);
+    expect(MilestoneCreate.safeParse({ name: '' }).success).toBe(false);
   });
   it('MilestoneUpdate parses nullable targetDate + rejects empty name', () => {
     expect(MilestoneUpdate.parse({ targetDate: null }).targetDate).toBeNull();

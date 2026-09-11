@@ -397,24 +397,28 @@ describe('milestones router', () => {
       .returning({ id: schema.project.id });
     const projectId = assertDefined(proj).id;
 
-    // Empty list (no filter branch).
-    expect((await json<{ items: unknown[] }>(await writer.request('/'))).items).toHaveLength(0);
+    const collection = `/${projectId}/milestones`;
 
-    const created = await writer.request('/', {
+    // A project with no checkpoints yet.
+    expect((await json<{ items: unknown[] }>(await writer.request(collection))).items).toHaveLength(
+      0,
+    );
+
+    const created = await writer.request(collection, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ projectId, name: 'M1', targetDate: '2026-06-01', sort: 1 }),
+      body: JSON.stringify({ name: 'M1', targetDate: '2026-06-01', sort: 1 }),
     });
     expect(created.status).toBe(201);
     const id = (await json<{ id: string }>(created)).id;
 
-    // List with the project filter branch.
-    const filtered = await writer.request(`/?projectId=${projectId}`);
-    expect((await json<{ items: unknown[] }>(filtered)).items).toHaveLength(1);
+    expect((await json<{ items: unknown[] }>(await writer.request(collection))).items).toHaveLength(
+      1,
+    );
 
-    expect((await writer.request(`/${id}`)).status).toBe(200);
+    expect((await writer.request(`${collection}/${id}`)).status).toBe(200);
 
-    const patched = await writer.request(`/${id}`, {
+    const patched = await writer.request(`${collection}/${id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'M1b', targetDate: null, sort: 5 }),
@@ -423,7 +427,7 @@ describe('milestones router', () => {
     expect((await json<{ targetDate: string | null }>(patched)).targetDate).toBeNull();
 
     // Patch targetDate to a value (non-null branch).
-    const patched2 = await writer.request(`/${id}`, {
+    const patched2 = await writer.request(`${collection}/${id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ targetDate: '2026-07-01' }),
@@ -432,7 +436,7 @@ describe('milestones router', () => {
       '2026-07-01T00:00:00.000Z',
     );
 
-    expect((await writer.request(`/${id}`, { method: 'DELETE' })).status).toBe(200);
+    expect((await writer.request(`${collection}/${id}`, { method: 'DELETE' })).status).toBe(200);
   });
 
   it('create without targetDate omits the date', async () => {
@@ -449,10 +453,10 @@ describe('milestones router', () => {
         statusId: statusId('project', 'planned'),
       })
       .returning({ id: schema.project.id });
-    const created = await writer.request('/', {
+    const created = await writer.request(`/${assertDefined(proj).id}/milestones`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ projectId: assertDefined(proj).id, name: 'M-nodate' }),
+      body: JSON.stringify({ name: 'M-nodate' }),
     });
     expect(created.status).toBe(201);
     expect((await json<{ targetDate: string | null }>(created)).targetDate).toBeNull();
@@ -461,10 +465,10 @@ describe('milestones router', () => {
   it('404s on create when the project is not in the org', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
-    const res = await writer.request('/', {
+    const res = await writer.request(`/${MISSING_ULID}/milestones`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ projectId: MISSING_ULID, name: 'M' }),
+      body: JSON.stringify({ name: 'M' }),
     });
     expect(res.status).toBe(404);
   });
@@ -472,34 +476,36 @@ describe('milestones router', () => {
   it('403 / 404 / 422 branches', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const viewer = appWithActor(milestones, orgId, ['view']);
+    // The capability is checked before the project is read, so a viewer is refused rather than
+    // told whether the project exists.
     expect(
       (
-        await viewer.request('/', {
+        await viewer.request('/p/milestones', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ projectId: 'p', name: 'M' }),
+          body: JSON.stringify({ name: 'M' }),
         })
       ).status,
     ).toBe(403);
 
     const writer = appWithActor(milestones, orgId, ['contribute']);
-    expect((await writer.request('/none')).status).toBe(404);
+    expect((await writer.request('/p/milestones/none')).status).toBe(404);
     expect(
       (
-        await writer.request('/none', {
+        await writer.request('/p/milestones/none', {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ name: 'x' }),
         })
       ).status,
     ).toBe(404);
-    expect((await writer.request('/none', { method: 'DELETE' })).status).toBe(404);
+    expect((await writer.request('/p/milestones/none', { method: 'DELETE' })).status).toBe(404);
     expect(
       (
-        await writer.request('/', {
+        await writer.request('/p/milestones', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ projectId: 'p' }),
+          body: JSON.stringify({}),
         })
       ).status,
     ).toBe(422);

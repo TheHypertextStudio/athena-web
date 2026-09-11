@@ -28,7 +28,7 @@ export function ProjectDependenciesPanel({
   canEdit,
 }: ProjectDependenciesPanelProps): JSX.Element {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const options = useComposerOptions(orgId, ['projects'], pickerOpen);
+  const options = useComposerOptions(orgId, ['projects'], pickerOpen, null);
   const { dependencies, loading, error, add, remove, pending, mutationError } =
     useProjectDependencies(orgId, projectId, projectDetailKey);
   const projectOptions = useMemo(

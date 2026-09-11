@@ -67,7 +67,6 @@ import integrationsLinearAgent from './integrations-linear-agent';
 import integrationsMcp from './integrations-mcp';
 import labels from './labels';
 import members from './members';
-import milestones from './milestones';
 import programs from './programs';
 import processDefinitions from './process-definitions';
 import projects from './projects';
@@ -479,7 +478,6 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .route('/:orgId/initiatives', initiatives)
   .route('/:orgId/programs', programs)
   .route('/:orgId/cycles', cycles)
-  .route('/:orgId/milestones', milestones)
   .route('/:orgId/statuses', workStatuses)
   .route('/:orgId/teams', teamStatusFork)
   .route('/:orgId/labels', labels)

@@ -453,7 +453,7 @@ const OBJECT_ROUTE_SEGMENTS: Readonly<Record<ObjectKind, string | null>> = {
   team: 'teams',
   calendar_event: null,
   time_block: null,
-  milestone: 'milestones',
+  milestone: null,
   actor: null,
   label: null,
   calendar_slot: null,

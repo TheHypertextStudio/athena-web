@@ -39,6 +39,7 @@ import {
   teamOptions,
 } from '@/components/pickers/options';
 import { api } from '@/lib/api';
+import { projectMilestonesDef } from '@/lib/project-milestones-def';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /** The org-scoped option lists a composer can opt into loading. */
@@ -105,6 +106,7 @@ export function useComposerOptions(
   orgId: string,
   include: readonly ComposerOptionKind[],
   enabled: boolean,
+  projectId: string | null,
 ): ComposerOptions {
   const queryClient = useQueryClient();
   const want = useMemo(() => new Set(include), [include]);
@@ -210,14 +212,10 @@ export function useComposerOptions(
       { enabled: on('cycles'), staleTime: STALE.static },
     ),
   );
-  const milestonesQ = useApiQuery(
-    apiQueryOptions(
-      ['org', orgId, 'milestones'],
-      () => api.v1.orgs[':orgId'].milestones.$get({ param: { orgId }, query: {} }),
-      'Could not load milestones.',
-      { enabled: on('milestones'), staleTime: STALE.static },
-    ),
-  );
+  // Scoped to one Project, because that is the only set a milestone picker may legally offer: the
+  // server refuses a task whose milestone belongs to a different project. Listing the whole org — as
+  // this did while the routes were flat — filled the menu with options that could only be rejected.
+  const milestonesQ = useApiQuery(projectMilestonesDef(orgId, projectId, on('milestones')));
   const milestoneDisplaysQ = useApiQuery(
     apiQueryOptions(
       queryKeys.entityDisplays(orgId, 'milestone'),

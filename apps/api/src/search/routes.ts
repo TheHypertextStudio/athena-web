@@ -7,6 +7,7 @@ export function entityHref(
   organizationId: string,
   kind: SearchDocumentKind,
   entityId: string,
+  facet?: Record<string, string | null | undefined>,
 ): string {
   switch (kind) {
     case 'organization':
@@ -27,8 +28,12 @@ export function entityHref(
       return `/orgs/${organizationId}/programs/${entityId}`;
     case 'initiative':
       return `/orgs/${organizationId}/initiatives/${entityId}`;
+    // A milestone is edited on its Project, so the result opens that Project. The indexed facet
+    // carries the parent; without it the list is the only honest destination.
     case 'milestone':
-      return `/orgs/${organizationId}/milestones/${entityId}`;
+      return facet?.['projectId']
+        ? `/orgs/${organizationId}/projects/${facet['projectId']}`
+        : `/orgs/${organizationId}/projects`;
     case 'cycle':
       return `/orgs/${organizationId}/cycles/${entityId}`;
     // The task list filtered by this label, expressed in the *view toolbar's* own URL codec
@@ -59,13 +64,14 @@ export function entityRoute(
   organizationId: string,
   kind: SearchDocumentKind,
   entityId: string,
+  facet: Record<string, string | null | undefined> = {},
 ): SearchRouteDraft {
   return {
     type: 'entity',
     organizationId,
     entityKind: kind,
     entityId,
-    href: entityHref(organizationId, kind, entityId),
+    href: entityHref(organizationId, kind, entityId, facet),
   };
 }
 

@@ -174,6 +174,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const queryClient = useQueryClient();
   const accountId = useResolvedAccountId();
   const projectNoun = useVocabulary('project');
+  const taskNoun = useVocabulary('task').toLowerCase();
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
   const subject = ProjectSubjectRef.parse({ subjectType: 'project', subjectId: projectId });
   const navigationSnapshot = useNavigationSnapshot('project', projectId);
@@ -827,6 +828,7 @@ export default function ProjectDetailPage(): JSX.Element {
             projectDetailKey={workDef.queryKey}
             milestones={workQ.data?.milestones ?? []}
             milestoneTasks={milestoneTasks}
+            taskNoun={taskNoun}
             canEdit={canEdit}
           />
           <AgentsStrip agents={agentsHere} />

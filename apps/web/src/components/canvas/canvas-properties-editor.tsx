@@ -225,6 +225,25 @@ function AssociationField({
   );
 }
 
+/**
+ * The one Project every selected Task belongs to, or `null` when they disagree or there are none.
+ *
+ * @remarks
+ * Milestones belong to a Project, so a selection spanning several has no milestone set to offer.
+ * The empty guard is load-bearing: `aggregateScalar` reads `snapshots[0]` without checking, and a
+ * Project-only or cleared selection holds no tasks.
+ *
+ * @param snapshots - The current selection.
+ * @returns the shared Project id, or `null`.
+ */
+function sharedTaskProjectId(snapshots: readonly CanvasPropertySnapshot[]): string | null {
+  const tasks = snapshots.filter(
+    (snapshot): snapshot is Extract<CanvasPropertySnapshot, { kind: 'task' }> =>
+      snapshot.kind === 'task',
+  );
+  return tasks.length === 0 ? null : commonNonNullValue(tasks, (task) => task.projectId);
+}
+
 /** Render the complete approved catalog and issue every mutation through one canvas command. */
 export default function CanvasPropertiesEditor({
   snapshots,
@@ -241,7 +260,13 @@ export default function CanvasPropertiesEditor({
           ? null
           : guard.reason;
   const organizationId = snapshots[0]?.organizationId ?? '';
-  const options = useComposerOptions(organizationId, OPTION_KINDS, organizationId.length > 0);
+  const selectionProjectId = sharedTaskProjectId(snapshots);
+  const options = useComposerOptions(
+    organizationId,
+    OPTION_KINDS,
+    organizationId.length > 0,
+    selectionProjectId,
+  );
   const registry = useStatusRegistry();
   const estimation = useEstimationScale(organizationId, organizationId.length > 0);
   const planning = useFiscalYearStartMonth(organizationId, organizationId.length > 0);
@@ -397,10 +422,10 @@ export default function CanvasPropertiesEditor({
     const statusPickerOptions = statusOptions(
       registry.statusesFor('task', tasks[0]?.teamId).filter(({ key }) => statusKeySet.has(key)),
     );
-    const projectId = commonNonNullValue(tasks, (task) => task.projectId);
     const teamId = commonNonNullValue(tasks, (task) => task.teamId);
+    // Already the selection's own project's milestones — the read is scoped, not filtered after.
     const milestoneOptionsForProject = milestoneOptions(
-      options.milestones.filter((item) => projectId !== null && item.projectId === projectId),
+      options.milestones,
       options.milestoneDisplays,
     );
     const cycleOptionsForTeam = cycleOptions(
@@ -499,7 +524,7 @@ export default function CanvasPropertiesEditor({
             }}
             placeholder={scalarPlaceholder(
               milestone,
-              projectId === null ? 'Select Tasks in one Project' : 'Set milestone',
+              selectionProjectId === null ? 'Select Tasks in one Project' : 'Set milestone',
             )}
             clearLabel="No milestone"
             ariaLabel="Milestone"

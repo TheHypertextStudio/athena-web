@@ -23,7 +23,6 @@ import {
 import { VocabularyProvider } from '@docket/ui/hooks';
 import {
   Calendar,
-  Flag,
   GanttChart,
   RefreshCw,
   Search,
@@ -597,7 +596,6 @@ interface SavedRecentEntityIdentityProps {
 const FIXED_RECENT_DOCUMENT_ICON = {
   task: TaskAlt,
   cycle: RefreshCw,
-  milestone: Flag,
   session: GanttChart,
 } as const;
 

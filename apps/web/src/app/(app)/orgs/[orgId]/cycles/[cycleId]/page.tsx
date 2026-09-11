@@ -25,7 +25,7 @@ import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker
 import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
 import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
-import { QuickAddTaskRow } from '@/components/tasks/quick-add-task-row';
+import { QuickAddRow } from '@/components/views/quick-add-row';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { PageContainer } from '@/components/views/page-layout';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
@@ -458,8 +458,9 @@ export default function CycleDetailPage(): JSX.Element {
             />
           )}
 
-          <QuickAddTaskRow
+          <QuickAddRow
             canEdit={canEditNow}
+            noun={taskNoun}
             placeholder={`Add a ${taskNoun} to this ${cycleNounLower}…`}
             onAdd={(title) => createCycleTask.mutateAsync(title).then(() => undefined)}
           />

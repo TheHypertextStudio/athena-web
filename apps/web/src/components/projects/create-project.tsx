@@ -66,6 +66,10 @@ import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 import { ProjectComposerPickers } from './project-form-pickers';
+import {
+  type DraftMilestone,
+  ProjectMilestonesField,
+} from '@/components/projects/project-milestones-field';
 
 /** The lists this composer's pickers draw from. */
 const COMPOSER_INCLUDE = ['actors', 'programs', 'initiatives'] as const;
@@ -84,6 +88,129 @@ export interface ProjectDraft {
   startTimeframe: PlanningTimeframe | null;
   targetTimeframe: PlanningTimeframe | null;
   initiativeIds: readonly string[];
+  /**
+   * Checkpoints to create alongside the Project, in the order they will be created.
+   *
+   * @remarks
+   * A milestone needs a `projectId`, which does not exist until the Project does, so these are
+   * drafts here and become records in a second pass after the create succeeds. Their position in
+   * this list becomes their `sort`.
+   */
+  milestones: readonly DraftMilestone[];
+}
+
+/**
+ * Create each drafted milestone against the new Project, in order.
+ *
+ * @remarks
+ * Sequential rather than concurrent so `sort` is the position in the list and not the order the
+ * network happened to settle in. One failure does not abort the rest: a later milestone can still
+ * succeed, and the caller's job is to report exactly which ones did not.
+ *
+ * @param orgId - The org the Project was created in.
+ * @param projectId - The Project the milestones belong to, as the create response returned it.
+ * @param drafts - The drafted milestones, in display order.
+ * @returns the drafts that could not be created, in their original order.
+ */
+async function createDraftMilestones(
+  orgId: string,
+  projectId: ProjectOut['id'],
+  drafts: readonly DraftMilestone[],
+): Promise<readonly DraftMilestone[]> {
+  const unsaved: DraftMilestone[] = [];
+  for (const [index, milestone] of drafts.entries()) {
+    const note = milestone.description.trim();
+    try {
+      const res = await api.v1.orgs[':orgId'].milestones.$post({
+        param: { orgId },
+        json: {
+          // Already branded: this id came back from the create, it was not typed by anyone.
+          projectId,
+          name: milestone.name,
+          ...(note.length > 0 ? { description: note } : {}),
+          ...(milestone.targetDate ? { targetDate: milestone.targetDate } : {}),
+          sort: index,
+        },
+      });
+      if (!res.ok) unsaved.push(milestone);
+    } catch {
+      unsaved.push(milestone);
+    }
+  }
+  return unsaved;
+}
+
+/**
+ * Build the Project create body from the draft.
+ *
+ * @remarks
+ * Every optional field is omitted rather than sent empty, which is a conditional spread each — so
+ * this lives outside `submit` and keeps that function about the *sequence* of writes.
+ *
+ * @param draft - The composer's current values.
+ * @param name - The trimmed project name.
+ * @param teamId - The resolved destination team, or `null` to follow the org default.
+ * @returns the request body.
+ */
+function projectCreateBody(draft: ProjectDraft, name: string, teamId: string | null) {
+  const summary = draft.summary.trim();
+  const description = draft.description.trim();
+  return {
+    name,
+    ...(summary.length > 0 ? { summary } : {}),
+    ...(description.length > 0 ? { description } : {}),
+    ...(teamId ? { teamId: TeamId.parse(teamId) } : {}),
+    ...(draft.leadId ? { leadId: ActorId.parse(draft.leadId) } : {}),
+    ...(draft.programId ? { programId: ProgramId.parse(draft.programId) } : {}),
+    status: draft.status,
+    ...(draft.health ? { health: draft.health } : {}),
+    ...(draft.startTimeframe
+      ? {
+          startDate: draft.startTimeframe.date,
+          startDateResolution: draft.startTimeframe.resolution,
+        }
+      : {}),
+    ...(draft.targetTimeframe
+      ? {
+          targetDate: draft.targetTimeframe.date,
+          targetDateResolution: draft.targetTimeframe.resolution,
+        }
+      : {}),
+    ...(draft.initiativeIds.length > 0
+      ? { initiativeIds: draft.initiativeIds.map((id) => InitiativeId.parse(id)) }
+      : {}),
+  };
+}
+
+/**
+ * The primary action's label, which changes once the Project itself is saved.
+ *
+ * @remarks
+ * Module-level beside {@link unsavedMilestonesMessage} because it is the other half of the same
+ * recovery state: the button stops offering to create a Project and starts offering to finish one.
+ *
+ * @param recovering - Whether the Project is committed and only its milestones are outstanding.
+ * @param projectNoun - The vocabulary-skinned Project noun.
+ * @returns the submit button's label.
+ */
+function projectSubmitLabel(recovering: boolean, projectNoun: string): string {
+  return recovering ? 'Add remaining milestones' : `Create ${projectNoun}`;
+}
+
+/**
+ * Application-owned copy naming the checkpoints that did not save.
+ *
+ * @remarks
+ * "Milestone" is not vocabulary-skinned (its `ObjectDescriptor` has `vocabularyKey: null`), so the
+ * noun is a literal here rather than a plumbed-through prop.
+ *
+ * @param unsaved - The drafts that failed, in order.
+ * @returns the message shown under the composer's fields.
+ */
+function unsavedMilestonesMessage(unsaved: readonly DraftMilestone[]): string {
+  const names = unsaved.map((milestone) => milestone.name).join(', ');
+  const one = unsaved.length === 1;
+  return `Saved everything except the milestone${one ? '' : 's'} ${names}. Try again to add ${one ? 'it' : 'them'}.`;
 }
 
 /** Workspace references carried with a successful Project create for related invalidations. */
@@ -184,6 +311,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
     startTimeframe: null,
     targetTimeframe: null,
     initiativeIds: [],
+    milestones: [],
   });
 
   useDefaultedStatus('project', draft.status, (key) => {
@@ -192,6 +320,10 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
 
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The Project once it exists but its milestones do not — see `attachMilestones`.
+  const [committed, setCommitted] = useState<ProjectOut | null>(null);
+  // Past the point of no return: the Project is saved and the composer is now a milestone retry.
+  const recovering = committed !== null;
   const continuation = useComposerContinuation({
     creating,
     successMessage: `${projectNoun} created. Ready to create another.`,
@@ -288,7 +420,71 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
     destinationReady &&
     (globalCreation?.canContribute ?? true);
 
-  /** Create the project with all set properties, then hand it to the parent. */
+  /**
+   * Create the drafted milestones against a Project that now exists.
+   *
+   * @remarks
+   * On a partial failure the Project is real and only the checkpoints are missing. Reporting
+   * success would be a lie, and resubmitting the whole form would create a *second* Project — so
+   * the create is remembered in `committed`, the draft is narrowed to just the milestones that did
+   * not land, and the next submit retries only those.
+   *
+   * @param project - The Project the milestones belong to.
+   * @returns whether every drafted milestone was created.
+   */
+  const attachMilestones = useCallback(
+    async (project: ProjectOut): Promise<boolean> => {
+      const unsaved = await createDraftMilestones(orgId, project.id, draft.milestones);
+      if (unsaved.length === 0) return true;
+      setCommitted(project);
+      updateDraft((current) => ({ ...current, milestones: unsaved }));
+      setError(unsavedMilestonesMessage(unsaved));
+      return false;
+    },
+    [draft.milestones, orgId, updateDraft],
+  );
+
+  /** Hand the finished Project to the parent and either reset for another or close. */
+  const finishCreate = useCallback(
+    (project: ProjectOut, continueCreating: boolean): void => {
+      if (globalCreation !== undefined) {
+        globalCreation.onCreated(
+          project,
+          { programId: draft.programId, initiativeIds: draft.initiativeIds },
+          continueCreating,
+        );
+      } else {
+        runConfirmedCreateCallback(() => {
+          onCreated(project);
+        });
+      }
+      if (continueCreating) {
+        continuation.completeContinuation(() => {
+          updateDraft(() => ({ name: '', summary: '', description: '', milestones: [] }));
+        });
+        return;
+      }
+      onOpenChange(false);
+    },
+    [
+      continuation,
+      draft.initiativeIds,
+      draft.programId,
+      globalCreation,
+      onCreated,
+      onOpenChange,
+      updateDraft,
+    ],
+  );
+
+  /**
+   * Create the project with all set properties, then its milestones, then hand it to the parent.
+   *
+   * @remarks
+   * Two writes, and the second can fail on its own. Once the Project is committed it is held in
+   * `committed` so a retry adds only the milestones that did not land rather than creating a second
+   * Project — the submit button is a recovery action from that point on, not a create.
+   */
   const submit = useCallback(
     async (continueCreating = false): Promise<void> => {
       const trimmed = draft.name.trim();
@@ -296,34 +492,16 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       setCreating(true);
       setError(null);
       try {
-        const trimmedBody = draft.description.trim();
+        if (committed !== null) {
+          if (await attachMilestones(committed)) {
+            setCommitted(null);
+            finishCreate(committed, continueCreating);
+          }
+          return;
+        }
         const res = await api.v1.orgs[':orgId'].projects.$post({
           param: { orgId },
-          json: {
-            name: trimmed,
-            ...(draft.summary.trim().length > 0 ? { summary: draft.summary.trim() } : {}),
-            ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
-            ...(teamId ? { teamId: TeamId.parse(teamId) } : {}),
-            ...(draft.leadId ? { leadId: ActorId.parse(draft.leadId) } : {}),
-            ...(draft.programId ? { programId: ProgramId.parse(draft.programId) } : {}),
-            status: draft.status,
-            ...(draft.health ? { health: draft.health } : {}),
-            ...(draft.startTimeframe
-              ? {
-                  startDate: draft.startTimeframe.date,
-                  startDateResolution: draft.startTimeframe.resolution,
-                }
-              : {}),
-            ...(draft.targetTimeframe
-              ? {
-                  targetDate: draft.targetTimeframe.date,
-                  targetDateResolution: draft.targetTimeframe.resolution,
-                }
-              : {}),
-            ...(draft.initiativeIds.length > 0
-              ? { initiativeIds: draft.initiativeIds.map((id) => InitiativeId.parse(id)) }
-              : {}),
-          },
+          json: projectCreateBody(draft, trimmed, teamId),
         });
         if (!res.ok) {
           setError(
@@ -335,27 +513,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
           return;
         }
         const created = await res.json();
-        if (globalCreation !== undefined) {
-          globalCreation.onCreated(
-            created,
-            {
-              programId: draft.programId,
-              initiativeIds: draft.initiativeIds,
-            },
-            continueCreating,
-          );
-        } else {
-          runConfirmedCreateCallback(() => {
-            onCreated(created);
-          });
-        }
-        if (continueCreating) {
-          continuation.completeContinuation(() => {
-            updateDraft(() => ({ name: '', summary: '', description: '' }));
-          });
-          return;
-        }
-        onOpenChange(false);
+        if (await attachMilestones(created)) finishCreate(created, continueCreating);
       } catch (caught) {
         setError(
           userErrorMessage(caught, `Something went wrong creating the ${projectNounLower}.`),
@@ -366,15 +524,15 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       }
     },
     [
+      attachMilestones,
       canSubmit,
+      committed,
       continuation,
       draft,
-      globalCreation,
+      finishCreate,
       teamId,
       orgId,
       projectNounLower,
-      onOpenChange,
-      onCreated,
       updateDraft,
     ],
   );
@@ -437,12 +595,26 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       bodyPlaceholder="Add a description"
       bodyContributions={[templateContribution]}
       mentionOrgId={orgId}
+      trailingFields={
+        <ProjectMilestonesField
+          value={draft.milestones}
+          onChange={(milestones) => {
+            setField('milestones', milestones);
+          }}
+          disabled={creating}
+        />
+      }
       error={error ?? planningCalendar.error ?? globalCreation?.loadError ?? null}
       statusMessage={continuation.statusMessage}
       creating={creating}
+      // Once the Project is committed the draft is no longer a draft: closing must not offer to
+      // discard it, and its fields are locked because editing them here can no longer save
+      // anything. Only the submit button stays live, as the retry for the milestones.
+      draftCommitted={recovering}
+      contentDisabled={recovering}
       canSubmit={canSubmit}
       onSubmit={() => void submit(continuation.createMore)}
-      submitLabel={`Create ${projectNoun}`}
+      submitLabel={projectSubmitLabel(recovering, projectNoun)}
     >
       <ProjectComposerPickers
         status={draft.status}

@@ -29,7 +29,7 @@ const EXPECTED: Readonly<Record<Kind, string>> = {
   program: `/orgs/${ORG}/programs/${ID}`,
   initiative: `/orgs/${ORG}/initiatives/${ID}`,
   cycle: `/orgs/${ORG}/cycles/${ID}`,
-  milestone: `/orgs/${ORG}/projects?milestoneId=${ID}`,
+  milestone: `/orgs/${ORG}/milestones/${ID}`,
   team: `/orgs/${ORG}/teams/${ID}`,
   actor: `/orgs/${ORG}/people/${ID}`,
   agent_session: `/orgs/${ORG}/sessions/${ID}`,

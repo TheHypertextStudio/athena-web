@@ -104,6 +104,17 @@ export interface ComposerShellProps {
    * the thing it makes.
    */
   leadingFields?: ReactNode | undefined;
+  /**
+   * Extra fields rendered in the scrolling body, below the description.
+   *
+   * @remarks
+   * For a composer that also defines the entity's *contents* on the way in — the Project composer
+   * uses this to declare a new Project's milestones. These cannot go in `children`: that slot is the
+   * pinned footer pill strip, which is for one-value properties and which this composer still needs.
+   * They sit after the description because they are the last thing filled in, and inside the body's
+   * scroll because a list has no fixed height.
+   */
+  trailingFields?: ReactNode | undefined;
   /** The current title text. */
   title: string;
   /** Report a changed title. */
@@ -182,6 +193,7 @@ export function ComposerShell({
   propertyLayout = 'compact',
   continuation,
   leadingFields,
+  trailingFields,
   title,
   onTitleChange,
   titleInputRef,
@@ -430,6 +442,7 @@ export function ComposerShell({
             contents={documentContents}
             hasContents={hasContents}
             freeformFields={propertyLayout === 'freeform' ? children : null}
+            trailingFields={trailingFields}
           />
 
           {/* Action bar: pills, then error, then the single primary action — all pinned below the
@@ -481,6 +494,8 @@ interface ComposerBodyRegionProps {
   hasContents: boolean;
   /** Fields a freeform composer places in the body rather than the footer. */
   freeformFields: ReactNode;
+  /** Fields for follow-up work the composer also commits, below the description. */
+  trailingFields: ReactNode;
 }
 
 /**
@@ -503,6 +518,7 @@ function ComposerBodyRegion({
   contents,
   hasContents,
   freeformFields,
+  trailingFields,
 }: ComposerBodyRegionProps): JSX.Element {
   return (
     <DialogBody inset="responsive-inline" className="@container flex flex-col">
@@ -535,6 +551,14 @@ function ComposerBodyRegion({
            *  compact composers keep their pills anchored in the footer below, out of the editor's
            *  scroll — see PropertyStrip's placement there for why. */}
           {freeformFields}
+
+          {/*
+           * Locked only while a request is in flight, not by `contentDisabled`. These fields are the
+           * *outstanding* work, not the draft's own content: a composer sets `contentDisabled` once
+           * its entity is committed, and that is exactly the moment the remaining trailing work
+           * still needs correcting.
+           */}
+          {trailingFields}
         </div>
 
         {hasContents ? (

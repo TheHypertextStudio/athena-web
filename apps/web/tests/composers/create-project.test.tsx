@@ -8,6 +8,8 @@
  *
  * - the title + description flow through;
  * - choosing a lead and toggling an initiative thread their ids into the create body;
+ * - milestones drafted in the composer are created against the new Project, in list order;
+ * - a Project that saves while a milestone does not is never reported as a success;
  * - a server error is surfaced and no `onCreated` fires.
  *
  * The RPC client is mocked; the lead + initiative rosters are fed through the mocked `$get`s.
@@ -21,6 +23,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   projectPost,
+  milestonePost,
   membersGet,
   agentsGet,
   initiativesGet,
@@ -37,6 +40,7 @@ const {
   const createObjectState: { current: unknown } = { current: null };
   return {
     projectPost: vi.fn(),
+    milestonePost: vi.fn(),
     membersGet: vi.fn(),
     agentsGet: vi.fn(),
     initiativesGet: vi.fn(),
@@ -57,6 +61,7 @@ vi.mock('../../src/lib/api', () => ({
       orgs: {
         ':orgId': {
           projects: { $post: projectPost },
+          milestones: { $post: milestonePost },
           members: { $get: membersGet },
           agents: { $get: agentsGet },
           initiatives: { $get: initiativesGet },
@@ -216,6 +221,7 @@ const GLOBAL_PROJECT_TEAMS: readonly TeamOut[] = [
 
 beforeEach(() => {
   projectPost.mockReset();
+  milestonePost.mockReset();
   membersGet
     .mockReset()
     .mockImplementation(({ param }: { param: { orgId: string } }) =>
@@ -967,6 +973,82 @@ describe('CreateProjectDialog — robust composer', () => {
     expect(onCreated).toHaveBeenCalledOnce();
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  /** Draft one milestone in the composer's Milestones section. */
+  function addMilestone(name: string): void {
+    const field = screen.getByLabelText('New milestone name');
+    fireEvent.change(field, { target: { value: name } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+  }
+
+  it('creates drafted milestones against the new Project, in list order', async () => {
+    projectPost.mockResolvedValue(jsonResponse(true, { id: 'proj_ms', name: 'Atlas' }));
+    milestonePost.mockResolvedValue(jsonResponse(true, { id: 'ms_1' }));
+    const { onCreated } = renderComposer();
+
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Atlas' } });
+    addMilestone('Beta');
+    addMilestone('Launch');
+    fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
+
+    await waitFor(() => {
+      expect(milestonePost).toHaveBeenCalledTimes(2);
+    });
+    // `sort` is the position in the list, so the order survives however the requests settle.
+    expect(milestonePost.mock.calls.map((call) => call[0].json)).toEqual([
+      { projectId: 'proj_ms', name: 'Beta', sort: 0 },
+      { projectId: 'proj_ms', name: 'Launch', sort: 1 },
+    ]);
+    expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'proj_ms' }));
+  });
+
+  it('does not report success when the Project saves but a milestone does not', async () => {
+    projectPost.mockResolvedValue(jsonResponse(true, { id: 'proj_partial', name: 'Atlas' }));
+    milestonePost
+      .mockResolvedValueOnce(jsonResponse(true, { id: 'ms_1' }))
+      .mockResolvedValueOnce(jsonResponse(false, { detail: 'nope' }));
+    const { onCreated, onOpenChange } = renderComposer();
+
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Atlas' } });
+    addMilestone('Beta');
+    addMilestone('Launch');
+    fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(within(alert).getByText(/Launch/)).toBeTruthy();
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('retries only the unsaved milestones rather than creating a second Project', async () => {
+    projectPost.mockResolvedValue(jsonResponse(true, { id: 'proj_retry', name: 'Atlas' }));
+    milestonePost
+      .mockResolvedValueOnce(jsonResponse(true, { id: 'ms_1' }))
+      .mockResolvedValueOnce(jsonResponse(false, { detail: 'nope' }));
+    const { onCreated } = renderComposer();
+
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Atlas' } });
+    addMilestone('Beta');
+    addMilestone('Launch');
+    fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
+
+    // The primary action stops offering to create a Project and starts offering to finish one.
+    const retry = await screen.findByRole('button', { name: 'Add remaining milestones' });
+    milestonePost.mockResolvedValue(jsonResponse(true, { id: 'ms_2' }));
+    fireEvent.click(retry);
+
+    await waitFor(() => {
+      expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'proj_retry' }));
+    });
+    expect(projectPost).toHaveBeenCalledTimes(1);
+    // Beta landed the first time; only Launch is sent again, and it keeps its position.
+    expect(milestonePost).toHaveBeenCalledTimes(3);
+    expect(milestonePost.mock.calls[2]?.[0].json).toEqual({
+      projectId: 'proj_retry',
+      name: 'Launch',
+      sort: 0,
+    });
   });
 
   it('surfaces application-owned copy when the create fails', async () => {

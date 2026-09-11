@@ -101,6 +101,8 @@ export const queryKeys = {
   entityDisplay: (orgId: string, subjectType: string, subjectId: string) =>
     ['org', orgId, 'display', subjectType, subjectId] as const,
   milestones: (orgId: string) => ['org', orgId, 'milestones'] as const,
+  milestone: (orgId: string, milestoneId: string) =>
+    ['org', orgId, 'milestones', milestoneId] as const,
   members: (orgId: string) => ['org', orgId, 'members'] as const,
   roles: (orgId: string) => ['org', orgId, 'roles'] as const,
   invitations: (orgId: string) => ['org', orgId, 'invitations'] as const,

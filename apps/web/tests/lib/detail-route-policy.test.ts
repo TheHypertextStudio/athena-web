@@ -8,6 +8,7 @@ const details = [
   'src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx',
   'src/app/(app)/orgs/[orgId]/programs/[programId]/program-detail-client.tsx',
   'src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx',
+  'src/app/(app)/orgs/[orgId]/milestones/[milestoneId]/milestone-detail-client.tsx',
 ] as const;
 
 describe('detail route ownership', () => {

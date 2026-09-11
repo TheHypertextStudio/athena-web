@@ -1,26 +1,27 @@
 'use client';
 
 /**
- * `QuickAddTaskRow` — an inline "type a title, press Enter" task composer.
+ * `QuickAddRow` — the app's one inline "type a name, press Enter" composer.
  *
  * @remarks
- * Generalizes the one true inline add in the app ({@link "@/components/task-detail/Subtasks"}) so any
- * task context (a project's Tasks tab, a board column, a cycle) can create work without a modal or a
- * redirect. The host owns the actual create call via {@link QuickAddTaskRowProps.onAdd} — it supplies
- * the contextual defaults (team, project, milestone…) around the typed title. Renders nothing when
- * the viewer can't create.
+ * The dashed-outline row that sits at the foot of a list and creates one more of whatever that list
+ * holds, without a modal or a redirect. The host owns the actual create call via
+ * {@link QuickAddRowProps.onAdd} — it supplies the contextual defaults (team, project, milestone…)
+ * around the typed name — and names what is being created through
+ * {@link QuickAddRowProps.noun}, which is the vocabulary-skinned singular the surrounding surface
+ * already uses ("task", "issue", "milestone"). Renders nothing when the viewer can't create.
  *
- * The composer is built for someone entering several tasks in a row, which is the whole reason it
+ * The composer is built for someone entering several entries in a row, which is the whole reason it
  * exists rather than a dialog. It used to disable the field and wait for the round trip before
- * clearing — so between every two tasks there was a dead input, focus had moved off it, and the
- * next Enter went nowhere. Now each submission captures its own title, the field clears and stays
+ * clearing — so between every two entries there was a dead input, focus had moved off it, and the
+ * next Enter went nowhere. Now each submission captures its own name, the field clears and stays
  * focused in the same turn, and the next one can be typed while the previous is still in flight.
  *
  * Clearing before the server has agreed is only safe if a refusal gives the words back. It does,
- * but not by refilling the field: the field belongs to the next task, and there can be more than
- * one refusal outstanding. Each refused submission becomes its own retryable row, so entering two
- * titles that both fail leaves both of them on screen — putting them back one at a time into a
- * single box means the second one silently overwrites nothing and is simply lost.
+ * but not by refilling the field: the field belongs to the next entry, and there can be more than
+ * one refusal outstanding. Each refused submission becomes its own row with retry and discard, so
+ * entering two names that both fail leaves both of them on screen — putting them back one at a time
+ * into a single box means the second one silently overwrites nothing and is simply lost.
  */
 import { Plus, RefreshCw, X } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
@@ -28,13 +29,15 @@ import { type JSX, useRef, useState } from 'react';
 
 import { userErrorMessage } from '@/lib/problem';
 
-/** Props for {@link QuickAddTaskRow}. */
-export interface QuickAddTaskRowProps {
-  /** Create a task from the typed title; resolves once persisted. */
-  onAdd: (title: string) => Promise<void>;
+/** Props for {@link QuickAddRow}. */
+export interface QuickAddRowProps {
+  /** Create one entry from the typed name; resolves once persisted. */
+  onAdd: (value: string) => Promise<void>;
   /** Whether the viewer may create; false renders nothing. */
   canEdit: boolean;
-  /** Placeholder prompt, e.g. `"Add a task…"`. */
+  /** The vocabulary-skinned singular for what this row creates, lowercase — e.g. `"task"`. */
+  noun: string;
+  /** Placeholder prompt; defaults to `Add a {noun}…`. */
   placeholder?: string;
 }
 
@@ -43,7 +46,7 @@ interface RefusedSubmission {
   /** Identity for the row, so two refusals of the same text stay distinct. */
   readonly key: number;
   /** Exactly what was typed. */
-  readonly title: string;
+  readonly value: string;
   /**
    * Application-owned copy for why it did not land.
    *
@@ -56,34 +59,35 @@ interface RefusedSubmission {
   readonly reason: string;
 }
 
-/** An inline task composer that stays put across entries. */
-export function QuickAddTaskRow({
+/** An inline composer that stays put across entries. */
+export function QuickAddRow({
   onAdd,
   canEdit,
-  placeholder = 'Add a task…',
-}: QuickAddTaskRowProps): JSX.Element | null {
-  const [title, setTitle] = useState('');
+  noun,
+  placeholder = `Add a ${noun}…`,
+}: QuickAddRowProps): JSX.Element | null {
+  const [value, setValue] = useState('');
   const [refused, setRefused] = useState<readonly RefusedSubmission[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const nextKey = useRef(0);
 
   if (!canEdit) return null;
 
-  /** Submit one captured title, parking it as retryable if the server refuses. */
+  /** Submit one captured name, parking it as retryable if the server refuses. */
   const submit = (submitted: string): void => {
     void onAdd(submitted).catch((caught: unknown) => {
-      const reason = userErrorMessage(caught, 'Could not add that task.');
-      setRefused((current) => [...current, { key: nextKey.current++, title: submitted, reason }]);
+      const reason = userErrorMessage(caught, `Could not add that ${noun}.`);
+      setRefused((current) => [...current, { key: nextKey.current++, value: submitted, reason }]);
     });
   };
 
   const add = (): void => {
-    const submitted = title.trim();
+    const submitted = value.trim();
     if (submitted.length === 0) return;
 
     // Cleared and refocused in this turn, before anything is awaited. Whatever the network does
-    // next concerns the title captured above, not the field, which now belongs to the next task.
-    setTitle('');
+    // next concerns the name captured above, not the field, which now belongs to the next entry.
+    setValue('');
     inputRef.current?.focus();
     submit(submitted);
   };
@@ -91,7 +95,7 @@ export function QuickAddTaskRow({
   /** Try a refused submission again, removing its row first so a second failure re-adds it. */
   const retry = (entry: RefusedSubmission): void => {
     setRefused((current) => current.filter((item) => item.key !== entry.key));
-    submit(entry.title);
+    submit(entry.value);
   };
 
   return (
@@ -106,11 +110,11 @@ export function QuickAddTaskRow({
         <Plus aria-hidden className="text-on-surface-variant size-4 shrink-0" />
         <input
           ref={inputRef}
-          value={title}
-          aria-label="New task title"
+          value={value}
+          aria-label={`New ${noun} name`}
           placeholder={placeholder}
           onChange={(event) => {
-            setTitle(event.target.value);
+            setValue(event.target.value);
           }}
           onKeyDown={(event) => {
             // Explicit Enter handling (not just implicit form submit) so a single keystroke always adds.
@@ -124,7 +128,7 @@ export function QuickAddTaskRow({
       </form>
 
       {refused.length === 0 ? null : (
-        <ul aria-label="Tasks that could not be added" className="flex flex-col gap-1">
+        <ul aria-label={`Unsent ${noun}s`} className="flex flex-col gap-1">
           {refused.map((entry) => (
             <li
               key={entry.key}
@@ -132,7 +136,7 @@ export function QuickAddTaskRow({
             >
               <div className="flex min-w-0 flex-1 flex-col">
                 <span data-refused-title className="text-on-surface text-body-medium truncate">
-                  {entry.title}
+                  {entry.value}
                 </span>
                 <span role="alert" className="text-error text-body-small">
                   {entry.reason}
@@ -142,7 +146,7 @@ export function QuickAddTaskRow({
                 type="button"
                 variant="ghost"
                 size="sm"
-                aria-label={`Retry adding ${entry.title}`}
+                aria-label={`Retry adding ${entry.value}`}
                 onClick={() => {
                   retry(entry);
                 }}
@@ -153,7 +157,7 @@ export function QuickAddTaskRow({
                 type="button"
                 variant="ghost"
                 size="sm"
-                aria-label={`Discard ${entry.title}`}
+                aria-label={`Discard ${entry.value}`}
                 onClick={() => {
                   setRefused((current) => current.filter((item) => item.key !== entry.key));
                 }}

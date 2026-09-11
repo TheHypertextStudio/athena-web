@@ -1,15 +1,15 @@
 /**
- * Behavior tests for {@link ProjectMilestonesPanel} — the project Overview's milestone
- * list, quick-add, inline rename, and remove.
+ * Behavior tests for {@link ProjectMilestonesPanel} — the project Overview's milestone list,
+ * quick-add, and remove.
  *
  * @remarks
- * The panel owns its own create/update/delete mutations via `useProjectMilestones`, so the
- * RPC client is mocked (rather than passing callback props) and wrapped in a real
- * `QueryClientProvider`, mirroring `integration-config-panel.test.tsx`'s pattern for
- * hook-owning components. Name/description edits go through `EditableTitle`/
- * `EditableFreeformText`, which are always-live inputs (no click-to-activate, no explicit
- * Save) — `Enter` on the title forces an immediate commit rather than waiting on its
- * autosave debounce, which is what these tests drive to keep them synchronous.
+ * The panel owns its own create/delete mutations via `useProjectMilestones`, so the RPC client is
+ * mocked (rather than passing callback props) and wrapped in a real `QueryClientProvider`,
+ * mirroring `integration-config-panel.test.tsx`'s pattern for hook-owning components.
+ *
+ * Editing a milestone is *not* tested here, because the panel no longer does it: each row links to
+ * the milestone's own detail page, which owns the name, note and date. What belongs to the list —
+ * ordering, progress, the link out, adding one, removing one — is what these cases cover.
  */
 import { MilestoneId, ProjectId, TaskId } from '@docket/work/ids';
 import { OrganizationId, TeamId } from '@docket/identity-access/ids';
@@ -20,10 +20,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Hoisted so the mock factory (lifted above imports) can reference them.
-const { milestonesPost, milestonesPatch, milestonesDelete } = vi.hoisted(() => ({
+const { milestonesPost, milestonesDelete, displayGet } = vi.hoisted(() => ({
   milestonesPost: vi.fn(),
-  milestonesPatch: vi.fn(),
   milestonesDelete: vi.fn(),
+  displayGet: vi.fn(),
 }));
 
 vi.mock('../../../src/lib/api', () => ({
@@ -32,11 +32,10 @@ vi.mock('../../../src/lib/api', () => ({
       orgs: {
         ':orgId': {
           milestones: Object.assign(
-            {
-              ':id': { $patch: milestonesPatch, $delete: milestonesDelete },
-            },
+            { ':id': { $delete: milestonesDelete } },
             { $post: milestonesPost },
           ),
+          display: { ':subjectType': { $get: displayGet } },
         },
       },
     },
@@ -131,10 +130,38 @@ describe('ProjectMilestonesPanel', () => {
       ],
     });
 
-    expect(screen.getByDisplayValue('Beta')).toBeTruthy();
+    expect(screen.getByText('Beta')).toBeTruthy();
     expect(screen.getByText('Ship the beta')).toBeTruthy();
     expect(screen.getByText('1/2')).toBeTruthy();
     expect(screen.getByRole('progressbar')).toBeTruthy();
+  });
+
+  it('links each milestone row to its own detail page', () => {
+    renderPanel({
+      milestones: [
+        milestone({ id: MILESTONE_1, name: 'Beta', sort: 0 }),
+        milestone({ id: MILESTONE_2, name: 'Launch', sort: 1 }),
+      ],
+    });
+
+    const rows = screen.getAllByRole('link');
+    expect(rows.map((row) => row.getAttribute('href'))).toEqual([
+      `/orgs/${ORG_ID}/milestones/${MILESTONE_1}`,
+      `/orgs/${ORG_ID}/milestones/${MILESTONE_2}`,
+    ]);
+  });
+
+  it('orders rows by sort, not by the order they arrive in', () => {
+    renderPanel({
+      milestones: [
+        milestone({ id: MILESTONE_2, name: 'Launch', sort: 1 }),
+        milestone({ id: MILESTONE_1, name: 'Beta', sort: 0 }),
+      ],
+    });
+
+    const hrefs = screen.getAllByRole('link').map((row) => row.getAttribute('href'));
+    expect(hrefs[0]).toContain(MILESTONE_1);
+    expect(hrefs[1]).toContain(MILESTONE_2);
   });
 
   it('hides the progress bar when a milestone has no tasks', () => {
@@ -151,11 +178,11 @@ describe('ProjectMilestonesPanel', () => {
       canEdit: false,
     });
 
-    // No quick-add row, no remove button, and the name renders as plain text — not the
-    // always-live `<input>` `EditableTitle` renders for an editable viewer.
+    // No quick-add row and no remove button — but the row itself still links out, because
+    // reading a milestone is not a mutation.
     expect(screen.queryByPlaceholderText('Add a milestone…')).toBeNull();
     expect(screen.queryByRole('button', { name: /Remove Beta/ })).toBeNull();
-    expect(screen.queryByRole('textbox', { name: 'Milestone name' })).toBeNull();
+    expect(screen.getByRole('link')).toBeTruthy();
     expect(screen.getByText('Beta')).toBeTruthy();
   });
 
@@ -202,22 +229,19 @@ describe('ProjectMilestonesPanel', () => {
     expect(milestonesPost).not.toHaveBeenCalled();
   });
 
-  it('renames a milestone through the always-live title field', async () => {
-    milestonesPatch.mockResolvedValue(
-      jsonResponse(true, milestone({ id: MILESTONE_1, name: 'Renamed' })),
-    );
-    renderPanel({ milestones: [milestone({ id: MILESTONE_1, name: 'Beta' })] });
+  it('keeps a refused quick-add on screen so its words are not lost', async () => {
+    milestonesPost.mockResolvedValue(jsonResponse(false, { detail: 'nope' }));
+    renderPanel();
 
-    const input = screen.getByRole('textbox', { name: 'Milestone name' });
-    fireEvent.change(input, { target: { value: 'Renamed' } });
-    // Enter forces an immediate commit rather than waiting on the autosave debounce.
+    const input = screen.getByPlaceholderText('Add a milestone…');
+    fireEvent.change(input, { target: { value: 'Launch' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
+    // The field clears immediately so the next one can be typed; the refused text reappears as
+    // its own retryable row rather than being written back over the field.
+    expect((input as HTMLInputElement).value).toBe('');
     await waitFor(() => {
-      expect(milestonesPatch).toHaveBeenCalledWith({
-        param: { orgId: ORG_ID, id: MILESTONE_1 },
-        json: { name: 'Renamed' },
-      });
+      expect(screen.getByRole('button', { name: 'Retry adding Launch' })).toBeTruthy();
     });
   });
 });

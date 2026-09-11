@@ -19,7 +19,7 @@ import type { TaskOut } from '@docket/work/task-model';
 import { type EntityTableGroup } from '@docket/ui/components';
 import { Button } from '@docket/ui/primitives';
 
-import { QuickAddTaskRow } from '@/components/tasks/quick-add-task-row';
+import { QuickAddRow } from '@/components/views/quick-add-row';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
 
@@ -179,7 +179,7 @@ export function MilestoneTasks({
         </Button>
       </div>
 
-      <QuickAddTaskRow onAdd={onQuickAdd} canEdit={canEdit} placeholder={`Add a ${taskNoun}…`} />
+      <QuickAddRow onAdd={onQuickAdd} canEdit={canEdit} noun={taskNoun} />
 
       {tasks.length === 0 ? (
         <div className="border-outline-variant text-on-surface-variant text-body-medium rounded-xl border border-dashed p-8 text-center">

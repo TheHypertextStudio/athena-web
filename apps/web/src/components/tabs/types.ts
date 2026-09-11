@@ -12,11 +12,13 @@ import { AgentSessionId, type AgentSessionId as AgentSessionIdValue } from '@doc
 import {
   CycleId,
   InitiativeId,
+  MilestoneId,
   ProgramId,
   ProjectId,
   TaskId,
   type CycleId as CycleIdValue,
   type InitiativeId as InitiativeIdValue,
+  type MilestoneId as MilestoneIdValue,
   type ProgramId as ProgramIdValue,
   type ProjectId as ProjectIdValue,
   type TaskId as TaskIdValue,
@@ -43,6 +45,11 @@ export type TabRef =
     }
   | { readonly type: 'cycle'; readonly orgId: OrganizationIdValue; readonly id: CycleIdValue }
   | {
+      readonly type: 'milestone';
+      readonly orgId: OrganizationIdValue;
+      readonly id: MilestoneIdValue;
+    }
+  | {
       readonly type: 'session';
       readonly orgId: OrganizationIdValue;
       readonly id: AgentSessionIdValue;
@@ -62,6 +69,8 @@ export function parseTabRef(type: TabDocType, orgId: string, id: string): TabRef
       return { type, orgId: organizationId, id: InitiativeId.parse(id) };
     case 'cycle':
       return { type, orgId: organizationId, id: CycleId.parse(id) };
+    case 'milestone':
+      return { type, orgId: organizationId, id: MilestoneId.parse(id) };
     case 'session':
       return { type, orgId: organizationId, id: AgentSessionId.parse(id) };
   }
@@ -85,6 +94,7 @@ export const TAB_ROUTE_SEGMENT: Record<TabDocType, string> = {
   initiative: 'initiatives',
   program: 'programs',
   cycle: 'cycles',
+  milestone: 'milestones',
   session: 'sessions',
 };
 
@@ -115,6 +125,11 @@ export function hrefForTab(ref: TabRef): string {
       return buildAuthenticatedHref('/orgs/[orgId]/cycles/[cycleId]', {
         orgId: ref.orgId,
         cycleId: ref.id,
+      });
+    case 'milestone':
+      return buildAuthenticatedHref('/orgs/[orgId]/milestones/[milestoneId]', {
+        orgId: ref.orgId,
+        milestoneId: ref.id,
       });
     case 'session':
       return buildAuthenticatedHref('/orgs/[orgId]/sessions/[sessionId]', {

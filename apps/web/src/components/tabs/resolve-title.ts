@@ -17,6 +17,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { initiativeRecordDef, programRecordDef, projectRecordDef } from '@/lib/entity-records';
 import { peekNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
+import { milestoneDetailDef } from '@/lib/use-milestone-detail';
 import { taskDetailDef } from '@/lib/use-task-detail';
 
 import type { TabRef } from './types';
@@ -60,6 +61,8 @@ export function titleFromCache(queryClient: QueryClient, ref: TabRef): string | 
       return nameOf(queryClient.getQueryData(programRecordDef(orgId, id).queryKey));
     case 'initiative':
       return nameOf(queryClient.getQueryData(initiativeRecordDef(orgId, id).queryKey));
+    case 'milestone':
+      return nameOf(queryClient.getQueryData(milestoneDetailDef(orgId, id).queryKey));
     default:
       return null;
   }
@@ -79,28 +82,45 @@ export function titleFromNavigationSnapshot(ref: TabRef): string | null {
         ? snapshot.title
         : null;
     }
-    case 'project': {
-      const snapshot = peekNavigationSnapshot('project', ref.id);
-      return snapshot?.target === 'project' && snapshot.organizationId === ref.orgId
-        ? snapshot.name
-        : null;
-    }
-    case 'program': {
-      const snapshot = peekNavigationSnapshot('program', ref.id);
-      return snapshot?.target === 'program' && snapshot.organizationId === ref.orgId
-        ? snapshot.name
-        : null;
-    }
+    case 'project':
+    case 'program':
     case 'initiative': {
-      const snapshot = peekNavigationSnapshot('initiative', ref.id);
-      return snapshot?.target === 'initiative' && snapshot.organizationId === ref.orgId
+      // These three snapshots differ only in their `target` tag, so one read serves all of them.
+      const snapshot = peekNavigationSnapshot(ref.type, ref.id);
+      return snapshot?.target === ref.type && snapshot.organizationId === ref.orgId
         ? snapshot.name
         : null;
     }
+    // A cycle, milestone or session is never seeded into the navigation snapshot store; their tabs
+    // resolve by cache or by request instead.
     case 'cycle':
+    case 'milestone':
     case 'session':
       return null;
   }
+}
+
+/**
+ * Name an agent session by the work it is doing.
+ *
+ * @remarks
+ * A session carries no name of its own. Attached to a task, that task names it. Otherwise there is
+ * nothing to call it, and the right answer is to say so — the bar then reads "Session", which is
+ * true, rather than a slice of its id, which was the previous behavior and told the reader nothing.
+ *
+ * @param orgId - The session's org.
+ * @param id - The session id.
+ * @returns the session's title, or `null` when it has no task to borrow one from.
+ */
+async function sessionTitle(orgId: string, id: string): Promise<string | null> {
+  const res = await api.v1.orgs[':orgId'].sessions[':id'].$get({ param: { orgId, id } });
+  if (!res.ok) return null;
+  const detail = await res.json();
+  if (!detail.taskId) return null;
+  const taskRes = await api.v1.orgs[':orgId'].tasks[':id'].$get({
+    param: { orgId, id: detail.taskId },
+  });
+  return taskRes.ok ? `${(await taskRes.json()).title} · session` : null;
 }
 
 /**
@@ -145,21 +165,13 @@ export async function resolveTabTitle(ref: TabRef): Promise<string | null> {
         if (res.ok) return (await res.json()).displayName;
         break;
       }
-      case 'session': {
-        const res = await api.v1.orgs[':orgId'].sessions[':id'].$get({ param: { orgId, id } });
-        if (!res.ok) break;
-        const detail = await res.json();
-        // A session's name is the work it is doing; it carries no name of its own. Attached to a
-        // task, that task names it. Otherwise there is nothing to call it, and the
-        // right answer is to say so — the bar then reads "Session", which is true, rather than a
-        // slice of its id, which was the previous behavior and told the reader nothing.
-        if (!detail.taskId) break;
-        const taskRes = await api.v1.orgs[':orgId'].tasks[':id'].$get({
-          param: { orgId, id: detail.taskId },
-        });
-        if (taskRes.ok) return `${(await taskRes.json()).title} · session`;
+      case 'milestone': {
+        const res = await api.v1.orgs[':orgId'].milestones[':id'].$get({ param: { orgId, id } });
+        if (res.ok) return (await res.json()).name;
         break;
       }
+      case 'session':
+        return await sessionTitle(orgId, id);
     }
   } catch {
     // Non-fatal: an unreadable document is one the bar labels by kind, not one it names wrongly.

@@ -1,4 +1,5 @@
 import {
+  Flag,
   FolderKanban,
   GanttChart,
   Layers,
@@ -10,7 +11,8 @@ import {
 import type * as React from 'react';
 
 /** The kinds of document a tab can represent (drives the leading glyph). */
-export type TabDocType = 'task' | 'project' | 'initiative' | 'program' | 'cycle' | 'session';
+export type TabDocType =
+  'task' | 'project' | 'initiative' | 'program' | 'cycle' | 'milestone' | 'session';
 
 /** A single open document in the {@link TabBar}. */
 export interface OpenTab {
@@ -40,6 +42,7 @@ export const TYPE_LABEL: Record<TabDocType, string> = {
   initiative: 'Initiative',
   program: 'Program',
   cycle: 'Cycle',
+  milestone: 'Milestone',
   session: 'Session',
 };
 
@@ -75,5 +78,6 @@ export const TYPE_ICON: Record<TabDocType, LucideIcon> = {
   initiative: Target,
   program: Layers,
   cycle: RefreshCw,
+  milestone: Flag,
   session: GanttChart,
 };

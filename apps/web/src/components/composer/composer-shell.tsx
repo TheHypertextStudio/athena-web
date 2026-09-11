@@ -36,8 +36,13 @@ import {
 } from '@docket/ui/primitives';
 import { Maximize, Minimize } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { type JSX, type ReactNode, type RefObject, useId, useState } from 'react';
+import { type JSX, type ReactNode, type RefObject, useId, useRef, useState } from 'react';
 
+import {
+  DocumentContentsRail,
+  useDocumentContents,
+  type DocumentContents,
+} from '@/components/editor/document-contents';
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
 import type { EditorContribution } from '@/components/editor/editor-contribution';
 import MentionHydrationProvider from '@/components/mentions/mention-hydration';
@@ -206,6 +211,12 @@ export function ComposerShell({
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   // Expansion belongs to one opening. Radix resets it through `onOpenAutoFocus` on every reopen.
   const [expanded, setExpanded] = useState(false);
+  const bodyColumnRef = useRef<HTMLDivElement>(null);
+  // A draft owns no URL — the page under the dialog does — so the rail scrolls without a hash.
+  const documentContents = useDocumentContents(bodyColumnRef, body);
+  // Same threshold as the detail page: a rail beside two headings is navigation for a distance
+  // nobody has to travel.
+  const hasContents = bodyPlaceholder !== undefined && documentContents.headings.length >= 2;
 
   // A draft worth protecting is one with typed text; bare default property picks are not.
   const isDirty =
@@ -407,32 +418,19 @@ export function ComposerShell({
             </div>
           </DialogHeader>
 
-          <DialogBody inset="responsive-inline" className="flex flex-col gap-4">
-            {bodyEditor !== null ? (
-              <>
-                {/*
-                 * The background/padding lives on the editor's own surface, not a wrapping div —
-                 * that surface is what already turns a click anywhere inside it (including the
-                 * padding) into a focus. A separate padded wrapper would look identical but leave
-                 * its own inset dead: clicking there would land on this div instead of the editor,
-                 * and nothing would happen. `p-3`, not `px-3 py-2`, so the inset reads the same on
-                 * every side.
-                 */}
-                {mentionOrgId === undefined ? (
-                  bodyEditor
-                ) : (
-                  <MentionHydrationProvider orgId={mentionOrgId}>
-                    {bodyEditor}
-                  </MentionHydrationProvider>
-                )}
-              </>
-            ) : null}
-
-            {/* Freeform composers (e.g. team creation) place their own fields in the scrolling
-             *  body; compact composers keep their pills anchored in the footer below, out of the
-             *  editor's scroll — see PropertyStrip's placement there for why. */}
-            {propertyLayout === 'freeform' ? children : null}
-          </DialogBody>
+          {/* `@container` goes on the body region and the columns on the child, because a
+           *  container query never matches the element that declares the container. The rail needs
+           *  more width than the collapsed `large` tier has to spare, so `@2xl` is also what keeps
+           *  it to the expanded `detail` panel without the shell having to know which tier it is
+           *  in. */}
+          <ComposerBodyRegion
+            editor={bodyEditor}
+            mentionOrgId={mentionOrgId}
+            columnRef={bodyColumnRef}
+            contents={documentContents}
+            hasContents={hasContents}
+            freeformFields={propertyLayout === 'freeform' ? children : null}
+          />
 
           {/* Action bar: pills, then error, then the single primary action — all pinned below the
            *  scrolling body so a long AI-drafted description can never carry them out of view or
@@ -466,6 +464,86 @@ export function ComposerShell({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Props for {@link ComposerBodyRegion}. */
+interface ComposerBodyRegionProps {
+  /** The description editor, or null for a composer with no body. */
+  editor: ReactNode;
+  /** The organization whose entities the body may mention, when it may mention any. */
+  mentionOrgId?: string | undefined;
+  /** Ref for the column the contents rail reads headings from. */
+  columnRef: RefObject<HTMLDivElement | null>;
+  /** The tracked headings driving the rail. */
+  contents: DocumentContents;
+  /** Whether the draft has earned a rail. */
+  hasContents: boolean;
+  /** Fields a freeform composer places in the body rather than the footer. */
+  freeformFields: ReactNode;
+}
+
+/**
+ * The body region: the description in its own column, with a contents rail beside it.
+ *
+ * @param props - The {@link ComposerBodyRegionProps}.
+ * @returns the rendered body region.
+ *
+ * @remarks
+ * `@container` goes on the region and the columns on the child, because a container query never
+ * matches the element that declares the container — with both on the same element the rail drops
+ * into a second row below the body instead of taking the column beside it. `@2xl` is also what
+ * keeps the rail to the expanded panel: the collapsed tier has no 11rem to spare, so the shell
+ * never has to know which tier it is in.
+ */
+function ComposerBodyRegion({
+  editor,
+  mentionOrgId,
+  columnRef,
+  contents,
+  hasContents,
+  freeformFields,
+}: ComposerBodyRegionProps): JSX.Element {
+  return (
+    <DialogBody inset="responsive-inline" className="@container flex flex-col">
+      <div
+        className={cn(
+          // `minmax(0,1fr)`, not `1fr`. A bare `1fr` means `minmax(auto,1fr)`, whose auto floor is
+          // the content's height — the row grows past the region, the editor's rounded surface
+          // outgrows the scrollport, and the dialog body scrolls a box whose top and bottom
+          // corners are then sliced off. A zero floor clamps the row to the region so the editor
+          // stays inside its own scrollport and scrolls there, corners intact.
+          'grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4',
+          hasContents && '@2xl:grid-cols-[minmax(0,1fr)_11rem]',
+        )}
+      >
+        <div ref={columnRef} className="flex min-w-0 flex-col gap-4">
+          {/*
+           * The background/padding lives on the editor's own surface, not a wrapping div — that
+           * surface is what already turns a click anywhere inside it (including the padding) into
+           * a focus. A separate padded wrapper would look identical but leave its own inset dead:
+           * clicking there would land on this div instead of the editor, and nothing would happen.
+           * `p-3`, not `px-3 py-2`, so the inset reads the same on every side.
+           */}
+          {mentionOrgId === undefined ? (
+            editor
+          ) : (
+            <MentionHydrationProvider orgId={mentionOrgId}>{editor}</MentionHydrationProvider>
+          )}
+
+          {/* Freeform composers (e.g. team creation) place their own fields in the scrolling body;
+           *  compact composers keep their pills anchored in the footer below, out of the editor's
+           *  scroll — see PropertyStrip's placement there for why. */}
+          {freeformFields}
+        </div>
+
+        {hasContents ? (
+          <div className="entity-contents-desktop hidden @2xl:block">
+            <DocumentContentsRail contents={contents} showLabel density="compact" />
+          </div>
+        ) : null}
+      </div>
+    </DialogBody>
   );
 }
 

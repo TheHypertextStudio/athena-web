@@ -54,7 +54,7 @@ export function DetailPrintSummary({
       <section className="mt-8" aria-label="Overview">
         <h2 className="text-title-large text-on-surface">Overview</h2>
         {description?.trim() ? (
-          <StaticMarkdown value={description} className="mt-3 max-w-none" />
+          <StaticMarkdown value={description} className="mt-3 [&>*]:max-w-none" />
         ) : (
           <p className="text-on-surface-variant text-body-medium mt-3">No overview provided.</p>
         )}

@@ -298,6 +298,12 @@ describe('clicking an editor-shaped surface', () => {
       'overscroll-contain',
     );
     expect(scrollOwner).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto', 'overscroll-contain');
+    // The row the editor sits in needs a zero floor. A bare `1fr` is `minmax(auto,1fr)`, whose
+    // auto minimum is the content height: the editor then outgrows the scrollport, the dialog body
+    // scrolls it, and the top and bottom of its rounded surface are sliced off.
+    const bodyGrid = assertDefined(scrollSurface?.closest('.grid'));
+    expect(bodyGrid.className).toContain('grid-rows-[minmax(0,1fr)]');
+    expect(bodyGrid.className).not.toMatch(/grid-rows-\[1fr\]/);
 
     const bodyNode = body;
     const expandButton = screen.getByRole('button', { name: 'Expand editor' });
@@ -445,6 +451,46 @@ describe('the document contents rail', () => {
     'How we get there.',
   ].join('\n');
 
+  /** A composer whose body carries the given Markdown. */
+  function composerWith(body: string): ReactElement {
+    return (
+      <ComposerShell
+        open
+        onOpenChange={vi.fn()}
+        heading="New project"
+        title="Draft title"
+        onTitleChange={vi.fn()}
+        titlePlaceholder="Project name"
+        body={body}
+        onBodyChange={vi.fn()}
+        bodyPlaceholder="Add description"
+        creating={false}
+        canSubmit
+        onSubmit={vi.fn()}
+        submitLabel="Create project"
+      >
+        <div />
+      </ComposerShell>
+    );
+  }
+
+  it('gives the composer a rail once its draft has more than one heading', async () => {
+    renderEditor(composerWith(DOC));
+    await screen.findByRole('textbox', { name: 'Add description' });
+    expect(
+      await screen.findByRole('navigation', { name: 'Document contents' }),
+    ).toBeInTheDocument();
+    expect(await screen.findAllByRole('link', { name: 'Approach' })).not.toHaveLength(0);
+  });
+
+  it('leaves a single-heading draft the full width of the composer body', async () => {
+    renderEditor(composerWith('# Objectives\n\nWhy we are here.'));
+    await screen.findByRole('textbox', { name: 'Add description' });
+    // A rail beside one heading is navigation for a distance nobody has to travel, and it costs a
+    // column of the body to say so.
+    expect(screen.queryByRole('navigation', { name: 'Document contents' })).toBeNull();
+  });
+
   it('scrolls to the heading an entry names', async () => {
     // jsdom implements no scrolling at all, so the method has to be installed before it can be
     // observed. Recording the receiver is what proves the rail resolved a real heading.
@@ -483,6 +529,47 @@ describe('the document contents rail', () => {
       expect(surface.querySelectorAll('h1, h2, h3').length).toBe(2);
     });
     expect(await screen.findAllByRole('link', { name: 'Objectives' })).not.toHaveLength(0);
+  });
+});
+
+describe('the reading measure', () => {
+  it('caps the text blocks rather than the surface a host paints', async () => {
+    renderEditor(
+      <ComposerShell
+        open
+        onOpenChange={vi.fn()}
+        heading="New project"
+        title=""
+        onTitleChange={vi.fn()}
+        titlePlaceholder="Project name"
+        body="Some prose."
+        onBodyChange={vi.fn()}
+        bodyPlaceholder="Add description"
+        creating={false}
+        canSubmit={false}
+        onSubmit={vi.fn()}
+        submitLabel="Create project"
+      >
+        <div />
+      </ComposerShell>,
+    );
+
+    const prose = await screen.findByRole('textbox', { name: 'Add description' });
+    const painted = assertDefined(prose.closest('[data-editor-surface]'));
+
+    // Matched as patterns, not literal class strings. The invariant is *where* the measure lives,
+    // not what it is worth or how it is spelled: a different value, a token, or another selector
+    // should all be free to change without touching this test.
+    //
+    // The host paints this element — a tint, a radius, and padding — so a cap on it caps the *box*:
+    // the surface stopped short of its container while the title above and the property pills
+    // below still ran the panel's full width. `max-w-full` and `max-w-none` are not caps and stay
+    // allowed here.
+    expect(painted.className).toMatch(/(^|\s)bg-/);
+    expect(painted.className).not.toMatch(/(^|\s)max-w-\[/);
+    // The measure belongs to the top-level blocks, which leaves the contenteditable node itself
+    // full width so a click to the right of a line lands at the end of that line.
+    expect(prose.className).toMatch(/\[&>\*[^\]]*\]:max-w-\[/);
   });
 });
 

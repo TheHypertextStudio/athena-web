@@ -85,7 +85,7 @@ function ActivityRow({ entry }: { readonly entry: TaskActivityOut }): JSX.Elemen
           </time>
         </div>
         {entry.type === 'comment' && entry.body ? (
-          <StaticMarkdown value={entry.body} className="mt-1 max-w-none" />
+          <StaticMarkdown value={entry.body} className="mt-1 [&>*]:max-w-none" />
         ) : null}
       </div>
     </li>

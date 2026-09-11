@@ -1,11 +1,62 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-09-09
+> **Last Updated**: 2026-09-11
 
 ---
 
 ## Active Tasks
+
+### [COMPOSER-MEASURE-001] The composer body fills its panel and carries a contents rail
+
+- **Completed**: 2026-09-11
+- **Priority**: P1
+- **Summary**: The tinted body surface in a create composer stopped short of the panel's right
+  edge while the title, summary, property pills, and action row all ran the full width, so the body
+  read as a truncated block in a blank gutter. Worst in the expanded `detail` tier, where roughly
+  346px of the panel went to nothing.
+
+#### Cause
+
+`FreeformTextEditor` carried its `max-w-[75ch]` reading measure on its **root** element, and that
+root is the element hosts paint: the composer gives it `bg-surface-container-low … rounded-lg p-3`,
+and the task comment box does the same. The measure therefore capped the _box_ rather than the
+_text_. The commit that introduced it (`2919a70c2`) argued root placement was "safe everywhere …
+since a max-width only ever caps, never forces overflow" — true only while nothing paints that
+element. Two `StaticMarkdown` call sites had already been working around the same mistake with
+`max-w-none`.
+
+#### Change
+
+The measure moved to the top-level blocks — `[&>*:not(.tableWrapper)]:max-w-[75ch]` on the
+`.ProseMirror` node — leaving the contenteditable itself full width, which is also what makes a
+click to the right of a line land at the end of that line. `StaticMarkdown` mirrors it and its two
+full-bleed callers override `[&>*]:max-w-none`. Tables keep the whole surface.
+
+The width that frees up carries a document contents rail. The detail page already had one, so it
+was extracted rather than designed: `useDocumentContents`, `DocumentContentsRail`, and
+`DocumentContentsDisclosure` now serve both hosts. The rail's row size became a `density` prop; it
+had been an `@4xl:` container query that only resolved correctly because each of the detail page's
+two mounts was visible at exactly one width. In the composer the rail sits in its own grid column
+gated on `@2xl`, which the collapsed `large` panel cannot satisfy — so it appears with the expanded
+`detail` panel without the shell needing to know which tier it is in.
+
+- **Files changed**: `apps/web/src/components/editor/freeform-text.tsx`,
+  `.../editor/static-markdown.tsx`, `.../editor/document-contents.tsx` (new),
+  `.../editor/entity-document.tsx`, `.../composer/composer-shell.tsx`,
+  `.../task-detail/task-activity-feed.tsx`, `.../views/detail-print-summary.tsx`,
+  `apps/web/tests/editor/editor-surface.test.tsx`,
+  `apps/web/tests/components/projects/projects-experience-contract.test.ts`.
+- **Learnings**: A container query never matches the element that declares `@container`. Putting
+  both on `DialogBody` silently dropped the rail into a second row below the body and stopped the
+  editor filling the expanded panel — plausible in review, visible only in a measurement.
+
+  The larger lesson was about the branch, not the CSS. This was built on a base 115 commits behind
+  `origin/main`, and upstream had reworked the same composer: the size tiers, the footer rows, the
+  empty-description prompt, the title spacing, and scroll ownership all moved. A first pass "fixed"
+  a 56px spacing trench and four stale assertions in `verify-composer.spec.ts` that upstream had
+  already fixed differently — work that was wrong against main and had to be dropped. Rebase before
+  diagnosing, not after; a bug report written against a stale base describes a codebase nobody has.
 
 ### [SEARCH-ACTIVITY-DUPES-001] Stop one entity from filling the palette with itself
 

@@ -15,6 +15,7 @@ const detailPath = join(
   'apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx',
 );
 const documentPath = join(root, 'apps/web/src/components/editor/entity-document.tsx');
+const documentContentsPath = join(root, 'apps/web/src/components/editor/document-contents.tsx');
 const editorPath = join(root, 'apps/web/src/components/editor/freeform-text.tsx');
 const pageLayoutPath = join(root, 'apps/web/src/components/views/page-layout.tsx');
 const entityDetailLayoutPath = join(root, 'apps/web/src/components/views/entity-detail-layout.tsx');
@@ -190,7 +191,9 @@ describe('Projects experience contract', () => {
     expect(document).toContain('max-w-[75ch]');
     expect(document).not.toContain('max-w-none');
     expect(document).not.toContain('grid-cols-[9rem');
-    expect(document).toContain('ExpandMoreRounded');
+    // The rail itself — including the compact disclosure it collapses into — is shared with the
+    // create composer, so its markup lives in the extracted module the document composes.
+    expect(source(documentContentsPath)).toContain('ExpandMoreRounded');
     expect(document).toContain('bg-surface-container-low');
     expect(document).not.toContain('border-y');
     expect(editor).toContain('text-body-medium');

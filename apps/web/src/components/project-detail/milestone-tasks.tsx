@@ -57,8 +57,15 @@ export interface MilestoneTasksProps {
   taskNoun: string;
   /** Open a task's detail. */
   onOpenTask: (task: TaskOut) => void;
-  /** Open the full task composer scoped to this Project. */
-  onCreate: () => void;
+  /**
+   * Open the full task composer, when this surface has one to open.
+   *
+   * @remarks
+   * Omitted where the composer could not carry the surface's own context — the Milestone page has
+   * no way to pre-select its milestone, so offering the button there would silently file the task
+   * under the project with no milestone at all.
+   */
+  onCreate?: (() => void) | undefined;
   /** Inline quick-add: create a task in this Project from a typed title. */
   onQuickAdd: (title: string) => Promise<void>;
   /** Rename a task in place (double-click its title in the table). */
@@ -173,17 +180,21 @@ export function MilestoneTasks({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-end gap-3">
-        <Button type="button" variant="outline" onClick={onCreate}>
-          Add {taskNoun} with details
-        </Button>
-      </div>
+      {onCreate ? (
+        <div className="flex items-center justify-end gap-3">
+          <Button type="button" variant="outline" onClick={onCreate}>
+            Add {taskNoun} with details
+          </Button>
+        </div>
+      ) : null}
 
       <QuickAddRow onAdd={onQuickAdd} canEdit={canEdit} noun={taskNoun} />
 
       {tasks.length === 0 ? (
         <div className="border-outline-variant text-on-surface-variant text-body-medium rounded-xl border border-dashed p-8 text-center">
-          No {taskNoun}s yet — add the first one above.
+          {canEdit || onCreate
+            ? `No ${taskNoun}s yet — add the first one above.`
+            : `No ${taskNoun}s are assigned here yet.`}
         </div>
       ) : (
         <TaskTable

@@ -70,6 +70,15 @@ export interface ComposerContinuation {
 export interface ComposerShellProps {
   /** Whether the dialog is open (the host page owns this state). */
   open: boolean;
+  /**
+   * Run just before any dismiss path closes the dialog (Esc, backdrop, X, or discard).
+   *
+   * @remarks
+   * For work a composer has already committed and must not lose on the way out — a created entity
+   * whose follow-up writes are still outstanding. It does not close the dialog and it does not run
+   * on a successful submit, where the composer's own completion path owns the handover.
+   */
+  onDismiss?: (() => void) | undefined;
   /** Notify the parent that the open state changed (Esc, backdrop, X, discard, or success). */
   onOpenChange: (open: boolean) => void;
   /**
@@ -185,6 +194,7 @@ export interface ComposerShellProps {
 export function ComposerShell({
   open,
   onOpenChange,
+  onDismiss,
   heading,
   icon,
   context,
@@ -270,12 +280,15 @@ export function ComposerShell({
       setConfirmingDiscard(true);
       return;
     }
+    onDismiss?.();
     onOpenChange(false);
   };
 
   /** Discard the draft and close. */
   const discard = (): void => {
     setConfirmingDiscard(false);
+    // Discarding abandons the *draft*, never work the composer already committed.
+    onDismiss?.();
     onOpenChange(false);
   };
 

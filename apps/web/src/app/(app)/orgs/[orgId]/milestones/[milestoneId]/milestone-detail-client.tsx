@@ -259,12 +259,9 @@ function MilestoneDetail({ orgId, milestone, page }: MilestoneDetailProps): JSX.
           orgId={orgId}
           tasks={page.tasks}
           milestones={[{ id: milestone.id, name: milestone.name, targetDate }]}
-          resolveActor={() => ({ name: 'Unknown', kind: 'human' as const })}
+          resolveActor={page.resolveActor}
           taskNoun={taskNoun}
           onOpenTask={() => undefined}
-          onCreate={() => {
-            router.push(`/orgs/${orgId}/tasks?projectId=${projectId ?? ''}`);
-          }}
           onQuickAdd={async () => undefined}
           onRename={() => undefined}
           canEdit={false}

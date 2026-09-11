@@ -99,6 +99,14 @@ export interface ProjectDraft {
   milestones: readonly DraftMilestone[];
 }
 
+/** What a pass over the drafted milestones left behind. */
+interface UnsavedMilestones {
+  /** The drafts that could not be created, in order, each stamped with the `sort` it was sent at. */
+  readonly drafts: readonly DraftMilestone[];
+  /** Why the first of them was refused, in application-owned copy, or `null` when unknown. */
+  readonly reason: string | null;
+}
+
 /**
  * Create each drafted milestone against the new Project, in order.
  *
@@ -107,19 +115,27 @@ export interface ProjectDraft {
  * network happened to settle in. One failure does not abort the rest: a later milestone can still
  * succeed, and the caller's job is to report exactly which ones did not.
  *
+ * A draft that fails is returned carrying the `sort` it was *attempted* at, not its position in
+ * whatever list the retry is handed. A retry runs over the survivors alone, so re-deriving the
+ * position would restart numbering at zero and collide with the milestones that already landed.
+ *
  * @param orgId - The org the Project was created in.
  * @param projectId - The Project the milestones belong to, as the create response returned it.
  * @param drafts - The drafted milestones, in display order.
- * @returns the drafts that could not be created, in their original order.
+ * @returns the drafts that could not be created, and why the first of them was refused.
  */
 async function createDraftMilestones(
   orgId: string,
   projectId: ProjectOut['id'],
   drafts: readonly DraftMilestone[],
-): Promise<readonly DraftMilestone[]> {
+): Promise<UnsavedMilestones> {
   const unsaved: DraftMilestone[] = [];
+  let reason: string | null = null;
   for (const [index, milestone] of drafts.entries()) {
     const note = milestone.description.trim();
+    // Its own position the first time through, and the position it kept thereafter.
+    const sort = milestone.sort ?? index;
+    const attempted = { ...milestone, sort };
     try {
       const res = await api.v1.orgs[':orgId'].milestones.$post({
         param: { orgId },
@@ -129,15 +145,21 @@ async function createDraftMilestones(
           name: milestone.name,
           ...(note.length > 0 ? { description: note } : {}),
           ...(milestone.targetDate ? { targetDate: milestone.targetDate } : {}),
-          sort: index,
+          sort,
         },
       });
-      if (!res.ok) unsaved.push(milestone);
-    } catch {
-      unsaved.push(milestone);
+      if (res.ok) continue;
+      reason ??= userErrorMessage(
+        await readProblemError(res, `Could not add ${milestone.name}.`),
+        `Could not add ${milestone.name}.`,
+      );
+      unsaved.push(attempted);
+    } catch (caught) {
+      reason ??= userErrorMessage(caught, `Could not add ${milestone.name}.`);
+      unsaved.push(attempted);
     }
   }
-  return unsaved;
+  return { drafts: unsaved, reason };
 }
 
 /**
@@ -204,13 +226,16 @@ function projectSubmitLabel(recovering: boolean, projectNoun: string): string {
  * "Milestone" is not vocabulary-skinned (its `ObjectDescriptor` has `vocabularyKey: null`), so the
  * noun is a literal here rather than a plumbed-through prop.
  *
- * @param unsaved - The drafts that failed, in order.
+ * @param unsaved - The drafts that failed and the reason the first of them was refused.
  * @returns the message shown under the composer's fields.
  */
-function unsavedMilestonesMessage(unsaved: readonly DraftMilestone[]): string {
-  const names = unsaved.map((milestone) => milestone.name).join(', ');
-  const one = unsaved.length === 1;
-  return `Saved everything except the milestone${one ? '' : 's'} ${names}. Try again to add ${one ? 'it' : 'them'}.`;
+function unsavedMilestonesMessage({ drafts, reason }: UnsavedMilestones): string {
+  const names = drafts.map((milestone) => milestone.name).join(', ');
+  const one = drafts.length === 1;
+  const lead = `Saved everything except the milestone${one ? '' : 's'} ${names}.`;
+  // The server's own reason, when it gave one — without it a refusal that a retry cannot fix reads
+  // identically to a dropped connection, and the only advice on offer is to try the same thing again.
+  return reason === null ? `${lead} Try again to add ${one ? 'it' : 'them'}.` : `${lead} ${reason}`;
 }
 
 /** Workspace references carried with a successful Project create for related invalidations. */
@@ -435,17 +460,25 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
   const attachMilestones = useCallback(
     async (project: ProjectOut): Promise<boolean> => {
       const unsaved = await createDraftMilestones(orgId, project.id, draft.milestones);
-      if (unsaved.length === 0) return true;
+      if (unsaved.drafts.length === 0) return true;
       setCommitted(project);
-      updateDraft((current) => ({ ...current, milestones: unsaved }));
+      updateDraft(() => ({ milestones: unsaved.drafts }));
       setError(unsavedMilestonesMessage(unsaved));
       return false;
     },
     [draft.milestones, orgId, updateDraft],
   );
 
-  /** Hand the finished Project to the parent and either reset for another or close. */
-  const finishCreate = useCallback(
+  /**
+   * Tell the host a Project exists, which is what makes it real to the rest of the app.
+   *
+   * @remarks
+   * Separate from closing on purpose. A Project committed while its milestones are still
+   * outstanding must reach the host whether the person retries or simply leaves — without this the
+   * record seed and every invalidation are skipped, and a Project that exists on the server is
+   * absent from the Projects list until a full reload.
+   */
+  const reportCreated = useCallback(
     (project: ProjectOut, continueCreating: boolean): void => {
       if (globalCreation !== undefined) {
         globalCreation.onCreated(
@@ -453,11 +486,26 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
           { programId: draft.programId, initiativeIds: draft.initiativeIds },
           continueCreating,
         );
-      } else {
-        runConfirmedCreateCallback(() => {
-          onCreated(project);
-        });
+        return;
       }
+      runConfirmedCreateCallback(() => {
+        onCreated(project);
+      });
+    },
+    [draft.initiativeIds, draft.programId, globalCreation, onCreated],
+  );
+
+  /** Report a committed Project on the way out, when the person leaves mid-retry. */
+  const handleDismiss = useCallback((): void => {
+    if (committed === null) return;
+    setCommitted(null);
+    reportCreated(committed, false);
+  }, [committed, reportCreated]);
+
+  /** Hand the finished Project to the parent and either reset for another or close. */
+  const finishCreate = useCallback(
+    (project: ProjectOut, continueCreating: boolean): void => {
+      reportCreated(project, continueCreating);
       if (continueCreating) {
         continuation.completeContinuation(() => {
           updateDraft(() => ({ name: '', summary: '', description: '', milestones: [] }));
@@ -466,15 +514,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       }
       onOpenChange(false);
     },
-    [
-      continuation,
-      draft.initiativeIds,
-      draft.programId,
-      globalCreation,
-      onCreated,
-      onOpenChange,
-      updateDraft,
-    ],
+    [continuation, onOpenChange, reportCreated, updateDraft],
   );
 
   /**
@@ -601,15 +641,16 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
           onChange={(milestones) => {
             setField('milestones', milestones);
           }}
-          disabled={creating}
         />
       }
       error={error ?? planningCalendar.error ?? globalCreation?.loadError ?? null}
       statusMessage={continuation.statusMessage}
       creating={creating}
+      onDismiss={handleDismiss}
       // Once the Project is committed the draft is no longer a draft: closing must not offer to
-      // discard it, and its fields are locked because editing them here can no longer save
-      // anything. Only the submit button stays live, as the retry for the milestones.
+      // discard it, and the Project's own fields are locked because editing them here can no longer
+      // save anything. The milestone field stays live — it is the outstanding work, and the shell
+      // keeps its trailing fields out of `contentDisabled` for exactly that reason.
       draftCommitted={recovering}
       contentDisabled={recovering}
       canSubmit={canSubmit}

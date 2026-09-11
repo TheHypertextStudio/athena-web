@@ -1042,13 +1042,34 @@ describe('CreateProjectDialog — robust composer', () => {
       expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'proj_retry' }));
     });
     expect(projectPost).toHaveBeenCalledTimes(1);
-    // Beta landed the first time; only Launch is sent again, and it keeps its position.
+    // Beta landed the first time; only Launch is sent again, and it keeps the position it was
+    // first attempted at — restarting at 0 would collide with the Beta that already saved.
     expect(milestonePost).toHaveBeenCalledTimes(3);
     expect(milestonePost.mock.calls[2]?.[0].json).toEqual({
       projectId: 'proj_retry',
       name: 'Launch',
-      sort: 0,
+      sort: 1,
     });
+  });
+
+  it('hands over the committed Project when the composer is dismissed mid-retry', async () => {
+    projectPost.mockResolvedValue(jsonResponse(true, { id: 'proj_dismiss', name: 'Atlas' }));
+    milestonePost.mockResolvedValue(jsonResponse(false, { detail: 'nope' }));
+    const { onCreated } = renderComposer();
+
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Atlas' } });
+    addMilestone('Beta');
+    fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
+    await screen.findByRole('button', { name: 'Add remaining milestones' });
+
+    // Leaving instead of retrying is allowed — losing the Project is not. It exists on the server,
+    // so the host has to learn about it or it is absent from every list until a reload.
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'proj_dismiss' }));
+    });
+    expect(projectPost).toHaveBeenCalledTimes(1);
   });
 
   it('surfaces application-owned copy when the create fails', async () => {

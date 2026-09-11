@@ -17,6 +17,9 @@
  *
  * Adding uses the shared {@link QuickAddRow}, which is the same control the Project Overview's
  * Milestones list uses, so a milestone is added the same way in both places.
+ *
+ * Nothing here takes a `disabled` prop: `ComposerShell` renders its trailing fields inside a
+ * `<fieldset disabled={creating}>`, which disables every control below in one place.
  */
 import { DatePicker } from '@docket/ui/components';
 import { X } from '@docket/ui/icons';
@@ -36,6 +39,16 @@ export interface DraftMilestone {
   readonly targetDate: string | null;
   /** The note, empty when none was written. */
   readonly description: string;
+  /**
+   * The `sort` this draft was last sent at, or `null` before it has been attempted.
+   *
+   * @remarks
+   * A draft's position in this list is its `sort` the first time through. It cannot stay that way:
+   * a partial failure narrows the list to the survivors, so re-deriving the position on a retry
+   * would restart numbering at zero and collide with the milestones that already landed. Once
+   * attempted, a draft carries the number it was given.
+   */
+  readonly sort: number | null;
 }
 
 /** Props for {@link ProjectMilestonesField}. */
@@ -44,8 +57,6 @@ export interface ProjectMilestonesFieldProps {
   value: readonly DraftMilestone[];
   /** Report the full next list. */
   onChange: (next: readonly DraftMilestone[]) => void;
-  /** Whether the composer is busy; disables adding and removing. */
-  disabled: boolean;
   /** The vocabulary-skinned singular milestone noun. */
   noun?: string;
 }
@@ -57,6 +68,7 @@ function draftFrom(name: string): DraftMilestone {
     name,
     targetDate: null,
     description: '',
+    sort: null,
   };
 }
 
@@ -64,7 +76,6 @@ function draftFrom(name: string): DraftMilestone {
 export function ProjectMilestonesField({
   value,
   onChange,
-  disabled,
   noun = 'milestone',
 }: ProjectMilestonesFieldProps): JSX.Element {
   /** Replace one draft in place, leaving order (and therefore `sort`) alone. */
@@ -107,7 +118,6 @@ export function ProjectMilestonesField({
               variant="ghost"
               size="icon"
               aria-label={`Remove ${draft.name}`}
-              disabled={disabled}
               onClick={() => {
                 onChange(value.filter((entry) => entry.key !== draft.key));
               }}
@@ -131,7 +141,7 @@ export function ProjectMilestonesField({
         onAdd={async (name) => {
           onChange([...value, draftFrom(name)]);
         }}
-        canEdit={!disabled}
+        canEdit
         noun={noun}
       />
     </section>

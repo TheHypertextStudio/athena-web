@@ -31,7 +31,6 @@ function Host({ onChange }: { onChange?: (next: readonly DraftMilestone[]) => vo
         setValue(next);
         onChange?.(next);
       }}
-      disabled={false}
     />
   );
 }
@@ -92,14 +91,14 @@ describe('ProjectMilestonesField', () => {
     expect(draftNames()).toEqual(['Beta', 'GA']);
   });
 
-  it('starts every draft undated rather than guessing a target', () => {
+  it('starts every draft undated and unnumbered rather than guessing', () => {
     const onChange = vi.fn();
     render(<Host onChange={onChange} />);
 
     add('Beta');
 
     expect(onChange).toHaveBeenCalledWith([
-      expect.objectContaining({ name: 'Beta', targetDate: null, description: '' }),
+      expect.objectContaining({ name: 'Beta', targetDate: null, description: '', sort: null }),
     ]);
   });
 });

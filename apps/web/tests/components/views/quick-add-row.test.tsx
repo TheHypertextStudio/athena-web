@@ -61,6 +61,32 @@ describe('QuickAddRow', () => {
     });
   });
 
+  it('accepts the next name while the previous one is still saving', async () => {
+    const settle: (() => void)[] = [];
+    const onAdd = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          settle.push(resolve);
+        }),
+    );
+    render(<QuickAddRow onAdd={onAdd} canEdit noun="task" />);
+
+    // The whole reason the field clears before the round trip: a second entry must go in while the
+    // first is still outstanding, not after it.
+    submit('First');
+    submit('Second');
+
+    expect(onAdd).toHaveBeenNthCalledWith(1, 'First');
+    expect(onAdd).toHaveBeenNthCalledWith(2, 'Second');
+
+    settle.forEach((resolve) => {
+      resolve();
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /Retry adding/ })).toBeNull();
+    });
+  });
+
   it('trims the submitted name and ignores a blank one', () => {
     const onAdd = vi.fn(async () => undefined);
     render(<QuickAddRow onAdd={onAdd} canEdit noun="task" />);

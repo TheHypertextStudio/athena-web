@@ -13,6 +13,10 @@
 import type { MilestoneOut } from '@docket/work/milestone-contract';
 
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
+import {
+  type ActorDirectory,
+  buildActorDirectory,
+} from '@/components/project-detail/actor-directory';
 import type { MilestoneTask } from '@/components/project-detail/milestone-tasks';
 import { projectWorkSectionsDef } from '@/lib/fetch-project-sections';
 import { projectRecordDef } from '@/lib/entity-records';
@@ -48,6 +52,8 @@ export interface MilestonePageData {
   readonly progress: MilestoneProgress;
   /** Whether the viewer may edit. */
   readonly canEdit: boolean;
+  /** Resolves a task's assignee id to a real name, so no row invents one. */
+  readonly resolveActor: ActorDirectory;
   /** Whether the milestone read is still in flight. */
   readonly loading: boolean;
   /** The milestone read's failure, if any. */
@@ -81,17 +87,21 @@ export function useMilestonePage(orgId: string, milestoneId: string): MilestoneP
     enabled: projectId !== null,
   });
 
-  const tasks = useMemo<readonly MilestoneTask[]>(
-    () =>
-      (workQ.data?.tasks ?? [])
-        .map((task) => ({
-          task,
-          milestoneId:
-            workQ.data?.taskMilestones.find((entry) => entry.taskId === task.id)?.milestoneId ??
-            null,
-        }))
-        .filter((entry) => entry.milestoneId === milestoneId),
-    [workQ.data, milestoneId],
+  // Indexed once rather than scanned per task: the join carries a row for every task in the
+  // project, so a `find` inside the `map` is quadratic over a set that is already the largest
+  // thing this page reads.
+  const tasks = useMemo<readonly MilestoneTask[]>(() => {
+    const milestoneOfTask = new Map(
+      (workQ.data?.taskMilestones ?? []).map((entry) => [entry.taskId, entry.milestoneId]),
+    );
+    return (workQ.data?.tasks ?? [])
+      .filter((task) => milestoneOfTask.get(task.id) === milestoneId)
+      .map((task) => ({ task, milestoneId }));
+  }, [workQ.data, milestoneId]);
+
+  const resolveActor = useMemo(
+    () => buildActorDirectory({ members: membership.members, agents: [] }),
+    [membership.members],
   );
 
   const categoryOf = useCategoryOf('task');
@@ -112,6 +122,7 @@ export function useMilestonePage(orgId: string, milestoneId: string): MilestoneP
     tasks,
     progress,
     canEdit,
+    resolveActor,
     loading: milestoneQ.isPending,
     error: milestoneQ.isError ? milestoneQ.error : null,
     tasksFailed: workQ.isError,

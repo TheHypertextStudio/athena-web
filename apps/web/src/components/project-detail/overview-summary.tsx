@@ -40,14 +40,6 @@ export interface SummaryTask {
   readonly milestoneId: string | null;
 }
 
-/** Minimal milestone metadata for the by-milestone roll-up, in display order. */
-export interface SummaryMilestone {
-  /** The milestone id. */
-  readonly id: string;
-  /** The milestone name. */
-  readonly name: string;
-}
-
 /** Props for {@link OverviewSummary}. */
 export interface OverviewSummaryProps {
   /** The project's tasks, each with its resolved milestone (the canonical task set). */
@@ -66,10 +58,15 @@ const STATE_BAR_CLASS: Record<WorkflowStateType, string> = {
 /**
  * The state-distribution card.
  *
+ * @remarks
+ * A project with no tasks has no shape to show, and the card would be a heading over an empty bar
+ * whose `role="img"` label is the empty string. Nothing is the honest render: the Tasks tab is
+ * where work is added, and the section reappears the moment there is any.
+ *
  * @param props - The {@link OverviewSummaryProps}.
- * @returns the rendered summary, or an inviting empty state when there are no tasks.
+ * @returns the rendered summary, or `null` when the project has no tasks.
  */
-export function OverviewSummary({ tasks }: OverviewSummaryProps): JSX.Element {
+export function OverviewSummary({ tasks }: OverviewSummaryProps): JSX.Element | null {
   const total = tasks.length;
   const categoryOf = useCategoryOf('task');
 
@@ -83,6 +80,8 @@ export function OverviewSummary({ tasks }: OverviewSummaryProps): JSX.Element {
     }
     return CATEGORY_ORDER.map((type) => ({ type, count: counts.get(type) ?? 0 }));
   }, [tasks, categoryOf]);
+
+  if (total === 0) return null;
 
   return (
     <section

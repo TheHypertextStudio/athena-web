@@ -20,10 +20,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Hoisted so the mock factory (lifted above imports) can reference them.
-const { milestonesPost, milestonesDelete, displayGet } = vi.hoisted(() => ({
+const { milestonesPost, milestonesDelete } = vi.hoisted(() => ({
   milestonesPost: vi.fn(),
   milestonesDelete: vi.fn(),
-  displayGet: vi.fn(),
 }));
 
 vi.mock('../../../src/lib/api', () => ({
@@ -39,7 +38,6 @@ vi.mock('../../../src/lib/api', () => ({
               ),
             },
           },
-          display: { ':subjectType': { $get: displayGet } },
         },
       },
     },

@@ -59,7 +59,7 @@ import {
   focusRing,
 } from '@docket/ui/primitives';
 import type { QueryKey } from '@tanstack/react-query';
-import { type JSX, useMemo, useState } from 'react';
+import { type JSX, useMemo, useRef, useState } from 'react';
 
 import type { MilestoneTask } from '@/components/project-detail/milestone-tasks';
 import { DatePicker } from '@docket/ui/components';
@@ -77,11 +77,6 @@ const UNSCHEDULED_KEY = '__unscheduled__';
 
 /** A milestone nothing points at yet. */
 const zeroProgress = { done: 0, total: 0 } as const;
-
-/** Removal is the list's job, so a row's own hook has no delete completion to run. */
-function noop(): void {
-  // Intentionally empty.
-}
 
 /** Props for the private {@link MilestoneRow}. */
 interface MilestoneRowProps {
@@ -128,7 +123,7 @@ function MilestoneRow({
   onRemove,
 }: MilestoneRowProps): JSX.Element {
   const [open, setOpen] = useState(false);
-  const { patch, mutationError } = useMilestoneDetail(orgId, milestone.id, projectId, noop);
+  const { patch, mutationError } = useMilestoneDetail(orgId, milestone.id, projectId);
   const targetDate = milestoneTargetDate(milestone);
   const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
 
@@ -158,7 +153,7 @@ function MilestoneRow({
             <span className="text-on-surface text-label-large min-w-0 truncate">
               {milestone.name}
             </span>
-            {open || milestone.description === null ? null : (
+            {open || !milestone.description ? null : (
               // Markdown source, so printing it raw would read as `**Feature freeze**`. Hidden
               // while open: the editor below is already showing the whole note.
               <ExcerptMarkdown
@@ -262,7 +257,7 @@ export function ProjectMilestonesPanel({
   taskNoun,
   canEdit,
 }: ProjectMilestonesPanelProps): JSX.Element {
-  const { create, remove, pending, mutationError } = useProjectMilestones(
+  const { create, remove, removing, mutationError } = useProjectMilestones(
     orgId,
     projectId,
     projectDetailKey,
@@ -275,10 +270,28 @@ export function ProjectMilestonesPanel({
   );
 
   const ordered = useMemo(() => [...milestones].sort((a, b) => a.sort - b.sort), [milestones]);
+  // The highest position in use, not the count: the API never renumbers after a delete, so a list
+  // of 0 and 2 has length 2 and would hand the next milestone a colliding sort.
   const nextSort = useMemo(
     () => ordered.reduce((highest, milestone) => Math.max(highest, milestone.sort), -1) + 1,
     [ordered],
   );
+  const issued = useRef(-1);
+
+  /**
+   * The `sort` for the next milestone added here.
+   *
+   * @remarks
+   * `nextSort` only moves when the refetch lands, and the add row deliberately accepts the next
+   * name before the previous create has settled — so two names typed in a row would otherwise both
+   * be sent at the same position. The last number handed out is remembered and never repeated.
+   *
+   * @returns the position to create at.
+   */
+  const takeSort = (): number => {
+    issued.current = Math.max(nextSort, issued.current + 1);
+    return issued.current;
+  };
   return (
     <section aria-label="Milestones" className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
@@ -301,7 +314,7 @@ export function ProjectMilestonesPanel({
               progress={progressByMilestone.get(milestone.id) ?? zeroProgress}
               taskNoun={taskNoun}
               canEdit={canEdit}
-              removing={pending}
+              removing={removing}
               onRemove={() => {
                 remove(milestone.id);
               }}
@@ -311,9 +324,7 @@ export function ProjectMilestonesPanel({
       )}
 
       <QuickAddRow
-        // The highest position in use, not the count: the API never renumbers after a delete, so
-        // a list of 0 and 2 has length 2 and would hand the next milestone a colliding sort.
-        onAdd={(name) => create({ name, sort: nextSort })}
+        onAdd={(name) => create({ name, sort: takeSort() })}
         canEdit={canEdit}
         noun="milestone"
       />

@@ -10,12 +10,18 @@
  *
  * The create input is {@link MilestoneCreate} itself: the parent is a path segment, not a field, so
  * there is nothing to subtract.
+ *
+ * Both mutations also invalidate {@link projectMilestonesDef}, the standalone list every milestone
+ * picker reads. It is a different query from the project-detail read and holds its answer for five
+ * minutes, so without this a milestone deleted here stays on offer in the task composer long enough
+ * to be chosen — and the server then refuses the task that names it.
  */
 import type { MilestoneCreate, MilestoneOut } from '@docket/work/milestone-contract';
 import type { QueryKey } from '@tanstack/react-query';
 
 import { api } from './api';
 import { userErrorMessage } from './problem';
+import { projectMilestonesDef } from './project-milestones-def';
 import { unwrap, useApiMutation } from './query';
 
 /** Fields settable on milestone create; the parent Project is the path, not a field. */
@@ -25,7 +31,16 @@ export type CreateMilestoneInput = MilestoneCreate;
 export interface ProjectMilestonesMutations {
   create: (input: CreateMilestoneInput) => Promise<void>;
   remove: (id: string) => void;
+  /** Whether any mutation is in flight. */
   pending: boolean;
+  /**
+   * Whether a delete is in flight.
+   *
+   * @remarks
+   * Separate from `pending` because the add row is built to accept the next name while the previous
+   * create is still going, and a create must not be what greys out every row's own remove button.
+   */
+  removing: boolean;
   mutationError: string | null;
 }
 
@@ -46,6 +61,8 @@ export function useProjectMilestones(
   projectId: string,
   projectDetailKey: QueryKey,
 ): ProjectMilestonesMutations {
+  const invalidateKeys = [projectDetailKey, projectMilestonesDef(orgId, projectId).queryKey];
+
   const createMutation = useApiMutation<MilestoneOut, CreateMilestoneInput>({
     mutationFn: (input) =>
       unwrap(
@@ -56,7 +73,7 @@ export function useProjectMilestones(
           }),
         'Could not create the milestone.',
       ),
-    invalidateKeys: [projectDetailKey],
+    invalidateKeys,
   });
 
   const removeMutation = useApiMutation<MilestoneOut, string>({
@@ -68,7 +85,7 @@ export function useProjectMilestones(
           }),
         'Could not remove the milestone.',
       ),
-    invalidateKeys: [projectDetailKey],
+    invalidateKeys,
   });
 
   return {
@@ -79,6 +96,7 @@ export function useProjectMilestones(
       removeMutation.mutate(id);
     },
     pending: createMutation.isPending || removeMutation.isPending,
+    removing: removeMutation.isPending,
     mutationError: removeMutation.error
       ? userErrorMessage(removeMutation.error, 'Could not remove the milestone.')
       : null,

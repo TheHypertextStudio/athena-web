@@ -119,6 +119,10 @@ interface UnsavedMilestones {
  * whatever list the retry is handed. A retry runs over the survivors alone, so re-deriving the
  * position would restart numbering at zero and collide with the milestones that already landed.
  *
+ * A row whose name has been emptied is not sent. The name is the whole of a milestone here, and the
+ * contract requires it, so posting the blank would earn a 422 and a recovery banner naming nothing.
+ * An emptied row is a row the person cleared.
+ *
  * @param orgId - The org the Project was created in.
  * @param projectId - The Project the milestones belong to, as the create response returned it.
  * @param drafts - The drafted milestones, in display order.
@@ -132,6 +136,8 @@ async function createDraftMilestones(
   const unsaved: DraftMilestone[] = [];
   let reason: string | null = null;
   for (const [index, milestone] of drafts.entries()) {
+    const name = milestone.name.trim();
+    if (name.length === 0) continue;
     const note = milestone.description.trim();
     // Its own position the first time through, and the position it kept thereafter.
     const sort = milestone.sort ?? index;
@@ -141,7 +147,7 @@ async function createDraftMilestones(
         // Already branded: this id came back from the create, it was not typed by anyone.
         param: { orgId, id: projectId },
         json: {
-          name: milestone.name,
+          name,
           ...(note.length > 0 ? { description: note } : {}),
           ...(milestone.targetDate ? { targetDate: milestone.targetDate } : {}),
           sort,

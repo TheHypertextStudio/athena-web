@@ -91,51 +91,56 @@ export function ProjectMilestonesField({
     <section aria-label={`${Noun}s`} className="flex flex-col gap-2">
       <h3 className="text-on-surface-variant text-label-large">{Noun}s</h3>
 
-      {value.map((draft) => (
-        <div key={draft.key} className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <Input
-              value={draft.name}
-              aria-label={`${Noun} name`}
-              placeholder={`${Noun} name`}
+      {value.map((draft) => {
+        // A row can be emptied after it is added, and an aria-label interpolating the name would
+        // then read "Remove ". The noun is what the row still is when it has nothing else.
+        const label = draft.name.trim().length > 0 ? draft.name.trim() : Noun;
+        return (
+          <div key={draft.key} className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Input
+                value={draft.name}
+                aria-label={`${Noun} name`}
+                placeholder={`${Noun} name`}
+                onChange={(event) => {
+                  update(draft.key, { name: event.target.value });
+                }}
+                className="min-w-0 flex-1"
+              />
+              <DatePicker
+                value={draft.targetDate}
+                onChange={(targetDate) => {
+                  update(draft.key, { targetDate });
+                }}
+                placeholder="Target date"
+                formatLabel={(next) => formatCalendarDate(next) ?? undefined}
+                ariaLabel={`${label} target date`}
+                triggerVariant="ghost"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Remove ${label}`}
+                onClick={() => {
+                  onChange(value.filter((entry) => entry.key !== draft.key));
+                }}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+            <Textarea
+              value={draft.description}
+              aria-label={`${label} note`}
+              placeholder="Add a note…"
+              rows={2}
               onChange={(event) => {
-                update(draft.key, { name: event.target.value });
+                update(draft.key, { description: event.target.value });
               }}
-              className="min-w-0 flex-1"
             />
-            <DatePicker
-              value={draft.targetDate}
-              onChange={(targetDate) => {
-                update(draft.key, { targetDate });
-              }}
-              placeholder="Target date"
-              formatLabel={(next) => formatCalendarDate(next) ?? undefined}
-              ariaLabel={`${draft.name} target date`}
-              triggerVariant="ghost"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={`Remove ${draft.name}`}
-              onClick={() => {
-                onChange(value.filter((entry) => entry.key !== draft.key));
-              }}
-            >
-              <X className="size-4" />
-            </Button>
           </div>
-          <Textarea
-            value={draft.description}
-            aria-label={`${draft.name} note`}
-            placeholder="Add a note…"
-            rows={2}
-            onChange={(event) => {
-              update(draft.key, { description: event.target.value });
-            }}
-          />
-        </div>
-      ))}
+        );
+      })}
 
       <QuickAddRow
         onAdd={async (name) => {

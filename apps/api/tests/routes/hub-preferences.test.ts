@@ -134,6 +134,19 @@ describe('Hub preferences', () => {
       density: 'compact',
       theme: 'dark',
     });
+
+    // The write must not delete what the read could not understand. `viewState` replaces the stored
+    // column whole, so pruning on read and then writing that back would destroy the stale entries
+    // permanently — and a backfill can only repair bytes that still exist.
+    const [afterPatch] = await schema.db
+      .select({ preferences: schema.hub.preferences })
+      .from(schema.hub)
+      .where(eq(schema.hub.userId, userId));
+    const storedViewState = (afterPatch?.preferences as { viewState?: unknown[] }).viewState ?? [];
+    expect(storedViewState).toHaveLength(2);
+    expect(storedViewState).toContainEqual(
+      expect.objectContaining({ retiredField: 'gone' }) as unknown,
+    );
   });
 
   it('requires a session and returns 404 when the caller has no Hub', async () => {

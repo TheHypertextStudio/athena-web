@@ -20,7 +20,55 @@
  * a backfill can find it. They are deliberately narrow: they repair *stored* values against a
  * contract that moved underneath them, and are never a way to accept malformed input.
  */
-import type { z } from 'zod';
+import { z } from 'zod';
+
+/** One issue, reduced to the parts that name a schema location rather than stored data. */
+export interface DescribedIssue {
+  readonly code: string;
+  readonly path: string;
+  /** The unrecognized key names, on `unrecognized_keys` — the field a backfill has to strip. */
+  readonly keys?: readonly string[] | undefined;
+}
+
+/**
+ * Reduce Zod issues to the parts a backfill can act on.
+ *
+ * @remarks
+ * `{code, path}` alone is not enough for the two shapes these schemas actually produce. A
+ * `.strict()` object rejecting a renamed field reports `unrecognized_keys` with an **empty path**
+ * and the field names in `issue.keys`; a `z.union` — which `PersonalWorkViewState` is — reports
+ * `invalid_union` with an empty path and the real detail nested in `issue.errors`. Logging only the
+ * path therefore produced `{"code":"invalid_union","path":""}` for precisely the migration this
+ * exists to support: enough to find the row, nothing about what to repair. Union members are
+ * flattened one level and unrecognized keys are carried through.
+ *
+ * Values are never included. Keys and paths are schema identifiers; the data itself is the person's
+ * stored configuration and has no business in a log stream.
+ *
+ * @param issues - The issues from a failed parse.
+ * @returns one described issue per leaf, with union members flattened.
+ */
+export function describeIssues(issues: readonly z.core.$ZodIssue[]): DescribedIssue[] {
+  return issues.flatMap((issue) => {
+    const path = z.core.toDotPath(issue.path);
+    if (issue.code === 'invalid_union') {
+      // One entry per union member keeps the log bounded while naming every candidate's objection.
+      return issue.errors.flatMap((member) =>
+        describeIssues(member).map((nested) => ({
+          ...nested,
+          path: path === '' ? nested.path : `${path}.${nested.path}`,
+        })),
+      );
+    }
+    return [
+      {
+        code: issue.code,
+        path,
+        ...(issue.code === 'unrecognized_keys' ? { keys: issue.keys } : {}),
+      },
+    ];
+  });
+}
 
 /** Where a stale stored definition was found, for the log line. */
 export interface StoredDefinitionSite {
@@ -37,7 +85,7 @@ export interface StoredDefinitionSite {
  * Paths and issue codes only. The stored value is a person's own saved configuration, and the
  * surrounding log stream is not the place for it.
  */
-function logStaleDefinition(site: StoredDefinitionSite, error: z.ZodError): void {
+export function logStaleStoredDefinition(site: StoredDefinitionSite, error: z.ZodError): void {
   console.error(
     JSON.stringify({
       level: 'error',
@@ -45,7 +93,7 @@ function logStaleDefinition(site: StoredDefinitionSite, error: z.ZodError): void
       event: 'stale_stored_definition',
       column: site.column,
       ...(site.rowId ? { rowId: site.rowId } : {}),
-      issues: error.issues.map((issue) => ({ code: issue.code, path: issue.path.join('.') })),
+      issues: describeIssues(error.issues),
     }),
   );
 }
@@ -65,7 +113,7 @@ export function parseStoredDefinition<TSchema extends z.ZodType>(
 ): z.output<TSchema> | null {
   const result = schema.safeParse(value);
   if (result.success) return result.data;
-  logStaleDefinition(site, result.error);
+  logStaleStoredDefinition(site, result.error);
   return null;
 }
 
@@ -81,11 +129,30 @@ export function parseStoredDefinitions<TSchema extends z.ZodType>(
   schema: TSchema,
   values: readonly unknown[],
   site: StoredDefinitionSite,
-): z.output<TSchema>[] {
+): StoredDefinitionSplit<z.output<TSchema>> {
   const kept: z.output<TSchema>[] = [];
+  const stale: unknown[] = [];
   for (const value of values) {
-    const parsed = parseStoredDefinition(schema, value, site);
-    if (parsed !== null) kept.push(parsed);
+    const result = schema.safeParse(value);
+    if (result.success) kept.push(result.data);
+    else {
+      logStaleStoredDefinition(site, result.error);
+      stale.push(value);
+    }
   }
-  return kept;
+  return { kept, stale };
+}
+
+/**
+ * The conforming entries, and the raw values that no longer parse.
+ *
+ * @remarks
+ * `stale` exists so a write path can carry what it could not read back into storage untouched. A
+ * read that drops an entry is a presentation choice; a write that drops it is deletion, and these
+ * rows are the only copy — `0097_remove_initiative_project_count.sql` repaired this exact class of
+ * damage in place, which is only possible while the bytes still exist.
+ */
+export interface StoredDefinitionSplit<TValue> {
+  readonly kept: readonly TValue[];
+  readonly stale: readonly unknown[];
 }

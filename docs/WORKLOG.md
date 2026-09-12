@@ -7,6 +7,71 @@
 
 ## Active Tasks
 
+### [WORKVIEW-REVIEW-001] Corrections from reviewing the work-view failure branch
+
+- **Completed**: 2026-09-12
+- **Priority**: P0
+- **Summary**: A max-effort review of the six preceding commits found fifteen defects, two of them
+  data loss introduced by the fixes themselves. Fourteen are corrected here; the fifteenth is
+  recorded below.
+
+- **The two that mattered**: making the preferences read failure silent left a failed read
+  indistinguishable from "this person has no overrides" — and `viewState` is sent whole and replaces
+  the stored column, so the next unrelated click would persist an empty list and destroy every
+  view's collapsed groups, hidden columns and favorites across every workspace. Writes are now
+  refused until the read lands, and the surface says why rather than letting changes appear to work.
+  The server half compounded it: the lenient read fed its pruned list straight back into the write,
+  so the first theme change after a contract move deleted the stale entries permanently. Entries the
+  contract cannot read are now written back untouched, with a test asserting the bytes survive.
+
+- **Consistency**: `toOutOrNull` guarded only the list route and only the `definition` column, so a
+  row stale in `context` still failed the org-wide list, `GET /:id` still answered 422, and DELETE
+  removed the row and the search entry _before_ failing serialization — telling the caller the
+  delete failed after it had happened. One `safeParse` of the whole output now decides, every route
+  treats a stale row as absent, and DELETE serializes before it deletes.
+
+- **Retry**: the policy was four attempts over 3.5–7s, documented as three over 1.5s, and retried
+  non-`UserFacingError`s — so a deterministic client bug cost four round trips. It is now two
+  retries, and only for failures that could answer differently. A schema rejection is no longer
+  indistinguishable from a dropped connection: `ContractMismatchError` names it and says to reload,
+  rather than telling someone to check a network that is fine.
+
+- **Decisions**: `canRetry` now comes from `isWorthRetrying` rather than the catalog's recovery verb,
+  which had `precondition_failed` and `idempotency_key_reuse` offering a button that cannot work.
+  Failures that retrying cannot fix render the destination that can, from `PUBLIC_PROBLEM_RECOVERY`
+  — previously a `forbidden` was a dead end while the public `/problems` page offered an action for
+  the same code.
+
+  The ratchet had two defects of its own. Its `count` metric failed the refactor it exists to force:
+  splitting one complexity-18 function into two complexity-13 helpers reads as 1 → 2 violations. It
+  tracks total overshoot now, so that split registers as the improvement it is. And an unchecked
+  cast let a legacy bare-number entry silently disable the gate for that file while printing
+  "clean"; it throws. Both verified by fault injection. The gate also ran on no CI job at all — CI
+  invokes `turbo run lint` with a shard filter, never the root script — so it now has a step beside
+  `pnpm test:tooling`, which exists for exactly this class of repo-wide check.
+
+  The ledger was re-seeded from `main` rather than `HEAD`, because seeding at HEAD meant the new size
+  rules' ceilings were measured after this branch's own growth. Six entries tripped; all six were
+  refactored away rather than absorbed — `work-view-page.tsx` shed its tab row and failure states,
+  `use-work-view.ts` shed two helpers, and two oversized specs were split. The branch now provably
+  adds no size or complexity debt against a baseline that predates it.
+
+- **Files changed**: new `work-view-tabs.tsx`, `work-view-failures.tsx`, `use-preference-mutation.ts`,
+  `validated-rpc-response.ts`, `work-view-preference-read.test.tsx`, `saved-views-stale.test.ts`;
+  `stored-definition.ts`, `hub.ts`, `saved-views.ts`, `error.ts`, `query-core.ts`,
+  `failure-presentation.ts`, `work-view-load-failure.tsx`, `work-view-page.tsx`, `use-work-view.ts`,
+  `complexity-ledger.ts`, `tooling/eslint-config/index.js`, `.github/workflows/ci.yml`.
+
+- **Validation**: API 463 files / 5,835 tests; web 485 / 3,800; repo tooling 27 / 315. Root
+  typecheck, lint, format and `complexity:check` all clean.
+
+- **Blockers**: One finding not fixed — the saved-views failure moved from `role="alert"` to an
+  sr-only polite live region created with its content already present, which NVDA and JAWS commonly
+  do not announce. Confirming it needs a real screen reader, and the fix belongs in a shared
+  announcement primitive rather than another hand-rolled span.
+
+---
+
 ### [WORKVIEW-STALE-001] A view field that moved no longer takes the workspace down
 
 - **Completed**: 2026-09-11

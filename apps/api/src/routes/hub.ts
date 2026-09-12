@@ -66,6 +66,13 @@ const portfolioQuery = z.object({
   initiativeId: z.string().optional(),
 });
 
+/** A stored preferences row, split into what the current contract accepts and what it does not. */
+interface StoredHubPreferences {
+  readonly preferences: z.infer<typeof HubPreferences>;
+  /** Raw entries that no longer parse, carried so a write can put them back rather than delete them. */
+  readonly staleViewState: readonly unknown[];
+}
+
 /**
  * Parse a stored preferences row without letting one stale view override take the surface down.
  *
@@ -85,20 +92,28 @@ const portfolioQuery = z.object({
  * @returns the preferences, carrying only the view overrides that still satisfy the contract.
  * @throws {z.ZodError} when the row is malformed outside `viewState`.
  */
-function parseStoredHubPreferences(
-  stored: unknown,
-  userId: string,
-): z.infer<typeof HubPreferences> {
+function parseStoredHubPreferences(stored: unknown, userId: string): StoredHubPreferences {
   const direct = HubPreferences.safeParse(stored);
-  if (direct.success) return direct.data;
-  if (typeof stored !== 'object' || stored === null) return HubPreferences.parse(stored);
+  if (direct.success) return { preferences: direct.data, staleViewState: [] };
+  if (typeof stored !== 'object' || stored === null) {
+    return { preferences: HubPreferences.parse(stored), staleViewState: [] };
+  }
   const candidate: Record<string, unknown> = { ...stored };
-  if (!Array.isArray(candidate['viewState'])) return HubPreferences.parse(stored);
-  const viewState = parseStoredDefinitions(PersonalWorkViewState, candidate['viewState'], {
+  // Only repair when `viewState` is what broke. Taking this path for an unrelated defect logs a
+  // stale-entry line naming the wrong column and then throws anyway, pointing a backfill at a
+  // column that was fine.
+  const viewStateAtFault = direct.error.issues.some((issue) => issue.path[0] === 'viewState');
+  if (!viewStateAtFault || !Array.isArray(candidate['viewState'])) {
+    return { preferences: HubPreferences.parse(stored), staleViewState: [] };
+  }
+  const split = parseStoredDefinitions(PersonalWorkViewState, candidate['viewState'], {
     column: 'hub.preferences.viewState',
     rowId: userId,
   });
-  return HubPreferences.parse({ ...candidate, viewState });
+  return {
+    preferences: HubPreferences.parse({ ...candidate, viewState: split.kept }),
+    staleViewState: split.stale,
+  };
 }
 
 /** Read the caller-owned Hub row or existence-hide the missing personal root. */
@@ -110,7 +125,7 @@ async function readHubPreferences(userId: string): Promise<z.infer<typeof HubPre
     .limit(1);
   const row = rows[0];
   if (!row) throw new NotFoundError('Hub not found');
-  return parseStoredHubPreferences(row.preferences, userId);
+  return parseStoredHubPreferences(row.preferences, userId).preferences;
 }
 
 /** Deep-merge nested preference groups so a focused patch cannot erase sibling settings. */
@@ -196,20 +211,26 @@ const hubPreferenceRoutes: Hono<AppEnv, HubPreferenceRoutes> = new Hono<AppEnv>(
           .for('update');
         const current = currentRows[0];
         if (!current) throw new NotFoundError('Hub not found');
-        const merged = mergeHubPreferences(
-          parseStoredHubPreferences(current.preferences, session.user.id),
-          patch,
-        );
+        const stored = parseStoredHubPreferences(current.preferences, session.user.id);
+        const merged = mergeHubPreferences(stored.preferences, patch);
+        // Entries the current contract cannot read are written back untouched. Dropping them here
+        // would turn a lenient read into deletion: `viewState` replaces the stored column whole, so
+        // the first unrelated write — a theme change — would erase every override that referenced a
+        // field a deploy had renamed, and the log deliberately never carries the values.
+        const preserved =
+          stored.staleViewState.length === 0
+            ? merged
+            : { ...merged, viewState: [...(merged.viewState ?? []), ...stored.staleViewState] };
         const rows = await tx
           .update(hubTable)
           // Zod's inferred preferences shape is accepted by the stored Hub preferences column.
-          .set({ preferences: merged })
+          .set({ preferences: preserved as typeof merged })
           .where(eq(hubTable.userId, session.user.id))
           .returning({ preferences: hubTable.preferences });
         const updated = rows[0];
         /* v8 ignore next -- @preserve the locked caller-owned Hub row exists */
         if (!updated) throw new NotFoundError('Hub not found');
-        return parseStoredHubPreferences(updated.preferences, session.user.id);
+        return parseStoredHubPreferences(updated.preferences, session.user.id).preferences;
       });
       return ok(c, HubPreferences, preferences);
     },

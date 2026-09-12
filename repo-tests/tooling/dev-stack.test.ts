@@ -18,11 +18,31 @@ const adminManifest = JSON.parse(
 
 describe('documented development stack', () => {
   it('uses explicit adjacent ports instead of a shared reverse proxy', () => {
-    expect(script).toContain('WEB_PORT="${DOCKET_DEV_PORT:-1355}"');
     expect(script).toContain('API_PORT=$((WEB_PORT + 1))');
     expect(script).toContain('ADMIN_PORT=$((WEB_PORT + 2))');
     expect(script).toContain('RUNNER_PORT=$((WEB_PORT + 3))');
+    expect(script).toContain('DOCKET_DEV_PORT');
     expect(supervisor).not.toContain('portless');
+  });
+
+  it('gives each checkout its own port block rather than a shared default', () => {
+    // Every host this stack serves is a `*.docket.localhost` name on 127.0.0.1, so a shared base
+    // port means one checkout's server answers another's URLs — indistinguishably, and with its
+    // own origin allowlist and schema. The base is therefore derived per worktree, and the primary
+    // checkout keeps 1355 so the documented URLs stay correct.
+    expect(script).toContain('derive_web_port()');
+    expect(script).toContain('git-dir');
+    expect(script).toMatch(/echo 1355/);
+    expect(script).toMatch(/1400 \+ slot \* 4/);
+  });
+
+  it('refuses to report healthy when another checkout owns the port', () => {
+    expect(script).toContain('verify_ownership()');
+    expect(script).toContain('port_owner_pid');
+    // The check is the listener's working directory against this checkout's root; a foreign
+    // listener is reported with its pid and cwd instead of being counted as a healthy stack.
+    expect(script).toContain('-d cwd');
+    expect(script).toMatch(/verify_ownership \|\| return 1/);
   });
 
   it('scopes process cleanup to the current worktree', () => {

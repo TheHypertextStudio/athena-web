@@ -1,11 +1,60 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-09-11
+> **Last Updated**: 2026-09-12
 
 ---
 
 ## Active Tasks
+
+### [DEVSTACK-PORTS-001] Every worktree gets its own dev stack
+
+- **Completed**: 2026-09-12
+- **Priority**: P0
+- **Summary**: `scripts/dev-stack.sh` pinned web to `1355` in every checkout. Every host it serves
+  is a `*.docket.localhost` name and the whole `.localhost` TLD resolves to `127.0.0.1`, so the
+  branch prefix decorated the _name_ and did nothing to the _address_: whichever worktree bound the
+  port first answered every other one's URLs. Each checkout now derives its own four-port block, and
+  `status` refuses to report healthy when a foreign process owns the port.
+
+- **What it looked like instead**: an auth regression. A request to
+  `my-branch.docket.localhost:1355` reached a sibling worktree's server, which rejected it against
+  its own origin allowlist — `ERROR [Better Auth]: Invalid origin: http://<my-branch>.docket.localhost:1355`.
+  The same mechanism produces unexpected 404s (a route that branch does not have), data from work
+  you never did, and schema errors from another migration state. One session lost an hour to it and
+  filed a task blaming unrelated passkey commits before the port turned out to be the answer. The
+  evidence was there the whole time: 34 `next dev` processes, none of them this checkout's, and the
+  URL still returned 200.
+
+- **Approach**: the primary checkout keeps `1355`–`1358` so the documented URLs and anything holding
+  that number stay right. A linked worktree hashes its absolute git dir — stable across branch
+  renames, unlike the branch name — into a stride-4 block from `1400`, and probes forward if that
+  block is taken. A block counts as free when every port in it is unbound or already bound by a
+  process whose working directory is inside this checkout, so restarting reclaims your own ports
+  instead of drifting upward. `DOCKET_DEV_PORT` still pins the range by hand.
+
+- **The guard is the other half**: deriving a port stops the collision, it does not detect one.
+  `verify_ownership()` runs first in `probe()`, reads the listening pid off the web port and its cwd
+  from `lsof`, and fails with the foreign pid and path printed when that path is outside `$ROOT`.
+  Without it the stack reports `READY` while someone else's app serves every screenshot and every
+  assertion.
+
+- **Files changed**: `scripts/dev-stack.sh`, `docs/engineering/ui-verification.md`,
+  `repo-tests/tooling/dev-stack.test.ts`.
+
+- **Validation**: this worktree resolves to `1484` and the primary to `1355`; all twelve worktrees
+  derive distinct blocks. Full stack green — `web=200 sign-in=200 sign-up=200 onboarding=200
+admin=200 api=200 oidc=200 runner=200`, where `oidc` had been `404` purely because the foreign
+  server was answering. `e2e/tools/dev-session.ts` completed a real passkey signup against the
+  derived port.
+
+- **Learnings**: a hostname is not an address. `.localhost` names are a naming convenience with no
+  routing behaviour, so any scheme that distinguishes environments by subdomain alone distinguishes
+  nothing. Also: `pnpm test:coverage` does not run `test:tooling` — only `pnpm test` runs both, and
+  the pre-push hook runs `pnpm test`. Validating with the coverage script alone hides every
+  `repo-tests/` failure until the push is rejected.
+
+---
 
 ### [WORKVIEW-REVIEW-001] Corrections from reviewing the work-view failure branch
 

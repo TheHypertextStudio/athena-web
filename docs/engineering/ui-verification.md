@@ -15,10 +15,27 @@ committed here.
 bash scripts/dev-stack.sh start
 ```
 
-Brings the whole stack up on explicit adjacent HTTP ports—web `1355`, API `1356`, admin `1357`, and
-runner `1358` by default—with branch-prefixed hostnames. It bypasses Portless completely and blocks
-until all four processes, the auth routes, API health, and OIDC discovery answer `200`. It prints
-`READY` plus the exact env to export. Set `DOCKET_DEV_PORT` to move the complete four-port range.
+Brings the whole stack up on four adjacent HTTP ports with branch-prefixed hostnames. It bypasses
+Portless completely and blocks until all four processes, the auth routes, API health, and OIDC
+discovery answer `200`. It prints `READY` plus the exact env to export.
+
+**Each checkout gets its own port block, and this matters.** The primary checkout uses web `1355`,
+API `1356`, admin `1357`, runner `1358`. A worktree hashes its git dir into a stride-4 block from
+`1400` up, and probes forward if that block is taken. Read the ports off `dev-stack.sh env` rather
+than assuming them; `DOCKET_DEV_PORT` still pins the range by hand.
+
+The reason is that every host here is a `*.docket.localhost` name, and the whole `.localhost` TLD
+resolves to `127.0.0.1`. The branch prefix decorates the _name_ and does nothing to the _address_.
+When two worktrees shared port `1355`, whichever bound it first served both, so requests to
+`b.docket.localhost:1355` reached worktree A's server — which rejected them against its own origin
+allowlist, or answered from another migration's schema. The symptom looks exactly like an auth
+regression or a broken config in your own branch, and one session lost an hour to that diagnosis
+before the port was the answer.
+
+`status` now refuses to report healthy unless the process listening on the web port has a working
+directory inside this checkout, and prints the foreign listener's pid and cwd when it does not. If
+you see that message, stop the other stack or set `DOCKET_DEV_PORT`; do not trust anything you
+verified against those URLs beforehand.
 
 ```bash
 eval "$(bash scripts/dev-stack.sh env)"
@@ -132,6 +149,7 @@ failure from your own fixtures.
 | A request hangs and every registered route later returns 404             | The optional shared Portless proxy wedged under concurrent Next client-chunk requests                                  | Stop using the proxy for acceptance; `dev-stack.sh` addresses each process directly   |
 | Passkey ceremony fails with `CHALLENGE_NOT_FOUND`                        | `BETTER_AUTH_COOKIE_DOMAIN` does not cover the origin being driven                                                     | `dev-stack.sh`'s topology is consistent by construction; do not hand-roll the origins |
 | `dev-session.ts` times out waiting for `#name`                           | `next dev` compiles a route on first request, and the cold compile outruns the tool's own timeout                      | `curl` the route once to warm it, then re-run                                         |
+| `Invalid origin`, an unexpected 404, or data from work you never did     | Another checkout's stack is answering this one's URLs — every `*.docket.localhost` host is `127.0.0.1`                 | `dev-stack.sh status` names the foreign pid and cwd; stop it or set `DOCKET_DEV_PORT` |
 | Env overrides silently ignored                                           | `dotenv-cli`'s `-o/--override` makes the **file** win over the environment — the opposite of what the flag sounds like | Put exports inside the child: `dotenv -e .env.local -- bash -c 'export FOO=…; …'`     |
 
 ## What not to do

@@ -14,20 +14,76 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LOG="${TMPDIR:-/tmp}/docket-dev.log"
-WEB_PORT="${DOCKET_DEV_PORT:-1355}"
-API_PORT=$((WEB_PORT + 1))
-ADMIN_PORT=$((WEB_PORT + 2))
-RUNNER_PORT=$((WEB_PORT + 3))
+LOG="${TMPDIR:-/tmp}/docket-dev-${UID}-$(basename "$ROOT").log"
 
 PREFIX="$(basename "$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)")"
-STACK_PID_FILE="${TMPDIR:-/tmp}/docket-dev-${UID}-${PREFIX}-${WEB_PORT}.pid"
 GIT_DIR="$(git -C "$ROOT" rev-parse --absolute-git-dir 2>/dev/null || true)"
 GIT_COMMON_DIR="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+IS_WORKTREE=false
 HOST_PREFIX=""
 if [ "$GIT_DIR" != "$GIT_COMMON_DIR" ] && [ "$PREFIX" != main ] && [ "$PREFIX" != master ]; then
+  IS_WORKTREE=true
   HOST_PREFIX="$PREFIX."
 fi
+
+# Every host in this stack is a `*.docket.localhost` name, and the whole `.localhost` TLD resolves
+# to 127.0.0.1. The branch prefix therefore decorates the *name* and does nothing to the *address*:
+# two worktrees that pick the same port both answer on 127.0.0.1:<port>, and whichever bound it
+# first serves both. Requests to `b.docket.localhost:1355` reach worktree A's server, which then
+# rejects them against its own allowlist — the failure reads as an auth or config bug and is
+# neither. Give each worktree its own port block so the address distinguishes them too.
+#
+# The primary checkout keeps 1355 so the documented URLs and anything holding that number stay
+# right. Worktrees hash their git dir — stable across branch renames, unlike the branch name — into
+# a stride-4 block above the primary range.
+derive_web_port() {
+  if [ "$IS_WORKTREE" != true ]; then
+    echo 1355
+    return
+  fi
+  local digest slot
+  digest=$(printf '%s' "$GIT_DIR" | cksum | cut -d' ' -f1)
+  slot=$((digest % 150))
+  echo $((1400 + slot * 4))
+}
+
+# A free block is one where every port is either unbound or already bound by *this* stack. Probing
+# forward keeps two worktrees that hash to the same slot from fighting over it.
+port_owner_pid() {
+  lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -1
+}
+
+block_is_available() {
+  local base=$1 offset owner
+  for offset in 0 1 2 3; do
+    owner=$(port_owner_pid $((base + offset)))
+    [ -z "$owner" ] && continue
+    # Ours if the listener's working directory is inside this checkout.
+    lsof -a -p "$owner" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | grep -q "^$ROOT" || return 1
+  done
+  return 0
+}
+
+resolve_ports() {
+  local candidate attempts
+  if [ -n "${DOCKET_DEV_PORT:-}" ]; then
+    WEB_PORT="$DOCKET_DEV_PORT"
+  else
+    candidate=$(derive_web_port)
+    attempts=0
+    while [ "$attempts" -lt 40 ] && ! block_is_available "$candidate"; do
+      candidate=$((candidate + 4))
+      attempts=$((attempts + 1))
+    done
+    WEB_PORT="$candidate"
+  fi
+  API_PORT=$((WEB_PORT + 1))
+  ADMIN_PORT=$((WEB_PORT + 2))
+  RUNNER_PORT=$((WEB_PORT + 3))
+}
+
+resolve_ports
+STACK_PID_FILE="${TMPDIR:-/tmp}/docket-dev-${UID}-${PREFIX}-${WEB_PORT}.pid"
 
 export APP_URL="http://${HOST_PREFIX}docket.localhost:$WEB_PORT"
 export WEB_URL="$APP_URL"
@@ -61,8 +117,40 @@ export PASSKEY_RP_ID="$BETTER_AUTH_PASSKEY_RP_ID"
 EOF
 }
 
+# Confirm the process answering our web port is this checkout's.
+#
+# Without this the stack reports healthy while a sibling worktree serves every request: each host
+# is a `.localhost` name on 127.0.0.1, so a foreign listener responds to ours indistinguishably.
+# What the caller then sees is the foreign app's behaviour — an origin allowlist that excludes this
+# branch, a schema from another migration state — attributed to their own code.
+verify_ownership() {
+  local owner cwd
+  owner=$(port_owner_pid "$WEB_PORT")
+  if [ -z "$owner" ]; then
+    echo "dev-stack: nothing is listening on $WEB_PORT." >&2
+    return 1
+  fi
+  cwd=$(lsof -a -p "$owner" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
+  case "$cwd" in
+    "$ROOT"*) return 0 ;;
+  esac
+  cat >&2 <<EOF
+dev-stack: port $WEB_PORT is served by another checkout, not this one.
+
+  this checkout : $ROOT
+  listener pid  : $owner
+  listener cwd  : ${cwd:-unknown}
+
+Every *.docket.localhost host resolves to 127.0.0.1, so that process is answering this stack's
+URLs. Anything you verify against them is that checkout's behaviour, not yours. Stop its stack, or
+set DOCKET_DEV_PORT to a free block, then start again.
+EOF
+  return 1
+}
+
 probe() {
   local web sign_in sign_up onboarding admin api oidc runner
+  verify_ownership || return 1
   web=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$APP_URL" 2>/dev/null || echo 000)
   sign_in=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$APP_URL/sign-in" 2>/dev/null || echo 000)
   sign_up=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$APP_URL/sign-up" 2>/dev/null || echo 000)

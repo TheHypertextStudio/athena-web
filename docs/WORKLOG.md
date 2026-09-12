@@ -815,7 +815,12 @@ tests/search/` plus the search route suites — 135/135 passing.
   retains the asserted canonical ID for signature verification, and updates the matched historical
   row. A regression test failed with the former exact-string lookup and passes with the compatible
   lookup. The auth package passes all 207 tests plus typecheck and lint with concurrency limited to
-  two.
+  two. A second signed-hardware retry still reached the verifier and returned an undifferentiated
+  401, which proved that encoding lookup was not the complete cause. The migration endpoint now
+  returns one of three rate-limited application-owned codes for credential lookup, WebAuthn
+  rejection, or stale persistence state. The native client accepts only those three codes and
+  includes the matched code in its canary error. The focused server suite passes 16 tests, and the
+  native macOS suite passes all 55 tests.
 - **Blockers**: The legacy-passkey replacement ceremony, native Apple ID-token exchange, and native
   Google ID-token exchange still need signed-hardware canaries. Each canary must also prove session
   restoration and local-first sign-out before release sign-off.

@@ -23,6 +23,17 @@ type EndpointContext = Parameters<typeof getSessionFromCtx>[0];
 /** Only errors created at this boundary may cross it unchanged. */
 class PasskeyMigrationError extends APIError {}
 
+type MigrationRejectionCode =
+  'MIGRATION_CREDENTIAL_NOT_FOUND' | 'MIGRATION_ASSERTION_REJECTED' | 'MIGRATION_STATE_CHANGED';
+
+/** Reject a ceremony with a safe code that identifies its failed boundary. */
+function rejectMigration(code: MigrationRejectionCode): PasskeyMigrationError {
+  return new PasskeyMigrationError('UNAUTHORIZED', {
+    code,
+    message: 'Passkey migration assertion was not verified.',
+  });
+}
+
 /** Discard provider and persistence details before Better Auth can log them. */
 function safeMigrationHandler<T extends EndpointContext, R>(
   handler: (ctx: T) => Promise<R>,
@@ -186,9 +197,7 @@ export function passkeyMigrationPlugin(
             .where(inArray(passkey.credentialID, credentialIdCandidates(ctx.body.id)))
             .limit(1);
           if (!record) {
-            throw new PasskeyMigrationError('UNAUTHORIZED', {
-              message: 'Passkey migration assertion was not verified.',
-            });
+            throw rejectMigration('MIGRATION_CREDENTIAL_NOT_FOUND');
           }
           const verification = await webAuthn.verifyAuthenticationResponse({
             response: ctx.body as never,
@@ -204,9 +213,7 @@ export function passkeyMigrationPlugin(
             requireUserVerification: true,
           });
           if (!verification.verified || !verification.authenticationInfo.userVerified) {
-            throw new PasskeyMigrationError('UNAUTHORIZED', {
-              message: 'Passkey migration assertion was not verified.',
-            });
+            throw rejectMigration('MIGRATION_ASSERTION_REJECTED');
           }
           const [updated, user] = await Promise.all([
             database
@@ -217,9 +224,7 @@ export function passkeyMigrationPlugin(
             ctx.context.internalAdapter.findUserById(record.userId),
           ]);
           if (updated.length !== 1 || !user) {
-            throw new PasskeyMigrationError('UNAUTHORIZED', {
-              message: 'Passkey migration assertion was not verified.',
-            });
+            throw rejectMigration('MIGRATION_STATE_CHANGED');
           }
           const session = await ctx.context.internalAdapter.createSession(user.id);
           await setSessionCookie(ctx, { session, user });

@@ -436,7 +436,7 @@ describe('passkey migration plugin', () => {
       '/passkey-migration/verify-authentication',
       json(responseCookies(unknown), { id: 'missing-passkey' }),
     );
-    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ code: 'MIGRATION_CREDENTIAL_NOT_FOUND' });
     expect(responseCookies(response)).not.toContain('session_token');
   });
 
@@ -473,7 +473,7 @@ describe('passkey migration plugin', () => {
       '/passkey-migration/verify-authentication',
       json(responseCookies(challenge), { id: 'invalid-assertion' }),
     );
-    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ code: 'MIGRATION_ASSERTION_REJECTED' });
     expect(responseCookies(response)).not.toContain('session_token');
   });
 
@@ -521,7 +521,7 @@ describe('passkey migration plugin', () => {
       '/passkey-migration/verify-authentication',
       json(responseCookies(counterChallenge), { id: 'concurrent-counter' }),
     );
-    expect(counterResponse.status).toBe(401);
+    expect(await counterResponse.json()).toMatchObject({ code: 'MIGRATION_STATE_CHANGED' });
     expect(responseCookies(counterResponse)).not.toContain('session_token');
   });
 

@@ -3,7 +3,7 @@ import type { cycle, program } from '@docket/db';
 import { actor, db, grant, milestone, project, role, task, type Database } from '@docket/db';
 import type { GrantResourceKind } from '@docket/identity-access/grants';
 import type { TaskOut, TaskRef } from '@docket/work/task-model';
-import { and, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, count, eq, inArray, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { CapabilityError, NotFoundError, ValidationError } from '../error';
@@ -475,4 +475,54 @@ export async function wouldCreateSubtaskCycle(
     SELECT 1 AS hit FROM ancestors WHERE p = ${taskId} LIMIT 1
   `);
   return rawResultRowCount(reach) > 0;
+}
+
+/** One Project's visible Task totals. */
+export interface ProjectTaskCounts {
+  readonly total: number;
+  readonly completed: number;
+}
+
+/**
+ * Count each Project's visible Tasks, and how many are done, in the database.
+ *
+ * @remarks
+ * This is the aggregate {@link buildTaskViewCondition} was written for. The Project overview used to
+ * select every non-archived Task in the workspace — including the ones belonging to no Project,
+ * fetched only to be discarded — and apply the visibility policy in JavaScript afterwards, so a
+ * large workspace paid a full materialization, an ETag hash over it, and a response-schema parse of
+ * it on every load, per concurrent request, on one vCPU.
+ *
+ * @param orgId - The caller's organization.
+ * @param actorId - The caller's human actor id, for the visibility policy.
+ * @returns totals keyed by Project id; a Project with no visible Tasks is simply absent.
+ */
+export async function visibleProjectTaskCounts(
+  orgId: string,
+  actorId: string,
+): Promise<Map<string, ProjectTaskCounts>> {
+  const rows = await db
+    .select({
+      projectId: task.projectId,
+      total: count(),
+      // `count(column)` skips nulls, so this is the completed subset without a second pass.
+      completed: count(task.completedAt),
+    })
+    .from(task)
+    .where(
+      and(
+        eq(task.organizationId, orgId),
+        isNull(task.archivedAt),
+        isNotNull(task.projectId),
+        await buildTaskViewCondition(orgId, actorId),
+      ),
+    )
+    .groupBy(task.projectId);
+  return new Map(
+    rows.flatMap((row) =>
+      row.projectId === null
+        ? []
+        : [[row.projectId, { total: row.total, completed: row.completed }]],
+    ),
+  );
 }

@@ -416,6 +416,9 @@ function complexityRuleEntry(rule, limit) {
   return ['error', { max: limit, ...(RULE_OPTIONS[rule] ?? {}) }];
 }
 
+/** Specs whose outermost `describe` callback is the whole file. */
+const TEST_FILES = ['**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts', '**/*.spec.tsx'];
+
 /** @type {import('typescript-eslint').ConfigArray} */
 export const complexityConfig = [
   {
@@ -427,6 +430,13 @@ export const complexityConfig = [
         complexityRuleEntry(rule, target),
       ]),
     ),
+  },
+  {
+    // A spec's outermost `describe` callback spans the file, so `max-lines-per-function` measures
+    // the file a second time and reports a "2,987-line function" that is really forty small tests.
+    // `max-lines` still applies, and is the rule that actually says a spec has grown too large.
+    files: TEST_FILES,
+    rules: { 'max-lines-per-function': 'off' },
   },
 ];
 

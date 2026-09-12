@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as WorkBoardModule from '../../src/components/work-views/work-board';
 import { useSelection } from '../../src/components/selection/selection-context';
 import { objectKey } from '../../src/lib/actions/object';
+import { ApiRequestError } from '../../src/lib/query-core';
 
 const { capability, controller, createMock, local, foreign, context, toolbarProps, failures } =
   vi.hoisted(() => {
@@ -443,14 +444,20 @@ describe('WorkViewPage selection and permissions', () => {
 
 describe('WorkViewPage failure altitudes', () => {
   function failContent(): void {
-    failures.initialError = new Error('roster read failed');
+    failures.initialError = new ApiRequestError({ message: 'roster read failed', status: 0 });
     failures.hasResponse = false;
   }
 
   it('answers a failed surface with one recovery state instead of a queue of alerts', () => {
     failContent();
-    failures.savedViewsError = new Error('saved views read failed');
-    failures.preferencesError = new Error('preference write failed');
+    failures.savedViewsError = new ApiRequestError({
+      message: 'saved views read failed',
+      status: 0,
+    });
+    failures.preferencesError = new ApiRequestError({
+      message: 'preference write failed',
+      status: 0,
+    });
 
     render(<WorkViewPage organizationId={ROUTE_ORG} target="task" />);
 
@@ -461,7 +468,10 @@ describe('WorkViewPage failure altitudes', () => {
 
   it('repairs every failed read from the one recovery action', () => {
     failContent();
-    failures.savedViewsError = new Error('saved views read failed');
+    failures.savedViewsError = new ApiRequestError({
+      message: 'saved views read failed',
+      status: 0,
+    });
 
     render(<WorkViewPage organizationId={ROUTE_ORG} target="task" />);
     fireEvent.click(within(screen.getByRole('alert')).getByRole('button'));
@@ -470,7 +480,10 @@ describe('WorkViewPage failure altitudes', () => {
   });
 
   it('keeps the view tabs usable when only saved views fail', () => {
-    failures.savedViewsError = new Error('saved views read failed');
+    failures.savedViewsError = new ApiRequestError({
+      message: 'saved views read failed',
+      status: 0,
+    });
 
     render(<WorkViewPage organizationId={ROUTE_ORG} target="task" />);
 
@@ -482,7 +495,10 @@ describe('WorkViewPage failure altitudes', () => {
 
   it('says nothing about saved views while the content itself is unavailable', () => {
     failContent();
-    failures.savedViewsError = new Error('saved views read failed');
+    failures.savedViewsError = new ApiRequestError({
+      message: 'saved views read failed',
+      status: 0,
+    });
 
     render(<WorkViewPage organizationId={ROUTE_ORG} target="task" />);
 
@@ -490,7 +506,10 @@ describe('WorkViewPage failure altitudes', () => {
   });
 
   it('reports a failed preference write while the surface is otherwise usable', () => {
-    failures.preferencesError = new Error('preference write failed');
+    failures.preferencesError = new ApiRequestError({
+      message: 'preference write failed',
+      status: 0,
+    });
 
     render(<WorkViewPage organizationId={ROUTE_ORG} target="task" />);
 

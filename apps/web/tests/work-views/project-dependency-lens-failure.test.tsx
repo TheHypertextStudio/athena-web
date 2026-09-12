@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
+
+import { ApiRequestError } from '../../src/lib/query-core';
 import type { ComponentType } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,6 +13,7 @@ const { graphState, queryState, refetch } = vi.hoisted(() => ({
     isPending: false,
     isError: false,
     isFetching: false,
+    error: undefined as Error | undefined,
   },
   refetch: vi.fn(() => Promise.resolve({ data: { items: [] } })),
 }));
@@ -44,12 +47,14 @@ beforeEach(() => {
   queryState.isPending = false;
   queryState.isError = false;
   queryState.isFetching = false;
+  queryState.error = undefined;
   refetch.mockClear();
 });
 
 describe('ProjectDependencyLens failure states', () => {
   it('yields the content area to a recoverable state when the lens has nothing to show', () => {
     queryState.isError = true;
+    queryState.error = new ApiRequestError({ message: 'x', status: 0 });
 
     const { onRetry } = renderLens();
 
@@ -63,6 +68,7 @@ describe('ProjectDependencyLens failure states', () => {
 
   it('routes recovery through the host so every failed read on the surface is repaired', () => {
     queryState.isError = true;
+    queryState.error = new ApiRequestError({ message: 'x', status: 0 });
 
     const { onRetry } = renderLens();
     fireEvent.click(within(screen.getByRole('alert')).getByRole('button'));
@@ -76,6 +82,7 @@ describe('ProjectDependencyLens failure states', () => {
   it('keeps a readable graph on screen when a refresh fails', () => {
     queryState.data = { items: [] };
     queryState.isError = true;
+    queryState.error = new ApiRequestError({ message: 'x', status: 0 });
 
     renderLens();
 

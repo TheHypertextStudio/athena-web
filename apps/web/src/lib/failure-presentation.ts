@@ -20,8 +20,9 @@
  * not know what happened.
  */
 import { PROBLEM_CATALOG, type ProblemCode, type ProblemRecovery } from './contracts/errors';
-import { OfflineError } from './query-core';
-import { toUserFacingError, UserFacingError } from './problem';
+import { ContractMismatchError, isWorthRetrying, OfflineError } from './query-core';
+import { toUserFacingError, type UserFacingError } from './problem';
+import { PUBLIC_PROBLEM_RECOVERY } from './problem-recovery';
 
 /** The kind of glyph a failure state should wear, chosen with the copy rather than at the callsite. */
 export type FailureIcon = 'offline' | 'retry' | 'permission' | 'billing' | 'identity' | 'missing';
@@ -64,14 +65,7 @@ const OFFLINE: Omit<FailurePresentation, 'status'> = {
   icon: 'offline',
 };
 
-/**
- * No response arrived at all.
- *
- * @remarks
- * `status: 0` is also what a client-side schema parse failure collapses to, because the parse runs
- * inside the query's own fetcher. Both are "Docket answered with something unusable", both are
- * worth retrying once, and neither is the person's fault.
- */
+/** No response arrived at all. */
 const UNREACHABLE: Omit<FailurePresentation, 'status'> = {
   title: "Can't reach Docket.",
   detail: 'The connection failed before the server answered. Check your network and try again.',
@@ -80,31 +74,64 @@ const UNREACHABLE: Omit<FailurePresentation, 'status'> = {
   icon: 'offline',
 };
 
-/** A response Docket could not classify: no problem body, or a status outside the catalog. */
-function unclassified(status: number | undefined): FailurePresentation {
-  if (status !== undefined && status >= 500) {
-    return { ...fromCode('internal'), status };
-  }
+/**
+ * The server answered and this client could not read the answer.
+ *
+ * @remarks
+ * Told apart from {@link UNREACHABLE} because the instruction differs: checking the network is
+ * useless advice for a deploy skew, and retrying cannot change a body the contract rejects. A
+ * reload is the one thing that can help, because it fetches the current client.
+ */
+const MISMATCH: Omit<FailurePresentation, 'status'> = {
+  title: 'Docket needs to reload.',
+  detail:
+    'This page is running an older version than the server. Reload to pick up the current one.',
+  recovery: 'return',
+  canRetry: false,
+  icon: 'missing',
+};
+
+/**
+ * A failure with no stable code: no problem body, a status outside the catalog, or no status at all.
+ *
+ * @remarks
+ * A statusless {@link UserFacingError} carries copy the throwing code chose deliberately — see the
+ * contract-mismatch messages in `use-work-view.ts` — so its own message is more specific than any
+ * fallback and is preferred over it.
+ */
+function unclassified(
+  structured: UserFacingError,
+  fallbackTitle: string,
+  error: unknown,
+): FailurePresentation {
+  const { status } = structured;
+  if (status !== undefined && status >= 500) return { ...fromCode('internal', error), status };
   return {
-    title: 'Docket could not complete that.',
+    title: structured.message === '' ? fallbackTitle : structured.message,
     detail: 'The request did not succeed. Trying again is usually enough.',
     recovery: 'retry',
-    canRetry: true,
+    canRetry: isWorthRetrying(error),
     icon: 'retry',
-    status,
+    ...(status === undefined ? {} : { status }),
   };
 }
 
-/** Read the catalog entry for a stable code. */
-function fromCode(code: ProblemCode): FailurePresentation {
+/**
+ * Read the catalog entry for a stable code.
+ *
+ * @remarks
+ * `canRetry` comes from {@link isWorthRetrying}, not from the catalog's `recovery` verb. The verb is
+ * public guidance for the `/problems` pages — `precondition_failed` and `idempotency_key_reuse` both
+ * carry `'retry'`, but neither can succeed by re-issuing the identical request, and offering the
+ * button loops the person. One predicate decides retryability for the query layer and the UI alike.
+ */
+function fromCode(code: ProblemCode, error: unknown): FailurePresentation {
   const definition = PROBLEM_CATALOG[code];
   return {
     title: definition.title,
     detail: definition.summary,
     recovery: definition.recovery,
-    // Only the catalog's own `retry` verb means the same request can succeed unchanged. A
-    // `forbidden` or a `not_found` does not become true because someone pressed a button again.
-    canRetry: definition.recovery === 'retry',
+    canRetry: isWorthRetrying(error),
     icon: RECOVERY_ICON[definition.recovery],
     code,
     status: definition.status,
@@ -121,26 +148,41 @@ function fromCode(code: ProblemCode): FailurePresentation {
  */
 export function failurePresentation(error: unknown, fallbackTitle: string): FailurePresentation {
   if (error instanceof OfflineError) return { ...OFFLINE, status: 0 };
+  if (error instanceof ContractMismatchError) return { ...MISMATCH, status: 0 };
   const structured = toUserFacingError(error, fallbackTitle);
   if (structured.code !== undefined) {
     // The response's own status wins where it exists; otherwise the catalog's canonical one stands.
     return {
-      ...fromCode(structured.code),
+      ...fromCode(structured.code, error),
       ...(structured.status === undefined ? {} : { status: structured.status }),
     };
   }
   if (structured.status === 0) return { ...UNREACHABLE, status: 0 };
-  if (structured.status === undefined) {
-    return {
-      title: fallbackTitle,
-      detail: 'The request did not succeed. Trying again is usually enough.',
-      recovery: 'retry',
-      canRetry: true,
-      icon: 'retry',
-    };
-  }
-  return unclassified(structured.status);
+  return unclassified(structured, fallbackTitle, error);
 }
 
-/** Re-exported so a caller can narrow on the structured type without a second import. */
-export { UserFacingError };
+/** Where a failure that retrying cannot fix should send the person instead. */
+export interface FailureAction {
+  readonly href: string;
+  readonly label: string;
+}
+
+/**
+ * The destination that can actually resolve a failure the same request cannot.
+ *
+ * @remarks
+ * Without this a refusal renders a title, a sentence and nothing to do — a dead end. The catalog
+ * already answers it: `PUBLIC_PROBLEM_RECOVERY` maps each recovery verb to an href and a label, and
+ * the public `/problems` pages have been using it all along while the product showed less.
+ *
+ * `retry` returns nothing, because that case is served by the surface's own retry control rather
+ * than by navigating away from the thing the person was doing.
+ *
+ * @param failure - The described failure.
+ * @returns the action to offer, or `undefined` when retrying is the right affordance.
+ */
+export function failureAction(failure: FailurePresentation): FailureAction | undefined {
+  if (failure.canRetry || failure.recovery === 'retry') return undefined;
+  const action = PUBLIC_PROBLEM_RECOVERY[failure.recovery];
+  return { href: action.href, label: action.label };
+}

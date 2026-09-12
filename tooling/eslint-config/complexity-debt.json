@@ -271,16 +271,22 @@
       "excess": 33
     },
     "max-lines": {
-      "max": 522,
-      "excess": 22
+      "max": 550,
+      "excess": 50
     },
     "max-lines-per-function": {
       "max": 95,
-      "excess": 15
+      "excess": 17
     },
     "sonarjs/cognitive-complexity": {
       "max": 44,
       "excess": 29
+    }
+  },
+  "apps/api/src/content/drizzle-document-image-reference-storage.ts": {
+    "max-lines-per-function": {
+      "max": 97,
+      "excess": 17
     }
   },
   "apps/api/src/content/drizzle-mention-storage.ts": {
@@ -611,8 +617,8 @@
       "excess": 4
     },
     "max-lines": {
-      "max": 598,
-      "excess": 98
+      "max": 599,
+      "excess": 99
     },
     "max-lines-per-function": {
       "max": 120,
@@ -653,8 +659,8 @@
       "excess": 12
     },
     "max-lines-per-function": {
-      "max": 152,
-      "excess": 72
+      "max": 154,
+      "excess": 74
     }
   },
   "apps/api/src/lib/work-views/sort-sql.ts": {
@@ -687,8 +693,8 @@
   },
   "apps/api/src/mcp/apps/runtime.ts": {
     "max-lines": {
-      "max": 802,
-      "excess": 302
+      "max": 945,
+      "excess": 445
     }
   },
   "apps/api/src/mcp/archive-tool.ts": {
@@ -697,8 +703,8 @@
       "excess": 15
     },
     "max-lines-per-function": {
-      "max": 176,
-      "excess": 185
+      "max": 186,
+      "excess": 197
     },
     "sonarjs/cognitive-complexity": {
       "max": 37,
@@ -764,11 +770,15 @@
   "apps/api/src/mcp/list-work.ts": {
     "complexity": {
       "max": 28,
-      "excess": 25
+      "excess": 26
+    },
+    "max-lines": {
+      "max": 605,
+      "excess": 105
     },
     "max-lines-per-function": {
-      "max": 139,
-      "excess": 97
+      "max": 140,
+      "excess": 117
     },
     "max-params": {
       "max": 6,
@@ -785,12 +795,12 @@
       "excess": 24
     },
     "max-lines": {
-      "max": 566,
-      "excess": 66
+      "max": 594,
+      "excess": 94
     },
     "max-lines-per-function": {
-      "max": 224,
-      "excess": 234
+      "max": 242,
+      "excess": 258
     },
     "sonarjs/cognitive-complexity": {
       "max": 38,
@@ -883,12 +893,12 @@
       "excess": 27
     },
     "max-lines": {
-      "max": 560,
-      "excess": 60
+      "max": 576,
+      "excess": 76
     },
     "max-lines-per-function": {
-      "max": 251,
-      "excess": 376
+      "max": 266,
+      "excess": 413
     },
     "max-params": {
       "max": 7,
@@ -900,13 +910,9 @@
     }
   },
   "apps/api/src/mcp/view-plan-tools.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    },
     "max-lines-per-function": {
-      "max": 143,
-      "excess": 63
+      "max": 148,
+      "excess": 68
     }
   },
   "apps/api/src/mcp/workspaces-tool.ts": {
@@ -917,8 +923,8 @@
   },
   "apps/api/src/mcp/write-tools.ts": {
     "max-lines-per-function": {
-      "max": 157,
-      "excess": 77
+      "max": 185,
+      "excess": 105
     }
   },
   "apps/api/src/permissions/resource-access.ts": {
@@ -1081,12 +1087,12 @@
   },
   "apps/api/src/routes/calendar-google-adapter.ts": {
     "complexity": {
-      "max": 28,
-      "excess": 18
+      "max": 24,
+      "excess": 12
     },
     "max-lines": {
-      "max": 576,
-      "excess": 76
+      "max": 653,
+      "excess": 153
     }
   },
   "apps/api/src/routes/calendar-schedules.ts": {
@@ -1115,12 +1121,12 @@
       "excess": 2
     },
     "max-lines": {
-      "max": 754,
-      "excess": 254
+      "max": 905,
+      "excess": 405
     },
     "max-lines-per-function": {
-      "max": 111,
-      "excess": 50
+      "max": 114,
+      "excess": 71
     },
     "sonarjs/cognitive-complexity": {
       "max": 33,
@@ -1237,12 +1243,12 @@
       "excess": 41
     },
     "max-lines": {
-      "max": 1073,
-      "excess": 573
+      "max": 1066,
+      "excess": 566
     },
     "max-lines-per-function": {
       "max": 241,
-      "excess": 432
+      "excess": 424
     },
     "sonarjs/cognitive-complexity": {
       "max": 45,
@@ -1431,8 +1437,8 @@
   },
   "apps/api/src/routes/me-calendar.ts": {
     "max-lines": {
-      "max": 564,
-      "excess": 64
+      "max": 646,
+      "excess": 146
     },
     "max-lines-per-function": {
       "max": 84,
@@ -1495,8 +1501,8 @@
       "excess": 5
     },
     "max-lines": {
-      "max": 573,
-      "excess": 73
+      "max": 574,
+      "excess": 74
     },
     "max-lines-per-function": {
       "max": 266,
@@ -1593,22 +1599,14 @@
   },
   "apps/api/src/routes/phone-numbers.ts": {
     "max-lines-per-function": {
-      "max": 199,
-      "excess": 119
+      "max": 218,
+      "excess": 138
     }
   },
   "apps/api/src/routes/phone-verification.ts": {
-    "complexity": {
-      "max": 15,
-      "excess": 3
-    },
     "max-lines-per-function": {
-      "max": 111,
-      "excess": 42
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 17,
-      "excess": 2
+      "max": 86,
+      "excess": 6
     }
   },
   "apps/api/src/routes/programs.ts": {
@@ -1629,20 +1627,26 @@
   },
   "apps/api/src/routes/projects.ts": {
     "max-lines-per-function": {
-      "max": 146,
-      "excess": 143
+      "max": 138,
+      "excess": 148
     },
     "complexity": {
       "max": 19,
       "excess": 12
     },
     "max-lines": {
-      "max": 865,
-      "excess": 365
+      "max": 874,
+      "excess": 374
     },
     "sonarjs/cognitive-complexity": {
       "max": 19,
       "excess": 4
+    }
+  },
+  "apps/api/src/routes/publish-brief.ts": {
+    "max-lines": {
+      "max": 541,
+      "excess": 41
     }
   },
   "apps/api/src/routes/roles.ts": {
@@ -1853,18 +1857,56 @@
       "excess": 1
     }
   },
-  "apps/api/src/search/query.ts": {
+  "apps/api/src/search/query-browse.ts": {
     "complexity": {
-      "max": 30,
-      "excess": 51
-    },
-    "max-lines": {
-      "max": 1115,
-      "excess": 615
+      "max": 17,
+      "excess": 5
     },
     "sonarjs/cognitive-complexity": {
       "max": 22,
-      "excess": 19
+      "excess": 7
+    }
+  },
+  "apps/api/src/search/query-filters.ts": {
+    "complexity": {
+      "max": 30,
+      "excess": 18
+    },
+    "sonarjs/cognitive-complexity": {
+      "max": 20,
+      "excess": 5
+    }
+  },
+  "apps/api/src/search/query-ranked-scan.ts": {
+    "complexity": {
+      "max": 20,
+      "excess": 8
+    },
+    "sonarjs/cognitive-complexity": {
+      "max": 21,
+      "excess": 6
+    }
+  },
+  "apps/api/src/search/query-scoring.ts": {
+    "complexity": {
+      "max": 18,
+      "excess": 6
+    },
+    "sonarjs/cognitive-complexity": {
+      "max": 16,
+      "excess": 1
+    }
+  },
+  "apps/api/src/search/query-visibility.ts": {
+    "complexity": {
+      "max": 16,
+      "excess": 4
+    }
+  },
+  "apps/api/src/search/query.ts": {
+    "complexity": {
+      "max": 22,
+      "excess": 10
     }
   },
   "apps/api/src/search/routes.ts": {
@@ -2069,38 +2111,48 @@
       "excess": 1
     },
     "max-lines": {
-      "max": 950,
-      "excess": 450
+      "max": 1050,
+      "excess": 550
     },
     "max-lines-per-function": {
-      "max": 101,
-      "excess": 21
+      "max": 138,
+      "excess": 58
     },
     "max-params": {
       "max": 6,
       "excess": 1
     }
   },
+  "apps/api/src/services/work-location/schedule-repository.ts": {
+    "max-lines": {
+      "max": 512,
+      "excess": 12
+    },
+    "max-lines-per-function": {
+      "max": 84,
+      "excess": 6
+    }
+  },
   "apps/api/src/services/work-location/sync-engine.ts": {
     "complexity": {
       "max": 33,
-      "excess": 71
+      "excess": 65
     },
     "max-depth": {
       "max": 5,
       "excess": 2
     },
     "max-lines": {
-      "max": 1109,
-      "excess": 609
+      "max": 1544,
+      "excess": 1044
     },
     "max-lines-per-function": {
-      "max": 204,
-      "excess": 317
+      "max": 197,
+      "excess": 267
     },
     "sonarjs/cognitive-complexity": {
       "max": 52,
-      "excess": 69
+      "excess": 62
     }
   },
   "apps/api/src/time/access.ts": {
@@ -2151,8 +2203,8 @@
       "excess": 10
     },
     "max-lines": {
-      "max": 761,
-      "excess": 261
+      "max": 762,
+      "excess": 262
     },
     "max-lines-per-function": {
       "max": 149,
@@ -2171,8 +2223,8 @@
   },
   "apps/api/tests/account/export.test.ts": {
     "max-lines": {
-      "max": 532,
-      "excess": 32
+      "max": 555,
+      "excess": 55
     }
   },
   "apps/api/tests/agent/athena-dispatcher.test.ts": {
@@ -2207,8 +2259,8 @@
   },
   "apps/api/tests/contracts/legacy/dto-dto.test.ts": {
     "max-lines": {
-      "max": 2471,
-      "excess": 1971
+      "max": 2467,
+      "excess": 1967
     }
   },
   "apps/api/tests/contracts/legacy/dto-object-command.test.ts": {
@@ -2253,8 +2305,8 @@
   },
   "apps/api/tests/mcp/mcp-capabilities.test.ts": {
     "max-lines": {
-      "max": 756,
-      "excess": 256
+      "max": 774,
+      "excess": 274
     }
   },
   "apps/api/tests/mcp/mcp-directive.test.ts": {
@@ -2281,8 +2333,8 @@
       "excess": 3
     },
     "max-lines": {
-      "max": 1822,
-      "excess": 1322
+      "max": 1888,
+      "excess": 1388
     }
   },
   "apps/api/tests/mcp/mcp-tools.test.ts": {
@@ -2293,8 +2345,8 @@
   },
   "apps/api/tests/mcp/mcp-update-tool.test.ts": {
     "max-lines": {
-      "max": 705,
-      "excess": 205
+      "max": 706,
+      "excess": 206
     }
   },
   "apps/api/tests/recurrence/materialize.test.ts": {
@@ -2337,28 +2389,40 @@
       "excess": 1108
     }
   },
+  "apps/api/tests/routes/calendar-agenda.test.ts": {
+    "max-lines": {
+      "max": 598,
+      "excess": 98
+    }
+  },
   "apps/api/tests/routes/calendar-google-adapter-edges.test.ts": {
     "max-lines": {
-      "max": 508,
-      "excess": 8
+      "max": 584,
+      "excess": 84
     }
   },
   "apps/api/tests/routes/calendar-outbox-edges.test.ts": {
     "max-lines": {
-      "max": 634,
-      "excess": 134
+      "max": 640,
+      "excess": 140
+    }
+  },
+  "apps/api/tests/routes/calendar-read.test.ts": {
+    "max-lines": {
+      "max": 636,
+      "excess": 136
     }
   },
   "apps/api/tests/routes/calendar-sync-engine.test.ts": {
     "max-lines": {
-      "max": 1205,
-      "excess": 705
+      "max": 1442,
+      "excess": 942
     }
   },
   "apps/api/tests/routes/calendar-sync-sweep.test.ts": {
     "max-lines": {
-      "max": 547,
-      "excess": 47
+      "max": 561,
+      "excess": 61
     }
   },
   "apps/api/tests/routes/calendar-task-links.test.ts": {
@@ -2451,8 +2515,8 @@
   },
   "apps/api/tests/routes/initiatives-detail.test.ts": {
     "max-lines": {
-      "max": 1484,
-      "excess": 984
+      "max": 1486,
+      "excess": 986
     }
   },
   "apps/api/tests/routes/integration-reconcile-graph-appliers.test.ts": {
@@ -2509,14 +2573,14 @@
   },
   "apps/api/tests/routes/lattice-connection-branches.test.ts": {
     "max-lines": {
-      "max": 575,
-      "excess": 75
+      "max": 571,
+      "excess": 71
     }
   },
   "apps/api/tests/routes/lattice-routes-branches.test.ts": {
     "max-lines": {
-      "max": 697,
-      "excess": 197
+      "max": 699,
+      "excess": 199
     }
   },
   "apps/api/tests/routes/me-athena-agents-stream.test.ts": {
@@ -2567,10 +2631,16 @@
       "excess": 27
     }
   },
+  "apps/api/tests/routes/phone-numbers.test.ts": {
+    "max-lines": {
+      "max": 581,
+      "excess": 81
+    }
+  },
   "apps/api/tests/routes/projects-detail.test.ts": {
     "max-lines": {
-      "max": 754,
-      "excess": 254
+      "max": 809,
+      "excess": 309
     }
   },
   "apps/api/tests/routes/publish-brief.test.ts": {
@@ -2581,8 +2651,8 @@
   },
   "apps/api/tests/routes/publish.test.ts": {
     "max-lines": {
-      "max": 913,
-      "excess": 413
+      "max": 1073,
+      "excess": 573
     }
   },
   "apps/api/tests/routes/recurrence.test.ts": {
@@ -2633,6 +2703,12 @@
       "excess": 107
     }
   },
+  "apps/api/tests/routes/work-location.test.ts": {
+    "max-lines": {
+      "max": 549,
+      "excess": 49
+    }
+  },
   "apps/api/tests/routes/work-statuses.test.ts": {
     "max-lines": {
       "max": 970,
@@ -2645,8 +2721,8 @@
       "excess": 15
     },
     "max-lines": {
-      "max": 3065,
-      "excess": 2565
+      "max": 3157,
+      "excess": 2657
     }
   },
   "apps/api/tests/search/jobs.test.ts": {
@@ -2657,8 +2733,8 @@
   },
   "apps/api/tests/search/query.test.ts": {
     "max-lines": {
-      "max": 1594,
-      "excess": 1094
+      "max": 1736,
+      "excess": 1236
     }
   },
   "apps/api/tests/search/used-in.test.ts": {
@@ -2713,8 +2789,8 @@
   },
   "apps/api/tests/services/work-location/sync-engine.test.ts": {
     "max-lines": {
-      "max": 696,
-      "excess": 196
+      "max": 1350,
+      "excess": 850
     }
   },
   "apps/api/tests/support/linear-agent-webhook.ts": {
@@ -2743,8 +2819,8 @@
   },
   "apps/api/tests/work-views/query.test.ts": {
     "max-lines": {
-      "max": 1791,
-      "excess": 1291
+      "max": 1830,
+      "excess": 1330
     }
   },
   "apps/api/tests/work-views/scalar-relations.test.ts": {
@@ -2805,8 +2881,8 @@
   },
   "apps/web/e2e/mcp/widget-shots.spec.ts": {
     "max-lines": {
-      "max": 894,
-      "excess": 394
+      "max": 1034,
+      "excess": 534
     }
   },
   "apps/web/e2e/settings/settings-audit-shots.spec.ts": {
@@ -2905,8 +2981,8 @@
       "excess": 2
     },
     "max-lines-per-function": {
-      "max": 235,
-      "excess": 155
+      "max": 245,
+      "excess": 165
     }
   },
   "apps/web/src/app/(app)/calendar/calendar-comparison-controls.tsx": {
@@ -2977,8 +3053,8 @@
       "excess": 16
     },
     "max-lines-per-function": {
-      "max": 366,
-      "excess": 286
+      "max": 368,
+      "excess": 288
     },
     "sonarjs/cognitive-complexity": {
       "max": 27,
@@ -3005,12 +3081,12 @@
       "excess": 99
     },
     "max-lines": {
-      "max": 760,
-      "excess": 260
+      "max": 761,
+      "excess": 261
     },
     "max-lines-per-function": {
-      "max": 678,
-      "excess": 598
+      "max": 679,
+      "excess": 599
     },
     "sonarjs/cognitive-complexity": {
       "max": 59,
@@ -3037,8 +3113,8 @@
       "excess": 31
     },
     "max-lines-per-function": {
-      "max": 415,
-      "excess": 335
+      "max": 416,
+      "excess": 336
     },
     "sonarjs/cognitive-complexity": {
       "max": 26,
@@ -3047,16 +3123,16 @@
   },
   "apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx": {
     "complexity": {
-      "max": 127,
-      "excess": 115
+      "max": 125,
+      "excess": 113
     },
     "max-lines": {
-      "max": 952,
-      "excess": 452
+      "max": 941,
+      "excess": 441
     },
     "max-lines-per-function": {
-      "max": 799,
-      "excess": 719
+      "max": 788,
+      "excess": 708
     },
     "sonarjs/cognitive-complexity": {
       "max": 77,
@@ -3069,12 +3145,12 @@
       "excess": 13
     },
     "max-lines": {
-      "max": 551,
-      "excess": 51
+      "max": 556,
+      "excess": 56
     },
     "max-lines-per-function": {
-      "max": 295,
-      "excess": 274
+      "max": 299,
+      "excess": 278
     },
     "sonarjs/cognitive-complexity": {
       "max": 25,
@@ -3093,8 +3169,8 @@
       "excess": 15
     },
     "max-lines-per-function": {
-      "max": 262,
-      "excess": 182
+      "max": 263,
+      "excess": 183
     },
     "sonarjs/cognitive-complexity": {
       "max": 30,
@@ -3107,8 +3183,8 @@
       "excess": 9
     },
     "max-lines-per-function": {
-      "max": 296,
-      "excess": 216
+      "max": 297,
+      "excess": 217
     }
   },
   "apps/web/src/app/(app)/orgs/[orgId]/settings/templates/page.tsx": {
@@ -3137,12 +3213,12 @@
       "excess": 13
     },
     "max-lines": {
-      "max": 518,
-      "excess": 18
+      "max": 519,
+      "excess": 19
     },
     "max-lines-per-function": {
-      "max": 464,
-      "excess": 384
+      "max": 465,
+      "excess": 385
     }
   },
   "apps/web/src/app/(app)/orgs/[orgId]/teams/[teamId]/team-detail-client.tsx": {
@@ -3151,8 +3227,8 @@
       "excess": 6
     },
     "max-lines-per-function": {
-      "max": 231,
-      "excess": 151
+      "max": 232,
+      "excess": 152
     },
     "sonarjs/cognitive-complexity": {
       "max": 24,
@@ -3207,20 +3283,16 @@
   },
   "apps/web/src/app/(app)/settings/athena/lattice-section.tsx": {
     "complexity": {
-      "max": 45,
-      "excess": 33
+      "max": 25,
+      "excess": 13
     },
     "max-lines": {
-      "max": 556,
-      "excess": 56
+      "max": 539,
+      "excess": 39
     },
     "max-lines-per-function": {
-      "max": 266,
-      "excess": 193
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 27,
-      "excess": 12
+      "max": 272,
+      "excess": 194
     }
   },
   "apps/web/src/app/(app)/settings/athena/page.tsx": {
@@ -3257,28 +3329,30 @@
       "excess": 6
     }
   },
+  "apps/web/src/app/(app)/settings/places/page.tsx": {
+    "max-lines": {
+      "max": 697,
+      "excess": 197
+    },
+    "max-lines-per-function": {
+      "max": 281,
+      "excess": 226
+    }
+  },
   "apps/web/src/app/(app)/settings/profile/page.tsx": {
     "max-lines-per-function": {
       "max": 85,
       "excess": 5
     }
   },
-  "apps/web/src/app/(app)/settings/work-locations/page.tsx": {
-    "complexity": {
-      "max": 47,
-      "excess": 35
-    },
+  "apps/web/src/app/(app)/settings/work-schedule/page.tsx": {
     "max-lines": {
-      "max": 799,
-      "excess": 299
+      "max": 612,
+      "excess": 112
     },
     "max-lines-per-function": {
-      "max": 690,
-      "excess": 625
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 30,
-      "excess": 15
+      "max": 161,
+      "excess": 81
     }
   },
   "apps/web/src/app/(app)/tasks/all-tasks-client.tsx": {
@@ -3401,12 +3475,12 @@
       "excess": 4
     },
     "max-lines-per-function": {
-      "max": 299,
-      "excess": 219
+      "max": 301,
+      "excess": 221
     },
     "sonarjs/cognitive-complexity": {
-      "max": 17,
-      "excess": 2
+      "max": 16,
+      "excess": 1
     }
   },
   "apps/web/src/components/agenda/agenda-context.tsx": {
@@ -3437,8 +3511,8 @@
       "excess": 29
     },
     "max-lines-per-function": {
-      "max": 158,
-      "excess": 78
+      "max": 161,
+      "excess": 81
     },
     "sonarjs/cognitive-complexity": {
       "max": 53,
@@ -3509,8 +3583,8 @@
       "excess": 19
     },
     "max-lines": {
-      "max": 734,
-      "excess": 234
+      "max": 743,
+      "excess": 243
     },
     "max-lines-per-function": {
       "max": 175,
@@ -3687,20 +3761,20 @@
   },
   "apps/web/src/components/athena/voice-phone-numbers.tsx": {
     "complexity": {
-      "max": 28,
-      "excess": 18
+      "max": 24,
+      "excess": 23
     },
     "max-lines": {
-      "max": 555,
-      "excess": 55
+      "max": 739,
+      "excess": 239
     },
     "max-lines-per-function": {
-      "max": 492,
-      "excess": 442
+      "max": 488,
+      "excess": 574
     },
     "sonarjs/cognitive-complexity": {
-      "max": 31,
-      "excess": 16
+      "max": 30,
+      "excess": 19
     }
   },
   "apps/web/src/components/authentication-interlock.tsx": {
@@ -3729,22 +3803,6 @@
     "max-lines-per-function": {
       "max": 144,
       "excess": 64
-    }
-  },
-  "apps/web/src/components/calendar/calendar-layer-dedup.ts": {
-    "complexity": {
-      "max": 21,
-      "excess": 9
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 28,
-      "excess": 13
-    }
-  },
-  "apps/web/src/components/calendar/calendar-layer-panel.tsx": {
-    "max-lines-per-function": {
-      "max": 103,
-      "excess": 23
     }
   },
   "apps/web/src/components/calendar/calendar-timezone-dialog.tsx": {
@@ -3781,40 +3839,22 @@
       "excess": 127
     }
   },
-  "apps/web/src/components/calendar/item-drawer/calendar-item-workspace.tsx": {
-    "complexity": {
-      "max": 16,
-      "excess": 4
-    },
+  "apps/web/src/components/calendar/item-drawer/linked-task-row.tsx": {
     "max-lines-per-function": {
-      "max": 109,
-      "excess": 29
+      "max": 97,
+      "excess": 17
     }
   },
-  "apps/web/src/components/calendar/item-drawer/core-fields-form.tsx": {
-    "complexity": {
-      "max": 38,
-      "excess": 35
-    },
+  "apps/web/src/components/calendar/item-drawer/use-core-field-drafts.ts": {
     "max-lines-per-function": {
-      "max": 301,
-      "excess": 221
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 31,
-      "excess": 21
+      "max": 116,
+      "excess": 36
     }
   },
-  "apps/web/src/components/calendar/item-drawer/linked-tasks-section.tsx": {
+  "apps/web/src/components/calendar/item-peek/calendar-item-peek-overlay.tsx": {
     "max-lines-per-function": {
-      "max": 144,
-      "excess": 85
-    }
-  },
-  "apps/web/src/components/calendar/item-drawer/relations-section.tsx": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
+      "max": 82,
+      "excess": 2
     }
   },
   "apps/web/src/components/calendar/timezone-index.ts": {
@@ -3865,12 +3905,12 @@
       "excess": 48
     },
     "max-lines": {
-      "max": 792,
-      "excess": 292
+      "max": 802,
+      "excess": 302
     },
     "max-lines-per-function": {
-      "max": 584,
-      "excess": 508
+      "max": 589,
+      "excess": 513
     },
     "sonarjs/cognitive-complexity": {
       "max": 53,
@@ -3999,12 +4039,12 @@
       "excess": 11
     },
     "max-lines": {
-      "max": 706,
-      "excess": 206
+      "max": 701,
+      "excess": 201
     },
     "max-lines-per-function": {
-      "max": 624,
-      "excess": 544
+      "max": 618,
+      "excess": 538
     }
   },
   "apps/web/src/components/canvas/task-hierarchy-layout.ts": {
@@ -4107,16 +4147,16 @@
   },
   "apps/web/src/components/composer/composer-shell.tsx": {
     "complexity": {
-      "max": 41,
-      "excess": 29
+      "max": 40,
+      "excess": 28
     },
     "max-lines-per-function": {
-      "max": 260,
-      "excess": 180
+      "max": 265,
+      "excess": 185
     },
     "sonarjs/cognitive-complexity": {
-      "max": 31,
-      "excess": 16
+      "max": 29,
+      "excess": 14
     }
   },
   "apps/web/src/components/composer/template-menu.tsx": {
@@ -4211,36 +4251,42 @@
       "excess": 8
     }
   },
+  "apps/web/src/components/editor/document-figure-extension.ts": {
+    "max-lines-per-function": {
+      "max": 83,
+      "excess": 3
+    }
+  },
+  "apps/web/src/components/editor/document-figure-node-view.tsx": {
+    "max-lines-per-function": {
+      "max": 125,
+      "excess": 45
+    }
+  },
   "apps/web/src/components/editor/editable-title.tsx": {
     "max-lines-per-function": {
       "max": 122,
       "excess": 42
     }
   },
-  "apps/web/src/components/editor/entity-document.tsx": {
-    "max-lines-per-function": {
-      "max": 133,
-      "excess": 53
-    }
-  },
   "apps/web/src/components/editor/freeform-text.tsx": {
     "complexity": {
       "max": 23,
-      "excess": 14
+      "excess": 20
+    },
+    "max-lines": {
+      "max": 633,
+      "excess": 133
     },
     "max-lines-per-function": {
-      "max": 285,
-      "excess": 217
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 16,
-      "excess": 1
+      "max": 387,
+      "excess": 324
     }
   },
   "apps/web/src/components/editor/markdown-clipboard.ts": {
     "complexity": {
       "max": 25,
-      "excess": 16
+      "excess": 17
     },
     "sonarjs/cognitive-complexity": {
       "max": 34,
@@ -4249,8 +4295,8 @@
   },
   "apps/web/src/components/editor/render-markdown-tokens.tsx": {
     "complexity": {
-      "max": 21,
-      "excess": 15
+      "max": 19,
+      "excess": 12
     }
   },
   "apps/web/src/components/editor/suggestion-plugin.ts": {
@@ -4269,10 +4315,16 @@
       "excess": 161
     }
   },
+  "apps/web/src/components/editor/use-document-figure-uploads.ts": {
+    "max-lines-per-function": {
+      "max": 123,
+      "excess": 43
+    }
+  },
   "apps/web/src/components/editor/use-slash-commands.tsx": {
     "max-lines-per-function": {
-      "max": 144,
-      "excess": 64
+      "max": 157,
+      "excess": 77
     }
   },
   "apps/web/src/components/entity-detail/resources-tab.tsx": {
@@ -4281,20 +4333,24 @@
       "excess": 8
     },
     "max-lines-per-function": {
-      "max": 216,
-      "excess": 136
+      "max": 219,
+      "excess": 139
     }
   },
   "apps/web/src/components/entity-detail/updates-panel.tsx": {
     "max-lines-per-function": {
-      "max": 167,
-      "excess": 87
+      "max": 169,
+      "excess": 89
     }
   },
-  "apps/web/src/components/entity-display/entity-icon-picker.tsx": {
+  "apps/web/src/components/entity-display/entity-icon-picker-loaded.tsx": {
+    "max-lines": {
+      "max": 1262,
+      "excess": 762
+    },
     "max-lines-per-function": {
-      "max": 153,
-      "excess": 73
+      "max": 323,
+      "excess": 474
     }
   },
   "apps/web/src/components/in-page-search/in-page-search-field.tsx": {
@@ -4347,8 +4403,8 @@
   },
   "apps/web/src/components/initiatives/initiative-form-pickers.tsx": {
     "max-lines-per-function": {
-      "max": 101,
-      "excess": 21
+      "max": 102,
+      "excess": 22
     }
   },
   "apps/web/src/components/initiatives/initiative-hierarchy-picker-overlay.tsx": {
@@ -4539,16 +4595,16 @@
   },
   "apps/web/src/components/pickers/relation-target-picker-overlay.tsx": {
     "complexity": {
-      "max": 26,
-      "excess": 19
+      "max": 23,
+      "excess": 16
     },
     "max-lines-per-function": {
-      "max": 265,
-      "excess": 185
+      "max": 256,
+      "excess": 176
     },
     "sonarjs/cognitive-complexity": {
-      "max": 45,
-      "excess": 30
+      "max": 17,
+      "excess": 2
     }
   },
   "apps/web/src/components/pickers/use-composer-options.ts": {
@@ -4557,8 +4613,8 @@
       "excess": 41
     },
     "max-lines-per-function": {
-      "max": 304,
-      "excess": 224
+      "max": 298,
+      "excess": 218
     }
   },
   "apps/web/src/components/programs/create-program.tsx": {
@@ -4595,16 +4651,10 @@
       "excess": 28
     }
   },
-  "apps/web/src/components/project-detail/overview-summary.tsx": {
-    "max-lines-per-function": {
-      "max": 120,
-      "excess": 40
-    }
-  },
   "apps/web/src/components/project-detail/project-milestones.tsx": {
     "max-lines-per-function": {
-      "max": 187,
-      "excess": 131
+      "max": 108,
+      "excess": 28
     }
   },
   "apps/web/src/components/project-detail/project-restore-controller.ts": {
@@ -4622,15 +4672,15 @@
   "apps/web/src/components/projects/create-project.tsx": {
     "complexity": {
       "max": 23,
-      "excess": 19
+      "excess": 13
     },
     "max-lines": {
-      "max": 511,
-      "excess": 11
+      "max": 544,
+      "excess": 44
     },
     "max-lines-per-function": {
-      "max": 322,
-      "excess": 245
+      "max": 304,
+      "excess": 227
     }
   },
   "apps/web/src/components/projects/project-catalog.ts": {
@@ -4641,8 +4691,8 @@
   },
   "apps/web/src/components/projects/project-form-pickers.tsx": {
     "max-lines-per-function": {
-      "max": 106,
-      "excess": 26
+      "max": 108,
+      "excess": 28
     }
   },
   "apps/web/src/components/projects/project-relation-port.ts": {
@@ -4675,18 +4725,24 @@
       "excess": 19
     }
   },
+  "apps/web/src/components/publishing/brief-document.tsx": {
+    "max-lines-per-function": {
+      "max": 81,
+      "excess": 1
+    }
+  },
   "apps/web/src/components/publishing/publish-action.tsx": {
     "complexity": {
-      "max": 32,
-      "excess": 20
+      "max": 29,
+      "excess": 17
     },
     "max-lines-per-function": {
-      "max": 216,
-      "excess": 136
+      "max": 210,
+      "excess": 130
     },
     "sonarjs/cognitive-complexity": {
-      "max": 33,
-      "excess": 18
+      "max": 27,
+      "excess": 12
     }
   },
   "apps/web/src/components/publishing/publishing-settings.tsx": {
@@ -4983,8 +5039,8 @@
       "excess": 47
     },
     "max-lines": {
-      "max": 684,
-      "excess": 184
+      "max": 685,
+      "excess": 185
     },
     "max-lines-per-function": {
       "max": 427,
@@ -5129,16 +5185,20 @@
   },
   "apps/web/src/components/settings/google-calendar-settings.tsx": {
     "complexity": {
-      "max": 42,
-      "excess": 30
+      "max": 40,
+      "excess": 28
+    },
+    "max-lines": {
+      "max": 636,
+      "excess": 136
     },
     "max-lines-per-function": {
-      "max": 279,
-      "excess": 212
+      "max": 288,
+      "excess": 246
     },
     "sonarjs/cognitive-complexity": {
-      "max": 25,
-      "excess": 10
+      "max": 24,
+      "excess": 9
     }
   },
   "apps/web/src/components/settings/gtasks-accounts-section.tsx": {
@@ -5445,12 +5505,8 @@
   },
   "apps/web/src/components/tabs/resolve-title.ts": {
     "complexity": {
-      "max": 19,
-      "excess": 11
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 18,
-      "excess": 3
+      "max": 13,
+      "excess": 2
     }
   },
   "apps/web/src/components/task-detail/Subtasks.tsx": {
@@ -5501,22 +5557,16 @@
       "excess": 44
     },
     "max-lines": {
-      "max": 592,
-      "excess": 92
+      "max": 599,
+      "excess": 99
     },
     "max-lines-per-function": {
-      "max": 401,
-      "excess": 332
+      "max": 408,
+      "excess": 339
     },
     "sonarjs/cognitive-complexity": {
       "max": 24,
       "excess": 9
-    }
-  },
-  "apps/web/src/components/tasks/quick-add-task-row.tsx": {
-    "max-lines-per-function": {
-      "max": 98,
-      "excess": 18
     }
   },
   "apps/web/src/components/tasks/task-actions.ts": {
@@ -5531,8 +5581,8 @@
   },
   "apps/web/src/components/tasks/task-form-pickers.tsx": {
     "max-lines-per-function": {
-      "max": 160,
-      "excess": 80
+      "max": 161,
+      "excess": 81
     }
   },
   "apps/web/src/components/tasks/task-hierarchy-model.ts": {
@@ -5579,14 +5629,14 @@
   },
   "apps/web/src/components/teams/team-card.tsx": {
     "max-lines-per-function": {
-      "max": 96,
-      "excess": 16
+      "max": 97,
+      "excess": 17
     }
   },
   "apps/web/src/components/teams/team-list-ui.tsx": {
     "max-lines-per-function": {
-      "max": 91,
-      "excess": 11
+      "max": 92,
+      "excess": 12
     }
   },
   "apps/web/src/components/teams/team-picker.tsx": {
@@ -5595,8 +5645,8 @@
       "excess": 2
     },
     "max-lines-per-function": {
-      "max": 81,
-      "excess": 1
+      "max": 83,
+      "excess": 3
     }
   },
   "apps/web/src/components/templates/merge.ts": {
@@ -5855,10 +5905,16 @@
       "excess": 11
     }
   },
+  "apps/web/src/components/views/quick-add-row.tsx": {
+    "max-lines-per-function": {
+      "max": 99,
+      "excess": 19
+    }
+  },
   "apps/web/src/components/views/save-view-composer.tsx": {
     "max-lines-per-function": {
-      "max": 101,
-      "excess": 21
+      "max": 105,
+      "excess": 25
     }
   },
   "apps/web/src/components/views/task-catalog.ts": {
@@ -5870,7 +5926,7 @@
   "apps/web/src/components/views/task-table.tsx": {
     "max-lines-per-function": {
       "max": 114,
-      "excess": 46
+      "excess": 47
     }
   },
   "apps/web/src/components/views/use-view-state.ts": {
@@ -5893,8 +5949,8 @@
   },
   "apps/web/src/components/work-location/place-editor-dialog.tsx": {
     "max-lines-per-function": {
-      "max": 101,
-      "excess": 21
+      "max": 108,
+      "excess": 28
     }
   },
   "apps/web/src/components/work-location/place-map-picker.tsx": {
@@ -5951,6 +6007,16 @@
       "excess": 31
     }
   },
+  "apps/web/src/components/work-location/work-schedule-editor-dialog.tsx": {
+    "max-lines": {
+      "max": 711,
+      "excess": 211
+    },
+    "max-lines-per-function": {
+      "max": 349,
+      "excess": 348
+    }
+  },
   "apps/web/src/components/work-views/display-control-panel.tsx": {
     "max-lines-per-function": {
       "max": 220,
@@ -5981,8 +6047,8 @@
       "excess": 3
     },
     "max-lines-per-function": {
-      "max": 103,
-      "excess": 23
+      "max": 104,
+      "excess": 24
     }
   },
   "apps/web/src/components/work-views/renderer-types.ts": {
@@ -6053,8 +6119,8 @@
   },
   "apps/web/src/components/work-views/work-list-columns.tsx": {
     "max-lines": {
-      "max": 523,
-      "excess": 23
+      "max": 524,
+      "excess": 24
     }
   },
   "apps/web/src/components/work-views/work-list.tsx": {
@@ -6140,7 +6206,7 @@
   "apps/web/src/lib/clipboard/html-to-markdown.ts": {
     "complexity": {
       "max": 19,
-      "excess": 10
+      "excess": 19
     }
   },
   "apps/web/src/lib/contracts/recurrence.ts": {
@@ -6155,8 +6221,8 @@
       "excess": 11
     },
     "max-lines-per-function": {
-      "max": 127,
-      "excess": 89
+      "max": 126,
+      "excess": 87
     }
   },
   "apps/web/src/lib/interactions/navigation.tsx": {
@@ -6283,8 +6349,8 @@
       "excess": 33
     },
     "max-lines-per-function": {
-      "max": 144,
-      "excess": 64
+      "max": 139,
+      "excess": 59
     }
   },
   "apps/web/src/lib/use-task-mutations.ts": {
@@ -6309,20 +6375,26 @@
   },
   "apps/web/src/proxy.ts": {
     "complexity": {
-      "max": 14,
-      "excess": 2
+      "max": 13,
+      "excess": 1
     }
   },
   "apps/web/tests/agenda/agenda-canvas-interactions.test.tsx": {
     "max-lines": {
-      "max": 670,
-      "excess": 170
+      "max": 694,
+      "excess": 194
     }
   },
   "apps/web/tests/athena/mcp-app-view.test.tsx": {
     "max-lines": {
       "max": 682,
       "excess": 182
+    }
+  },
+  "apps/web/tests/athena/voice-phone-numbers.test.tsx": {
+    "max-lines": {
+      "max": 571,
+      "excess": 71
     }
   },
   "apps/web/tests/calendar/calendar-data.test.tsx": {
@@ -6333,14 +6405,14 @@
   },
   "apps/web/tests/calendar/calendar-item-drawer.test.tsx": {
     "max-lines": {
-      "max": 600,
-      "excess": 100
+      "max": 704,
+      "excess": 204
     }
   },
   "apps/web/tests/calendar/calendar-scheduling-surface.test.tsx": {
     "max-lines": {
-      "max": 1064,
-      "excess": 564
+      "max": 1063,
+      "excess": 563
     }
   },
   "apps/web/tests/components/initiatives/initiative-actions.test.tsx": {
@@ -6367,8 +6439,8 @@
       "excess": 7
     },
     "max-lines": {
-      "max": 866,
-      "excess": 366
+      "max": 921,
+      "excess": 421
     }
   },
   "apps/web/tests/composers/create-task.test.tsx": {
@@ -6377,8 +6449,8 @@
       "excess": 3
     },
     "max-lines": {
-      "max": 1119,
-      "excess": 619
+      "max": 1136,
+      "excess": 636
     }
   },
   "apps/web/tests/create-object/create-object-provider.test.tsx": {
@@ -6403,6 +6475,12 @@
     "sonarjs/cognitive-complexity": {
       "max": 62,
       "excess": 47
+    }
+  },
+  "apps/web/tests/editor/editor-surface.test.tsx": {
+    "max-lines": {
+      "max": 509,
+      "excess": 9
     }
   },
   "apps/web/tests/editor/slash-commands.test.tsx": {
@@ -6431,8 +6509,8 @@
   },
   "apps/web/tests/scheduling/scheduling-canvas.test.tsx": {
     "max-lines": {
-      "max": 1841,
-      "excess": 1341
+      "max": 1846,
+      "excess": 1346
     }
   },
   "apps/web/tests/scheduling/scheduling-import-boundaries.test.ts": {
@@ -6689,14 +6767,36 @@
   },
   "domains/planning/src/contracts/calendar.ts": {
     "max-lines": {
-      "max": 892,
-      "excess": 392
+      "max": 1023,
+      "excess": 523
+    }
+  },
+  "domains/planning/src/contracts/work-location.ts": {
+    "max-lines": {
+      "max": 690,
+      "excess": 190
+    }
+  },
+  "domains/planning/src/work-location-resolution.ts": {
+    "max-lines": {
+      "max": 624,
+      "excess": 124
+    },
+    "max-lines-per-function": {
+      "max": 87,
+      "excess": 7
     }
   },
   "domains/planning/tests/legacy/dto-calendar.test.ts": {
     "max-lines": {
-      "max": 536,
-      "excess": 36
+      "max": 583,
+      "excess": 83
+    }
+  },
+  "domains/planning/tests/work-location-resolution.test.ts": {
+    "max-lines": {
+      "max": 748,
+      "excess": 248
     }
   },
   "domains/work/src/contracts/initiative.ts": {
@@ -6723,6 +6823,18 @@
       "excess": 753
     }
   },
+  "domains/work/src/generated/emoji-hexcodes.ts": {
+    "max-lines": {
+      "max": 3959,
+      "excess": 3459
+    }
+  },
+  "domains/work/src/generated/material-symbol-names.ts": {
+    "max-lines": {
+      "max": 3911,
+      "excess": 3411
+    }
+  },
   "domains/work/src/parent-resolution.ts": {
     "complexity": {
       "max": 13,
@@ -6731,32 +6843,38 @@
   },
   "domains/work/tests/legacy/dto-work-contracts.test.ts": {
     "max-lines": {
-      "max": 774,
-      "excess": 274
+      "max": 770,
+      "excess": 270
     }
   },
   "domains/work/tests/legacy/work-view.test.ts": {
     "max-lines": {
-      "max": 578,
-      "excess": 78
+      "max": 579,
+      "excess": 79
     }
   },
   "packages/auth/src/auth-builder.ts": {
     "complexity": {
-      "max": 31,
-      "excess": 26
+      "max": 30,
+      "excess": 25
     },
     "max-lines": {
-      "max": 680,
-      "excess": 180
+      "max": 727,
+      "excess": 227
     },
     "max-lines-per-function": {
-      "max": 404,
-      "excess": 324
+      "max": 408,
+      "excess": 328
     },
     "sonarjs/cognitive-complexity": {
-      "max": 28,
-      "excess": 13
+      "max": 27,
+      "excess": 12
+    }
+  },
+  "packages/auth/src/passkey-migration.ts": {
+    "max-lines-per-function": {
+      "max": 84,
+      "excess": 4
     }
   },
   "packages/auth/src/restore-credential.ts": {
@@ -6773,8 +6891,14 @@
   },
   "packages/auth/tests/builder/auth.test.ts": {
     "max-lines": {
-      "max": 1883,
-      "excess": 1383
+      "max": 1972,
+      "excess": 1472
+    }
+  },
+  "packages/auth/tests/passkey-migration.test.ts": {
+    "max-lines": {
+      "max": 562,
+      "excess": 62
     }
   },
   "packages/auth/tests/restore-credential.test.ts": {
@@ -6797,8 +6921,8 @@
   },
   "packages/db/src/enums.ts": {
     "max-lines": {
-      "max": 697,
-      "excess": 197
+      "max": 708,
+      "excess": 208
     }
   },
   "packages/db/src/identity-access.ts": {
@@ -6823,8 +6947,8 @@
   },
   "packages/db/src/schema/crosscutting.ts": {
     "max-lines": {
-      "max": 741,
-      "excess": 241
+      "max": 752,
+      "excess": 252
     }
   },
   "packages/db/src/schema/recurrence.ts": {
@@ -6841,8 +6965,8 @@
   },
   "packages/db/tests/schema/db.test.ts": {
     "max-lines": {
-      "max": 1197,
-      "excess": 697
+      "max": 1231,
+      "excess": 731
     }
   },
   "packages/db/tests/schema/lifecycle-updates.test.ts": {
@@ -6857,8 +6981,8 @@
       "excess": 40
     },
     "max-lines-per-function": {
-      "max": 105,
-      "excess": 25
+      "max": 104,
+      "excess": 24
     },
     "sonarjs/cognitive-complexity": {
       "max": 56,
@@ -6873,14 +6997,14 @@
   },
   "packages/env/src/registry-vars-core.ts": {
     "max-lines": {
-      "max": 513,
-      "excess": 13
+      "max": 552,
+      "excess": 52
     }
   },
   "packages/env/tests/registry/env.test.ts": {
     "max-lines": {
-      "max": 954,
-      "excess": 454
+      "max": 1020,
+      "excess": 520
     }
   },
   "packages/integrations/src/agent-surface-github.ts": {
@@ -7201,8 +7325,8 @@
       "excess": 32
     },
     "max-lines": {
-      "max": 616,
-      "excess": 116
+      "max": 618,
+      "excess": 118
     },
     "sonarjs/cognitive-complexity": {
       "max": 73,
@@ -7303,8 +7427,8 @@
   },
   "packages/ui/src/components/pickers/TimeframePicker.tsx": {
     "max-lines-per-function": {
-      "max": 213,
-      "excess": 133
+      "max": 214,
+      "excess": 134
     }
   },
   "packages/ui/src/components/shell/AppShell.tsx": {
@@ -7313,8 +7437,8 @@
       "excess": 14
     },
     "max-lines-per-function": {
-      "max": 296,
-      "excess": 216
+      "max": 294,
+      "excess": 214
     }
   },
   "packages/ui/src/components/shell/ExpandedSidebar.tsx": {
@@ -7325,8 +7449,8 @@
   },
   "packages/ui/src/components/shell/NavigationRail.tsx": {
     "max-lines-per-function": {
-      "max": 121,
-      "excess": 57
+      "max": 118,
+      "excess": 54
     }
   },
   "packages/ui/src/components/shell/Sidebar.tsx": {
@@ -7391,8 +7515,8 @@
   },
   "packages/ui/src/components/views/EntityTable.tsx": {
     "max-lines": {
-      "max": 663,
-      "excess": 163
+      "max": 662,
+      "excess": 162
     },
     "max-lines-per-function": {
       "max": 360,
@@ -7479,20 +7603,20 @@
   },
   "packages/ui/tests/components/shell/shell-full.test.tsx": {
     "max-lines": {
-      "max": 1531,
-      "excess": 1031
+      "max": 1530,
+      "excess": 1030
     }
   },
   "packages/ui/tests/components/views/entity-table.test.tsx": {
     "max-lines": {
-      "max": 971,
-      "excess": 471
+      "max": 965,
+      "excess": 465
     }
   },
   "packages/ui/tests/primitives/design-contract.test.tsx": {
     "max-lines": {
-      "max": 625,
-      "excess": 125
+      "max": 626,
+      "excess": 126
     }
   },
   "repo-tests/ci/ci-gate-policy.test.ts": {
@@ -7513,8 +7637,8 @@
       "excess": 13
     },
     "max-lines": {
-      "max": 1070,
-      "excess": 570
+      "max": 1016,
+      "excess": 516
     },
     "max-lines-per-function": {
       "max": 149,
@@ -7565,8 +7689,8 @@
   },
   "scripts/integration-providers.ts": {
     "max-lines": {
-      "max": 746,
-      "excess": 246
+      "max": 783,
+      "excess": 283
     },
     "max-lines-per-function": {
       "max": 84,

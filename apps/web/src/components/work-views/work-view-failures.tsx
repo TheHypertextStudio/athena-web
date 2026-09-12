@@ -70,6 +70,7 @@ export function SavedViewsRetry({
   );
 }
 
+/** Report a saved-view create or update that the server refused, beside the dialog that tried it. */
 export function SaveViewFailure({ error }: { readonly error: unknown }): JSX.Element | null {
   if (!error) return null;
   return (
@@ -79,6 +80,13 @@ export function SaveViewFailure({ error }: { readonly error: unknown }): JSX.Ele
   );
 }
 
+/**
+ * The failures of operations layered over working content: pagination, preferences, the default.
+ *
+ * @remarks
+ * Each row owns its own retry, because each is a different operation with a different recovery. All
+ * of them go quiet while the content itself has failed — see `contentFailed`.
+ */
 export function WorkViewOperationFailures({
   title,
   contentFailed,

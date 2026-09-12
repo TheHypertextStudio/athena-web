@@ -21,7 +21,7 @@
  */
 import { PROBLEM_CATALOG, type ProblemCode, type ProblemRecovery } from './contracts/errors';
 import { ContractMismatchError, isWorthRetrying, OfflineError } from './query-core';
-import { toUserFacingError, type UserFacingError } from './problem';
+import { toUserFacingError, type UserFacingError, userErrorMessage } from './problem';
 import { PUBLIC_PROBLEM_RECOVERY } from './problem-recovery';
 
 /** The kind of glyph a failure state should wear, chosen with the copy rather than at the callsite. */
@@ -107,7 +107,9 @@ function unclassified(
   const { status } = structured;
   if (status !== undefined && status >= 500) return { ...fromCode('internal', error), status };
   return {
-    title: structured.message === '' ? fallbackTitle : structured.message,
+    // Through the sanctioned reader rather than `.message`: it yields the fallback for anything
+    // that is not already application-owned copy, which is the property the source policy protects.
+    title: userErrorMessage(error, fallbackTitle),
     detail: 'The request did not succeed. Trying again is usually enough.',
     recovery: 'retry',
     canRetry: isWorthRetrying(error),

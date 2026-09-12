@@ -79,6 +79,12 @@ function SavedViewTab({
   );
 }
 
+/**
+ * Render the view-tab row for one work-view surface.
+ *
+ * @param props - The tabs to draw, which is selected, and the saved-views failure state.
+ * @returns the tablist, ending in a quiet retry when saved views could not load.
+ */
 export function WorkViewTabs({
   title,
   savedViews,

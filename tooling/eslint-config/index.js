@@ -394,11 +394,26 @@ export const COMPLEXITY_TARGETS = Object.freeze({
   'max-depth': 4,
   'max-params': 5,
   'sonarjs/cognitive-complexity': 15,
+  'max-lines': 500,
+  'max-lines-per-function': 80,
+});
+
+/**
+ * Extra options per rule, beyond the limit itself.
+ *
+ * @remarks
+ * Size is measured in code, not in prose. This repo writes long TSDoc deliberately, and a rule that
+ * counted it would push authors to explain less in order to satisfy a number about length.
+ */
+const RULE_OPTIONS = Object.freeze({
+  'max-lines': { skipBlankLines: true, skipComments: true },
+  'max-lines-per-function': { skipBlankLines: true, skipComments: true },
 });
 
 /** The rule entry each rule wants: sonarjs takes a bare number, the core rules take `{ max }`. */
 function complexityRuleEntry(rule, limit) {
-  return rule === 'sonarjs/cognitive-complexity' ? ['error', limit] : ['error', { max: limit }];
+  if (rule === 'sonarjs/cognitive-complexity') return ['error', limit];
+  return ['error', { max: limit, ...(RULE_OPTIONS[rule] ?? {}) }];
 }
 
 /** @type {import('typescript-eslint').ConfigArray} */
@@ -437,14 +452,21 @@ const complexityDebt = JSON.parse(
 );
 
 /**
- * Per-file relaxations for complexity that predates the gate.
+ * Per-file relaxations for size and complexity that predate the gate.
  *
  * @remarks
- * Turning these four rules on with no relaxations fails every file that already exceeded them, and
- * a gate that lands red gets disabled. `complexity-debt.json` records each such file's current
- * worst value and this block pins the file to it, so its worst function cannot get worse while new
- * and already-clean files are held to {@link COMPLEXITY_TARGETS}. The numbers may only ever be
- * lowered — `pnpm complexity:ledger` rewrites them from a measurement. Sign-off is an empty ledger.
+ * Turning these rules on with no relaxations fails every file that already exceeded them, and a
+ * gate that lands red gets disabled. `complexity-debt.json` records each such file's current worst
+ * value and this block pins the file to it, so its worst function cannot get worse while new and
+ * already-clean files are held to {@link COMPLEXITY_TARGETS}. The numbers may only ever be lowered —
+ * `pnpm complexity:ledger` rewrites them from a measurement. Sign-off is an empty ledger.
+ *
+ * Each entry also records `count`, the number of violations at that ceiling, because the ceiling
+ * alone left a hole wide enough to drive the whole codebase through: a file pinned at complexity 18
+ * accepted *any number* of new functions up to 18, so the several hundred gnarliest files in the
+ * repo were exactly the ones where new complexity was free. ESLint cannot express "at most N
+ * violations", so the count is enforced by `pnpm complexity:check`, which re-measures and fails when
+ * a file's worst value or its violation count rises.
  *
  * Grouped by `(rule, limit)` rather than one object per file: ESLint walks the whole config array
  * for every linted file, so several hundred single-file objects is a cost for no benefit.
@@ -455,8 +477,8 @@ export const complexityDebtConfig = (() => {
   /** @type {Map<string, string[]>} */
   const groups = new Map();
   for (const [file, rules] of Object.entries(complexityDebt)) {
-    for (const [rule, limit] of Object.entries(rules)) {
-      const key = `${rule} ${String(limit)}`;
+    for (const [rule, entry] of Object.entries(rules)) {
+      const key = `${rule} ${String(entry.max)}`;
       const files = groups.get(key);
       if (files === undefined) groups.set(key, [escapeGlob(file)]);
       else files.push(escapeGlob(file));

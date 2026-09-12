@@ -22,6 +22,8 @@ import {
   ApiRequestError,
   apiQueryOptions,
   createQueryClient,
+  isWorthRetrying,
+  OfflineError,
   queryKeys,
   seedListItem,
   SessionExpiredError,
@@ -208,6 +210,31 @@ describe('createQueryClient session-expiry wiring', () => {
     });
     expect(call).toHaveBeenCalledTimes(1); // no retry
     client.clear();
+  });
+
+  it('re-attempts only failures that could answer differently', () => {
+    // About the moment, so worth another look.
+    expect(isWorthRetrying(new ApiRequestError({ message: 'x', status: 0 }))).toBe(true);
+    expect(isWorthRetrying(new ApiRequestError({ message: 'x', status: 500 }))).toBe(true);
+    expect(isWorthRetrying(new ApiRequestError({ message: 'x', status: 503 }))).toBe(true);
+    expect(
+      isWorthRetrying(new ApiRequestError({ message: 'x', status: 429, code: 'rate_limited' })),
+    ).toBe(true);
+    expect(isWorthRetrying(new OfflineError())).toBe(true);
+
+    // About the request, so asking again only delays the answer and multiplies the load.
+    expect(
+      isWorthRetrying(new ApiRequestError({ message: 'x', status: 403, code: 'forbidden' })),
+    ).toBe(false);
+    expect(
+      isWorthRetrying(new ApiRequestError({ message: 'x', status: 404, code: 'not_found' })),
+    ).toBe(false);
+    expect(
+      isWorthRetrying(new ApiRequestError({ message: 'x', status: 422, code: 'validation_error' })),
+    ).toBe(false);
+
+    // An expired session fails fastest of all, so the interlock can redirect.
+    expect(isWorthRetrying(new SessionExpiredError())).toBe(false);
   });
 
   it('opens the sign-in interlock for a 401 that carries no readable problem body', async () => {

@@ -40,20 +40,20 @@ running application for a navigation that needed no network at all.
 
 ## Pieces
 
-| Concern                          | Where                                                                   |
-| -------------------------------- | ----------------------------------------------------------------------- |
-| Location source                  | `src/lib/app-location.tsx`                                              |
-| Route matching                   | `src/lib/route-match.ts`                                                |
-| Route table (generated)          | `src/lib/offline-routes.generated.ts`                                   |
-| Table generator + rules          | `scripts/generate-offline-routes.ts`, `scripts/offline-route-policy.ts` |
-| Deciding a document was replayed | `src/components/pwa/route-slot.tsx`                                     |
-| Rendering a route from cache     | `src/components/pwa/offline-route-outlet.tsx`                           |
-| Reachability                     | `src/components/reachability.tsx`                                       |
-| Links                            | `src/components/docket-link.tsx`                                        |
-| Document cache + warming         | `service-worker/documents.ts`                                           |
-| Navigation fallback order        | `service-worker/strategies.ts`                                          |
-| Persisted query cache            | `src/lib/query-persist.ts`                                              |
-| Write queue                      | `src/components/pwa/outbox.ts`                                          |
+| Concern                          | Where                                                                       |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| Location source                  | `src/lib/app-location.tsx`                                                  |
+| Route matching                   | `src/lib/route-match.ts`                                                    |
+| Route table (generated)          | `src/lib/offline-routes.generated.ts`                                       |
+| Table generator + rules          | `scripts/generate-offline-routes.ts`, `scripts/offline-route-policy.ts`     |
+| Deciding a document was replayed | `src/components/pwa/route-slot.tsx`                                         |
+| Rendering a route from cache     | `src/components/pwa/offline-route-outlet.tsx`                               |
+| Reachability                     | `src/components/reachability.tsx`                                           |
+| Links                            | `src/components/docket-link.tsx`                                            |
+| Document cache + warming         | `service-worker/documents.ts`                                               |
+| Navigation fallback order        | `service-worker/strategies.ts`                                              |
+| Entity identity snapshots        | `src/lib/navigation-snapshots.ts`, `src/lib/navigation-snapshot-runtime.ts` |
+| Write queue                      | `src/components/pwa/outbox.ts`                                              |
 
 ## `window.location` is the authority
 
@@ -137,9 +137,21 @@ offline after its first request. Tests identify each exception by its generated 
 prove that an ordinary application chunk which mentions one icon name remains in the precache.
 
 Route **code** is precached because it is identical for every user and it is the difference between
-a page rendering and not. Per-object **data** never is — a workspace's objects run to megabytes — so
-which entities are available offline is whatever the person actually loaded, held in the persisted
-query cache.
+a page rendering and not. Per-object **data** never is — a workspace's objects run to megabytes.
+
+**Read data does not survive a reload.** `4ca5d34d7` removed the persisted query cache along with
+`src/lib/query-persist.ts` and `src/components/query-persistence.tsx`, because whole-query
+persistence tied 24-hour offline retention to 24-hour _heap_ retention: `persistQueryClient` will
+not restore an entry whose `gcTime` has elapsed, so the two numbers had to match. What remains is
+identity, not data — a three-item memory working set plus a per-account IndexedDB LRU of entity
+snapshots (title, status, priority), enough to paint a detail header while the real read is in
+flight.
+
+So an offline or cold start has no `/v1` response anywhere on the device: the service worker passes
+`/v1` through without caching (below), and the query cache starts empty. Writes are the only tier
+with durability, through the outbox. Restoring read durability means a **per-query** persister,
+which writes each query to storage independently of heap `gcTime` and so does not reintroduce the
+coupling that removed the last one.
 
 The warm runs **after** activation, not during install, so a release is never held up by a few
 megabytes on a slow connection, and it is skipped outright when the browser reports Data Saver. It

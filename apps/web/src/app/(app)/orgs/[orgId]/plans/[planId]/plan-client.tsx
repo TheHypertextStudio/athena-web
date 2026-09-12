@@ -12,8 +12,14 @@
  * Which revisions are the person's own is tracked here so the panel can tell a local edit from
  * one Athena made: only the latter earns the enter motion and the "Athena updated" pill.
  */
-import { AppBar, EmptyState, useShellSidebar } from '@docket/ui/components';
-import { ChevronLeft, Sparkles, Workflow } from '@docket/ui/icons';
+import {
+  AppBar,
+  EmptyState,
+  useOwnPageScroll,
+  useShellRail,
+  useShellSidebar,
+} from '@docket/ui/components';
+import { ChevronLeft, Workflow } from '@docket/ui/icons';
 import {
   Button,
   Skeleton,
@@ -33,6 +39,7 @@ import { EMPTY_PLAN_DIFF, planDiff, type PlanDiff } from '@/components/plan-canv
 import { api } from '@/lib/api';
 import { useAppLocation, useTypedRoute } from '@/lib/app-location';
 import { useAppRouter } from '@/lib/interactions/navigation';
+import { athenaHref } from '@/lib/athena/query-defs';
 import { useCommitPlan, usePlan, usePlanAthenaSync, usePlanOps } from '@/lib/plan-draft/defs';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
@@ -41,8 +48,11 @@ import { useOrgCapability } from '@/lib/use-org-capability';
 /** The option sources the inspector's pickers need. */
 const OPTION_KINDS = ['actors', 'initiatives'] as const;
 
-/** The width at which the shell docks the rail beside main content instead of over it. */
-const RAIL_BESIDE_CANVAS_QUERY = '(min-width: 1024px)';
+/**
+ * The width at which the conversation floats beside the board; below it the shell's own sheet
+ * carries Athena, since a floating column would cover the whole canvas.
+ */
+const CONVERSATION_BESIDE_CANVAS_QUERY = '(min-width: 1024px)';
 
 /**
  * Below this window width the route asks the shell for its icon rail while the plan is open.
@@ -117,11 +127,16 @@ export default function PlanClient(): JSX.Element {
     params: { orgId, planId },
   } = useTypedRoute('/orgs/[orgId]/plans/[planId]');
   const router = useAppRouter();
+  // The board runs edge to edge: the page owns its scroll, the sidebar drops to its icon rail on
+  // most windows, and the shell's rail collapses because the conversation floats on the canvas.
+  useOwnPageScroll();
   const { requestCompact } = useShellSidebar();
   useEffect(() => {
     if (window.innerWidth >= COMPACT_SIDEBAR_BELOW_PX) return undefined;
     return requestCompact();
   }, [requestCompact]);
+  const { requestCollapsed } = useShellRail();
+  useEffect(() => requestCollapsed(), [requestCollapsed]);
   const { searchParams } = useAppLocation();
   const startRequested = searchParams.get(START_QUERY) === START_VALUE;
   const athena = useAthenaPanel();
@@ -154,19 +169,31 @@ export default function PlanClient(): JSX.Element {
   );
   const canEdit = canContribute && plan?.status !== 'archived';
 
-  // A plan is shaped by talking: reveal the rail once on arrival. An entry point that already
-  // seeded the rail with a draft (Plan with Athena on an initiative) has revealed it itself, and
-  // revealing again would clear that draft.
+  // The conversation floats on the canvas. While the window is wide enough, this route hosts it:
+  // every "open Athena" on the route (the bar's toggle, Ask Athena on a node, the keyboard
+  // shortcut, an entry point's opening line) lands in the column rather than the shell's rail.
+  const { openAthena, registerHost } = athena;
+  const [conversationOpen, setConversationOpen] = useState(false);
+  const [draftRequest, setDraftRequest] = useState<{ text: string; version: number } | null>(null);
+  useEffect(() => {
+    if (!window.matchMedia(CONVERSATION_BESIDE_CANVAS_QUERY).matches) return undefined;
+    return registerHost({
+      reveal: (draft) => {
+        setConversationOpen(true);
+        if (draft === undefined) return;
+        setDraftRequest((current) => ({ text: draft, version: (current?.version ?? 0) + 1 }));
+      },
+    });
+  }, [registerHost]);
+
+  // A plan is shaped by talking: the conversation is open on arrival where it fits beside the
+  // board. On a compact viewport it stays one tap away in the shell.
   const revealed = useRef(false);
-  const { openAthena, launchDraft } = athena;
   useEffect(() => {
     if (revealed.current || startRequested) return;
     revealed.current = true;
-    // On a compact viewport the rail covers main content, so revealing it on arrival would hide
-    // the very canvas the person came to see; there the rail stays one tap away in the shell.
-    const wide = window.matchMedia(RAIL_BESIDE_CANVAS_QUERY).matches;
-    if (launchDraft === null && wide) openAthena();
-  }, [launchDraft, openAthena, startRequested]);
+    if (window.matchMedia(CONVERSATION_BESIDE_CANVAS_QUERY).matches) setConversationOpen(true);
+  }, [startRequested]);
 
   // An entry point asked for the conversation to open with the plan: seed the composer with an
   // opening line once the plan is known, then drop the flag so a reload does not repeat it.
@@ -231,41 +258,30 @@ export default function PlanClient(): JSX.Element {
   );
 
   const back = backTarget(orgId, plan);
-  const chrome = (bar: React.ReactNode, title: string): JSX.Element => (
-    <AppBar
-      title={title}
-      navigation={
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="sm" iconOnly asChild aria-label={back.label}>
-              <Link href={back.href}>
-                <ChevronLeft aria-hidden="true" />
-              </Link>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{back.label}</TooltipContent>
-        </Tooltip>
-      }
-      actions={
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            openAthena();
-          }}
-        >
-          <Sparkles className="size-4" /> Athena
+  const navigation = (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="sm" iconOnly asChild aria-label={back.label}>
+          <Link href={back.href}>
+            <ChevronLeft aria-hidden="true" />
+          </Link>
         </Button>
-      }
-      controls={bar}
-    />
+      </TooltipTrigger>
+      <TooltipContent>{back.label}</TooltipContent>
+    </Tooltip>
+  );
+  // Before the plan is known the bar floats alone over the page, where it will float over the
+  // board, so nothing jumps when the plan arrives.
+  const placeholderBar = (
+    <div className="absolute top-3 left-3 z-[2000]">
+      <AppBar presentation="floating" aria-label="Plan" title="Plan" navigation={navigation} />
+    </div>
   );
 
   if (planQuery.isPending) {
     return (
-      <Surface tone="page" shape="none" className="flex h-full min-h-0 w-full flex-col">
-        {chrome(null, 'Plan')}
+      <Surface tone="page" shape="none" className="relative flex h-full min-h-0 w-full flex-col">
+        {placeholderBar}
         <div className="relative flex-1">
           <Skeleton className="absolute inset-2 rounded-lg" />
         </div>
@@ -274,8 +290,8 @@ export default function PlanClient(): JSX.Element {
   }
   if (planQuery.isError || !plan) {
     return (
-      <Surface tone="page" shape="none" className="flex h-full min-h-0 w-full flex-col">
-        {chrome(null, 'Plan')}
+      <Surface tone="page" shape="none" className="relative flex h-full min-h-0 w-full flex-col">
+        {placeholderBar}
         <div className="flex flex-1 items-center justify-center p-4">
           <EmptyState
             icon={Workflow}
@@ -302,7 +318,13 @@ export default function PlanClient(): JSX.Element {
         memberOptions={options.memberOptions}
         initiativeOptions={options.initiativeOptions}
         className="min-h-0 flex-1"
-        renderChrome={(bar) => chrome(bar, plan.title)}
+        chrome={{ title: plan.title, navigation }}
+        conversation={{
+          open: conversationOpen,
+          draftRequest,
+          fullHref: athenaHref({ workspaceId: orgId }),
+          onToggle: setConversationOpen,
+        }}
       />
     </Surface>
   );

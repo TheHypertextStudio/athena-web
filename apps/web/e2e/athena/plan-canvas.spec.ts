@@ -82,14 +82,19 @@ test.describe('Planning canvas', () => {
     await expect(outreach).toBeVisible({ timeout: TIMEOUTS.pageReady });
     await expect(outreach).toHaveAttribute('data-plan-status', 'draft');
     await expect(page.locator('[data-plan-ref="t1"]')).toBeVisible();
-    await expect(page.getByTestId('plan-counts')).toContainText('2 projects');
-    await expect(page.getByTestId('plan-counts')).toContainText('5 draft');
+    // The chrome floats over the board: one bar as a region, and no band above the canvas.
+    const bar = page.getByRole('region', { name: 'Plan' });
+    await expect(bar).toBeVisible();
+    await expect(bar.getByTestId('plan-counts')).toContainText('2 projects');
+    await expect(bar.getByTestId('plan-counts')).toContainText('5 draft');
 
-    // --- Selecting a project opens the inspector naming what Confirm creates -------------
+    // --- Selecting a project floats the inspector naming what Confirm creates -----------
     // The container's centre is a task row (its own node), so aim at the header band.
     await outreach.click({ position: { x: 120, y: 24 } });
-    const confirm = page.getByRole('button', { name: /^Confirm/ }).first();
-    await expect(confirm).toBeVisible({ timeout: TIMEOUTS.ui });
+    const inspector = page.getByRole('complementary', { name: 'Selection details' });
+    await expect(inspector).toBeVisible({ timeout: TIMEOUTS.ui });
+    await expect(inspector.locator('[data-presentation="floating"]')).toBeVisible();
+    const confirm = inspector.getByRole('button', { name: /^Confirm/ });
     await expect(confirm).toContainText('2 tasks');
     await confirm.click();
 
@@ -105,7 +110,12 @@ test.describe('Planning canvas', () => {
       'data-plan-status',
       'draft',
     );
-    await expect(page.getByTestId('plan-counts')).toContainText('1 draft');
+    // Escape closes the floating inspector and clears the selection, which gives the counts
+    // their place in the bar back.
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('plan-counts')).toContainText('1 draft', {
+      timeout: TIMEOUTS.ui,
+    });
     const projects = await apiFetch(page, `/v1/orgs/${orgId}/projects`);
     const names = (projects.body as { items: { name: string }[] }).items.map((p) => p.name);
     expect(names).toContain('Donor outreach');

@@ -15,9 +15,9 @@
  */
 import type { PickerOption } from '@docket/ui/components';
 import { EmptyState } from '@docket/ui/components';
-import { Plus, Search, Sparkles, Undo } from '@docket/ui/icons';
+import { Plus, Sparkles, Undo } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { Button, Input, Surface } from '@docket/ui/primitives';
+import { Button, Surface } from '@docket/ui/primitives';
 import type {
   PlanCommitOut,
   PlanDraftOut,
@@ -26,7 +26,7 @@ import type {
 } from '@docket/work/plan-draft-contract';
 import { planCounts } from '@docket/work/plan-draft';
 import type { Edge, Node, OnNodeDrag, ReactFlowInstance } from '@xyflow/react';
-import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import Canvas from '@/components/canvas/canvas';
 import {
@@ -34,6 +34,12 @@ import {
   type CanvasActions,
 } from '@/components/canvas/canvas-actions-context';
 import CanvasOverlayPanel from '@/components/canvas/canvas-overlay-panel';
+import {
+  CANVAS_OVERLAY_GUTTER,
+  type CanvasOverlayInsets,
+  fitPaddingFor,
+  occludedRight,
+} from '@/components/canvas/canvas-viewport-insets';
 import DependencyEdge from '@/components/canvas/dependency-edge';
 import { keepNodeInViewDeltaX } from '@/components/canvas/graph-inspector-geometry';
 import { GraphInspectorHost } from '@/components/canvas/graph-inspector-host';
@@ -54,8 +60,9 @@ import {
 } from './plan-layout';
 import PlanLinkEdge from './plan-link-edge';
 import { PLAN_EDGE_TYPE, PLAN_NODE_TYPE, planNodeData, projectPlan } from './plan-nodes';
+import PlanBar from './plan-bar';
+import PlanConversation from './plan-conversation';
 import PlanProjectNode from './plan-project-node';
-import PlanSelectionBar from './plan-selection-bar';
 import PlanTaskNode from './plan-task-node';
 
 /** The registered node renderers. */
@@ -120,23 +127,72 @@ const PILL_VISIBLE_MS = 4_000;
 /** Zoom floor when widening the viewport around what Athena added; below it a row is unreadable. */
 const REVEAL_MIN_ZOOM = 0.5;
 
+/** The gutter a reveal keeps clear inside the visible board, before any floating chrome. */
+const REVEAL_PADDING = 32;
+
 /**
- * Bring every node into view after a remote revision added some, once the new nodes have been
- * placed and measured. Returns a cancel for the pending frame.
+ * Below this host width the inspector and the conversation take turns: opening one closes the
+ * other, because two floating columns beside each other would leave no board to read.
  */
-function revealAdditions(flowInstance: ReactFlowInstance | null): () => void {
+const ONE_PANEL_BELOW_PX = 1100;
+
+/** The measured inline size of an element, 0 until it is known. */
+function useElementWidth(): [number, (node: HTMLDivElement | null) => void] {
+  const [width, setWidth] = useState(0);
+  const observer = useRef<ResizeObserver | null>(null);
+  const attach = useCallback((node: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (node === null || typeof ResizeObserver === 'undefined') return;
+    setWidth(node.getBoundingClientRect().width);
+    observer.current = new ResizeObserver((entries) => {
+      const next = entries[0]?.contentRect.width;
+      if (typeof next === 'number') setWidth(next);
+    });
+    observer.current.observe(node);
+  }, []);
+  return [width, attach];
+}
+
+/** The dot grid under a plan: sparser and lighter than the graphs', since containers tile it. */
+const PLAN_DOT_GRID = { gap: 32, size: 0.75, color: 'var(--color-outline-variant)' } as const;
+
+/**
+ * Bring every node into view after a revision added some, once the new nodes have been placed
+ * and measured, keeping clear of the floating chrome. Returns a cancel for the pending frame.
+ */
+function revealAdditions(
+  flowInstance: ReactFlowInstance | null,
+  insets: CanvasOverlayInsets,
+): () => void {
   if (flowInstance === null) return () => undefined;
   const frame = window.requestAnimationFrame(() => {
     void flowInstance.fitView({
       duration: 450,
       minZoom: REVEAL_MIN_ZOOM,
       maxZoom: 1,
-      padding: 0.12,
+      padding: fitPaddingFor(insets, REVEAL_PADDING),
     });
   });
   return () => {
     window.cancelAnimationFrame(frame);
   };
+}
+
+/** What the floating conversation needs from the route. */
+export interface PlanConversationState {
+  readonly open: boolean;
+  readonly draftRequest: { readonly text: string; readonly version: number } | null;
+  /** Where the full Athena workspace lives. */
+  readonly fullHref: string;
+  readonly onToggle: (open: boolean) => void;
+}
+
+/** What the floating bar needs from the route. */
+export interface PlanChrome {
+  readonly title: string;
+  /** The way back: an icon button before the title. */
+  readonly navigation: ReactNode;
 }
 
 /** Props for {@link PlanCanvasPanel}. */
@@ -158,7 +214,8 @@ export interface PlanCanvasPanelProps {
   readonly memberOptions: readonly PickerOption[];
   readonly initiativeOptions: readonly PickerOption[];
   /** Compose the page chrome around the view bar this panel builds. */
-  readonly renderChrome?: ((bar: ReactNode) => ReactNode) | undefined;
+  readonly chrome: PlanChrome;
+  readonly conversation: PlanConversationState;
   readonly className?: string | undefined;
 }
 
@@ -204,61 +261,6 @@ function restoreOps(document: PlanDraftOut['document'], refs: readonly string[])
   ];
 }
 
-/** The view bar: search, the Add project action, and the counts. */
-function PlanViewBar({
-  search,
-  onSearchChange,
-  counts,
-  onAddProject,
-}: {
-  readonly search: string;
-  readonly onSearchChange: (value: string) => void;
-  readonly counts: { projects: number; tasks: number; draft: number };
-  readonly onAddProject: (() => void) | null;
-}): JSX.Element {
-  return (
-    <div className="@container flex min-w-0 flex-1 items-center gap-2">
-      <div className="relative min-w-24 shrink basis-56">
-        <Search
-          aria-hidden="true"
-          className="text-on-surface-variant pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
-        />
-        <Input
-          aria-label="Search the plan"
-          placeholder="Search"
-          value={search}
-          onChange={(event) => {
-            onSearchChange(event.target.value);
-          }}
-          className="pl-8"
-        />
-      </div>
-      {onAddProject ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          aria-label="Add project"
-          onClick={onAddProject}
-        >
-          <Plus className="size-4" />
-          <span className="hidden @2xl:inline">Project</span>
-        </Button>
-      ) : null}
-      <span
-        className="text-on-surface-variant text-label-medium ml-auto shrink-0 whitespace-nowrap"
-        data-testid="plan-counts"
-      >
-        <span className="hidden @2xl:inline">
-          {counts.projects} {counts.projects === 1 ? 'project' : 'projects'} · {counts.tasks}{' '}
-          {counts.tasks === 1 ? 'task' : 'tasks'} ·{' '}
-        </span>
-        <span className={cn(counts.draft > 0 && 'text-primary')}>{counts.draft} draft</span>
-      </span>
-    </div>
-  );
-}
-
 /** How much of a start the plan has: nothing, an initiative alone, or work under it. */
 type PlanStartState = 'empty' | 'initiative-only' | 'underway';
 
@@ -286,7 +288,7 @@ function PlanStartOverlay({
   if (state === 'underway') return null;
   if (state === 'initiative-only') {
     return (
-      <CanvasOverlayPanel position="top-center">
+      <CanvasOverlayPanel position="top-center" className="!top-16">
         <PlanStartHint onAddProject={onAddProject} />
       </CanvasOverlayPanel>
     );
@@ -415,7 +417,8 @@ export default function PlanCanvasPanel({
   onOpen,
   memberOptions,
   initiativeOptions,
-  renderChrome,
+  chrome,
+  conversation,
   className,
 }: PlanCanvasPanelProps): JSX.Element {
   const { containerRef, aspectRatio, ready: aspectReady } = useCanvasAspectRatio();
@@ -427,6 +430,19 @@ export default function PlanCanvasPanel({
   const [notice, setNotice] = useState<PlanNotice | null>(null);
   const [search, setSearch] = useState('');
   const [pill, setPill] = useState<string | null>(null);
+  // The floating chrome's geometry: the bar's height, and what the inspector and the conversation
+  // cover on the right, so fits and reveals keep the board in the part a person can see.
+  const [selectedRefs, setSelectedRefs] = useState<readonly string[]>([]);
+  const [hostWidth, attachHost] = useElementWidth();
+  const onePanel = hostWidth > 0 && hostWidth < ONE_PANEL_BELOW_PX;
+  const [barHeight, setBarHeight] = useState(0);
+  const [inspectorRight, setInspectorRight] = useState(0);
+  const [conversationWidth, setConversationWidth] = useState(0);
+  const conversationRight = occludedRight([{ open: conversation.open, width: conversationWidth }]);
+  const insets = useMemo<CanvasOverlayInsets>(
+    () => ({ top: barHeight + CANVAS_OVERLAY_GUTTER, right: inspectorRight + conversationRight }),
+    [barHeight, inspectorRight, conversationRight],
+  );
 
   const actorName = useCallback(
     (actorId: string): string | null =>
@@ -475,17 +491,32 @@ export default function PlanCanvasPanel({
     const timer = window.setTimeout(() => {
       setPill(null);
     }, PILL_VISIBLE_MS);
-    const reveal = added > 0 ? revealAdditions(flowInstance) : null;
+    const reveal = added > 0 ? revealAdditions(flowInstance, insets) : null;
     return () => {
       window.clearTimeout(timer);
       reveal?.();
     };
-  }, [flowInstance, remoteDiff]);
+  }, [flowInstance, insets, remoteDiff]);
 
   // Selection follows the document: a node Athena or a commit removed cannot stay selected.
   useEffect(() => {
     if (selectedRef !== null && !byRef.has(selectedRef)) setSelectedRef(null);
   }, [byRef, selectedRef]);
+
+  // On a narrow host the two floating columns take turns: a selection closes the conversation,
+  // and opening the conversation clears the selection.
+  const { open: conversationOpen, onToggle: toggleConversation } = conversation;
+  const previousConversationOpen = useRef(conversationOpen);
+  useEffect(() => {
+    if (!onePanel) return;
+    const conversationJustOpened = conversationOpen && !previousConversationOpen.current;
+    previousConversationOpen.current = conversationOpen;
+    if (conversationJustOpened) {
+      setSelectedRef(null);
+      return;
+    }
+    if (selectedRef !== null && conversationOpen) toggleConversation(false);
+  }, [conversationOpen, onePanel, selectedRef, toggleConversation]);
 
   const apply = useCallback(
     async (batch: readonly PlanOp[]): Promise<PlanDraftOut | null> => {
@@ -523,10 +554,10 @@ export default function PlanCanvasPanel({
         if (!result) return;
         setSelectedRef(ref);
         setFocusRef(ref);
-        revealAdditions(flowInstance);
+        revealAdditions(flowInstance, insets);
       });
     },
-    [apply, flowInstance, plan.title],
+    [apply, flowInstance, insets, plan.title],
   );
 
   const addTask = useCallback(
@@ -541,10 +572,10 @@ export default function PlanCanvasPanel({
         if (!result) return;
         setSelectedRef(ref);
         setFocusRef(ref);
-        revealAdditions(flowInstance);
+        revealAdditions(flowInstance, insets);
       });
     },
-    [apply, flowInstance],
+    [apply, flowInstance, insets],
   );
 
   const removeRefs = useCallback(
@@ -718,16 +749,18 @@ export default function PlanCanvasPanel({
   const onInspectorDock = useCallback(
     (visibleWidth: number) => {
       if (focusRef !== null && focusRef === selectedRef) {
-        revealAdditions(flowInstance);
+        revealAdditions(flowInstance, insets);
         return;
       }
       keepSelectionInView(visibleWidth);
     },
-    [flowInstance, focusRef, keepSelectionInView, selectedRef],
+    [flowInstance, focusRef, insets, keepSelectionInView, selectedRef],
   );
 
   const bar = (
-    <PlanViewBar
+    <PlanBar
+      title={chrome.title}
+      navigation={chrome.navigation}
       search={search}
       onSearchChange={setSearch}
       counts={counts}
@@ -738,6 +771,20 @@ export default function PlanCanvasPanel({
             }
           : null
       }
+      selection={{
+        plan,
+        refs: selectedRefs,
+        canEdit,
+        committing,
+        onConfirm: confirmRefs,
+        onRemove: removeRefs,
+        onAsk: askAbout,
+        onOpen,
+      }}
+      conversationOpen={conversation.open}
+      onToggleConversation={conversation.onToggle}
+      insetRight={insets.right ?? 0}
+      onHeightChange={setBarHeight}
     />
   );
 
@@ -769,17 +816,20 @@ export default function PlanCanvasPanel({
   const startState = planStartState(plan, counts.projects, rootInitiativeRef);
 
   return (
-    <div className={cn('flex h-full min-h-0 w-full flex-col', className)}>
-      {renderChrome?.(bar)}
+    <div ref={attachHost} className={cn('flex h-full min-h-0 w-full flex-col', className)}>
       <GraphInspectorHost
         hostRef={containerRef}
         className="flex-1"
         aside={inspector}
+        presentation="floating"
+        offsetRight={conversationRight}
+        onOcclusionChange={setInspectorRight}
         onClose={() => {
           setSelectedRef(null);
         }}
         onDock={onInspectorDock}
       >
+        {bar}
         <PlanCanvasActionsProvider value={planActions}>
           <CanvasActionsProvider value={canvasActions}>
             <Canvas
@@ -790,6 +840,10 @@ export default function PlanCanvasPanel({
               density="full"
               disableLayout
               layoutReady={aspectReady}
+              overlayInsets={insets}
+              frameAnchor="start"
+              dotGrid={PLAN_DOT_GRID}
+              onSelectionChange={setSelectedRefs}
               interactive={canEdit}
               highlightChains={false}
               highlightIds={highlightIds}
@@ -813,15 +867,6 @@ export default function PlanCanvasPanel({
                 setNotice(null);
               })}
             >
-              <PlanSelectionBar
-                plan={plan}
-                canEdit={canEdit}
-                committing={committing}
-                onConfirm={confirmRefs}
-                onRemove={removeRefs}
-                onAsk={askAbout}
-                onOpen={onOpen}
-              />
               <PlanStartOverlay
                 state={startState}
                 onAddProject={
@@ -835,6 +880,18 @@ export default function PlanCanvasPanel({
             </Canvas>
           </CanvasActionsProvider>
         </PlanCanvasActionsProvider>
+        {conversation.open ? (
+          <PlanConversation
+            orgId={orgId}
+            draftRequest={conversation.draftRequest}
+            fullHref={conversation.fullHref}
+            offsetRight={0}
+            onClose={() => {
+              conversation.onToggle(false);
+            }}
+            onWidthChange={setConversationWidth}
+          />
+        ) : null}
       </GraphInspectorHost>
     </div>
   );

@@ -716,6 +716,51 @@ tests/search/` plus the search route suites — 135/135 passing.
 - **Learnings**: Fixture insertion order does not define cursor order when every row shares the same
   sort fields. A container image can also expose a temporary database server while its entrypoint
   initializes the final database.
+
+---
+
+### [DETAIL-LOADING-002] A masthead field is the size of the text it holds
+
+- **Completed**: 2026-09-11
+- **Priority**: P2
+- **Summary**: The last settle left by [DETAIL-LOADING-001]: the summary slot measured 24px while a
+  detail page loaded and 30px once it had, so the property row and everything under it stepped down
+  6px. The question posed was which side owned the number — the placeholder or the field. Neither
+  did. Both were already exactly right.
+- **Approach**: Measuring the field rather than the slot settled it in one reading. The summary
+  `<textarea>` is **24px**, exactly its `text-body-large` line box, and the placeholder standing in
+  for it is `h-6`, also 24px. The 6px was never in either of them — it was the box around the
+  field. A `<textarea>` is `display: inline-block`, so it aligns to its parent's baseline and the
+  parent's line box reserves descender space beneath it.
+
+  That is why the earlier fix to the placeholder's type scale moved the number without closing it:
+  it was correcting the one thing that had not been wrong.
+
+  `EditableSubtitle` had already answered this question in its own read-only branch, which renders
+  `<span className={cn('block', className)}>`. Only the editable branch omitted it. Adding `block`
+  to the field drops it out of the inline formatting context and the slot collapses to the field's
+  own height.
+
+  The same defect was sitting in `EditableTitle`, unmeasured and larger: its `<h1>` is 36px while
+  loading and was **44px** once editable — a 36px field plus an 8px gap. So a heading changed
+  height the moment it became editable, and a list row grew when double-clicked into edit, which is
+  the same bug reported as a loading artefact only because that is where someone happened to see
+  it. Both fields are `block` now; both slots hold at 36px and 24px across the transition.
+
+- **Files changed**:
+  - `apps/web/src/components/editor/editable-subtitle.tsx`, `editable-title.tsx` — `block` on the
+    field
+  - `apps/web/e2e/work/detail-loading-masthead.spec.ts` — asserts the masthead's geometry as one
+    object
+- **Validation**: `pnpm typecheck`, `pnpm lint`, `pnpm test --force` (27/27), `pnpm format:check`,
+  and the browser spec. Also ran `entity-detail-scroll-ownership` and `work-roster-acceptance`,
+  since `EditableTitle` is a list-row control and not only a masthead one. The new assertion was
+  confirmed to fail without the fix (`subtitle` 24 → 30, `rowY` 204 → 210) rather than assumed to.
+- **Learnings**: Two rounds were spent on this seam because the measurements were taken on slots
+  and the fixes were applied to contents. A slot's height is a claim about its content _and_ about
+  the box rules around it, and only measuring both separates them. The spec now asserts the
+  masthead as a single object — every slot height plus the property row's y — because each
+  individual number was correct at some point while the thing a reader actually notices was not.
 - **Blockers**: None.
 
 ---

@@ -13,6 +13,10 @@ billing
 data
 design
 docs
+# editor: the typed surfaces themselves — the document, and the inline title and summary fields
+# wherever they appear. A field's own behaviour and geometry belong here even when the bug is only
+# visible on one kind of record; that record's scope owns what surrounds the field, not the field.
+editor
 # dx: the LOCAL DEVELOPER'S day-to-day tooling and workflow only — lint config, CI, build
 # scripts, the dev server, editor/IDE setup. It is not for the product's own code, including
 # internal package/module structure, exports, or naming (that work is either scoped to the

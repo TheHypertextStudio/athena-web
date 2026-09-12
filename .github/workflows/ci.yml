@@ -225,6 +225,15 @@ jobs:
       - run: pnpm test:tooling
         if: matrix.tooling
 
+      # The complexity ratchet's second half. ESLint enforces the per-file ceilings, but it cannot
+      # express "and no more violations than before" — a new over-target function inside an
+      # already-ledgered file produces no message at all, because the relaxation raised the limit
+      # for the whole file. `complexity:check` re-measures against the real targets and fails when a
+      # file's worst value or total overshoot rises. It is repo-wide and belongs to no package, so
+      # turbo never sees it; it rides with `rest` so it runs exactly once.
+      - run: pnpm complexity:check
+        if: matrix.tooling
+
       - id: coverage
         if: always()
         run: |

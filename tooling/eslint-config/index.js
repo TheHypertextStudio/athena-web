@@ -471,12 +471,13 @@ const complexityDebt = JSON.parse(
  * already-clean files are held to {@link COMPLEXITY_TARGETS}. The numbers may only ever be lowered —
  * `pnpm complexity:ledger` rewrites them from a measurement. Sign-off is an empty ledger.
  *
- * Each entry also records `count`, the number of violations at that ceiling, because the ceiling
- * alone left a hole wide enough to drive the whole codebase through: a file pinned at complexity 18
- * accepted *any number* of new functions up to 18, so the several hundred gnarliest files in the
- * repo were exactly the ones where new complexity was free. ESLint cannot express "at most N
- * violations", so the count is enforced by `pnpm complexity:check`, which re-measures and fails when
- * a file's worst value or its violation count rises.
+ * Each entry also records `excess`, the total overshoot across every violation in that file, because
+ * the ceiling alone left a hole wide enough to drive the whole codebase through: a file pinned at
+ * complexity 18 accepted *any number* of new functions up to 18, so the several hundred gnarliest
+ * files in the repo were exactly the ones where new complexity was free. ESLint cannot express a
+ * budget, so `pnpm complexity:check` re-measures and fails when a file's worst value or its total
+ * overshoot rises. Overshoot rather than a count, so splitting one over-target function into two
+ * smaller ones registers as the improvement it is.
  *
  * Grouped by `(rule, limit)` rather than one object per file: ESLint walks the whole config array
  * for every linted file, so several hundred single-file objects is a cost for no benefit.

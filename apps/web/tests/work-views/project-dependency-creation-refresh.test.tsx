@@ -44,6 +44,8 @@ describe('ProjectDependencyLens creation refresh', () => {
     const rendered = render(
       <ProjectDependencyLens
         organizationId="org_alpha"
+        title="Projects"
+        onRetry={vi.fn()}
         requestedSelectionId={PROJECT_ID}
         requestedSelectionAttempt={0}
       />,
@@ -60,6 +62,8 @@ describe('ProjectDependencyLens creation refresh', () => {
     rendered.rerender(
       <ProjectDependencyLens
         organizationId="org_alpha"
+        title="Projects"
+        onRetry={vi.fn()}
         requestedSelectionId={PROJECT_ID}
         requestedSelectionAttempt={1}
       />,

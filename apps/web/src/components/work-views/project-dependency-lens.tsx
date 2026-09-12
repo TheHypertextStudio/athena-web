@@ -5,8 +5,9 @@ import dynamic from 'next/dynamic';
 import { type JSX, useEffect, useState } from 'react';
 
 import { projectOverviewDef } from '@/lib/fetch-project-overview';
-import { userErrorMessage } from '@/lib/problem';
 import { useApiQuery } from '@/lib/query';
+
+import { WorkViewLoadFailure } from './work-view-load-failure';
 
 const ProjectGraphPanel = dynamic(
   () =>
@@ -17,6 +18,13 @@ const ProjectGraphPanel = dynamic(
 /** Props for the retained Project-only dependency lens. */
 export interface ProjectDependencyLensProps {
   readonly organizationId: string;
+  /** Surface title used by the shared recovery state, owned by the host's page copy. */
+  readonly title: string;
+  /**
+   * Recover from a failed load. The host owns this because the lens is one of several reads that
+   * fail together, and a retry that repaired only this one would leave the rest broken.
+   */
+  readonly onRetry: () => void;
   /** A newly created Project that should open once the invalidated overview refreshes. */
   readonly requestedSelectionId?: string | null | undefined;
   /** Notify the host after the requested Project is present and selected. */
@@ -32,6 +40,8 @@ export interface ProjectDependencyLensProps {
 /** Load the dependency projection only after the viewer opens its dedicated lens. */
 export function ProjectDependencyLens({
   organizationId,
+  title,
+  onRetry,
   requestedSelectionId = null,
   onRequestedSelectionResolved,
   onRequestedSelectionMissing,
@@ -59,17 +69,17 @@ export function ProjectDependencyLens({
     };
   }, [refetch, requestedSelectionAttempt, requestedSelectionId]);
 
+  const rows = query.data?.items;
   if (query.isPending) return <Skeleton className="h-full min-h-80 w-full" />;
-  if (query.isError) {
-    return (
-      <p role="alert" className="text-error text-body-medium p-4">
-        {userErrorMessage(query.error, 'Could not load project dependencies.')}
-      </p>
-    );
+  // A failed refresh never blanks a graph the viewer can still read, which is the same contract
+  // `WorkViewLoadFailure` states for roster rows. Only a lens with nothing to show yields the
+  // content area to the recovery state.
+  if (rows === undefined) {
+    return <WorkViewLoadFailure title={title} retrying={query.isFetching} onRetry={onRetry} />;
   }
   return (
     <ProjectGraphPanel
-      rows={query.data.items}
+      rows={rows}
       orgId={organizationId}
       requestedSelectionId={requestedSelectionId}
       onRequestedSelectionResolved={onRequestedSelectionResolved}

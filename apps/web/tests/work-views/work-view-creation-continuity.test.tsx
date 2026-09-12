@@ -233,8 +233,11 @@ vi.mock('../../src/components/work-views/work-list', () => ({
 
 vi.mock('../../src/lib/query', () => ({
   apiQueryOptions: () => ({}),
-  queryKeys: { savedViews: (organizationId: string) => ['saved-views', organizationId] },
-  useApiQuery: () => ({ data: { items: [] } }),
+  queryKeys: {
+    savedViews: (organizationId: string) => ['saved-views', organizationId],
+    projects: (organizationId: string) => ['projects', organizationId],
+  },
+  useApiQuery: () => ({ data: { items: [] }, isError: false }),
 }));
 
 import { WorkViewPage } from '../../src/components/work-views/work-view-page';

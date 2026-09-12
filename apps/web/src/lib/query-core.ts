@@ -301,7 +301,15 @@ export async function unwrap(
   }
   if (!response.ok) {
     const error = await readProblemError(response as unknown as Response, fallbackMessage);
-    if (response.status === 401 && error.code === 'unauthorized') {
+    // A 401 with no readable problem body is still an expired session. Requiring the `unauthorized`
+    // code let a proxy-level or HTML 401 slip past the interlock: it became an ordinary request
+    // error, was retried once, and left every read on the surface reporting its own "could not
+    // load" instead of sending the viewer to sign in.
+    //
+    // A 401 that *does* carry some other code is a different statement — `reauth_required` asks a
+    // still-valid session to step up for one sensitive operation — so those keep their code and
+    // reach the surface that knows what to do with them.
+    if (response.status === 401 && (error.code === undefined || error.code === 'unauthorized')) {
       throw new SessionExpiredError();
     }
     const organizationId = organizationIdFromRequestUrl(response.url);

@@ -8,8 +8,8 @@ import type * as WorkBoardModule from '../../src/components/work-views/work-boar
 import { useSelection } from '../../src/components/selection/selection-context';
 import { objectKey } from '../../src/lib/actions/object';
 
-const { capability, controller, createMock, local, foreign, context, toolbarProps } = vi.hoisted(
-  () => {
+const { capability, controller, createMock, local, foreign, context, toolbarProps, failures } =
+  vi.hoisted(() => {
     const routeOrganizationId = '01ARZ3NDEKTSV4RRFFQ69G5FA0';
     const foreignOrganizationId = '01ARZ3NDEKTSV4RRFFQ69G5FB0';
     const localRow = {
@@ -72,9 +72,17 @@ const { capability, controller, createMock, local, foreign, context, toolbarProp
       foreign: foreignRow,
       context: contextRow,
       toolbarProps: { current: null as Record<string, unknown> | null },
+      // Failure state the degradation rules read. Mutable for the same reason `rows` is: these
+      // are the inputs a test varies, not fixtures the page owns.
+      failures: {
+        initialError: null as Error | null,
+        hasResponse: true,
+        preferencesError: null as Error | null,
+        savedViewsError: null as Error | null,
+        retrySurface: vi.fn(),
+      },
     };
-  },
-);
+  });
 
 vi.mock('../../src/components/settings/use-can-manage-org', () => ({
   useCanManageOrg: () => ({ ...capability, loading: false }),
@@ -113,15 +121,17 @@ vi.mock('../../src/components/work-views/use-work-view', () => ({
     executionKey: controller.executionKey,
     definition: controller.definition,
     effectiveDefinition: controller.definition,
-    response: {
-      rows: controller.rows,
-      groups: controller.groups,
-      totalCount: [
-        ...controller.rows,
-        ...controller.groupPages.flatMap((page) => page.rows),
-      ].filter((row) => !row.isContext).length,
-      nextCursor: null,
-    },
+    response: failures.hasResponse
+      ? {
+          rows: controller.rows,
+          groups: controller.groups,
+          totalCount: [
+            ...controller.rows,
+            ...controller.groupPages.flatMap((page) => page.rows),
+          ].filter((row) => !row.isContext).length,
+          nextCursor: null,
+        }
+      : undefined,
     groupPages: controller.groupPages,
     collapsedGroups: controller.collapsedGroups,
     hiddenBoardColumns: controller.hiddenBoardColumns,
@@ -133,10 +143,10 @@ vi.mock('../../src/components/work-views/use-work-view', () => ({
     facetLoading: false,
     facetHasMore: false,
     facetLoadingMore: false,
-    initialError: null,
+    initialError: failures.initialError,
     rootContinuationError: null,
     facetError: null,
-    preferencesError: null,
+    preferencesError: failures.preferencesError,
     saveError: null,
     defaultError: null,
     saving: false,
@@ -150,6 +160,7 @@ vi.mock('../../src/components/work-views/use-work-view', () => ({
     retryInitial: vi.fn(),
     retryFacet: vi.fn(),
     retryPreferences: vi.fn(),
+    retrySurface: failures.retrySurface,
     toggleCollapsedGroup: vi.fn(),
     toggleHiddenBoardColumn: vi.fn(),
     showAllBoardColumns: vi.fn(),
@@ -176,7 +187,13 @@ vi.mock('../../src/components/work-views/use-project-timeline-mutations', () => 
 vi.mock('../../src/components/work-views/work-view-toolbar', () => ({
   WorkViewToolbar: (props: Record<string, unknown>) => {
     toolbarProps.current = props;
-    return <button type="button">View controls</button>;
+    return (
+      <>
+        {/* The real toolbar renders its leading slot, which is where the view tabs live. */}
+        {props['leading'] as ReactNode}
+        <button type="button">View controls</button>
+      </>
+    );
   },
 }));
 
@@ -281,8 +298,16 @@ vi.mock('../../src/components/work-views/work-board', async (importOriginal) => 
 
 vi.mock('../../src/lib/query', () => ({
   apiQueryOptions: () => ({}),
-  queryKeys: { savedViews: (organizationId: string) => ['saved-views', organizationId] },
-  useApiQuery: () => ({ data: { items: [] }, error: null, refetch: vi.fn() }),
+  queryKeys: {
+    savedViews: (organizationId: string) => ['saved-views', organizationId],
+    projects: (organizationId: string) => ['projects', organizationId],
+  },
+  useApiQuery: () => ({
+    data: { items: [] },
+    error: failures.savedViewsError,
+    isError: Boolean(failures.savedViewsError),
+    refetch: vi.fn(),
+  }),
 }));
 
 import { WorkViewPage } from '../../src/components/work-views/work-view-page';
@@ -304,6 +329,11 @@ beforeEach(() => {
   controller.definition.presentation.layout = 'list';
   createMock.mockReset();
   toolbarProps.current = null;
+  failures.initialError = null;
+  failures.hasResponse = true;
+  failures.preferencesError = null;
+  failures.savedViewsError = null;
+  failures.retrySurface.mockClear();
   clipboardWriteText.mockReset().mockResolvedValue(undefined);
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
@@ -408,5 +438,62 @@ describe('WorkViewPage selection and permissions', () => {
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: 'Copied' })).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('WorkViewPage failure altitudes', () => {
+  function failContent(): void {
+    failures.initialError = new Error('roster read failed');
+    failures.hasResponse = false;
+  }
+
+  it('answers a failed surface with one recovery state instead of a queue of alerts', () => {
+    failContent();
+    failures.savedViewsError = new Error('saved views read failed');
+    failures.preferencesError = new Error('preference write failed');
+
+    render(<WorkViewPage organizationId={ROUTE_ORG} target="task" />);
+
+    // One upstream failure breaks every read behind this surface. Each owner announcing itself is
+    // what turned a single outage into a column of red sentences.
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+  });
+
+  it('repairs every failed read from the one recovery action', () => {
+    failContent();
+    failures.savedViewsError = new Error('saved views read failed');
+
+    render(<WorkViewPage organizationId={ROUTE_ORG} target="task" />);
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+
+    expect(failures.retrySurface).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the view tabs usable when only saved views fail', () => {
+    failures.savedViewsError = new Error('saved views read failed');
+
+    render(<WorkViewPage organizationId={ROUTE_ORG} target="task" />);
+
+    // The surface still works without saved views, so the built-in tabs stay and recovery is one
+    // named control rather than a sentence wedged into the row.
+    expect(screen.getByRole('tab', { name: /all tasks/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /saved views.*retry/i })).toBeInTheDocument();
+  });
+
+  it('says nothing about saved views while the content itself is unavailable', () => {
+    failContent();
+    failures.savedViewsError = new Error('saved views read failed');
+
+    render(<WorkViewPage organizationId={ROUTE_ORG} target="task" />);
+
+    expect(screen.queryByRole('button', { name: /saved views.*retry/i })).not.toBeInTheDocument();
+  });
+
+  it('reports a failed preference write while the surface is otherwise usable', () => {
+    failures.preferencesError = new Error('preference write failed');
+
+    render(<WorkViewPage organizationId={ROUTE_ORG} target="task" />);
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
   });
 });

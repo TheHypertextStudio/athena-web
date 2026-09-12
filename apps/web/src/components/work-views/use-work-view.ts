@@ -253,11 +253,25 @@ export interface WorkViewController<TTarget extends ViewTarget> {
   readonly rootContinuationError: unknown;
   /** Facet query failure owned by the filter builder. */
   readonly facetError: unknown;
-  /** Personal view preference failure owned by the changed presentation control. */
+  /**
+   * Personal view preference **write** failure, owned by the changed presentation control.
+   *
+   * A failed preference *read* is deliberately absent: defaults apply, the surface stays usable,
+   * and the query layer retries on its own, so there is nothing for a viewer to act on. Folding
+   * the read in here is what made a failed `GET /v1/hub/preferences` announce itself as a failed
+   * save of something nobody had submitted.
+   */
   readonly preferencesError: unknown;
   /** Saved-view mutation failure owned by the open save dialog. */
   readonly saveError: unknown;
-  /** Default mutation failure owned by the default action. */
+  /**
+   * Workspace-default **mutation** failure, owned by the default action.
+   *
+   * The matching read is deliberately silent. A workspace with no default answers `404`, which the
+   * query absorbs as `null` because "nobody set one" is the ordinary case rather than a fault; any
+   * real failure of that read leaves the surface on its built-in definition and is already covered
+   * by the content state. Surfacing it here would report a failed write nobody attempted.
+   */
   readonly defaultError: unknown;
   readonly saving: boolean;
   readonly settingDefault: boolean;
@@ -269,7 +283,10 @@ export interface WorkViewController<TTarget extends ViewTarget> {
   readonly loadMoreRows: () => void;
   readonly retryInitial: () => void;
   readonly retryFacet: () => void;
+  /** Retry the failed preference **write**; a failed read is silent and retries on its own. */
   readonly retryPreferences: () => void;
+  /** Refetch every failed read behind the surface, for recovery from a shared upstream failure. */
+  readonly retrySurface: () => void;
   readonly toggleCollapsedGroup: (key: string) => void;
   readonly toggleHiddenBoardColumn: (key: string) => void;
   readonly showAllBoardColumns: () => void;
@@ -1079,6 +1096,19 @@ export function useWorkView<TTarget extends ViewTarget>(
     void queryQ.refetch();
   }, [queryQ]);
 
+  /**
+   * Repair every failed read behind the surface in one gesture.
+   *
+   * The reads share one client, one session cookie and one middleware stack, so a single upstream
+   * failure takes all of them down together. Retrying only the query that owns the visible state
+   * would leave the others broken behind a page that now looks recovered.
+   */
+  const retrySurface = useCallback((): void => {
+    void queryQ.refetch();
+    if (preferencesQ.isError) void preferencesQ.refetch();
+    if (defaultQ.isError) void defaultQ.refetch();
+  }, [defaultQ, preferencesQ, queryQ]);
+
   const response = useMemo<QueryResponseFor<TTarget> | undefined>(() => {
     const first = queryQ.isPlaceholderData ? undefined : queryQ.data;
     const continuation =
@@ -1135,8 +1165,7 @@ export function useWorkView<TTarget extends ViewTarget>(
         preferenceError ??
         (failedPreferenceWrite
           ? new UserFacingError('Could not save your view preferences.')
-          : null) ??
-        preferencesQ.error,
+          : null),
       saveError: saveMutation.error,
       defaultError: defaultMutation.error,
       saving: saveMutation.isPending,
@@ -1150,13 +1179,10 @@ export function useWorkView<TTarget extends ViewTarget>(
       retryInitial,
       retryFacet,
       retryPreferences: () => {
-        if (preferencesQ.error) {
-          void preferencesQ.refetch();
-          return;
-        }
         if (!failedPreferenceWrite) return;
         enqueuePreferenceWrite(failedPreferenceWrite.input, failedPreferenceWrite.onLatestFailure);
       },
+      retrySurface,
       toggleCollapsedGroup,
       toggleHiddenBoardColumn,
       showAllBoardColumns,
@@ -1214,6 +1240,7 @@ export function useWorkView<TTarget extends ViewTarget>(
       rootPageState,
       retryInitial,
       retryFacet,
+      retrySurface,
       showAllBoardColumns,
       requestFacet,
       resetPersonalOverride,

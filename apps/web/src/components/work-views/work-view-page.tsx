@@ -19,7 +19,16 @@ import {
   type ViewScope,
 } from '@docket/work/saved-view-contract';
 import { EmptyState } from '@docket/ui/components';
-import { FolderKanban, Heart, Layers, ListChecks, Plus, Target, X } from '@docket/ui/icons';
+import {
+  FolderKanban,
+  Heart,
+  Layers,
+  ListChecks,
+  Plus,
+  RefreshCw,
+  Target,
+  X,
+} from '@docket/ui/icons';
 import {
   Button,
   Dialog,
@@ -33,6 +42,10 @@ import {
   Input,
   Select,
   Skeleton,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import type { ViewTarget } from '@docket/work/view-contract';
@@ -67,6 +80,7 @@ import { ProjectDependencyLens } from './project-dependency-lens';
 import { ProjectTimelineAdapter } from './project-timeline-adapter';
 import type { WorkViewGroupSummary, WorkViewRowFor } from './renderer-types';
 import { useWorkView } from './use-work-view';
+import { useWorkViewSurfaceRecovery } from './use-work-view-surface-recovery';
 import { useWorkViewOrder } from './use-work-view-order';
 import { useProjectTimelineMutations } from './use-project-timeline-mutations';
 import type { WorkViewDefinitionFor } from './view-state';
@@ -275,21 +289,56 @@ function RowsSkeleton({ label }: { readonly label: string }): JSX.Element {
   );
 }
 
-function SavedViewsLoadFailure({
+/**
+ * Recovery for saved views that failed to load, sized to what the viewer actually lost.
+ *
+ * Saved views are an optional layer over a surface that still works without them, so this degrades
+ * to absence rather than announcing itself: the built-in tabs render as usual and the row ends with
+ * one quiet glyph. A red sentence wedged between the tabs broke the row's rhythm and claimed the
+ * same weight as a failure that empties the page.
+ */
+function SavedViewsRetry({
   error,
+  contentFailed,
   onRetry,
 }: {
   readonly error: unknown;
+  /** Silent while the content itself has failed: the recovery state below already owns it. */
+  readonly contentFailed: boolean;
   readonly onRetry?: (() => void) | undefined;
 }): JSX.Element | null {
-  if (!error || !onRetry) return null;
+  if (contentFailed || !error || !onRetry) return null;
+  const label = 'Saved views could not load. Retry.';
   return (
-    <span role="alert" className="text-error text-body-small flex shrink-0 items-center gap-1">
-      Could not load saved views.
-      <Button variant="ghost" controlSize="sm" onClick={onRetry}>
-        Retry
-      </Button>
-    </span>
+    <>
+      {/* Polite, not assertive: nothing here interrupts what the viewer is already doing. */}
+      <span aria-live="polite" aria-atomic="true" className="sr-only">
+        {label}
+      </span>
+      {/*
+        Provided locally rather than inherited: Radix throws without an ancestor provider, so a
+        hint about a minor failure could otherwise take down the whole surface. Nesting inside the
+        app-wide provider is supported and keeps this control safe wherever it is rendered.
+      */}
+      <TooltipProvider delayDuration={400}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              iconOnly
+              controlSize="sm"
+              className="shrink-0"
+              aria-label={label}
+              onClick={onRetry}
+            >
+              <RefreshCw aria-hidden />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{label}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </>
   );
 }
 
@@ -304,6 +353,7 @@ function SaveViewFailure({ error }: { readonly error: unknown }): JSX.Element | 
 
 function WorkViewOperationFailures({
   title,
+  contentFailed,
   rootContinuationError,
   onRetryRoot,
   preferencesError,
@@ -312,6 +362,12 @@ function WorkViewOperationFailures({
   onRetryDefault,
 }: {
   readonly title: string;
+  /**
+   * A lower altitude never speaks while a higher one has failed. With the content gone, none of
+   * these operations is available to act on, so their rows would be noise stacked above a recovery
+   * state that already explains the situation and offers the only useful action.
+   */
+  readonly contentFailed: boolean;
   readonly rootContinuationError: unknown;
   readonly onRetryRoot: () => void;
   readonly preferencesError: unknown;
@@ -319,6 +375,7 @@ function WorkViewOperationFailures({
   readonly defaultError: unknown;
   readonly onRetryDefault: () => void;
 }): JSX.Element {
+  if (contentFailed) return <></>;
   return (
     <>
       {rootContinuationError ? (
@@ -347,13 +404,6 @@ function WorkViewOperationFailures({
       ) : null}
     </>
   );
-}
-
-function shouldShowInitialFailure<TTarget extends ViewTarget>(
-  initialError: unknown,
-  response: ReturnType<typeof useWorkView<TTarget>>['response'],
-): boolean {
-  return Boolean(initialError) && response === undefined;
 }
 
 /** Keep root continuation recovery inside the list's typed table entry. */
@@ -472,8 +522,18 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     search,
     savedView: selectedSavedView as Extract<SavedWorkViewOutValue, { target: TTarget }> | null,
   });
+  const dependencyLensActive = target === 'project' && dependencyMode;
   const orderMutation = useWorkViewOrder();
   const projectTimeline = useProjectTimelineMutations();
+  const { contentFailed, retrySurface } = useWorkViewSurfaceRecovery({
+    organizationId,
+    dependencyLensActive,
+    initialError: controller.initialError,
+    hasResponse: controller.response !== undefined,
+    retryControllerReads: controller.retrySurface,
+    savedViewsFailed: savedViewsQuery.isError,
+    refetchSavedViews: () => void savedViewsQuery.refetch(),
+  });
   // The target discriminator was validated by `useWorkView`. TypeScript loses that correlation
   // when it indexes the four response variants through a generic target.
   const rows = (controller.response?.rows ?? []) as unknown as readonly WorkViewRowFor<TTarget>[];
@@ -636,10 +696,12 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   };
 
   let content: JSX.Element;
-  if (target === 'project' && dependencyMode) {
+  if (dependencyLensActive) {
     content = (
       <ProjectDependencyLens
         organizationId={organizationId}
+        title={copy.title}
+        onRetry={retrySurface}
         requestedSelectionId={activeCreatedProjectSelection?.id ?? null}
         requestedSelectionAttempt={activeCreatedProjectSelection?.attempt ?? 0}
         onRequestedSelectionResolved={resolveCreatedProjectSelection}
@@ -654,12 +716,12 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       ) : (
         <RowsSkeleton label={copy.title.toLowerCase()} />
       );
-  } else if (shouldShowInitialFailure(controller.initialError, controller.response)) {
+  } else if (contentFailed) {
     content = (
       <WorkViewLoadFailure
         title={copy.title}
         retrying={controller.retrying}
-        onRetry={controller.retryInitial}
+        onRetry={retrySurface}
       />
     );
   } else if ((controller.response?.totalCount ?? 0) === 0) {
@@ -848,8 +910,9 @@ export function WorkViewPage<TTarget extends ViewTarget>({
           Dependencies
         </Button>
       ) : null}
-      <SavedViewsLoadFailure
+      <SavedViewsRetry
         error={savedViewsQuery.error}
+        contentFailed={contentFailed}
         onRetry={() => void savedViewsQuery.refetch()}
       />
     </div>
@@ -992,6 +1055,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
               ) : null}
               <WorkViewOperationFailures
                 title={copy.title}
+                contentFailed={contentFailed}
                 rootContinuationError={externalRootContinuationError(
                   layout,
                   controller.rootContinuationError,

@@ -7,6 +7,81 @@
 
 ## Active Tasks
 
+### [WORKVIEW-FAILURE-001] A failed work view answers with one state and one action
+
+- **Completed**: 2026-09-11
+- **Priority**: P1
+- **Summary**: A Projects screenshot showed three red sentences down the page — "Could not load
+  saved views." wedged between the view tabs, "Could not save your view preferences." under them,
+  and "Could not load projects." where the dependency graph belongs. Three type scales, three
+  `role="alert"` sites, and the one failure that actually emptied the page was the only one without
+  a retry. It was never three bugs. `WorkViewPage` fires four reads through one `hc()` client, one
+  `/v1` rewrite, one session cookie and one middleware stack, so an upstream failure takes all four
+  down together; three own a visible error slot and announce themselves independently, and the
+  fourth is swallowed. That 3-of-4 fingerprint is the proof of a single cause. Tasks, Programs and
+  Initiatives render through the same component and had the same behavior.
+
+- **Approach**: Failures now have altitude, and the treatment matches what the person actually
+  lost. **Content** — the roster or the dependency graph — owns the area it emptied: a centered
+  `EmptyState`, a `RefreshCw` glyph, `"{Title} could not load"` and a Retry, carrying no error
+  color, which is what the 2026-08-23 work-view-recovery audit shipped for the roster and never
+  reached the lens. **Chrome** — saved views — degrades to absence: the built-in tabs render as
+  usual and the row ends with one quiet glyph, named by tooltip and `aria-label` and announced
+  politely rather than as an alert. **Infrastructure** — the preference and workspace-default reads
+  — says nothing at all: defaults apply, the surface works, the query layer retries on its own.
+
+  The rule that removes the stacking is that a lower altitude never speaks while a higher one has
+  failed, and it lives in the failure components themselves rather than as ternaries at the call
+  site. `useWorkViewSurfaceRecovery` decides whether the content failed and exposes the one retry
+  that repairs every failed read; it subscribes to the same overview cache entry the lens reads, so
+  the host can see a lens failure without a second request.
+
+  Two of the three sentences turned out to describe events that never happened. "Could not save
+  your view preferences." was `preferencesError` falling through to `preferencesQ.error` — the
+  **read** — rendered through hardcoded save copy, so a failed `GET /v1/hub/preferences` reported a
+  save nobody had submitted (regression from `77f9ffe74`; the retry handler had always branched
+  correctly, only the display path conflated them). And the lens's own fallback copy was
+  unreachable: `userErrorMessage` prefers the error's message, which came from the shared
+  `projectOverviewDef` fallback, so a dependency-graph failure said "Could not load projects."
+
+- **Decisions**: A `401` with no readable problem body is now treated as an expired session.
+  Requiring the problem+json `unauthorized` code let a proxy-level or HTML `401` slip past the
+  interlock — it became an ordinary request error, was retried once, and left four panels each
+  reporting "could not load" instead of routing to sign-in. The first attempt keyed on status
+  alone and was wrong: a `401` carrying `reauth_required` is a still-valid session being asked to
+  step up for one sensitive operation, and an existing test says so. The rule is status `401` with
+  the code absent or `unauthorized`; any other structured code keeps its meaning.
+
+  `defaultQ`'s read stays deliberately silent and now says why in its TSDoc. A workspace with no
+  default answers `404`, which the query already absorbs as `null` because "nobody set one" is the
+  ordinary case, and any real failure of that read is already covered by the content state.
+
+  `SavedViewsRetry` carries its own `TooltipProvider`. Radix throws without an ancestor provider,
+  so inheriting the app-wide one meant a hint about a minor failure could take down the surface —
+  the exact class of failure this task exists to remove.
+
+- **Files changed**: `apps/web/src/components/work-views/work-view-page.tsx`,
+  `use-work-view.ts`, `project-dependency-lens.tsx`, new `use-work-view-surface-recovery.ts`,
+  `apps/web/src/lib/query-core.ts`; tests in `apps/web/tests/work-views/` (new
+  `project-dependency-lens-failure.test.tsx`) and `apps/web/tests/lib/query.test.tsx`.
+
+- **Validation**: Root `typecheck`, `lint`, `format:check` and `test` (coverage) all green, 27/27
+  turbo tasks. Reproduced the original failure shape against a live stack by aborting only the
+  surface's reads: the Dependencies tab now shows a single recovery state in both themes with the
+  tab row intact, and saved-views-only failure leaves the surface working behind one quiet glyph.
+  A fresh authenticated account answers `200` on preferences, saved views and the overview, so the
+  screenshot's cause is environmental or data-specific rather than a universal regression.
+
+- **Learnings**: Adding the recovery hook pushed `WorkViewPage` past the complexity ratchet (71 vs
+  67). Moving each suppression rule into the component that owns the failure brought it back under
+  and read better than the ternaries it replaced — the gate pointed at a real design improvement
+  rather than an exemption. Separately, `dev-stack.sh` cannot take `:1355` when another worktree
+  already holds it; every surface answers `404` through a proxy that has no route registered for
+  this branch, and `DOCKET_DEV_PORT` is the fix.
+
+- **Blockers**: The calendar rail shows "Calendar updates are temporarily unavailable." in a red
+  panel during these captures — a different surface, the same class of problem, not addressed here.
+
 ### [MILESTONE-PARITY-001] A project milestone is read and edited on the project that owns it
 
 - **Completed**: 2026-09-11

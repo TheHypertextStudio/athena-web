@@ -210,6 +210,29 @@ describe('createQueryClient session-expiry wiring', () => {
     client.clear();
   });
 
+  it('opens the sign-in interlock for a 401 that carries no readable problem body', async () => {
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(
+      () =>
+        useApiQuery(
+          apiQueryOptions<ProjectShape>(
+            queryKeys.project('org_1', 'p1'),
+            // A proxy or edge 401 answers with HTML, not problem+json. Treating that as an
+            // ordinary request error left every read on a surface reporting its own "could not
+            // load" instead of sending the viewer to sign in.
+            () => Promise.resolve(new Response('<html>Unauthorized</html>', { status: 401 })),
+            'Could not load this project.',
+          ),
+        ),
+      { wrapper },
+    );
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+    expect(result.current.error).toBeInstanceOf(SessionExpiredError);
+  });
+
   it('does not sign the user out for a structured re-authentication 401', async () => {
     const { wrapper } = makeQueryWrapper();
     const { result } = renderHook(

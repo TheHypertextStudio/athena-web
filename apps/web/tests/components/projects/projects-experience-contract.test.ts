@@ -6,6 +6,9 @@ import { describe, expect, it } from 'vitest';
 const root = resolve(import.meta.dirname, '../../../../../');
 const overviewPath = join(root, 'apps/web/src/app/(app)/orgs/[orgId]/projects/projects-client.tsx');
 const workPagePath = join(root, 'apps/web/src/components/work-views/work-view-page.tsx');
+// The tab row moved into its own component; the contract is about the row existing, not about
+// which file draws it.
+const workTabsPath = join(root, 'apps/web/src/components/work-views/work-view-tabs.tsx');
 const workListPath = join(root, 'apps/web/src/components/work-views/work-list.tsx');
 const workListColumnsPath = join(root, 'apps/web/src/components/work-views/work-list-columns.tsx');
 const timelinePath = join(root, 'apps/web/src/components/work-views/project-timeline-adapter.tsx');
@@ -34,8 +37,10 @@ describe('Projects experience contract', () => {
     expect(overview).toContain('<WorkViewPage');
     expect(workPage).toContain('<ListPageLayout');
     expect(workPage).toContain('<WorkViewToolbar');
-    expect(workPage).toContain('role="tablist"');
-    expect(workPage).toContain('controller.toggleFavoriteView(view.id)');
+    expect(workPage).toContain('<WorkViewTabs');
+    const workTabs = source(workTabsPath);
+    expect(workTabs).toContain('role="tablist"');
+    expect(workTabs).toContain('onToggleFavorite');
     // The dependencies lens now renders the shared React Flow canvas (lazy-loaded) instead of the
     // old hand-rolled SVG DependencyLens.
     expect(source(dependencyPath)).toContain('<ProjectGraphPanel');

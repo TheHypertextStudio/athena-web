@@ -1198,39 +1198,6 @@ describe('useWorkView preference serialization', () => {
     });
   });
 
-  it('stays silent when the preference read fails and nothing was ever submitted', async () => {
-    apiMocks.getPreferences.mockRejectedValue(new Error('preference read failed'));
-    const { wrapper } = makeQueryWrapper();
-    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current.response).toBeDefined();
-    });
-
-    // A failed read leaves the surface on defaults and working, so there is nothing for a viewer
-    // to act on. Reporting it through the write slot claimed a save had failed that never ran.
-    expect(result.current.preferencesError).toBeNull();
-  });
-
-  it('repairs the preference read through the surface retry rather than the write retry', async () => {
-    apiMocks.getPreferences.mockRejectedValueOnce(new Error('preference read failed'));
-    const { wrapper } = makeQueryWrapper();
-    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current.response).toBeDefined();
-    });
-    const readsBefore = apiMocks.getPreferences.mock.calls.length;
-
-    act(() => {
-      result.current.retrySurface();
-    });
-
-    await waitFor(() => {
-      expect(apiMocks.getPreferences.mock.calls.length).toBeGreaterThan(readsBefore);
-    });
-  });
-
   it('retries the failed preference payload after a later preference write changes current state', async () => {
     apiMocks.patchPreferences
       .mockRejectedValueOnce(new Error('first preference write failed'))

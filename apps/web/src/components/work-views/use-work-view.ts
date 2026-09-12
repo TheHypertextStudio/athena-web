@@ -42,7 +42,6 @@ import {
   apiInfiniteQueryOptions,
   type RpcResponse,
   queryKeys,
-  rpcErrorResponse,
   unwrap,
   useApiListQuery,
   useInfiniteApiQuery,
@@ -61,6 +60,8 @@ import {
   workViewFilterFieldCatalog,
 } from './view-state';
 import type { WorkViewGroupPage, WorkViewRowFor } from './renderer-types';
+import { usePreferenceMutation } from './use-preference-mutation';
+import { validatedRpcResponse } from './validated-rpc-response';
 import {
   emptyWorkViewPages,
   mergeWorkViewPageRows,
@@ -99,24 +100,6 @@ type QueryResponseFor<TTarget extends ViewTarget> = QueryResponseByTarget[TTarge
 
 type FacetResponseFor<TTarget extends ViewTarget> = WorkViewFacetResponseForTarget<TTarget>;
 type DefaultWorkViewInput = ReturnType<typeof OrganizationWorkViewDefaultBody.parse>;
-
-interface RuntimeSchema<T> {
-  parse(value: unknown): T;
-}
-
-async function validatedRpcResponse<T>(
-  call: () => Promise<RpcResponse<unknown>>,
-  schema: RuntimeSchema<T>,
-): Promise<RpcResponse<T>> {
-  const response = await call();
-  if (!response.ok) return rpcErrorResponse<T>(response);
-  const value = schema.parse(await response.json());
-  return {
-    ok: true,
-    status: response.status,
-    json: async () => value,
-  };
-}
 
 function parseQueryResponse<TTarget extends ViewTarget>(
   target: TTarget,
@@ -256,12 +239,21 @@ export interface WorkViewController<TTarget extends ViewTarget> {
   /**
    * Personal view preference **write** failure, owned by the changed presentation control.
    *
-   * A failed preference *read* is deliberately absent: defaults apply, the surface stays usable,
-   * and the query layer retries on its own, so there is nothing for a viewer to act on. Folding
-   * the read in here is what made a failed `GET /v1/hub/preferences` announce itself as a failed
-   * save of something nobody had submitted.
+   * A failed *read* is reported separately through {@link preferencesUnavailable}, because the two
+   * need different words: folding the read in here is what made a failed `GET /v1/hub/preferences`
+   * announce itself as a failed save of something nobody had submitted.
    */
   readonly preferencesError: unknown;
+  /**
+   * The stored overrides could not be read, so presentation changes are not being saved.
+   *
+   * @remarks
+   * This has to be visible. `viewState` is sent whole and replaces the stored column, so a write
+   * built on a failed read would persist an empty list and destroy every view instance's settings
+   * across every workspace. Writes are refused while this is true, which the person would otherwise
+   * experience as their changes silently not sticking.
+   */
+  readonly preferencesUnavailable: boolean;
   /** Saved-view mutation failure owned by the open save dialog. */
   readonly saveError: unknown;
   /**
@@ -453,6 +445,10 @@ export function useWorkView<TTarget extends ViewTarget>(
     enabled: options.savedView == null,
   });
 
+  // Whether the stored overrides are actually known. A failed read leaves `persistedStates` empty,
+  // which is indistinguishable from "this person has no overrides" — and writing that back erases
+  // the real ones. Every write path checks this first.
+  const preferencesLoaded = preferencesQ.isSuccess;
   const persistedStates = preferencesQ.data?.viewState ?? [];
   const timezone = preferencesQ.data?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const persistedPersonal = persistedStates.find((state) => state.instanceKey === instanceKey);
@@ -762,18 +758,7 @@ export function useWorkView<TTarget extends ViewTarget>(
     }));
   }, [controllerKey, facetResponse, target]);
 
-  const preferenceMutation = useApiMutation<HubPreferences, readonly PersonalWorkViewStateValue[]>({
-    mutationFn: (viewState) =>
-      unwrap(
-        () =>
-          validatedRpcResponse(
-            () => api.v1.hub.preferences.$patch({ json: { viewState: [...viewState] } }),
-            HubPreferences,
-          ),
-        'Could not save your view preferences.',
-      ),
-    invalidateKeys: [queryKeys.hubPreferences()],
-  });
+  const preferenceMutation = usePreferenceMutation();
   const preferenceQueue = useRef<Promise<void>>(Promise.resolve());
   const preferredStates = useRef<readonly PersonalWorkViewStateValue[]>(persistedStates);
   const queuedPreferenceWrites = useRef(0);
@@ -791,6 +776,12 @@ export function useWorkView<TTarget extends ViewTarget>(
 
   const enqueuePreferenceWrite = useCallback(
     (next: readonly PersonalWorkViewStateValue[], onLatestFailure: () => void): void => {
+      // A write built on a read that never landed is a wipe, not a save. `viewState` is sent whole
+      // and the server replaces the column with it, so if the read failed, `persistedStates` is the
+      // empty array rather than the person's real overrides — and persisting that destroys every
+      // view instance's collapsed groups, hidden columns and favorites, across every workspace,
+      // from one unrelated click. Until the read succeeds there is nothing safe to merge into.
+      if (!preferencesLoaded) return;
       const revision = preferenceRevision.current + 1;
       preferenceRevision.current = revision;
       preferredStates.current = next;
@@ -815,7 +806,7 @@ export function useWorkView<TTarget extends ViewTarget>(
           }
         });
     },
-    [preferenceMutation],
+    [preferenceMutation, preferencesLoaded],
   );
 
   const saveMutation = useApiMutation<SavedWorkViewOut, SaveWorkViewInput>({
@@ -1166,6 +1157,7 @@ export function useWorkView<TTarget extends ViewTarget>(
         (failedPreferenceWrite
           ? new UserFacingError('Could not save your view preferences.')
           : null),
+      preferencesUnavailable: preferencesQ.isError,
       saveError: saveMutation.error,
       defaultError: defaultMutation.error,
       saving: saveMutation.isPending,
@@ -1179,6 +1171,12 @@ export function useWorkView<TTarget extends ViewTarget>(
       retryInitial,
       retryFacet,
       retryPreferences: () => {
+        // The read comes first: until it lands there is nothing safe to write against, and
+        // `enqueuePreferenceWrite` refuses anyway.
+        if (preferencesQ.isError) {
+          void preferencesQ.refetch();
+          return;
+        }
         if (!failedPreferenceWrite) return;
         enqueuePreferenceWrite(failedPreferenceWrite.input, failedPreferenceWrite.onLatestFailure);
       },
@@ -1228,7 +1226,7 @@ export function useWorkView<TTarget extends ViewTarget>(
       failedPreferenceWrite,
       failedDefaultInput,
       preferenceWritesPending,
-      preferencesQ.error,
+      preferencesQ.isError,
       preferencesQ.refetch,
       queryQ.data,
       queryQ.error,

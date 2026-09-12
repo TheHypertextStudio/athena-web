@@ -19,16 +19,7 @@ import {
   type ViewScope,
 } from '@docket/work/saved-view-contract';
 import { EmptyState } from '@docket/ui/components';
-import {
-  FolderKanban,
-  Heart,
-  Layers,
-  ListChecks,
-  Plus,
-  RefreshCw,
-  Target,
-  X,
-} from '@docket/ui/icons';
+import { FolderKanban, Layers, ListChecks, Plus, Target, X } from '@docket/ui/icons';
 import {
   Button,
   Dialog,
@@ -42,10 +33,6 @@ import {
   Input,
   Select,
   Skeleton,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
 } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import type { ViewTarget } from '@docket/work/view-contract';
@@ -88,7 +75,9 @@ import { visibleWorkBoardRows, WorkBoard } from './work-board';
 import { WorkCards } from './work-cards';
 import { WorkList } from './work-list';
 import { visibleWorkListRows } from './work-list-groups';
+import { SaveViewFailure, WorkViewOperationFailures } from './work-view-failures';
 import { WorkViewLoadFailure } from './work-view-load-failure';
+import { WorkViewTabs } from './work-view-tabs';
 import {
   isRouteOwnedDirectWorkViewRow,
   workViewRowInteractionPolicy,
@@ -288,124 +277,6 @@ function RowsSkeleton({ label }: { readonly label: string }): JSX.Element {
     </div>
   );
 }
-
-/**
- * Recovery for saved views that failed to load, sized to what the viewer actually lost.
- *
- * Saved views are an optional layer over a surface that still works without them, so this degrades
- * to absence rather than announcing itself: the built-in tabs render as usual and the row ends with
- * one quiet glyph. A red sentence wedged between the tabs broke the row's rhythm and claimed the
- * same weight as a failure that empties the page.
- */
-function SavedViewsRetry({
-  error,
-  contentFailed,
-  onRetry,
-}: {
-  readonly error: unknown;
-  /** Silent while the content itself has failed: the recovery state below already owns it. */
-  readonly contentFailed: boolean;
-  readonly onRetry?: (() => void) | undefined;
-}): JSX.Element | null {
-  if (contentFailed || !error || !onRetry) return null;
-  const label = 'Saved views could not load. Retry.';
-  return (
-    <>
-      {/* Polite, not assertive: nothing here interrupts what the viewer is already doing. */}
-      <span aria-live="polite" aria-atomic="true" className="sr-only">
-        {label}
-      </span>
-      {/*
-        Provided locally rather than inherited: Radix throws without an ancestor provider, so a
-        hint about a minor failure could otherwise take down the whole surface. Nesting inside the
-        app-wide provider is supported and keeps this control safe wherever it is rendered.
-      */}
-      <TooltipProvider delayDuration={400}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              iconOnly
-              controlSize="sm"
-              className="shrink-0"
-              aria-label={label}
-              onClick={onRetry}
-            >
-              <RefreshCw aria-hidden />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{label}</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    </>
-  );
-}
-
-function SaveViewFailure({ error }: { readonly error: unknown }): JSX.Element | null {
-  if (!error) return null;
-  return (
-    <p role="alert" className="text-error text-body-medium">
-      Could not save this view. Check the details and try again.
-    </p>
-  );
-}
-
-function WorkViewOperationFailures({
-  title,
-  contentFailed,
-  rootContinuationError,
-  onRetryRoot,
-  preferencesError,
-  onRetryPreferences,
-  defaultError,
-  onRetryDefault,
-}: {
-  readonly title: string;
-  /**
-   * A lower altitude never speaks while a higher one has failed. With the content gone, none of
-   * these operations is available to act on, so their rows would be noise stacked above a recovery
-   * state that already explains the situation and offers the only useful action.
-   */
-  readonly contentFailed: boolean;
-  readonly rootContinuationError: unknown;
-  readonly onRetryRoot: () => void;
-  readonly preferencesError: unknown;
-  readonly onRetryPreferences: () => void;
-  readonly defaultError: unknown;
-  readonly onRetryDefault: () => void;
-}): JSX.Element {
-  if (contentFailed) return <></>;
-  return (
-    <>
-      {rootContinuationError ? (
-        <p role="alert" className="text-error text-body-medium flex items-center gap-2 px-3 py-2">
-          Could not load more {title.toLowerCase()}.
-          <Button variant="ghost" controlSize="sm" onClick={onRetryRoot}>
-            Retry
-          </Button>
-        </p>
-      ) : null}
-      {preferencesError ? (
-        <p role="alert" className="text-error text-body-medium flex items-center gap-2 px-3 py-2">
-          Could not save your view preferences.
-          <Button variant="ghost" controlSize="sm" onClick={onRetryPreferences}>
-            Retry
-          </Button>
-        </p>
-      ) : null}
-      {defaultError ? (
-        <p role="alert" className="text-error text-body-medium flex items-center gap-2 px-3 py-2">
-          Could not set the workspace view default.
-          <Button variant="ghost" controlSize="sm" onClick={onRetryDefault}>
-            Retry
-          </Button>
-        </p>
-      ) : null}
-    </>
-  );
-}
-
 /** Keep root continuation recovery inside the list's typed table entry. */
 function externalRootContinuationError(layout: string, error: unknown): unknown {
   return layout === 'list' ? null : error;
@@ -839,84 +710,22 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   }
 
   const viewTabs = (
-    <div
-      role="tablist"
-      aria-label={`${copy.title} views`}
-      className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden"
-    >
-      <Button
-        role="tab"
-        controlSize="sm"
-        className="shrink-0 rounded-full"
-        aria-label={`All ${copy.title.toLowerCase()}`}
-        variant={!dependencyMode && selectedViewId === null ? 'secondary' : 'ghost'}
-        aria-selected={!dependencyMode && selectedViewId === null}
-        onClick={() => {
-          setDependencyMode(false);
-          setSelectedViewId(null);
-        }}
-      >
-        <span aria-hidden className="sm:hidden">
-          All
-        </span>
-        <span aria-hidden className="hidden sm:inline">
-          All {copy.title.toLowerCase()}
-        </span>
-      </Button>
-      {savedViews.map((view) => {
-        const favorite = controller.favoriteViewIds.has(view.id);
-        return (
-          <div key={view.id} className="flex shrink-0 items-center">
-            <Button
-              role="tab"
-              controlSize="sm"
-              className="shrink-0 rounded-full"
-              variant={selectedViewId === view.id ? 'secondary' : 'ghost'}
-              aria-selected={!dependencyMode && selectedViewId === view.id}
-              onClick={() => {
-                setDependencyMode(false);
-                setSelectedViewId(view.id);
-              }}
-            >
-              {view.name}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              iconOnly
-              controlSize="sm"
-              aria-label={`${favorite ? 'Remove' : 'Add'} ${view.name} ${favorite ? 'from' : 'to'} favorites`}
-              aria-pressed={favorite}
-              onClick={() => {
-                controller.toggleFavoriteView(view.id);
-              }}
-            >
-              <Heart aria-hidden className={favorite ? 'text-primary' : undefined} />
-            </Button>
-          </div>
-        );
-      })}
-      {target === 'project' ? (
-        <Button
-          role="tab"
-          controlSize="sm"
-          className="shrink-0 rounded-full"
-          variant={dependencyMode ? 'secondary' : 'ghost'}
-          aria-selected={dependencyMode}
-          onClick={() => {
-            setDependencyMode(true);
-            setSelectedViewId(null);
-          }}
-        >
-          Dependencies
-        </Button>
-      ) : null}
-      <SavedViewsRetry
-        error={savedViewsQuery.error}
-        contentFailed={contentFailed}
-        onRetry={() => void savedViewsQuery.refetch()}
-      />
-    </div>
+    <WorkViewTabs
+      title={copy.title}
+      savedViews={savedViews}
+      favoriteViewIds={controller.favoriteViewIds}
+      selectedViewId={selectedViewId}
+      dependencyMode={dependencyMode}
+      showDependencies={target === 'project'}
+      savedViewsError={savedViewsQuery.error}
+      contentFailed={contentFailed}
+      onSelect={(viewId, dependencies) => {
+        setDependencyMode(dependencies);
+        setSelectedViewId(viewId);
+      }}
+      onToggleFavorite={controller.toggleFavoriteView}
+      onRetrySavedViews={() => void savedViewsQuery.refetch()}
+    />
   );
 
   const viewOverflowItems = (
@@ -1063,6 +872,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                 )}
                 onRetryRoot={controller.loadMoreRows}
                 preferencesError={controller.preferencesError}
+                preferencesUnavailable={controller.preferencesUnavailable}
                 onRetryPreferences={controller.retryPreferences}
                 defaultError={controller.defaultError}
                 onRetryDefault={controller.setAsDefault}

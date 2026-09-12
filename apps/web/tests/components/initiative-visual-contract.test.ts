@@ -9,6 +9,7 @@ const overviewPath = join(
   'apps/web/src/app/(app)/orgs/[orgId]/initiatives/initiatives-client.tsx',
 );
 const workPagePath = join(root, 'apps/web/src/components/work-views/work-view-page.tsx');
+const workTabsPath = join(root, 'apps/web/src/components/work-views/work-view-tabs.tsx');
 const workViewToolbarPath = join(root, 'apps/web/src/components/work-views/work-view-toolbar.tsx');
 const detailPath = join(
   root,
@@ -161,7 +162,9 @@ describe('Initiative visual contract', () => {
     const workPage = source(workPagePath);
     const toolbar = source(workViewToolbarPath);
 
-    expect(workPage).toContain('flex min-w-0 flex-1 items-center gap-1 overflow-hidden');
+    expect(source(workTabsPath)).toContain(
+      'flex min-w-0 flex-1 items-center gap-1 overflow-hidden',
+    );
     expect(workPage).not.toContain('overflow-x-auto');
     expect(toolbar).toContain('w-full flex-nowrap overflow-hidden');
     expect(toolbar).toContain('aria-label="More view controls"');

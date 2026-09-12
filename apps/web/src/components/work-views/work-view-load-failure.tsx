@@ -11,7 +11,10 @@ import {
 } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
-import { type FailureIcon, failurePresentation } from '@/lib/failure-presentation';
+import { Button } from '@docket/ui/primitives';
+
+import Link from '@/components/docket-link';
+import { failureAction, type FailureIcon, failurePresentation } from '@/lib/failure-presentation';
 
 /** Props for the shared work-view recovery state. */
 export interface WorkViewLoadFailureProps {
@@ -55,6 +58,7 @@ export function WorkViewLoadFailure({
 }: WorkViewLoadFailureProps): JSX.Element {
   if (hasCachedRows) return <></>;
   const failure = failurePresentation(error, `${title} could not load`);
+  const action = failureAction(failure);
   return (
     <div role="alert" className="flex min-h-64 flex-1 items-center justify-center p-6">
       <EmptyState
@@ -63,7 +67,8 @@ export function WorkViewLoadFailure({
         title={failure.title}
         body={failure.detail}
         // Retrying a permission or billing failure cannot change the answer, and offering it says
-        // the surface does not know what went wrong.
+        // the surface does not know what went wrong. Those get the destination that can resolve
+        // them instead, so the state is never a dead end.
         {...(failure.canRetry
           ? {
               cta: {
@@ -71,6 +76,15 @@ export function WorkViewLoadFailure({
                 onClick: onRetry,
                 disabled: retrying,
               },
+            }
+          : {})}
+        {...(action
+          ? {
+              action: (
+                <Button asChild variant="outline">
+                  <Link href={action.href}>{action.label}</Link>
+                </Button>
+              ),
             }
           : {})}
       />

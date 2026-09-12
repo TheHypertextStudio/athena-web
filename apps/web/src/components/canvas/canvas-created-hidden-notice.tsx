@@ -13,6 +13,8 @@ export interface CanvasCreatedHiddenNoticeProps {
   readonly actionLabel: string;
   /** Recover by changing the view or opening the created object. */
   readonly onAction: () => void;
+  /** Extra classes on the panel, e.g. an offset below a floating bar. */
+  readonly className?: string | undefined;
 }
 
 /** Explain why creation succeeded without replacing the retained graph. */
@@ -20,9 +22,10 @@ export default function CanvasCreatedHiddenNotice({
   message,
   actionLabel,
   onAction,
+  className,
 }: CanvasCreatedHiddenNoticeProps): React.JSX.Element {
   return (
-    <CanvasOverlayPanel position="top-center">
+    <CanvasOverlayPanel position="top-center" className={className}>
       <Surface
         tone="prominent"
         shape="medium"

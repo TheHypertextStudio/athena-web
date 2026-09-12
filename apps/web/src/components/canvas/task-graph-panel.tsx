@@ -51,10 +51,15 @@ import type { ObjectRef } from '@/lib/actions';
 import { taskNodesToPropertySnapshots } from '@/components/canvas/canvas-properties-model';
 import { CanvasSelectionRetentionProvider } from '@/components/canvas/canvas-selection-retention';
 
-import BulkActionsBar from './bulk-actions-bar';
+import BulkActionsBar, { BulkPropertiesDialogHost, BulkSelectionActions } from './bulk-actions-bar';
 import Canvas from './canvas';
+import CanvasFloatingBar from './canvas-floating-bar';
+import { CANVAS_OVERLAY_GUTTER, type CanvasOverlayInsets } from './canvas-viewport-insets';
 import CanvasCommandNotice from './canvas-command-notice';
-import { CanvasCommandProviderWithHistory } from './canvas-command-context';
+import {
+  CanvasCommandProviderWithHistory,
+  useCanvasCommandContext,
+} from './canvas-command-context';
 import CanvasCreatedHiddenNotice from './canvas-created-hidden-notice';
 import CanvasSelectionBridge from './canvas-selection-bridge';
 import CanvasSelectionFrame from './canvas-selection-frame';
@@ -62,7 +67,7 @@ import { type CanvasActions, CanvasActionsProvider } from './canvas-actions-cont
 import DependencyEdge from './dependency-edge';
 import { DEFAULT_GRAPH_DISPLAY, type GraphDisplayState } from './graph-display';
 import { buildGraphCatalog, UNSET } from './graph-catalog';
-import GraphViewBar from './graph-view-bar';
+import GraphViewBar, { type GraphCounts, GraphCountsLabel } from './graph-view-bar';
 import GroupNode from './group-node';
 import { edgeKind } from './use-graph-interactions';
 import { type GroupSpec } from './use-grouped-layout';
@@ -86,6 +91,13 @@ import { prefersReducedMotion } from '@/lib/motion';
 const NODE_TYPES = { task: TaskNode, taskBranch: TaskBranchNode, group: GroupNode };
 const EDGE_TYPES = { default: DependencyEdge };
 
+/** The chrome a floating host names: the title and the way back. */
+export interface TaskGraphFloatingChrome {
+  readonly title: string;
+  /** The way back: an icon button before the title. */
+  readonly navigation?: React.ReactNode;
+}
+
 /** Props for {@link TaskGraphPanel}. */
 export interface TaskGraphPanelProps {
   /** The scope to render (org / project / task-neighborhood). */
@@ -102,6 +114,12 @@ export interface TaskGraphPanelProps {
    * would force every host into the same masthead.
    */
   renderChrome?: (bar: React.ReactNode) => React.ReactNode;
+  /**
+   * Run the canvas edge to edge under one floating bar that carries the title, the view
+   * controls, the counts, and the selection's actions. The alternative to `renderChrome` for a
+   * host that owns the whole page.
+   */
+  floatingChrome?: TaskGraphFloatingChrome;
   /** Controlled query state (URL-backed); falls back to internal state when omitted. */
   viewState?: ViewState;
   /** Replace the active filter predicates; paired with `viewState`. */
@@ -116,6 +134,83 @@ export interface TaskGraphPanelProps {
   onExpand?: () => void;
   /** Extra classes for the container. */
   className?: string;
+}
+
+/** Whether a host asked for the view bar, in a band or floating. */
+function hasChrome(
+  renderChrome: TaskGraphPanelProps['renderChrome'],
+  floatingChrome: TaskGraphFloatingChrome | undefined,
+): boolean {
+  return renderChrome !== undefined || floatingChrome !== undefined;
+}
+
+/** What a floating bar changes about the canvas: the frame's insets and where notices sit. */
+interface FloatingLayout {
+  readonly insets: CanvasOverlayInsets | undefined;
+  readonly noticeClass: string | undefined;
+}
+
+function floatingLayout(
+  chrome: TaskGraphFloatingChrome | undefined,
+  barHeight: number,
+): FloatingLayout {
+  if (chrome === undefined) return { insets: undefined, noticeClass: undefined };
+  return { insets: { top: barHeight + CANVAS_OVERLAY_GUTTER }, noticeClass: '!top-20' };
+}
+
+/** Props for {@link TaskGraphFloatingBar}. */
+interface TaskGraphFloatingBarProps {
+  readonly chrome: TaskGraphFloatingChrome;
+  readonly controls: React.ReactNode;
+  readonly counts: GraphCounts;
+  readonly onHeightChange: (height: number) => void;
+}
+
+/**
+ * The floating bar over the canvas. Mounted only under a floating host, inside the command
+ * provider, so the selection's actions can read the canvas commands.
+ */
+function TaskGraphFloatingBar({
+  chrome,
+  controls,
+  counts,
+  onHeightChange,
+}: TaskGraphFloatingBarProps): React.JSX.Element {
+  const commands = useCanvasCommandContext();
+  const selection =
+    commands !== null && commands.selectedObjects.length > 0 ? (
+      <BulkSelectionActions commands={commands} />
+    ) : null;
+  return (
+    <CanvasFloatingBar
+      title={chrome.title}
+      ariaLabel="Task graph"
+      navigation={chrome.navigation}
+      controls={controls}
+      trailing={<GraphCountsLabel counts={counts} />}
+      selection={selection}
+      onHeightChange={onHeightChange}
+    />
+  );
+}
+
+/** Props for {@link TaskGraphChromeSlot}. */
+interface TaskGraphChromeSlotProps extends Omit<TaskGraphFloatingBarProps, 'chrome'> {
+  readonly chrome: TaskGraphFloatingChrome | undefined;
+}
+
+/** The floating bar when a host asked for one; nothing under a band host. */
+function TaskGraphChromeSlot({
+  chrome,
+  ...rest
+}: TaskGraphChromeSlotProps): React.JSX.Element | null {
+  if (chrome === undefined) return null;
+  return <TaskGraphFloatingBar chrome={chrome} {...rest} />;
+}
+
+/** The selection's chrome: the embed's own panel, or only the dialog under a floating bar. */
+function BulkSlot({ floating }: { readonly floating: boolean }): React.JSX.Element {
+  return floating ? <BulkPropertiesDialogHost /> : <BulkActionsBar />;
 }
 
 /** Minimap node color by status-category token (the canvas is generic; the host injects this). */
@@ -135,6 +230,7 @@ export default function TaskGraphPanel({
   scope,
   density = 'compact',
   renderChrome,
+  floatingChrome,
   viewState: controlledViewState,
   onFiltersChange,
   onGroupByChange,
@@ -279,6 +375,10 @@ export default function TaskGraphPanel({
     queryKeys.tasks(orgId),
   ]);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
+  // A floating bar's height keeps the frame below it.
+  const [barHeight, setBarHeight] = useState(0);
+  const chromed = hasChrome(renderChrome, floatingChrome);
+  const floating = floatingLayout(floatingChrome, barHeight);
   const resolveTaskTitle = useCallback(
     (id: string): string => {
       const node = nodes.find((candidate) => candidate.id === id);
@@ -372,7 +472,7 @@ export default function TaskGraphPanel({
   // fit below, which is why it is presentation state rather than another filter chip.
   const needle = display.search.trim().toLowerCase();
   const filtered = useMemo(() => {
-    if (renderChrome === undefined) return { nodes, edges };
+    if (!chromed) return { nodes, edges };
     const byPredicate = filterRows(nodes, viewState.filters, catalog);
     const bySearch =
       needle.length === 0
@@ -383,7 +483,7 @@ export default function TaskGraphPanel({
       bySearch.map(({ id }) => id),
     );
     return { nodes: keptNodes, edges: pruneEdges(keptNodes, edges) };
-  }, [renderChrome, nodes, edges, viewState.filters, catalog, needle]);
+  }, [chromed, nodes, edges, viewState.filters, catalog, needle]);
 
   const navigate = useCallback(
     (id: string) => {
@@ -597,6 +697,25 @@ export default function TaskGraphPanel({
     !canvasNodes.some(({ id }) => id === createdSelectionId) &&
     (viewState.filters.length > 0 || needle.length > 0);
 
+  const bar = (
+    <GraphViewBar
+      catalog={catalog}
+      state={viewState}
+      onFiltersChange={setFilters}
+      onGroupByChange={setGroupBy}
+      onSortChange={() => {
+        // The graph declares no sortable fields — rank order is the layout's job — so the shared
+        // bar renders no Ordering section and this is never reached.
+      }}
+      display={display}
+      onDisplayChange={patchDisplay}
+      showDepth={isNeighborhood}
+      depth={depth}
+      counts={counts}
+      compact={floatingChrome !== undefined}
+    />
+  );
+
   const body = (() => {
     if (isLoading) {
       // placeholder: the graph itself — which tasks and dependencies exist, and therefore the
@@ -630,6 +749,12 @@ export default function TaskGraphPanel({
         >
           <CanvasSelectionFrame label="Task graph">
             <CanvasActionsProvider value={canvasActions}>
+              <TaskGraphChromeSlot
+                chrome={floatingChrome}
+                controls={bar}
+                counts={counts}
+                onHeightChange={setBarHeight}
+              />
               <Canvas
                 nodes={canvasNodes}
                 edges={filtered.edges}
@@ -640,7 +765,8 @@ export default function TaskGraphPanel({
                 disableLayout
                 layoutReady={aspectReady}
                 nodeColor={taskStateColor}
-                minimap={renderChrome === undefined ? display.minimap : true}
+                minimap={chromed ? true : display.minimap}
+                overlayInsets={floating.insets}
                 interactive={canEdit}
                 highlightIds={display.critical ? criticalIds : null}
                 focusOn={focusOn}
@@ -692,9 +818,10 @@ export default function TaskGraphPanel({
                   }
                   onRequestedSelectionApplied={applyCreatedSelection}
                 />
-                <BulkActionsBar />
+                <BulkSlot floating={floatingChrome !== undefined} />
                 {createdHidden ? (
                   <CanvasCreatedHiddenNotice
+                    className={floating.noticeClass}
                     message="Created, but hidden by current filters"
                     actionLabel="Clear filters"
                     onAction={() => {
@@ -709,6 +836,7 @@ export default function TaskGraphPanel({
                 ) : null}
                 {createdOutsideScopeId !== null ? (
                   <CanvasCreatedHiddenNotice
+                    className={floating.noticeClass}
                     message={
                       scope.projectId !== undefined
                         ? 'Created, but outside this Project'
@@ -757,24 +885,6 @@ export default function TaskGraphPanel({
       </CanvasSelectionRetentionProvider>
     );
   })();
-
-  const bar = (
-    <GraphViewBar
-      catalog={catalog}
-      state={viewState}
-      onFiltersChange={setFilters}
-      onGroupByChange={setGroupBy}
-      onSortChange={() => {
-        // The graph declares no sortable fields — rank order is the layout's job — so the shared
-        // bar renders no Ordering section and this is never reached.
-      }}
-      display={display}
-      onDisplayChange={patchDisplay}
-      showDepth={isNeighborhood}
-      depth={depth}
-      counts={counts}
-    />
-  );
 
   // Only the full-density canvas peeks. The embedded graphs on the task and project detail pages
   // run at a reduced density in a short box, and `setSelectedId` reaches them from creation and

@@ -12,11 +12,11 @@
  * table mounts a route with no props. `graph-client.tsx` resolves the scope from the URL and renders
  * this.
  *
- * The page chrome is one {@link AppBar}: the back affordance, the title, and the view controls are
- * slots in a single tonal band, so nothing here spells out a background or draws a rule. The canvas
- * below sits on the page surface, and the tonal step between the two is what separates them.
+ * The canvas runs edge to edge under one floating bar: the back affordance, the title, the view
+ * controls, and the counts are slots in that bar, and the page owns its own scroll so the board
+ * fills the panel.
  */
-import { AppBar } from '@docket/ui/components';
+import { useOwnPageScroll } from '@docket/ui/components';
 import { ChevronLeft } from '@docket/ui/icons';
 import { Button, Surface, Tooltip, TooltipContent, TooltipTrigger } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
@@ -50,6 +50,19 @@ export default function GraphCanvas({ scope }: GraphCanvasProps): JSX.Element {
   const { state, setFilters, setGroupBy } = useViewState();
   const { display, patchDisplay } = useGraphDisplay();
   const back = backTarget(scope);
+  useOwnPageScroll();
+  const navigation = (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="sm" iconOnly asChild aria-label={back.label}>
+          <Link href={back.href}>
+            <ChevronLeft aria-hidden="true" />
+          </Link>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{back.label}</TooltipContent>
+    </Tooltip>
+  );
   return (
     <Surface tone="page" shape="none" className="flex h-full min-h-0 w-full flex-col">
       <TaskGraphPanel
@@ -61,24 +74,7 @@ export default function GraphCanvas({ scope }: GraphCanvasProps): JSX.Element {
         display={display}
         onDisplayChange={patchDisplay}
         className="min-h-0 flex-1"
-        renderChrome={(bar) => (
-          <AppBar
-            title="Task graph"
-            navigation={
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="sm" iconOnly asChild aria-label={back.label}>
-                    <Link href={back.href}>
-                      <ChevronLeft aria-hidden="true" />
-                    </Link>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{back.label}</TooltipContent>
-              </Tooltip>
-            }
-            controls={bar}
-          />
-        )}
+        floatingChrome={{ title: 'Task graph', navigation }}
       />
     </Surface>
   );

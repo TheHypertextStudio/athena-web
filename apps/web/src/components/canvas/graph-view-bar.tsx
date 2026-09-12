@@ -37,6 +37,7 @@ import type {
 } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 
+import CanvasSearchField from './canvas-search-field';
 import { type GraphDisplayState, MAX_DEPTH, MIN_DEPTH } from './graph-display';
 import type { LayoutDirection } from './use-dagre-layout';
 
@@ -74,6 +75,25 @@ export interface GraphViewBarProps {
   depth: number;
   /** Live counts for the status line. */
   counts: GraphCounts;
+  /**
+   * The bar's one-row form for a floating host: search rests as an icon and the counts are left
+   * to the host, which places them beside its actions.
+   */
+  compact?: boolean;
+}
+
+/** The live counts: tasks, dependencies, and how many are blocked. */
+export function GraphCountsLabel({ counts }: { readonly counts: GraphCounts }): JSX.Element {
+  return (
+    <span className="text-on-surface-variant text-label-medium shrink-0 whitespace-nowrap">
+      <span className="hidden @2xl:inline">
+        {counts.tasks} tasks · {counts.deps} deps ·{' '}
+      </span>
+      <span className={cn(counts.blocked > 0 && 'text-state-started')}>
+        {counts.blocked} blocked
+      </span>
+    </span>
+  );
 }
 
 /** Human label for a layout direction. */
@@ -174,7 +194,33 @@ export default function GraphViewBar({
   showDepth,
   depth,
   counts,
+  compact = false,
 }: GraphViewBarProps): JSX.Element {
+  const search = compact ? (
+    <CanvasSearchField
+      value={display.search}
+      onChange={(value) => {
+        onDisplayChange({ search: value });
+      }}
+      label="Search tasks by title"
+    />
+  ) : (
+    <div className="relative min-w-24 shrink basis-56">
+      <Search
+        className="text-on-surface-variant pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
+        aria-hidden="true"
+      />
+      <Input
+        value={display.search}
+        onChange={(e) => {
+          onDisplayChange({ search: e.target.value });
+        }}
+        placeholder="Search"
+        aria-label="Search tasks by title"
+        className="min-h-10 w-full pl-8 @2xl:min-h-8"
+      />
+    </div>
+  );
   return (
     <FilterToolbar
       catalog={catalog}
@@ -182,23 +228,7 @@ export default function GraphViewBar({
       onFiltersChange={onFiltersChange}
       onGroupByChange={onGroupByChange}
       onSortChange={onSortChange}
-      leading={
-        <div className="relative min-w-24 shrink basis-56">
-          <Search
-            className="text-on-surface-variant pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
-            aria-hidden="true"
-          />
-          <Input
-            value={display.search}
-            onChange={(e) => {
-              onDisplayChange({ search: e.target.value });
-            }}
-            placeholder="Search"
-            aria-label="Search tasks by title"
-            className="min-h-10 w-full pl-8 @2xl:min-h-8"
-          />
-        </div>
-      }
+      leading={search}
       displayExtras={
         <GraphDisplayExtras
           display={display}
@@ -208,16 +238,7 @@ export default function GraphViewBar({
           readyCount={counts.ready}
         />
       }
-      saveSlot={
-        <span className="text-on-surface-variant text-label-medium shrink-0 whitespace-nowrap">
-          <span className="hidden @2xl:inline">
-            {counts.tasks} tasks · {counts.deps} deps ·{' '}
-          </span>
-          <span className={cn(counts.blocked > 0 && 'text-state-started')}>
-            {counts.blocked} blocked
-          </span>
-        </span>
-      }
+      saveSlot={compact ? undefined : <GraphCountsLabel counts={counts} />}
     />
   );
 }

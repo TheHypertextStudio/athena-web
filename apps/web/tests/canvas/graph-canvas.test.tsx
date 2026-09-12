@@ -15,7 +15,7 @@ vi.mock('next/link', () => ({
 }));
 
 vi.mock('@docket/ui/components', () => ({
-  AppBar: ({ navigation }: { navigation: ReactNode }) => <header>{navigation}</header>,
+  useOwnPageScroll: vi.fn(),
 }));
 
 vi.mock('@docket/ui/icons', () => ({ ChevronLeft: () => <svg /> }));
@@ -29,8 +29,8 @@ vi.mock('@docket/ui/primitives', () => ({
 }));
 
 vi.mock('@/components/canvas/task-graph-panel', () => ({
-  default: ({ renderChrome }: { renderChrome: (bar: ReactNode) => ReactNode }) => (
-    <section>{renderChrome(null)}</section>
+  default: ({ floatingChrome }: { floatingChrome: { navigation: ReactNode } }) => (
+    <section>{floatingChrome.navigation}</section>
   ),
 }));
 

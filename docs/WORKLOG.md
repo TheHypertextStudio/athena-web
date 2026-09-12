@@ -7,6 +7,36 @@
 
 ## Active Tasks
 
+### [ATHENA-COMPANION-001] Athena becomes a page-aware companion thread
+
+- **Status**: REVIEW (design awaiting product decisions)
+- **Started**: 2026-09-12
+- **Priority**: P0
+- **Description**: The utility-rail Athena panel is a job queue with a ticket view: lanes, lifecycle
+  buttons above the content, a "Start this work" dispatch form, an "Open full" escape hatch, and a
+  state reset on every route change. It holds a different conversation from the one Today opens.
+  Replace the frame with one persistent personal thread that knows the current page, renders
+  delegated work as live cards in the thread with a pinned Working strip, shares a single composer
+  with Today and `/athena`, and posts heads-up entries when something needs the person.
+- **Plan**: `docs/superpowers/specs/2026-09-12-athena-companion-design.md` — five properties the
+  design must pass, three approaches with the recommendation, the panel anatomy, the context model,
+  five delivery phases, files to modify, risks, and four decisions the user must confirm.
+- **Subtasks**:
+  - [x] Critique the current panel against the engine spec and prior audits
+  - [x] Write the design and phased plan
+  - [ ] Confirm the four product decisions in §8
+  - [ ] Phase 0: context spine (page context provider, navigation-stable panel, personal thread hook)
+  - [ ] Phase 1: companion thread replaces the queue in the rail
+  - [ ] Phase 2: job cards, Working strip, wide view
+  - [ ] Phase 3: heads-up entries and live suggestions
+  - [ ] Phase 4: retire dead code, update docs, full design audit
+- **Blockers**: Product decisions in §8 of the design.
+- **Notes**: The engine is unchanged. The personal canonical conversation, the personal session SSE
+  tail, the presenter, `ProposalGroupCard`, `ElicitationCard`, and the MCP app cards are all
+  reused. What goes is the frame: queue → ticket → log.
+
+---
+
 ### [AUTH-ANDROID-DAL-001] Restore Android passkey domain association
 
 - **Status**: REVIEW

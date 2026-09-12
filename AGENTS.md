@@ -357,11 +357,18 @@ A task is ONLY complete when:
 - **NO stub implementations** (`throw new Error('Not implemented')`)
 - **NO skipped tests** (`it.skip()`, `describe.skip()`)
 - **NO placeholder content** without implementation plan
-- **NO new entries in `complexity-debt.json`**. That ledger records complexity that predates the
-  gate; it may only shrink. A complexity, cognitive-complexity, depth, or parameter-count failure in
-  code you wrote is refactored, never granted an exemption. Note the ledger pins a _file_, not a
-  function: a new over-complex function inside an already-ledgered file needs no new entry and so
-  this rule cannot catch it. See `docs/engineering/complexity-ratchet.md`.
+- **NO new entries in `complexity-debt.json`**, and no larger numbers in existing ones. That ledger
+  records size and complexity that predate the gate; it may only shrink. A complexity,
+  cognitive-complexity, depth, parameter-count, file-length, or function-length failure in code you
+  wrote is refactored, never granted an exemption.
+
+  Each entry records both the worst value and `count`, the number of violations at that ceiling, and
+  `pnpm complexity:check` (part of `pnpm lint`) fails when either rises. This closes the hole that
+  used to be documented here instead of fixed: the relaxation raises the limit for a whole file, so
+  a brand-new over-limit function inside an already-ledgered file produced no ESLint message at all,
+  and the several hundred gnarliest files in the repo were exactly the ones where new complexity was
+  free. Regenerating the ledger to absorb a regression is the one forbidden way to make the gate
+  green. See `docs/engineering/complexity-ratchet.md`.
 
 If a task cannot be completed:
 

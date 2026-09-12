@@ -31,7 +31,17 @@ const MEASURED = new Map<string, RegExp>([
   ['max-depth', /too deeply \((\d+)\)/],
   ['max-params', /parameters \((\d+)\)/],
   ['sonarjs/cognitive-complexity', /Complexity from (\d+) to/],
+  ['max-lines', /too many lines \((\d+)\)/],
+  ['max-lines-per-function', /too many lines \((\d+)\)/],
 ]);
+
+/** One rule's debt in one file: its worst measured value, and how many violations there are. */
+interface DebtEntry {
+  readonly max: number;
+  readonly count: number;
+}
+
+const CHECK = process.argv.includes('--check');
 
 // `cwd` is load-bearing: Linter relativizes each filePath against it before matching the `files`
 // patterns below. Without it, running from anywhere but the repo root silently matches nothing and
@@ -60,7 +70,7 @@ const files = execFileSync('git', ['ls-files', '*.ts', '*.tsx', '*.mts', '*.cts'
   .filter((file) => file !== '' && !file.endsWith('.d.ts') && existsSync(resolve(ROOT, file)))
   .sort();
 
-const worst: Record<string, Record<string, number>> = {};
+const worst: Record<string, Record<string, DebtEntry>> = {};
 for (const file of files) {
   const source = readFileSync(resolve(ROOT, file), 'utf8');
   for (const message of linter.verify(source, config, file)) {
@@ -69,17 +79,21 @@ for (const file of files) {
     const found = pattern.exec(message.message);
     if (!found?.[1]) throw new Error(`${message.ruleId} reworded its message: ${message.message}`);
     const value = Number(found[1]);
-    const entry = (worst[file] ??= {});
-    entry[message.ruleId] = Math.max(entry[message.ruleId] ?? 0, value);
+    const rules = (worst[file] ??= {});
+    const previous = rules[message.ruleId];
+    rules[message.ruleId] = {
+      max: Math.max(previous?.max ?? 0, value),
+      count: (previous?.count ?? 0) + 1,
+    };
   }
 }
 
 // Sorted, so a regeneration diffs as the numbers that changed and nothing else.
-const sorted: Record<string, Record<string, number>> = {};
+const sorted: Record<string, Record<string, DebtEntry>> = {};
 let total = 0;
 for (const file of Object.keys(worst).sort()) {
   const rules = worst[file] ?? {};
-  const entry: Record<string, number> = {};
+  const entry: Record<string, DebtEntry> = {};
   for (const rule of Object.keys(rules).sort()) {
     const value = rules[rule];
     if (value !== undefined) entry[rule] = value;
@@ -87,7 +101,59 @@ for (const file of Object.keys(worst).sort()) {
   sorted[file] = entry;
   total += Object.keys(rules).length;
 }
-writeFileSync(LEDGER, `${JSON.stringify(sorted, null, 2)}\n`);
+
+if (!CHECK) {
+  writeFileSync(LEDGER, `${JSON.stringify(sorted, null, 2)}\n`);
+  process.stdout.write(
+    `complexity ledger: ${String(Object.keys(sorted).length)} files, ${String(total)} entries\n`,
+  );
+  process.exit(0);
+}
+
+/**
+ * Compare a fresh measurement against the committed ledger.
+ *
+ * @remarks
+ * ESLint alone cannot catch growth inside a ledgered file: the relaxation raises the *limit* for the
+ * whole file, so a brand-new function at the ledgered ceiling produces no message at all. That is
+ * the hole `AGENTS.md` documented and did not close — "a new over-complex function inside an
+ * already-ledgered file needs no new entry and so this rule cannot catch it". Counting the
+ * violations closes it: the worst value may not rise, and neither may how many there are.
+ */
+const committed = JSON.parse(readFileSync(LEDGER, 'utf8')) as Record<
+  string,
+  Record<string, DebtEntry>
+>;
+const regressions: string[] = [];
+for (const [file, rules] of Object.entries(sorted)) {
+  for (const [rule, measured] of Object.entries(rules)) {
+    const allowed = committed[file]?.[rule];
+    if (allowed === undefined) {
+      regressions.push(`${file}: ${rule} is newly over the target (${String(measured.max)})`);
+      continue;
+    }
+    if (measured.max > allowed.max) {
+      regressions.push(
+        `${file}: ${rule} rose from ${String(allowed.max)} to ${String(measured.max)}`,
+      );
+    }
+    if (measured.count > allowed.count) {
+      regressions.push(
+        `${file}: ${rule} went from ${String(allowed.count)} to ${String(measured.count)} violations at the ledgered ceiling`,
+      );
+    }
+  }
+}
+
+if (regressions.length > 0) {
+  process.stderr.write(
+    `complexity ledger: ${String(regressions.length)} regression(s). The ledger may only shrink.\n` +
+      `${regressions.map((line) => `  - ${line}`).join('\n')}\n` +
+      'Refactor the offending code. Do not regenerate the ledger to absorb it.\n',
+  );
+  process.exit(1);
+}
+
 process.stdout.write(
-  `complexity ledger: ${String(Object.keys(sorted).length)} files, ${String(total)} entries\n`,
+  `complexity ledger: clean (${String(Object.keys(sorted).length)} files, ${String(total)} entries)\n`,
 );

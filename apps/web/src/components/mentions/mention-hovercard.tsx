@@ -130,6 +130,7 @@ export default function MentionHoverCard({
   const href = entity?.href ?? external?.canonicalUrl ?? '';
   const isExternal = refValue.kind === 'external';
 
+  // placeholder: what kind of record this mention points at, and its own summary.
   return (
     <HoverCard open={open} onOpenChange={onOpenChange} openDelay={180} closeDelay={120}>
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>

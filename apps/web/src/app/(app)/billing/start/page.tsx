@@ -21,6 +21,7 @@ export default function StartBillingPage(): JSX.Element {
         </p>
       </div>
 
+      {/* placeholder: which of the reader's workspaces are eligible to start a trial. */}
       {orgsLoading ? (
         <p className="text-on-surface-variant text-body-medium" role="status">
           Loading your workspaces…

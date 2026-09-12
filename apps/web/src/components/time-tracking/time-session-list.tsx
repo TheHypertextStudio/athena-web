@@ -148,6 +148,7 @@ export function TimeSessionList({
 function SessionSkeleton(): JSX.Element {
   return (
     <div className="flex flex-col gap-6" aria-label="Loading tracked sessions" aria-busy="true">
+      {/* placeholder: the tracked sessions in the ledger, and the day each is grouped under. */}
       {[0, 1].map((group) => (
         <div key={group} className="flex flex-col gap-2">
           <Skeleton className="h-5 w-40" />

@@ -304,6 +304,8 @@ export function UpdateCard({ onApply }: { readonly onApply: () => void }): JSX.E
   const busyMessage = isApplying ? 'Applying update…' : 'Reloading…';
   const readyOrFailedMessage = isFailed ? 'Couldn’t apply update' : 'Update available';
 
+  // placeholder: none of this is unknown-until-fetch. The busy region reports the progress of an
+  // update the reader just accepted, so the live status is the content rather than a stand-in.
   return (
     <div
       ref={containerRef}

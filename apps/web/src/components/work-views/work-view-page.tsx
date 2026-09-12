@@ -256,6 +256,8 @@ function CardsSkeleton({
  * metadata columns a wide viewport shows.
  */
 function RowsSkeleton({ label }: { readonly label: string }): JSX.Element {
+  // placeholder: the roster rows — how many there are, and each one's mark, name, and the two
+  // metadata columns a wide viewport shows.
   return (
     <div
       role="status"

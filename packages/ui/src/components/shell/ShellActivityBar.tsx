@@ -83,6 +83,8 @@ export function ShellActivityBar({
                 invariant, not a coincidence. The name above carries this for a screen reader. */}
             {panel.status ? (
               <span
+                // placeholder: none. This dot reports a panel's live status — its pulse is the
+                // `attention` tone, not a stand-in for something still being read.
                 aria-hidden="true"
                 data-testid={`rail-status-${panel.id}`}
                 data-tone={panel.status.tone}

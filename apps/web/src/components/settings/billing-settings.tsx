@@ -134,6 +134,7 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
     },
   });
 
+  // placeholder: this workspace's plan, seat count and renewal, all read from the provider.
   if (billingQ.isPending) return <Skeleton className="h-72 max-w-2xl rounded-lg" />;
   if (billingQ.isError) {
     return (

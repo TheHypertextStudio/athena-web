@@ -44,6 +44,7 @@ export default function FocusPanel(): JSX.Element {
     }
   };
 
+  // placeholder: whether a timer is running, and against which task.
   return (
     <section aria-label="Focus" className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 px-3 pt-3 pb-2">

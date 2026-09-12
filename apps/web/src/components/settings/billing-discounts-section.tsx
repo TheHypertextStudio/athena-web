@@ -170,6 +170,7 @@ export function BillingDiscountsSection({
     },
   });
 
+  // placeholder: the discounts applied to this workspace's subscription.
   if (discountsQ.isPending) return <Skeleton className="h-52 max-w-2xl rounded-lg" />;
   if (discountsQ.isError) {
     return (

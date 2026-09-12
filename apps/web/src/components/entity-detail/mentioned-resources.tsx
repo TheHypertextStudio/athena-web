@@ -60,6 +60,7 @@ export default function MentionedResources({
       <h3 className="text-on-surface-variant text-label-medium px-1">{heading}</h3>
       {mentions.length === 0 ? (
         <div className="bg-surface-container-lowest rounded-xl p-2">
+          {/* placeholder: the resources this document mentions, resolved from its prose. */}
           <div className="h-14 animate-pulse rounded-lg" aria-hidden />
         </div>
       ) : (

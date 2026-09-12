@@ -822,6 +822,7 @@ export function VoicePhoneNumbers(): JSX.Element {
     );
   };
 
+  // placeholder: the phone numbers this workspace has provisioned for Athena.
   return (
     <SettingsGroup capability={SETTINGS_NODES.athenaPhone} data-phone-numbers-section>
       {numbersQ.isPending ? (

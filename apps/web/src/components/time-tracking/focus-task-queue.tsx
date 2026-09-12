@@ -87,6 +87,7 @@ export default function FocusTaskQueue({
   starting,
   onStart,
 }: FocusTaskQueueProps): JSX.Element {
+  // placeholder: the tasks matching what has been typed, searched as it is typed.
   const { orgName } = useActiveOrg();
   const [query, setQuery] = useState('');
   const date = todayISODate();

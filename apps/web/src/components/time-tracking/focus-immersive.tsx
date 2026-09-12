@@ -59,6 +59,7 @@ export default function FocusImmersive({ userId = null }: FocusImmersiveProps): 
     });
   };
 
+  // placeholder: the running timer, the task it is against, and that task's notes.
   return (
     <FocusRouteFrame
       userId={userId}

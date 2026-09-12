@@ -72,6 +72,7 @@ export function PhoneCallSummarySheet({ voiceSessionId }: PhoneCallSummarySheetP
   };
 
   const changes = summary.data?.changes ?? [];
+  // placeholder: what the call covered, which is summarised after it ends.
   return (
     <Sheet
       open={voiceSessionId !== null}

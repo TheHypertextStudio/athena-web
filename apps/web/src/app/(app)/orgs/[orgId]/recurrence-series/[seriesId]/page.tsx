@@ -186,6 +186,7 @@ export default function RecurrenceSeriesPage(): JSX.Element {
   }, [detail, today]);
 
   if (detailQ.isPending) {
+    // placeholder: the series' name, its schedule summary, and its occurrences.
     return (
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-6">
         <Skeleton className="h-8 w-72" />

@@ -213,6 +213,7 @@ export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX
   );
 
   if (tasksQ.isPending) {
+    // placeholder: the tasks belonging to this program's projects.
     return (
       <div className="space-y-2">
         {Array.from({ length: 6 }, (_, index) => (

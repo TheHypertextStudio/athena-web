@@ -120,6 +120,7 @@ export function PasskeysSection(): JSX.Element {
   });
 
   if (listQ.isPending) {
+    // placeholder: the passkeys enrolled on this account, and when each was last used.
     return <Skeleton className="h-40 w-full rounded-xl" />;
   }
   if (listQ.isError) {

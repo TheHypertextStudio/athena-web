@@ -265,6 +265,7 @@ export function AthenaPanelProvider({
 
 /** Render Athena's compact rail, which shows either the queue or one selected work session. */
 export function AthenaRailPanel(): JSX.Element {
+  // placeholder: Athena's work queue, or the detail of the item selected in it.
   const athena = useAthenaPanel();
   const groups = useMemo(() => {
     const sessions = athena.queue.data

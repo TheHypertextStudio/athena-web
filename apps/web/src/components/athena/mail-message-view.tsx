@@ -70,6 +70,7 @@ export function MailMessageView({ messageId }: MailMessageViewProps): JSX.Elemen
     );
   }
   if (messageQ.isPending || !messageQ.data) {
+    // placeholder: the message's subject line and its body.
     return (
       <div className="flex flex-col gap-3 p-4">
         <Skeleton className="h-8 w-2/3 rounded-md" />

@@ -141,6 +141,7 @@ export function TaskActivityFeed({
     }
   }
 
+  // placeholder: this task's comments and activity, at the chosen filter.
   return (
     <section aria-labelledby="activity-heading" className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">

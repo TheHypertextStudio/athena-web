@@ -352,6 +352,8 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
       </div>
     ) : undefined;
 
+  // placeholder: the library's resources, which the current filters decide, and the fields of
+  // whichever entry is opened beside them.
   return (
     <ListPageLayout
       title="Library"

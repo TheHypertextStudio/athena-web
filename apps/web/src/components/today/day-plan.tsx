@@ -146,6 +146,7 @@ export default function DayPlan({
     </ControlGroup>
   );
 
+  // placeholder: the tasks planned for today, across every workspace.
   return (
     <TodaySection
       id="today-work-heading"

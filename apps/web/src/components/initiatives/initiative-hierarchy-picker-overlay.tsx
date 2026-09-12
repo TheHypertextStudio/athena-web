@@ -297,6 +297,7 @@ export function InitiativeHierarchyPickerOverlay({
   ).current;
   const anchorRef = useRef<PopoverVirtualAnchor | null>(capturedAnchor.virtual);
 
+  // placeholder: the initiatives this one may be filed under.
   return (
     <Popover
       open

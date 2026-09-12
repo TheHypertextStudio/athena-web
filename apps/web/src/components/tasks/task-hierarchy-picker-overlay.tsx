@@ -101,6 +101,7 @@ export function TaskHierarchyPickerOverlay({
   const isPending = tasksQ.isPending || projectsQ.isPending || teamsQ.isPending;
   const count = request.subjects.length;
 
+  // placeholder: the tasks this one may be filed under.
   return (
     <Popover
       open

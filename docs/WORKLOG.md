@@ -7,6 +7,69 @@
 
 ## Active Tasks
 
+### [MILESTONE-PARITY-001] A project milestone is read and edited on the project that owns it
+
+- **Completed**: 2026-09-11
+- **Priority**: P1
+- **Summary**: Project milestones were the one entity with a bespoke editing surface: a bordered
+  card per milestone on the Overview tab, each carrying an inline title field, a date picker, a full
+  Markdown editor, and a hand-rolled add form. They also read as a standalone entity in the API and
+  the object registry, which they are not.
+
+#### Change
+
+A milestone is now a disclosure row on the project. Collapsed it costs one line — name, one-line
+description excerpt, target date, completion. Open, it grows the same document editor every other
+body uses, in place: no route of its own, no sheet, no overlay covering the project to show
+something that belongs to it. `milestone-sheet.tsx`, the `/orgs/:orgId/milestones/:milestoneId`
+route, and `components/milestone-detail/` are gone.
+
+The API moved with it. Every milestone route now nests under its project
+(`/v1/orgs/:orgId/projects/:id/milestones[/:milestoneId]`), matching how Linear models the same
+record, and `MilestoneCreate` dropped its `projectId` because the path already carries it. Nesting
+surfaced a latent bug: the task composer and task detail were offering _every_ org milestone while
+the server refuses a cross-project one. Both now use the shared `projectMilestonesDef`.
+
+Milestones can also be defined while creating a project. `ComposerShell` gained a `trailingFields`
+slot, and `ProjectMilestonesField` collects name + target date + description drafts that post after
+the project itself. A milestone that fails to save keeps the dialog open with its draft intact
+rather than reporting success.
+
+#### Design pass
+
+The section is a headed group of `surface-container-low` blocks on the page ground, gap-separated,
+at the 8px control radius. No second container wraps what the heading already gathers, and no line
+is drawn for any of it — §8 is explicit that grouping is a tonal step. An open row steps to
+`surface-container`.
+
+Three things the rows carried came out:
+
+- **The per-row entity glyph.** A column of identical flags in a list where every row is a milestone
+  of one project says nothing, and a milestone appears nowhere else to be recognized in. Removing it
+  also removed the `entityDisplays` query that existed only to draw it.
+- **112px of dead space under every note.** `EditableFreeformText` hardcoded `min-h-28` at both of
+  its editor call sites — a page body's reservation, correct there, a hole in a dense row. It is now
+  a `compact` prop that drops to the editor's own 40px floor; every existing caller keeps today's
+  height.
+- **`X` as the remove control.** X reads as dismiss. Removing a milestone is a delete, and `Trash2`
+  is the app's delete mark everywhere else.
+
+- **Files changed**: `apps/api/src/routes/milestones.ts`, `domains/work/src/contracts/milestone.ts`,
+  `apps/web/src/components/project-detail/project-milestones.tsx`,
+  `apps/web/src/components/project-detail/overview-summary.tsx`,
+  `apps/web/src/components/editor/freeform-text.tsx`,
+  `apps/web/src/components/composer/composer-shell.tsx`,
+  `apps/web/src/components/projects/project-milestones-field.tsx` (new),
+  `apps/web/src/components/views/quick-add-row.tsx` (new, replacing `quick-add-task-row.tsx`),
+  `apps/web/src/lib/project-milestones-def.ts` (new), `apps/web/src/lib/use-milestone-detail.ts`.
+- **Validation**: `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm test` green. Verified in
+  a browser against seeded data through `scripts/dev-stack.sh` at `DOCKET_DEV_PORT=1377`, light and
+  dark, collapsed and open.
+- **Learnings**: A reserved editor height is invisible in the component that sets it and obvious in
+  the host that embeds it — `min-h-28` had been read as a styling detail for long enough that the
+  gap it produced looked like a layout bug three levels up. Also: when an API disagrees with the
+  product about what owns a record, the pickers are where it shows first.
+
 ### [COMPOSER-MEASURE-001] The composer body fills its panel and carries a contents rail
 
 - **Completed**: 2026-09-11

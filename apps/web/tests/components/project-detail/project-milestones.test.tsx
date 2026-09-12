@@ -7,16 +7,16 @@
  * mocked (rather than passing callback props) and wrapped in a real `QueryClientProvider`,
  * mirroring `integration-config-panel.test.tsx`'s pattern for hook-owning components.
  *
- * Editing a milestone is *not* tested here, because the panel no longer does it: each row links to
- * the milestone's own detail page, which owns the name, note and date. What belongs to the list —
- * ordering, progress, the link out, adding one, removing one — is what these cases cover.
+ * A milestone is read and edited where it sits: each row is a disclosure that opens its date and
+ * note in place. These cases cover what belongs to the list — ordering, progress, opening a row,
+ * adding one, removing one — and the guarantee that opening one neither navigates nor overlays.
  */
 import { MilestoneId, ProjectId, TaskId } from '@docket/work/ids';
 import { OrganizationId, TeamId } from '@docket/identity-access/ids';
 import { type MilestoneOut } from '@docket/work/milestone-contract';
 import { type TaskOut } from '@docket/work/task-model';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Hoisted so the mock factory (lifted above imports) can reference them.
@@ -141,39 +141,24 @@ describe('ProjectMilestonesPanel', () => {
     expect(screen.getByRole('progressbar')).toBeTruthy();
   });
 
-  it('opens the milestone editor in place rather than navigating away', async () => {
+  it('expands a milestone in place rather than navigating or covering the project', async () => {
     renderPanel({
       milestones: [milestone({ id: MILESTONE_1, name: 'Beta', sort: 0 })],
     });
 
-    // A milestone has no address of its own; it is edited on the project it belongs to.
+    // A milestone has no address of its own and no overlay: it opens where it already sits.
     expect(screen.queryByRole('link', { name: 'Beta' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
+    const trigger = screen.getByRole('button', { name: 'Beta' });
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
 
-    const editor = await screen.findByRole('dialog');
-    expect(within(editor).getByRole('textbox', { name: 'Milestone name' })).toBeTruthy();
-  });
-
-  it('confirms before deleting from the editor, unlike the inline row remove', async () => {
-    milestonesDelete.mockResolvedValue(jsonResponse(true, { id: MILESTONE_1 }));
-    renderPanel({ milestones: [milestone({ id: MILESTONE_1, name: 'Beta' })] });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
-    const editor = await screen.findByRole('dialog');
-    fireEvent.click(within(editor).getByRole('button', { name: 'Delete milestone' }));
-
-    // The button sits directly beneath the note, so it asks first and writes nothing until it is
-    // answered — the row's own remove is adjacent and obviously scoped, so it does not.
-    expect(milestonesDelete).not.toHaveBeenCalled();
-    // Exactly one such button is reachable: the confirmation's. The editor's trigger is hidden
-    // from the accessibility tree while the modal sits over it, which is why this is unambiguous.
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete milestone' }));
+    fireEvent.click(trigger);
 
     await waitFor(() => {
-      expect(milestonesDelete).toHaveBeenCalledWith({
-        param: { orgId: ORG_ID, id: PROJECT_ID, milestoneId: MILESTONE_1 },
-      });
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
     });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // The note editor comes with the disclosure, on the project's own surface.
+    expect(await screen.findByRole('button', { name: /Beta target date/ })).toBeTruthy();
   });
 
   it('orders rows by sort, not by the order they arrive in', () => {
@@ -184,8 +169,13 @@ describe('ProjectMilestonesPanel', () => {
       ],
     });
 
-    const names = screen.getAllByRole('button').map((row) => row.textContent);
-    expect(names.indexOf('Beta')).toBeLessThan(names.indexOf('Launch'));
+    // The disclosure triggers, in DOM order — the only buttons that carry an expanded state.
+    const triggers = screen
+      .getAllByRole('button')
+      .filter((button) => button.getAttribute('aria-expanded') !== null)
+      .map((button) => button.textContent);
+    expect(triggers[0]).toContain('Beta');
+    expect(triggers[1]).toContain('Launch');
   });
 
   it('hides the progress bar when a milestone has no tasks', () => {

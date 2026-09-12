@@ -175,7 +175,6 @@ export default function ProjectDetailPage(): JSX.Element {
   const accountId = useResolvedAccountId();
   const projectNoun = useVocabulary('project');
   const taskNoun = useVocabulary('task').toLowerCase();
-  const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
   const subject = ProjectSubjectRef.parse({ subjectType: 'project', subjectId: projectId });
   const navigationSnapshot = useNavigationSnapshot('project', projectId);
   const aggregateDef = projectDetailAggregateDef(orgId, projectId);
@@ -814,14 +813,7 @@ export default function ProjectDetailPage(): JSX.Element {
               Could not load Project work.
             </p>
           ) : null}
-          <OverviewSummary
-            tasks={milestoneTasks}
-            milestones={(workQ.data?.milestones ?? []).map((milestone) => ({
-              id: milestone.id,
-              name: milestone.name,
-            }))}
-            taskNounPlural={taskNounPlural}
-          />
+          <OverviewSummary tasks={milestoneTasks} />
           <ProjectMilestonesPanel
             orgId={orgId}
             projectId={projectId}

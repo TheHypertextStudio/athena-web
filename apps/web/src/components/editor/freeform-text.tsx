@@ -672,6 +672,26 @@ export interface EditableFreeformTextProps {
   className?: string;
   /** Feature behavior supplied through the editor's generic contribution boundary. */
   contributions?: readonly EditorContribution[];
+  /**
+   * Size the writing area to its content rather than to a document.
+   *
+   * @remarks
+   * A page body reserves `min-h-28` (112px) so an empty description is still an obvious place to
+   * start typing. Embedded in a dense surface — a disclosure row, a list item — that reservation is
+   * just a hole: two short lines render in 56px and the host draws a block twice that tall around
+   * them. Compact drops to the editor's own 40px floor, which is one line plus its caret.
+   */
+  compact?: boolean;
+}
+
+/**
+ * The editor's minimum writing area.
+ *
+ * @param compact - Whether the host is a dense surface rather than a page body.
+ * @returns the min-height utility for the editor's body.
+ */
+function bodyMinHeight(compact: boolean): string {
+  return compact ? 'min-h-10' : 'min-h-28';
 }
 
 /**
@@ -690,6 +710,7 @@ export function EditableFreeformText({
   onEditStart,
   className,
   contributions = [],
+  compact = false,
 }: EditableFreeformTextProps): JSX.Element {
   const activeOrgId = useActiveOrgIdOptional();
   const [draft, setDraft] = useState(value ?? '');
@@ -764,7 +785,7 @@ export function EditableFreeformText({
           onChange={updateDraft}
           placeholder={placeholder}
           ariaLabel="Description"
-          className="flex min-h-28 flex-1 flex-col [&>div]:flex-1"
+          className={cn(bodyMinHeight(compact), 'flex flex-1 flex-col [&>div]:flex-1')}
           contributions={contributions}
         />
       ) : (
@@ -774,7 +795,7 @@ export function EditableFreeformText({
             onChange={updateDraft}
             placeholder={placeholder}
             ariaLabel="Description"
-            className="flex min-h-28 flex-1 flex-col [&>div]:flex-1"
+            className={cn(bodyMinHeight(compact), 'flex flex-1 flex-col [&>div]:flex-1')}
             mentionOrgId={activeOrgId}
             contributions={contributions}
           />

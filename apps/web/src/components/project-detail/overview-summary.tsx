@@ -14,9 +14,9 @@
  * - **State distribution** — a segmented bar (one slice per canonical workflow-state type,
  *   colored by the shared `--color-state-*` tokens) over a chip legend (a {@link StatusIcon}
  *   + count per non-empty state). It answers "how much is in flight vs done vs not started".
- * - **By milestone** — each milestone (in display order, Unscheduled last) with its own
- *   done/total count and a thin completion bar, so a viewer sees which milestones are
- *   carrying the project and which are stalled — without leaving Overview for the Tasks tab.
+ * The per-milestone breakdown that used to sit here is gone: the Milestones section directly below
+ * renders the same done/total and completion bar per milestone, and does it on rows you can open.
+ * Two lists of the same three numbers, stacked, is not a summary.
  *
  * All counts group by status category and use the shared state tokens for
  * color, so the breakdown stays consistent with the status glyphs everywhere else.
@@ -24,13 +24,12 @@
 import type { TaskOut } from '@docket/work/task-model';
 import { cn } from '@docket/ui';
 import { StatusIcon, type WorkflowStateType } from '@docket/ui/components';
-import { Flag, ListChecks } from '@docket/ui/icons';
+import { ListChecks } from '@docket/ui/icons';
 import { DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
 
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
-import { countTasksByMilestone } from '@/lib/milestone-progress';
 import { CATEGORY_LABEL, CATEGORY_ORDER } from '@/lib/work-category';
 
 /** A task paired with its resolved milestone id (mirrors the Tasks-tab shape). */
@@ -53,10 +52,6 @@ export interface SummaryMilestone {
 export interface OverviewSummaryProps {
   /** The project's tasks, each with its resolved milestone (the canonical task set). */
   tasks: readonly SummaryTask[];
-  /** Ordered milestone metadata; an Unscheduled bucket is appended when needed. */
-  milestones: readonly SummaryMilestone[];
-  /** The (vocabulary-resolved) plural task noun, lowercased for inline copy. */
-  taskNounPlural: string;
 }
 
 /** The `bg-state-*` token class for each canonical state type (segmented-bar fill). */
@@ -68,20 +63,13 @@ const STATE_BAR_CLASS: Record<WorkflowStateType, string> = {
   canceled: 'bg-state-canceled',
 };
 
-/** The synthesized Unscheduled bucket id. */
-const UNSCHEDULED_ID = '__unscheduled__';
-
 /**
- * The state-distribution + by-milestone breakdown card.
+ * The state-distribution card.
  *
  * @param props - The {@link OverviewSummaryProps}.
  * @returns the rendered summary, or an inviting empty state when there are no tasks.
  */
-export function OverviewSummary({
-  tasks,
-  milestones,
-  taskNounPlural,
-}: OverviewSummaryProps): JSX.Element {
+export function OverviewSummary({ tasks }: OverviewSummaryProps): JSX.Element {
   const total = tasks.length;
   const categoryOf = useCategoryOf('task');
 
@@ -95,36 +83,6 @@ export function OverviewSummary({
     }
     return CATEGORY_ORDER.map((type) => ({ type, count: counts.get(type) ?? 0 }));
   }, [tasks, categoryOf]);
-
-  /** Per-milestone done/total roll-up, in display order with Unscheduled last. */
-  const byMilestone = useMemo(() => {
-    const order = new Map<string, number>();
-    milestones.forEach((m, i) => order.set(m.id, i));
-    const name = new Map<string, string>(milestones.map((m) => [m.id, m.name]));
-
-    const buckets = countTasksByMilestone(tasks, UNSCHEDULED_ID, categoryOf);
-
-    return [...buckets.entries()]
-      .map(([id, b]) => ({
-        id,
-        label: id === UNSCHEDULED_ID ? 'Unscheduled' : (name.get(id) ?? 'Milestone'),
-        done: b.done,
-        total: b.total,
-        rank: id === UNSCHEDULED_ID ? milestones.length : (order.get(id) ?? milestones.length),
-      }))
-      .sort((a, b) => a.rank - b.rank);
-  }, [tasks, milestones, categoryOf]);
-
-  if (total === 0) {
-    return (
-      <section
-        aria-label="Status breakdown"
-        className="border-outline-variant bg-surface-container-low text-on-surface-variant text-body-medium rounded-xl border p-4"
-      >
-        No {taskNounPlural} yet — add one from the Tasks tab to see the breakdown here.
-      </section>
-    );
-  }
 
   return (
     <section
@@ -174,42 +132,6 @@ export function OverviewSummary({
                 <span className="text-on-surface text-label-medium tabular-nums">{s.count}</span>
               </li>
             ))}
-        </ul>
-      </div>
-
-      <div className="border-outline-variant flex flex-col gap-3 border-t pt-4">
-        <div className="flex items-center gap-2">
-          <DecorativeIcon icon={Flag} />
-          <h2 className="text-on-surface text-title-medium">By milestone</h2>
-        </div>
-
-        <ul className="flex flex-col gap-3">
-          {byMilestone.map((m) => {
-            const pct = m.total > 0 ? Math.round((m.done / m.total) * 100) : 0;
-            return (
-              <li key={m.id} className="flex flex-col gap-1.5">
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-on-surface text-body-medium truncate">{m.label}</span>
-                  <span className="text-on-surface-variant text-body-small shrink-0 tabular-nums">
-                    {m.done}/{m.total}
-                  </span>
-                </div>
-                <div
-                  role="progressbar"
-                  aria-valuenow={pct}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-label={`${m.label}: ${pct}% complete`}
-                  className="bg-surface-container h-1.5 w-full overflow-hidden rounded-full"
-                >
-                  <div
-                    className="bg-state-completed h-full rounded-full transition-[width] duration-500 ease-out"
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </li>
-            );
-          })}
         </ul>
       </div>
     </section>

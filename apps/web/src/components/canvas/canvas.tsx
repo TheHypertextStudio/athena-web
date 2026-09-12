@@ -22,6 +22,8 @@ import {
   type NodeTypes,
   type EdgeTypes,
   type OnInit,
+  type OnSelectionChangeFunc,
+  type ReactFlowInstance,
   type OnNodeDrag,
   ReactFlow,
   ReactFlowProvider,
@@ -43,6 +45,15 @@ import {
 } from 'react';
 
 import { useCanvasMenus } from './canvas-menus';
+import {
+  type CanvasOverlayInsets,
+  availableCanvasHeight,
+  availableCanvasWidth,
+  fitPaddingFor,
+  insetRight,
+  insetTop,
+} from './canvas-viewport-insets';
+import { computeFirstFrameViewport, type FrameAnchor } from './graph-first-frame-viewport';
 import CanvasViewportToolbar from './canvas-viewport-toolbar';
 import { useControlledFlow, useFitViewOnChange } from './use-controlled-flow';
 import { deriveGraphInitialFrame } from './graph-initial-frame';
@@ -64,12 +75,96 @@ const BOTTOM_CHROME_FALLBACK_HEIGHT = 78;
 const BOTTOM_CHROME_NOTICE_FALLBACK_HEIGHT = 190;
 const BOTTOM_CHROME_MINIMAP_HEIGHT = 150;
 const MOBILE_CANVAS_QUERY = '(max-width: 39.999rem)';
-const VIEWPORT_FIT_PADDING = {
-  top: '24px',
-  right: '24px',
-  bottom: '24px',
-  left: '24px',
-} as const;
+/** No floating chrome covers the canvas unless a host says so. */
+const NO_INSETS: CanvasOverlayInsets = {};
+
+/** The dot grid drawn under a graph. */
+export interface CanvasDotGrid {
+  /** Distance between dots, in canvas pixels. */
+  readonly gap: number;
+  /** Dot radius; xyflow's default when omitted. */
+  readonly size?: number;
+  /** Dot colour; the tone's default when omitted. */
+  readonly color?: string;
+}
+/** The grid the Task and Project graphs draw. */
+const DEFAULT_DOT_GRID: CanvasDotGrid = { gap: 20 };
+
+/** xyflow `Background` props for a dot grid, with only the fields the grid sets. */
+function dotGridProps(grid: CanvasDotGrid): { gap: number; size?: number; color?: string } {
+  return {
+    gap: grid.gap,
+    ...(grid.size === undefined ? {} : { size: grid.size }),
+    ...(grid.color === undefined ? {} : { color: grid.color }),
+  };
+}
+
+/** What the first frame needs beyond the graph: where to anchor it, and what is in the way. */
+interface FirstFrameSpec {
+  readonly anchor: FrameAnchor;
+  readonly insets: CanvasOverlayInsets;
+  readonly viewport: { readonly width: number; readonly height: number };
+  readonly minZoom: number;
+  readonly maxZoom: number;
+}
+
+/**
+ * Frame `nodeIds` at `zoom`: centred through xyflow's own fit, or anchored to the left edge
+ * through the pure placement, so the graph never centres under floating chrome.
+ */
+function applyFirstFrame(
+  flowInstance: ReactFlowInstance,
+  nodeIds: readonly string[],
+  zoom: number,
+  spec: FirstFrameSpec,
+): void {
+  if (spec.anchor === 'center') {
+    void flowInstance.fitView({
+      nodes: nodeIds.map((id) => ({ id })),
+      minZoom: spec.minZoom,
+      maxZoom: spec.maxZoom,
+      padding: fitPaddingFor(spec.insets, WORKING_AREA_PADDING),
+    });
+    return;
+  }
+  void flowInstance.setViewport(
+    computeFirstFrameViewport({
+      bounds: flowInstance.getNodesBounds([...nodeIds]),
+      viewport: spec.viewport,
+      padding: {
+        top: WORKING_AREA_PADDING + insetTop(spec.insets),
+        right: WORKING_AREA_PADDING + insetRight(spec.insets),
+        bottom: WORKING_AREA_PADDING,
+        left: WORKING_AREA_PADDING,
+      },
+      zoom: Math.max(spec.minZoom, Math.min(zoom, spec.maxZoom)),
+      anchor: 'start',
+    }),
+  );
+}
+
+/**
+ * Report the selected node ids to the host, once per change of the id set.
+ *
+ * @remarks
+ * xyflow calls its selection handler on every change event, including ones that leave the set
+ * as it was; the host only hears about a different set.
+ */
+function useSelectionReporter(
+  onSelectionChange: ((ids: readonly string[]) => void) | undefined,
+): OnSelectionChangeFunc {
+  const lastSelection = useRef('');
+  return useCallback<OnSelectionChangeFunc>(
+    ({ nodes: selected }) => {
+      const ids = selected.map(({ id }) => id);
+      const key = ids.join(' ');
+      if (key === lastSelection.current) return;
+      lastSelection.current = key;
+      onSelectionChange?.(ids);
+    },
+    [onSelectionChange],
+  );
+}
 
 /** Props for {@link Canvas}. */
 export interface CanvasProps extends GraphInteractionHandlers {
@@ -132,6 +227,17 @@ export interface CanvasProps extends GraphInteractionHandlers {
    * canvases omit it because the reduced graph is not legible at that size.
    */
   minimap?: boolean | undefined;
+  /**
+   * Pixels of the canvas covered by the host's floating chrome, so fits and the first frame keep
+   * the graph in the part a person can see and the bottom chrome slides out from under it.
+   */
+  overlayInsets?: CanvasOverlayInsets | undefined;
+  /** Where the first frame anchors the graph: centred (default) or against the left edge. */
+  frameAnchor?: FrameAnchor | undefined;
+  /** The dot grid under the graph. Defaults to the graphs' 20px grid. */
+  dotGrid?: CanvasDotGrid | undefined;
+  /** Called with the selected node ids whenever the selection changes. */
+  onSelectionChange?: ((ids: readonly string[]) => void) | undefined;
   /** When provided, renders an expand affordance that calls this. */
   onExpand?: (() => void) | undefined;
   /** Called when a node is single-clicked (selected), or null when the pane is clicked. */
@@ -172,6 +278,10 @@ function CanvasInner({
   fitMaxZoom = 1,
   nodeColor,
   minimap,
+  overlayInsets,
+  frameAnchor,
+  dotGrid,
+  onSelectionChange,
   onExpand,
   onSelectNode,
   onNavigate,
@@ -186,7 +296,7 @@ function CanvasInner({
   onReparentEdge,
   children,
   className,
-}: CanvasProps): React.JSX.Element {
+}: CanvasInnerProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const bottomChromeRef = useRef<HTMLDivElement>(null);
@@ -214,7 +324,12 @@ function CanvasInner({
 
   const interactions = useGraphInteractions({ onConnectEdge, onDeleteEdge, onReparentEdge });
   const highlight = useGraphHighlight(nodes, edges, highlightIds, highlightChains);
-  useFitViewOnChange(focusOn, fitMaxZoom, layoutReady && layoutApplied, VIEWPORT_FIT_PADDING);
+  const fitPadding = useMemo(
+    () => fitPaddingFor(overlayInsets, WORKING_AREA_PADDING),
+    [overlayInsets],
+  );
+  useFitViewOnChange(focusOn, fitMaxZoom, layoutReady && layoutApplied, fitPadding);
+  const selectionChanged = useSelectionReporter(onSelectionChange);
   useEffect(() => {
     const element = bottomChromeRef.current;
     if (element === null || typeof ResizeObserver === 'undefined') return;
@@ -340,8 +455,23 @@ function CanvasInner({
         .getNodes()
         .filter((node) => node.type !== 'group')
         .map(({ id }) => id);
-      const availableWidth = Math.max(1, element.clientWidth - WORKING_AREA_PADDING * 2);
-      const availableHeight = Math.max(1, element.clientHeight - WORKING_AREA_PADDING * 2);
+      const availableWidth = availableCanvasWidth(
+        element.clientWidth,
+        overlayInsets,
+        WORKING_AREA_PADDING,
+      );
+      const availableHeight = availableCanvasHeight(
+        element.clientHeight,
+        overlayInsets,
+        WORKING_AREA_PADDING,
+      );
+      const frameSpec: FirstFrameSpec = {
+        anchor: frameAnchor,
+        insets: overlayInsets,
+        viewport: { width: element.clientWidth, height: element.clientHeight },
+        minZoom: READABLE_INITIAL_ZOOM,
+        maxZoom: fitMaxZoom,
+      };
       const allBounds = flowInstance.getNodesBounds(allNodeIds);
       const allZoom = Math.min(
         availableWidth / Math.max(allBounds.width, 1),
@@ -349,12 +479,7 @@ function CanvasInner({
         fitMaxZoom,
       );
       if (allZoom >= READABLE_INITIAL_ZOOM) {
-        void flowInstance.fitView({
-          nodes: allNodeIds.map((id) => ({ id })),
-          minZoom: READABLE_INITIAL_ZOOM,
-          maxZoom: fitMaxZoom,
-          padding: VIEWPORT_FIT_PADDING,
-        });
+        applyFirstFrame(flowInstance, allNodeIds, allZoom, frameSpec);
         return;
       }
       const primaryBounds = flowInstance.getNodesBounds([...initialFrame.nodeIds]);
@@ -364,12 +489,7 @@ function CanvasInner({
         fitMaxZoom,
       );
       if (primaryZoom >= READABLE_INITIAL_ZOOM) {
-        void flowInstance.fitView({
-          nodes: initialFrame.nodeIds.map((id) => ({ id })),
-          minZoom: READABLE_INITIAL_ZOOM,
-          maxZoom: fitMaxZoom,
-          padding: VIEWPORT_FIT_PADDING,
-        });
+        applyFirstFrame(flowInstance, initialFrame.nodeIds, primaryZoom, frameSpec);
         return;
       }
       const anchor =
@@ -380,7 +500,7 @@ function CanvasInner({
       const position = anchor.internals.positionAbsolute;
       void flowInstance.setViewport({
         x: WORKING_AREA_PADDING - position.x * READABLE_INITIAL_ZOOM,
-        y: WORKING_AREA_PADDING - position.y * READABLE_INITIAL_ZOOM,
+        y: WORKING_AREA_PADDING + insetTop(overlayInsets) - position.y * READABLE_INITIAL_ZOOM,
         zoom: READABLE_INITIAL_ZOOM,
       });
     };
@@ -389,7 +509,16 @@ function CanvasInner({
       canceled = true;
       cancelAnimationFrame(frameId);
     };
-  }, [fitMaxZoom, flowInstance, focusOn, initialFrame, layoutApplied, layoutReady]);
+  }, [
+    fitMaxZoom,
+    flowInstance,
+    focusOn,
+    frameAnchor,
+    initialFrame,
+    layoutApplied,
+    layoutReady,
+    overlayInsets,
+  ]);
 
   return (
     <LodProvider value={lod}>
@@ -457,7 +586,8 @@ function CanvasInner({
             proOptions={{ hideAttribution: true }}
             minZoom={0.1}
             maxZoom={maxZoom}
-            fitViewOptions={{ maxZoom: fitMaxZoom, padding: VIEWPORT_FIT_PADDING }}
+            fitViewOptions={{ maxZoom: fitMaxZoom, padding: fitPadding }}
+            onSelectionChange={selectionChanged}
           >
             {/*
             The canvas takes the page's own surface. It used to force `surface-container`, so the
@@ -466,7 +596,7 @@ function CanvasInner({
           */}
             <Background
               variant={BackgroundVariant.Dots}
-              gap={20}
+              {...dotGridProps(dotGrid)}
               className={surfaceToneColor('page')}
             />
             {/*
@@ -479,7 +609,8 @@ function CanvasInner({
         <CanvasOverlayPanel
           position="bottom-left"
           data-testid="canvas-bottom-chrome"
-          className="pointer-events-none !right-[15px] !bottom-[15px] !left-[15px] !m-0"
+          className="pointer-events-none !bottom-[15px] !left-[15px] !m-0"
+          style={{ right: 15 + insetRight(overlayInsets) }}
         >
           <div
             ref={bottomChromeRef}
@@ -513,7 +644,7 @@ function CanvasInner({
               className="col-start-2 row-start-2 flex min-w-0 justify-center"
             >
               <CanvasViewportToolbar
-                fitPadding={VIEWPORT_FIT_PADDING}
+                fitPadding={fitPadding}
                 onRelayout={() => {
                   framed.current = false;
                   onRelayout?.();
@@ -564,7 +695,19 @@ function CanvasInner({
 export default function Canvas(props: CanvasProps): React.JSX.Element {
   return (
     <ReactFlowProvider>
-      <CanvasInner {...props} />
+      <CanvasInner
+        {...props}
+        overlayInsets={props.overlayInsets ?? NO_INSETS}
+        frameAnchor={props.frameAnchor ?? 'center'}
+        dotGrid={props.dotGrid ?? DEFAULT_DOT_GRID}
+      />
     </ReactFlowProvider>
   );
 }
+
+/** {@link CanvasProps} with the defaults the wrapper resolves. */
+type CanvasInnerProps = Omit<CanvasProps, 'overlayInsets' | 'frameAnchor' | 'dotGrid'> & {
+  readonly overlayInsets: CanvasOverlayInsets;
+  readonly frameAnchor: FrameAnchor;
+  readonly dotGrid: CanvasDotGrid;
+};

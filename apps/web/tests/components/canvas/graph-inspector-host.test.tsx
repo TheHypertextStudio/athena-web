@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import { GraphInspectorHost } from '@/components/canvas/graph-inspector-host';
 
@@ -58,6 +58,94 @@ function renderHost(open: boolean, onClose = vi.fn()): { onClose: ReturnType<typ
   );
   return { onClose };
 }
+
+interface FloatingHandlers {
+  readonly onClose: Mock<() => void>;
+  readonly onDock: Mock<(visibleWidth: number) => void>;
+  readonly onOcclusionChange: Mock<(rightPx: number) => void>;
+}
+
+function renderFloating(
+  open: boolean,
+  offsetRight = 0,
+): ReturnType<typeof render> & FloatingHandlers {
+  const onClose = vi.fn<() => void>();
+  const onDock = vi.fn<(visibleWidth: number) => void>();
+  const onOcclusionChange = vi.fn<(rightPx: number) => void>();
+  const view = render(
+    <GraphInspectorHost
+      presentation="floating"
+      offsetRight={offsetRight}
+      aside={open ? <button type="button">Open task</button> : null}
+      onClose={onClose}
+      onDock={onDock}
+      onOcclusionChange={onOcclusionChange}
+    >
+      <div data-testid="canvas">Canvas</div>
+    </GraphInspectorHost>,
+  );
+  return { ...view, onClose, onDock, onOcclusionChange };
+}
+
+describe('GraphInspectorHost floating presentation', () => {
+  it('floats the inspector over a live canvas on a wide host', () => {
+    renderFloating(true);
+    const aside = screen.getByRole('complementary', { name: 'Selection details' });
+    expect(aside.querySelector('[data-presentation="floating"]')).not.toBeNull();
+    expect(screen.getByTestId('canvas').parentElement).not.toHaveAttribute('inert');
+    expect(screen.getByTestId('canvas-floating-column')).toHaveClass('absolute');
+  });
+
+  it('reports the canvas width left of the panel, and how much of the edge it covers', () => {
+    const { onDock, onOcclusionChange } = renderFloating(true, 300);
+    expect(onDock).toHaveBeenCalledWith(hostWidth - COLUMN_WIDTH - 12 - 300);
+    expect(onOcclusionChange).toHaveBeenCalledWith(COLUMN_WIDTH + 12);
+  });
+
+  it('reports zero coverage once it closes', () => {
+    const view = renderFloating(true);
+    view.rerender(
+      <GraphInspectorHost
+        presentation="floating"
+        aside={null}
+        onClose={view.onClose}
+        onDock={view.onDock}
+        onOcclusionChange={view.onOcclusionChange}
+      >
+        <div data-testid="canvas">Canvas</div>
+      </GraphInspectorHost>,
+    );
+    expect(view.onOcclusionChange).toHaveBeenLastCalledWith(0);
+    expect(screen.queryByRole('complementary', { name: 'Selection details' })).toBeNull();
+  });
+
+  it('closes on Escape and hands focus back to the canvas column', () => {
+    const view = renderFloating(true);
+    const button = screen.getByRole('button', { name: 'Open task' });
+    button.focus();
+    fireEvent.keyDown(button, { key: 'Escape' });
+    expect(view.onClose).toHaveBeenCalledTimes(1);
+    view.rerender(
+      <GraphInspectorHost
+        presentation="floating"
+        aside={null}
+        onClose={view.onClose}
+        onDock={view.onDock}
+        onOcclusionChange={view.onOcclusionChange}
+      >
+        <div data-testid="canvas">Canvas</div>
+      </GraphInspectorHost>,
+    );
+    expect(document.activeElement).toBe(screen.getByTestId('canvas').parentElement);
+  });
+
+  it('still covers the canvas on a host too narrow to dock', () => {
+    hostWidth = 600;
+    renderFloating(true);
+    expect(screen.getByTestId('canvas').parentElement).toHaveAttribute('inert');
+    expect(screen.queryByTestId('canvas-floating-column')).toBeNull();
+  });
+});
 
 describe('GraphInspectorHost', () => {
   it('docks the inspector as a sibling column on a wide host', () => {

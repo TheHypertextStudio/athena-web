@@ -207,6 +207,7 @@ export {
   type ShellSidebarState,
   useShellSidebar,
 } from './shell/ShellSidebarContext';
+export { ShellRailProvider, type ShellRailState, useShellRail } from './shell/ShellRailContext';
 export {
   ContextProvider,
   type ContextProviderProps,

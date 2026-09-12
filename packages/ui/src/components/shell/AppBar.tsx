@@ -16,6 +16,10 @@
  *    `flex-nowrap`, the title truncates, and the `controls` slot is expected to collapse its own
  *    overflow into a menu. A bar whose height depends on the viewport reflows the page under it.
  *
+ * A surface that runs edge to edge underneath its chrome, such as a canvas, asks for the
+ * `floating` presentation instead: one row on the floating tone, controls beside the title, placed
+ * by the caller over the surface.
+ *
  * ## The navigation slot is an icon, not a sentence
  *
  * MD3's top app bar opens with a navigation icon, and the destination lives in its accessible
@@ -65,6 +69,19 @@ export interface AppBarProps {
   controls?: React.ReactNode;
   /** Extra classes merged onto the band. */
   className?: string;
+  /**
+   * How the bar sits on the page.
+   *
+   * @remarks
+   * `band` (the default) is the persistent chrome band above a surface: a title row and an
+   * optional controls row on the `card` tone. `floating` is one row on the `floating` tone, for a
+   * surface that runs edge to edge underneath it, such as a canvas; the caller positions it, and
+   * `controls` shares the row with the title. A floating bar is a region landmark, so it needs an
+   * accessible name.
+   */
+  presentation?: 'band' | 'floating';
+  /** The landmark name of a floating bar. Required when `presentation` is `floating`. */
+  'aria-label'?: string;
 }
 
 /**
@@ -79,7 +96,35 @@ export function AppBar({
   actions,
   controls,
   className,
+  presentation = 'band',
+  'aria-label': ariaLabel,
 }: AppBarProps): React.JSX.Element {
+  const heading =
+    typeof title === 'string' ? (
+      <h1 className="text-on-surface text-title-medium min-w-0 truncate">{title}</h1>
+    ) : (
+      title
+    );
+  if (presentation === 'floating') {
+    return (
+      <Surface
+        as="section"
+        tone="floating"
+        shape="large"
+        aria-label={ariaLabel}
+        className={cn('flex min-w-0 flex-nowrap items-center gap-2 px-2 py-1.5', className)}
+      >
+        {navigation}
+        {heading}
+        {controls ? (
+          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2">{controls}</div>
+        ) : (
+          <span className="flex-1" aria-hidden="true" />
+        )}
+        {actions}
+      </Surface>
+    );
+  }
   return (
     <Surface
       as="header"
@@ -93,11 +138,7 @@ export function AppBar({
     >
       <div className="flex min-w-0 flex-nowrap items-center gap-2">
         {navigation}
-        {typeof title === 'string' ? (
-          <h1 className="text-on-surface text-title-medium min-w-0 truncate">{title}</h1>
-        ) : (
-          title
-        )}
+        {heading}
         {actions ? (
           <>
             <span className="flex-1" aria-hidden="true" />

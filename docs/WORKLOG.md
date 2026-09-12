@@ -1982,6 +1982,28 @@ at **zero** violations across the tree, so it enters the ratchet with no ledger 
   Athena's own `plan_commit`, stays gated. Initiative-to-project links are edges because the
   relationship is many-to-many; project-to-task ownership is containment because a task has one
   project.
+### [ATHENA-PLAN-CANVAS-002] Make the planning canvas immersive
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-09-12
+- **Priority**: P1
+- **Description**: A designer-lens critique of the shipped planning canvas found the board sitting
+  under three rows of chrome beside two docked panels, a root card that reads like a list row,
+  faint directionless edges, rows that truncate their titles for text assignees, and two visual
+  systems for one draft/created dimension. The approved direction is an immersive surface: a
+  full-bleed canvas over which one floating bar, a floating inspector, and a floating Athena
+  conversation sit, plus a craft pass on nodes, edges, and rows. Shared canvas pieces change so the
+  Task graph benefits too. Plan: `~/.claude/plans/cheeky-tickling-treasure.md`.
+- **Subtasks**:
+  - [ ] Shared shell and canvas capabilities: floating `AppBar`, rail collapse requests, canvas overlay insets, first-frame anchor and dot grid, dependency arrowheads, floating inspector host, floating bar/column/search components, Athena host hook.
+  - [ ] The plan route goes immersive: floating bar with selection actions, floating conversation on the org thread, floating inspector, insets-aware fit.
+  - [ ] Node, edge, and row craft: root card, state chip, dependency handles, avatars, quieter links, quieter grid, left-anchored first frame.
+  - [ ] The Task graph adopts the shared floating bar.
+  - [ ] Design review at 1440 and 1024 in both themes, journey rerun, engineering spec, release gates.
+- **Blockers**: None.
+- **Notes**: `canvas.tsx` and `graph-initial-frame.ts` are in the complexity ledger, so new
+  framing logic lives in pure modules beside them. The plan's conversation moves from the rail's
+  personal-session composer to the org chat thread, which is the session `plan_start` binds to.
 
 ### [DOCS-VERIFY-001] The documentation site is checked after every release
 

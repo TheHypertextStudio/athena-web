@@ -23,6 +23,7 @@ import {
   type ActiveContext,
 } from '../../../src/components/shell/ContextProvider';
 import { ShellDrawerProvider } from '../../../src/components/shell/ShellDrawerContext';
+import { useShellRail } from '../../../src/components/shell/ShellRailContext';
 import { ShellSidebarProvider } from '../../../src/components/shell/ShellSidebarContext';
 import { Sidebar } from '../../../src/components/shell/Sidebar';
 import { SidebarNavItem } from '../../../src/components/shell/SidebarNavItem';
@@ -339,7 +340,11 @@ describe('AppShell rail', () => {
   };
 
   /** Render the shell with one rail panel, with `matchMedia` answering per query. */
-  function renderWithRail(matches: (query: string) => boolean, tabBar?: React.ReactNode): void {
+  function renderWithRail(
+    matches: (query: string) => boolean,
+    tabBar?: React.ReactNode,
+    main: React.ReactNode = <div>Main</div>,
+  ): void {
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: matches(query),
       media: query,
@@ -364,11 +369,33 @@ describe('AppShell rail', () => {
           tabBar={tabBar}
           aside={{ panels: [TASKS_PANEL], defaultPanelId: 'tasks' }}
         >
-          <div>Main</div>
+          {main}
         </AppShell>
       </ContextProvider>,
     );
   }
+
+  function CollapseRailWhileMounted(): React.JSX.Element {
+    const { requestCollapsed } = useShellRail();
+    React.useEffect(() => requestCollapsed(), [requestCollapsed]);
+    return <div>Canvas</div>;
+  }
+
+  it('collapses the rail while a surface asks for room, without saving that choice', () => {
+    window.localStorage.setItem('docket.rail.collapsed', '0');
+    renderWithRail(() => true, undefined, <CollapseRailWhileMounted />);
+    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-0');
+    expect(window.localStorage.getItem('docket.rail.collapsed')).toBe('0');
+  });
+
+  it('lets the viewer expand the rail over a request, and still saves nothing', () => {
+    window.localStorage.setItem('docket.rail.collapsed', '0');
+    renderWithRail(() => true, undefined, <CollapseRailWhileMounted />);
+    const activityBar = screen.getByRole('navigation', { name: 'Panels' });
+    fireEvent.click(within(activityBar).getByRole('button', { name: 'Tasks' }));
+    expect(screen.getByRole('complementary', { name: 'Tasks' })).not.toHaveClass('w-0');
+    expect(window.localStorage.getItem('docket.rail.collapsed')).toBe('0');
+  });
 
   it('renders the panel host and switcher at EVERY width, hiding them in CSS below lg', () => {
     // The old shell mounted these on a JS media query, so crossing the query added a whole column

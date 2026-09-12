@@ -102,6 +102,7 @@ import {
 import { usePageScrollOwner } from './page-scroll';
 import { startNavigationTransition } from './navigation-transition';
 import { ShellDrawerProvider } from './ShellDrawerContext';
+import { ShellRailProvider } from './ShellRailContext';
 import { ShellSidebarProvider } from './ShellSidebarContext';
 import { ShellOverlayProvider } from './ShellOverlayContext';
 import { ShellRailDock } from './ShellRailDock';
@@ -295,11 +296,11 @@ function readSidebarCollapsed(): boolean {
 }
 
 /**
- * Surfaces that need the room (a canvas beside an open panel) ask for the icon rail while they are
- * mounted. The count is how many are asking; the override is the viewer expanding the sidebar
- * anyway, which stands until every request is released.
+ * Counted requests from surfaces that need room: a canvas asks for the icon rail, or for the
+ * right-hand rail to collapse, while it is mounted. The count is how many are asking; the override
+ * is the viewer opening the thing anyway, which stands until every request is released.
  */
-function useSidebarCompactRequests(): {
+function useCountedRequests(): {
   readonly requested: boolean;
   readonly request: () => () => void;
   readonly override: () => void;
@@ -323,6 +324,11 @@ function useSidebarCompactRequests(): {
     setOverridden(true);
   }, []);
   return { requested: count > 0 && !overridden, request, override };
+}
+
+/** Whether the rail is collapsed: the viewer's saved choice, or a surface's standing request. */
+function collapsedByChoiceOrRequest(chosen: boolean, requested: boolean): boolean {
+  return chosen || requested;
 }
 
 /** Persist a rail-state value. Storage failures are absorbed by {@link writeStoredValue}. */
@@ -466,10 +472,11 @@ export function AppShell({
   // Expanded on the server and on the first client paint, so the markup matches; the mount effect
   // below applies the viewer's choice (or the width default) once hydration is safe.
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
-  const compact = useSidebarCompactRequests();
+  const compact = useCountedRequests();
+  const railCollapse = useCountedRequests();
   const compactRequested = compact.requested;
   const restoreSidebarToggleFocus = React.useRef(false);
-  const railCollapsed = rail.collapsed;
+  const railCollapsed = collapsedByChoiceOrRequest(rail.collapsed, railCollapse.requested);
   // A node that happens to render `null` cannot reserve space for its sibling rail. Hosts must
   // therefore pass `null` for an empty document collection, rather than an always-mounted TabBar.
   const tabBarPresent = tabBar !== null && tabBar !== undefined && tabBar !== false;
@@ -561,6 +568,13 @@ export function AppShell({
   // "toggle the docked panel" — there is no width at which the same control does something else.
   const handlePanelIconClick = React.useCallback(
     (id: string) => {
+      if (railCollapse.requested) {
+        // Expanding over a surface's request is the viewer's call for as long as that surface is
+        // open; it says nothing about what they want elsewhere, so nothing is saved.
+        railCollapse.override();
+        if (id !== activePanelIdResolved) setRail((current) => ({ ...current, activeId: id }));
+        return;
+      }
       if (id === activePanelIdResolved && !railCollapsed) {
         setRail((current) => ({ ...current, collapsed: true }));
         writeRailState(RAIL_COLLAPSED_KEY, '1');
@@ -570,7 +584,11 @@ export function AppShell({
       writeRailState(RAIL_ACTIVE_KEY, id);
       writeRailState(RAIL_COLLAPSED_KEY, '0');
     },
-    [activePanelIdResolved, railCollapsed],
+    [activePanelIdResolved, railCollapse, railCollapsed],
+  );
+  const railState = React.useMemo(
+    () => ({ collapsed: railCollapsed, requestCollapsed: railCollapse.request }),
+    [railCollapse.request, railCollapsed],
   );
 
   // Stable dismiss callback handed to the drawer-rendered sidebar so a nav selection closes the
@@ -748,7 +766,9 @@ export function AppShell({
               rebinding && 'animate-org-rebind',
             )}
           >
-            <ShellSidebarProvider value={sidebarState}>{children}</ShellSidebarProvider>
+            <ShellSidebarProvider value={sidebarState}>
+              <ShellRailProvider value={railState}>{children}</ShellRailProvider>
+            </ShellSidebarProvider>
           </main>
           <div
             ref={setOverlayHost}

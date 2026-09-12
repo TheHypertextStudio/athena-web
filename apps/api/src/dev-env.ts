@@ -14,57 +14,30 @@
  * `.env.local`, not a monorepo-wide file. `overload: true` lets the file win over any inherited
  * value, and the loader is a no-op when the file is absent (a deployed environment supplies real
  * platform env), so it never clobbers production config.
+ *
+ * Because that reload also wins over the correction `scripts/portless-env.ts` applied in the
+ * parent, the prefix has to be reapplied here. The rules come from `@docket/dev-topology`: this
+ * file used to carry its own list of host-bearing variables and its own copy of the rewrite, and
+ * that list had drifted — it was missing `MCP_ISSUER_URL`, `MCP_RESOURCE_URL`,
+ * `MCP_ALLOWED_ORIGINS` and `OIDC_LOGIN_PAGE_URL`, so a restarted API in a worktree issued MCP
+ * tokens for the canonical origin and sent OIDC logins to another checkout's sign-in page.
  */
+import { applyDevHostPrefix, assertDevTopology, portlessPrefix } from '@docket/dev-topology';
+import dotenvx from '@dotenvx/dotenvx';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-
-import dotenvx from '@dotenvx/dotenvx';
 
 const envPath = resolve(process.cwd(), '.env.local');
 if (existsSync(envPath)) {
   dotenvx.config({ path: envPath, overload: true, quiet: true });
 }
 
-/** Host-bearing values that must follow the API worktree's Portless prefix. */
-const PORTLESS_HOST_VALUES: readonly string[] = [
-  'API_URL',
-  'WEB_URL',
-  'NEXT_PUBLIC_API_URL',
-  'NEXT_PUBLIC_APP_URL',
-  'BETTER_AUTH_URL',
-  'BETTER_AUTH_TRUSTED_ORIGINS',
-  'BETTER_AUTH_ALLOWED_HOSTS',
-  'BETTER_AUTH_PASSKEY_RP_ID',
-  'NEXT_PUBLIC_PASSKEY_RP_ID',
-];
-
-/** Reapply this API worktree's Portless host prefix after a watched env reload. */
-function reapplyPortlessPrefix(): void {
-  const rawUrl = process.env['PORTLESS_URL'];
-  if (!rawUrl) return;
-
-  let host: string;
-  try {
-    host = new URL(rawUrl).hostname;
-  } catch {
-    return;
-  }
-
-  const serviceHost = 'api.docket.localhost';
-  if (!host.endsWith(`.${serviceHost}`)) return;
-  const prefix = host.slice(0, -(serviceHost.length + 1));
-  if (!prefix) return;
-
-  const hostPattern = /(^|[/@,\s])((?:[\w-]+\.)*)docket\.localhost/g;
-  for (const name of PORTLESS_HOST_VALUES) {
-    const current = process.env[name];
-    if (!current) continue;
-    process.env[name] = current.replace(hostPattern, (_match, lead: string, subNames: string) =>
-      subNames.startsWith(`${prefix}.`) ? _match : `${lead}${prefix}.${subNames}docket.localhost`,
-    );
-  }
-}
-
 // `tsx watch` restarts after `.env.local` changes. Its local reload intentionally wins over the
 // parent process, so restore the branch-specific endpoints before the API imports its env schema.
-reapplyPortlessPrefix();
+const prefix = portlessPrefix(process.env['PORTLESS_URL'], 'api.docket');
+if (prefix) applyDevHostPrefix(process.env, prefix);
+
+// Refuse to boot on a self-contradicting topology. The API is where a mismatch does its damage —
+// it owns the origin allowlist, the session cookie and the passkey relying party — and every one
+// of those failures reads as an auth bug rather than as the configuration problem it is.
+assertDevTopology(process.env);

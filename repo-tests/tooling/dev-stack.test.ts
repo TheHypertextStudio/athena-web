@@ -17,32 +17,47 @@ const adminManifest = JSON.parse(
 ) as { readonly devDependencies?: Readonly<Record<string, string>> };
 
 describe('documented development stack', () => {
-  it('uses explicit adjacent ports instead of a shared reverse proxy', () => {
-    expect(script).toContain('API_PORT=$((WEB_PORT + 1))');
-    expect(script).toContain('ADMIN_PORT=$((WEB_PORT + 2))');
-    expect(script).toContain('RUNNER_PORT=$((WEB_PORT + 3))');
+  it('takes its hosts and ports from the shared resolver instead of declaring them', () => {
+    // The script used to export ~20 host-bearing variables of its own, which made it one of five
+    // files with an opinion about what a dev host looks like. Two of those five had already
+    // drifted, and a drift here surfaces as broken authentication rather than as a config error.
+    expect(script).toContain('packages/dev-topology/bin/print-env.ts');
+    expect(script).toContain('--print-base');
+    expect(script).toContain('eval "$rendered"');
     expect(script).toContain('DOCKET_DEV_PORT');
     expect(supervisor).not.toContain('portless');
   });
 
-  it('gives each checkout its own port block rather than a shared default', () => {
-    // Every host this stack serves is a `*.docket.localhost` name on 127.0.0.1, so a shared base
-    // port means one checkout's server answers another's URLs — indistinguishably, and with its
-    // own origin allowlist and schema. The base is therefore derived per worktree, and the primary
-    // checkout keeps 1355 so the documented URLs stay correct.
-    expect(script).toContain('derive_web_port()');
-    expect(script).toContain('git-dir');
-    expect(script).toMatch(/echo 1355/);
-    expect(script).toMatch(/1400 \+ slot \* 4/);
+  it('does not hand-write a dev hostname or a port block of its own', () => {
+    expect(script).not.toContain('derive_web_port');
+    // Re-emitting a resolved value for a caller to eval is fine; writing a literal host is the
+    // duplication that drifts. Only literals are forbidden here.
+    const literalHost = script
+      .split('\n')
+      .filter((line) => line.includes('docket.localhost'))
+      .filter((line) => !line.trim().startsWith('#'))
+      .filter((line) => /[=:]/.test(line));
+    expect(literalHost).toEqual([]);
+  });
+
+  it('probes for a free block before accepting the derived one', () => {
+    // Two checkouts can hash to the same slot, and only the shell can see what is listening.
+    expect(script).toContain('block_is_available');
+    expect(script).toContain('port_owner_pid');
+    expect(script).toMatch(/candidate=\$\(\(candidate \+ 4\)\)/);
   });
 
   it('refuses to report healthy when another checkout owns the port', () => {
     expect(script).toContain('verify_ownership()');
-    expect(script).toContain('port_owner_pid');
     // The check is the listener's working directory against this checkout's root; a foreign
     // listener is reported with its pid and cwd instead of being counted as a healthy stack.
     expect(script).toContain('-d cwd');
     expect(script).toMatch(/verify_ownership \|\| return 1/);
+  });
+
+  it('offers one command that explains the topology', () => {
+    expect(script).toContain('doctor)');
+    expect(script).toContain('packages/dev-topology/bin/doctor.ts');
   });
 
   it('scopes process cleanup to the current worktree', () => {
@@ -80,12 +95,15 @@ describe('documented development stack', () => {
     expect(supervisor).toContain('apps/runner');
   });
 
-  it('uses branch-prefixed hosts in linked worktrees', () => {
-    expect(script).toContain('HOST_PREFIX=""');
-    expect(script).toContain('if [ "$GIT_DIR" != "$GIT_COMMON_DIR" ]');
-    expect(script).toContain('HOST_PREFIX="$PREFIX."');
-    expect(script).toContain('http://${HOST_PREFIX}docket.localhost:$WEB_PORT');
-    expect(script).toContain('http://${HOST_PREFIX}api.docket.localhost:$API_PORT');
+  it('gives every service its port from the block the resolver chose', () => {
+    for (const name of [
+      'DOCKET_WEB_PORT',
+      'DOCKET_API_PORT',
+      'DOCKET_ADMIN_PORT',
+      'DOCKET_RUNNER_PORT',
+    ]) {
+      expect(supervisor).toContain(name);
+    }
   });
 
   it('builds the API contract and migrates before starting services', () => {

@@ -7,6 +7,97 @@
 
 ## Active Tasks
 
+### [DEVTOPO-001] One resolver decides which hosts and ports a checkout serves
+
+- **Completed**: 2026-09-12
+- **Priority**: P0
+- **Summary**: The knowledge of what a local dev host looks like lived in five files at once, each
+  with its own hand-written list of the variables that name one. Two of those lists had already
+  drifted. `@docket/dev-topology` is now the only definition, every launcher consumes it, and the
+  launchers refuse to start when the environment they end up with describes more than one stack.
+
+- **Why this was expensive rather than merely untidy**: a drifted list never fails as a
+  configuration error. It fails as `Invalid origin`, as a `Set-Cookie` the browser drops silently,
+  as a passkey `CHALLENGE_NOT_FOUND`, or as a 404 on a route that exists — later, in a different
+  subsystem, and reliably diagnosed as an auth bug. Fourteen variables that must agree, maintained
+  by hand in five places, is a machine for producing that afternoon.
+
+- **The five**: `.env.example` → `.env.local` (14 host-bearing keys, all canonical, correct only in
+  the primary checkout); `scripts/portless-env.ts` (rewrote 13 of them); `apps/api/src/dev-env.ts`
+  (rewrote 9, with its own copy of the regex); `scripts/dev-stack.sh` (~20 exports of its own);
+  `.claude/launch.json` (two more topologies, one of them on `localhost:4000/4001` with the cookie
+  domain blanked). `scripts/run-release-acceptance.sh` is a sixth, left alone deliberately — it
+  isolates each run on an ephemeral loopback port, so its canonical hostnames cannot collide.
+
+- **What the drift was actually costing**:
+  - The passkey relying-party id. `portless-env.ts` prefixed it, producing
+    `<prefix>.docket.localhost` — a **sibling** of the API host, not a parent, so the ceremony
+    excluded the API and failed. `dev-stack.sh` always set the shared parent and its ceremony
+    worked. That is why passkeys worked under one dev path and failed under the other for months,
+    and why the recorded workaround was to unset `BETTER_AUTH_COOKIE_DOMAIN` — which treats the
+    symptom. The relying-party id now follows the same rule as the cookie domain and is enumerated
+    in `DELIBERATELY_UNPREFIXED` with the reasoning.
+  - `apps/api/src/dev-env.ts`'s list was missing `MCP_ISSUER_URL`, `MCP_RESOURCE_URL`,
+    `MCP_ALLOWED_ORIGINS` and `OIDC_LOGIN_PAGE_URL`, so a restarted API in a worktree issued MCP
+    tokens for the canonical origin and sent OIDC logins to another checkout's sign-in page.
+  - `ADMIN_URL` existed in `dev-stack.sh`'s topology and in no other, and `auth-builder.ts` fails
+    the admin-origin check closed when it is absent. The same check therefore passed under one dev
+    path and failed under the other.
+  - `apps/runner` was in none of the five. `wrangler dev --local` binds `8787` in every checkout, so
+    two worktrees running `pnpm dev` shared one runner — the same defect the web, api and admin
+    ports had, on the one service nobody had counted.
+
+- **Fail loud**: `checkDevTopology` compares the relying-party id against both origins, the cookie
+  domain against both hosts, the browser mirrors against their server values, the trusted origins
+  and allowed hosts against the app and api, and the auth/OIDC/MCP URLs against the stack they
+  claim. Each finding names the two variables and the symptom their disagreement produces.
+  `portless-env.ts` exits rather than spawning the app; `apps/api/src/dev-env.ts` throws before the
+  env schema loads. Booting anyway is what converted one line of configuration into an afternoon.
+
+- **`pnpm dev:doctor`**: prints this checkout's hosts and ports for both modes, names any process
+  from another checkout holding a port in the block with its pid and cwd, and reports whether the
+  environment a launcher would produce is coherent.
+
+- **Guard**: `repo-tests/tooling/dev-topology-ownership.test.ts` fails the build when any file
+  outside the resolver assigns a host-bearing variable to a literal dev host, and asserts the two
+  launchers hold no list of their own. A sixth copy is cheap to add and expensive to discover.
+
+- **Files changed**: `packages/dev-topology/**` (new), `scripts/portless-env.ts`,
+  `scripts/dev-runner.ts` (new), `scripts/dev-stack.sh`, `apps/api/src/dev-env.ts`,
+  `apps/runner/package.json`, `apps/api/package.json`, `package.json`, `.claude/launch.json`,
+  `docs/engineering/ui-verification.md`, `repo-tests/tooling/dev-stack.test.ts`,
+  `repo-tests/tooling/dev-topology-ownership.test.ts`.
+
+- **Validation**: `pnpm typecheck`, `pnpm lint`, `pnpm format:check` and `pnpm test` all green (28
+  turbo tasks, coverage included). Both dev paths exercised end to end in this worktree: `pnpm dev`
+  brings all four services up with the runner on its own derived port and every URL answering 200
+  over HTTPS, and `e2e/tools/dev-session.ts` **completed a real passkey signup against the portless
+  path** — the ceremony that had been failing in worktrees. `dev-stack.sh env`, `status` and
+  `doctor` all resolve from the package.
+
+- **Learnings**: a hostname is not an address, and a _list_ of hostname-bearing variables is not a
+  topology. The first mistake gives two checkouts the same port; the second gives one checkout two
+  contradictory identities, which is harder to see and much harder to attribute. The general rule
+  the five copies broke: when N values must agree, derive them from one and assert the derivation,
+  because any hand-maintained copy will drift and the drift will surface somewhere that looks
+  unrelated.
+
+  Also, the check found the relying-party-id bug on its very first run, against an environment
+  that had been shipping for months. A consistency assertion is worth writing even when you believe
+  the thing it checks is already correct.
+
+- **Blockers**: `~/.portless/service.log` is 220 MB and root-owned. It holds 422,589
+  `Port 443 is already in use` lines: the launchd proxy crash-looped for months against a
+  user-started proxy on the same port. The cause is already gone — the proxy-backed dev stack that
+  started a second listener is retired — and the loop stopped on 2026-09-11, but truncating the
+  file needs root and is left to the user.
+
+  `scripts/run-release-acceptance.sh` still restates the relying-party id and allowed hosts. It
+  cannot collide (ephemeral ports) and it gates CI, so folding it into the resolver is deliberately
+  a separate slice.
+
+---
+
 ### [DEVSTACK-PORTS-001] Every worktree gets its own dev stack
 
 - **Completed**: 2026-09-12

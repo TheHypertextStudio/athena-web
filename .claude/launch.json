@@ -2,23 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "docket-web",
+      "name": "docket-stack",
       "runtimeExecutable": "bash",
-      "runtimeArgs": [
-        "-c",
-        "PREFIX=$(git rev-parse --abbrev-ref HEAD | sed 's#.*/##'); if [ \"$PREFIX\" = \"main\" ]; then WEB_HOST=docket.localhost; API_HOST=api.docket.localhost; else WEB_HOST=$PREFIX.docket.localhost; API_HOST=$PREFIX.api.docket.localhost; fi; export API_URL=https://$API_HOST NEXT_PUBLIC_API_URL=https://$API_HOST NEXT_PUBLIC_APP_URL=https://$WEB_HOST BETTER_AUTH_URL=https://$API_HOST BETTER_AUTH_PASSKEY_RP_ID=$WEB_HOST NEXT_PUBLIC_PASSKEY_RP_ID=$WEB_HOST BETTER_AUTH_TRUSTED_ORIGINS=https://$WEB_HOST,https://$API_HOST NODE_EXTRA_CA_CERTS=$HOME/.portless/ca.pem; echo \"[launch] web=https://$WEB_HOST api=https://$API_HOST\"; pnpm exec dotenv -e .env.local -- pnpm exec turbo run dev --filter=@docket/web --filter=@docket/api"
-      ],
-      "port": 4000,
-      "autoPort": true
-    },
-    {
-      "name": "docket-web-http",
-      "runtimeExecutable": "bash",
-      "runtimeArgs": [
-        "-c",
-        "export API_URL=http://localhost:4001 NEXT_PUBLIC_API_URL=http://localhost:4001 NEXT_PUBLIC_APP_URL=http://localhost:4000 WEB_URL=http://localhost:4000 BETTER_AUTH_URL=http://localhost:4001 BETTER_AUTH_PASSKEY_RP_ID=localhost NEXT_PUBLIC_PASSKEY_RP_ID=localhost BETTER_AUTH_COOKIE_DOMAIN= BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:4000,http://localhost:4001 BETTER_AUTH_ALLOWED_HOSTS=localhost; echo \"[launch] web=$NEXT_PUBLIC_APP_URL api=$NEXT_PUBLIC_API_URL\"; PORT=4001 pnpm exec dotenv -e .env.local -- pnpm --filter @docket/api run dev:app & PORT=4000 pnpm exec dotenv -e .env.local -- pnpm --filter @docket/web run dev:app; wait"
-      ],
-      "port": 4000
+      "runtimeArgs": ["-c", "scripts/dev-stack.sh start"]
     }
   ]
 }

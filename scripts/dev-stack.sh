@@ -10,6 +10,7 @@
 #   scripts/dev-stack.sh start
 #   scripts/dev-stack.sh stop
 #   scripts/dev-stack.sh status
+#   scripts/dev-stack.sh doctor
 #   scripts/dev-stack.sh env
 set -uo pipefail
 
@@ -17,38 +18,22 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG="${TMPDIR:-/tmp}/docket-dev-${UID}-$(basename "$ROOT").log"
 
 PREFIX="$(basename "$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)")"
-GIT_DIR="$(git -C "$ROOT" rev-parse --absolute-git-dir 2>/dev/null || true)"
-GIT_COMMON_DIR="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
-IS_WORKTREE=false
-HOST_PREFIX=""
-if [ "$GIT_DIR" != "$GIT_COMMON_DIR" ] && [ "$PREFIX" != main ] && [ "$PREFIX" != master ]; then
-  IS_WORKTREE=true
-  HOST_PREFIX="$PREFIX."
-fi
 
-# Every host in this stack is a `*.docket.localhost` name, and the whole `.localhost` TLD resolves
-# to 127.0.0.1. The branch prefix therefore decorates the *name* and does nothing to the *address*:
-# two worktrees that pick the same port both answer on 127.0.0.1:<port>, and whichever bound it
-# first serves both. Requests to `b.docket.localhost:1355` reach worktree A's server, which then
-# rejects them against its own allowlist — the failure reads as an auth or config bug and is
-# neither. Give each worktree its own port block so the address distinguishes them too.
+# Which hosts and ports this checkout serves is decided in one place: `@docket/dev-topology`. This
+# script used to declare its own twenty exports, which made it one of five files that each had an
+# opinion about what a dev host looks like — and when two of those opinions disagreed, the failure
+# arrived as `Invalid origin`, a dropped session cookie or a 404, never as a config error.
 #
-# The primary checkout keeps 1355 so the documented URLs and anything holding that number stay
-# right. Worktrees hash their git dir — stable across branch renames, unlike the branch name — into
-# a stride-4 block above the primary range.
-derive_web_port() {
-  if [ "$IS_WORKTREE" != true ]; then
-    echo 1355
-    return
-  fi
-  local digest slot
-  digest=$(printf '%s' "$GIT_DIR" | cksum | cut -d' ' -f1)
-  slot=$((digest % 150))
-  echo $((1400 + slot * 4))
+# The resolver is asked two questions: which base port this checkout derives, and (once the shell
+# has confirmed that block is actually free) the whole environment at that base.
+topology() {
+  (cd "$ROOT" && pnpm exec tsx packages/dev-topology/bin/print-env.ts --root="$ROOT" "$@")
 }
 
 # A free block is one where every port is either unbound or already bound by *this* stack. Probing
-# forward keeps two worktrees that hash to the same slot from fighting over it.
+# forward keeps two worktrees that hash to the same slot from fighting over it. This half stays in
+# the shell because it reads what is actually listening, which `lsof` answers and the resolver
+# cannot.
 port_owner_pid() {
   lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -1
 }
@@ -67,47 +52,38 @@ block_is_available() {
 resolve_ports() {
   local candidate attempts
   if [ -n "${DOCKET_DEV_PORT:-}" ]; then
-    WEB_PORT="$DOCKET_DEV_PORT"
+    candidate="$DOCKET_DEV_PORT"
   else
-    candidate=$(derive_web_port)
+    candidate=$(topology --print-base) || {
+      echo "dev-stack: could not resolve this checkout's port block" >&2
+      exit 1
+    }
     attempts=0
     while [ "$attempts" -lt 40 ] && ! block_is_available "$candidate"; do
       candidate=$((candidate + 4))
       attempts=$((attempts + 1))
     done
-    WEB_PORT="$candidate"
   fi
-  API_PORT=$((WEB_PORT + 1))
-  ADMIN_PORT=$((WEB_PORT + 2))
-  RUNNER_PORT=$((WEB_PORT + 3))
+
+  # Take the whole environment from the resolver at the block the probe settled on, so the URLs,
+  # the origin allowlist and the relying-party id are all derived from the same number.
+  local rendered
+  rendered=$(topology --base="$candidate") || {
+    echo "dev-stack: could not resolve this checkout's dev topology" >&2
+    exit 1
+  }
+  # Every line the resolver prints is an `export`, so this populates the environment the
+  # supervisor and the probes inherit.
+  eval "$rendered"
+
+  WEB_PORT="$DOCKET_WEB_PORT"
+  API_PORT="$DOCKET_API_PORT"
+  ADMIN_PORT="$DOCKET_ADMIN_PORT"
+  RUNNER_PORT="$DOCKET_RUNNER_PORT"
 }
 
 resolve_ports
 STACK_PID_FILE="${TMPDIR:-/tmp}/docket-dev-${UID}-${PREFIX}-${WEB_PORT}.pid"
-
-export APP_URL="http://${HOST_PREFIX}docket.localhost:$WEB_PORT"
-export WEB_URL="$APP_URL"
-export API_URL="http://${HOST_PREFIX}api.docket.localhost:$API_PORT"
-export ADMIN_URL="http://${HOST_PREFIX}admin.docket.localhost:$ADMIN_PORT"
-export NEXT_PUBLIC_API_URL="$API_URL"
-export NEXT_PUBLIC_APP_URL="$APP_URL"
-export BETTER_AUTH_URL="$API_URL"
-export BETTER_AUTH_PASSKEY_RP_ID=docket.localhost
-export NEXT_PUBLIC_PASSKEY_RP_ID=docket.localhost
-export BETTER_AUTH_TRUSTED_ORIGINS="$APP_URL,$ADMIN_URL"
-export BETTER_AUTH_ALLOWED_HOSTS="${HOST_PREFIX}docket.localhost:$WEB_PORT,${HOST_PREFIX}admin.docket.localhost:$ADMIN_PORT,${HOST_PREFIX}api.docket.localhost:$API_PORT"
-export MCP_ISSUER_URL="$API_URL"
-export MCP_RESOURCE_URL="$API_URL/mcp"
-export MCP_ALLOWED_ORIGINS="$APP_URL"
-export OIDC_LOGIN_PAGE_URL="$APP_URL/sign-in"
-export CLOUDFLARE_ATHENA_RUNNER_URL="http://127.0.0.1:$RUNNER_PORT"
-export GOOGLE_OAUTH_PUBLIC=false
-# The API is the only process whose validated runtime contract consumes PORT.
-export PORT="$API_PORT"
-export DOCKET_WEB_PORT="$WEB_PORT"
-export DOCKET_API_PORT="$API_PORT"
-export DOCKET_ADMIN_PORT="$ADMIN_PORT"
-export DOCKET_RUNNER_PORT="$RUNNER_PORT"
 
 print_env() {
   cat <<EOF
@@ -197,6 +173,7 @@ case "${1:-start}" in
   env) print_env ;;
   stop) stop_stack; echo "stopped" ;;
   status) probe ;;
+  doctor) (cd "$ROOT" && pnpm exec tsx packages/dev-topology/bin/doctor.ts) ;;
   start)
     stop_stack
     : >"$LOG"
@@ -226,5 +203,5 @@ case "${1:-start}" in
     stop_stack
     exit 1
     ;;
-  *) echo "usage: dev-stack.sh {start|stop|status|env}" >&2; exit 2 ;;
+  *) echo "usage: dev-stack.sh {start|stop|status|doctor|env}" >&2; exit 2 ;;
 esac

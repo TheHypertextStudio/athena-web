@@ -41,6 +41,7 @@
     "@docket/brand": "workspace:*",
     "@docket/connections": "workspace:*",
     "@docket/db": "workspace:*",
+    "@docket/dev-topology": "workspace:*",
     "@docket/env": "workspace:*",
     "@docket/identity-access": "workspace:*",
     "@docket/integrations": "workspace:*",

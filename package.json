@@ -74,10 +74,12 @@
     "search:backfill": "dotenv -e .env.local -- tsx scripts/search-backfill.ts",
     "search:repair": "dotenv -e .env.local -- tsx scripts/search-backfill.ts --repair",
     "search:process": "dotenv -e .env.local -- tsx scripts/search-process-jobs.ts",
-    "prepare": "if [ -f scripts/install-git-guardrails.sh ]; then sh scripts/install-git-guardrails.sh; fi && (git update-index --skip-worktree .env.local 2>/dev/null || true)"
+    "prepare": "if [ -f scripts/install-git-guardrails.sh ]; then sh scripts/install-git-guardrails.sh; fi && (git update-index --skip-worktree .env.local 2>/dev/null || true)",
+    "dev:doctor": "bash scripts/dev-stack.sh doctor"
   },
   "devDependencies": {
     "@clack/prompts": "^1.7.0",
+    "@docket/dev-topology": "workspace:*",
     "@docket/test-utils": "workspace:*",
     "@docket/tsconfig": "workspace:*",
     "@eslint/js": "catalog:",

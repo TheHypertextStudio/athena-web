@@ -12,7 +12,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "build": "wrangler deploy --dry-run --outdir dist",
-    "dev": "wrangler dev --local",
+    "dev": "tsx ../../scripts/dev-runner.ts wrangler dev --local",
     "typecheck": "tsc --noEmit && wrangler types --check",
     "lint": "eslint . --ignore-pattern worker-configuration.d.ts",
     "lint:fix": "eslint . --ignore-pattern worker-configuration.d.ts --fix",

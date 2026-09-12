@@ -37,6 +37,53 @@ directory inside this checkout, and prints the foreign listener's pid and cwd wh
 you see that message, stop the other stack or set `DOCKET_DEV_PORT`; do not trust anything you
 verified against those URLs beforehand.
 
+---
+
+## One resolver owns every host and port
+
+**`@docket/dev-topology` decides which hostnames and ports a checkout serves. Do not write a dev
+host, a port, or a list of host-bearing variables anywhere else.**
+
+That knowledge used to live in five files at once — the checked-in `.env.local`,
+`scripts/portless-env.ts`, `apps/api/src/dev-env.ts`, `scripts/dev-stack.sh`, and
+`.claude/launch.json` — each with its own hand-written list of the variables that name a host. Two
+of those lists had already drifted: the copy in `apps/api/src/dev-env.ts` was missing
+`MCP_ISSUER_URL`, `MCP_RESOURCE_URL`, `MCP_ALLOWED_ORIGINS` and `OIDC_LOGIN_PAGE_URL`, so a
+restarted API in a worktree issued MCP tokens for the canonical origin and sent OIDC logins to
+another checkout's sign-in page. `ADMIN_URL` existed in one topology and not the others, so the
+admin-origin check failed closed under `pnpm dev` and passed under `dev-stack.sh`.
+
+A drifted list never fails as a configuration error. It fails as `Invalid origin`, as a
+`Set-Cookie` the browser drops silently, as a passkey `CHALLENGE_NOT_FOUND`, or as a 404 on a route
+that exists — later, in a different subsystem, and reliably misdiagnosed as an auth bug.
+
+Two modes consume the one resolver:
+
+| Mode               | Entry point            | How it gets addresses                                                         |
+| ------------------ | ---------------------- | ----------------------------------------------------------------------------- |
+| **Portless**       | `pnpm dev`             | Portless assigns a host and free port; the launcher corrects the env to match |
+| **Explicit ports** | `scripts/dev-stack.sh` | The resolver derives a port block from the checkout; no proxy in the path     |
+
+`repo-tests/tooling/dev-topology-ownership.test.ts` fails the build when a sixth copy appears.
+
+### The launchers refuse to start on a contradiction
+
+`scripts/portless-env.ts` and `apps/api/src/dev-env.ts` run a consistency check after correcting
+the environment, and **exit rather than starting the app** when the values still describe more than
+one stack. The message names the two variables that disagree and the symptom their disagreement
+produces. Starting anyway is what turned a one-line configuration problem into an afternoon.
+
+### `pnpm dev:doctor`
+
+```bash
+pnpm dev:doctor
+```
+
+Prints this checkout's hosts and ports for both modes, names any process from another checkout
+holding a port in this block (with its pid and cwd), and reports whether the environment a launcher
+would produce is coherent. Run this first when something host-related is not working — it is the
+answer to "why is this env variable wrong" that used to take an afternoon of reading auth logs.
+
 ```bash
 eval "$(bash scripts/dev-stack.sh env)"
 ```
@@ -82,10 +129,12 @@ For a full craft review rather than raw captures, use the `design-review` skill
 
 ## Driving the page in the Browser pane
 
-The `docket-web` entry in `.claude/launch.json` starts portless with **TLS**, which headless
-Chromium rejects (`ERR_SSL_TLSV1_ALERT_INTERNAL_ERROR`). Do not use it for automated verification.
+`.claude/launch.json` has one entry, `docket-stack`, and it runs `dev-stack.sh start`. The two
+entries it replaced each declared their own hosts — one of them set a _prefixed_ passkey
+relying-party id, which excludes the sibling API host and breaks the ceremony, and the other moved
+the whole stack to `localhost:4000/4001` with the cookie domain blanked.
 
-Start the stack with `dev-stack.sh` instead, then point the Browser pane at the origin it prints:
+Start the stack, then point the Browser pane at the origin it prints:
 
 ```
 preview_start { url: "<APP_URL>" }
@@ -149,7 +198,9 @@ failure from your own fixtures.
 | A request hangs and every registered route later returns 404             | The optional shared Portless proxy wedged under concurrent Next client-chunk requests                                  | Stop using the proxy for acceptance; `dev-stack.sh` addresses each process directly   |
 | Passkey ceremony fails with `CHALLENGE_NOT_FOUND`                        | `BETTER_AUTH_COOKIE_DOMAIN` does not cover the origin being driven                                                     | `dev-stack.sh`'s topology is consistent by construction; do not hand-roll the origins |
 | `dev-session.ts` times out waiting for `#name`                           | `next dev` compiles a route on first request, and the cold compile outruns the tool's own timeout                      | `curl` the route once to warm it, then re-run                                         |
-| `Invalid origin`, an unexpected 404, or data from work you never did     | Another checkout's stack is answering this one's URLs — every `*.docket.localhost` host is `127.0.0.1`                 | `dev-stack.sh status` names the foreign pid and cwd; stop it or set `DOCKET_DEV_PORT` |
+| `Invalid origin`, an unexpected 404, or data from work you never did     | Another checkout's stack is answering this one's URLs — every `*.docket.localhost` host is `127.0.0.1`                 | `pnpm dev:doctor` names the foreign pid and cwd; stop it or set `DOCKET_DEV_PORT`     |
+| A launcher exits printing two variables that disagree                    | The environment describes more than one stack; the check refuses to start the app on it                                | Fix the named variable — the message says which symptom it would have caused          |
+| Two worktrees' runners fight, or one answers the other's Athena runs     | `wrangler dev --local` binds `8787` in every checkout                                                                  | Fixed: `apps/runner`'s dev script takes its port from the resolver                    |
 | Env overrides silently ignored                                           | `dotenv-cli`'s `-o/--override` makes the **file** win over the environment — the opposite of what the flag sounds like | Put exports inside the child: `dotenv -e .env.local -- bash -c 'export FOO=…; …'`     |
 
 ## What not to do

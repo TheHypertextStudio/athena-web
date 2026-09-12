@@ -3611,8 +3611,8 @@
       "excess": 10
     },
     "max-lines-per-function": {
-      "max": 175,
-      "excess": 95
+      "max": 177,
+      "excess": 97
     },
     "sonarjs/cognitive-complexity": {
       "max": 17,
@@ -3625,8 +3625,8 @@
       "excess": 5
     },
     "max-lines-per-function": {
-      "max": 201,
-      "excess": 229
+      "max": 203,
+      "excess": 231
     },
     "sonarjs/cognitive-complexity": {
       "max": 21,
@@ -3723,8 +3723,8 @@
   },
   "apps/web/src/components/athena/mail-attach-dialog.tsx": {
     "max-lines-per-function": {
-      "max": 172,
-      "excess": 92
+      "max": 174,
+      "excess": 94
     }
   },
   "apps/web/src/components/athena/mail-message-view.tsx": {
@@ -4413,8 +4413,8 @@
       "excess": 22
     },
     "max-lines-per-function": {
-      "max": 286,
-      "excess": 206
+      "max": 287,
+      "excess": 207
     },
     "sonarjs/cognitive-complexity": {
       "max": 35,
@@ -4505,8 +4505,8 @@
       "excess": 2
     },
     "max-lines-per-function": {
-      "max": 121,
-      "excess": 41
+      "max": 115,
+      "excess": 35
     }
   },
   "apps/web/src/components/mentions/mention-textarea.tsx": {
@@ -4567,8 +4567,8 @@
   },
   "apps/web/src/components/people/add-person-dialog.tsx": {
     "max-lines-per-function": {
-      "max": 113,
-      "excess": 33
+      "max": 115,
+      "excess": 35
     }
   },
   "apps/web/src/components/people/people-list.tsx": {
@@ -4589,8 +4589,8 @@
       "excess": 4
     },
     "max-lines-per-function": {
-      "max": 161,
-      "excess": 81
+      "max": 162,
+      "excess": 82
     }
   },
   "apps/web/src/components/pickers/relation-target-picker-overlay.tsx": {
@@ -4599,8 +4599,8 @@
       "excess": 16
     },
     "max-lines-per-function": {
-      "max": 256,
-      "excess": 176
+      "max": 257,
+      "excess": 177
     },
     "sonarjs/cognitive-complexity": {
       "max": 17,
@@ -5259,12 +5259,12 @@
       "excess": 14
     },
     "max-lines": {
-      "max": 573,
-      "excess": 73
+      "max": 576,
+      "excess": 76
     },
     "max-lines-per-function": {
       "max": 226,
-      "excess": 283
+      "excess": 285
     },
     "sonarjs/cognitive-complexity": {
       "max": 34,
@@ -5336,13 +5336,13 @@
   "apps/web/src/components/settings/passkeys-section.tsx": {
     "max-lines-per-function": {
       "max": 104,
-      "excess": 28
+      "excess": 30
     }
   },
   "apps/web/src/components/settings/recovery-codes-dialog.tsx": {
     "max-lines-per-function": {
-      "max": 155,
-      "excess": 75
+      "max": 128,
+      "excess": 48
     }
   },
   "apps/web/src/components/settings/security-tab.tsx": {
@@ -5431,14 +5431,20 @@
       "excess": 13
     }
   },
+  "apps/web/src/components/statuses/delete-status-dialog.tsx": {
+    "max-lines-per-function": {
+      "max": 81,
+      "excess": 1
+    }
+  },
   "apps/web/src/components/statuses/status-editor-dialog.tsx": {
     "complexity": {
-      "max": 17,
-      "excess": 5
+      "max": 15,
+      "excess": 3
     },
     "max-lines-per-function": {
-      "max": 139,
-      "excess": 59
+      "max": 132,
+      "excess": 52
     }
   },
   "apps/web/src/components/statuses/status-entity-section.tsx": {
@@ -5593,8 +5599,8 @@
   },
   "apps/web/src/components/tasks/task-hierarchy-picker-overlay.tsx": {
     "max-lines-per-function": {
-      "max": 119,
-      "excess": 39
+      "max": 120,
+      "excess": 40
     }
   },
   "apps/web/src/components/tasks/task-relation-port.ts": {
@@ -5943,8 +5949,8 @@
   },
   "apps/web/src/components/work-location/occurrence-editor-dialog.tsx": {
     "max-lines-per-function": {
-      "max": 114,
-      "excess": 34
+      "max": 118,
+      "excess": 38
     }
   },
   "apps/web/src/components/work-location/place-editor-dialog.tsx": {
@@ -6139,8 +6145,8 @@
   },
   "apps/web/src/components/work-views/work-view-page.tsx": {
     "max-lines-per-function": {
-      "max": 727,
-      "excess": 647
+      "max": 729,
+      "excess": 649
     },
     "complexity": {
       "max": 67,
@@ -6151,8 +6157,8 @@
       "excess": 23
     },
     "max-lines": {
-      "max": 1106,
-      "excess": 606
+      "max": 1109,
+      "excess": 609
     }
   },
   "apps/web/src/components/work-views/work-view-toolbar.tsx": {
@@ -7381,6 +7387,12 @@
       "excess": 59
     }
   },
+  "packages/ui/src/components/menus/MenuListbox.tsx": {
+    "max-lines-per-function": {
+      "max": 81,
+      "excess": 1
+    }
+  },
   "packages/ui/src/components/pickers/CalendarGrid.tsx": {
     "complexity": {
       "max": 15,
@@ -7403,12 +7415,12 @@
       "excess": 29
     },
     "max-lines-per-function": {
-      "max": 352,
-      "excess": 343
+      "max": 360,
+      "excess": 354
     },
     "sonarjs/cognitive-complexity": {
       "max": 19,
-      "excess": 6
+      "excess": 8
     }
   },
   "packages/ui/src/components/pickers/PropertyTrigger.tsx": {
@@ -7437,8 +7449,8 @@
       "excess": 14
     },
     "max-lines-per-function": {
-      "max": 294,
-      "excess": 214
+      "max": 304,
+      "excess": 224
     }
   },
   "packages/ui/src/components/shell/ExpandedSidebar.tsx": {
@@ -7575,8 +7587,8 @@
   },
   "packages/ui/src/primitives/dialog.tsx": {
     "complexity": {
-      "max": 15,
-      "excess": 3
+      "max": 13,
+      "excess": 1
     }
   },
   "packages/ui/src/primitives/field.tsx": {
@@ -7597,8 +7609,8 @@
   },
   "packages/ui/tests/components/pickers/pickers.test.tsx": {
     "max-lines": {
-      "max": 1183,
-      "excess": 683
+      "max": 1223,
+      "excess": 723
     }
   },
   "packages/ui/tests/components/shell/shell-full.test.tsx": {
@@ -7617,6 +7629,12 @@
     "max-lines": {
       "max": 626,
       "excess": 126
+    }
+  },
+  "packages/ui/tests/primitives/dialog.test.tsx": {
+    "max-lines": {
+      "max": 506,
+      "excess": 6
     }
   },
   "repo-tests/ci/ci-gate-policy.test.ts": {

@@ -23,10 +23,13 @@ editor
 # domain/package it changes, or left unscoped if it's cross-cutting).
 dx
 hub
-# initiatives: an initiative as a person meets it — opening one, reading it, changing its
-# properties. Pairs with `projects`: the record is the section, so a change to the page you open an
-# initiative into belongs here rather than to whatever component happens to draw it. A change
-# spanning several kinds of record takes the one it was found on.
+# The record scopes — `cycles`, `initiatives`, `programs`, `projects`, `tasks` — are one set, and a
+# record is named for what a person opens rather than for the component that draws it. A change to
+# the page an initiative opens into is `initiatives`, not the layout's name; a change spanning
+# several kinds of record takes the one it was found on. Their contracts and reads underneath are
+# `data`; the surfaces that aggregate work across records (Home, Inbox) are `hub`; dates and
+# scheduling are `planning`.
+cycles
 initiatives
 integrations
 marketing
@@ -34,8 +37,10 @@ mcp
 onboarding
 permissions
 planning
+programs
 projects
 takeout
+tasks
 time
 ui
 work-location

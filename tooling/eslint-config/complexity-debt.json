@@ -57,24 +57,6 @@
       "count": 1
     }
   },
-  "apps/admin/tests/app/notification-console.test.tsx": {
-    "max-lines-per-function": {
-      "max": 107,
-      "count": 1
-    }
-  },
-  "apps/admin/tests/app/service-controls.test.tsx": {
-    "max-lines-per-function": {
-      "max": 127,
-      "count": 1
-    }
-  },
-  "apps/admin/tests/components/admin-shell.test.tsx": {
-    "max-lines-per-function": {
-      "max": 109,
-      "count": 1
-    }
-  },
   "apps/api/src/account/archive.ts": {
     "complexity": {
       "max": 17,
@@ -1651,11 +1633,11 @@
       "count": 2
     },
     "max-lines": {
-      "max": 865,
+      "max": 850,
       "count": 1
     },
     "max-lines-per-function": {
-      "max": 146,
+      "max": 127,
       "count": 5
     },
     "sonarjs/cognitive-complexity": {
@@ -2187,43 +2169,9 @@
       "count": 1
     }
   },
-  "apps/api/tests/account/archive.test.ts": {
-    "max-lines-per-function": {
-      "max": 143,
-      "count": 1
-    }
-  },
   "apps/api/tests/account/export.test.ts": {
     "max-lines": {
       "max": 532,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 386,
-      "count": 3
-    }
-  },
-  "apps/api/tests/account/lifecycle.test.ts": {
-    "max-lines-per-function": {
-      "max": 100,
-      "count": 2
-    }
-  },
-  "apps/api/tests/agent/agent-dispatch-branches.test.ts": {
-    "max-lines-per-function": {
-      "max": 83,
-      "count": 1
-    }
-  },
-  "apps/api/tests/agent/async-generation.test.ts": {
-    "max-lines-per-function": {
-      "max": 348,
-      "count": 1
-    }
-  },
-  "apps/api/tests/agent/async-runner.test.ts": {
-    "max-lines-per-function": {
-      "max": 119,
       "count": 1
     }
   },
@@ -2231,59 +2179,17 @@
     "max-lines": {
       "max": 604,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 118,
-      "count": 4
-    }
-  },
-  "apps/api/tests/agent/dispatch-outbox.test.ts": {
-    "max-lines-per-function": {
-      "max": 292,
-      "count": 1
-    }
-  },
-  "apps/api/tests/agent/execute-approved-tool-failure.test.ts": {
-    "max-lines-per-function": {
-      "max": 106,
-      "count": 2
-    }
-  },
-  "apps/api/tests/agent/execution-advance-recovery.test.ts": {
-    "max-lines-per-function": {
-      "max": 111,
-      "count": 1
-    }
-  },
-  "apps/api/tests/agent/execution-advance.test.ts": {
-    "max-lines-per-function": {
-      "max": 180,
-      "count": 1
     }
   },
   "apps/api/tests/agent/lattice-delegations.test.ts": {
     "max-lines": {
       "max": 4378,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 4072,
-      "count": 7
     }
   },
   "apps/api/tests/agent/loop-coverage-gaps.test.ts": {
     "max-lines": {
       "max": 1266,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 148,
-      "count": 4
-    }
-  },
-  "apps/api/tests/agent/loop.test.ts": {
-    "max-lines-per-function": {
-      "max": 120,
       "count": 1
     }
   },
@@ -2291,73 +2197,11 @@
     "max-lines": {
       "max": 569,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 273,
-      "count": 2
-    }
-  },
-  "apps/api/tests/agent/run-generation-coverage-gaps.test.ts": {
-    "max-lines-per-function": {
-      "max": 91,
-      "count": 1
-    }
-  },
-  "apps/api/tests/agent/toolbox.test.ts": {
-    "max-lines-per-function": {
-      "max": 218,
-      "count": 1
     }
   },
   "apps/api/tests/agent/user-owned-loop.test.ts": {
     "max-lines": {
       "max": 1352,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 1143,
-      "count": 5
-    }
-  },
-  "apps/api/tests/content/entity-mentions.test.ts": {
-    "max-lines-per-function": {
-      "max": 147,
-      "count": 1
-    }
-  },
-  "apps/api/tests/content/legacy-mention-sweep.test.ts": {
-    "max-lines-per-function": {
-      "max": 205,
-      "count": 1
-    }
-  },
-  "apps/api/tests/content/mention-external-gateway.test.ts": {
-    "max-lines-per-function": {
-      "max": 111,
-      "count": 1
-    }
-  },
-  "apps/api/tests/content/mention-hydrate.test.ts": {
-    "max-lines-per-function": {
-      "max": 141,
-      "count": 1
-    }
-  },
-  "apps/api/tests/content/reconcile-mentions-in-memory.test.ts": {
-    "max-lines-per-function": {
-      "max": 84,
-      "count": 1
-    }
-  },
-  "apps/api/tests/content/reconcile-mentions.test.ts": {
-    "max-lines-per-function": {
-      "max": 196,
-      "count": 1
-    }
-  },
-  "apps/api/tests/contracts/legacy/detail-aggregate.test.ts": {
-    "max-lines-per-function": {
-      "max": 119,
       "count": 1
     }
   },
@@ -2365,65 +2209,17 @@
     "max-lines": {
       "max": 2471,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 251,
-      "count": 11
-    }
-  },
-  "apps/api/tests/contracts/legacy/dto-event-contract.test.ts": {
-    "max-lines-per-function": {
-      "max": 111,
-      "count": 1
     }
   },
   "apps/api/tests/contracts/legacy/dto-object-command.test.ts": {
     "max-lines": {
       "max": 569,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 355,
-      "count": 2
     }
   },
   "apps/api/tests/contracts/legacy/dto-recurrence.test.ts": {
     "max-lines": {
       "max": 582,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 155,
-      "count": 3
-    }
-  },
-  "apps/api/tests/contracts/legacy/dto-search.test.ts": {
-    "max-lines-per-function": {
-      "max": 199,
-      "count": 2
-    }
-  },
-  "apps/api/tests/contracts/legacy/entity-navigation.test.ts": {
-    "max-lines-per-function": {
-      "max": 214,
-      "count": 2
-    }
-  },
-  "apps/api/tests/contracts/legacy/saved-work-view.test.ts": {
-    "max-lines-per-function": {
-      "max": 231,
-      "count": 1
-    }
-  },
-  "apps/api/tests/core/container.test.ts": {
-    "max-lines-per-function": {
-      "max": 166,
-      "count": 1
-    }
-  },
-  "apps/api/tests/core/cors.test.ts": {
-    "max-lines-per-function": {
-      "max": 119,
       "count": 1
     }
   },
@@ -2435,27 +2231,11 @@
     "max-lines": {
       "max": 1081,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 1044,
-      "count": 9
-    }
-  },
-  "apps/api/tests/core/infra.test.ts": {
-    "max-lines-per-function": {
-      "max": 149,
-      "count": 2
     }
   },
   "apps/api/tests/core/openapi-spec.test.ts": {
     "complexity": {
       "max": 18,
-      "count": 1
-    }
-  },
-  "apps/api/tests/lattice/lattice-flow.test.ts": {
-    "max-lines-per-function": {
-      "max": 222,
       "count": 1
     }
   },
@@ -2471,127 +2251,9 @@
       "count": 1
     }
   },
-  "apps/api/tests/lib/activity/sweep.test.ts": {
-    "max-lines-per-function": {
-      "max": 273,
-      "count": 1
-    }
-  },
-  "apps/api/tests/lib/automation/apply-label.test.ts": {
-    "max-lines-per-function": {
-      "max": 102,
-      "count": 1
-    }
-  },
-  "apps/api/tests/lib/automation/assign-to-cycle.test.ts": {
-    "max-lines-per-function": {
-      "max": 84,
-      "count": 1
-    }
-  },
-  "apps/api/tests/lib/automation/engine.test.ts": {
-    "max-lines-per-function": {
-      "max": 87,
-      "count": 1
-    }
-  },
-  "apps/api/tests/lib/external-agent-relay.test.ts": {
-    "max-lines-per-function": {
-      "max": 365,
-      "count": 2
-    }
-  },
-  "apps/api/tests/lib/identity/resolve-external-actor.test.ts": {
-    "max-lines-per-function": {
-      "max": 158,
-      "count": 1
-    }
-  },
-  "apps/api/tests/lib/linear-agent-credential.test.ts": {
-    "max-lines-per-function": {
-      "max": 81,
-      "count": 1
-    }
-  },
-  "apps/api/tests/lib/oauth-stub-provider.test.ts": {
-    "max-lines-per-function": {
-      "max": 239,
-      "count": 1
-    }
-  },
-  "apps/api/tests/lib/planning-timeframe.test.ts": {
-    "max-lines-per-function": {
-      "max": 91,
-      "count": 1
-    }
-  },
-  "apps/api/tests/lib/slack-app.test.ts": {
-    "max-lines-per-function": {
-      "max": 119,
-      "count": 1
-    }
-  },
-  "apps/api/tests/lib/view-filter-sql.test.ts": {
-    "max-lines-per-function": {
-      "max": 85,
-      "count": 1
-    }
-  },
-  "apps/api/tests/mcp/mcp-app-fallback.test.ts": {
-    "max-lines-per-function": {
-      "max": 143,
-      "count": 1
-    }
-  },
-  "apps/api/tests/mcp/mcp-app-model-context.test.ts": {
-    "max-lines-per-function": {
-      "max": 89,
-      "count": 1
-    }
-  },
-  "apps/api/tests/mcp/mcp-app-runtime.test.ts": {
-    "max-lines-per-function": {
-      "max": 112,
-      "count": 2
-    }
-  },
-  "apps/api/tests/mcp/mcp-apps-host-routes-resource-shapes.test.ts": {
-    "max-lines-per-function": {
-      "max": 94,
-      "count": 1
-    }
-  },
-  "apps/api/tests/mcp/mcp-apps-host-routes.test.ts": {
-    "max-lines-per-function": {
-      "max": 87,
-      "count": 1
-    }
-  },
-  "apps/api/tests/mcp/mcp-athena-user.test.ts": {
-    "max-lines-per-function": {
-      "max": 88,
-      "count": 1
-    }
-  },
-  "apps/api/tests/mcp/mcp-auth.test.ts": {
-    "max-lines-per-function": {
-      "max": 83,
-      "count": 1
-    }
-  },
   "apps/api/tests/mcp/mcp-capabilities.test.ts": {
     "max-lines": {
       "max": 756,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 90,
-      "count": 2
-    }
-  },
-  "apps/api/tests/mcp/mcp-cimd.test.ts": {
-    "max-lines-per-function": {
-      "max": 258,
       "count": 1
     }
   },
@@ -2599,71 +2261,17 @@
     "max-lines": {
       "max": 509,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 142,
-      "count": 1
-    }
-  },
-  "apps/api/tests/mcp/mcp-filter-coverage.test.ts": {
-    "max-lines-per-function": {
-      "max": 105,
-      "count": 2
-    }
-  },
-  "apps/api/tests/mcp/mcp-grant-lifecycle.test.ts": {
-    "max-lines-per-function": {
-      "max": 104,
-      "count": 1
     }
   },
   "apps/api/tests/mcp/mcp-link-archive.test.ts": {
     "max-lines": {
       "max": 563,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 274,
-      "count": 3
-    }
-  },
-  "apps/api/tests/mcp/mcp-notifications.test.ts": {
-    "max-lines-per-function": {
-      "max": 215,
-      "count": 1
-    }
-  },
-  "apps/api/tests/mcp/mcp-organize-tool.test.ts": {
-    "max-lines-per-function": {
-      "max": 254,
-      "count": 1
     }
   },
   "apps/api/tests/mcp/mcp-plan-tools.test.ts": {
     "max-lines": {
       "max": 899,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 362,
-      "count": 4
-    }
-  },
-  "apps/api/tests/mcp/mcp-repeating-work-tools.test.ts": {
-    "max-lines-per-function": {
-      "max": 131,
-      "count": 1
-    }
-  },
-  "apps/api/tests/mcp/mcp-scope.test.ts": {
-    "max-lines-per-function": {
-      "max": 86,
-      "count": 1
-    }
-  },
-  "apps/api/tests/mcp/mcp-server-transport.test.ts": {
-    "max-lines-per-function": {
-      "max": 95,
       "count": 1
     }
   },
@@ -2675,83 +2283,17 @@
     "max-lines": {
       "max": 1822,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 351,
-      "count": 8
-    }
-  },
-  "apps/api/tests/mcp/mcp-time-tools.test.ts": {
-    "max-lines-per-function": {
-      "max": 283,
-      "count": 1
     }
   },
   "apps/api/tests/mcp/mcp-tools.test.ts": {
     "max-lines": {
       "max": 717,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 136,
-      "count": 5
     }
   },
   "apps/api/tests/mcp/mcp-update-tool.test.ts": {
     "max-lines": {
       "max": 705,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 331,
-      "count": 3
-    }
-  },
-  "apps/api/tests/mcp/mcp-workflow-states.test.ts": {
-    "max-lines-per-function": {
-      "max": 102,
-      "count": 1
-    }
-  },
-  "apps/api/tests/mcp/mcp-write-tools.test.ts": {
-    "max-lines-per-function": {
-      "max": 119,
-      "count": 1
-    }
-  },
-  "apps/api/tests/mcp/task-protocol.test.ts": {
-    "max-lines-per-function": {
-      "max": 106,
-      "count": 1
-    }
-  },
-  "apps/api/tests/mcp/task-store.test.ts": {
-    "max-lines-per-function": {
-      "max": 300,
-      "count": 1
-    }
-  },
-  "apps/api/tests/permissions/permissions.test.ts": {
-    "max-lines-per-function": {
-      "max": 169,
-      "count": 1
-    }
-  },
-  "apps/api/tests/permissions/resource-access.test.ts": {
-    "max-lines-per-function": {
-      "max": 312,
-      "count": 1
-    }
-  },
-  "apps/api/tests/recurrence/calendar-binding.test.ts": {
-    "max-lines-per-function": {
-      "max": 151,
-      "count": 2
-    }
-  },
-  "apps/api/tests/recurrence/expand.test.ts": {
-    "max-lines-per-function": {
-      "max": 324,
       "count": 1
     }
   },
@@ -2763,79 +2305,11 @@
     "max-lines": {
       "max": 1192,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 1022,
-      "count": 6
-    }
-  },
-  "apps/api/tests/recurrence/rrule.test.ts": {
-    "max-lines-per-function": {
-      "max": 203,
-      "count": 2
-    }
-  },
-  "apps/api/tests/recurrence/series-storage.test.ts": {
-    "max-lines-per-function": {
-      "max": 177,
-      "count": 1
-    }
-  },
-  "apps/api/tests/recurrence/sweep.test.ts": {
-    "max-lines-per-function": {
-      "max": 314,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/actors-accountless.test.ts": {
-    "max-lines-per-function": {
-      "max": 231,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/admin-notifications.test.ts": {
-    "max-lines-per-function": {
-      "max": 129,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/admin-staff.test.ts": {
-    "max-lines-per-function": {
-      "max": 117,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/admin-status.test.ts": {
-    "max-lines-per-function": {
-      "max": 88,
-      "count": 1
     }
   },
   "apps/api/tests/routes/admin.test.ts": {
     "max-lines": {
       "max": 1501,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 426,
-      "count": 4
-    }
-  },
-  "apps/api/tests/routes/agent-chat.test.ts": {
-    "max-lines-per-function": {
-      "max": 95,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/agent-flows.test.ts": {
-    "max-lines-per-function": {
-      "max": 113,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/agent-proposals.test.ts": {
-    "max-lines-per-function": {
-      "max": 129,
       "count": 1
     }
   },
@@ -2843,97 +2317,29 @@
     "max-lines": {
       "max": 889,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 651,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/agent-session-task-resource-access.test.ts": {
-    "max-lines-per-function": {
-      "max": 93,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/agent-sessions-review.test.ts": {
-    "max-lines-per-function": {
-      "max": 105,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/athena-mail-store.test.ts": {
-    "max-lines-per-function": {
-      "max": 129,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/attachments.test.ts": {
-    "max-lines-per-function": {
-      "max": 214,
-      "count": 1
     }
   },
   "apps/api/tests/routes/automation-engine-db.test.ts": {
     "max-lines": {
       "max": 1062,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 303,
-      "count": 6
     }
   },
   "apps/api/tests/routes/automation-task-routing.test.ts": {
     "max-lines": {
       "max": 744,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 93,
-      "count": 4
     }
   },
   "apps/api/tests/routes/billing-http.test.ts": {
     "max-lines": {
       "max": 1608,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 1216,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/billing-lifecycle.test.ts": {
-    "max-lines-per-function": {
-      "max": 152,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/calendar-agenda.test.ts": {
-    "max-lines-per-function": {
-      "max": 189,
-      "count": 3
     }
   },
   "apps/api/tests/routes/calendar-google-adapter-edges.test.ts": {
     "max-lines": {
       "max": 508,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 145,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/calendar-items.test.ts": {
-    "max-lines-per-function": {
-      "max": 328,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/calendar-layer-migration.test.ts": {
-    "max-lines-per-function": {
-      "max": 179,
       "count": 1
     }
   },
@@ -2941,58 +2347,24 @@
     "max-lines": {
       "max": 634,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 232,
-      "count": 4
-    }
-  },
-  "apps/api/tests/routes/calendar-read.test.ts": {
-    "max-lines-per-function": {
-      "max": 233,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/calendar-schedules.test.ts": {
-    "max-lines-per-function": {
-      "max": 207,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/calendar-shared.test.ts": {
-    "max-lines-per-function": {
-      "max": 202,
-      "count": 1
     }
   },
   "apps/api/tests/routes/calendar-sync-engine.test.ts": {
     "max-lines": {
       "max": 1205,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 471,
-      "count": 6
     }
   },
   "apps/api/tests/routes/calendar-sync-sweep.test.ts": {
     "max-lines": {
       "max": 547,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 240,
-      "count": 6
     }
   },
   "apps/api/tests/routes/calendar-task-links.test.ts": {
     "max-lines": {
       "max": 624,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 511,
-      "count": 2
     }
   },
   "apps/api/tests/routes/calendar-write-back.test.ts": {
@@ -3003,59 +2375,17 @@
     "max-lines": {
       "max": 824,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 183,
-      "count": 3
     }
   },
   "apps/api/tests/routes/calendar-write-edges.test.ts": {
     "max-lines": {
       "max": 728,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 217,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/capture.test.ts": {
-    "max-lines-per-function": {
-      "max": 128,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/comments-threading.test.ts": {
-    "max-lines-per-function": {
-      "max": 269,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/contact-points.test.ts": {
-    "max-lines-per-function": {
-      "max": 161,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/coverage-edges.test.ts": {
-    "max-lines-per-function": {
-      "max": 85,
-      "count": 2
     }
   },
   "apps/api/tests/routes/cross-org-fk.test.ts": {
     "max-lines": {
       "max": 526,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 140,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/cycles-autoroll.test.ts": {
-    "max-lines-per-function": {
-      "max": 139,
       "count": 1
     }
   },
@@ -3063,49 +2393,11 @@
     "max-lines": {
       "max": 552,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 165,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/daily-digest.test.ts": {
-    "max-lines-per-function": {
-      "max": 336,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/day-cadence-sweep.test.ts": {
-    "max-lines-per-function": {
-      "max": 98,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/dependency-graph.test.ts": {
-    "max-lines-per-function": {
-      "max": 114,
-      "count": 1
     }
   },
   "apps/api/tests/routes/detail-aggregates.test.ts": {
     "max-lines": {
       "max": 1651,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 1521,
-      "count": 7
-    }
-  },
-  "apps/api/tests/routes/document-images.test.ts": {
-    "max-lines-per-function": {
-      "max": 119,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/elicitation-mcp.test.ts": {
-    "max-lines-per-function": {
-      "max": 108,
       "count": 1
     }
   },
@@ -3113,139 +2405,29 @@
     "max-lines": {
       "max": 852,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 170,
-      "count": 3
     }
   },
   "apps/api/tests/routes/elicitation.test.ts": {
     "max-lines": {
       "max": 734,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 131,
-      "count": 3
-    }
-  },
-  "apps/api/tests/routes/elicitations-route.test.ts": {
-    "max-lines-per-function": {
-      "max": 110,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/email-suggestions.test.ts": {
-    "max-lines-per-function": {
-      "max": 134,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/email-sweep.test.ts": {
-    "max-lines-per-function": {
-      "max": 111,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/email-synthesize.test.ts": {
-    "max-lines-per-function": {
-      "max": 146,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/entity-display.test.ts": {
-    "max-lines-per-function": {
-      "max": 269,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/event-emit.test.ts": {
-    "max-lines-per-function": {
-      "max": 305,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/event-sync-association.test.ts": {
-    "max-lines-per-function": {
-      "max": 254,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/event-sync-attribution.test.ts": {
-    "max-lines-per-function": {
-      "max": 95,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/event-sync.test.ts": {
-    "max-lines-per-function": {
-      "max": 303,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/external-agent-sweep.test.ts": {
-    "max-lines-per-function": {
-      "max": 248,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/group-a.test.ts": {
-    "max-lines-per-function": {
-      "max": 159,
-      "count": 3
     }
   },
   "apps/api/tests/routes/group-b.test.ts": {
     "max-lines": {
       "max": 1820,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 761,
-      "count": 9
-    }
-  },
-  "apps/api/tests/routes/group-c.test.ts": {
-    "max-lines-per-function": {
-      "max": 275,
-      "count": 2
     }
   },
   "apps/api/tests/routes/group-d.test.ts": {
     "max-lines": {
       "max": 1389,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 517,
-      "count": 5
-    }
-  },
-  "apps/api/tests/routes/group-e.test.ts": {
-    "max-lines-per-function": {
-      "max": 134,
-      "count": 2
     }
   },
   "apps/api/tests/routes/hub-aggregation.test.ts": {
     "max-lines": {
       "max": 1284,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 745,
-      "count": 8
-    }
-  },
-  "apps/api/tests/routes/hub-preferences.test.ts": {
-    "max-lines-per-function": {
-      "max": 119,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/hub-today.test.ts": {
-    "max-lines-per-function": {
-      "max": 152,
       "count": 1
     }
   },
@@ -3253,79 +2435,29 @@
     "max-lines": {
       "max": 655,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 240,
-      "count": 2
     }
   },
   "apps/api/tests/routes/ingest-linear-agent.test.ts": {
     "max-lines": {
       "max": 688,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 554,
-      "count": 3
-    }
-  },
-  "apps/api/tests/routes/ingest.test.ts": {
-    "max-lines-per-function": {
-      "max": 113,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/initiative-hierarchy-candidates.test.ts": {
-    "max-lines-per-function": {
-      "max": 213,
-      "count": 2
     }
   },
   "apps/api/tests/routes/initiative-hierarchy-security.test.ts": {
     "max-lines": {
       "max": 553,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 501,
-      "count": 2
     }
   },
   "apps/api/tests/routes/initiatives-detail.test.ts": {
     "max-lines": {
       "max": 1484,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 311,
-      "count": 11
-    }
-  },
-  "apps/api/tests/routes/integration-identity.test.ts": {
-    "max-lines-per-function": {
-      "max": 174,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/integration-provider.test.ts": {
-    "max-lines-per-function": {
-      "max": 105,
-      "count": 1
     }
   },
   "apps/api/tests/routes/integration-reconcile-graph-appliers.test.ts": {
     "max-lines": {
       "max": 734,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 242,
-      "count": 3
-    }
-  },
-  "apps/api/tests/routes/integration-reconcile-graph-orchestration.test.ts": {
-    "max-lines-per-function": {
-      "max": 127,
       "count": 1
     }
   },
@@ -3337,29 +2469,17 @@
     "max-lines": {
       "max": 960,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 749,
-      "count": 3
     }
   },
   "apps/api/tests/routes/integration-reconcile-orchestration.test.ts": {
     "max-lines": {
       "max": 737,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 481,
-      "count": 2
     }
   },
   "apps/api/tests/routes/integration-reconcile-sunsama.test.ts": {
     "complexity": {
       "max": 18,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 137,
       "count": 1
     }
   },
@@ -3367,65 +2487,17 @@
     "max-lines": {
       "max": 716,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 467,
-      "count": 5
     }
   },
   "apps/api/tests/routes/integration-sync-graph.test.ts": {
     "max-lines": {
       "max": 636,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 316,
-      "count": 3
     }
   },
   "apps/api/tests/routes/integrations-edges.test.ts": {
     "max-lines": {
       "max": 501,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 154,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/integrations-linear-agent-oauth.test.ts": {
-    "max-lines-per-function": {
-      "max": 152,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/integrations-mcp-authorize.test.ts": {
-    "max-lines-per-function": {
-      "max": 129,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/integrations-mcp-oauth.test.ts": {
-    "max-lines-per-function": {
-      "max": 297,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/integrations-mcp-update.test.ts": {
-    "max-lines-per-function": {
-      "max": 114,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/integrations-mcp.test.ts": {
-    "max-lines-per-function": {
-      "max": 218,
-      "count": 3
-    }
-  },
-  "apps/api/tests/routes/integrations-slack.test.ts": {
-    "max-lines-per-function": {
-      "max": 87,
       "count": 1
     }
   },
@@ -3433,31 +2505,11 @@
     "max-lines": {
       "max": 984,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 218,
-      "count": 4
-    }
-  },
-  "apps/api/tests/routes/internal-athena-execution.test.ts": {
-    "max-lines-per-function": {
-      "max": 284,
-      "count": 2
     }
   },
   "apps/api/tests/routes/lattice-connection-branches.test.ts": {
     "max-lines": {
       "max": 575,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 111,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/lattice-oauth-branches.test.ts": {
-    "max-lines-per-function": {
-      "max": 258,
       "count": 1
     }
   },
@@ -3465,41 +2517,9 @@
     "max-lines": {
       "max": 697,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 161,
-      "count": 3
-    }
-  },
-  "apps/api/tests/routes/linear-agent-cron.test.ts": {
-    "max-lines-per-function": {
-      "max": 170,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/list-pagination.test.ts": {
-    "max-lines-per-function": {
-      "max": 109,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/me-account.test.ts": {
-    "max-lines-per-function": {
-      "max": 86,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/me-athena-activity.test.ts": {
-    "max-lines-per-function": {
-      "max": 304,
-      "count": 1
     }
   },
   "apps/api/tests/routes/me-athena-agents-stream.test.ts": {
-    "max-lines-per-function": {
-      "max": 156,
-      "count": 1
-    },
     "sonarjs/cognitive-complexity": {
       "max": 16,
       "count": 1
@@ -3509,151 +2529,29 @@
     "max-lines": {
       "max": 619,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 482,
-      "count": 1
     }
   },
   "apps/api/tests/routes/me-athena-context.test.ts": {
     "max-lines": {
       "max": 1199,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 410,
-      "count": 4
     }
   },
   "apps/api/tests/routes/me-athena.test.ts": {
     "max-lines": {
       "max": 2169,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 1878,
-      "count": 4
-    }
-  },
-  "apps/api/tests/routes/me-calendar.test.ts": {
-    "max-lines-per-function": {
-      "max": 258,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/me-identities.test.ts": {
-    "max-lines-per-function": {
-      "max": 103,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/me-passkeys.test.ts": {
-    "max-lines-per-function": {
-      "max": 106,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/members-invitations.test.ts": {
-    "max-lines-per-function": {
-      "max": 149,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/mentions.test.ts": {
-    "max-lines-per-function": {
-      "max": 147,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/notification-intents.test.ts": {
-    "max-lines-per-function": {
-      "max": 110,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/notification-preferences.test.ts": {
-    "max-lines-per-function": {
-      "max": 135,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/notification-service-smoke.test.ts": {
-    "max-lines-per-function": {
-      "max": 129,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/notifications-inbox.test.ts": {
-    "max-lines-per-function": {
-      "max": 126,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/notion-mirror-design.test.ts": {
-    "max-lines-per-function": {
-      "max": 337,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/notion-mirror-entities-pull.test.ts": {
-    "max-lines-per-function": {
-      "max": 191,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/notion-mirror-entities-relations.test.ts": {
-    "max-lines-per-function": {
-      "max": 100,
-      "count": 2
     }
   },
   "apps/api/tests/routes/notion-mirror-reconcile.test.ts": {
     "max-lines": {
       "max": 1482,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 1272,
-      "count": 5
-    }
-  },
-  "apps/api/tests/routes/notion-mirror-routes.test.ts": {
-    "max-lines-per-function": {
-      "max": 316,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/object-command-effects-retry.test.ts": {
-    "max-lines-per-function": {
-      "max": 233,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/object-commands-outbox.test.ts": {
-    "max-lines-per-function": {
-      "max": 246,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/object-commands-scale.test.ts": {
-    "max-lines-per-function": {
-      "max": 242,
-      "count": 2
     }
   },
   "apps/api/tests/routes/object-commands.test.ts": {
     "max-lines": {
       "max": 3563,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 3269,
-      "count": 7
-    }
-  },
-  "apps/api/tests/routes/org-settings.test.ts": {
-    "max-lines-per-function": {
-      "max": 92,
       "count": 1
     }
   },
@@ -3661,55 +2559,11 @@
     "max-lines": {
       "max": 975,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 422,
-      "count": 5
-    }
-  },
-  "apps/api/tests/routes/personal-athena-connections.test.ts": {
-    "max-lines-per-function": {
-      "max": 367,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/phone-call-authorization.test.ts": {
-    "max-lines-per-function": {
-      "max": 113,
-      "count": 1
     }
   },
   "apps/api/tests/routes/phone-inbound-call.test.ts": {
     "max-lines": {
       "max": 527,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 387,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/phone-numbers.test.ts": {
-    "max-lines-per-function": {
-      "max": 416,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/phone-verification.test.ts": {
-    "max-lines-per-function": {
-      "max": 321,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/programs-detail.test.ts": {
-    "max-lines-per-function": {
-      "max": 104,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/project-rollup.test.ts": {
-    "max-lines-per-function": {
-      "max": 170,
       "count": 1
     }
   },
@@ -3717,75 +2571,23 @@
     "max-lines": {
       "max": 754,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 450,
-      "count": 4
     }
   },
   "apps/api/tests/routes/publish-brief.test.ts": {
     "max-lines": {
       "max": 635,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 131,
-      "count": 4
     }
   },
   "apps/api/tests/routes/publish.test.ts": {
     "max-lines": {
       "max": 913,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 171,
-      "count": 5
     }
   },
   "apps/api/tests/routes/recurrence.test.ts": {
     "max-lines": {
       "max": 700,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 428,
-      "count": 5
-    }
-  },
-  "apps/api/tests/routes/rest-mechanics.test.ts": {
-    "max-lines-per-function": {
-      "max": 99,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/session-from-prompt.test.ts": {
-    "max-lines-per-function": {
-      "max": 125,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/slack-relevance.test.ts": {
-    "max-lines-per-function": {
-      "max": 102,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/stream-link.test.ts": {
-    "max-lines-per-function": {
-      "max": 220,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/stream-read.test.ts": {
-    "max-lines-per-function": {
-      "max": 82,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/sync-notion.test.ts": {
-    "max-lines-per-function": {
-      "max": 214,
       "count": 1
     }
   },
@@ -3793,65 +2595,17 @@
     "max-lines": {
       "max": 794,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 570,
-      "count": 2
     }
   },
   "apps/api/tests/routes/task-bearing-event-resource-access.test.ts": {
     "max-lines": {
       "max": 1024,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 451,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/task-comment-access.test.ts": {
-    "max-lines-per-function": {
-      "max": 140,
-      "count": 2
     }
   },
   "apps/api/tests/routes/task-expansion.test.ts": {
     "max-lines": {
       "max": 915,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 880,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/task-helpers.test.ts": {
-    "max-lines-per-function": {
-      "max": 140,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/task-hierarchy-completion.test.ts": {
-    "max-lines-per-function": {
-      "max": 297,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/task-reparent-batch.test.ts": {
-    "max-lines-per-function": {
-      "max": 156,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/task-resource-access.test.ts": {
-    "max-lines-per-function": {
-      "max": 332,
-      "count": 3
-    }
-  },
-  "apps/api/tests/routes/task-rollup-resource-access.test.ts": {
-    "max-lines-per-function": {
-      "max": 201,
       "count": 1
     }
   },
@@ -3859,73 +2613,11 @@
     "max-lines": {
       "max": 1347,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 633,
-      "count": 4
-    }
-  },
-  "apps/api/tests/routes/team-reports.test.ts": {
-    "max-lines-per-function": {
-      "max": 115,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/teams.test.ts": {
-    "max-lines-per-function": {
-      "max": 321,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/templates.test.ts": {
-    "max-lines-per-function": {
-      "max": 253,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/time-edge-cases.test.ts": {
-    "max-lines-per-function": {
-      "max": 438,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/time-share.test.ts": {
-    "max-lines-per-function": {
-      "max": 204,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/time-task-visibility.test.ts": {
-    "max-lines-per-function": {
-      "max": 421,
-      "count": 3
     }
   },
   "apps/api/tests/routes/time.test.ts": {
     "max-lines": {
       "max": 1188,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 1116,
-      "count": 3
-    }
-  },
-  "apps/api/tests/routes/twilio-relay-socket.test.ts": {
-    "max-lines-per-function": {
-      "max": 98,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/updates-detail.test.ts": {
-    "max-lines-per-function": {
-      "max": 122,
-      "count": 2
-    }
-  },
-  "apps/api/tests/routes/voice-channel-parity.test.ts": {
-    "max-lines-per-function": {
-      "max": 153,
       "count": 1
     }
   },
@@ -3933,48 +2625,18 @@
     "complexity": {
       "max": 13,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 197,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/voice-sessions-route.test.ts": {
-    "max-lines-per-function": {
-      "max": 144,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/voice-tools.test.ts": {
-    "max-lines-per-function": {
-      "max": 292,
-      "count": 2
     }
   },
   "apps/api/tests/routes/webhooks-extra.test.ts": {
     "max-lines": {
       "max": 607,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 481,
-      "count": 1
-    }
-  },
-  "apps/api/tests/routes/work-location.test.ts": {
-    "max-lines-per-function": {
-      "max": 235,
-      "count": 2
     }
   },
   "apps/api/tests/routes/work-statuses.test.ts": {
     "max-lines": {
       "max": 970,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 247,
-      "count": 3
     }
   },
   "apps/api/tests/routes/work-views.test.ts": {
@@ -3985,76 +2647,24 @@
     "max-lines": {
       "max": 3061,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 2987,
-      "count": 13
-    }
-  },
-  "apps/api/tests/search/entity-references.test.ts": {
-    "max-lines-per-function": {
-      "max": 264,
-      "count": 3
     }
   },
   "apps/api/tests/search/jobs.test.ts": {
     "max-lines": {
       "max": 641,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 629,
-      "count": 2
-    }
-  },
-  "apps/api/tests/search/projectors-activity.test.ts": {
-    "max-lines-per-function": {
-      "max": 101,
-      "count": 1
-    }
-  },
-  "apps/api/tests/search/projectors.test.ts": {
-    "max-lines-per-function": {
-      "max": 352,
-      "count": 2
-    }
-  },
-  "apps/api/tests/search/query-browse.test.ts": {
-    "max-lines-per-function": {
-      "max": 181,
-      "count": 1
-    }
-  },
-  "apps/api/tests/search/query-caller-scope.test.ts": {
-    "max-lines-per-function": {
-      "max": 156,
-      "count": 4
-    }
-  },
-  "apps/api/tests/search/query-visibility-facts.test.ts": {
-    "max-lines-per-function": {
-      "max": 346,
-      "count": 2
     }
   },
   "apps/api/tests/search/query.test.ts": {
     "max-lines": {
       "max": 1594,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 1573,
-      "count": 8
     }
   },
   "apps/api/tests/search/used-in.test.ts": {
     "max-lines": {
       "max": 563,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 551,
-      "count": 4
     }
   },
   "apps/api/tests/security/credential-masking.test.ts": {
@@ -4062,106 +2672,14 @@
       "max": 5,
       "count": 3
     },
-    "max-lines-per-function": {
-      "max": 94,
-      "count": 1
-    },
     "sonarjs/cognitive-complexity": {
       "max": 29,
       "count": 1
     }
   },
-  "apps/api/tests/security/replay-owner.test.ts": {
-    "max-lines-per-function": {
-      "max": 92,
-      "count": 1
-    }
-  },
-  "apps/api/tests/security/route-auth.test.ts": {
-    "max-lines-per-function": {
-      "max": 83,
-      "count": 1
-    }
-  },
-  "apps/api/tests/services/billing-launch-audit.test.ts": {
-    "max-lines-per-function": {
-      "max": 357,
-      "count": 3
-    }
-  },
   "apps/api/tests/services/billing-reconciliation.test.ts": {
     "max-lines": {
       "max": 878,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 849,
-      "count": 1
-    }
-  },
-  "apps/api/tests/services/boundary/extension-service.test.ts": {
-    "max-lines-per-function": {
-      "max": 161,
-      "count": 1
-    }
-  },
-  "apps/api/tests/services/highlights/curate.test.ts": {
-    "max-lines-per-function": {
-      "max": 255,
-      "count": 1
-    }
-  },
-  "apps/api/tests/services/highlights/reconcile.test.ts": {
-    "max-lines-per-function": {
-      "max": 223,
-      "count": 1
-    }
-  },
-  "apps/api/tests/services/hub-today-projection.test.ts": {
-    "max-lines-per-function": {
-      "max": 163,
-      "count": 2
-    }
-  },
-  "apps/api/tests/services/notifications/dispatcher-email.test.ts": {
-    "max-lines-per-function": {
-      "max": 133,
-      "count": 1
-    }
-  },
-  "apps/api/tests/services/notifications/dispatcher-sms-push.test.ts": {
-    "max-lines-per-function": {
-      "max": 171,
-      "count": 1
-    }
-  },
-  "apps/api/tests/services/notifications/dispatcher-web.test.ts": {
-    "max-lines-per-function": {
-      "max": 133,
-      "count": 2
-    }
-  },
-  "apps/api/tests/services/notifications/inbound.test.ts": {
-    "max-lines-per-function": {
-      "max": 191,
-      "count": 1
-    }
-  },
-  "apps/api/tests/services/notifications/preferences.test.ts": {
-    "max-lines-per-function": {
-      "max": 167,
-      "count": 1
-    }
-  },
-  "apps/api/tests/services/scheduling/day-loop.test.ts": {
-    "max-lines-per-function": {
-      "max": 105,
-      "count": 2
-    }
-  },
-  "apps/api/tests/services/scheduling/day-planner.test.ts": {
-    "max-lines-per-function": {
-      "max": 87,
       "count": 1
     }
   },
@@ -4169,30 +2687,18 @@
     "max-lines": {
       "max": 750,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 201,
-      "count": 4
     }
   },
   "apps/api/tests/services/scheduling/repository.test.ts": {
     "max-lines": {
       "max": 757,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 164,
-      "count": 3
     }
   },
   "apps/api/tests/services/scheduling/schedule-week-routes.test.ts": {
     "max-lines": {
       "max": 594,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 158,
-      "count": 2
     }
   },
   "apps/api/tests/services/scheduling/week-planner.test.ts": {
@@ -4205,50 +2711,10 @@
       "count": 1
     }
   },
-  "apps/api/tests/services/service-probes.test.ts": {
-    "max-lines-per-function": {
-      "max": 83,
-      "count": 1
-    }
-  },
-  "apps/api/tests/services/work-location/google-transport.test.ts": {
-    "max-lines-per-function": {
-      "max": 114,
-      "count": 1
-    }
-  },
-  "apps/api/tests/services/work-location/google.test.ts": {
-    "max-lines-per-function": {
-      "max": 88,
-      "count": 1
-    }
-  },
-  "apps/api/tests/services/work-location/repository-partial-updates.test.ts": {
-    "max-lines-per-function": {
-      "max": 115,
-      "count": 1
-    }
-  },
-  "apps/api/tests/services/work-location/repository.test.ts": {
-    "max-lines-per-function": {
-      "max": 225,
-      "count": 1
-    }
-  },
-  "apps/api/tests/services/work-location/sweep.test.ts": {
-    "max-lines-per-function": {
-      "max": 118,
-      "count": 2
-    }
-  },
   "apps/api/tests/services/work-location/sync-engine.test.ts": {
     "max-lines": {
       "max": 696,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 553,
-      "count": 2
     }
   },
   "apps/api/tests/support/linear-agent-webhook.ts": {
@@ -4263,37 +2729,9 @@
       "count": 3
     }
   },
-  "apps/api/tests/time/access.test.ts": {
-    "max-lines-per-function": {
-      "max": 175,
-      "count": 2
-    }
-  },
-  "apps/api/tests/time/agent-execution.test.ts": {
-    "max-lines-per-function": {
-      "max": 453,
-      "count": 4
-    }
-  },
-  "apps/api/tests/time/anchor-suggestion.test.ts": {
-    "max-lines-per-function": {
-      "max": 207,
-      "count": 1
-    }
-  },
   "apps/api/tests/time/read-models.test.ts": {
     "max-lines": {
       "max": 816,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 208,
-      "count": 4
-    }
-  },
-  "apps/api/tests/time/reporting.test.ts": {
-    "max-lines-per-function": {
-      "max": 86,
       "count": 1
     }
   },
@@ -4301,44 +2739,12 @@
     "max-lines": {
       "max": 617,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 470,
-      "count": 2
-    }
-  },
-  "apps/api/tests/work-views/cursor.test.ts": {
-    "max-lines-per-function": {
-      "max": 216,
-      "count": 1
-    }
-  },
-  "apps/api/tests/work-views/performance.test.ts": {
-    "max-lines-per-function": {
-      "max": 219,
-      "count": 3
-    }
-  },
-  "apps/api/tests/work-views/planning-timeframes.test.ts": {
-    "max-lines-per-function": {
-      "max": 106,
-      "count": 2
-    }
-  },
-  "apps/api/tests/work-views/query-plan.test.ts": {
-    "max-lines-per-function": {
-      "max": 166,
-      "count": 1
     }
   },
   "apps/api/tests/work-views/query.test.ts": {
     "max-lines": {
       "max": 1791,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 1748,
-      "count": 13
     }
   },
   "apps/api/tests/work-views/scalar-relations.test.ts": {
@@ -4349,20 +2755,12 @@
     "max-lines": {
       "max": 543,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 416,
-      "count": 2
     }
   },
   "apps/api/tests/work-views/tenant-relations.test.ts": {
     "complexity": {
       "max": 14,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 194,
-      "count": 2
     }
   },
   "apps/runner/src/workflow.ts": {
@@ -4371,59 +2769,13 @@
       "count": 1
     }
   },
-  "apps/runner/tests/handlers/http.test.ts": {
-    "max-lines-per-function": {
-      "max": 110,
-      "count": 1
-    }
-  },
-  "apps/runner/tests/wire/hmac.test.ts": {
-    "max-lines-per-function": {
-      "max": 85,
-      "count": 1
-    }
-  },
-  "apps/runner/tests/workflow/workflow.test.ts": {
-    "max-lines-per-function": {
-      "max": 101,
-      "count": 1
-    }
-  },
   "apps/web/e2e/athena/mcp-apps-stable.spec.ts": {
     "complexity": {
       "max": 19,
       "count": 1
     },
-    "max-lines-per-function": {
-      "max": 96,
-      "count": 2
-    },
     "sonarjs/cognitive-complexity": {
       "max": 18,
-      "count": 1
-    }
-  },
-  "apps/web/e2e/athena/verify-composer.spec.ts": {
-    "max-lines-per-function": {
-      "max": 142,
-      "count": 2
-    }
-  },
-  "apps/web/e2e/auth/oauth-sign-in.spec.ts": {
-    "max-lines-per-function": {
-      "max": 129,
-      "count": 1
-    }
-  },
-  "apps/web/e2e/calendar/agenda-quick-create-evidence.spec.ts": {
-    "max-lines-per-function": {
-      "max": 143,
-      "count": 1
-    }
-  },
-  "apps/web/e2e/calendar/calendar-duplicate-events.spec.ts": {
-    "max-lines-per-function": {
-      "max": 89,
       "count": 1
     }
   },
@@ -4431,30 +2783,6 @@
     "sonarjs/cognitive-complexity": {
       "max": 16,
       "count": 1
-    }
-  },
-  "apps/web/e2e/calendar/calendar-viewport-floor.spec.ts": {
-    "max-lines-per-function": {
-      "max": 81,
-      "count": 1
-    }
-  },
-  "apps/web/e2e/calendar/google-calendar.spec.ts": {
-    "max-lines-per-function": {
-      "max": 84,
-      "count": 1
-    }
-  },
-  "apps/web/e2e/calendar/layered-calendar-drawer.spec.ts": {
-    "max-lines-per-function": {
-      "max": 125,
-      "count": 1
-    }
-  },
-  "apps/web/e2e/calendar/layered-calendar.spec.ts": {
-    "max-lines-per-function": {
-      "max": 192,
-      "count": 2
     }
   },
   "apps/web/e2e/helpers/calendar-routes.ts": {
@@ -4479,69 +2807,11 @@
     "max-lines": {
       "max": 894,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 111,
-      "count": 3
-    }
-  },
-  "apps/web/e2e/release/core-screen-acceptance.spec.ts": {
-    "max-lines-per-function": {
-      "max": 94,
-      "count": 1
-    }
-  },
-  "apps/web/e2e/release/work-roster-acceptance.spec.ts": {
-    "max-lines-per-function": {
-      "max": 164,
-      "count": 1
-    }
-  },
-  "apps/web/e2e/scheduling/fluid-scheduling-dense-overflow.spec.ts": {
-    "max-lines-per-function": {
-      "max": 110,
-      "count": 1
-    }
-  },
-  "apps/web/e2e/scheduling/fluid-scheduling-gestures.spec.ts": {
-    "max-lines-per-function": {
-      "max": 271,
-      "count": 3
-    }
-  },
-  "apps/web/e2e/scheduling/fluid-scheduling.spec.ts": {
-    "max-lines-per-function": {
-      "max": 256,
-      "count": 2
-    }
-  },
-  "apps/web/e2e/settings/notion-mirror-shots.spec.ts": {
-    "max-lines-per-function": {
-      "max": 105,
-      "count": 1
     }
   },
   "apps/web/e2e/settings/settings-audit-shots.spec.ts": {
     "sonarjs/cognitive-complexity": {
       "max": 19,
-      "count": 1
-    }
-  },
-  "apps/web/e2e/shell/navigation-rail-evidence.spec.ts": {
-    "max-lines-per-function": {
-      "max": 141,
-      "count": 1
-    }
-  },
-  "apps/web/e2e/stream.spec.ts": {
-    "max-lines-per-function": {
-      "max": 81,
-      "count": 1
-    }
-  },
-  "apps/web/e2e/task-hierarchy.spec.ts": {
-    "max-lines-per-function": {
-      "max": 108,
       "count": 1
     }
   },
@@ -4575,26 +2845,10 @@
       "count": 1
     }
   },
-  "apps/web/e2e/work/library-finder.spec.ts": {
-    "max-lines-per-function": {
-      "max": 155,
-      "count": 1
-    }
-  },
   "apps/web/e2e/work/markdown-code-shots.spec.ts": {
     "complexity": {
       "max": 13,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 189,
-      "count": 2
-    }
-  },
-  "apps/web/e2e/work/markdown-code.spec.ts": {
-    "max-lines-per-function": {
-      "max": 102,
-      "count": 2
     }
   },
   "apps/web/e2e/work/mentions-shots.spec.ts": {
@@ -4602,18 +2856,8 @@
       "max": 17,
       "count": 1
     },
-    "max-lines-per-function": {
-      "max": 118,
-      "count": 1
-    },
     "sonarjs/cognitive-complexity": {
       "max": 23,
-      "count": 1
-    }
-  },
-  "apps/web/e2e/work/mentions.spec.ts": {
-    "max-lines-per-function": {
-      "max": 136,
       "count": 1
     }
   },
@@ -4621,25 +2865,11 @@
     "complexity": {
       "max": 24,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 207,
-      "count": 1
-    }
-  },
-  "apps/web/e2e/work/planning-timeframes.spec.ts": {
-    "max-lines-per-function": {
-      "max": 136,
-      "count": 1
     }
   },
   "apps/web/e2e/work/project-detail-header-evidence.spec.ts": {
     "complexity": {
       "max": 18,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 215,
       "count": 1
     }
   },
@@ -4647,25 +2877,11 @@
     "complexity": {
       "max": 50,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 147,
-      "count": 2
     }
   },
   "apps/web/e2e/work/verify-today.spec.ts": {
     "complexity": {
       "max": 14,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 159,
-      "count": 1
-    }
-  },
-  "apps/web/e2e/work/work-views.spec.ts": {
-    "max-lines-per-function": {
-      "max": 90,
       "count": 1
     }
   },
@@ -8101,121 +6317,11 @@
     "max-lines": {
       "max": 670,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 429,
-      "count": 1
-    }
-  },
-  "apps/web/tests/agenda/agenda-context-navigation.test.tsx": {
-    "max-lines-per-function": {
-      "max": 187,
-      "count": 1
-    }
-  },
-  "apps/web/tests/agenda/agenda-entry-actions.test.tsx": {
-    "max-lines-per-function": {
-      "max": 128,
-      "count": 1
-    }
-  },
-  "apps/web/tests/agenda/agenda-timebox-mutation.test.tsx": {
-    "max-lines-per-function": {
-      "max": 208,
-      "count": 1
-    }
-  },
-  "apps/web/tests/athena/api-adapter.test.ts": {
-    "max-lines-per-function": {
-      "max": 254,
-      "count": 1
-    }
-  },
-  "apps/web/tests/athena/athena-conversation.test.tsx": {
-    "max-lines-per-function": {
-      "max": 81,
-      "count": 1
-    }
-  },
-  "apps/web/tests/athena/lattice-fedcm.test.ts": {
-    "max-lines-per-function": {
-      "max": 84,
-      "count": 1
-    }
-  },
-  "apps/web/tests/athena/lattice-section.test.tsx": {
-    "max-lines-per-function": {
-      "max": 95,
-      "count": 1
     }
   },
   "apps/web/tests/athena/mcp-app-view.test.tsx": {
     "max-lines": {
       "max": 682,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 425,
-      "count": 3
-    }
-  },
-  "apps/web/tests/athena/panel-provider.test.tsx": {
-    "max-lines-per-function": {
-      "max": 138,
-      "count": 1
-    }
-  },
-  "apps/web/tests/athena/query-defs.test.ts": {
-    "max-lines-per-function": {
-      "max": 155,
-      "count": 1
-    }
-  },
-  "apps/web/tests/athena/voice-phone-numbers.test.tsx": {
-    "max-lines-per-function": {
-      "max": 358,
-      "count": 1
-    }
-  },
-  "apps/web/tests/athena/workbench.test.tsx": {
-    "max-lines-per-function": {
-      "max": 168,
-      "count": 1
-    }
-  },
-  "apps/web/tests/athena/workspace.test.tsx": {
-    "max-lines-per-function": {
-      "max": 437,
-      "count": 1
-    }
-  },
-  "apps/web/tests/auth/entry-gate.test.ts": {
-    "max-lines-per-function": {
-      "max": 90,
-      "count": 2
-    }
-  },
-  "apps/web/tests/auth/server-session.test.ts": {
-    "max-lines-per-function": {
-      "max": 95,
-      "count": 1
-    }
-  },
-  "apps/web/tests/billing/billing-recovery.test.tsx": {
-    "max-lines-per-function": {
-      "max": 116,
-      "count": 1
-    }
-  },
-  "apps/web/tests/calendar/calendar-actions.test.tsx": {
-    "max-lines-per-function": {
-      "max": 105,
-      "count": 1
-    }
-  },
-  "apps/web/tests/calendar/calendar-agenda-live-clock.test.tsx": {
-    "max-lines-per-function": {
-      "max": 86,
       "count": 1
     }
   },
@@ -8223,55 +6329,11 @@
     "max-lines": {
       "max": 713,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 249,
-      "count": 1
-    }
-  },
-  "apps/web/tests/calendar/calendar-event-dedup.test.ts": {
-    "max-lines-per-function": {
-      "max": 172,
-      "count": 1
-    }
-  },
-  "apps/web/tests/calendar/calendar-item-card.test.tsx": {
-    "max-lines-per-function": {
-      "max": 185,
-      "count": 2
     }
   },
   "apps/web/tests/calendar/calendar-item-drawer.test.tsx": {
     "max-lines": {
       "max": 600,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 349,
-      "count": 1
-    }
-  },
-  "apps/web/tests/calendar/calendar-layer-dedup.test.ts": {
-    "max-lines-per-function": {
-      "max": 256,
-      "count": 1
-    }
-  },
-  "apps/web/tests/calendar/calendar-layer-panel.test.tsx": {
-    "max-lines-per-function": {
-      "max": 268,
-      "count": 1
-    }
-  },
-  "apps/web/tests/calendar/calendar-schedule-model.test.ts": {
-    "max-lines-per-function": {
-      "max": 221,
-      "count": 1
-    }
-  },
-  "apps/web/tests/calendar/calendar-scheduling-dst-move.test.tsx": {
-    "max-lines-per-function": {
-      "max": 192,
       "count": 1
     }
   },
@@ -8279,241 +6341,11 @@
     "max-lines": {
       "max": 1064,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 744,
-      "count": 2
-    }
-  },
-  "apps/web/tests/calendar/calendar-toolbar.test.tsx": {
-    "max-lines-per-function": {
-      "max": 111,
-      "count": 1
-    }
-  },
-  "apps/web/tests/calendar/calendar-view-settings.test.tsx": {
-    "max-lines-per-function": {
-      "max": 90,
-      "count": 1
-    }
-  },
-  "apps/web/tests/calendar/core-fields-form.test.tsx": {
-    "max-lines-per-function": {
-      "max": 113,
-      "count": 2
-    }
-  },
-  "apps/web/tests/calendar/create-block-form.test.tsx": {
-    "max-lines-per-function": {
-      "max": 264,
-      "count": 1
-    }
-  },
-  "apps/web/tests/calendar/use-calendar-date-axis.test.tsx": {
-    "max-lines-per-function": {
-      "max": 114,
-      "count": 1
-    }
-  },
-  "apps/web/tests/calendar/use-calendar-people-axis.test.tsx": {
-    "max-lines-per-function": {
-      "max": 144,
-      "count": 1
-    }
-  },
-  "apps/web/tests/calendar/use-clamped-dialog-position.test.ts": {
-    "max-lines-per-function": {
-      "max": 115,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/app-shell-frame.test.tsx": {
-    "max-lines-per-function": {
-      "max": 262,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/auth/auth-visual-contract.test.ts": {
-    "max-lines-per-function": {
-      "max": 88,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/auth/oauth-authorize-page.test.tsx": {
-    "max-lines-per-function": {
-      "max": 269,
-      "count": 2
-    }
-  },
-  "apps/web/tests/components/auth/sign-in-page.test.tsx": {
-    "max-lines-per-function": {
-      "max": 150,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/auth/sign-up-page.test.tsx": {
-    "max-lines-per-function": {
-      "max": 99,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/authentication-interlock.test.tsx": {
-    "max-lines-per-function": {
-      "max": 101,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/canvas/canvas-bulk-properties-editor.test.tsx": {
-    "max-lines-per-function": {
-      "max": 299,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/canvas/canvas-layout-lifecycle.test.tsx": {
-    "max-lines-per-function": {
-      "max": 243,
-      "count": 2
-    }
-  },
-  "apps/web/tests/components/canvas/canvas-menus.test.tsx": {
-    "max-lines-per-function": {
-      "max": 88,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/canvas/canvas-properties-integration.test.tsx": {
-    "max-lines-per-function": {
-      "max": 92,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/canvas/canvas-properties-model.test.ts": {
-    "max-lines-per-function": {
-      "max": 104,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/canvas/canvas-properties-projection.test.ts": {
-    "max-lines-per-function": {
-      "max": 82,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/canvas/canvas-selection-bridge.test.tsx": {
-    "max-lines-per-function": {
-      "max": 131,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/canvas/graph-inspector-host.test.tsx": {
-    "max-lines-per-function": {
-      "max": 86,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/canvas/graph-layout-engine.test.ts": {
-    "max-lines-per-function": {
-      "max": 121,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/canvas/project-graph-creation-continuity.test.tsx": {
-    "max-lines-per-function": {
-      "max": 104,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/canvas/task-graph-focused-minimap.test.tsx": {
-    "max-lines-per-function": {
-      "max": 92,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/canvas/task-hierarchy-layout.test.ts": {
-    "max-lines-per-function": {
-      "max": 87,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/canvas/use-canvas-command-history.test.tsx": {
-    "max-lines-per-function": {
-      "max": 240,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/command-palette/command-palette.test.tsx": {
-    "max-lines-per-function": {
-      "max": 140,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/command-palette/search-result-item.test.ts": {
-    "max-lines-per-function": {
-      "max": 109,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/command-palette/sub-modes.test.ts": {
-    "max-lines-per-function": {
-      "max": 172,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/editable-title.test.tsx": {
-    "max-lines-per-function": {
-      "max": 127,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/entity-detail-collapse-contract.test.ts": {
-    "max-lines-per-function": {
-      "max": 108,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/entity-detail-layout.test.tsx": {
-    "max-lines-per-function": {
-      "max": 142,
-      "count": 2
-    }
-  },
-  "apps/web/tests/components/entity-display/use-entity-display.test.tsx": {
-    "max-lines-per-function": {
-      "max": 99,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/entity-icon-picker.test.tsx": {
-    "max-lines-per-function": {
-      "max": 83,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/in-page-search/in-page-search-provider.test.tsx": {
-    "max-lines-per-function": {
-      "max": 160,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/inbox/inbox-client.test.tsx": {
-    "max-lines-per-function": {
-      "max": 103,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/initiative-visual-contract.test.ts": {
-    "max-lines-per-function": {
-      "max": 153,
-      "count": 1
     }
   },
   "apps/web/tests/components/initiatives/initiative-actions.test.tsx": {
     "max-lines": {
       "max": 823,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 740,
       "count": 1
     }
   },
@@ -8521,229 +6353,11 @@
     "max-lines": {
       "max": 702,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 463,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/initiatives/initiative-relationship-panels.test.tsx": {
-    "max-lines-per-function": {
-      "max": 202,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/library/library-client.test.tsx": {
-    "max-lines-per-function": {
-      "max": 171,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/mentions/mention-menu.test.tsx": {
-    "max-lines-per-function": {
-      "max": 106,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/objects/object-surface.test.tsx": {
-    "max-lines-per-function": {
-      "max": 149,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/pickers/label-picker-overlay.test.tsx": {
-    "max-lines-per-function": {
-      "max": 229,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/project-detail/project-milestones.test.tsx": {
-    "max-lines-per-function": {
-      "max": 87,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/project-detail/project-properties-panel.test.tsx": {
-    "max-lines-per-function": {
-      "max": 94,
-      "count": 1
     }
   },
   "apps/web/tests/components/project-detail/project-restore-invalidation.test.ts": {
     "max-lines": {
       "max": 1155,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 1034,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/projects/projects-experience-contract.test.ts": {
-    "max-lines-per-function": {
-      "max": 147,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/publishing/publishing-settings.test.tsx": {
-    "max-lines-per-function": {
-      "max": 87,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/quick-add-task-row.test.tsx": {
-    "max-lines-per-function": {
-      "max": 122,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/service-worker-provider.test.tsx": {
-    "max-lines-per-function": {
-      "max": 151,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/settings/billing-settings.test.tsx": {
-    "max-lines-per-function": {
-      "max": 133,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/settings/contact-points-section.test.tsx": {
-    "max-lines-per-function": {
-      "max": 140,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/settings/export-data-tab.test.tsx": {
-    "max-lines-per-function": {
-      "max": 85,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/settings/google-calendar-settings.test.tsx": {
-    "max-lines-per-function": {
-      "max": 93,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/settings/integration-config-panel.test.tsx": {
-    "max-lines-per-function": {
-      "max": 105,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/settings/notification-preferences-section.test.tsx": {
-    "max-lines-per-function": {
-      "max": 121,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/settings/notion-mirror-panel.test.tsx": {
-    "max-lines-per-function": {
-      "max": 92,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/settings/notion-setup-card.test.tsx": {
-    "max-lines-per-function": {
-      "max": 83,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/settings/settings-pane.test.tsx": {
-    "max-lines-per-function": {
-      "max": 152,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/settings/settings-shell-focus.test.tsx": {
-    "max-lines-per-function": {
-      "max": 92,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/settings/use-integrations-data-github-connect.test.tsx": {
-    "max-lines-per-function": {
-      "max": 121,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/statuses/status-registry.test.tsx": {
-    "max-lines-per-function": {
-      "max": 129,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/stream/stream-episode.test.tsx": {
-    "max-lines-per-function": {
-      "max": 102,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/stream/stream-grouping.test.ts": {
-    "max-lines-per-function": {
-      "max": 93,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/stream/stream-meta.test.ts": {
-    "max-lines-per-function": {
-      "max": 95,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/tabs/tab-shortcuts.test.tsx": {
-    "max-lines-per-function": {
-      "max": 102,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/tasks/task-actions.test.tsx": {
-    "max-lines-per-function": {
-      "max": 89,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/tasks/use-task-hierarchy-mutation.test.tsx": {
-    "max-lines-per-function": {
-      "max": 114,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/timeline/timeline-layout.test.ts": {
-    "max-lines-per-function": {
-      "max": 85,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/unauthorized-watcher.test.tsx": {
-    "max-lines-per-function": {
-      "max": 212,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/views/task-table.test.tsx": {
-    "max-lines-per-function": {
-      "max": 276,
-      "count": 1
-    }
-  },
-  "apps/web/tests/components/views/view-apply.test.ts": {
-    "max-lines-per-function": {
-      "max": 81,
-      "count": 1
-    }
-  },
-  "apps/web/tests/composers/create-initiative.test.tsx": {
-    "max-lines-per-function": {
-      "max": 172,
-      "count": 1
-    }
-  },
-  "apps/web/tests/composers/create-program.test.tsx": {
-    "max-lines-per-function": {
-      "max": 163,
       "count": 1
     }
   },
@@ -8755,10 +6369,6 @@
     "max-lines": {
       "max": 866,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 410,
-      "count": 3
     }
   },
   "apps/web/tests/composers/create-task.test.tsx": {
@@ -8768,22 +6378,6 @@
     },
     "max-lines": {
       "max": 1119,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 671,
-      "count": 2
-    }
-  },
-  "apps/web/tests/composers/create-team.test.tsx": {
-    "max-lines-per-function": {
-      "max": 101,
-      "count": 1
-    }
-  },
-  "apps/web/tests/composers/picker-options.test.tsx": {
-    "max-lines-per-function": {
-      "max": 228,
       "count": 1
     }
   },
@@ -8795,10 +6389,6 @@
     "max-lines": {
       "max": 808,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 192,
-      "count": 2
     }
   },
   "apps/web/tests/create-object/launcher-source-policy.test.ts": {
@@ -8810,88 +6400,14 @@
       "max": 544,
       "count": 1
     },
-    "max-lines-per-function": {
-      "max": 272,
-      "count": 2
-    },
     "sonarjs/cognitive-complexity": {
       "max": 62,
       "count": 1
     }
   },
-  "apps/web/tests/editor/code-formatting.test.tsx": {
-    "max-lines-per-function": {
-      "max": 98,
-      "count": 1
-    }
-  },
-  "apps/web/tests/editor/code-language-loader.test.ts": {
-    "max-lines-per-function": {
-      "max": 86,
-      "count": 1
-    }
-  },
-  "apps/web/tests/editor/composer-editor-parity.test.tsx": {
-    "max-lines-per-function": {
-      "max": 177,
-      "count": 1
-    }
-  },
-  "apps/web/tests/editor/description-templates.test.tsx": {
-    "max-lines-per-function": {
-      "max": 136,
-      "count": 1
-    }
-  },
-  "apps/web/tests/editor/editor-surface.test.tsx": {
-    "max-lines-per-function": {
-      "max": 145,
-      "count": 2
-    }
-  },
-  "apps/web/tests/editor/markdown-clipboard.test.ts": {
-    "max-lines-per-function": {
-      "max": 152,
-      "count": 1
-    }
-  },
-  "apps/web/tests/editor/markdown-paste.test.tsx": {
-    "max-lines-per-function": {
-      "max": 146,
-      "count": 1
-    }
-  },
-  "apps/web/tests/editor/markdown-table.test.tsx": {
-    "max-lines-per-function": {
-      "max": 303,
-      "count": 1
-    }
-  },
   "apps/web/tests/editor/slash-commands.test.tsx": {
-    "max-lines-per-function": {
-      "max": 150,
-      "count": 1
-    },
     "sonarjs/cognitive-complexity": {
       "max": 18,
-      "count": 1
-    }
-  },
-  "apps/web/tests/interactions/navigation.test.tsx": {
-    "max-lines-per-function": {
-      "max": 127,
-      "count": 1
-    }
-  },
-  "apps/web/tests/interactions/receipt-store.test.ts": {
-    "max-lines-per-function": {
-      "max": 203,
-      "count": 1
-    }
-  },
-  "apps/web/tests/interactions/use-responsive-action.test.tsx": {
-    "max-lines-per-function": {
-      "max": 220,
       "count": 1
     }
   },
@@ -8899,249 +6415,23 @@
     "max-lines": {
       "max": 713,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 230,
-      "count": 3
-    }
-  },
-  "apps/web/tests/interactivity/entity-navigation-actions.test.tsx": {
-    "max-lines-per-function": {
-      "max": 151,
-      "count": 1
-    }
-  },
-  "apps/web/tests/interactivity/entity-table-selection.test.tsx": {
-    "max-lines-per-function": {
-      "max": 128,
-      "count": 1
-    }
-  },
-  "apps/web/tests/interactivity/object-context-menu.test.tsx": {
-    "max-lines-per-function": {
-      "max": 198,
-      "count": 1
-    }
-  },
-  "apps/web/tests/interactivity/relation-drop-target.test.tsx": {
-    "max-lines-per-function": {
-      "max": 192,
-      "count": 1
-    }
-  },
-  "apps/web/tests/interactivity/selection-model.test.ts": {
-    "max-lines-per-function": {
-      "max": 104,
-      "count": 1
-    }
-  },
-  "apps/web/tests/lib/app-location.test.tsx": {
-    "max-lines-per-function": {
-      "max": 92,
-      "count": 1
-    }
-  },
-  "apps/web/tests/lib/clipboard/html-to-markdown.test.ts": {
-    "max-lines-per-function": {
-      "max": 109,
-      "count": 1
-    }
-  },
-  "apps/web/tests/lib/detail-route-policy.test.ts": {
-    "max-lines-per-function": {
-      "max": 89,
-      "count": 1
-    }
-  },
-  "apps/web/tests/lib/mutations/intent-journal.test.ts": {
-    "max-lines-per-function": {
-      "max": 146,
-      "count": 1
-    }
-  },
-  "apps/web/tests/lib/query.test.tsx": {
-    "max-lines-per-function": {
-      "max": 202,
-      "count": 3
-    }
-  },
-  "apps/web/tests/lib/sign-out.test.ts": {
-    "max-lines-per-function": {
-      "max": 148,
-      "count": 1
-    }
-  },
-  "apps/web/tests/lib/use-debounced-autosave.test.tsx": {
-    "max-lines-per-function": {
-      "max": 98,
-      "count": 1
-    }
-  },
-  "apps/web/tests/lib/use-initiative-mutations.test.ts": {
-    "max-lines-per-function": {
-      "max": 85,
-      "count": 1
-    }
-  },
-  "apps/web/tests/lib/use-program-mutations.test.ts": {
-    "max-lines-per-function": {
-      "max": 101,
-      "count": 1
-    }
-  },
-  "apps/web/tests/lib/use-project-mutations.test.ts": {
-    "max-lines-per-function": {
-      "max": 106,
-      "count": 1
-    }
-  },
-  "apps/web/tests/lib/use-remote-search.test.tsx": {
-    "max-lines-per-function": {
-      "max": 100,
-      "count": 1
-    }
-  },
-  "apps/web/tests/lib/use-task-mutations.test.tsx": {
-    "max-lines-per-function": {
-      "max": 111,
-      "count": 1
-    }
-  },
-  "apps/web/tests/lib/work-metadata-invalidation.test.tsx": {
-    "max-lines-per-function": {
-      "max": 82,
-      "count": 1
-    }
-  },
-  "apps/web/tests/lib/work-target-invalidation.test.ts": {
-    "max-lines-per-function": {
-      "max": 210,
-      "count": 1
-    }
-  },
-  "apps/web/tests/pickers/calendar-date.test.ts": {
-    "max-lines-per-function": {
-      "max": 85,
-      "count": 1
-    }
-  },
-  "apps/web/tests/pickers/date-picker-contract.test.tsx": {
-    "max-lines-per-function": {
-      "max": 206,
-      "count": 1
-    }
-  },
-  "apps/web/tests/pickers/timeframe-picker-contract.test.tsx": {
-    "max-lines-per-function": {
-      "max": 182,
-      "count": 1
     }
   },
   "apps/web/tests/pwa/offline-queue.test.ts": {
     "max-lines": {
       "max": 1460,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 520,
-      "count": 3
-    }
-  },
-  "apps/web/tests/pwa/offline-sync-indicator.test.tsx": {
-    "max-lines-per-function": {
-      "max": 231,
-      "count": 2
     }
   },
   "apps/web/tests/pwa/outbox-cross-tab.test.ts": {
     "max-lines": {
       "max": 701,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 556,
-      "count": 1
-    }
-  },
-  "apps/web/tests/scheduling-plan/day-start-review.test.tsx": {
-    "max-lines-per-function": {
-      "max": 108,
-      "count": 1
-    }
-  },
-  "apps/web/tests/scheduling/scheduling-all-day-editing.test.tsx": {
-    "max-lines-per-function": {
-      "max": 175,
-      "count": 1
-    }
-  },
-  "apps/web/tests/scheduling/scheduling-all-day-pointer-editing.test.tsx": {
-    "max-lines-per-function": {
-      "max": 139,
-      "count": 1
-    }
-  },
-  "apps/web/tests/scheduling/scheduling-canvas-agenda-presentation.test.tsx": {
-    "max-lines-per-function": {
-      "max": 128,
-      "count": 1
-    }
-  },
-  "apps/web/tests/scheduling/scheduling-canvas-horizontal-viewport.test.tsx": {
-    "max-lines-per-function": {
-      "max": 301,
-      "count": 1
-    }
-  },
-  "apps/web/tests/scheduling/scheduling-canvas-notice.test.tsx": {
-    "max-lines-per-function": {
-      "max": 110,
-      "count": 1
     }
   },
   "apps/web/tests/scheduling/scheduling-canvas.test.tsx": {
     "max-lines": {
       "max": 1841,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 1768,
-      "count": 3
-    }
-  },
-  "apps/web/tests/scheduling/scheduling-composition-seams.test.tsx": {
-    "max-lines-per-function": {
-      "max": 418,
-      "count": 1
-    }
-  },
-  "apps/web/tests/scheduling/scheduling-context-intersections.test.ts": {
-    "max-lines-per-function": {
-      "max": 92,
-      "count": 1
-    }
-  },
-  "apps/web/tests/scheduling/scheduling-dense-overflow.test.ts": {
-    "max-lines-per-function": {
-      "max": 140,
-      "count": 1
-    }
-  },
-  "apps/web/tests/scheduling/scheduling-dst-labels.test.tsx": {
-    "max-lines-per-function": {
-      "max": 96,
-      "count": 1
-    }
-  },
-  "apps/web/tests/scheduling/scheduling-geometry.test.ts": {
-    "max-lines-per-function": {
-      "max": 91,
-      "count": 1
-    }
-  },
-  "apps/web/tests/scheduling/scheduling-gesture.test.ts": {
-    "max-lines-per-function": {
-      "max": 170,
       "count": 1
     }
   },
@@ -9152,18 +6442,6 @@
     },
     "sonarjs/cognitive-complexity": {
       "max": 18,
-      "count": 1
-    }
-  },
-  "apps/web/tests/scheduling/scheduling-item-presentation.test.tsx": {
-    "max-lines-per-function": {
-      "max": 465,
-      "count": 1
-    }
-  },
-  "apps/web/tests/scheduling/scheduling-lane-heading.test.tsx": {
-    "max-lines-per-function": {
-      "max": 85,
       "count": 1
     }
   },
@@ -9181,73 +6459,11 @@
     "max-lines": {
       "max": 540,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 448,
-      "count": 1
-    }
-  },
-  "apps/web/tests/scheduling/scheduling-region-selection.test.tsx": {
-    "max-lines-per-function": {
-      "max": 287,
-      "count": 1
-    }
-  },
-  "apps/web/tests/scheduling/scheduling-touch-gestures.test.tsx": {
-    "max-lines-per-function": {
-      "max": 215,
-      "count": 1
-    }
-  },
-  "apps/web/tests/task-detail/task-header-controls.test.tsx": {
-    "max-lines-per-function": {
-      "max": 81,
-      "count": 1
     }
   },
   "apps/web/tests/time-tracking/focus-panel.test.tsx": {
     "max-lines": {
       "max": 681,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 419,
-      "count": 1
-    }
-  },
-  "apps/web/tests/time-tracking/task-timer-button.test.tsx": {
-    "max-lines-per-function": {
-      "max": 132,
-      "count": 1
-    }
-  },
-  "apps/web/tests/timeline/timeline-drag.test.tsx": {
-    "max-lines-per-function": {
-      "max": 233,
-      "count": 1
-    }
-  },
-  "apps/web/tests/today/today-actions.test.tsx": {
-    "max-lines-per-function": {
-      "max": 170,
-      "count": 1
-    }
-  },
-  "apps/web/tests/today/today-prompt.test.tsx": {
-    "max-lines-per-function": {
-      "max": 126,
-      "count": 1
-    }
-  },
-  "apps/web/tests/today/today-sections.test.tsx": {
-    "max-lines-per-function": {
-      "max": 107,
-      "count": 1
-    }
-  },
-  "apps/web/tests/work-location/foreground-location-reporter.test.ts": {
-    "max-lines-per-function": {
-      "max": 103,
       "count": 1
     }
   },
@@ -9255,91 +6471,11 @@
     "max-lines": {
       "max": 903,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 836,
-      "count": 3
-    }
-  },
-  "apps/web/tests/work-location/work-location-calendar-editing.test.ts": {
-    "max-lines-per-function": {
-      "max": 320,
-      "count": 1
-    }
-  },
-  "apps/web/tests/work-location/work-location-calendar-model.test.ts": {
-    "max-lines-per-function": {
-      "max": 175,
-      "count": 1
-    }
-  },
-  "apps/web/tests/work-location/work-locations-settings.test.tsx": {
-    "max-lines-per-function": {
-      "max": 101,
-      "count": 2
-    }
-  },
-  "apps/web/tests/work-views/initiative-rails.test.ts": {
-    "max-lines-per-function": {
-      "max": 112,
-      "count": 1
-    }
-  },
-  "apps/web/tests/work-views/project-timeline-mutations.test.tsx": {
-    "max-lines-per-function": {
-      "max": 149,
-      "count": 1
-    }
-  },
-  "apps/web/tests/work-views/view-state.test.ts": {
-    "max-lines-per-function": {
-      "max": 141,
-      "count": 1
-    }
-  },
-  "apps/web/tests/work-views/work-board-interaction-policy.test.tsx": {
-    "max-lines-per-function": {
-      "max": 185,
-      "count": 1
-    }
-  },
-  "apps/web/tests/work-views/work-board.test.tsx": {
-    "max-lines-per-function": {
-      "max": 209,
-      "count": 1
-    }
-  },
-  "apps/web/tests/work-views/work-cards.test.tsx": {
-    "max-lines-per-function": {
-      "max": 237,
-      "count": 1
-    }
-  },
-  "apps/web/tests/work-views/work-list-columns.test.tsx": {
-    "max-lines-per-function": {
-      "max": 98,
-      "count": 1
-    }
-  },
-  "apps/web/tests/work-views/work-list-groups.test.ts": {
-    "max-lines-per-function": {
-      "max": 100,
-      "count": 1
     }
   },
   "apps/web/tests/work-views/work-list.test.tsx": {
     "max-lines": {
       "max": 944,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 718,
-      "count": 3
-    }
-  },
-  "apps/web/tests/work-views/work-timeline.test.tsx": {
-    "max-lines-per-function": {
-      "max": 189,
       "count": 1
     }
   },
@@ -9347,44 +6483,12 @@
     "max-lines": {
       "max": 1227,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 371,
-      "count": 5
-    }
-  },
-  "apps/web/tests/work-views/work-view-creation-continuity.test.tsx": {
-    "max-lines-per-function": {
-      "max": 117,
-      "count": 1
-    }
-  },
-  "apps/web/tests/work-views/work-view-load-failure.test.tsx": {
-    "max-lines-per-function": {
-      "max": 91,
-      "count": 1
-    }
-  },
-  "apps/web/tests/work-views/work-view-page.test.tsx": {
-    "max-lines-per-function": {
-      "max": 83,
-      "count": 1
-    }
-  },
-  "apps/web/tests/work-views/work-view-pages.test.ts": {
-    "max-lines-per-function": {
-      "max": 99,
-      "count": 1
     }
   },
   "apps/web/tests/work-views/work-view-toolbar.test.tsx": {
     "max-lines": {
       "max": 949,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 398,
-      "count": 2
     }
   },
   "domains/athena/src/agent-session-translation.ts": {
@@ -9465,83 +6569,15 @@
       "count": 1
     }
   },
-  "domains/athena/tests/agent-session-runtime.test.ts": {
-    "max-lines-per-function": {
-      "max": 87,
-      "count": 1
-    }
-  },
-  "domains/athena/tests/agent-session-translation.test.ts": {
-    "max-lines-per-function": {
-      "max": 89,
-      "count": 1
-    }
-  },
-  "domains/athena/tests/conversation-search.test.ts": {
-    "max-lines-per-function": {
-      "max": 89,
-      "count": 1
-    }
-  },
-  "domains/athena/tests/conversation-segmenter.test.ts": {
-    "max-lines-per-function": {
-      "max": 132,
-      "count": 1
-    }
-  },
-  "domains/athena/tests/digest-episodes.test.ts": {
-    "max-lines-per-function": {
-      "max": 105,
-      "count": 1
-    }
-  },
   "domains/athena/tests/elicitation-grammar.test.ts": {
     "max-lines": {
       "max": 526,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 171,
-      "count": 3
     }
   },
   "domains/athena/tests/legacy/dto-elicitation.test.ts": {
     "max-lines": {
       "max": 644,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 184,
-      "count": 3
-    }
-  },
-  "domains/athena/tests/model-backend.test.ts": {
-    "max-lines-per-function": {
-      "max": 127,
-      "count": 1
-    }
-  },
-  "domains/athena/tests/task-drafting.test.ts": {
-    "max-lines-per-function": {
-      "max": 190,
-      "count": 1
-    }
-  },
-  "domains/athena/tests/task-expansion.test.ts": {
-    "max-lines-per-function": {
-      "max": 374,
-      "count": 1
-    }
-  },
-  "domains/athena/tests/turn-runtime.test.ts": {
-    "max-lines-per-function": {
-      "max": 105,
-      "count": 1
-    }
-  },
-  "domains/athena/tests/turn-translate.test.ts": {
-    "max-lines-per-function": {
-      "max": 125,
       "count": 1
     }
   },
@@ -9615,38 +6651,12 @@
     "complexity": {
       "max": 14,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 496,
-      "count": 2
     }
   },
   "domains/billing/tests/adapters/stripe.test.ts": {
     "max-lines": {
       "max": 1024,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 658,
-      "count": 2
-    }
-  },
-  "domains/billing/tests/application/lifecycle.test.ts": {
-    "max-lines-per-function": {
-      "max": 155,
-      "count": 1
-    }
-  },
-  "domains/billing/tests/application/provider-state.test.ts": {
-    "max-lines-per-function": {
-      "max": 186,
-      "count": 1
-    }
-  },
-  "domains/billing/tests/provision.test.ts": {
-    "max-lines-per-function": {
-      "max": 209,
-      "count": 3
     }
   },
   "domains/connections/src/contracts/integration.ts": {
@@ -9671,104 +6681,10 @@
       "count": 2
     }
   },
-  "domains/connections/tests/notion-mirror-contract.test.ts": {
-    "max-lines-per-function": {
-      "max": 81,
-      "count": 1
-    }
-  },
-  "domains/connections/tests/notion-mirror-in-memory.test.ts": {
-    "max-lines-per-function": {
-      "max": 127,
-      "count": 1
-    }
-  },
   "domains/connections/tests/notion-mirror-sdk-client.test.ts": {
     "max-lines": {
       "max": 721,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 215,
-      "count": 2
-    }
-  },
-  "domains/connections/tests/notion-mirror-values-codec.test.ts": {
-    "max-lines-per-function": {
-      "max": 92,
-      "count": 1
-    }
-  },
-  "domains/connections/tests/notion-mirror-values-edge-cases.test.ts": {
-    "max-lines-per-function": {
-      "max": 81,
-      "count": 1
-    }
-  },
-  "domains/connections/tests/notion-mirror-values-resolution.test.ts": {
-    "max-lines-per-function": {
-      "max": 193,
-      "count": 1
-    }
-  },
-  "domains/identity-access/tests/contracts.test.ts": {
-    "max-lines-per-function": {
-      "max": 86,
-      "count": 1
-    }
-  },
-  "domains/notifications/tests/dispatch/adapters/email.test.ts": {
-    "max-lines-per-function": {
-      "max": 83,
-      "count": 1
-    }
-  },
-  "domains/notifications/tests/dispatch/adapters/push.test.ts": {
-    "max-lines-per-function": {
-      "max": 140,
-      "count": 1
-    }
-  },
-  "domains/notifications/tests/dispatch/adapters/sms.test.ts": {
-    "max-lines-per-function": {
-      "max": 101,
-      "count": 1
-    }
-  },
-  "domains/notifications/tests/dispatch/audience.test.ts": {
-    "max-lines-per-function": {
-      "max": 173,
-      "count": 1
-    }
-  },
-  "domains/notifications/tests/dispatch/dispatcher.test.ts": {
-    "max-lines-per-function": {
-      "max": 108,
-      "count": 3
-    }
-  },
-  "domains/notifications/tests/dispatch/preferences.test.ts": {
-    "max-lines-per-function": {
-      "max": 364,
-      "count": 1
-    }
-  },
-  "domains/notifications/tests/policy/policy.test.ts": {
-    "max-lines-per-function": {
-      "max": 108,
-      "count": 1
-    }
-  },
-  "domains/notifications/tests/preferences/preferences.test.ts": {
-    "max-lines-per-function": {
-      "max": 101,
-      "count": 1
-    }
-  },
-  "domains/notifications/tests/webpush/webpush.test.ts": {
-    "max-lines-per-function": {
-      "max": 100,
-      "count": 3
     }
   },
   "domains/planning/src/contracts/calendar.ts": {
@@ -9777,37 +6693,9 @@
       "count": 1
     }
   },
-  "domains/planning/tests/exact-resize.test.ts": {
-    "max-lines-per-function": {
-      "max": 81,
-      "count": 1
-    }
-  },
   "domains/planning/tests/legacy/dto-calendar.test.ts": {
     "max-lines": {
       "max": 536,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 83,
-      "count": 1
-    }
-  },
-  "domains/planning/tests/legacy/dto-work-location.test.ts": {
-    "max-lines-per-function": {
-      "max": 142,
-      "count": 2
-    }
-  },
-  "domains/planning/tests/work-location-resolution-precedence.test.ts": {
-    "max-lines-per-function": {
-      "max": 134,
-      "count": 1
-    }
-  },
-  "domains/planning/tests/work-location-resolution.test.ts": {
-    "max-lines-per-function": {
-      "max": 270,
       "count": 1
     }
   },
@@ -9845,37 +6733,11 @@
     "max-lines": {
       "max": 774,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 151,
-      "count": 2
-    }
-  },
-  "domains/work/tests/legacy/saved-work-view-domain.test.ts": {
-    "max-lines-per-function": {
-      "max": 211,
-      "count": 1
     }
   },
   "domains/work/tests/legacy/work-view.test.ts": {
     "max-lines": {
       "max": 578,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 511,
-      "count": 2
-    }
-  },
-  "domains/work/tests/relation-contract.test.ts": {
-    "max-lines-per-function": {
-      "max": 141,
-      "count": 1
-    }
-  },
-  "domains/work/tests/view-contract.test.ts": {
-    "max-lines-per-function": {
-      "max": 97,
       "count": 1
     }
   },
@@ -9913,41 +6775,17 @@
     "max-lines": {
       "max": 1883,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 710,
-      "count": 6
-    }
-  },
-  "packages/auth/tests/builder/session-cookie-cache.test.ts": {
-    "max-lines-per-function": {
-      "max": 95,
-      "count": 1
-    }
-  },
-  "packages/auth/tests/google-directory.test.ts": {
-    "max-lines-per-function": {
-      "max": 157,
-      "count": 1
     }
   },
   "packages/auth/tests/restore-credential.test.ts": {
     "max-lines": {
       "max": 535,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 283,
-      "count": 3
     }
   },
   "packages/auth/tests/staff-google-sync.test.ts": {
     "max-lines": {
       "max": 553,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 186,
       "count": 1
     }
   },
@@ -9955,10 +6793,6 @@
     "max-lines": {
       "max": 1406,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 498,
-      "count": 7
     }
   },
   "packages/db/src/enums.ts": {
@@ -9999,142 +6833,22 @@
       "count": 1
     }
   },
-  "packages/db/tests/client/client.test.ts": {
-    "max-lines-per-function": {
-      "max": 90,
-      "count": 1
-    }
-  },
   "packages/db/tests/identity-access.test.ts": {
     "max-lines": {
       "max": 605,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 197,
-      "count": 5
-    }
-  },
-  "packages/db/tests/migrations/billing-lifecycle-data-repair.test.ts": {
-    "max-lines-per-function": {
-      "max": 153,
-      "count": 2
-    }
-  },
-  "packages/db/tests/migrations/billing-orphan-entitlement-repair.test.ts": {
-    "max-lines-per-function": {
-      "max": 166,
-      "count": 2
-    }
-  },
-  "packages/db/tests/migrations/entity-display-subjects-migration.test.ts": {
-    "max-lines-per-function": {
-      "max": 86,
-      "count": 1
-    }
-  },
-  "packages/db/tests/migrations/initiative-project-count-removal-migration.test.ts": {
-    "max-lines-per-function": {
-      "max": 148,
-      "count": 2
-    }
-  },
-  "packages/db/tests/migrations/lattice-reply-key-lifecycle-migration.test.ts": {
-    "max-lines-per-function": {
-      "max": 193,
-      "count": 2
-    }
-  },
-  "packages/db/tests/migrations/user-owned-athena-migration.test.ts": {
-    "max-lines-per-function": {
-      "max": 81,
-      "count": 1
-    }
-  },
-  "packages/db/tests/migrations/work-status-migration.test.ts": {
-    "max-lines-per-function": {
-      "max": 226,
-      "count": 1
-    }
-  },
-  "packages/db/tests/migrations/work-view-migration.test.ts": {
-    "max-lines-per-function": {
-      "max": 84,
-      "count": 2
-    }
-  },
-  "packages/db/tests/schema/athena-schema.test.ts": {
-    "max-lines-per-function": {
-      "max": 395,
-      "count": 1
-    }
-  },
-  "packages/db/tests/schema/billing-launch-schema.test.ts": {
-    "max-lines-per-function": {
-      "max": 171,
-      "count": 2
     }
   },
   "packages/db/tests/schema/db.test.ts": {
     "max-lines": {
       "max": 1197,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 697,
-      "count": 4
     }
   },
   "packages/db/tests/schema/lifecycle-updates.test.ts": {
     "max-lines": {
       "max": 844,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 418,
-      "count": 2
-    }
-  },
-  "packages/db/tests/schema/personal-athena-schema.test.ts": {
-    "max-lines-per-function": {
-      "max": 295,
-      "count": 2
-    }
-  },
-  "packages/db/tests/schema/planning-timeframe-schema.test.ts": {
-    "max-lines-per-function": {
-      "max": 147,
-      "count": 1
-    }
-  },
-  "packages/db/tests/schema/recurrence-schema.test.ts": {
-    "max-lines-per-function": {
-      "max": 347,
-      "count": 2
-    }
-  },
-  "packages/db/tests/schema/search.test.ts": {
-    "max-lines-per-function": {
-      "max": 108,
-      "count": 2
-    }
-  },
-  "packages/db/tests/schema/work-constraints.test.ts": {
-    "max-lines-per-function": {
-      "max": 164,
-      "count": 1
-    }
-  },
-  "packages/db/tests/schema/work-location-schema.test.ts": {
-    "max-lines-per-function": {
-      "max": 162,
-      "count": 1
-    }
-  },
-  "packages/db/tests/schema/work-status-schema.test.ts": {
-    "max-lines-per-function": {
-      "max": 91,
-      "count": 2
     }
   },
   "packages/env/src/api.ts": {
@@ -10167,10 +6881,6 @@
     "max-lines": {
       "max": 954,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 637,
-      "count": 4
     }
   },
   "packages/integrations/src/agent-surface-github.ts": {
@@ -10363,49 +7073,9 @@
       "count": 1
     }
   },
-  "packages/integrations/tests/connector/connector-work-graph.test.ts": {
-    "max-lines-per-function": {
-      "max": 187,
-      "count": 1
-    }
-  },
   "packages/integrations/tests/connector/real-connector.test.ts": {
     "max-lines": {
       "max": 870,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 247,
-      "count": 3
-    }
-  },
-  "packages/integrations/tests/lattice/lattice-gateway.test.ts": {
-    "max-lines-per-function": {
-      "max": 90,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/lattice/lattice-oauth.test.ts": {
-    "max-lines-per-function": {
-      "max": 154,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/lattice/lattice-sdk.test.ts": {
-    "max-lines-per-function": {
-      "max": 220,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/legacy/mcp-mcp-protocol.test.ts": {
-    "max-lines-per-function": {
-      "max": 125,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/mcp/mcp-apps-conformance.test.ts": {
-    "max-lines-per-function": {
-      "max": 122,
       "count": 1
     }
   },
@@ -10419,55 +7089,9 @@
       "count": 1
     }
   },
-  "packages/integrations/tests/mcp/mcp-apps-connector.test.ts": {
-    "max-lines-per-function": {
-      "max": 167,
-      "count": 1
-    }
-  },
   "packages/integrations/tests/mcp/mcp-apps-host.test.ts": {
     "max-lines": {
       "max": 738,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 181,
-      "count": 4
-    }
-  },
-  "packages/integrations/tests/mcp/mcp-apps-official-compat.test.ts": {
-    "max-lines-per-function": {
-      "max": 139,
-      "count": 2
-    }
-  },
-  "packages/integrations/tests/mcp/mcp-apps-real-connector.test.ts": {
-    "max-lines-per-function": {
-      "max": 190,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/mcp/mcp-apps-sandbox.test.ts": {
-    "max-lines-per-function": {
-      "max": 149,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/mcp/mcp-network.test.ts": {
-    "max-lines-per-function": {
-      "max": 375,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/mcp/mcp-oauth-protocol.test.ts": {
-    "max-lines-per-function": {
-      "max": 111,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/mcp/mcp-oauth.test.ts": {
-    "max-lines-per-function": {
-      "max": 267,
       "count": 1
     }
   },
@@ -10475,10 +7099,6 @@
     "max-lines": {
       "max": 599,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 254,
-      "count": 3
     }
   },
   "packages/integrations/tests/notion/notion-fixtures.ts": {
@@ -10487,67 +7107,9 @@
       "count": 1
     }
   },
-  "packages/integrations/tests/notion/notion-mapping.test.ts": {
-    "max-lines-per-function": {
-      "max": 138,
-      "count": 3
-    }
-  },
-  "packages/integrations/tests/observers/observer-discord.test.ts": {
-    "max-lines-per-function": {
-      "max": 138,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/observers/observer-github.test.ts": {
-    "max-lines-per-function": {
-      "max": 201,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/observers/observer-linear.test.ts": {
-    "max-lines-per-function": {
-      "max": 274,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/observers/observer-slack.test.ts": {
-    "max-lines-per-function": {
-      "max": 196,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/observers/observer.test.ts": {
-    "max-lines-per-function": {
-      "max": 92,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/providers/activity-pull.test.ts": {
-    "max-lines-per-function": {
-      "max": 95,
-      "count": 2
-    }
-  },
   "packages/integrations/tests/providers/agent-surface-contract.test.ts": {
     "max-lines": {
       "max": 623,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 535,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/providers/gmail.test.ts": {
-    "max-lines-per-function": {
-      "max": 294,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/providers/google.test.ts": {
-    "max-lines-per-function": {
-      "max": 82,
       "count": 1
     }
   },
@@ -10555,71 +7117,23 @@
     "max-lines": {
       "max": 598,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 192,
-      "count": 2
     }
   },
   "packages/integrations/tests/providers/linear.test.ts": {
     "max-lines": {
       "max": 753,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 147,
-      "count": 2
     }
   },
   "packages/integrations/tests/providers/microsoft.test.ts": {
     "max-lines": {
       "max": 588,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 253,
-      "count": 3
-    }
-  },
-  "packages/integrations/tests/sunsama/sunsama-connector.test.ts": {
-    "max-lines-per-function": {
-      "max": 103,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/sunsama/sunsama-mapping.test.ts": {
-    "max-lines-per-function": {
-      "max": 97,
-      "count": 1
-    }
-  },
-  "packages/integrations/tests/sunsama/sunsama-reader.test.ts": {
-    "max-lines-per-function": {
-      "max": 98,
-      "count": 2
-    }
-  },
-  "packages/integrations/tests/unfurl.test.ts": {
-    "max-lines-per-function": {
-      "max": 169,
-      "count": 2
     }
   },
   "packages/mail/src/resend-inbound.ts": {
     "complexity": {
       "max": 14,
-      "count": 1
-    }
-  },
-  "packages/mail/tests/inbound/resend-inbound.test.ts": {
-    "max-lines-per-function": {
-      "max": 122,
-      "count": 1
-    }
-  },
-  "packages/mail/tests/inbound/svix-signature.test.ts": {
-    "max-lines-per-function": {
-      "max": 161,
       "count": 1
     }
   },
@@ -10639,33 +7153,15 @@
       "count": 1
     }
   },
-  "packages/service-worker/tests/documents.test.ts": {
-    "max-lines-per-function": {
-      "max": 162,
-      "count": 1
-    }
-  },
   "packages/test-utils/src/doc-coverage.ts": {
     "complexity": {
       "max": 13,
       "count": 1
     }
   },
-  "packages/test-utils/tests/design-policies/design-token-policy.test.ts": {
-    "max-lines-per-function": {
-      "max": 278,
-      "count": 2
-    }
-  },
   "packages/test-utils/tests/design-policies/design-token-scan.ts": {
     "complexity": {
       "max": 13,
-      "count": 1
-    }
-  },
-  "packages/test-utils/tests/docs-policies/docs-site-coverage.test.ts": {
-    "max-lines-per-function": {
-      "max": 95,
       "count": 1
     }
   },
@@ -10683,10 +7179,6 @@
     "max-lines": {
       "max": 543,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 415,
-      "count": 1
     }
   },
   "packages/test-utils/tests/workspace-policies/domain-import-policy.test.ts": {
@@ -10697,10 +7189,6 @@
     "max-lines": {
       "max": 1678,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 845,
-      "count": 2
     },
     "sonarjs/cognitive-complexity": {
       "max": 29,
@@ -10716,18 +7204,8 @@
       "max": 616,
       "count": 1
     },
-    "max-lines-per-function": {
-      "max": 338,
-      "count": 2
-    },
     "sonarjs/cognitive-complexity": {
       "max": 73,
-      "count": 1
-    }
-  },
-  "packages/test-utils/tests/workspace-policies/google-oauth-bootstrap.test.ts": {
-    "max-lines-per-function": {
-      "max": 147,
       "count": 1
     }
   },
@@ -10742,10 +7220,6 @@
       "max": 21,
       "count": 1
     },
-    "max-lines-per-function": {
-      "max": 122,
-      "count": 2
-    },
     "sonarjs/cognitive-complexity": {
       "max": 20,
       "count": 1
@@ -10755,10 +7229,6 @@
     "complexity": {
       "max": 15,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 134,
-      "count": 2
     },
     "sonarjs/cognitive-complexity": {
       "max": 17,
@@ -11001,37 +7471,9 @@
       "count": 1
     }
   },
-  "packages/ui/tests/components/menus/menu-action-row.test.tsx": {
-    "max-lines-per-function": {
-      "max": 248,
-      "count": 1
-    }
-  },
-  "packages/ui/tests/components/menus/menu-listbox.test.tsx": {
-    "max-lines-per-function": {
-      "max": 109,
-      "count": 1
-    }
-  },
   "packages/ui/tests/components/pickers/pickers.test.tsx": {
     "max-lines": {
       "max": 1183,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 536,
-      "count": 4
-    }
-  },
-  "packages/ui/tests/components/pickers/timeframe-picker.test.tsx": {
-    "max-lines-per-function": {
-      "max": 155,
-      "count": 1
-    }
-  },
-  "packages/ui/tests/components/shell/navigation-rail.test.tsx": {
-    "max-lines-per-function": {
-      "max": 138,
       "count": 1
     }
   },
@@ -11039,55 +7481,11 @@
     "max-lines": {
       "max": 1531,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 343,
-      "count": 6
-    }
-  },
-  "packages/ui/tests/components/views/entity-list-row.test.tsx": {
-    "max-lines-per-function": {
-      "max": 156,
-      "count": 1
-    }
-  },
-  "packages/ui/tests/components/views/entity-table-virtual.test.tsx": {
-    "max-lines-per-function": {
-      "max": 361,
-      "count": 2
     }
   },
   "packages/ui/tests/components/views/entity-table.test.tsx": {
     "max-lines": {
       "max": 971,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 228,
-      "count": 6
-    }
-  },
-  "packages/ui/tests/components/views/list-view.test.tsx": {
-    "max-lines-per-function": {
-      "max": 96,
-      "count": 1
-    }
-  },
-  "packages/ui/tests/hooks/hooks.test.tsx": {
-    "max-lines-per-function": {
-      "max": 214,
-      "count": 1
-    }
-  },
-  "packages/ui/tests/hooks/use-reorderable.test.tsx": {
-    "max-lines-per-function": {
-      "max": 141,
-      "count": 2
-    }
-  },
-  "packages/ui/tests/primitives/context-menu.test.tsx": {
-    "max-lines-per-function": {
-      "max": 159,
       "count": 1
     }
   },
@@ -11095,73 +7493,11 @@
     "max-lines": {
       "max": 625,
       "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 104,
-      "count": 2
-    }
-  },
-  "packages/ui/tests/primitives/dialog.test.tsx": {
-    "max-lines-per-function": {
-      "max": 281,
-      "count": 1
-    }
-  },
-  "packages/ui/tests/primitives/primitives.test.tsx": {
-    "max-lines-per-function": {
-      "max": 110,
-      "count": 1
-    }
-  },
-  "packages/ui/tests/primitives/sheet.test.tsx": {
-    "max-lines-per-function": {
-      "max": 129,
-      "count": 1
-    }
-  },
-  "packages/ui/tests/primitives/tabs.test.tsx": {
-    "max-lines-per-function": {
-      "max": 123,
-      "count": 1
     }
   },
   "repo-tests/ci/ci-gate-policy.test.ts": {
     "max-lines": {
       "max": 554,
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "max": 208,
-      "count": 2
-    }
-  },
-  "repo-tests/launch/launch-record.test.ts": {
-    "max-lines-per-function": {
-      "max": 89,
-      "count": 1
-    }
-  },
-  "repo-tests/tooling/bootstrap-setup.test.ts": {
-    "max-lines-per-function": {
-      "max": 184,
-      "count": 1
-    }
-  },
-  "repo-tests/tooling/commit-message.test.ts": {
-    "max-lines-per-function": {
-      "max": 90,
-      "count": 1
-    }
-  },
-  "repo-tests/tooling/production-verify.test.ts": {
-    "max-lines-per-function": {
-      "max": 91,
-      "count": 1
-    }
-  },
-  "repo-tests/tooling/release-acceptance-script.test.ts": {
-    "max-lines-per-function": {
-      "max": 113,
       "count": 1
     }
   },

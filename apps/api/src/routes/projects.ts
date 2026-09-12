@@ -61,7 +61,11 @@ import { emitEvent } from './event-emit';
 import { insertMilestones } from '../lib/milestone-writes';
 import milestones from './milestones';
 import { projectDependencyRoutes } from './project-dependency-routes';
-import { buildTaskViewCondition, buildTaskViewFilter } from './task-helpers';
+import {
+  buildTaskViewCondition,
+  buildTaskViewFilter,
+  visibleProjectTaskCounts,
+} from './task-helpers';
 
 type ProjectRow = typeof project.$inferSelect;
 
@@ -469,7 +473,7 @@ const projects = new Hono<AppEnv>()
       const { orgId, actorId } = c.get('actorCtx');
       const [
         projectRows,
-        taskRows,
+        taskCounts,
         dependencyRows,
         displayRows,
         milestoneRows,
@@ -481,17 +485,7 @@ const projects = new Hono<AppEnv>()
           .from(project)
           .where(and(eq(project.organizationId, orgId), isNull(project.archivedAt)))
           .orderBy(desc(project.createdAt), desc(project.id)),
-        db
-          .select({
-            id: task.id,
-            teamId: task.teamId,
-            projectId: task.projectId,
-            programId: task.programId,
-            visibility: task.visibility,
-            completedAt: task.completedAt,
-          })
-          .from(task)
-          .where(and(eq(task.organizationId, orgId), isNull(task.archivedAt))),
+        visibleProjectTaskCounts(orgId, actorId),
         db
           .select({
             blockingProjectId: projectDependency.blockingProjectId,
@@ -528,15 +522,6 @@ const projects = new Hono<AppEnv>()
           .where(eq(initiativeProject.organizationId, orgId)),
       ]);
 
-      const canView = await buildTaskViewFilter(orgId, actorId);
-      const taskCounts = new Map<string, { total: number; completed: number }>();
-      for (const row of taskRows.filter(canView)) {
-        if (!row.projectId) continue;
-        const current = taskCounts.get(row.projectId) ?? { total: 0, completed: 0 };
-        current.total += 1;
-        if (row.completedAt) current.completed += 1;
-        taskCounts.set(row.projectId, current);
-      }
       const blockedBy = new Map<string, string[]>();
       const blocks = new Map<string, string[]>();
       const activeProjectIds = new Set(projectRows.map((row) => row.id));

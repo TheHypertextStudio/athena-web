@@ -915,6 +915,129 @@ tests/search/` plus the search route suites — 135/135 passing.
   pinning the portable engine later requires explicit authorization and does not change Docket's
   user-facing bootstrap API.
 
+### [DIALOG-INSET-001] One dialog geometry, one inset
+
+- **Status**: REVIEW
+- **Started**: 2026-09-11
+- **Priority**: P2
+- **Description**: `DialogContent` carried a second geometry for call sites that passed no
+  `presentation` — a fallback class string with `p-6` on the panel. The header, body, and footer
+  slots each apply their own `px-6 py-4`, so every dialog using both rendered at a 48px horizontal
+  inset against its migrated neighbours' 24px.
+- **Approach**: The fallback is gone. `presentation` defaults to
+  `{ kind: 'centered', size: 'standard', height: 'content' }`, so there is one geometry contract and
+  no second spelling of it. Thirteen call sites had loose children that were relying on the panel's
+  `p-6`; each is now wrapped in `DialogBody`, which also gives them a real scroll owner instead of
+  the surface-level fallback.
+
+  Three shapes turned up and none of them generalised, which is why this was done by hand after a
+  scripted transform mangled six files:
+
+  1. Loose content between `DialogHeader` and `DialogFooter` — wrap it.
+  2. A `<form>` that owns the footer so Enter submits — the form becomes the panel's flex column
+     (`flex min-h-0 flex-1 flex-col`) and the body slot goes inside it, which is what keeps the
+     actions fixed while the fields scroll.
+  3. Content that only exists on a condition (a delete confirmation's error line) — the body is
+     rendered conditionally too, since an always-present one puts 32px of empty content region
+     between the description and the buttons of every clean confirm.
+
+- **Files changed**: `packages/ui/src/primitives/dialog.tsx`,
+  `packages/ui/src/components/feedback/ConfirmDestructiveDialog.tsx`, and twelve
+  `apps/web/src/components/**` dialogs; `docs/design/design-system.md` section 6.
+- **Validation**: `packages/ui` 775 passing, `apps/web` 3784 passing, both `tsc --noEmit` clean,
+  ESLint clean. The inset itself was measured in Chromium against the real class strings: 48px
+  before, 24px after.
+- **Learnings**: Extracting `recovery-codes-dialog`'s conditional body tripped the complexity gate.
+  Per AGENTS.md that is refactored, never ledgered — the fix was pulling the revealed-codes block
+  and the three-way description into their own components, which also removed a chained ternary the
+  standing style rule bans.
+- **Blockers**: Screenshot verification still outstanding. Another worktree
+  (`dead-space-layout-e267d0`) holds the shared dev stack on :1355, and taking it would kill that
+  session's server.
+
+---
+
+### [OVERLAY-STATE-001] Overlay geometry and interaction states
+
+- **Status**: REVIEW
+- **Started**: 2026-09-10
+- **Priority**: P1
+- **Description**: Four reported defects, all of them landing on the shared overlay primitives:
+  dialogs that clip instead of scrolling, picker lists trapped in a 256px scroll window, every
+  entity picker pinned to 224px with no width floor, and a hard focus ring painted on mouse hover.
+- **Subtasks**:
+  - [x] Phase 1 — gate the picker's focus indicator behind keyboard navigation
+  - [x] Phase 2 — real menu width floors; single-line rows
+  - [x] Phase 3 — status picker rows lose the description line
+  - [x] Phase 4 — overlay scroll ownership stops being opt-in
+  - [x] Phase 5 — scroll geometry and stable gutters
+  - [ ] Phase 6 — consolidate the remaining focus and selection treatments
+  - [x] Phase 7 — scanner guard for a borrowed focus ring
+  - [ ] Screenshot verification against a seeded workspace
+
+**Approach**
+
+Every one of the four reports traced back to a primitive contradicting a rule
+`docs/design/design-system.md` already stated. The interesting work was diagnosis, not design.
+
+The focus ring was one string: `ACTIVE_PICKER_ROW = 'ring-[3px] ring-ring ring-inset'` — the
+shared `menuFocusRing` with its `focus-visible:` prefixes stripped off, toggled by React state that
+`onMouseEnter` set, and applied to the chosen row at mount. `:focus-visible` cannot reach these
+rows, because the listbox parks real focus on its search input and names the highlight with
+`aria-activedescendant`, so the row publishes `data-nav` from a new `useInputModality` hook instead
+and `menuActiveDescendantRing` keys off `data-nav="keyboard"`. The hook is the browser's own
+`:focus-visible` heuristic behind one pair of shared document listeners.
+
+Width was the same shape of mistake. A `MENU_WIDTH` tier was a fixed `w-*` with `min-w-0` — a
+ceiling and a floor of zero — so a menu was exactly its tier's width whatever it held, and the
+pickers, which passed no tier at all, sat at the 224px default. A tier is now a range: minimum,
+`w-max`, maximum. The ceiling folds the viewport clamp into one `min()`, because two `max-w-*`
+classes resolve to whichever `cn` saw last and the viewport clamp is the one that would have been
+dropped.
+
+Scrolling was opt-in and around twenty dialogs had never opted in. `OVERLAY_SCROLL_FALLBACK` is a
+`not-has-[[data-overlay-scroll-owner]]:` variant rather than a rule in `globals.css`, because a
+base-layer rule loses to the `overflow-hidden` utility on the same element; as a variant it carries
+the attribute selector's extra specificity and wins on the y axis alone.
+
+**Files changed**
+
+- `packages/ui/src/hooks/use-input-modality.ts` — new
+- `packages/ui/src/primitives/menu-styles.ts` — `menuActiveDescendantRing`, `MENU_WIDTH` ranges,
+  `menuSupporting` clamp
+- `packages/ui/src/primitives/overlay-inset.ts` — `OVERLAY_SCROLL_FALLBACK`
+- `packages/ui/src/primitives/{dialog,sheet,popover,dropdown-menu,context-menu}.tsx`
+- `packages/ui/src/components/pickers/PickerList.tsx`, `{OptionPicker,EntityMultiPicker,LabelsPicker}.tsx`
+- `packages/ui/src/components/menus/MenuListbox.tsx` — `active`/`selected` split, `MenuNote`
+- `apps/web/src/components/mentions/mention-menu.tsx` — panel → menu presentation
+- `apps/web/src/components/pickers/options.tsx` — status rows lose the description
+- `packages/test-utils/tests/design-policies/design-token-scan.ts` — `unscoped-focus-ring`
+- `docs/design/design-system.md` — §6 width/rows/states, §7 scroll ownership, §9 the new rule
+
+**Validation**
+
+`packages/ui` 774 passing, `apps/web` 3784 passing, `packages/test-utils` 197 passing, `tsc
+--noEmit` clean for both, ESLint clean on every touched path. The `unscoped-focus-ring` rule lands
+at **zero** violations across the tree, so it enters the ratchet with no ledger entries.
+
+**Learnings**
+
+- A scripted JSX transform to wrap loose dialog children in `DialogBody` mangled six files —
+  it put `<DialogBody>` inside `<DialogHeader>` — and was reverted. The remaining call sites need
+  hand edits; several interleave content between slots and some put `DialogFooter` inside a
+  `<form>`. Spun off as its own task.
+- The design-token ratchet caught its own win: removing a raw `text-xs` from the mention menu made
+  that file's ledger entry stale and failed the build until it was deleted. Working as intended.
+
+**Blockers**
+
+- Screenshot verification still outstanding — needs `scripts/dev-stack.sh`, a seeded workspace, and
+  `pnpm db:reset` afterwards.
+- The unmigrated `DialogContent` fallback still adds `p-6` on the panel while the slots add their
+  own `px-6 py-4`, a 48px inset at 13 call sites. Separate task.
+
+- **Notes**: Plan at `~/.claude/plans/jazzy-popping-crescent.md`.
+
 ---
 
 ### [DETAIL-INSET-001] Every edge of a detail page is measured the same way

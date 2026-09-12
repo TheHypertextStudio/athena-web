@@ -71,10 +71,13 @@ describe('status picker options', () => {
     }
   });
 
-  it('carries a status description as the supporting line, and omits it when there is none', () => {
-    const [queued, building] = statusOptions(set);
-    expect(queued?.supporting).toBe('Captured, waiting to be picked up.');
-    expect(building?.supporting).toBeUndefined();
+  it('keeps every status row a single line, description or not', () => {
+    // A description belongs on the settings page that authors it. Under a name in a picker it
+    // makes each row a different height, which is what the check and glyph then fail to line up
+    // against.
+    for (const option of statusOptions(set)) {
+      expect(option.supporting, option.label).toBeUndefined();
+    }
   });
 
   it('gives every cycle status option the glyph a cycle row renders', () => {

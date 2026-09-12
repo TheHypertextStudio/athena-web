@@ -34,6 +34,7 @@ import {
   Button,
   DecorativeIcon,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -250,7 +251,7 @@ function RenamePasskeyDialog({
     >
       <DialogContent>
         <form
-          className="flex flex-col gap-4"
+          className="flex min-h-0 flex-1 flex-col"
           onSubmit={(event) => {
             event.preventDefault();
             if (trimmedName && trimmedName !== persistedName) rename.mutate(trimmedName);
@@ -262,7 +263,7 @@ function RenamePasskeyDialog({
               Choose a name that helps you recognize this passkey later.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-2">
+          <DialogBody className="flex flex-col gap-2">
             <label htmlFor={nameId} className="text-on-surface text-label-large">
               Passkey name
             </label>
@@ -274,10 +275,12 @@ function RenamePasskeyDialog({
                 setName(event.target.value);
               }}
             />
-          </div>
-          {rename.isError ? (
-            <WriteError message={userErrorMessage(rename.error, 'Could not rename the passkey.')} />
-          ) : null}
+            {rename.isError ? (
+              <WriteError
+                message={userErrorMessage(rename.error, 'Could not rename the passkey.')}
+              />
+            ) : null}
+          </DialogBody>
           <DialogFooter>
             <Button
               type="button"
@@ -395,7 +398,9 @@ function RemovePasskeyDialog({
           </DialogDescription>
         </DialogHeader>
         {remove.isError ? (
-          <WriteError message={userErrorMessage(remove.error, 'Could not remove the passkey.')} />
+          <DialogBody>
+            <WriteError message={userErrorMessage(remove.error, 'Could not remove the passkey.')} />
+          </DialogBody>
         ) : null}
         <DialogFooter>
           <Button

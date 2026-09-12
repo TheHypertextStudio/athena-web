@@ -20,11 +20,31 @@
  *
  * | Variant    | Border | Fill | Use for |
  * |------------|--------|------|---------|
- * | `outlined` | 1px `outline-variant` hairline | transparent | **default** — dialog and settings forms, anywhere a field sits on a plain panel and must announce itself as editable |
- * | `filled`   | none (transparent, box-size preserved) | `surface-container-high` | fields on an untinted surface where a hairline would be the loudest line on screen — search boxes, composers, toolbar filters |
- * | `plain`    | none | none | inline editors that must sit on the same axis as the text they replace — a row title you click to rename, a detail-page heading |
+ * | `outlined` | 1px `outline` | `surface-container-lowest` | **default** — a well cut into whatever it sits on |
+ * | `filled`   | 1px `outline` | `surface-container-highest` | the same idea inverted, for a field on a surface already at the light end of the ramp |
+ * | `plain`    | none until hover | none | inline editors that must sit on the same axis as the text they replace — a row title you click to rename, a detail-page heading |
  *
- * Every variant renders a 1px border; `filled` and `plain` simply make it transparent. That is
+ * ## A field is always distinguishable from what it sits on
+ *
+ * A box that takes typing has to look like one before it is touched, and that takes both halves.
+ *
+ * **The boundary.** `outlined` and `filled` draw it in `outline`: 3.43:1 against
+ * `surface-container-high` in light and 3.39:1 in dark, over WCAG 1.4.11's 3:1 floor for a UI
+ * component boundary. It used to be the `outline-variant` separator tint at 1.17:1 — a hairline to
+ * hunt for — while `hover:` already used the right value, so only the rest state was wrong.
+ *
+ * **The fill.** A boundary alone leaves the field's interior identical to the panel, so the box
+ * still does not read as a box. `outlined` paints `surface-container-lowest`: lighter than every
+ * tinted surface in light, markedly darker in dark, a well cut into the panel either way.
+ *
+ * No fill clears 3:1 on its own — the ramp spans L 0.93–0.995 in light, so the widest gap it offers
+ * is about 1.2:1, and reaching 3:1 would take roughly L 0.55, a mid-grey slab. Large adjacent areas
+ * read apart well below the text threshold, which is why the pair works: the fill gives the field
+ * its shape and the outline carries the measured contrast. `filled` used to paint
+ * `surface-container-high` — the token a dialog, sheet, and panel popover all paint — so a filled
+ * field inside any of them was exactly 1:1 against its background.
+ *
+ * Every variant renders a 1px border; `plain` simply makes it transparent. That is
  * deliberate: a `filled` field and an `outlined` field placed side by side are then the same box,
  * to the pixel, and swapping a field's variant never shifts its neighbours.
  *
@@ -119,7 +139,7 @@ export interface FieldSurfaceOptions {
  * closed variant set rather than inventing a fourth look.
  */
 export function fieldSurface({
-  variant = 'outlined',
+  variant = 'filled',
   controlSize,
   invalid = false,
   multiline = false,
@@ -138,9 +158,27 @@ export function fieldSurface({
       ? cn(metrics.minHeight, COARSE_FLOOR.growable, 'py-2')
       : cn(metrics.height, COARSE_FLOOR.fixed),
     variant === 'plain' ? 'px-0' : metrics.paddingX,
-    variant === 'outlined' && 'border-outline-variant hover:border-outline bg-transparent',
+    // Values below are `md.comp.*-text-field`, transcribed with provenance in
+    // `docs/design/references/md3-text-fields.md`. The resting outline had drifted onto
+    // `outline-variant`, a role the spec never names for a field, which measured 1.17:1 against a
+    // dialog panel — under WCAG 1.4.11's 3:1 for a component boundary, and a hairline to hunt for.
+    // `md.comp.outlined-text-field`: `outline` at 1px, `on-surface` on hover, and no container
+    // token at all — the outline is the whole affordance.
+    variant === 'outlined' && 'hover:border-on-surface border-outline bg-transparent',
+    // `md.comp.filled-text-field`: `surface-container-highest` plus an activation indicator, and
+    // no outline. The indicator is the mark that identifies the field — the container alone is
+    // 1.07:1 against a `surface-container-high` panel. Drawn as a bottom border so a filled field
+    // occupies the same 1px box every other variant does and swapping variants shifts nothing.
     variant === 'filled' &&
-      'bg-surface-container-high hover:bg-surface-container-highest border-transparent',
+      cn(
+        'bg-surface-container-highest border-transparent border-b-on-surface-variant hover:border-b-on-surface',
+        // `corner-extra-small-top`: the activation indicator is a straight full-width line, and a
+        // rounded bottom curves it away at both ends until it stops reading as one.
+        'rounded-b-none',
+      ),
+    // `plain` is the exception on purpose: it is the inline editor for a row title or a page
+    // heading, where a resting box would draw a rectangle around text that is not being edited.
+    // Its affordance is hover and focus.
     variant === 'plain' && 'hover:bg-surface-container-high border-transparent bg-transparent',
     invalid && 'border-error',
     ringOn === 'self' ? focusRing : 'focus-within:ring-ring focus-within:ring-2',
@@ -167,6 +205,15 @@ export interface InputProps extends Omit<React.ComponentProps<'input'>, 'size'> 
    * a plain input.
    */
   readonly prefix?: string;
+  /**
+   * A glyph shown inside the box, before the value — a status dot, an entity icon.
+   *
+   * @remarks
+   * For the case where the field *is* the preview: the value renders beside the mark it will
+   * carry everywhere else, so there is nothing to compare against a specimen somewhere below.
+   * Decorative, and marked `aria-hidden`; the field's own label carries the meaning.
+   */
+  readonly leading?: React.ReactNode;
 }
 
 /**
@@ -181,12 +228,13 @@ export function Input({
   controlSize,
   type,
   prefix,
+  leading,
   'aria-invalid': ariaInvalid,
   ...props
 }: InputProps): React.JSX.Element {
   const size = useControlSize(controlSize);
 
-  if (prefix === undefined) {
+  if (prefix === undefined && leading === undefined) {
     return (
       <input
         type={type}
@@ -212,22 +260,34 @@ export function Input({
           ringOn: 'within',
         }),
         'inline-flex items-center',
+        // The gap separates a leading glyph from the value. A `prefix` stays flush against the
+        // input, which is the point of one — `docket.app/` and the slug are one string.
+        leading === undefined ? undefined : metrics.gap,
         className,
       )}
     >
-      <span aria-hidden className="text-on-surface-variant shrink-0 truncate select-none">
-        {prefix}
-      </span>
-      <input
-        type={type}
-        aria-invalid={ariaInvalid}
-        className={cn(
-          typeClass(metrics.fieldToken),
-          'text-on-surface min-w-0 flex-1 border-0 bg-transparent p-0 outline-none',
-          'placeholder:text-on-surface-variant file:text-on-surface file:border-0 file:bg-transparent',
+      {leading === undefined ? null : (
+        <span aria-hidden className="flex shrink-0 items-center">
+          {leading}
+        </span>
+      )}
+      <span className="inline-flex min-w-0 flex-1 items-center">
+        {prefix === undefined ? null : (
+          <span aria-hidden className="text-on-surface-variant shrink-0 truncate select-none">
+            {prefix}
+          </span>
         )}
-        {...props}
-      />
+        <input
+          type={type}
+          aria-invalid={ariaInvalid}
+          className={cn(
+            typeClass(metrics.fieldToken),
+            'text-on-surface min-w-0 flex-1 border-0 bg-transparent p-0 outline-none',
+            'placeholder:text-on-surface-variant file:text-on-surface file:border-0 file:bg-transparent',
+          )}
+          {...props}
+        />
+      </span>
     </span>
   );
 }

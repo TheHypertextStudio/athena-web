@@ -618,8 +618,57 @@ describe('PickerList', () => {
     expect(document.activeElement).toBe(listbox);
     expect(listbox).toHaveAttribute('aria-activedescendant', chosenOption.id);
     expect(chosenOption).toHaveAttribute('data-active', 'true');
-    expect(chosenButton).toHaveClass('ring-[3px]', 'ring-ring', 'ring-inset');
     expect(chosenButton).toHaveClass('bg-tertiary-container');
+  });
+
+  it('leaves the focus indicator off until the keyboard moves the highlight', () => {
+    // The reader arrived here with a mouse, which is how a picker is usually opened.
+    fireEvent.pointerDown(document);
+    render(
+      <PickerList
+        options={PROJECTS}
+        selected="p1"
+        onSelect={vi.fn()}
+        searchable={false}
+        ariaLabel="Project"
+      />,
+    );
+    const listbox = screen.getByRole('listbox', { name: 'Project' });
+    const chosenButton = within(screen.getByRole('option', { name: /Migration/ })).getByRole(
+      'button',
+    );
+
+    // Opening on the current value must not draw a box around it.
+    expect(chosenButton).toHaveAttribute('data-nav', 'pointer');
+
+    listbox.focus();
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+    const nextButton = within(screen.getByRole('option', { name: /Onboarding/ })).getByRole(
+      'button',
+    );
+    expect(nextButton).toHaveAttribute('data-nav', 'keyboard');
+
+    // Reaching for the mouse again puts the highlight back on the state layer alone.
+    fireEvent.pointerMove(document);
+    expect(nextButton).toHaveAttribute('data-nav', 'pointer');
+  });
+
+  it('moves the highlight on hover without claiming keyboard focus', () => {
+    fireEvent.pointerDown(document);
+    render(
+      <PickerList
+        options={PROJECTS}
+        selected={null}
+        onSelect={vi.fn()}
+        searchable={false}
+        ariaLabel="Project"
+      />,
+    );
+    const hoveredOption = screen.getByRole('option', { name: /Onboarding/ });
+    fireEvent.mouseEnter(within(hoveredOption).getByRole('button'));
+
+    expect(hoveredOption).toHaveAttribute('data-active', 'true');
+    expect(within(hoveredOption).getByRole('button')).toHaveAttribute('data-nav', 'pointer');
   });
 
   it('scrolls the active option into view during keyboard navigation', () => {

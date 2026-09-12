@@ -239,6 +239,7 @@ export function LabelPickerOverlay({ request, onClose }: LabelPickerOverlayProps
     >
       <PopoverAnchor virtualRef={anchorRef} />
       <PopoverContent
+        width="lg"
         onCloseAutoFocus={(event) => {
           // Radix's default behavior refocuses a `PopoverTrigger` — there isn't one here (this
           // popover is anchored via `virtualRef`), so left alone focus would fall through to

@@ -81,6 +81,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { readStoredBoolean, readStoredString, writeStoredValue } from '../../lib/browser-storage';
 import { Menu, X } from '../../icons';
 import { cn } from '../../lib/utils';
+import { focusRing } from '../../primitives/focus';
 import {
   Sheet,
   SheetBody,
@@ -586,7 +587,8 @@ export function AppShell({
             surfaceToneColor('page'),
             // No shadow: §8 keeps shadows on overlay surfaces only, and this link's own border
             // already separates it from the content it lands over when focus reveals it.
-            'border-outline-variant focus-visible:ring-ring text-label-large sr-only z-50 rounded-md border px-3 py-2 transition-colors focus-visible:not-sr-only focus-visible:absolute focus-visible:top-2 focus-visible:left-2 focus-visible:ring-2 focus-visible:outline-none',
+            'border-outline-variant text-label-large sr-only z-50 rounded-md border px-3 py-2 transition-colors focus-visible:not-sr-only focus-visible:absolute focus-visible:top-2 focus-visible:left-2',
+            focusRing,
           )}
         >
           Skip to content
@@ -607,7 +609,10 @@ export function AppShell({
               onClick={() => {
                 setDrawerOpen(true);
               }}
-              className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              className={cn(
+                'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors',
+                focusRing,
+              )}
             >
               <Menu aria-hidden="true" className="size-5" />
             </button>
@@ -626,7 +631,10 @@ export function AppShell({
                   onClick={() => {
                     setOverlayPanelOpen(true);
                   }}
-                  className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-5"
+                  className={cn(
+                    'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors [&_svg]:size-5',
+                    focusRing,
+                  )}
                 >
                   {activePanel.icon}
                 </button>
@@ -763,7 +771,10 @@ export function AppShell({
                   <button
                     type="button"
                     aria-label={`Close ${activePanel.label}`}
-                    className="text-on-surface-variant hover:bg-surface-container-high focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                    className={cn(
+                      'text-on-surface-variant hover:bg-surface-container-high flex size-10 shrink-0 items-center justify-center rounded-full transition-colors',
+                      focusRing,
+                    )}
                   >
                     <X aria-hidden="true" className="size-5" />
                   </button>

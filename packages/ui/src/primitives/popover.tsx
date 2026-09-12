@@ -23,7 +23,7 @@ import type {
   PanelWidth,
   PopoverPresentation,
 } from './overlay-contract';
-import { OVERLAY_COLLISION_PADDING } from './overlay-inset';
+import { OVERLAY_COLLISION_PADDING, OVERLAY_SCROLL_FALLBACK } from './overlay-inset';
 
 /** Root controller for an open/closed popover (Radix passthrough). */
 export const Popover = PopoverPrimitive.Root;
@@ -81,7 +81,12 @@ const PANEL_WIDTH: Readonly<Record<PanelWidth, string>> = {
   lg: 'w-72',
   xl: 'w-88',
   wide: 'w-[28rem]',
-  content: 'w-auto',
+  /**
+   * Sized by what it holds — a calendar grid, a colour swatch board — with a floor so a panel
+   * whose content has not arrived yet, or has collapsed to a single control, does not render as a
+   * sliver pinned to its trigger.
+   */
+  content: 'w-auto min-w-48',
 };
 
 const PANEL_MAX_HEIGHT: Readonly<Record<PanelMaxHeight, string>> = {
@@ -136,11 +141,13 @@ export function PopoverContent({
           surfaceClass,
           'pointer-events-auto z-[120] min-h-0 origin-[var(--radix-popover-content-transform-origin)] outline-none',
           PANEL_MAX_HEIGHT[maxHeight],
-          isMenu && 'overflow-x-hidden overflow-y-auto',
+          // A menu surface always scrolls itself; a panel delegates to `PopoverBody` and falls
+          // back to scrolling only when no body claims the job.
+          isMenu ? 'overflow-x-hidden overflow-y-auto' : OVERLAY_SCROLL_FALLBACK,
           focusRing,
           className,
         )}
-        data-surface-tone={isMenu ? 'floating' : 'floating'}
+        data-surface-tone="floating"
         {...props}
       />
     </PopoverPrimitive.Portal>

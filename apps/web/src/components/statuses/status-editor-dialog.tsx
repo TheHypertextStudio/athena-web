@@ -4,10 +4,12 @@
  * Create or edit one status.
  *
  * @remarks
- * The preview is the point of the dialog. A status is a name plus a category, and the category is
- * what decides the glyph, the colour, and whether work sitting here counts as finished — none of
- * which a name tells you. Rendering the row exactly as a task list will render it means the choice
- * is made against the thing itself.
+ * A status is a name plus a category, and the category decides the glyph, the colour, and whether
+ * work sitting here counts as finished — none of which a name tells you. The Name field carries
+ * the category's glyph, so the value is read beside the mark it will carry on every task list.
+ * That used to be a separate preview row below the category list, which was the trouble: a glyph
+ * and a word in a rounded box, directly under five other glyph-and-word rounded boxes, read as a
+ * sixth option rather than a rendering of the status.
  *
  * The category picker warns rather than blocks when a change would move work across the finished
  * line, because that is usually the intent ("Shipped should count as done") and occasionally a
@@ -19,6 +21,7 @@ import { StatusIcon } from '@docket/ui/components';
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -102,8 +105,10 @@ export function StatusEditorDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* The footer lives inside the form so Enter submits, which makes the form the panel's
+            flex column and puts the body slot inside it. */}
         <form
-          className="flex flex-col gap-4"
+          className="flex min-h-0 flex-1 flex-col"
           onSubmit={(event) => {
             event.preventDefault();
             if (trimmed === '') return;
@@ -114,91 +119,81 @@ export function StatusEditorDialog({
             });
           }}
         >
-          <Field label="Name">
-            <Input
-              autoFocus
-              value={name}
-              maxLength={60}
-              onChange={(event) => {
-                setName(event.target.value);
-              }}
-              placeholder="In Review"
-            />
-          </Field>
+          <DialogBody className="flex flex-col gap-4">
+            <Field label="Name">
+              <Input
+                autoFocus
+                value={name}
+                maxLength={60}
+                onChange={(event) => {
+                  setName(event.target.value);
+                }}
+                placeholder="In Review"
+                leading={<StatusIcon type={category} label={CATEGORY_LABEL[category]} />}
+              />
+            </Field>
 
-          <Field
-            label="What it means"
-            description="Shown when someone is choosing between statuses."
-          >
-            <Textarea
-              value={description}
-              maxLength={280}
-              rows={2}
-              onChange={(event) => {
-                setDescription(event.target.value);
-              }}
-              placeholder="Waiting on a second pair of eyes."
-            />
-          </Field>
+            <Field label="Description" description="Shown on this page, beside the status.">
+              <Textarea
+                value={description}
+                maxLength={280}
+                rows={2}
+                onChange={(event) => {
+                  setDescription(event.target.value);
+                }}
+                placeholder="Waiting on a second pair of eyes."
+              />
+            </Field>
 
-          <fieldset className="flex flex-col gap-2">
-            <legend className="text-on-surface text-label-large mb-1">Category</legend>
-            <div className="flex flex-col gap-1">
-              {WORK_STATUS_CATEGORIES.map((option) => (
-                <label
-                  key={option}
-                  className={cn(
-                    'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-colors',
-                    option === category
-                      ? 'bg-secondary-container text-on-secondary-container'
-                      : 'hover:bg-surface-container',
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="category"
-                    value={option}
-                    checked={option === category}
-                    onChange={() => {
-                      setCategory(option);
-                    }}
-                    className="sr-only"
-                  />
-                  <StatusIcon type={option} label={CATEGORY_LABEL[option]} />
-                  <span className="flex min-w-0 flex-col">
-                    <span className="text-label-large">{CATEGORY_LABEL[option]}</span>
-                    <span className="text-body-small opacity-80">
-                      {CATEGORY_DESCRIPTION[option]}
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-on-surface text-label-large mb-1">Category</legend>
+              <div className="flex flex-col gap-1">
+                {WORK_STATUS_CATEGORIES.map((option) => (
+                  <label
+                    key={option}
+                    className={cn(
+                      'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-colors',
+                      option === category
+                        ? 'bg-secondary-container text-on-secondary-container'
+                        : 'hover:bg-surface-container',
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="category"
+                      value={option}
+                      checked={option === category}
+                      onChange={() => {
+                        setCategory(option);
+                      }}
+                      className="sr-only"
+                    />
+                    <StatusIcon type={option} label={CATEGORY_LABEL[option]} />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="text-label-large">{CATEGORY_LABEL[option]}</span>
+                      <span className="text-body-small opacity-80">
+                        {CATEGORY_DESCRIPTION[option]}
+                      </span>
                     </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
 
-          {crossesTheLine ? (
-            <p role="status" className="text-on-surface-variant text-body-small">
-              {isEnded(category)
-                ? 'Work already in this status will be recorded as ended, which changes progress and capacity.'
-                : 'Work already in this status will be reopened, which changes progress and capacity.'}
-            </p>
-          ) : null}
+            {crossesTheLine ? (
+              <p role="status" className="text-on-surface-variant text-body-small">
+                {isEnded(category)
+                  ? 'Work already in this status will be recorded as ended, which changes progress and capacity.'
+                  : 'Work already in this status will be reopened, which changes progress and capacity.'}
+              </p>
+            ) : null}
 
-          <div className="bg-surface-container-low flex items-center gap-3 rounded-lg px-3 py-2.5">
-            <StatusIcon
-              type={category}
-              label={trimmed === '' ? CATEGORY_LABEL[category] : trimmed}
-            />
-            <span className="text-on-surface text-label-large truncate">
-              {trimmed === '' ? 'Preview' : trimmed}
-            </span>
-          </div>
-
-          {error === null || error === undefined ? null : (
-            <p role="alert" className="text-error text-body-small">
-              {userErrorMessage(error, 'That status could not be saved.')}
-            </p>
-          )}
+            {error === null || error === undefined ? null : (
+              <p role="alert" className="text-error text-body-small">
+                {userErrorMessage(error, 'That status could not be saved.')}
+              </p>
+            )}
+          </DialogBody>
 
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>

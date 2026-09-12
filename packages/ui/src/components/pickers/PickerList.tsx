@@ -28,10 +28,17 @@
  */
 import * as React from 'react';
 
+import { useInputModality } from '../../hooks/use-input-modality';
 import { Check, Plus, Search, X } from '../../icons';
 import { cn } from '../../lib/utils';
 import { Skeleton } from '../../primitives';
-import { MENU_METRICS, menuItemClass, menuSupporting } from '../../primitives/menu-styles';
+import {
+  MENU_METRICS,
+  menuActiveDescendantLayer,
+  menuActiveDescendantRing,
+  menuItemClass,
+  menuSupporting,
+} from '../../primitives/menu-styles';
 
 import { type PickerOption, optionMatches } from './types';
 
@@ -70,6 +77,15 @@ interface PickerRow<TValue extends string> {
 
 type ActiveSyncMode = 'navigation' | 'query' | 'selection';
 
+/**
+ * Which device moved the highlight, for the two things that depend on it.
+ *
+ * @remarks
+ * Only the keyboard scrolls the list to keep up — the mouse is already where the reader is
+ * looking, and scrolling under a stationary cursor makes rows run away from it.
+ */
+type NavigationSource = 'keyboard' | 'pointer';
+
 /** Return a stable DOM id for one row in the listbox. */
 function pickerRowId<TValue extends string>(listId: string, row: PickerRow<TValue>): string {
   return `${listId}-option-${pickerRowKey(row)}`;
@@ -79,9 +95,6 @@ function pickerRowId<TValue extends string>(listId: string, row: PickerRow<TValu
 function pickerRowKey<TValue extends string>(row: PickerRow<TValue>): string {
   return row.option ? `value-${encodeURIComponent(row.option.value)}` : row.kind;
 }
-
-/** The menu focus indicator applied to the row named by `aria-activedescendant`. */
-const ACTIVE_PICKER_ROW = 'ring-[3px] ring-ring ring-inset' as const;
 
 /** Props for {@link PickerList}. */
 export interface PickerListProps<TValue extends string = string> {
@@ -243,6 +256,10 @@ export function PickerList<TValue extends string = string>({
   }, [rows, selectedValue]);
   const firstRowKey = rows[0] ? pickerRowKey(rows[0]) : null;
   const [activeRowKey, setActiveRowKey] = React.useState(chosenRowKey ?? firstRowKey);
+  // The list opens with its chosen row already active, so `aria-activedescendant` names something
+  // and Enter is meaningful straight away. Whether that row draws a ring is a separate question,
+  // answered by what the reader's hands are doing rather than by what the list highlighted.
+  const modality = useInputModality();
   const previousSelectedValue = React.useRef(selectedValue);
   const previousQuery = React.useRef(query);
   const activeSyncMode = React.useRef<ActiveSyncMode>('selection');
@@ -295,15 +312,22 @@ export function PickerList<TValue extends string = string>({
   const activeRow = rows[activeIndex];
   const activeRowId = activeRow ? pickerRowId(listId, activeRow) : undefined;
 
-  const setActiveRow = React.useCallback((row: PickerRow<TValue>, scroll: boolean): void => {
-    const key = pickerRowKey(row);
-    activeSyncMode.current = 'navigation';
-    setActiveRowKey(key);
-    const element = rowElements.current.get(key);
-    const maybeScrollable = element as
-      { scrollIntoView?: (options?: ScrollIntoViewOptions) => void } | undefined;
-    if (scroll) maybeScrollable?.scrollIntoView?.({ block: 'nearest' });
-  }, []);
+  // `source` decides two things at once, and they are the same decision: only the keyboard scrolls
+  // the list to keep up with the highlight (the mouse is already where it is looking), and only
+  // the keyboard draws the focus indicator.
+  const setActiveRow = React.useCallback(
+    (row: PickerRow<TValue>, source: NavigationSource): void => {
+      const key = pickerRowKey(row);
+      activeSyncMode.current = 'navigation';
+      setActiveRowKey(key);
+      if (source !== 'keyboard') return;
+      const element = rowElements.current.get(key);
+      const maybeScrollable = element as
+        { scrollIntoView?: (options?: ScrollIntoViewOptions) => void } | undefined;
+      maybeScrollable?.scrollIntoView?.({ block: 'nearest' });
+    },
+    [],
+  );
 
   const activate = React.useCallback(
     (index: number): void => {
@@ -327,7 +351,7 @@ export function PickerList<TValue extends string = string>({
     (event: React.KeyboardEvent): void => {
       const moveToIndex = (index: number): void => {
         const row = rows[index];
-        if (row) setActiveRow(row, true);
+        if (row) setActiveRow(row, 'keyboard');
       };
 
       switch (event.key) {
@@ -394,7 +418,10 @@ export function PickerList<TValue extends string = string>({
         tabIndex={searchable ? -1 : 0}
         onKeyDown={searchable ? undefined : onKeyDown}
         aria-busy={loading || undefined}
-        className="max-h-64 min-h-0 flex-1 overflow-y-auto overscroll-contain outline-none"
+        // No height of its own. The popover is already capped at the height Radix measured for
+        // it, so a second 256px cap here only made the list short on a tall screen — a stubby
+        // scrolling window with a bar in it and several hundred pixels of free space below.
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain outline-none"
       >
         {rows.length === 0 ? (
           loading ? (
@@ -437,16 +464,17 @@ export function PickerList<TValue extends string = string>({
                       clear?.onClear();
                     }}
                     onMouseEnter={() => {
-                      setActiveRow(row, false);
+                      setActiveRow(row, 'pointer');
                     }}
+                    data-nav={active ? modality : undefined}
                     className={cn(
                       pickerRowClass(),
                       'text-on-surface-variant',
                       pickerRowShape(index, rows.length, searchable),
-                      active && ACTIVE_PICKER_ROW,
-                      // The keyboard-highlighted row is the focus state, so it takes the 10%
-                      // layer. Pointer hover comes from menuItemClass at the spec's 8%.
-                      { 'bg-on-surface/10': active },
+                      menuActiveDescendantRing,
+                      // The active row is the focus state, so it takes the 10% layer whichever way
+                      // it was reached. Pointer hover comes from menuItemClass at the spec's 8%.
+                      { [menuActiveDescendantLayer]: active },
                     )}
                   >
                     <X aria-hidden="true" className="shrink-0 opacity-70" />
@@ -477,14 +505,15 @@ export function PickerList<TValue extends string = string>({
                       setQuery('');
                     }}
                     onMouseEnter={() => {
-                      setActiveRow(row, false);
+                      setActiveRow(row, 'pointer');
                     }}
+                    data-nav={active ? modality : undefined}
                     className={cn(
                       pickerRowClass(),
                       'text-on-surface',
                       pickerRowShape(index, rows.length, searchable),
-                      active && ACTIVE_PICKER_ROW,
-                      { 'bg-on-surface/10': active },
+                      menuActiveDescendantRing,
+                      { [menuActiveDescendantLayer]: active },
                     )}
                   >
                     <Plus aria-hidden="true" className="shrink-0 opacity-70" />
@@ -522,16 +551,17 @@ export function PickerList<TValue extends string = string>({
                     if (!option.disabled) onSelect(option.value);
                   }}
                   onMouseEnter={() => {
-                    setActiveRow(row, false);
+                    setActiveRow(row, 'pointer');
                   }}
+                  data-nav={active ? modality : undefined}
                   className={cn(
                     // A single-select row already has a trailing check and semantic leading glyph,
                     // so it stays on the neutral menu surface. Multi-select needs a persistent
                     // fill because several checked rows can remain in view at once.
                     pickerRowClass(multiple && chosen),
-                    { 'bg-on-surface/10': active && !(multiple && chosen) },
+                    { [menuActiveDescendantLayer]: active && !(multiple && chosen) },
                     pickerRowShape(index, rows.length, searchable),
-                    active && ACTIVE_PICKER_ROW,
+                    menuActiveDescendantRing,
                   )}
                 >
                   {hasAnyIcon ? (

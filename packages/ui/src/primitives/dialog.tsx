@@ -64,6 +64,7 @@ import type {
   DialogSize,
   OverlayInset,
 } from './overlay-contract';
+import { OVERLAY_SCROLL_FALLBACK } from './overlay-inset';
 import { useOverlayFocusRestore } from './use-overlay-focus-restore';
 
 /** Insets for dialog regions, including compact phone spacing that expands with the panel. */
@@ -169,6 +170,21 @@ const DIALOG_HEIGHT_SM: Readonly<Record<DialogHeight, string>> = {
   viewport: 'sm:h-[calc(100dvh-1.5rem)]',
 };
 
+/**
+ * What a dialog gets when it asks for nothing.
+ *
+ * @remarks
+ * There used to be a separate fallback class string here, and it carried a `p-6` on the panel.
+ * `DialogHeader`, `DialogBody`, and `DialogFooter` each apply their own `px-6 py-4`, so every
+ * dialog using both landed on a 48px horizontal inset — twice the migrated dialogs beside it.
+ * Defaulting the prop instead means one geometry contract with no second spelling of it.
+ */
+const DEFAULT_DIALOG_PRESENTATION: DialogPresentation = {
+  kind: 'centered',
+  size: 'standard',
+  height: 'content',
+};
+
 function dialogPresentationClass(presentation: DialogPresentation): string {
   const size = DIALOG_SIZE[presentation.size ?? 'standard'];
   const height = DIALOG_HEIGHT[presentation.height ?? 'content'];
@@ -223,15 +239,15 @@ export function DialogContent({
   children,
   showClose = true,
   closeLabel = 'Close',
-  presentation,
+  presentation = DEFAULT_DIALOG_PRESENTATION,
   containerQuery = false,
   onOpenAutoFocus,
   onCloseAutoFocus,
   ...props
 }: DialogContentProps): React.JSX.Element {
   const focusRestore = useOverlayFocusRestore(onOpenAutoFocus, onCloseAutoFocus);
-  const hosted = presentation?.kind === 'hosted' ? presentation : null;
-  const presentationClass = presentation ? dialogPresentationClass(presentation) : null;
+  const hosted = presentation.kind === 'hosted' ? presentation : null;
+  const presentationClass = dialogPresentationClass(presentation);
 
   return (
     <DialogPortal container={hosted?.portalContainer}>
@@ -250,13 +266,12 @@ export function DialogContent({
             }
           : {})}
         className={cn(
-          // `w-[calc(100%-2rem)]` keeps a 1rem gutter on each side at small viewports so the
-          // panel never bleeds to the window edge; `max-w-lg` caps it once the screen is wide
-          // enough that the calc would exceed it (the narrower per-dialog `max-w-md` still wins).
+          // Position, width, height, and the viewport gutter all come from the presentation; this
+          // string is only the panel's surface, elevation, motion, and clipping.
           'bg-surface-container-high text-on-surface data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-[0.98] data-[state=open]:zoom-in-[0.98] shadow-level3 z-[110] flex min-h-0 flex-col gap-0 overflow-hidden overscroll-contain rounded-xl p-0 duration-(--dur-slow) ease-(--ease-out) outline-none',
+          OVERLAY_SCROLL_FALLBACK,
           hostedDialogInteractivityClass(hosted),
-          presentationClass ??
-            'top-1/2 left-1/2 max-h-[85vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 p-6',
+          presentationClass,
           { '@container': containerQuery },
           className,
         )}

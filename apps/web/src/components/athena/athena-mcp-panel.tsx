@@ -8,6 +8,7 @@ import {
   Button,
   ControlGroup,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -489,11 +490,13 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
               directly in this conversation. You stay right here.
             </DialogDescription>
           </DialogHeader>
-          <ConnectForm
-            onConnected={() => {
-              setConnectOpen(false);
-            }}
-          />
+          <DialogBody>
+            <ConnectForm
+              onConnected={() => {
+                setConnectOpen(false);
+              }}
+            />
+          </DialogBody>
         </DialogContent>
       </Dialog>
     </section>

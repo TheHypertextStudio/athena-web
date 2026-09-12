@@ -19,6 +19,7 @@ import { WriteError } from './write-error';
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -66,6 +67,59 @@ function downloadCodes(codes: string[]): void {
   a.download = `docket-recovery-codes-${new Date().toISOString().slice(0, 10)}.txt`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** What the dialog says it is about, which depends on why it opened and how far it has got. */
+function IntroCopy({
+  revealed,
+  mode,
+}: {
+  readonly revealed: boolean;
+  readonly mode: RecoveryCodesDialogProps['mode'];
+}): JSX.Element {
+  if (revealed) {
+    return (
+      <>
+        Store these somewhere safe — a password manager is ideal. Each code works once to get back
+        into your account if you lose your passkey. You won&apos;t be able to see them again.
+      </>
+    );
+  }
+  if (mode === 'regenerate') {
+    return (
+      <>
+        This replaces your current recovery codes — any you saved before will stop working.
+        You&apos;ll re-verify your passkey first.
+      </>
+    );
+  }
+  return (
+    <>
+      Recovery codes let you get back into your account if you lose your passkey. You&apos;ll
+      re-verify your passkey, then we&apos;ll show you a fresh set to save.
+    </>
+  );
+}
+
+/** The one-time listing of generated codes, numbered so a reader can check they copied them all. */
+function RevealedCodes({ codes }: { readonly codes: readonly string[] }): JSX.Element {
+  return (
+    <>
+      <ol className="bg-surface-container text-body-medium grid grid-cols-2 gap-x-6 gap-y-1 rounded-md p-4 font-mono">
+        {codes.map((code, i) => (
+          <li key={code} className="text-on-surface flex gap-2 tabular-nums">
+            <span className="text-on-surface-variant w-5 shrink-0 text-right select-none">
+              {i + 1}.
+            </span>
+            {code}
+          </li>
+        ))}
+      </ol>
+      <p className="text-on-surface-variant text-body-small">
+        Copy or download your codes — you won&apos;t see them again.
+      </p>
+    </>
+  );
 }
 
 /** The recovery-codes (re)generation dialog (passkey step-up → reveal codes once). */
@@ -130,45 +184,17 @@ export function RecoveryCodesDialog({
             {revealed ? 'Save your recovery codes' : 'Generate recovery codes'}
           </DialogTitle>
           <DialogDescription>
-            {revealed ? (
-              <>
-                Store these somewhere safe — a password manager is ideal. Each code works once to
-                get back into your account if you lose your passkey. You won&apos;t be able to see
-                them again.
-              </>
-            ) : mode === 'regenerate' ? (
-              <>
-                This replaces your current recovery codes — any you saved before will stop working.
-                You&apos;ll re-verify your passkey first.
-              </>
-            ) : (
-              <>
-                Recovery codes let you get back into your account if you lose your passkey.
-                You&apos;ll re-verify your passkey, then we&apos;ll show you a fresh set to save.
-              </>
-            )}
+            <IntroCopy revealed={revealed} mode={mode} />
           </DialogDescription>
         </DialogHeader>
 
-        {revealed ? (
-          <div className="flex flex-col gap-2">
-            <ol className="bg-surface-container text-body-medium grid grid-cols-2 gap-x-6 gap-y-1 rounded-md p-4 font-mono">
-              {codes.map((code, i) => (
-                <li key={code} className="text-on-surface flex gap-2 tabular-nums">
-                  <span className="text-on-surface-variant w-5 shrink-0 text-right select-none">
-                    {i + 1}.
-                  </span>
-                  {code}
-                </li>
-              ))}
-            </ol>
-            <p className="text-on-surface-variant text-body-small">
-              Copy or download your codes — you won&apos;t see them again.
-            </p>
-          </div>
+        {/* A full set of codes can outrun the panel, so this is the region that scrolls. */}
+        {codes !== null || error !== null ? (
+          <DialogBody className="flex flex-col gap-2">
+            {codes !== null ? <RevealedCodes codes={codes} /> : null}
+            {error !== null ? <WriteError message={error} /> : null}
+          </DialogBody>
         ) : null}
-
-        {error ? <WriteError message={error} /> : null}
 
         <DialogFooter>
           {revealed ? (

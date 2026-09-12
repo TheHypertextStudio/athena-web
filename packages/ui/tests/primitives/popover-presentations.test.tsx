@@ -48,6 +48,11 @@ describe('Popover presentations', () => {
       </Popover>,
     );
 
-    expect(await screen.findByLabelText('Actions')).toHaveClass('w-48', 'min-w-0');
+    // A tier is a floor and a ceiling; the menu takes the width its rows need between them.
+    expect(await screen.findByLabelText('Actions')).toHaveClass(
+      'min-w-[min(12rem,calc(100vw-1.5rem))]',
+      'w-max',
+      'max-w-[min(16rem,calc(100vw-1.5rem))]',
+    );
   });
 });

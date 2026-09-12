@@ -102,7 +102,7 @@ export function EntityMultiPicker<TValue extends string = string>({
       <PopoverTrigger asChild disabled={disabled}>
         {trigger}
       </PopoverTrigger>
-      <PopoverContent>
+      <PopoverContent width="lg">
         <PickerList<TValue>
           options={options}
           selected={value}

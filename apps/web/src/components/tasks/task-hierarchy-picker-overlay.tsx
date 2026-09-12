@@ -110,6 +110,7 @@ export function TaskHierarchyPickerOverlay({
     >
       <PopoverAnchor virtualRef={anchorRef} />
       <PopoverContent
+        width="lg"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           if (capturedAnchor.focusTarget?.isConnected) capturedAnchor.focusTarget.focus();

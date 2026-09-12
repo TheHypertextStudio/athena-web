@@ -150,7 +150,7 @@ export {
   menuTrailingText,
 } from './menu-styles';
 
-export { OVERLAY_COLLISION_PADDING } from './overlay-inset';
+export { OVERLAY_COLLISION_PADDING, OVERLAY_SCROLL_FALLBACK } from './overlay-inset';
 export { HoverCard, HoverCardContent, HoverCardTrigger } from './hover-card';
 export { Row, type RowProps, Stack, type StackProps, Toolbar, type ToolbarProps } from './layout';
 export {

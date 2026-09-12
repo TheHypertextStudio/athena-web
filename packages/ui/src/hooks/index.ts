@@ -16,6 +16,7 @@ export {
   useReorderable,
   type UseReorderableOptions,
 } from './use-reorderable';
+export { type InputModality, useInputModality } from './use-input-modality';
 export {
   useListKeyboard,
   type UseListKeyboardOptions,

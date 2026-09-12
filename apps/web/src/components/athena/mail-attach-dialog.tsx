@@ -24,6 +24,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogBody,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -191,7 +192,9 @@ export function MailAttachDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent>
+      {/* An explicit presentation rather than the unmigrated fallback, which adds its own `p-6`
+          on the panel on top of the slots' `px-6 py-4`. */}
+      <DialogContent presentation={{ kind: 'centered', size: 'standard', height: 'content' }}>
         <DialogHeader>
           <DialogTitle>Attach to work</DialogTitle>
           <DialogDescription>
@@ -200,7 +203,7 @@ export function MailAttachDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4">
+        <DialogBody className="flex flex-col gap-4">
           <Field label="Workspace">
             <Select
               controlSize="lg"
@@ -286,7 +289,7 @@ export function MailAttachDialog({
               {attachError}
             </Text>
           ) : null}
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button

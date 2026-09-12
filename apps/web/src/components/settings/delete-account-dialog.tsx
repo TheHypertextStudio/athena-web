@@ -17,6 +17,7 @@ import {
   Button,
   Dialog,
   DialogClose,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -102,7 +103,7 @@ export function DeleteAccountDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-2 py-1">
+        <DialogBody className="flex flex-col gap-2">
           <label htmlFor={inputId} className="text-on-surface-variant text-body-medium">
             Type <span className="text-on-surface text-label-large">{email}</span> to confirm.
           </label>
@@ -116,9 +117,8 @@ export function DeleteAccountDialog({
               setTyped(e.target.value);
             }}
           />
-        </div>
-
-        {error ? <WriteError message={error} /> : null}
+          {error ? <WriteError message={error} /> : null}
+        </DialogBody>
 
         <DialogFooter>
           <DialogClose asChild>

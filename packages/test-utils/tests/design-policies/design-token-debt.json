@@ -373,9 +373,6 @@
   "apps/web/src/components/mentions/mention-hovercard.tsx": {
     "ad-hoc-border": 4
   },
-  "apps/web/src/components/mentions/mention-menu.tsx": {
-    "raw-type-utility": 1
-  },
   "apps/web/src/components/my-work/live-session-pill.tsx": {
     "ad-hoc-border": 6,
     "raw-type-utility": 2

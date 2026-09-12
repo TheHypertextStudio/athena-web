@@ -91,7 +91,7 @@ function RailDestination({
       <span
         data-slot="navigation-rail-active-indicator"
         className={cn(
-          'group-focus-visible:outline-secondary relative flex h-8 w-14 shrink-0 items-center justify-center rounded-full transition-colors duration-(--dur-fast) ease-(--ease-out) group-focus-visible:outline-3 group-focus-visible:outline-offset-2',
+          'group-focus-visible:outline-ring relative flex h-8 w-14 shrink-0 items-center justify-center rounded-full transition-colors duration-(--dur-fast) ease-(--ease-out) group-focus-visible:outline-3 group-focus-visible:outline-offset-2',
           destination.active
             ? 'bg-secondary-container text-on-secondary-container'
             : 'text-on-surface-variant',

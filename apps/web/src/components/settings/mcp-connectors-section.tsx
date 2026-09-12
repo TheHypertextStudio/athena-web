@@ -20,6 +20,7 @@ import {
   Badge,
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -147,12 +148,14 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
               Give Athena access to a remote MCP server it can use for tools and interactive apps.
             </DialogDescription>
           </DialogHeader>
-          <AddMcpConnectorForm
-            orgId={orgId}
-            onConnected={() => {
-              setAddOpen(false);
-            }}
-          />
+          <DialogBody>
+            <AddMcpConnectorForm
+              orgId={orgId}
+              onConnected={() => {
+                setAddOpen(false);
+              }}
+            />
+          </DialogBody>
         </DialogContent>
       </Dialog>
     </SettingsGroup>

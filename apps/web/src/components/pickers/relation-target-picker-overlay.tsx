@@ -211,6 +211,7 @@ export function RelationTargetPickerOverlay({
     >
       <PopoverAnchor virtualRef={anchorRef} />
       <PopoverContent
+        width="lg"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           if (anchorRef.current instanceof HTMLElement) anchorRef.current.focus();
@@ -231,7 +232,7 @@ export function RelationTargetPickerOverlay({
           </div>
         ) : targetKind === 'calendar_slot' ? (
           <form
-            className="flex min-w-72 flex-col gap-3 p-3"
+            className="flex flex-col gap-3 p-3"
             onSubmit={(event) => {
               event.preventDefault();
               const resolutionError = localInputResolutionError(

@@ -167,6 +167,7 @@ export {
   MenuDivider,
   MenuListbox,
   type MenuListboxProps,
+  MenuNote,
   MenuOption,
   type MenuOptionProps,
   MenuSectionLabel,

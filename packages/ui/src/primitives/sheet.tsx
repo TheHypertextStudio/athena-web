@@ -45,6 +45,7 @@ import * as React from 'react';
 import { cn } from '../lib/utils';
 import { focusRing } from './focus';
 import type { OverlayInset, SheetPresentation, SheetSize } from './overlay-contract';
+import { OVERLAY_SCROLL_FALLBACK } from './overlay-inset';
 import { useOverlayFocusRestore } from './use-overlay-focus-restore';
 
 /**
@@ -166,6 +167,7 @@ export function SheetContent({
       <DialogPrimitive.Content
         className={cn(
           'bg-surface-container-high text-on-surface data-[state=open]:animate-in data-[state=closed]:animate-out shadow-level1 fixed z-[100] flex min-h-0 flex-col gap-0 overflow-hidden overscroll-contain p-0 ease-(--ease-out) outline-none data-[state=closed]:duration-(--dur-base) data-[state=open]:duration-(--dur-slow)',
+          OVERLAY_SCROLL_FALLBACK,
           focusRing,
           sheetPresentationClass(presentation, side, size),
           className,

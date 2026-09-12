@@ -18,6 +18,7 @@ import {
   Button,
   Dialog,
   DialogClose,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -115,56 +116,58 @@ export function AddPersonDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form
-          className="flex flex-col gap-4 py-1"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submit();
-          }}
-        >
-          <Field label="Name">
-            <Input
-              controlSize="lg"
-              value={name}
-              autoFocus
-              autoComplete="off"
-              placeholder="Priya Raman"
-              disabled={busy}
-              maxLength={120}
-              onChange={(event) => {
-                setName(event.target.value);
-              }}
-            />
-          </Field>
-
-          {roleOptions.length > 0 ? (
-            <Field
-              label="Role"
-              description="What they can do here if they ever do sign in. It also sets how they're described across the workspace."
-            >
-              <Select
+        <DialogBody>
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit();
+            }}
+          >
+            <Field label="Name">
+              <Input
                 controlSize="lg"
-                value={roleId ?? ''}
+                value={name}
+                autoFocus
+                autoComplete="off"
+                placeholder="Priya Raman"
                 disabled={busy}
+                maxLength={120}
                 onChange={(event) => {
-                  setRoleId(event.target.value === '' ? null : event.target.value);
+                  setName(event.target.value);
                 }}
-              >
-                {roleOptions.map((role) => (
-                  <option key={role.id} value={role.id}>
-                    {role.name}
-                  </option>
-                ))}
-              </Select>
+              />
             </Field>
-          ) : null}
 
-          {error ? (
-            <Text as="p" role="alert" token="body-medium" tone="error">
-              {error}
-            </Text>
-          ) : null}
-        </form>
+            {roleOptions.length > 0 ? (
+              <Field
+                label="Role"
+                description="What they can do here if they ever do sign in. It also sets how they're described across the workspace."
+              >
+                <Select
+                  controlSize="lg"
+                  value={roleId ?? ''}
+                  disabled={busy}
+                  onChange={(event) => {
+                    setRoleId(event.target.value === '' ? null : event.target.value);
+                  }}
+                >
+                  {roleOptions.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : null}
+
+            {error ? (
+              <Text as="p" role="alert" token="body-medium" tone="error">
+                {error}
+              </Text>
+            ) : null}
+          </form>
+        </DialogBody>
 
         <DialogFooter>
           <DialogClose className="focus-visible:ring-ring text-on-surface-variant hover:bg-surface-container-high text-label-large rounded-md px-3 py-1.5 outline-none focus-visible:ring-1">

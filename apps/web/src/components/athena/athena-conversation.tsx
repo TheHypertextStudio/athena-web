@@ -23,6 +23,7 @@ import { cn } from '@docket/ui/lib/utils';
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -246,12 +247,14 @@ export default function AthenaConversation({
               conversation too.
             </DialogDescription>
           </DialogHeader>
-          <AddMcpConnectorForm
-            orgId={orgId}
-            onConnected={() => {
-              setConnectOpen(false);
-            }}
-          />
+          <DialogBody>
+            <AddMcpConnectorForm
+              orgId={orgId}
+              onConnected={() => {
+                setConnectOpen(false);
+              }}
+            />
+          </DialogBody>
         </DialogContent>
       </Dialog>
     </div>

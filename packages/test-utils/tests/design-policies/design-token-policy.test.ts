@@ -102,12 +102,21 @@ describe('design token policy', () => {
       const literalRgb = 'rgba(0, 0, 0, 0.1)';
       const templated = \`gap-2 \${spacing} text-sm\`;
       const legacyRoles = 'bg-card text-muted-foreground border-border bg-destructive';
+      // The focus-indicator role painted by something that is not focus.
+      const borrowedRing = 'ring-[3px] ring-ring ring-inset';
+      const borrowedOutline = 'hover:outline-ring';
 
       // Legal: token colours, token type, an explicit no-shadow, a token reference in brackets,
       // a movement (not a resize) on hover, and a static size that no interaction changes.
       const legal =
         'text-on-surface-variant text-body-medium text-label-small shadow-none ' +
         'text-[var(--radix-x)] hover:translate-y-0.5 hover:bg-surface-container-high size-4.5 h-8';
+
+      // Legal rings: the focus role behind a focus variant, the aria-activedescendant modality
+      // variant, and a ring in some other role, which is free to mean whatever the component needs.
+      const legalRings =
+        'focus-visible:ring-ring focus-within:ring-ring group-focus-visible:ring-ring ' +
+        'data-[nav=keyboard]:ring-ring ring-primary ring-1 ring-inset';
     `;
 
     const violations = scanDesignTokens(
@@ -249,6 +258,8 @@ describe('design token policy', () => {
       'rounded-sm',
       'rounded-2xl',
       'rounded-[3px]',
+      'ring-ring',
+      'outline-ring',
     ]) {
       expect(values, `expected the scanner to flag ${expected}`).toContain(expected);
     }
@@ -264,6 +275,9 @@ describe('design token policy', () => {
     }
 
     for (const legal of [
+      'focus-visible:ring-ring',
+      'data-[nav=keyboard]:ring-ring',
+      'ring-primary',
       'text-on-surface-variant',
       'text-body-medium',
       'text-label-small',

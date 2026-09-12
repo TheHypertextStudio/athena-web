@@ -144,14 +144,16 @@ describe('the slash insert menu', () => {
     const { user } = await openEditor();
     await user.keyboard('/');
     const menu = await screen.findByRole('listbox', { name: 'Insert a block' });
-    expect(within(menu).getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true');
+    // The highlight is where the keyboard is, not a chosen value — an insert menu commits
+    // nothing until Enter, so no row is ever `aria-selected`.
+    expect(within(menu).getAllByRole('option')[0]).toHaveAttribute('data-active', 'true');
     await user.keyboard('{ArrowDown}');
     await waitFor(() => {
-      expect(within(menu).getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true');
+      expect(within(menu).getAllByRole('option')[1]).toHaveAttribute('data-active', 'true');
     });
     await user.keyboard('{ArrowUp}');
     await waitFor(() => {
-      expect(within(menu).getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true');
+      expect(within(menu).getAllByRole('option')[0]).toHaveAttribute('data-active', 'true');
     });
   });
 

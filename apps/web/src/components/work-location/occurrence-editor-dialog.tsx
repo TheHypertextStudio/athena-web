@@ -10,6 +10,7 @@ import {
   Button,
   Dialog,
   DialogClose,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -101,49 +102,54 @@ export function OccurrenceEditorDialog({
           <DialogTitle>Change one occurrence</DialogTitle>
           <DialogDescription>Leave the rest of this weekly schedule unchanged.</DialogDescription>
         </DialogHeader>
-        <form className="flex flex-col gap-4" onSubmit={submit}>
-          <div className="text-on-surface-variant text-label-medium flex flex-col gap-1">
-            <span>Date</span>
-            <DatePicker
-              ariaLabel="Occurrence date"
-              placeholder="Pick a day"
-              triggerVariant="outline"
-              value={date || null}
-              onChange={(nextDate) => {
-                setDate(nextDate ?? '');
-              }}
-            />
-          </div>
-          <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
-            Change
-            <Select
-              value={action}
-              onChange={(event) => {
-                setAction(event.target.value as OccurrenceAction);
-              }}
-            >
-              <option value="replace">Work somewhere else</option>
-              <option value="cancel">No expected location</option>
-              <option value="restore">Restore the weekly schedule</option>
-            </Select>
-          </label>
-          {action === 'replace' ? (
+        {/* The footer submits the form, so the form is the panel's flex column and the body slot
+            sits inside it. */}
+        <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
+          <DialogBody className="flex flex-col gap-4">
+            <div className="text-on-surface-variant text-label-medium flex flex-col gap-1">
+              <span>Date</span>
+              <DatePicker
+                ariaLabel="Occurrence date"
+                placeholder="Pick a day"
+                triggerVariant="outline"
+                value={date || null}
+                onChange={(nextDate) => {
+                  setDate(nextDate ?? '');
+                }}
+              />
+            </div>
             <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
-              Place
+              Change
               <Select
-                value={placeId}
+                value={action}
                 onChange={(event) => {
-                  setPlaceId(event.target.value);
+                  setAction(event.target.value as OccurrenceAction);
                 }}
               >
-                {places.map((place) => (
-                  <option key={place.id} value={place.id}>
-                    {place.name}
-                  </option>
-                ))}
+                <option value="replace">Work somewhere else</option>
+                <option value="cancel">No expected location</option>
+                <option value="restore">Restore the weekly schedule</option>
               </Select>
             </label>
-          ) : null}
+            {action === 'replace' ? (
+              <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
+                Place
+                <Select
+                  value={placeId}
+                  onChange={(event) => {
+                    setPlaceId(event.target.value);
+                  }}
+                >
+                  {places.map((place) => (
+                    <option key={place.id} value={place.id}>
+                      {place.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            ) : null}
+          </DialogBody>
+
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="ghost" disabled={pending}>

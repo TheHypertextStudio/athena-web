@@ -86,9 +86,15 @@ export const HEALTH_OPTIONS: readonly PickerOption<Health>[] = HEALTH_ORDER.map(
  * screen that opens the picker.
  *
  * The set arrives in board order and each entry already carries its category, so the option order
- * and the {@link StatusIcon} glyph both come straight off the data. A status's `description` — the
- * sentence a workspace wrote about when to use it — rides along as the supporting line, which is
- * the moment it is actually worth reading.
+ * and the {@link StatusIcon} glyph both come straight off the data.
+ *
+ * A status's `description` deliberately does **not** ride along. A status picker is a row of
+ * stages someone already knows, opened to change one of them, and a sentence under each name
+ * turns four choices into a paragraph to read — worse, descriptions differ in length, so the rows
+ * come out at different heights and the arrow-key rhythm goes with them. The place that sentence
+ * earns its space is Settings → Statuses, where it is written and where someone is deciding what
+ * a stage should mean; {@link import('@/components/statuses/status-settings-row').StatusSettingsRow}
+ * shows it there.
  *
  * @param statuses - One kind of work's statuses, in board order.
  * @returns one {@link PickerOption} per status, keyed by its stored key.
@@ -104,9 +110,6 @@ export function statusOptions(statuses: readonly StatusLike[]): readonly PickerO
     value: status.key,
     label: status.name,
     icon: <StatusIcon type={status.category} label={status.name} />,
-    ...(status.description !== null && status.description.length > 0
-      ? { supporting: status.description }
-      : {}),
   }));
 }
 

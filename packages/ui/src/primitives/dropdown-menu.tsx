@@ -286,7 +286,9 @@ export function DropdownMenuItem({
       {hasRichAnatomy ? (
         <>
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="flex items-center gap-2">{children}</span>
+            <span className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap [&>*]:min-w-0 [&>*]:truncate">
+              {children}
+            </span>
             {supporting != null ? (
               <span className={menuSupporting(variant)}>{supporting}</span>
             ) : undefined}

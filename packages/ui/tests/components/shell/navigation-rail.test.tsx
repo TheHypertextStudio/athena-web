@@ -96,9 +96,11 @@ describe('collapsed sidebar navigation rail', () => {
     const selectedLayer = today.querySelector('[data-slot="navigation-rail-state-layer"]');
     const unselectedLayer = calendar.querySelector('[data-slot="navigation-rail-state-layer"]');
 
+    // `outline-ring` rather than `outline-secondary`: the same pixel, named as the focus-indicator
+    // role it is rather than the palette colour that role resolves to.
     expect(selectedIndicator).toHaveClass(
       'group-focus-visible:outline-3',
-      'group-focus-visible:outline-secondary',
+      'group-focus-visible:outline-ring',
       'group-focus-visible:outline-offset-2',
     );
     expect(selectedLayer).toHaveClass(

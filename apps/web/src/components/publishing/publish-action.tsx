@@ -27,6 +27,7 @@ import { suggestPublicSlug } from '@docket/work/publish-contract';
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -241,7 +242,7 @@ export function PublishAction({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col gap-4">
+          <DialogBody className="flex flex-col gap-4">
             <Field
               label="Address"
               description="Lowercase letters, numbers, and hyphens. This is the last part of the link."
@@ -291,7 +292,7 @@ export function PublishAction({
                 </Text>
               )
             ) : null}
-          </div>
+          </DialogBody>
 
           <DialogFooter>
             {dialogState === 'loading' ? (

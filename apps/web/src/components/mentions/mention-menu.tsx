@@ -22,14 +22,8 @@
  * The pending Files group reserves its heading and two rows at the real row height, so results
  * replace skeletons in place and the popover never re-flips position mid-typing.
  */
-import { MenuDivider, MenuListbox, MenuSectionLabel } from '@docket/ui/components';
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverBody,
-  PopoverContent,
-  Skeleton,
-} from '@docket/ui/primitives';
+import { MenuDivider, MenuListbox, MenuNote, MenuSectionLabel } from '@docket/ui/components';
+import { Popover, PopoverAnchor, PopoverContent, Skeleton } from '@docket/ui/primitives';
 import type { PopoverVirtualAnchorRef } from '@docket/ui/primitives';
 import type { MentionItem } from '../../lib/contracts/mention';
 import { useEffect, useRef } from 'react';
@@ -99,8 +93,8 @@ export default function MentionMenu({
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor virtualRef={anchorRef} />
       <PopoverContent
-        presentation="panel"
-        width="wide"
+        presentation="menu"
+        width="xl"
         side="bottom"
         align="start"
         sideOffset={6}
@@ -111,86 +105,80 @@ export default function MentionMenu({
           event.preventDefault();
         }}
       >
-        <PopoverBody inset="none">
-          <MenuListbox id={listboxId} ariaLabel="Mention a resource" className="space-y-0.5">
-            {groups.map((group, index) => (
-              <li key={group.key} role="group" aria-labelledby={`${listboxId}-group-${group.key}`}>
-                {index > 0 ? <MenuDivider as="div" aria-hidden className="mb-2" /> : null}
-                <MenuSectionLabel as="p" id={`${listboxId}-group-${group.key}`}>
-                  {group.label}
-                </MenuSectionLabel>
-                <ul className="space-y-0.5" role="presentation">
-                  {group.items.map((item) => (
-                    <MentionRow
-                      key={item.id}
-                      id={mentionRowId(listboxId, item)}
-                      item={item}
-                      active={item.id === resolvedActiveKey}
-                      onSelect={onSelect}
-                    />
-                  ))}
-                </ul>
-                {group.hidden > 0 ? (
-                  <p className="text-on-surface-variant px-2 pt-1 pb-0.5 text-xs">
-                    {`+${group.hidden} more — keep typing to narrow`}
-                  </p>
-                ) : null}
-              </li>
-            ))}
+        <MenuListbox id={listboxId} ariaLabel="Mention a resource">
+          {groups.map((group, index) => (
+            <li key={group.key} role="group" aria-labelledby={`${listboxId}-group-${group.key}`}>
+              {index > 0 ? <MenuDivider as="div" aria-hidden /> : null}
+              <MenuSectionLabel as="p" id={`${listboxId}-group-${group.key}`}>
+                {group.label}
+              </MenuSectionLabel>
+              <ul className="space-y-0.5" role="presentation">
+                {group.items.map((item) => (
+                  <MentionRow
+                    key={item.id}
+                    id={mentionRowId(listboxId, item)}
+                    item={item}
+                    active={item.id === resolvedActiveKey}
+                    onSelect={onSelect}
+                  />
+                ))}
+              </ul>
+              {group.hidden > 0 ? (
+                <MenuNote>{`+${group.hidden} more — keep typing to narrow`}</MenuNote>
+              ) : null}
+            </li>
+          ))}
 
-            {externalPending || externalFailed ? (
-              <li aria-hidden role="presentation">
-                {groups.length > 0 ? <MenuDivider as="div" aria-hidden className="mb-2" /> : null}
-                <MenuSectionLabel as="p">
-                  Files
-                  {externalPending ? <span className="ml-1 opacity-70">searching…</span> : null}
-                </MenuSectionLabel>
-                {externalPending ? (
-                  <div className="space-y-0.5 px-2">
-                    <Skeleton className="h-10 rounded-md" />
-                    <Skeleton className="h-10 rounded-md" />
-                  </div>
-                ) : (
-                  <p className="text-on-surface-variant text-body-medium px-3 py-2">
-                    File search is unavailable.
-                  </p>
-                )}
-              </li>
-            ) : null}
+          {externalPending || externalFailed ? (
+            <li aria-hidden role="presentation">
+              {groups.length > 0 ? <MenuDivider as="div" aria-hidden /> : null}
+              <MenuSectionLabel as="p">
+                Files
+                {externalPending ? <span className="ml-1 opacity-70">searching…</span> : null}
+              </MenuSectionLabel>
+              {externalPending ? (
+                <div className="space-y-0.5 px-1">
+                  <Skeleton className="h-10 rounded-md" />
+                  <Skeleton className="h-10 rounded-md" />
+                </div>
+              ) : (
+                <MenuNote>File search is unavailable.</MenuNote>
+              )}
+            </li>
+          ) : null}
 
-            {nothingYet && !localPending && !localFailed ? (
-              <li
-                role="presentation"
-                className="text-on-surface-variant text-body-medium px-3 py-6 text-center"
-              >
-                {query.trim() === ''
-                  ? 'Nothing to reference yet'
-                  : `No matches for “${query.trim()}”`}
-              </li>
-            ) : null}
+          {nothingYet && !localPending && !localFailed ? (
+            <li
+              role="presentation"
+              className="text-on-surface-variant text-body-small px-4 py-6 text-center"
+            >
+              {query.trim() === ''
+                ? 'Nothing to reference yet'
+                : `No matches for “${query.trim()}”`}
+            </li>
+          ) : null}
 
-            {nothingYet && localPending ? (
-              <li aria-hidden className="space-y-0.5 px-3 py-1">
-                <Skeleton className="h-10 rounded-md" />
-                <Skeleton className="h-10 rounded-md" />
-                <Skeleton className="h-10 rounded-md" />
-              </li>
-            ) : null}
+          {nothingYet && localPending ? (
+            <li aria-hidden className="space-y-0.5 px-1 py-1">
+              <Skeleton className="h-10 rounded-md" />
+              <Skeleton className="h-10 rounded-md" />
+              <Skeleton className="h-10 rounded-md" />
+            </li>
+          ) : null}
 
-            {nothingYet && localFailed ? (
-              <li
-                role="presentation"
-                className="text-on-surface-variant text-body-medium px-3 py-6 text-center"
-              >
-                Search is unavailable.
-              </li>
-            ) : null}
-          </MenuListbox>
+          {nothingYet && localFailed ? (
+            <li
+              role="presentation"
+              className="text-on-surface-variant text-body-small px-4 py-6 text-center"
+            >
+              Search is unavailable.
+            </li>
+          ) : null}
+        </MenuListbox>
 
-          <p aria-live="polite" aria-atomic="true" className="sr-only">
-            {`${state.items.length} results`}
-          </p>
-        </PopoverBody>
+        <p aria-live="polite" aria-atomic="true" className="sr-only">
+          {`${state.items.length} results`}
+        </p>
       </PopoverContent>
     </Popover>
   );

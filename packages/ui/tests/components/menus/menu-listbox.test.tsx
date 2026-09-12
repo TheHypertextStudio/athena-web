@@ -97,6 +97,41 @@ describe('MenuListbox', () => {
     expect(onActiveChange).toHaveBeenCalledOnce();
   });
 
+  it('keeps the navigated row off the selected container', () => {
+    fireEvent.pointerDown(document);
+    render(
+      <MenuListbox ariaLabel="Results">
+        <MenuOption active>Ada Lovelace</MenuOption>
+        <MenuOption selected>Grace Hopper</MenuOption>
+      </MenuListbox>,
+    );
+
+    // Arrowing past a row is not choosing it: the highlight is a state layer, and only a
+    // committed value takes the persistent selected container.
+    const navigated = screen.getByRole('option', { name: 'Ada Lovelace' });
+    expect(navigated).toHaveAttribute('aria-selected', 'false');
+    expect(navigated).not.toHaveClass('bg-tertiary-container');
+
+    const chosen = screen.getByRole('option', { name: 'Grace Hopper' });
+    expect(chosen).toHaveAttribute('aria-selected', 'true');
+    expect(chosen).toHaveClass('bg-tertiary-container');
+  });
+
+  it('draws the focus indicator only once the keyboard drives the highlight', () => {
+    fireEvent.pointerDown(document);
+    render(
+      <MenuListbox ariaLabel="Results">
+        <MenuOption active>Ada Lovelace</MenuOption>
+      </MenuListbox>,
+    );
+
+    const option = screen.getByRole('option', { name: 'Ada Lovelace' });
+    expect(option).toHaveAttribute('data-nav', 'pointer');
+
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    expect(option).toHaveAttribute('data-nav', 'keyboard');
+  });
+
   it('honors a caller that cancels pointer selection', () => {
     const onSelect = vi.fn();
     render(

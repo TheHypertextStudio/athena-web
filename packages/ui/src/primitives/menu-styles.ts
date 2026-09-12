@@ -92,17 +92,29 @@ export type MenuWidth = 'sm' | 'md' | 'lg' | 'xl';
  * `w-56` — seven widths for what are, in practice, four jobs: a short action list, an ordinary
  * action list, a list with descriptions, and a list with paths or timestamps in it.
  *
- * Every one clamps to the viewport, so the widest menu still fits a 320px phone.
+ * **A tier is a floor and a ceiling, not a fixed width.** It was a fixed `w-*` with `min-w-0`,
+ * which is a ceiling and no floor at all — so every menu was exactly as wide as its tier no matter
+ * what was in it, and a project named "Southern Nevada Transit History and Policy Agenda Report"
+ * was cut to an ellipsis in a 224px box with 200px of empty screen beside it. `w-max` lets the
+ * menu take the width its longest row actually needs, and the two bounds keep that from becoming
+ * the old free-for-all: it can never be narrower than its tier, and never wider than the ceiling
+ * or the viewport.
+ *
+ * **Both bounds carry the viewport clamp.** CSS resolves `min-width` above `max-width` wherever
+ * the two disagree, so a bare `min-w-88` floor beats the ceiling on a narrow screen: at 320px the
+ * ceiling computes to 296px, the floor stays 352px, and the document scrolls sideways. Each bound
+ * is therefore written as one `min()` against the viewport — which also keeps `cn` from resolving
+ * a conflicting pair of `max-w-*` classes down to whichever came last and dropping the clamp.
  */
 export const MENU_WIDTH: Readonly<Record<MenuWidth, string>> = {
-  /** 192px — a handful of one-word actions. */
-  sm: 'w-48 min-w-0',
-  /** 224px — the default: an action list with icons and labels. */
-  md: 'w-56 min-w-0',
-  /** 288px — rows carrying supporting text or a trailing value. */
-  lg: 'w-72 min-w-0',
-  /** 352px — rows carrying a path, a timestamp, or a workspace name. */
-  xl: 'w-88 min-w-0',
+  /** 192px, up to 256px — a handful of one-word actions. */
+  sm: 'min-w-[min(12rem,calc(100vw-1.5rem))] w-max max-w-[min(16rem,calc(100vw-1.5rem))]',
+  /** 224px, up to 320px — the default: an action list with icons and labels. */
+  md: 'min-w-[min(14rem,calc(100vw-1.5rem))] w-max max-w-[min(20rem,calc(100vw-1.5rem))]',
+  /** 288px, up to 448px — rows carrying supporting text or a trailing value. */
+  lg: 'min-w-[min(18rem,calc(100vw-1.5rem))] w-max max-w-[min(28rem,calc(100vw-1.5rem))]',
+  /** 352px, up to 512px — rows carrying a path, a timestamp, or a workspace name. */
+  xl: 'min-w-[min(22rem,calc(100vw-1.5rem))] w-max max-w-[min(32rem,calc(100vw-1.5rem))]',
 };
 
 /** The default width when a menu does not ask for one. */
@@ -155,7 +167,7 @@ export const DEFAULT_MENU_SECTIONS: MenuSections = 'divider';
  * step, and the spec's colour list for menus has no outline role in it.
  */
 const menuContentBase =
-  'z-[120] max-w-[calc(100vw-1.5rem)] flex flex-col rounded-corner-lg ' +
+  'z-[120] flex flex-col rounded-corner-lg ' +
   'has-data-[state=open]:rounded-corner-sm transition-[border-radius] ' +
   'data-[state=open]:animate-in data-[state=closed]:animate-out ' +
   'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 ' +
@@ -442,6 +454,35 @@ export const menuFocusRing =
   'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-inset' as const;
 
 /**
+ * The same indicator for a row that is *virtually* focused through `aria-activedescendant`.
+ *
+ * @remarks
+ * A searchable picker keeps real DOM focus on its search input and names the highlighted row with
+ * `aria-activedescendant`, so `:focus-visible` never matches the row and {@link menuFocusRing}
+ * cannot reach it. The row publishes its own modality as `data-nav` instead, and this draws the
+ * identical 3dp inset `secondary` ring off `data-nav="keyboard"`.
+ *
+ * Modality is the whole point. A pointer that merely passes over a row moves the highlight — that
+ * is how a mouse and the keyboard stay on one cursor — but it must not draw a focus indicator,
+ * any more than clicking a button should. Hover stays on the state layer alone. Painting the ring
+ * off "is active" rather than "was reached by keyboard" is what put a box around the current value
+ * the moment a picker opened.
+ */
+export const menuActiveDescendantRing =
+  'data-[nav=keyboard]:ring-[3px] data-[nav=keyboard]:ring-ring data-[nav=keyboard]:ring-inset' as const;
+
+/**
+ * The focus state layer for that same row, at the spec's 10%.
+ *
+ * @remarks
+ * {@link STATE_LAYER} reaches a row through `focus:not-hover:`, which needs real DOM focus. A row
+ * named by `aria-activedescendant` has none, so its layer is applied from the active flag instead
+ * and lives here rather than as a literal at each listbox. Pointer hover still lands on the 8%
+ * layer from {@link menuItemClass}; this is the escalation on top of it.
+ */
+export const menuActiveDescendantLayer = 'bg-on-surface/10' as const;
+
+/**
  * Class string for a section label / group heading.
  *
  * @param variant - Which colour mapping to render in.
@@ -564,10 +605,16 @@ export function menuTrailingText(variant: MenuVariant): string {
  *
  * @param variant - Which colour mapping to render in.
  * @returns Supporting-line typography and colour.
+ *
+ * @remarks
+ * One line, always. Arrow-key navigation reads as a rhythm only while the rows are the same
+ * height: a four-row status menu where one description wrapped rendered at four different heights,
+ * and the trailing check on the tall row left its neighbours' baseline. Supporting text that needs
+ * a second line belongs on the surface that authors it.
  */
 export function menuSupporting(variant: MenuVariant): string {
   return cn(
-    'text-body-small',
+    'text-body-small line-clamp-1',
     variant === 'vibrant' ? 'text-on-tertiary-container' : 'text-on-surface-variant',
   );
 }

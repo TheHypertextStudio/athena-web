@@ -23,6 +23,7 @@ import { FolderKanban, Heart, Layers, ListChecks, Plus, Target, X } from '@docke
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -1073,50 +1074,53 @@ export function WorkViewPage<TTarget extends ViewTarget>({
             <DialogHeader>
               <DialogTitle>Save view</DialogTitle>
             </DialogHeader>
-            <label className="text-label-large flex flex-col gap-2">
-              View name
-              <Input
-                autoFocus
-                value={viewName}
-                onChange={(event) => {
-                  setViewName(event.target.value);
-                }}
-              />
-            </label>
-            <label className="text-label-large flex flex-col gap-2">
-              Share with
-              <Select
-                value={viewScope}
-                onChange={(event) => {
-                  const scope = event.target.value as ViewScope;
-                  setViewScope(scope);
-                  if (scope !== 'team') setViewTeamId('');
-                }}
-              >
-                <option value="personal">Only me</option>
-                <option value="team">A team</option>
-                <option value="organization">Everyone in this workspace</option>
-              </Select>
-            </label>
-            {viewScope === 'team' ? (
+            <DialogBody className="flex flex-col gap-4">
               <label className="text-label-large flex flex-col gap-2">
-                Team
-                <Select
-                  value={viewTeamId}
+                View name
+                <Input
+                  autoFocus
+                  value={viewName}
                   onChange={(event) => {
-                    setViewTeamId(event.target.value);
+                    setViewName(event.target.value);
+                  }}
+                />
+              </label>
+              <label className="text-label-large flex flex-col gap-2">
+                Share with
+                <Select
+                  value={viewScope}
+                  onChange={(event) => {
+                    const scope = event.target.value as ViewScope;
+                    setViewScope(scope);
+                    if (scope !== 'team') setViewTeamId('');
                   }}
                 >
-                  <option value="">Choose a team</option>
-                  {teams.map((team) => (
-                    <option key={team.id} value={team.id}>
-                      {team.name}
-                    </option>
-                  ))}
+                  <option value="personal">Only me</option>
+                  <option value="team">A team</option>
+                  <option value="organization">Everyone in this workspace</option>
                 </Select>
               </label>
-            ) : null}
-            <SaveViewFailure error={controller.saveError} />
+              {viewScope === 'team' ? (
+                <label className="text-label-large flex flex-col gap-2">
+                  Team
+                  <Select
+                    value={viewTeamId}
+                    onChange={(event) => {
+                      setViewTeamId(event.target.value);
+                    }}
+                  >
+                    <option value="">Choose a team</option>
+                    {teams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+              ) : null}
+              <SaveViewFailure error={controller.saveError} />
+            </DialogBody>
+
             <DialogFooter>
               <Button
                 variant="ghost"

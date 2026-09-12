@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '../../primitives';
 import { cn } from '../../lib/utils';
+import { focusRing } from '../../primitives/focus';
 import type { RailPanel } from './ShellAside';
 
 /** Props for the mobile utility sheet's active-panel menu. */
@@ -34,7 +35,10 @@ export function MobilePanelSwitcher({
         <button
           type="button"
           aria-label={`Panel: ${activePanel.label}. Switch panel`}
-          className="text-on-surface hover:bg-surface-container-high focus-visible:ring-ring text-label-large flex h-10 max-w-full min-w-0 items-center gap-2 rounded-lg px-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          className={cn(
+            'text-on-surface hover:bg-surface-container-high text-label-large flex h-10 max-w-full min-w-0 items-center gap-2 rounded-lg px-2 transition-colors',
+            focusRing,
+          )}
         >
           <span aria-hidden="true" className="shrink-0 [&_svg]:size-4">
             {activePanel.icon}

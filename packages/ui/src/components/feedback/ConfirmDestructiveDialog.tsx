@@ -43,6 +43,7 @@
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -99,10 +100,14 @@ export function ConfirmDestructiveDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+        {/* Only when there is something to say: an always-rendered body would put 32px of empty
+            content region between the description and the buttons of every clean confirm. */}
         {error ? (
-          <p role="alert" className="text-body-medium text-error">
-            {error}
-          </p>
+          <DialogBody>
+            <p role="alert" className="text-body-medium text-error">
+              {error}
+            </p>
+          </DialogBody>
         ) : null}
         <DialogFooter>
           <Button

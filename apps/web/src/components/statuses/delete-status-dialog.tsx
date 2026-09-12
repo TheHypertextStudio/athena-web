@@ -16,6 +16,7 @@ import { StatusIcon } from '@docket/ui/components';
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -79,39 +80,43 @@ export function DeleteStatusDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <fieldset className="flex flex-col gap-1">
-          <legend className="text-on-surface text-label-large mb-2">Move that work to</legend>
-          {candidates.map((candidate) => (
-            <label
-              key={candidate.id}
-              className={cn(
-                'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-colors',
-                candidate.id === remapTo
-                  ? 'bg-secondary-container text-on-secondary-container'
-                  : 'hover:bg-surface-container',
-              )}
-            >
-              <input
-                type="radio"
-                name="remapTo"
-                value={candidate.id}
-                checked={candidate.id === remapTo}
-                onChange={() => {
-                  setRemapTo(candidate.id);
-                }}
-                className="sr-only"
-              />
-              <StatusIcon type={candidate.category} label={candidate.name} />
-              <span className="text-label-large truncate">{candidate.name}</span>
-            </label>
-          ))}
-        </fieldset>
+        {/* A workspace can define many statuses, so the list of destinations is the
+            region that scrolls. */}
+        <DialogBody className="flex flex-col gap-4">
+          <fieldset className="flex flex-col gap-1">
+            <legend className="text-on-surface text-label-large mb-2">Move that work to</legend>
+            {candidates.map((candidate) => (
+              <label
+                key={candidate.id}
+                className={cn(
+                  'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-colors',
+                  candidate.id === remapTo
+                    ? 'bg-secondary-container text-on-secondary-container'
+                    : 'hover:bg-surface-container',
+                )}
+              >
+                <input
+                  type="radio"
+                  name="remapTo"
+                  value={candidate.id}
+                  checked={candidate.id === remapTo}
+                  onChange={() => {
+                    setRemapTo(candidate.id);
+                  }}
+                  className="sr-only"
+                />
+                <StatusIcon type={candidate.category} label={candidate.name} />
+                <span className="text-label-large truncate">{candidate.name}</span>
+              </label>
+            ))}
+          </fieldset>
 
-        {error === null || error === undefined ? null : (
-          <p role="alert" className="text-error text-body-small">
-            {userErrorMessage(error, 'That status could not be deleted.')}
-          </p>
-        )}
+          {error === null || error === undefined ? null : (
+            <p role="alert" className="text-error text-body-small">
+              {userErrorMessage(error, 'That status could not be deleted.')}
+            </p>
+          )}
+        </DialogBody>
 
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose}>

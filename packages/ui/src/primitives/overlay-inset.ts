@@ -23,3 +23,25 @@
 
 /** Minimum distance, in CSS pixels, between any floating surface and every viewport edge. */
 export const OVERLAY_COLLISION_PADDING = 12;
+
+/**
+ * The fallback that keeps a floating surface from clipping when nothing inside it owns scroll.
+ *
+ * @remarks
+ * `DialogContent`, `SheetContent`, and a panel `PopoverContent` are all `overflow-hidden` under a
+ * height cap, and they hand scrolling to a `DialogBody` / `SheetBody` / `PopoverBody`. That slot
+ * holds a header and a footer still while the middle moves, but it is opt-in: a surface that omits
+ * it clips past the cap, with no scrollbar and no keyboard route to the rest. Around twenty dialogs
+ * were in that state, one of them showing an unbounded list of search results.
+ *
+ * When no descendant declares itself the scroll owner, the surface becomes one. The whole panel
+ * moves then, header included. Adding the body slot restores the fixed header and stops this
+ * selector matching.
+ *
+ * It has to be a `:has()` variant rather than a rule in `globals.css`, because a base-layer rule
+ * loses to the `overflow-hidden` utility on the same element. As a variant it sits in the same
+ * layer and carries the attribute selector's extra specificity, so it wins on the y axis only.
+ */
+export const OVERLAY_SCROLL_FALLBACK =
+  'not-has-[[data-overlay-scroll-owner]]:overflow-y-auto ' +
+  'not-has-[[data-overlay-scroll-owner]]:overscroll-contain';

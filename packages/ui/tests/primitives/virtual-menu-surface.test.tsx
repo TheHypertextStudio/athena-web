@@ -25,7 +25,13 @@ describe('VirtualMenuSurface', () => {
 
     const menu = await screen.findByRole('presentation');
     expect(menu).toHaveAttribute('data-overlay-scroll-owner', '');
-    expect(menu).toHaveClass('w-72', 'min-w-0', 'max-w-[calc(100vw-1.5rem)]');
+    // Both bounds clamp to the viewport: a bare `min-w-72` would outrank the ceiling and push
+    // the menu wider than a narrow screen.
+    expect(menu).toHaveClass(
+      'min-w-[min(18rem,calc(100vw-1.5rem))]',
+      'w-max',
+      'max-w-[min(28rem,calc(100vw-1.5rem))]',
+    );
     expect(menu).toHaveStyle({ maxHeight: '240px' });
   });
 });

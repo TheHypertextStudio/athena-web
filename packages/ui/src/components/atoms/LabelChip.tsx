@@ -33,6 +33,7 @@
 import * as React from 'react';
 
 import { cn } from '../../lib/utils';
+import { focusRing } from '../../primitives/focus';
 
 /**
  * The label palette keys the stylesheet knows how to resolve.
@@ -146,7 +147,7 @@ export function LabelChip({
   const chipClass = cn(
     shared,
     'text-label-large h-8 min-w-0 rounded-lg px-2.5',
-    'focus-visible:ring-secondary outline-none focus-visible:ring-2',
+    focusRing,
     className,
   );
 

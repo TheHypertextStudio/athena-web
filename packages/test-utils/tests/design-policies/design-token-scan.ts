@@ -27,6 +27,7 @@
  * | `legacy-color-role` | `bg-card`, `text-muted-foreground`, `border-border`, `bg-destructive`, `text-primary-foreground` | shadcn's role names alias the MD3 roles, so they resolve to the same pixel; one name per colour keeps the palette single. Use the MD3 name: `surface-container-low`, `on-surface-variant`, `outline-variant`, `error`, `on-primary`. |
  * | `hardcoded-color` | `#7a5cff`, `rgb(…)`, `rgba(…)`, `hsl(…)` | A literal colour cannot follow the light/dark theme and is invisible to every downstream token change. |
  * | `ad-hoc-border` | `border`, `border-outline-variant`, `border-l`, `border-dashed` | Grouping and separation are done with a tonal step on the surface ramp, not a drawn line (design-system §8). Only a field affordance, a focus indicator, or a genuine semantic boundary earns a border. |
+ * | `unscoped-focus-ring` | `ring-ring`, `outline-ring` with no focus variant on it | `--ring` is MD3's focus-indicator role, so a mark painted in it *is* a focus indicator. One carrying no `focus-visible:` fires on a mouse click, or on whatever JS state a component happens to toggle — which is how a picker came to draw a box around its current value the moment it opened, and drag that box around under the cursor. |
  *
  * ## Per-rule scope
  *
@@ -51,7 +52,8 @@ export type DesignTokenRule =
   | 'raw-shadow-on-overlay'
   | 'legacy-color-role'
   | 'hardcoded-color'
-  | 'ad-hoc-border';
+  | 'ad-hoc-border'
+  | 'unscoped-focus-ring';
 
 /** Every rule the scanner implements, for exhaustive reporting and ledger validation. */
 export const DESIGN_TOKEN_RULES: readonly DesignTokenRule[] = [
@@ -63,6 +65,7 @@ export const DESIGN_TOKEN_RULES: readonly DesignTokenRule[] = [
   'legacy-color-role',
   'hardcoded-color',
   'ad-hoc-border',
+  'unscoped-focus-ring',
 ];
 
 /**
@@ -292,6 +295,18 @@ const BORDER_SIDES = '[xytrbls]';
  */
 const BORDER_FOCUS_VARIANTS = 'focus|focus-visible|focus-within';
 
+/**
+ * The variants that make a `ring-ring` legitimately a focus indicator.
+ *
+ * @remarks
+ * `focus-visible` is the one to reach for; `focus` and `focus-within` are here because a field
+ * wrapper and a few legacy controls still use them and they are at least *focus*. `data-[nav=…]`
+ * is the `aria-activedescendant` case: a listbox that parks real focus on its search input has no
+ * focus for the pseudo-class to match, so the row publishes its own input modality instead. See
+ * `menuActiveDescendantRing` in `packages/ui/src/primitives/menu-styles.ts`.
+ */
+const FOCUS_RING_VARIANTS = String.raw`focus|focus-visible|focus-within|data-\[nav=[\w-]+\]`;
+
 const RULE_PATTERNS: readonly {
   readonly rule: DesignTokenRule;
   readonly pattern: RegExp;
@@ -389,6 +404,23 @@ const RULE_PATTERNS: readonly {
         String.raw`|collapse(?![\w-])|separate(?![\w-])` +
         String.raw`|(?:${CSS_BORDER_PROPERTIES})(?![\w-])` +
         String.raw`|spacing(?:-[\w.[\]/-]+)?(?![\w-]))[\w.[\]/-]+)?(?![\w-])`,
+      'g',
+    ),
+  },
+  {
+    rule: 'unscoped-focus-ring',
+    // `ring-ring` / `outline-ring` with nothing scoping it to focus.
+    //
+    // The colour is the whole signal: `--ring` resolves to `secondary`, which every MD3 component
+    // spec names as the focus-indicator role. A mark in that colour is a focus indicator by
+    // definition, so one that is not behind a focus variant is being painted by something that is
+    // not focus — a click, a hover, or a piece of React state.
+    //
+    // Deliberately narrow. A ring in some *other* role is free to mean whatever a component needs
+    // (`CalendarGrid` rings today's date in `primary`, and should). This bans exactly the case
+    // where the focus role is borrowed for a non-focus purpose.
+    pattern: new RegExp(
+      String.raw`(?<![\w-])(?<!(?:(?:group-|peer-)?(?:${FOCUS_RING_VARIANTS})):)(?:ring|outline)-ring(?![\w-])`,
       'g',
     ),
   },

@@ -432,15 +432,35 @@ function Badge(
 One recipe. Three variants. No shadow in any state — default, hover, focus, filled, disabled, or
 error.
 
-| Variant    | Border                | Fill                     | Use for                                                                                                  |
-| ---------- | --------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `outlined` | 1px `outline-variant` | transparent              | **default** — dialog and settings forms                                                                  |
-| `filled`   | transparent           | `surface-container-high` | search boxes, composers, toolbar filters — anywhere a hairline would be the loudest line on screen       |
-| `plain`    | transparent           | none                     | inline editors that must sit on the same axis as the text they replace (a row title you click to rename) |
+| Variant    | Border                          | Fill                        | Use for                                                                                                  |
+| ---------- | ------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `outlined` | 1px `outline`                   | transparent                 | **default** — the outline is the whole affordance                                                        |
+| `filled`   | 1px bottom activation indicator | `surface-container-highest` | a container plus an indicator, no outline                                                                |
+| `plain`    | none until hover                | none                        | inline editors that must sit on the same axis as the text they replace (a row title you click to rename) |
 
-Every variant renders a 1px border; `filled` and `plain` make it transparent. So a `filled` field
-and an `outlined` field side by side are the same box to the pixel, and changing a field's variant
-never shifts its neighbours.
+Every variant renders a 1px border; `plain` makes it transparent. So a `filled` field and an
+`outlined` field side by side are the same box to the pixel, and changing a field's variant never
+shifts its neighbours.
+
+**Values come from the spec, and the spec is written down.**
+[`references/md3-text-fields.md`](references/md3-text-fields.md) pins every token with its
+provenance. `field.tsx` used to cite the token paths without recording the values, which is how the
+resting outline drifted onto `outline-variant` — a role the spec never names for a field, measuring
+1.17:1 against a dialog panel, under WCAG 1.4.11's 3:1 for a component boundary.
+
+The two variants answer "how do I tell this is a field" differently, and neither uses a fill to do
+it. `outlined` has no container token at all: the 1px `outline` is the affordance, at 3.43:1 in
+light and 3.39:1 in dark. `filled` has no outline: `surface-container-highest` plus a bottom
+activation indicator, and the indicator is the mark that carries, because the container alone is
+1.07:1 against a `surface-container-high` panel.
+
+A fill can never carry it alone — the surface ramp spans L 0.93–0.995 in light, so the widest gap it
+offers is about 1.2:1, and 3:1 would take roughly L 0.55, a mid-grey slab. That is the reason MD3
+puts the identifying mark on a line in both variants.
+
+`plain` is the deliberate exception: it is the inline editor for a row title or a page heading,
+where a resting box would draw a rectangle around text nobody is editing. Its affordance is hover
+and focus.
 
 ### MD3 reference and deviations
 
@@ -614,8 +634,49 @@ onto. Vibrant escalates selection to solid `tertiary`.
 
 `PickerList` uses that persistent selected fill only for multi-select lists. A single-select picker
 keeps the menu surface neutral and identifies its chosen row with the trailing check. Its 10% active
-layer starts on the chosen row and follows keyboard or pointer movement. This prevents a status
-glyph, check, and saturated container from competing to say the same thing.
+layer starts on the chosen row and follows keyboard or pointer movement; the focus ring follows the
+keyboard alone. This prevents a status glyph, check, and saturated container from competing to say
+the same thing.
+
+### Width is a floor and a ceiling
+
+`MENU_WIDTH` has four tiers — `sm`, `md` (the default), `lg`, `xl` — and each is a **range**, not a
+fixed width: a minimum, `w-max`, and a maximum that already folds in the viewport clamp. A menu
+takes the width its longest row needs, somewhere between the two.
+
+It used to be a fixed `w-*` with `min-w-0`, which is a ceiling and no floor. Every menu was then
+exactly its tier's width whatever it held, so a picker pinned to the 224px default cut long project
+and program names to an ellipsis with a couple of hundred pixels of empty screen beside them, and a
+second line of supporting text wrapped rather than fitting. Call sites answered that the only way
+they could, with a local `min-w-[14rem]` fighting the container — which is the sprawl the closed set
+was introduced to end.
+
+Pick the tier by what the rows carry: `sm` for one-word actions, `md` for an action list, `lg` for
+rows with an entity name, supporting text, or a trailing value, `xl` for a path, a timestamp, or a
+workspace name. Every searchable picker is `lg`.
+
+Write **both** bounds as a single `min(<tier>,calc(100vw-1.5rem))`. Two things go wrong otherwise.
+Two `max-w-*` classes resolve to whichever `cn` saw last, which drops the viewport clamp. And CSS
+resolves `min-width` above `max-width` wherever they disagree, so a bare `min-w-88` floor beats the
+ceiling on a narrow screen — at 320px the ceiling computes to 296px, the floor stays 352px, and the
+document scrolls sideways.
+
+### Rows are one line
+
+A row's height is fixed by `min-h-11`, and nothing in it may wrap past that. The label truncates,
+and `menuSupporting` is `line-clamp-1`. Put `truncate` on the text, never on the flex row holding
+it: `text-overflow` needs a block container with inline content, so on a flex parent the ellipsis
+is inert and the label clips mid-glyph instead. Arrow-key navigation has a rhythm only while the rows are
+the same height, and a trailing check or glyph stops aligning with its neighbours the moment one
+row is two lines tall — a four-status menu where one description wrapped rendered at four different
+heights.
+
+Text that will not fit on one line is a sign it belongs where it was authored. A status
+`description` is shown in Settings → Statuses, where someone is deciding what the stage means, and
+not under the status name in a picker.
+
+Quiet prose inside a menu that is not a row — an empty state, a "+3 more" tail, an "unavailable"
+line — uses `MenuNote`, so it shares the row's 16dp axis instead of arriving at 8dp or 12dp.
 
 ### Sections: gap or divider, never both
 
@@ -650,6 +711,22 @@ every MD3 disabled token carries.
 
 The focus indicator is 3dp inside the row in the `secondary` role, not the shared 1px
 `focusRingInset`. Menu rows are the one place that ring does not apply.
+
+**A ring is a keyboard affordance.** A Radix menu gets that for free from `menuFocusRing`, which is
+scoped to `:focus-visible` and so never fires on a click. A listbox that keeps real focus on a
+search input or a text editor and names its highlighted row with `aria-activedescendant` has no
+focus for the pseudo-class to see, and that is the one place this has to be built by hand: the row
+publishes `data-nav` from `useInputModality`, and `menuActiveDescendantRing` draws the same 3dp ring
+off `data-nav="keyboard"`. Painting it off "is active" instead put a box around the current value
+the moment a picker opened, and then dragged that box around under the mouse.
+
+Typing is keyboard input. Once a query narrows a list, the highlighted row is the one Enter takes,
+so it keeps the ring.
+
+**Active is not selected.** Where the highlight is and what the value is are two facts, and a row
+that is merely arrowed past must not take the selected container — that tells the reader they have
+chosen something they are still looking at. `active` takes the 10% layer and, on the keyboard, the
+ring; `selected` takes `tertiary-container`. An autocomplete list has no selected row at all.
 
 A menu whose submenu is open morphs from `corner.large` to `corner.small`. That shape change is the
 spec's active state, and it is driven off the open `SubTrigger` Radix leaves inside the parent.
@@ -688,6 +765,42 @@ before — `CORE-08` measured Display radio rows at 32px of leading padding agai
 No menu opts in, and no row needs to know what its siblings render. The selectors are descendant
 rather than direct-child because a `DropdownMenuGroup` sits between the menu and its rows in the
 grouped layout.
+
+### Every overlay has a scroll owner
+
+A dialog, sheet, and panel popover are all `overflow-hidden` under a height cap, and they hand
+scrolling to a body slot — `DialogBody`, `SheetBody`, `PopoverBody` — which stamps
+`data-overlay-scroll-owner`. That is the shape to write: the header and footer hold still, and only
+the middle moves.
+
+The slot is not how a surface avoids clipping, though, because it is opt-in and around twenty
+dialogs had simply never added one. A surface with no scroll owner among its descendants now
+scrolls itself, through `OVERLAY_SCROLL_FALLBACK`. The whole panel moves in that case, header
+included, rather than leaving content unreachable.
+
+Treat the fallback as a floor, not a destination. A surface that can overflow should name its body
+slot, which is also what makes the fallback stand down.
+
+**A dialog never insets its own panel.** `DialogContent` defaults to
+`{ kind: 'centered', size: 'standard', height: 'content' }`, and the header, body, and footer slots
+each apply `px-6 py-4`. There used to be a second geometry here — a fallback class string for
+call sites that passed no presentation — and it carried a `p-6`, so a dialog using both landed on a
+48px horizontal inset against its migrated neighbours' 24px. One contract, no second spelling.
+
+When a form owns the footer so Enter submits, the form becomes the panel's flex column
+(`flex min-h-0 flex-1 flex-col`) and the body slot goes inside it. That is what keeps the actions
+fixed while the fields scroll.
+
+Nothing inside an overlay may set its own `max-h-*`. The surface is already capped — a dialog by its
+presentation height, a popover by `--radix-popover-content-available-height` — so a second cap
+underneath only makes the region shorter than the space it was given. A picker list pinned at
+`max-h-64` rendered as a 256px scrolling window with several hundred pixels free below it.
+
+Scroll owners reserve no scrollbar gutter. `scrollbar-gutter` takes its space inside the padding
+box, so any reservation indents the body's content past the header and footer it shares an axis
+with — measured at 24px against 39px on a platform drawing classic scrollbars. One edge is
+asymmetric within the body and both edges are misaligned against the panel, so the bar simply
+overlays the last few pixels of a row while it is scrolling, which is the lesser of the three.
 
 ---
 
@@ -794,16 +907,17 @@ against its own edge at any size. A test asserts this over the whole scale.
 
 ### Rules
 
-| Rule                        | Fails on                                                                                                                            |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `raw-type-utility`          | `text-xs`, `text-2xl`, `text-[13px]`, `font-semibold`, `leading-tight`, `leading-[1.1]`, `tracking-widest`, `tracking-[-0.015em]`   |
-| `raw-radius-utility`        | `rounded`, `rounded-t`, `rounded-sm`, `rounded-2xl`, `rounded-[3px]` — corners outside the two scales in §1                         |
-| `size-changing-interaction` | `hover:scale-105`, `active:scale-[0.99]`, `group-hover:h-10`, `hover:p-3`, `focus:text-lg`                                          |
-| `shadow-outside-overlay`    | any `shadow-*` outside the allow-set above                                                                                          |
-| `raw-shadow-on-overlay`     | `shadow-md`, `shadow-lg`, `shadow-2xl` _inside_ an allow-set overlay — a float names an MD3 level (`shadow-level0`–`shadow-level5`) |
-| `legacy-color-role`         | `bg-card`, `text-muted-foreground`, `border-border`, `bg-destructive`, `text-primary-foreground`                                    |
-| `hardcoded-color`           | `#7a5cff`, `rgb(…)`, `rgba(…)`, `hsl(…)`                                                                                            |
-| `ad-hoc-border`             | `border`, `border-l`, `border-2`, `border-dashed`, `border-outline-variant` — grouping is a tonal step, not a drawn line (§8)       |
+| Rule                        | Fails on                                                                                                                                                                     |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `raw-type-utility`          | `text-xs`, `text-2xl`, `text-[13px]`, `font-semibold`, `leading-tight`, `leading-[1.1]`, `tracking-widest`, `tracking-[-0.015em]`                                            |
+| `raw-radius-utility`        | `rounded`, `rounded-t`, `rounded-sm`, `rounded-2xl`, `rounded-[3px]` — corners outside the two scales in §1                                                                  |
+| `size-changing-interaction` | `hover:scale-105`, `active:scale-[0.99]`, `group-hover:h-10`, `hover:p-3`, `focus:text-lg`                                                                                   |
+| `shadow-outside-overlay`    | any `shadow-*` outside the allow-set above                                                                                                                                   |
+| `raw-shadow-on-overlay`     | `shadow-md`, `shadow-lg`, `shadow-2xl` _inside_ an allow-set overlay — a float names an MD3 level (`shadow-level0`–`shadow-level5`)                                          |
+| `legacy-color-role`         | `bg-card`, `text-muted-foreground`, `border-border`, `bg-destructive`, `text-primary-foreground`                                                                             |
+| `hardcoded-color`           | `#7a5cff`, `rgb(…)`, `rgba(…)`, `hsl(…)`                                                                                                                                     |
+| `ad-hoc-border`             | `border`, `border-l`, `border-2`, `border-dashed`, `border-outline-variant` — grouping is a tonal step, not a drawn line (§8)                                                |
+| `unscoped-focus-ring`       | `ring-ring` / `outline-ring` with no focus variant on it — `--ring` is the focus-indicator role, so a mark in it that is not behind focus is being painted by something else |
 
 Legal near-misses the scanner deliberately spares: `text-on-surface-variant` (a colour token),
 `shadow-none`, `text-[var(--radix-x)]` (a token reference), `hover:translate-y-0.5` (movement, not a
@@ -814,6 +928,13 @@ of the three things §8 says earns a border. For `raw-radius-utility`: both scal
 (`rounded-md`, `rounded-t-xl`, `rounded-b-corner-md`, `rounded-full`), `rounded-none` — which
 asserts there is no corner the way `border-0` asserts there is no border — and `rounded-[var(--x)]`
 and `rounded-[inherit]`, which defer to a token or to the parent rather than picking a value.
+
+`unscoped-focus-ring` spares `focus-visible:ring-ring` and its `group-`/`peer-` forms, `focus:` and
+`focus-within:`, and `data-[nav=keyboard]:ring-ring` — the `aria-activedescendant` case, where a
+listbox parks real focus on its search input and the row has to publish its own modality. A ring in
+any _other_ role is untouched: `CalendarGrid` rings today's date in `primary` and should. The rule
+is only about borrowing the focus colour for something that is not focus, which is what put a
+permanent box around a picker's current value and then let it follow the mouse.
 
 #### Per-rule scope
 

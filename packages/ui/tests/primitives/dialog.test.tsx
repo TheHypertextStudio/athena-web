@@ -145,7 +145,18 @@ describe('Dialog family', () => {
     expect(dialog).toHaveAccessibleName('New project');
     expect(dialog).toHaveAccessibleDescription('Give it a name to get started.');
     expect(dialog).toHaveClass('bg-surface-container-high', 'rounded-xl');
-    expect(dialog).toHaveClass('max-h-[85vh]', 'min-h-0', 'overflow-hidden', 'overscroll-contain');
+    // A dialog that asks for no presentation takes the centered/standard/content default rather
+    // than a second geometry spelled out only for it.
+    expect(dialog).toHaveClass(
+      'max-h-[min(85dvh,48rem)]',
+      'max-w-lg',
+      'min-h-0',
+      'overflow-hidden',
+      'overscroll-contain',
+    );
+    // The panel carries no inset of its own; the header, body, and footer slots own it.
+    expect(dialog).toHaveClass('p-0');
+    expect(dialog).not.toHaveClass('p-6');
     expect(dialog).not.toHaveClass('touch-pan-y');
   });
 

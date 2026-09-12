@@ -58,6 +58,36 @@ gated on `@2xl`, which the collapsed `large` panel cannot satisfy — so it appe
   already fixed differently — work that was wrong against main and had to be dropped. Rebase before
   diagnosing, not after; a bug report written against a stale base describes a codebase nobody has.
 
+### [EDITOR-INSET-CLICK-001] Every part of a description body accepts a click
+
+- **Completed**: 2026-09-11
+- **Priority**: P1
+- **Summary**: The inset around a description was dead. A host paints that element and pads it, so
+  the padding reads as part of the writing area, but a click there landed on the wrapper and did
+  nothing. Measured on the create composer: four of six places a reader might reasonably click —
+  left, right and top insets, and the bottom corner — accepted no click at all.
+
+#### Change
+
+`placeCaretFromInset` in `freeform-text.tsx` puts the caret at the position nearest the pointer
+when a click lands on the surface itself. The point is clamped into the content box before asking
+`posAtCoords`, which answers null for anything outside that box — i.e. for every click this exists
+to serve. The first attempt skipped the clamp and fell through to focusing the document's end, and
+the browser probe caught it: clicks level with line 1 landed on line 2. That fallback is the older
+regression where a long body scrolled to its last line and threw away a placed caret.
+
+- **Files changed**: `apps/web/src/components/editor/freeform-text.tsx`,
+  `apps/web/src/components/composer/composer-shell.tsx` (a comment there had claimed this already
+  worked), `apps/web/tests/editor/editor-surface.test.tsx`,
+  `apps/web/e2e/athena/verify-composer.spec.ts`.
+- **Validation**: root `typecheck`, `lint`, `format:check`, `test` (coverage) green.
+  `E2E_EVIDENCE=1 playwright test verify-composer` passes against a live stack. A browser probe
+  clicked six regions in both composer sizes: 4/12 failed before, 12/12 place a caret now, each on
+  the line the pointer was level with.
+- **Learnings**: where a caret lands is a layout question, and jsdom has no layout — the unit tests
+  can only check that the surface takes the click. Both prior assertions here pinned the dead
+  behavior and passed while the product was wrong, so the real check belongs in the browser suite.
+
 ### [SEARCH-ACTIVITY-DUPES-001] Stop one entity from filling the palette with itself
 
 - **Completed**: 2026-09-10

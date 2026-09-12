@@ -519,11 +519,11 @@ function ComposerBodyRegion({
       >
         <div ref={columnRef} className="flex min-w-0 flex-col gap-4">
           {/*
-           * The background/padding lives on the editor's own surface, not a wrapping div — that
-           * surface is what already turns a click anywhere inside it (including the padding) into
-           * a focus. A separate padded wrapper would look identical but leave its own inset dead:
-           * clicking there would land on this div instead of the editor, and nothing would happen.
-           * `p-3`, not `px-3 py-2`, so the inset reads the same on every side.
+           * The background/padding lives on the editor's own surface, not a wrapping div. A
+           * separate padded wrapper would look identical but leave its own inset dead: clicking
+           * there would land on this div instead of the editor. The surface makes its inset a
+           * writing target itself — see `placeCaretFromInset` in the editor. `p-3`, not
+           * `px-3 py-2`, so the inset reads the same on every side.
            */}
           {mentionOrgId === undefined ? (
             editor

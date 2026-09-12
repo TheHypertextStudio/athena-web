@@ -76,6 +76,36 @@ test.describe('new-task composer', () => {
       templateButton.evaluate((node) => node.getBoundingClientRect()),
     ]);
     expect(templateBounds.top).toBeGreaterThanOrEqual(placeholderBounds.bottom);
+    // Every pixel of the painted body is a writing target, its inset included. The inset used to
+    // swallow clicks outright, and the first repair sent them to the end of the document — which
+    // is the older bug of scrolling a long draft to its last line. So this checks both halves: a
+    // click level with the first line focuses the editor *and* lands on the first line.
+    await editor.click();
+    await page.keyboard.type('First line here.\nSecond line here.');
+    await page.waitForTimeout(300);
+    const insetLanding = await page.evaluate(`(() => {
+      const dialog = document.querySelector('[role="dialog"]');
+      const surface = dialog.querySelector('[data-editor-surface]');
+      const prose = dialog.querySelector('[contenteditable="true"]');
+      const first = prose.querySelector(':scope > *');
+      const s = surface.getBoundingClientRect();
+      const f = first.getBoundingClientRect();
+      return { x: s.left + 3, y: f.top + f.height / 2, first: (first.textContent || '') };
+    })()`);
+    const landing = insetLanding as { x: number; y: number; first: string };
+    await page.mouse.click(landing.x, landing.y);
+    const caret = await page.evaluate(`(() => {
+      const sel = window.getSelection();
+      const prose = document.querySelector('[role="dialog"] [contenteditable="true"]');
+      return {
+        inEditor: !!(sel && sel.anchorNode && prose && prose.contains(sel.anchorNode)),
+        line: sel && sel.anchorNode ? (sel.anchorNode.textContent || '') : '',
+      };
+    })()`);
+    expect(caret).toEqual({ inEditor: true, line: landing.first });
+    await editor.press('Meta+a');
+    await editor.press('Backspace');
+
     await expect(propertyStrip).toHaveCSS('flex-wrap', 'nowrap');
     await expect(propertyStrip).toHaveJSProperty(
       'scrollWidth',

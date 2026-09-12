@@ -14,7 +14,7 @@ import { Markdown } from '@tiptap/markdown';
 import { EditorContent, ReactNodeViewRenderer, useEditor } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import type { JSX } from 'react';
+import type { JSX, MouseEvent as ReactMouseEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { cn } from '@docket/ui/lib/utils';
@@ -503,9 +503,46 @@ export function FreeformTextEditor({
 
   if (!editor) return null;
 
+  /**
+   * Put a caret wherever the reader clicked, including the surface's own inset.
+   *
+   * @remarks
+   * A host paints this element and pads it, so its inset is part of the box a reader sees as the
+   * writing area — and every click that landed there used to do nothing at all. Resolving the
+   * click through `posAtCoords` is what makes that safe: the caret goes to the position nearest
+   * the pointer, so clicking beside the first line lands on the first line. An earlier attempt
+   * focused the document's end instead, which scrolled a long body to the bottom and threw away a
+   * caret the reader had already placed; that is the behavior this must not bring back.
+   */
+  const placeCaretFromInset = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    if (!isEditingEnabled || event.target !== event.currentTarget) return;
+    event.preventDefault();
+    try {
+      // Clamp into the content box before asking. `posAtCoords` answers null for a point outside
+      // it, and the inset is entirely outside it — so asking with the raw coordinates returns
+      // nothing for exactly the clicks this handler exists to serve. Clamping keeps the axis the
+      // reader aimed with: a click level with the first line stays level with the first line.
+      const content = editor.view.dom.getBoundingClientRect();
+      const found = editor.view.posAtCoords({
+        left: Math.min(Math.max(event.clientX, content.left + 1), content.right - 1),
+        top: Math.min(Math.max(event.clientY, content.top + 1), content.bottom - 1),
+      });
+      if (found) {
+        editor.chain().focus().setTextSelection(found.pos).run();
+        return;
+      }
+      editor.commands.focus(event.clientY < content.top ? 'start' : 'end');
+    } catch {
+      // `posAtCoords` reads layout, which a test environment does not have. Focusing without a
+      // position is still better than swallowing the click.
+      editor.commands.focus();
+    }
+  };
+
   return (
     <div
       ref={surfaceRef}
+      onMouseDown={placeCaretFromInset}
       data-editor-surface=""
       className={cn(
         'relative flex min-h-0 flex-1 flex-col [&_.ProseMirror]:min-h-10 [&_.ProseMirror]:flex-1 [&_.ProseMirror]:outline-none [&_.ProseMirror_.is-editor-empty:first-child::before]:hidden [&_.tableWrapper[data-table-controls-visible]]:mt-16 sm:[&_.tableWrapper[data-table-controls-visible]]:mt-14',

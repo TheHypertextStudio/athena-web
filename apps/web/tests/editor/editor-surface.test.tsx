@@ -184,14 +184,17 @@ describe('the block menu control', () => {
 });
 
 describe('clicking an editor-shaped surface', () => {
-  it('does not move the caret when the click lands in the outer editor margin', async () => {
+  it('claims a click on the editor surface instead of letting it fall through', async () => {
     renderEditor(<EntityDocument value="A single line." canEdit onSave={vi.fn()} />);
     const surface = await screen.findByRole('textbox', { name: 'Description' });
-    // This margin is outside ProseMirror's content. Treating it as a click at the end made a
-    // long document scroll to the last line and moved a previously placed caret.
+    // A host paints and pads this element, so its inset reads as part of the writing area. Every
+    // click there used to do nothing at all. The caret now goes to the position nearest the
+    // pointer — resolving *where* needs layout, which jsdom has none of, so what is checkable
+    // here is that the surface takes the click rather than ignoring it. The landing position is
+    // asserted in a real browser by `apps/web/e2e/athena/verify-composer.spec.ts`.
     const outerMargin = assertDefined(surface.closest('[data-editor-surface]'));
-    fireEvent.mouseDown(outerMargin, { bubbles: true });
-    expect(document.activeElement).not.toBe(surface);
+    const claimed = fireEvent.mouseDown(outerMargin, { bubbles: true, cancelable: true });
+    expect(claimed).toBe(false);
   });
 
   it('does not move the caret from a click on entity-card padding', async () => {
@@ -243,8 +246,9 @@ describe('clicking an editor-shaped surface', () => {
     );
     const surface = await screen.findByRole('textbox', { name: 'Add description' });
     const outerMargin = assertDefined(surface.closest('[data-editor-surface]'));
-    fireEvent.mouseDown(outerMargin, { bubbles: true });
-    expect(document.activeElement).not.toBe(surface);
+    const claimed = fireEvent.mouseDown(outerMargin, { bubbles: true, cancelable: true });
+    // The composer's body is one tinted box a reader aims at. No part of it may swallow a click.
+    expect(claimed).toBe(false);
   });
 
   it('keeps composer chrome fixed while the body owns contained scrolling in both size states', async () => {

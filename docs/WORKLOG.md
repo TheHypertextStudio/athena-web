@@ -774,6 +774,19 @@ tests/search/` plus the search route suites — 135/135 passing.
   sign-in is public through the existing provider gate. Live `/v1/config` exposes both native
   providers, the `studio.hypertext.docket` Apple audience, and the production Google web-client
   audience.
+  Signed WilliePad canaries pass Apple sign-in, Apple session restoration, Apple sign-out, Google
+  sign-in, Google session restoration, current-RP passkey sign-in, and current-RP session
+  restoration. The historical passkey reaches the migration verifier, but production returns
+  `MIGRATION_CREDENTIAL_NOT_FOUND`: the passkey table has no public key or account binding for the
+  credential ID that Apple asserted. The server cannot authenticate or migrate an orphaned
+  credential without that record. The native client now gives this diagnostic specific recovery
+  copy and lets a user who authenticated with Apple or Google add a new `clearthedocket.com`
+  passkey from Account settings. The authenticated registration keeps the signed-in session in
+  Keychain and sends its session cookie alongside the one-use Better Auth challenge cookie. Fifty-
+  eight native unit and HTTP-contract tests pass, the iOS Simulator test bundle compiles, and a
+  signed production Release build with the recovery control passes strict verification, installs,
+  and launches on WilliePad. The device canary now treats direct legacy migration as optional
+  compatibility and gates release on the authenticated replacement plus current-RP sign-in.
 - **Domain validation**: Verisign RDAP records the `clearthedocket.com` registration on 2026-09-08
   and delegates it to `candy.ns.cloudflare.com` and `ricardo.ns.cloudflare.com`. Vercel accepted
   `clearthedocket.com` and `www.clearthedocket.com` for project `docket` and requires an apex A

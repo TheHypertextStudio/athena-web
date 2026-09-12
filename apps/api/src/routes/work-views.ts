@@ -8,6 +8,10 @@ import {
   OrganizationWorkViewDefaultWrite,
 } from '@docket/work/saved-view-contract';
 import {
+  InitiativeViewDefinition,
+  ProgramViewDefinition,
+  ProjectViewDefinition,
+  TaskViewDefinition,
   WorkViewFacetRequest,
   WorkViewFacetResponse,
   WorkViewOrderRequest,
@@ -24,6 +28,7 @@ import { NotFoundError } from '../error';
 import type { JsonRoute } from '../lib/hono-rpc';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
+import { parseStoredDefinition } from '../lib/stored-definition';
 import { zJson, zParam } from '../lib/validate';
 import { queryWorkViewFacets } from '../lib/work-views/facets';
 import { reorderWorkView } from '../lib/work-views/order';
@@ -39,6 +44,14 @@ type DefaultDefinitionFor<TTarget extends OrganizationWorkViewDefaultInput['targ
   OrganizationWorkViewDefaultInput,
   { target: TTarget }
 >['definition'];
+
+/** The current definition schema for one organization-default target. */
+const DEFAULT_DEFINITION_SCHEMA = {
+  task: TaskViewDefinition,
+  project: ProjectViewDefinition,
+  program: ProgramViewDefinition,
+  initiative: InitiativeViewDefinition,
+} as const satisfies Record<(typeof organizationWorkViewDefault.$inferSelect)['target'], z.ZodType>;
 
 /**
  * Correlate a stored default's target and definition for the response serializer.
@@ -236,6 +249,18 @@ const workViews: Hono<AppEnv, WorkViewRoutes> = new Hono<AppEnv>()
         .limit(1);
       const row = rows[0];
       if (!row) throw new NotFoundError('Work-view default not found');
+      // A stored default whose definition no longer satisfies the contract answers exactly as an
+      // unset one does. It described a view nobody can render, and serializing it turned one stale
+      // row into a 500 for every member of the workspace; callers already treat the absent case as
+      // "use the built-in definition", which is the same outcome without the outage.
+      if (
+        parseStoredDefinition(DEFAULT_DEFINITION_SCHEMA[row.target], row.definition, {
+          column: 'organization_work_view_default.definition',
+          rowId: `${row.organizationId}:${row.target}`,
+        }) === null
+      ) {
+        throw new NotFoundError('Work-view default not found');
+      }
       return ok(c, OrganizationWorkViewDefault, organizationDefaultOut(row));
     },
   )

@@ -17,6 +17,7 @@ import {
   HubTodayOut,
 } from '../contracts/hub';
 import { HubPreferences } from '@docket/planning/hub-preferences-contract';
+import { PersonalWorkViewState } from '@docket/work/work-view-contract';
 import { ListQuery } from '../contracts/pagination';
 import { StreamPageOut, StreamQuery } from '../contracts/stream';
 import type { HubPreferences as HubPreferencesValue } from '@docket/planning/hub-preferences-contract';
@@ -29,6 +30,7 @@ import { AuthError, ConflictError, NotFoundError } from '../error';
 import type { JsonRoute } from '../lib/hono-rpc';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
+import { parseStoredDefinitions } from '../lib/stored-definition';
 import {
   buildFilterConditions,
   cursorCondition,
@@ -64,6 +66,41 @@ const portfolioQuery = z.object({
   initiativeId: z.string().optional(),
 });
 
+/**
+ * Parse a stored preferences row without letting one stale view override take the surface down.
+ *
+ * @remarks
+ * `viewState` entries are `.strict()` objects whose field enums come from the work-view contract, so
+ * renaming or removing a field makes every entry that referenced it unparseable. Failing the whole
+ * read for that is a bad trade twice over: a person loses preferences that are otherwise intact, and
+ * because the write path parses the same row, they cannot overwrite the stale entry to heal
+ * themselves. Unparseable entries are dropped and logged; the views they described fall back to
+ * their defaults, which is what an absent override already means.
+ *
+ * Anything wrong outside `viewState` still throws. This repairs a contract that moved underneath
+ * stored data, and is not a general tolerance for malformed rows.
+ *
+ * @param stored - The raw `hub.preferences` JSON value.
+ * @param userId - Owning row id, for the log line when an entry is stale.
+ * @returns the preferences, carrying only the view overrides that still satisfy the contract.
+ * @throws {z.ZodError} when the row is malformed outside `viewState`.
+ */
+function parseStoredHubPreferences(
+  stored: unknown,
+  userId: string,
+): z.infer<typeof HubPreferences> {
+  const direct = HubPreferences.safeParse(stored);
+  if (direct.success) return direct.data;
+  if (typeof stored !== 'object' || stored === null) return HubPreferences.parse(stored);
+  const candidate: Record<string, unknown> = { ...stored };
+  if (!Array.isArray(candidate['viewState'])) return HubPreferences.parse(stored);
+  const viewState = parseStoredDefinitions(PersonalWorkViewState, candidate['viewState'], {
+    column: 'hub.preferences.viewState',
+    rowId: userId,
+  });
+  return HubPreferences.parse({ ...candidate, viewState });
+}
+
 /** Read the caller-owned Hub row or existence-hide the missing personal root. */
 async function readHubPreferences(userId: string): Promise<z.infer<typeof HubPreferences>> {
   const rows = await db
@@ -73,7 +110,7 @@ async function readHubPreferences(userId: string): Promise<z.infer<typeof HubPre
     .limit(1);
   const row = rows[0];
   if (!row) throw new NotFoundError('Hub not found');
-  return HubPreferences.parse(row.preferences);
+  return parseStoredHubPreferences(row.preferences, userId);
 }
 
 /** Deep-merge nested preference groups so a focused patch cannot erase sibling settings. */
@@ -159,7 +196,10 @@ const hubPreferenceRoutes: Hono<AppEnv, HubPreferenceRoutes> = new Hono<AppEnv>(
           .for('update');
         const current = currentRows[0];
         if (!current) throw new NotFoundError('Hub not found');
-        const merged = mergeHubPreferences(HubPreferences.parse(current.preferences), patch);
+        const merged = mergeHubPreferences(
+          parseStoredHubPreferences(current.preferences, session.user.id),
+          patch,
+        );
         const rows = await tx
           .update(hubTable)
           // Zod's inferred preferences shape is accepted by the stored Hub preferences column.
@@ -169,7 +209,7 @@ const hubPreferenceRoutes: Hono<AppEnv, HubPreferenceRoutes> = new Hono<AppEnv>(
         const updated = rows[0];
         /* v8 ignore next -- @preserve the locked caller-owned Hub row exists */
         if (!updated) throw new NotFoundError('Hub not found');
-        return HubPreferences.parse(updated.preferences);
+        return parseStoredHubPreferences(updated.preferences, session.user.id);
       });
       return ok(c, HubPreferences, preferences);
     },

@@ -7,6 +7,63 @@
 
 ## Active Tasks
 
+### [WORKVIEW-STALE-001] A view field that moved no longer takes the workspace down
+
+- **Completed**: 2026-09-11
+- **Priority**: P0
+- **Summary**: The question behind the Projects screenshot was why a read fails at all. Three tables
+  store work-view definitions as JSON — `hub.preferences.viewState`, `saved_view.definition`, and
+  `organization_work_view_default.definition` — and all three are validated by `.strict()` schemas
+  whose field enums are built from the contract literal at module load. Renaming or removing one
+  field makes every stored row that referenced it unparseable, in all three tables at once, the
+  moment the new code deploys. That is exactly the trio of failures in the screenshot, and a fresh
+  account never reproduces it because it has nothing stored to fail on.
+
+- **Approach**: Stored definitions are now read through `apps/api/src/lib/stored-definition.ts`,
+  which drops what no longer conforms, keeps what does, and logs each loss with its row id under
+  `event: 'stale_stored_definition'` so a backfill can find it. Per surface: a stale `viewState`
+  entry is dropped and the rest of the person's preferences survive; a stale saved view is omitted
+  from the list instead of failing the list for every member who can see it; a stale organization
+  default answers exactly as an unset one does, which callers already treat as "use the built-in
+  definition". The repair is deliberately narrow — it fixes a contract that moved underneath stored
+  data and is never a tolerance for malformed input, so anything wrong outside those slots still
+  throws.
+
+  The preferences write path parsed the same column as the read, so a person with one stale entry
+  could not overwrite it to heal themselves. Both paths now go through the same lenient read.
+
+- **Decisions**: A stale organization default returns 404 rather than 500. An existing test asserted
+  the 500 and was rewritten: the property it actually protects — no `fieldErrors`, no `definition`
+  in the body — still holds, and a default nobody can render is worth what no default is worth. One
+  stale row used to be an outage for every member of the workspace.
+
+  `onError` now logs `ZodError` under `event: 'schema_validation_error'`. It was skipped, which made
+  the saved-views failure completely invisible: a `GET` answered 422 with `fieldErrors` keyed by
+  internal schema paths and left nothing behind, so an outage caused by stale stored data was
+  unobservable by the one system that could have named it. Issue paths and codes only; the values
+  are the stored data.
+
+- **Files changed**: new `apps/api/src/lib/stored-definition.ts`; `apps/api/src/routes/hub.ts`,
+  `saved-views.ts`, `work-views.ts`, `apps/api/src/error.ts`; tests in
+  `apps/api/tests/routes/hub-preferences.test.ts`, `group-b.test.ts`, `work-views.test.ts`.
+
+- **Validation**: Full API suite green — 461 files, 5831 tests, exit 0. Root `typecheck`, `lint` and
+  `format:check` clean. Each new test stores a row the current contract rejects and asserts the
+  endpoint still answers.
+
+- **Learnings**: `drizzle/0097_remove_initiative_project_count.sql` exists solely to strip one
+  removed field out of stored definitions across all three tables, so this had already fired once
+  and was patched by hand. There is still no general mechanism: the next field rename without a
+  matching backfill reproduces it. The read paths survive it now, but a validator that fails the
+  build when stored rows no longer parse against the new contract is the actual prevention, and is
+  not built yet.
+
+- **Blockers**: Not yet confirmed against production logs — `gcloud` auth had expired and cannot
+  reauthenticate non-interactively. `jsonPayload.event="response_contract_violation"` on the
+  `docket-api` Cloud Run service names the affected rows for the 500 cases.
+
+---
+
 ### [WORKVIEW-FAILURE-001] A failed work view answers with one state and one action
 
 - **Completed**: 2026-09-11

@@ -720,6 +720,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     content = (
       <WorkViewLoadFailure
         title={copy.title}
+        error={controller.initialError}
         retrying={controller.retrying}
         onRetry={retrySurface}
       />

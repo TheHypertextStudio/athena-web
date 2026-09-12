@@ -75,7 +75,14 @@ export function ProjectDependencyLens({
   // `WorkViewLoadFailure` states for roster rows. Only a lens with nothing to show yields the
   // content area to the recovery state.
   if (rows === undefined) {
-    return <WorkViewLoadFailure title={title} retrying={query.isFetching} onRetry={onRetry} />;
+    return (
+      <WorkViewLoadFailure
+        title={title}
+        error={query.error}
+        retrying={query.isFetching}
+        onRetry={onRetry}
+      />
+    );
   }
   return (
     <ProjectGraphPanel

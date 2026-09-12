@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -464,7 +464,7 @@ describe('WorkViewPage failure altitudes', () => {
     failures.savedViewsError = new Error('saved views read failed');
 
     render(<WorkViewPage organizationId={ROUTE_ORG} target="task" />);
-    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+    fireEvent.click(within(screen.getByRole('alert')).getByRole('button'));
 
     expect(failures.retrySurface).toHaveBeenCalledOnce();
   });

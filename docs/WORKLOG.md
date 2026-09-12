@@ -20,7 +20,10 @@
   with Today and `/athena`, and posts heads-up entries when something needs the person.
 - **Plan**: `docs/superpowers/specs/2026-09-12-athena-companion-design.md` — five properties the
   design must pass, three approaches with the recommendation, the panel anatomy, the context model,
-  five delivery phases, files to modify, risks, and four decisions the user must confirm.
+  five delivery phases, files to modify, risks, and four decisions the user must confirm. Mockups
+  (six artboards on the app's own tokens) are linked from the design's header; the 2026-09-12
+  revision adds the Work ledger (Running / Needs you / Done) to the wide view and a table of where
+  ongoing and past work are visible on each surface.
 - **Subtasks**:
   - [x] Critique the current panel against the engine spec and prior audits
   - [x] Write the design and phased plan

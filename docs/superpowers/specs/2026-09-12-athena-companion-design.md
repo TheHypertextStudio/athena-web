@@ -7,6 +7,9 @@
 > **Companions**: `docs/engineering/specs/athena-agent.md` (the engine), `docs/core/mvp-plan.md`
 > §4 and §8.6 (the product promise), `docs/design/audits/2026-07-15-personal-athena.md` (what
 > shipped and why)
+> **Mockups**: https://claude.ai/code/artifact/d2d831f2-3cf7-4fdd-b049-218198bd20d9 (six
+> artboards: the rail beside a project, the wide view with the Work ledger, a job card on a task,
+> and the panel's empty, working, and heads-up states; tokens lifted from `packages/ui`)
 
 ## 1. The problem in one paragraph
 
@@ -142,11 +145,25 @@ session.
 ### 4.7 The wide view
 
 `/athena` is the same thread at full width, in two columns from `@3xl`: the conversation browser
-(topics, search, date range) and the Working list on the left, the thread and composer on the
+(topics, search, date range) and the **Work ledger** on the left, the thread and composer on the
 right. Connecting a tool or app moves to the composer's attach menu and to Settings › Connections;
 it leaves the thread column.
 
-### 4.8 What is removed
+The Work ledger answers "what has Athena done for me?" without reinstating the queue as the front
+door. It lists every job with three filters: Running, Needs you, Done. Done sorts newest first and
+each row shows the objective, the receipt's one-line summary, and the date. Clicking any row jumps
+to that job's card in the thread. The panel never shows this list; in the panel, past work is
+reached by scrolling the thread, and the wide view is where a person goes to look back.
+
+### 4.8 Where ongoing and past work are visible
+
+| Question                      | Panel                                                   | Wide view                                 | Task or project page                |
+| ----------------------------- | ------------------------------------------------------- | ----------------------------------------- | ----------------------------------- |
+| What is Athena doing now?     | Working strip rows; job card in the thread; icon status | Work ledger › Running; card in the thread | Job card on the task's Activity     |
+| What needs me?                | Strip row with inline decision; card's decision block   | Work ledger › Needs you; heads-up entry   | Card's decision block               |
+| What did Athena do last week? | Scroll back; receipt cards collapsed to their summary   | Work ledger › Done; topics; search; dates | Receipt on whatever the job touched |
+
+### 4.9 What is removed
 
 - `AthenaRailPanel` queue view, `AthenaRailComposer`, and the "Open full" link.
 - The lifecycle button row in the workbench header. Pause / Resume / Cancel move into the job
@@ -200,7 +217,8 @@ Objective: delegated work lives in the thread.
 
 - Reduce `AthenaWorkbench` to `AthenaJobCard`: objective, live status, steps, decision block,
   receipt, overflow menu with Pause / Resume / Cancel.
-- Add the Working strip to the panel and the Working list to the wide view.
+- Add the Working strip to the panel and the Work ledger (Running / Needs you / Done) to the
+  wide view's left column, each row jumping to its card in the thread.
 - Render `ElicitationCard` and `ProposalGroupCard` as thread entries where they are raised.
 - Rebuild `/athena` as the wide view (§4.7). Move "Connect a tool or app" to the attach menu.
 - Show the job card on the source task's detail page.

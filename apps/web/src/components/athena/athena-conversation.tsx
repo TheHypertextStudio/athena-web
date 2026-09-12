@@ -65,6 +65,26 @@ export interface AthenaConversationProps {
    * yours, and a prop that kept overwriting it would fight your typing.
    */
   initialDraft?: string;
+  /**
+   * A draft handed to the composer after mount: each new `version` replaces the text and focuses
+   * the field, the way a door into this surface seeds it. `null` asks for nothing.
+   */
+  draftRequest?: { readonly text: string; readonly version: number } | null;
+}
+
+/** A requested draft replaces the composer's text and takes focus, once per version. */
+function useDraftRequest(
+  request: { readonly text: string; readonly version: number } | null,
+  setDraft: (text: string) => void,
+  composer: React.RefObject<HTMLFormElement | null>,
+): void {
+  const version = request?.version ?? null;
+  const text = request?.text ?? '';
+  useEffect(() => {
+    if (version === null) return;
+    setDraft(text);
+    composer.current?.querySelector('textarea')?.focus({ preventScroll: true });
+  }, [version, text, setDraft, composer]);
 }
 
 /** AthenaConversation renders the org's persistent Athena conversation. */
@@ -72,6 +92,7 @@ export default function AthenaConversation({
   orgId,
   className,
   initialDraft,
+  draftRequest = null,
 }: AthenaConversationProps): JSX.Element {
   const mentionOrgId = useMentionOrgId(orgId);
   const [sending, setSending] = useState(false);
@@ -79,7 +100,9 @@ export default function AthenaConversation({
   const [draft, setDraft] = useState(initialDraft ?? '');
   const [connectOpen, setConnectOpen] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLFormElement | null>(null);
   const queryClient = useQueryClient();
+  useDraftRequest(draftRequest, setDraft, composerRef);
 
   const query = useOrgChatThread(orgId);
   const thread = query.data ?? null;
@@ -190,6 +213,7 @@ export default function AthenaConversation({
       ) : null}
 
       <form
+        ref={composerRef}
         className="flex items-end gap-2 pt-2"
         onSubmit={(event) => {
           event.preventDefault();

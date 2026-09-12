@@ -13,6 +13,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { type UseQueryResult, useQueryClient } from '@tanstack/react-query';
@@ -57,6 +58,15 @@ export function isAthenaShortcut(event: KeyboardEvent): boolean {
   );
 }
 
+/**
+ * A surface that hosts the conversation itself, so an "open Athena" from anywhere on the route
+ * lands in it instead of the shell's rail.
+ */
+export interface AthenaConversationHost {
+  /** Show the conversation, seeding the composer with `draft` when one is given. */
+  readonly reveal: (draft?: string) => void;
+}
+
 /** State and controls shared by contextual Athena entry points and its utility-rail panel. */
 export interface AthenaPanelValue {
   readonly context: PersonalAthenaContext | null;
@@ -78,6 +88,11 @@ export interface AthenaPanelValue {
   readonly detachContext: () => void;
   readonly openAthena: (context?: PersonalAthenaContext | null, draft?: string) => void;
   readonly closeAthena: () => void;
+  /**
+   * Register the route's own conversation host. While one is registered, every reveal goes to it
+   * and no launch draft is held for the rail. Returns the release; call it on unmount.
+   */
+  readonly registerHost: (host: AthenaConversationHost) => () => void;
   readonly selectSession: (session: PersonalAthenaSessionSummary) => void;
   readonly sendMessage: (body: string) => void;
   readonly lifecycle: (action: 'run' | 'pause' | 'resume' | 'cancel') => void;
@@ -151,8 +166,20 @@ export function AthenaPanelProvider({
     },
   });
 
+  const hostRef = useRef<AthenaConversationHost | null>(null);
+  const registerHost = useCallback((host: AthenaConversationHost): (() => void) => {
+    hostRef.current = host;
+    return () => {
+      if (hostRef.current === host) hostRef.current = null;
+    };
+  }, []);
   const reveal = useCallback(
     (nextContext: PersonalAthenaContext | null, draft: string | undefined): void => {
+      const host = hostRef.current;
+      if (host) {
+        host.reveal(draft);
+        return;
+      }
       if (onRevealRail) {
         onRevealRail();
         return;
@@ -170,7 +197,9 @@ export function AthenaPanelProvider({
       setContext(resolvedContext);
       setSelectedId('');
       setContextAttached(true);
-      setLaunchDraft(startsNewWork ? (draft?.trim() ?? '') : null);
+      // A hosted conversation takes the draft itself; the rail's "Start this work" composer only
+      // holds one when the rail is where the reveal lands.
+      setLaunchDraft(startsNewWork && hostRef.current === null ? (draft?.trim() ?? '') : null);
       reveal(resolvedContext, startsNewWork ? draft : undefined);
     },
     [pageContext, reveal],
@@ -233,6 +262,7 @@ export function AthenaPanelProvider({
       },
       openAthena,
       closeAthena,
+      registerHost,
       selectSession: (session) => {
         setLaunchDraft(null);
         setContext({
@@ -263,6 +293,7 @@ export function AthenaPanelProvider({
       openAthena,
       queue,
       railStatus,
+      registerHost,
       selected,
       selectedId,
     ],

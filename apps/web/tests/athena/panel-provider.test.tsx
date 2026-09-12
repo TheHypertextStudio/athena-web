@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -103,6 +103,45 @@ function renderPanel(
   );
   return api;
 }
+
+function HostedConversation({ reveal }: { readonly reveal: (draft?: string) => void }): ReactNode {
+  const { registerHost, launchDraft } = useAthenaPanel();
+  useEffect(() => registerHost({ reveal }), [registerHost, reveal]);
+  return <span data-testid="launch-draft">{launchDraft ?? 'none'}</span>;
+}
+
+function renderHosted(reveal: (draft?: string) => void, onRevealRail: () => void): void {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <AthenaPanelProvider transport={transport()} railVisible={false} onRevealRail={onRevealRail}>
+        <AthenaLaunchers />
+        <HostedConversation reveal={reveal} />
+      </AthenaPanelProvider>
+    </QueryClientProvider>,
+  );
+}
+
+describe('AthenaPanelProvider with a route host', () => {
+  it('reveals into the host with the draft and holds no launch draft for the rail', () => {
+    const reveal = vi.fn();
+    const onRevealRail = vi.fn();
+    renderHosted(reveal, onRevealRail);
+    fireEvent.click(screen.getByRole('button', { name: 'Open contextual Athena' }));
+    expect(reveal).toHaveBeenCalledTimes(1);
+    expect(onRevealRail).not.toHaveBeenCalled();
+    expect(screen.getByTestId('launch-draft')).toHaveTextContent('none');
+  });
+
+  it('routes the keyboard shortcut to the host as well', () => {
+    const reveal = vi.fn();
+    const onRevealRail = vi.fn();
+    renderHosted(reveal, onRevealRail);
+    fireEvent.keyDown(document.body, { key: 'j', metaKey: true });
+    expect(reveal).toHaveBeenCalledTimes(1);
+    expect(onRevealRail).not.toHaveBeenCalled();
+  });
+});
 
 describe('AthenaPanelProvider', () => {
   it('uses attention before active work in the accessible rail status', async () => {

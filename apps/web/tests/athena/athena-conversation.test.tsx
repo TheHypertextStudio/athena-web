@@ -93,6 +93,31 @@ afterEach(() => {
   delete process.env['NEXT_PUBLIC_API_URL'];
 });
 
+describe('AthenaConversation draft requests', () => {
+  it('fills and focuses the composer for each new request version', async () => {
+    chatGet.mockResolvedValue(okResponse(thread([])));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <AthenaConversation
+          orgId="org_1"
+          draftRequest={{ text: 'Help me plan "Q3".', version: 1 }}
+        />
+      </QueryClientProvider>,
+    );
+    const composer = await screen.findByRole('combobox');
+    expect(composer).toHaveValue('Help me plan "Q3".');
+    expect(document.activeElement).toBe(composer);
+    fireEvent.change(composer, { target: { value: 'my own words' } });
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <AthenaConversation orgId="org_1" draftRequest={{ text: 'Second ask', version: 2 }} />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole('combobox')).toHaveValue('Second ask');
+  });
+});
+
 describe('AthenaConversation MCP app cards', () => {
   it('renders the quiet work chip with the interactive card beneath it', async () => {
     process.env['NEXT_PUBLIC_API_URL'] = 'https://api.docket.test';

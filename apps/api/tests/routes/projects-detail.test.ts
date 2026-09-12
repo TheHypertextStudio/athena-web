@@ -850,26 +850,41 @@ describe('projects create with initiative associations', () => {
     ]);
   });
 
-  it('writes no project at all when one of its milestones is invalid', async () => {
+  it('rolls the project back when a milestone fails inside the transaction', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
 
+    // A whitespace-only name passes the contract's `min(1)` and fails the `milestone_name_not_blank`
+    // check constraint — so the failure lands *after* the project row is written, which is the only
+    // way to prove the two share a transaction rather than merely running in order.
     const res = await writer.request('/', {
       method: 'POST',
       headers: J,
       body: JSON.stringify({
         name: 'Rejected',
         teamId,
-        milestones: [{ name: 'Beta' }, { name: '' }],
+        milestones: [{ name: 'Beta' }, { name: '   ' }],
       }),
     });
-    expect(res.status).toBe(422);
+    expect(res.ok).toBe(false);
 
-    const projects_ = await db
+    const written = await db
       .select({ id: schema.project.id })
       .from(schema.project)
       .where(eq(schema.project.name, 'Rejected'));
-    expect(projects_).toEqual([]);
+    expect(written).toEqual([]);
+  });
+
+  it('422s before any write when a milestone name is empty', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
+
+    const res = await writer.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Refused', teamId, milestones: [{ name: '' }] }),
+    });
+    expect(res.status).toBe(422);
   });
 
   it('creates with no links when initiativeIds is omitted or empty', async () => {

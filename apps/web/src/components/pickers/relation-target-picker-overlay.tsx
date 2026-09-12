@@ -28,6 +28,7 @@ import {
 import { useActionDispatch, useActionRegistry } from '@/lib/actions';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
+import { taskDetailDef } from '@/lib/use-task-detail';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery, useApiQuery } from '@/lib/query';
 
 /** Props for the relation target picker. */
@@ -42,16 +43,46 @@ export interface RelationTargetPickerOverlayProps {
  * @remarks
  * A target kind with no entry has no option list of its own — tasks, teams, and calendar items are
  * each read by this component directly, on their own terms.
+ *
+ * A `Map`, not an object literal: an object answers a lookup for `constructor` or `toString` from
+ * its prototype, and those answers are truthy, so a target kind sharing one of those names would
+ * resolve to a function instead of falling through to "no list".
  */
-const COMPOSER_KIND_BY_TARGET: Readonly<Record<string, ComposerOptionKind | undefined>> = {
-  actor: 'actors',
-  project: 'projects',
-  program: 'programs',
-  initiative: 'initiatives',
-  label: 'labels',
-  cycle: 'cycles',
-  milestone: 'milestones',
-};
+const COMPOSER_KIND_BY_TARGET = new Map<string, ComposerOptionKind>([
+  ['actor', 'actors'],
+  ['project', 'projects'],
+  ['program', 'programs'],
+  ['initiative', 'initiatives'],
+  ['label', 'labels'],
+  ['cycle', 'cycles'],
+  ['milestone', 'milestones'],
+]);
+
+/**
+ * The task whose Project scopes a milestone picker, or `null` when there is none to scope by.
+ *
+ * @remarks
+ * A milestone belongs to one Project and a task may only be moved to one of its own, so the picker
+ * has to know which Project before it can offer anything. The relation carries the task, not its
+ * parent, so the parent has to be read — the one case where the option list depends on the subject
+ * rather than on the workspace.
+ *
+ * One subject only. Every option this picker offers is dispatched against *all* of them, so a
+ * second task in a different Project would have its move refused after the person chose a target
+ * the picker itself put in front of them. With several selected there is no set that is legal for
+ * all of them, and nothing honest to show.
+ *
+ * @param targetKind - What the relation moves its subjects to.
+ * @param subjects - The objects the relation will be dispatched against.
+ * @returns the task id to read a Project from, or `null`.
+ */
+function milestoneScopeSubject(
+  targetKind: string | undefined,
+  subjects: RelationTargetPickerRequest['subjects'],
+): string | null {
+  if (targetKind !== 'milestone' || subjects.length !== 1) return null;
+  return subjects[0]?.id ?? null;
+}
 
 /** Choose a target and invoke the same relation action that a pointer drop invokes. */
 export function RelationTargetPickerOverlay({
@@ -65,23 +96,14 @@ export function RelationTargetPickerOverlay({
   const displayTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const relation = RELATION_DEFINITIONS.find(({ id }) => id === request.relationId);
   const targetKind = relation?.targetKind;
-  const composerKind = COMPOSER_KIND_BY_TARGET[targetKind ?? ''] ?? null;
-  // A milestone belongs to one Project and a task may only be moved to one of its own, so the
-  // picker has to know which Project before it can offer anything. The relation carries the task,
-  // not its parent, so the parent is read here — the one case where the option list depends on the
-  // subject rather than on the workspace.
-  const milestoneSubject = targetKind === 'milestone' ? (request.subjects[0]?.id ?? null) : null;
-  const subjectTaskQ = useApiQuery(
-    apiQueryOptions(
-      ['org', organizationId, 'task', milestoneSubject ?? ''] as const,
-      () =>
-        api.v1.orgs[':orgId'].tasks[':id'].$get({
-          param: { orgId: organizationId, id: milestoneSubject ?? '' },
-        }),
-      'Could not load this task.',
-      { enabled: milestoneSubject !== null, staleTime: STALE.volatile },
-    ),
-  );
+  const composerKind = COMPOSER_KIND_BY_TARGET.get(targetKind ?? '') ?? null;
+  const milestoneSubject = milestoneScopeSubject(targetKind, request.subjects);
+  // The shared task definition, so this read lands on the same cache entry the task detail fills
+  // and every write path already invalidates, rather than a private copy that nothing refreshes.
+  const subjectTaskQ = useApiQuery({
+    ...taskDetailDef(organizationId, milestoneSubject ?? ''),
+    enabled: milestoneSubject !== null,
+  });
   const composer = useComposerOptions(
     organizationId,
     composerKind === null ? [] : [composerKind],

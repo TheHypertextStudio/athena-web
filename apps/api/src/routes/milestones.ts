@@ -17,13 +17,14 @@
 import { db, milestone } from '@docket/db';
 import { MilestoneCreate, MilestoneOut, MilestoneUpdate } from '@docket/work/milestone-contract';
 import { pageOf } from '../contracts/pagination';
-import { and, asc, eq, max } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
+import { appendMilestone } from '../lib/milestone-writes';
 import { one } from '../lib/one';
 import { assertProjectInOrg } from '../lib/project-guard';
 import { apiDoc } from '../lib/openapi-route';
@@ -50,30 +51,6 @@ function toOut(m: MilestoneRow): z.input<typeof MilestoneOut> {
 const projectParam = z.object({ id: z.string() });
 /** A milestone addressed within its Project. */
 const milestoneParam = z.object({ id: z.string(), milestoneId: z.string() });
-
-/**
- * The position a new milestone takes when the caller did not name one.
- *
- * @remarks
- * Appending is the server's job because the position depends on rows only the server can see.
- * A client computing it has to read the list first and hope nothing changed — and the add row on
- * the project Overview deliberately accepts the next name before the previous create has settled,
- * so its copy of the list is out of date by design. Two appends racing can still tie; `sort` is an
- * ordering key, not a unique one, and a tie is resolved by whichever the list returns first.
- *
- * @param orgId - The caller's organization.
- * @param projectId - The Project to append within.
- * @returns one past the highest position in use, or `0` for a project with no milestones.
- */
-async function appendSort(orgId: string, projectId: string): Promise<number> {
-  const row = await one(
-    db
-      .select({ highest: max(milestone.sort) })
-      .from(milestone)
-      .where(and(eq(milestone.organizationId, orgId), eq(milestone.projectId, projectId))),
-  );
-  return (row?.highest ?? -1) + 1;
-}
 
 /**
  * Read one milestone as a member of the given Project.
@@ -151,21 +128,7 @@ const milestones = new Hono<AppEnv>()
       const body = c.req.valid('json');
       await assertProjectInOrg(orgId, id);
 
-      const inserted = await db
-        .insert(milestone)
-        .values({
-          organizationId: orgId,
-          projectId: id,
-          name: body.name,
-          description: body.description ?? null,
-          targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
-          sort: body.sort ?? (await appendSort(orgId, id)),
-          createdBy: actorId,
-        })
-        .returning();
-      const row = inserted[0];
-      /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-      if (!row) throw new Error('milestone insert returned no row');
+      const row = await appendMilestone({ orgId, projectId: id, actorId }, body);
       await enqueueSearchUpsert(orgId, 'milestone', row.id);
       return created(c, MilestoneOut, toOut(row));
     },

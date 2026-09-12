@@ -34,6 +34,16 @@ export type ProjectStatus = z.infer<typeof ProjectStatus>;
 /** The Project statuses a new workspace starts with. */
 export const DEFAULT_PROJECT_STATUS_KEYS = ['planned', 'active', 'completed', 'canceled'] as const;
 
+/**
+ * Maximum checkpoints one Project create may carry.
+ *
+ * @remarks
+ * The milestones ride inside the Project's own transaction, so an unbounded array would hold that
+ * transaction open for as long as the insert takes. A planned Project has a handful of checkpoints;
+ * anything past that is a list being built, which the per-milestone endpoint appends to.
+ */
+export const PROJECT_CREATE_MILESTONE_LIMIT = 50;
+
 /** Body for creating a Project (organizationId comes from the path, never the body). */
 export const ProjectCreate = z
   .object({
@@ -91,9 +101,10 @@ export const ProjectCreate = z
       .describe('Optional organization-global Labels to attach to the Project.'),
     milestones: z
       .array(MilestoneCreate)
+      .max(PROJECT_CREATE_MILESTONE_LIMIT)
       .optional()
       .describe(
-        'Optional checkpoints to create inside the new Project, in order — each entry’s position in the array is its `sort` unless it carries one. Written in the same transaction as the Project, so a create never leaves a Project whose milestones are missing. Equivalent to calling `POST /projects/:id/milestones` once per entry afterwards, without the window in which only some of them exist.',
+        `Optional checkpoints to create inside the new Project, in order — each entry’s position in the array is its \`sort\` unless it carries one. At most ${String(PROJECT_CREATE_MILESTONE_LIMIT)} per request; a Project needing more adds them through \`POST /projects/:id/milestones\`, which appends one at a time. Written in the same transaction as the Project, so a create never leaves a Project whose milestones are missing.`,
       ),
   })
   .meta({ id: 'ProjectCreate', description: 'Create a project within an organization.' });

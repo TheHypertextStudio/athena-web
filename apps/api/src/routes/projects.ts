@@ -58,6 +58,7 @@ import { capabilityGuard } from '../permissions/capability-guard';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { emitEvent } from './event-emit';
+import { insertMilestones } from '../lib/milestone-writes';
 import milestones from './milestones';
 import { projectDependencyRoutes } from './project-dependency-routes';
 import { buildTaskViewCondition, buildTaskViewFilter } from './task-helpers';
@@ -380,25 +381,16 @@ const projects = new Hono<AppEnv>()
 
         // The project's checkpoints, in the same transaction and for the same reason as the links
         // above: a create that saved the project and lost its milestones is not a create anyone
-        // asked for, and the client cannot repair it without risking a second project. A fresh
-        // project has no milestones to append after, so an entry's position in the array is its
-        // `sort` unless it named one.
-        if (body.milestones !== undefined && body.milestones.length > 0) {
-          const rows = await tx
-            .insert(milestone)
-            .values(
-              body.milestones.map((entry, index) => ({
-                organizationId: orgId,
-                projectId: created.id,
-                name: entry.name,
-                description: entry.description ?? null,
-                targetDate: entry.targetDate ? new Date(entry.targetDate) : undefined,
-                sort: entry.sort ?? index,
-              })),
-            )
-            .returning({ id: milestone.id });
-          milestoneIds = rows.map((inserted) => inserted.id);
-        }
+        // asked for, and the client cannot repair it without risking a second project. Through the
+        // shared writer, so a milestone created here is the same row the milestones router would
+        // have written. A fresh project has nothing to append after, so the first position is 0.
+        const checkpoints = await insertMilestones(
+          tx,
+          { orgId, projectId: created.id, actorId },
+          body.milestones ?? [],
+          0,
+        );
+        milestoneIds = checkpoints.map((row) => row.id);
         return created;
       });
 

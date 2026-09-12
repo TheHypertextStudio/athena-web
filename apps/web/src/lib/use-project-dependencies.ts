@@ -2,10 +2,11 @@
 
 /** Query and mutations for native Project dependency links. */
 import type { ProjectDependencyCreated, ProjectDependencyOut } from './contracts/project';
-import { type QueryKey, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
+import { projectWorkSectionsDef } from './fetch-project-sections';
 import { userErrorMessage } from './problem';
 import { apiQueryOptions, unwrap, useApiMutation, useApiQuery } from './query';
 import { invalidateWorkTargetQueries } from './work-target-invalidation';
@@ -25,15 +26,14 @@ export interface ProjectDependencies {
 }
 
 /** Read and edit dependency edges for one Project without leaving its detail view. */
-export function useProjectDependencies(
-  orgId: string,
-  projectId: string,
-  projectDetailKey: QueryKey,
-): ProjectDependencies {
+export function useProjectDependencies(orgId: string, projectId: string): ProjectDependencies {
   const queryClient = useQueryClient();
+  // Derived from the two ids this hook already has, the same way the milestone hooks derive theirs.
+  // Threading the project-detail key in as a prop asked the page to hand down something every
+  // consumer can build, and left two panels on one tab answering that question differently.
   const dependencyKey = useMemo(
-    () => [...projectDetailKey, 'dependencies'] as const,
-    [projectDetailKey],
+    () => [...projectWorkSectionsDef(orgId, projectId).queryKey, 'dependencies'] as const,
+    [orgId, projectId],
   );
   const query = useApiQuery(
     apiQueryOptions(

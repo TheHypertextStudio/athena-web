@@ -824,12 +824,7 @@ export default function ProjectDetailPage(): JSX.Element {
           />
           <AgentsStrip agents={agentsHere} />
           <AgentActivityFeed activities={agentActivity} />
-          <ProjectDependenciesPanel
-            orgId={orgId}
-            projectId={projectId}
-            projectDetailKey={workDef.queryKey}
-            canEdit={canEdit}
-          />
+          <ProjectDependenciesPanel orgId={orgId} projectId={projectId} canEdit={canEdit} />
         </section>
       ) : null}
       {tab === 'tasks' ? (

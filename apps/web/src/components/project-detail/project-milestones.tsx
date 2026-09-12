@@ -154,9 +154,11 @@ function MilestoneRow({
               // Markdown source, so printing it raw would read as `**Feature freeze**`. Hidden
               // while open: the editor below is already showing the whole note.
               <ExcerptMarkdown
-                // Cut before parsing: one truncated line is all that renders, and the component
-                // otherwise walks the whole note's token tree to build it.
-                value={milestone.description.slice(0, 200)}
+                // The first line, not the first N characters: this component takes an excerpt
+                // already cut to preview length, and cutting raw Markdown mid-construct would
+                // leave `**Feature freez` to render as literal asterisks. A line boundary cannot
+                // split an inline span, and one line is all the row shows.
+                value={milestone.description.split('\n', 1)[0] ?? ''}
                 className="text-on-surface-variant text-body-small truncate"
               />
             )}

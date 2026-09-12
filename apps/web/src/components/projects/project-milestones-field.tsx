@@ -26,8 +26,10 @@ import { X } from '@docket/ui/icons';
 import { Button, Input, Textarea } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
+import { PROJECT_CREATE_MILESTONE_LIMIT } from '@/lib/contracts/project';
 import { QuickAddRow } from '@/components/views/quick-add-row';
 import { formatCalendarDate } from '@/lib/format-date';
+import { UserFacingError } from '@/lib/problem';
 
 /** One unsaved milestone in a Project draft. */
 export interface DraftMilestone {
@@ -64,7 +66,7 @@ export function ProjectMilestonesField({
   value,
   onChange,
 }: ProjectMilestonesFieldProps): JSX.Element {
-  /** Replace one draft in place, leaving order (and therefore `sort`) alone. */
+  /** Replace one draft in place, leaving the list's order — which is its `sort` — alone. */
   const update = (key: string, patch: Partial<DraftMilestone>): void => {
     onChange(value.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)));
   };
@@ -126,6 +128,13 @@ export function ProjectMilestonesField({
 
       <QuickAddRow
         onAdd={async (name) => {
+          // The same cap the create body carries. Enforced here so the limit is reached against the
+          // row being typed, rather than as an opaque refusal of the whole project on submit.
+          if (value.length >= PROJECT_CREATE_MILESTONE_LIMIT) {
+            throw new UserFacingError(
+              `A new project can start with at most ${String(PROJECT_CREATE_MILESTONE_LIMIT)} milestones. Create it, then add the rest from its Milestones list.`,
+            );
+          }
           onChange([...value, draftFrom(name)]);
         }}
         canEdit

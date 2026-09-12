@@ -258,11 +258,11 @@ export default function CanvasPropertiesEditor({
           ? null
           : guard.reason;
   const organizationId = snapshots[0]?.organizationId ?? '';
-  const taskSnapshots = snapshots.filter(
+  const tasks = snapshots.filter(
     (snapshot): snapshot is Extract<CanvasPropertySnapshot, { kind: 'task' }> =>
       snapshot.kind === 'task',
   );
-  const selectionProjectId = sharedProjectId(taskSnapshots);
+  const selectionProjectId = sharedProjectId(tasks);
   const options = useComposerOptions(
     organizationId,
     OPTION_KINDS,
@@ -403,7 +403,6 @@ export default function CanvasPropertiesEditor({
   );
 
   if (first.kind === 'task') {
-    const tasks = taskSnapshots;
     const state = aggregateScalar(tasks, (task) => task.state);
     const priority = aggregateScalar(tasks, (task) => task.priority);
     const assignee = aggregateScalar(tasks, (task) => task.assigneeId);

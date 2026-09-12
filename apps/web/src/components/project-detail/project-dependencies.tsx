@@ -4,7 +4,6 @@
 import { EntityPicker } from '@docket/ui/components';
 import { Link as LinkIcon, X } from '@docket/ui/icons';
 import { Button, DecorativeIcon, Skeleton } from '@docket/ui/primitives';
-import type { QueryKey } from '@tanstack/react-query';
 import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 import { useMemo, useState } from 'react';
@@ -16,7 +15,6 @@ import { useProjectDependencies } from '@/lib/use-project-dependencies';
 export interface ProjectDependenciesPanelProps {
   orgId: string;
   projectId: string;
-  projectDetailKey: QueryKey;
   canEdit: boolean;
 }
 
@@ -24,13 +22,12 @@ export interface ProjectDependenciesPanelProps {
 export function ProjectDependenciesPanel({
   orgId,
   projectId,
-  projectDetailKey,
   canEdit,
 }: ProjectDependenciesPanelProps): JSX.Element {
   const [pickerOpen, setPickerOpen] = useState(false);
   const options = useComposerOptions(orgId, ['projects'], pickerOpen);
   const { dependencies, loading, error, add, remove, pending, mutationError } =
-    useProjectDependencies(orgId, projectId, projectDetailKey);
+    useProjectDependencies(orgId, projectId);
   const projectOptions = useMemo(
     () => options.projectOptions.filter((option) => option.value !== projectId),
     [options.projectOptions, projectId],

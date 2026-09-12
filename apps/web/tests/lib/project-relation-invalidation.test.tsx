@@ -63,13 +63,7 @@ describe('useProjectDependencies', () => {
       const { client, wrapper } = makeQueryWrapper();
       const invalidateQueries = vi.spyOn(client, 'invalidateQueries');
       const { result } = renderHook(
-        () =>
-          useProjectDependencies(PROJECT_ORGANIZATION_ID, PROJECT_ID, [
-            'org',
-            PROJECT_ORGANIZATION_ID,
-            'projects',
-            PROJECT_ID,
-          ]),
+        () => useProjectDependencies(PROJECT_ORGANIZATION_ID, PROJECT_ID),
         { wrapper },
       );
 

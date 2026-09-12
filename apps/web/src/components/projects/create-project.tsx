@@ -426,12 +426,14 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
           json: projectCreateBody(draft, trimmed, teamId),
         });
         if (!res.ok) {
-          setError(
-            userErrorMessage(
-              await readProblemError(res, `Could not create the ${projectNounLower}.`),
-              `Could not create the ${projectNounLower}.`,
-            ),
-          );
+          // The milestones ride in this request, so a refusal can be about one of them. Naming them
+          // is the only pointer available — a Problem carries a code, not the field that failed —
+          // and without it the rows read as uninvolved in a create that named only the project.
+          const fallback =
+            draft.milestones.length > 0
+              ? `Could not create the ${projectNounLower}. Check its fields and its milestones.`
+              : `Could not create the ${projectNounLower}.`;
+          setError(userErrorMessage(await readProblemError(res, fallback), fallback));
           return;
         }
         finishCreate(await res.json(), continueCreating);

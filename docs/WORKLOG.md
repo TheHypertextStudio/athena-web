@@ -121,8 +121,53 @@ regression where a long body scrolled to its last line and threw away a placed c
   `id` could ever have caught this. The fix belongs where the rows are minted from one corpus of
   independent source objects into a page of results a person reads as "things," which is the ranking
   step, not the presentation layer.
-- **Follow-ups**: Browse mode (an empty query, ordered by recency) can show the same duplication —
-  this fix only covers the ranked-search path the command palette and page search use with a query.
+- **Follow-up fix (2026-09-11)**: Two rounds of `/code-review xhigh --fix` found and closed real
+  gaps in the original fix. First round: `collapseActivityRows` was never wired into
+  `browseDocuments` (the empty-query path the palette actually hits on open, plus the Hub/org search
+  pages and an MCP `find` tool), and an `organizationId` truthy-guard asymmetry meant a subject kind
+  indexed without an org (a private calendar event) could never be recognized as already present.
+  Second round, after wiring the browse path in: its refill loop's early-exit still checked the raw,
+  pre-collapse row count, so a burst of activity duplicates could stop the loop before enough
+  distinct rows had been gathered, silently under-filling a page; and the org-less handling itself
+  was redesigned from an inferred per-row null-check into `ORG_LESS_SEARCH_KINDS`, a
+  `Record<SearchDocumentKind, boolean>` mirroring `rank.ts`'s `BASE_RANK` precedent, so a future
+  org-less kind is a compiler error to leave out rather than a silent dedup miss. New tests cover
+  browse-mode collapsing, the org-less/calendar-event case, and the refill-past-a-collapsed-burst
+  case (written first, watched fail against the unfixed code, per TDD). `pnpm vitest run
+tests/search/` plus the search route suites — 135/135 passing.
+- **Learnings (2026-09-11)**: The deepest of these bugs were in code the first fix itself
+  introduced, not the original bug — a reminder that a dedup filter placed after a size cap (here,
+  `browseDocuments`'s refill loop, and the `scanRankedCandidates` cap noted below) needs the cap's
+  own stopping condition updated too, or it silently under-fills. A JSDoc block also floated free of
+  its function during one editing pass (helpers inserted between a comment and the declaration it
+  documented) — caught only by rereading the diff, not by any tool; TSDoc placement doesn't
+  typecheck.
+- **Module split (2026-09-11)**: `apps/api/src/search/query.ts` had grown to 1562 lines carrying
+  every concern in the search service — visibility, scoring, collapsing duplicates, facets,
+  cursors, result assembly, browse mode, and the read-only lookup helpers — in one file. Split into
+  11 single-responsibility modules (`query-types`, `query-visibility`, `query-collapse`,
+  `query-scoring`, `query-filters`, `query-facets`, `query-cursor`, `query-results`,
+  `query-lookups`, `query-browse`, `query-ranked-scan`), leaving `query.ts` at 121 lines holding
+  only `searchWorkspace`. A pure move: the public import path (`searchWorkspace`,
+  `loadRecentDocuments`, `loadVisibleDocuments`, `SearchCaller`, all still resolving from
+  `'../search/query'`) and every function's behavior are unchanged, so no external caller needed
+  updating. `pnpm complexity:ledger`'s full regeneration touched ~15 unrelated files with drift
+  that predates this change; reverted that and hand-applied only the search module's entries
+  instead. A `/code-review`-style pass then found and fixed real issues the split itself introduced
+  (a misplaced JSDoc block; a false "org-less" collision risk from over-eager string coercion) and
+  a `/simplify` pass deduplicated a copy-pasted visibility SQL predicate and facet-key alias lists
+  across the new files, extracted `query-ranked-scan.ts` so `query.ts` holds only orchestration, and
+  fixed a double-computed `collapseActivityRows` call in `browseDocuments`'s refill loop.
+  `pnpm typecheck`/`lint`/`build`/`test` all green at every stage (27/27, 26/26, 4/4, 27/27 tasks).
+- **Follow-ups**: The ranked-search path's `collapseActivityRows` call still runs after
+  `scanRankedCandidates`'s own `limit + 1`-per-bucket retention cap, so it cannot backfill with
+  distinct candidates that cap already evicted — a page can come back short, `facets` can overcount
+  relative to `items`, and a subject shown on an earlier page is invisible to a later page's
+  collapse. Fixing that needs a refill loop over the ranked scan itself (the pattern this round just
+  applied to `browseDocuments`), not another change to `collapseActivityRows`. Separately, 5 of 12
+  canonical entity kinds (agent_session, thread, message, document, person) never get a
+  `subjectKind` populated by `searchKindForEntity`, so their activity duplicates can never collapse
+  either — a projector-completeness gap, not a `collapseActivityRows` bug.
 
 ---
 

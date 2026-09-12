@@ -455,9 +455,27 @@
   "apps/api/src/search/projectors/content.ts": {
     "max-params": 6
   },
-  "apps/api/src/search/query.ts": {
-    "complexity": 30,
+  "apps/api/src/search/query-browse.ts": {
+    "complexity": 17,
     "sonarjs/cognitive-complexity": 22
+  },
+  "apps/api/src/search/query-filters.ts": {
+    "complexity": 30,
+    "sonarjs/cognitive-complexity": 20
+  },
+  "apps/api/src/search/query-ranked-scan.ts": {
+    "complexity": 20,
+    "sonarjs/cognitive-complexity": 21
+  },
+  "apps/api/src/search/query-scoring.ts": {
+    "complexity": 18,
+    "sonarjs/cognitive-complexity": 16
+  },
+  "apps/api/src/search/query-visibility.ts": {
+    "complexity": 16
+  },
+  "apps/api/src/search/query.ts": {
+    "complexity": 22
   },
   "apps/api/src/search/routes.ts": {
     "complexity": 22

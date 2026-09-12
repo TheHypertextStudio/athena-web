@@ -259,4 +259,140 @@ describe('search browse mode', () => {
     });
     expect(result.items).toEqual([]);
   });
+
+  it('collapses activity rows into their subject in browse mode too', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'BrowseActivityCollapseUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    const base = Date.UTC(2026, 0, 1, 0, 0, 0);
+    await db.insert(schema.searchDocument).values([
+      {
+        id: `project:${orgId}:browse_collapse_project`,
+        organizationId: orgId,
+        kind: 'project',
+        family: 'work',
+        sourceTable: 'project',
+        entityId: 'browse_collapse_project',
+        title: 'Browse Collapse Project',
+        facet: {},
+        route: {
+          type: 'entity',
+          organizationId: orgId,
+          entityKind: 'project',
+          entityId: 'browse_collapse_project',
+          href: `/orgs/${orgId}/projects/browse_collapse_project`,
+        },
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+        updatedAt: new Date(base + 60_000),
+      },
+      ...Array.from({ length: 3 }, (_, index) => ({
+        id: `activity:${orgId}:browse_collapse_event_${index}`,
+        organizationId: orgId,
+        kind: 'activity' as const,
+        family: 'activity' as const,
+        sourceTable: 'event',
+        entityId: `browse_collapse_event_${index}`,
+        subjectKind: 'project',
+        subjectId: 'browse_collapse_project',
+        title: 'Browse Collapse Project',
+        facet: {},
+        route: {
+          type: 'activity',
+          organizationId: orgId,
+          eventId: `browse_collapse_event_${index}`,
+          href: `/orgs/${orgId}/stream?eventId=browse_collapse_event_${index}`,
+        },
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+        updatedAt: new Date(base + (index + 2) * 60_000),
+      })),
+    ]);
+
+    const result = await searchWorkspace({
+      scope: 'org',
+      caller: { kind: 'user', userId },
+      orgId,
+      params: { limit: 50, surface: 'palette' },
+    });
+
+    expect(result.items.map((item) => item.id)).toEqual([
+      `project:${orgId}:browse_collapse_project`,
+    ]);
+  });
+
+  it('refills past a burst of collapsed activity duplicates to still fill a browse page', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'BrowseRefillCollapseUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    const base = Date.UTC(2026, 0, 1, 0, 0, 0);
+    const limit = 5;
+
+    // With limit=5, browseDocuments' first over-fetch chunk is (limit+1)*4 = 24 rows. All 24 here
+    // are activity duplicates about one subject that never appears in this workspace, newer than
+    // every other document, so the raw fetch fills the whole first chunk before collapsing away to
+    // a single survivor.
+    const activityDocs = Array.from({ length: 24 }, (_, index) => ({
+      id: `activity:${orgId}:refill_event_${index}`,
+      organizationId: orgId,
+      kind: 'activity' as const,
+      family: 'activity' as const,
+      sourceTable: 'event',
+      entityId: `refill_event_${index}`,
+      subjectKind: 'task',
+      subjectId: 'refill_orphan_subject',
+      title: 'Refill Orphan Subject',
+      facet: {},
+      route: {
+        type: 'activity',
+        organizationId: orgId,
+        eventId: `refill_event_${index}`,
+        href: `/orgs/${orgId}/stream?eventId=refill_event_${index}`,
+      },
+      visibility: { mode: 'org_members' as const },
+      baseRank: 100,
+      updatedAt: new Date(base + (1000 - index) * 60_000),
+    }));
+
+    // Ten genuinely distinct, older documents that only a second refill round should reach.
+    const distinctDocs = Array.from({ length: 10 }, (_, index) => ({
+      id: `task:${orgId}:refill_distinct_${index}`,
+      organizationId: orgId,
+      kind: 'task' as const,
+      family: 'work' as const,
+      sourceTable: 'task',
+      entityId: `refill_distinct_${index}`,
+      title: `Refill distinct task ${index}`,
+      facet: {},
+      route: {
+        type: 'entity',
+        organizationId: orgId,
+        entityKind: 'task',
+        entityId: `refill_distinct_${index}`,
+        href: `/orgs/${orgId}/tasks/refill_distinct_${index}`,
+      },
+      visibility: { mode: 'org_members' as const },
+      baseRank: 100,
+      updatedAt: new Date(base + index * 60_000),
+    }));
+
+    await db.insert(schema.searchDocument).values([...activityDocs, ...distinctDocs]);
+
+    const result = await searchWorkspace({
+      scope: 'org',
+      caller: { kind: 'user', userId },
+      orgId,
+      params: { limit },
+    });
+
+    expect(result.items).toHaveLength(limit);
+    expect(result.items.some((item) => item.kind === 'task')).toBe(true);
+    expect(result.nextCursor).toBeDefined();
+  });
 });

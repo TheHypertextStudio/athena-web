@@ -1795,4 +1795,65 @@ describe('search query service', () => {
 
     expect(result.items.map((item) => item.id)).toEqual([`activity:${orgId}:orphan_event_0`]);
   });
+
+  it('collapses an activity row into an org-less subject (e.g. a private calendar event)', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchActivityCollapseCalendarUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    const title = 'Quarterly Planning Sync';
+    await db.insert(schema.searchDocument).values([
+      {
+        id: `calendar_event:${orgId}:collapse_calendar_event`,
+        organizationId: null,
+        userId,
+        kind: 'calendar_event',
+        family: 'content',
+        sourceTable: 'calendar_event',
+        entityId: 'collapse_calendar_event',
+        title,
+        facet: {},
+        route: {
+          type: 'entity',
+          entityKind: 'calendar_event',
+          entityId: 'collapse_calendar_event',
+          href: '/calendar?eventId=collapse_calendar_event',
+        },
+        visibility: { mode: 'user_private' },
+        baseRank: 50,
+      },
+      {
+        id: `activity:${orgId}:collapse_calendar_event_activity`,
+        organizationId: orgId,
+        kind: 'activity',
+        family: 'activity',
+        sourceTable: 'event',
+        entityId: 'collapse_calendar_event_activity',
+        subjectKind: 'calendar_event',
+        subjectId: 'collapse_calendar_event',
+        title,
+        facet: {},
+        route: {
+          type: 'activity',
+          organizationId: orgId,
+          eventId: 'collapse_calendar_event_activity',
+          href: `/orgs/${orgId}/stream?eventId=collapse_calendar_event_activity`,
+        },
+        visibility: { mode: 'org_members' },
+        baseRank: 30,
+      },
+    ]);
+
+    const result = await searchWorkspace({
+      scope: 'hub',
+      caller: { kind: 'user', userId },
+      params: { q: 'Quarterly Planning Sync', surface: 'palette' },
+    });
+
+    expect(result.items.map((item) => item.id)).toEqual([
+      `calendar_event:${orgId}:collapse_calendar_event`,
+    ]);
+  });
 });

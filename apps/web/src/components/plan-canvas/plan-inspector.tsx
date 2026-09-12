@@ -26,7 +26,7 @@ import { templatesOfKindDef } from '@/components/templates/queries';
 import { useApiListQuery } from '@/lib/query';
 
 import { describeConfirmation } from './plan-confirm';
-import { PlanCreatedMark, PlanDraftPill, PlanStatusGlyph } from './plan-status';
+import { PlanStateChip, PlanStatusGlyph } from './plan-status';
 
 /** Props for {@link PlanInspector}. */
 export interface PlanInspectorProps {
@@ -532,7 +532,7 @@ export default function PlanInspector(props: PlanInspectorProps): JSX.Element | 
       <div className="flex flex-col gap-3">
         <div className="text-on-surface-variant text-label-medium flex items-center gap-2">
           <span>{KIND_LABEL[node.kind]}</span>
-          {node.status === 'draft' ? <PlanDraftPill /> : <PlanCreatedMark />}
+          <PlanStateChip status={node.status} />
         </div>
         {node.status === 'draft' ? (
           <DraftBody {...props} node={node} />

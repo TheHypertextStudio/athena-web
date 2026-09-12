@@ -5,8 +5,10 @@
  *
  * @remarks
  * Dashed and quiet, because it states a relationship rather than an order: a project belongs to
- * an initiative, it is not blocked by it. It is never selectable and never removable from the
- * canvas — membership changes in the inspector — so it carries no hit area and no control.
+ * an initiative, it is not blocked by it. It shares the dependency edge's stroke so it stays
+ * legible in both themes, and it carries no arrowhead, so a dependency still reads heavier. It is
+ * never selectable and never removable from the canvas — membership changes in the inspector — so
+ * it carries no hit area and no control.
  */
 import { BaseEdge, type EdgeProps, getBezierPath } from '@xyflow/react';
 import { memo, type JSX } from 'react';
@@ -34,9 +36,9 @@ function PlanLinkEdgeComponent({
       path={path}
       interactionWidth={0}
       style={{
-        stroke: 'var(--color-outline-variant)',
+        stroke: 'var(--color-outline)',
         strokeWidth: 1.5,
-        strokeDasharray: '4 4',
+        strokeDasharray: '6 4',
         pointerEvents: 'none',
       }}
     />

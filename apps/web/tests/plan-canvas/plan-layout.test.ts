@@ -162,10 +162,10 @@ describe('layoutPlan in a portrait host', () => {
     expect(p1.position.y).toBeLessThan(p2.position.y);
     expect(overlaps(init, p1)).toBe(false);
     expect(overlaps(p1, p2)).toBe(false);
-    // Centred over the stack, so the whole board is only as wide as a container.
+    // Centred over the stack, so the whole board is only as wide as its wider column.
     const initMid = init.position.x + PLAN_INITIATIVE_SIZE.width / 2;
     expect(Math.abs(initMid - (p1.position.x + PLAN_PROJECT_WIDTH / 2))).toBeLessThan(1);
-    expect(bounds.width).toBe(PLAN_PROJECT_WIDTH);
+    expect(bounds.width).toBe(Math.max(PLAN_INITIATIVE_SIZE.width, PLAN_PROJECT_WIDTH));
   });
 
   it('keeps six containers in a single column', () => {

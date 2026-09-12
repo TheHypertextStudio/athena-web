@@ -11,9 +11,11 @@
  * Sizes live here rather than in the renderers because the layout has to know them before
  * anything renders — a container's height is a function of how many rows it holds.
  */
+import type { ActorKind } from '@docket/ui/components';
 import type { Edge, Node } from '@xyflow/react';
 import type { PlanDraftOut, PlanNode, PlanNodeKind } from '@docket/work/plan-draft-contract';
 
+import { dependencyMarkerEnd } from '../canvas/dependency-marker';
 import type { PlanDiff } from './plan-diff';
 
 /** Node type names registered with the canvas. */
@@ -32,19 +34,31 @@ export const PLAN_EDGE_TYPE = {
 } as const;
 
 /** The initiative card, in canvas units. */
-export const PLAN_INITIATIVE_SIZE = { width: 268, height: 96 } as const;
-/** A task row inside its container, in canvas units. */
-export const PLAN_TASK_SIZE = { width: 272, height: 40 } as const;
+export const PLAN_INITIATIVE_SIZE = { width: 336, height: 112 } as const;
 /** The project container's width; its height follows its rows. */
 export const PLAN_PROJECT_WIDTH = 304;
-/** The container's header band: glyph, title, meta line. */
-export const PLAN_PROJECT_HEADER = 68;
 /** Inset between the container edge and its rows. */
-export const PLAN_PROJECT_PADDING = 10;
+export const PLAN_PROJECT_PADDING = 12;
+/** A task row inside its container, in canvas units: the container's width less its insets. */
+export const PLAN_TASK_SIZE = {
+  width: PLAN_PROJECT_WIDTH - PLAN_PROJECT_PADDING * 2,
+  height: 40,
+} as const;
+/** The container's header band: glyph, title, meta line. */
+export const PLAN_PROJECT_HEADER = 64;
+/** The stroke every dependency edge on the plan takes, so the arrowhead matches the line. */
+export const PLAN_DEPENDENCY_STROKE = 'var(--color-outline)';
 /** Vertical gap between task rows. */
 export const PLAN_TASK_GAP = 4;
 /** The ghost "Add task" row an editable draft container ends with. */
 export const PLAN_PROJECT_FOOTER = 32;
+
+/** A person, agent, or team a plan field names, resolved for display. */
+export interface PlanActor {
+  readonly kind: ActorKind;
+  readonly name: string;
+  readonly avatarUrl: string | null;
+}
 
 /** What every plan node renderer receives. */
 export interface PlanNodeBaseData extends Record<string, unknown> {
@@ -67,7 +81,7 @@ export interface PlanNodeBaseData extends Record<string, unknown> {
 export interface PlanInitiativeNodeData extends PlanNodeBaseData {
   readonly kind: 'initiative';
   readonly summary: string | null;
-  readonly ownerName: string | null;
+  readonly owner: PlanActor | null;
   readonly targetDate: string | null;
   /** Whether this is the plan's root rather than a second initiative a project also joins. */
   readonly isRoot: boolean;
@@ -77,7 +91,7 @@ export interface PlanInitiativeNodeData extends PlanNodeBaseData {
 export interface PlanProjectNodeData extends PlanNodeBaseData {
   readonly kind: 'project';
   readonly summary: string | null;
-  readonly leadName: string | null;
+  readonly lead: PlanActor | null;
   readonly targetDate: string | null;
   readonly taskCount: number;
   /** Names of the other initiatives this project also belongs to. */
@@ -90,7 +104,7 @@ export interface PlanProjectNodeData extends PlanNodeBaseData {
 export interface PlanTaskNodeData extends PlanNodeBaseData {
   readonly kind: 'task';
   readonly parentRef: string;
-  readonly assigneeName: string | null;
+  readonly assignee: PlanActor | null;
   readonly dueDate: string | null;
   readonly priority: string | null;
 }
@@ -106,8 +120,8 @@ export interface ProjectPlanOptions {
   /** The latest diff, for the enter and highlight motion. */
   readonly diff: PlanDiff;
   readonly canEdit: boolean;
-  /** Resolve an actor id to a display name, or null when unknown. */
-  readonly actorName: (actorId: string) => string | null;
+  /** Resolve an actor id to the actor it names, or null when unknown. */
+  readonly resolveActor: (actorId: string) => PlanActor | null;
   /** Resolve an existing initiative id to its name, or null when unknown. */
   readonly initiativeName: (initiativeId: string) => string | null;
 }
@@ -131,8 +145,11 @@ function baseData(
   };
 }
 
-function nameOf(actorId: string | null | undefined, options: ProjectPlanOptions): string | null {
-  return actorId ? options.actorName(actorId) : null;
+function actorOf(
+  actorId: string | null | undefined,
+  options: ProjectPlanOptions,
+): PlanActor | null {
+  return actorId ? options.resolveActor(actorId) : null;
 }
 
 function initiativeNode(
@@ -149,7 +166,7 @@ function initiativeNode(
       ...baseData(node, plan, options),
       kind: 'initiative',
       summary: node.fields.summary ?? null,
-      ownerName: nameOf(node.fields.ownerId, options),
+      owner: actorOf(node.fields.ownerId, options),
       targetDate: node.fields.targetDate ?? null,
       isRoot,
     },
@@ -175,7 +192,7 @@ function projectNode(
       ...baseData(node, plan, options),
       kind: 'project',
       summary: node.fields.summary ?? null,
-      leadName: nameOf(node.fields.leadId, options),
+      lead: actorOf(node.fields.leadId, options),
       targetDate: node.fields.targetDate ?? null,
       taskCount,
       alsoIn,
@@ -201,7 +218,7 @@ function taskNode(
       ...baseData(node, plan, options),
       kind: 'task',
       parentRef: node.parentRef ?? '',
-      assigneeName: nameOf(node.fields.assigneeId, options),
+      assignee: actorOf(node.fields.assigneeId, options),
       dueDate: node.fields.dueDate ?? null,
       priority: node.fields.priority ?? null,
     },
@@ -300,6 +317,8 @@ function dependencyEdges(
       sourceHandle: 'dep-out',
       targetHandle: 'dep-in',
       deletable: canEdit,
+      markerEnd: dependencyMarkerEnd(PLAN_DEPENDENCY_STROKE),
+      style: { stroke: PLAN_DEPENDENCY_STROKE, strokeWidth: 1.5 },
       data: { kind: 'dependency' },
     }));
 }

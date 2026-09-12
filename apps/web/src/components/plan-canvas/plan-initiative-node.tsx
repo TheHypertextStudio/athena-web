@@ -4,10 +4,13 @@
  * `components/plan-canvas/plan-initiative-node` — the initiative card at a plan's root.
  *
  * @remarks
- * Mirrors the Project graph's card: tonal, no hairline, a leading accent bar for the root, and a
- * corner affordance that opens the real record once confirmed. Its one edit affordance is the
- * toolbar's Add project, because an initiative on this canvas is the thing projects hang off.
+ * The one card on the board that is not a container, so it earns the room to read like a record:
+ * identity row, the summary at body size, then who owns it and the date it lands. The leading
+ * accent bar marks the root, and the corner affordance opens the real record once confirmed. Its
+ * one edit affordance is the toolbar's Add project, because an initiative on this canvas is the
+ * thing projects hang off.
  */
+import { ActorAvatar } from '@docket/ui/components';
 import { ArrowRight, Plus, Target } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { surfaceToneColor } from '@docket/ui/primitives';
@@ -20,13 +23,52 @@ import { formatCalendarDate } from '@/lib/format-date';
 import { usePlanCanvasActions } from './plan-canvas-context';
 import { PLAN_INITIATIVE_SIZE, type PlanInitiativeNodeData } from './plan-nodes';
 import {
-  PlanCreatedMark,
-  PlanDraftPill,
   PlanField,
+  PlanStateChip,
   planCardClasses,
   planHandleClasses,
   planNodeTransitionName,
 } from './plan-status';
+
+/** The card's last line: who owns the initiative and when it lands; nothing for an unset field. */
+function PlanInitiativeMeta({
+  node,
+  changed,
+}: {
+  readonly node: PlanInitiativeNodeData;
+  readonly changed: ReadonlySet<string>;
+}): JSX.Element | null {
+  const target = formatCalendarDate(node.targetDate, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  if (node.owner === null && target === null) return null;
+  return (
+    <div className="text-on-surface-variant text-label-medium flex min-w-0 items-center gap-x-1.5">
+      {node.owner !== null ? (
+        <PlanField
+          changed={changed.has('ownerId')}
+          className="flex min-w-0 items-center gap-1 truncate"
+        >
+          <ActorAvatar
+            kind={node.owner.kind}
+            name={node.owner.name}
+            avatarUrl={node.owner.avatarUrl}
+            size={18}
+          />
+          <span className="min-w-0 truncate">{node.owner.name}</span>
+        </PlanField>
+      ) : null}
+      {target !== null ? (
+        <PlanField changed={changed.has('targetDate')} className="shrink-0 tabular-nums">
+          {node.owner !== null ? '· ' : ''}
+          {target}
+        </PlanField>
+      ) : null}
+    </div>
+  );
+}
 
 function PlanInitiativeNodeComponent({
   id,
@@ -37,11 +79,6 @@ function PlanInitiativeNodeComponent({
   const node = data as PlanInitiativeNodeData;
   const actions = usePlanCanvasActions();
   const changed = new Set(node.changedFields);
-  const target = formatCalendarDate(node.targetDate, { month: 'short', year: 'numeric' });
-  const meta = [
-    { field: 'ownerId', value: node.ownerName, shrink: true },
-    { field: 'targetDate', value: target, shrink: false },
-  ].filter((part): part is typeof part & { value: string } => part.value !== null);
   return (
     <div
       role="treeitem"
@@ -53,7 +90,7 @@ function PlanInitiativeNodeComponent({
       style={{ viewTransitionName: planNodeTransitionName(id), ...PLAN_INITIATIVE_SIZE }}
       className={cn(
         surfaceToneColor('floating'),
-        'group relative flex flex-col justify-center gap-1.5 overflow-hidden rounded-lg px-3.5',
+        'group relative flex flex-col justify-center gap-1.5 overflow-hidden rounded-xl py-3 pr-3.5 pl-4',
         planCardClasses(node.status, node.entered, selected),
       )}
     >
@@ -89,7 +126,7 @@ function PlanInitiativeNodeComponent({
           }}
           className={cn(
             surfaceToneColor('prominent'),
-            'nodrag nopan hover:bg-secondary-container hover:text-on-secondary-container focus-visible:ring-ring absolute top-1 right-1 z-10 inline-flex size-6 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none',
+            'nodrag nopan hover:bg-secondary-container hover:text-on-secondary-container focus-visible:ring-ring absolute top-1.5 right-1.5 z-10 inline-flex size-6 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none',
           )}
         >
           <ArrowRight className="size-4" />
@@ -99,32 +136,21 @@ function PlanInitiativeNodeComponent({
         <Target aria-hidden="true" className="text-primary size-4 shrink-0" />
         <PlanField
           changed={changed.has('title')}
-          className="text-on-surface text-label-large min-w-0 flex-1 truncate"
+          className="text-on-surface text-title-small min-w-0 flex-1 truncate"
         >
           {node.title}
         </PlanField>
-        {node.status === 'draft' ? <PlanDraftPill /> : <PlanCreatedMark />}
+        <PlanStateChip status={node.status} />
       </div>
       {node.summary !== null ? (
         <PlanField
           changed={changed.has('summary')}
-          className="text-on-surface-variant text-label-medium line-clamp-2"
+          className="text-on-surface-variant text-body-small line-clamp-2"
         >
           {node.summary}
         </PlanField>
       ) : null}
-      <div className="text-on-surface-variant text-label-medium flex min-w-0 items-center gap-2">
-        <span className="shrink-0">Initiative</span>
-        {meta.map((part) => (
-          <PlanField
-            key={part.field}
-            changed={changed.has(part.field)}
-            className={part.shrink ? 'min-w-0 truncate' : 'shrink-0'}
-          >
-            · {part.value}
-          </PlanField>
-        ))}
-      </div>
+      <PlanInitiativeMeta node={node} changed={changed} />
       <Handle
         type="source"
         position={sourcePosition ?? Position.Right}

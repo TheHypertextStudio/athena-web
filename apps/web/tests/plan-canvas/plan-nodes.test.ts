@@ -4,9 +4,11 @@ import type { PlanDraftOut, PlanNode } from '@docket/work/plan-draft-contract';
 
 import { EMPTY_PLAN_DIFF, planDiff } from '../../src/components/plan-canvas/plan-diff';
 import {
+  PLAN_DEPENDENCY_STROKE,
   PLAN_EDGE_TYPE,
   PLAN_NODE_TYPE,
   projectPlan,
+  type PlanActor,
   type PlanProjectNodeData,
   type PlanTaskNodeData,
 } from '../../src/components/plan-canvas/plan-nodes';
@@ -82,7 +84,12 @@ const options = {
   orgId: 'org_1',
   diff: EMPTY_PLAN_DIFF,
   canEdit: true,
-  actorName: (id: string) => (id === 'a1' ? 'Priya' : id === 'a2' ? 'Sam' : null),
+  resolveActor: (id: string): PlanActor | null => {
+    if (id === 'a1') return { kind: 'human', name: 'Priya', avatarUrl: null };
+    if (id === 'a2')
+      return { kind: 'human', name: 'Sam', avatarUrl: 'https://cdn.example/sam.png' };
+    return null;
+  },
   initiativeName: (id: string) => (id === 'ini_existing' ? 'Existing initiative' : null),
 };
 
@@ -109,6 +116,9 @@ describe('projectPlan', () => {
     const dep = edges.find((e) => e.id === 'dep:p1>p2');
     expect(dep?.type).toBe(PLAN_EDGE_TYPE.dependency);
     expect(dep?.data).toEqual({ kind: 'dependency' });
+    expect(dep?.markerEnd).toMatchObject({ type: 'arrowclosed', color: PLAN_DEPENDENCY_STROKE });
+    expect(dep?.style).toMatchObject({ stroke: PLAN_DEPENDENCY_STROKE });
+    expect(link?.markerEnd).toBeUndefined();
   });
 
   it('hydrates a confirmed node from its live record and resolves names', () => {
@@ -117,7 +127,11 @@ describe('projectPlan', () => {
     expect(p1.title).toBe('Outreach (live)');
     expect(p1.href).toBe('/orgs/org_1/projects/prj_1');
     expect(p1.status).toBe('confirmed');
-    expect(p1.leadName).toBe('Sam');
+    expect(p1.lead).toEqual({
+      kind: 'human',
+      name: 'Sam',
+      avatarUrl: 'https://cdn.example/sam.png',
+    });
     expect(p1.taskCount).toBe(1);
     expect(p1.canAddTask).toBe(false);
     const p2 = nodes.find((n) => n.id === 'p2')?.data as PlanProjectNodeData;

@@ -35,6 +35,7 @@ import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 import Link from '@/components/docket-link';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import PlanCanvasPanel from '@/components/plan-canvas/plan-canvas-panel';
+import { usePlanActorResolver } from '@/components/plan-canvas/plan-actors';
 import { EMPTY_PLAN_DIFF, planDiff, type PlanDiff } from '@/components/plan-canvas/plan-diff';
 import { api } from '@/lib/api';
 import { useAppLocation, useTypedRoute } from '@/lib/app-location';
@@ -162,12 +163,10 @@ export default function PlanClient(): JSX.Element {
       'Could not load roles.',
     ),
   );
-  const canContribute = useOrgCapability(
-    membersQ.data?.items ?? [],
-    rolesQ.data?.items ?? [],
-    'contribute',
-  );
+  const members = membersQ.data?.items ?? [];
+  const canContribute = useOrgCapability(members, rolesQ.data?.items ?? [], 'contribute');
   const canEdit = canContribute && plan?.status !== 'archived';
+  const resolveActor = usePlanActorResolver(members);
 
   // The conversation floats on the canvas. While the window is wide enough, this route hosts it:
   // every "open Athena" on the route (the bar's toggle, Ask Athena on a node, the keyboard
@@ -316,6 +315,7 @@ export default function PlanClient(): JSX.Element {
         onAskAthena={askAthena}
         onOpen={open}
         memberOptions={options.memberOptions}
+        resolveActor={resolveActor}
         initiativeOptions={options.initiativeOptions}
         className="min-h-0 flex-1"
         chrome={{ title: plan.title, navigation }}

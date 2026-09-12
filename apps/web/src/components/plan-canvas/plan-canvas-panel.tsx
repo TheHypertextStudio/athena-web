@@ -59,7 +59,13 @@ import {
   usePlanLayout,
 } from './plan-layout';
 import PlanLinkEdge from './plan-link-edge';
-import { PLAN_EDGE_TYPE, PLAN_NODE_TYPE, planNodeData, projectPlan } from './plan-nodes';
+import {
+  PLAN_EDGE_TYPE,
+  PLAN_NODE_TYPE,
+  type PlanActor,
+  planNodeData,
+  projectPlan,
+} from './plan-nodes';
 import PlanBar from './plan-bar';
 import PlanConversation from './plan-conversation';
 import PlanProjectNode from './plan-project-node';
@@ -134,7 +140,7 @@ const REVEAL_PADDING = 32;
  * Below this host width the inspector and the conversation take turns: opening one closes the
  * other, because two floating columns beside each other would leave no board to read.
  */
-const ONE_PANEL_BELOW_PX = 1100;
+const ONE_PANEL_BELOW_PX = 1200;
 
 /** The measured inline size of an element, 0 until it is known. */
 function useElementWidth(): [number, (node: HTMLDivElement | null) => void] {
@@ -212,6 +218,8 @@ export interface PlanCanvasPanelProps {
   /** Open a real record. */
   readonly onOpen: (href: string) => void;
   readonly memberOptions: readonly PickerOption[];
+  /** Resolve an actor id to the person, agent, or team it names, for the cards. */
+  readonly resolveActor: (actorId: string) => PlanActor | null;
   readonly initiativeOptions: readonly PickerOption[];
   /** Compose the page chrome around the view bar this panel builds. */
   readonly chrome: PlanChrome;
@@ -416,6 +424,7 @@ export default function PlanCanvasPanel({
   onAskAthena,
   onOpen,
   memberOptions,
+  resolveActor,
   initiativeOptions,
   chrome,
   conversation,
@@ -444,11 +453,6 @@ export default function PlanCanvasPanel({
     [barHeight, inspectorRight, conversationRight],
   );
 
-  const actorName = useCallback(
-    (actorId: string): string | null =>
-      memberOptions.find((option) => option.value === actorId)?.label ?? null,
-    [memberOptions],
-  );
   const initiativeName = useCallback(
     (initiativeId: string): string | null =>
       initiativeOptions.find((option) => option.value === initiativeId)?.label ?? null,
@@ -456,8 +460,8 @@ export default function PlanCanvasPanel({
   );
 
   const projected = useMemo(
-    () => projectPlan(plan, { orgId, diff: remoteDiff, canEdit, actorName, initiativeName }),
-    [plan, orgId, remoteDiff, canEdit, actorName, initiativeName],
+    () => projectPlan(plan, { orgId, diff: remoteDiff, canEdit, resolveActor, initiativeName }),
+    [plan, orgId, remoteDiff, canEdit, resolveActor, initiativeName],
   );
   // A portrait host (a phone) runs the board down the page under the initiative; a landscape
   // host stands the initiative beside it.

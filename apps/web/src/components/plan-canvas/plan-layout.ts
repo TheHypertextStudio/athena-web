@@ -35,7 +35,7 @@ import {
 } from './plan-nodes';
 
 /** Gap between the initiative column and the first project column. */
-const INITIATIVE_GUTTER = 96;
+const INITIATIVE_GUTTER = 72;
 /** Gap between the initiative row and the first container in a portrait board. */
 const INITIATIVE_ROW_GUTTER = 56;
 /** Gap between project columns. */

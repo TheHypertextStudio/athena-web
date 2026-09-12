@@ -11,7 +11,7 @@
  * interval because edges change out-of-band when teammates add or remove `blocks` links.
  */
 import type { GraphOut } from '@docket/work/task-model';
-import { type Edge, MarkerType, type Node } from '@xyflow/react';
+import { type Edge, type Node } from '@xyflow/react';
 import { useMemo } from 'react';
 
 import { unknownStatus, type WorkStatusDisplay } from '@/components/entity-display/work-status';
@@ -19,6 +19,7 @@ import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, STALE, useLiveApiQuery } from '@/lib/query';
 
+import { dependencyMarkerEnd } from './dependency-marker';
 import { annotateGraph, type EdgeTone } from './graph-annotate';
 import { computeInsights } from './graph-insight';
 import { type TaskGraphScope, taskGraphScopeKey } from './scope';
@@ -140,7 +141,7 @@ export function taskGraphToFlow(
         // Keep the stable kind on data for dependency delete/reconnect gating.
         data: { kind: e.kind },
         reconnectable: false,
-        markerEnd: { type: MarkerType.ArrowClosed, ...(stroke ? { color: stroke } : {}) },
+        markerEnd: dependencyMarkerEnd(stroke),
         style: {
           ...(stroke ? { stroke } : {}),
           ...(critical ? { strokeWidth: 2.5 } : {}),

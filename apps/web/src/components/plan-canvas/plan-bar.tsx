@@ -64,11 +64,12 @@ export function PlanSelectionActions({
           type="button"
           size="sm"
           disabled={committing}
+          title={confirmation.label}
           onClick={() => {
             onConfirm(refs);
           }}
         >
-          <CheckCircle2 className="size-4" /> {confirmation.label}
+          <CheckCircle2 className="size-4" /> Confirm
         </Button>
       ) : null}
       {href !== null ? (
@@ -184,7 +185,9 @@ export default function PlanBar({
             {counts.projects} {counts.projects === 1 ? 'project' : 'projects'} · {counts.tasks}{' '}
             {counts.tasks === 1 ? 'task' : 'tasks'} ·{' '}
           </span>
-          <span className={cn(counts.draft > 0 && 'text-primary')}>{counts.draft} draft</span>
+          <span className={cn(counts.draft > 0 && 'text-primary')}>
+            {counts.draft} {counts.draft === 1 ? 'draft' : 'drafts'}
+          </span>
         </span>
       }
       selection={selection.refs.length > 0 ? <PlanSelectionActions {...selection} /> : null}

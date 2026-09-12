@@ -113,8 +113,8 @@ describe('PlanBar', () => {
     const group = screen.getByTestId('canvas-selection-bar');
     const confirm = screen.getByRole('button', { name: /^Confirm/ });
     expect(group).toContainElement(confirm);
-    expect(confirm).toHaveTextContent('project');
-    expect(confirm).toHaveTextContent('initiative');
+    expect(confirm.title).toContain('project');
+    expect(confirm.title).toContain('initiative');
     fireEvent.click(confirm);
     expect(actions.onConfirm).toHaveBeenCalledWith(['p1']);
     fireEvent.click(screen.getByRole('button', { name: /Remove/ }));

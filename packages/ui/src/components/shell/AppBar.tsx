@@ -18,7 +18,10 @@
  *
  * A surface that runs edge to edge underneath its chrome, such as a canvas, asks for the
  * `floating` presentation instead: one row on the floating tone, controls beside the title, placed
- * by the caller over the surface.
+ * by the caller over the surface. In that row the title is what gives way: it takes the room the
+ * fixed slots leave, up to its own length, and truncates before anything else moves. `controls`
+ * and `actions` never shrink. The `fill` slot is the one flexible region, for a group that
+ * scrolls inside its own box when the row runs short.
  *
  * ## The navigation slot is an icon, not a sentence
  *
@@ -82,6 +85,14 @@ export interface AppBarProps {
   presentation?: 'band' | 'floating';
   /** The landmark name of a floating bar. Required when `presentation` is `floating`. */
   'aria-label'?: string;
+  /**
+   * The flexible region of a floating bar, between the controls and the actions.
+   *
+   * @remarks
+   * The one slot that shrinks: whatever goes here owns its own overflow, typically by scrolling.
+   * Ignored by the `band` presentation, whose controls row already spans the band.
+   */
+  fill?: React.ReactNode;
 }
 
 /**
@@ -98,13 +109,8 @@ export function AppBar({
   className,
   presentation = 'band',
   'aria-label': ariaLabel,
+  fill,
 }: AppBarProps): React.JSX.Element {
-  const heading =
-    typeof title === 'string' ? (
-      <h1 className="text-on-surface text-title-medium min-w-0 truncate">{title}</h1>
-    ) : (
-      title
-    );
   if (presentation === 'floating') {
     return (
       <Surface
@@ -115,16 +121,29 @@ export function AppBar({
         className={cn('flex min-w-0 flex-nowrap items-center gap-2 px-2 py-1.5', className)}
       >
         {navigation}
-        {heading}
-        {controls ? (
-          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2">{controls}</div>
+        {typeof title === 'string' ? (
+          <h1 className="text-on-surface text-title-medium max-w-fit min-w-16 grow basis-0 truncate">
+            {title}
+          </h1>
         ) : (
-          <span className="flex-1" aria-hidden="true" />
+          title
         )}
-        {actions}
+        {controls ? (
+          <div className="flex shrink-0 flex-nowrap items-center gap-2">{controls}</div>
+        ) : null}
+        {fill ? <div className="flex min-w-0 flex-nowrap items-center gap-2">{fill}</div> : null}
+        {actions ? (
+          <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2">{actions}</div>
+        ) : null}
       </Surface>
     );
   }
+  const heading =
+    typeof title === 'string' ? (
+      <h1 className="text-on-surface text-title-medium min-w-0 truncate">{title}</h1>
+    ) : (
+      title
+    );
   return (
     <Surface
       as="header"

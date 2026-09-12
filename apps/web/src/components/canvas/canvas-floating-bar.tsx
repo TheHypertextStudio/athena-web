@@ -7,10 +7,15 @@
  * A canvas that fills its panel keeps its chrome in a single floating row at the top left: the
  * way back, the title, the view controls, and the counts. When something is selected the counts
  * give way to the selection's actions in the same row, so no second bar ever floats over the
- * graph and covers a node. The bar reports its height so the canvas can keep its frame below it.
+ * graph and covers a node. The bar spans the width the floating columns leave it, so its layout
+ * holds still as counts change and a selection comes and goes: the title truncates, the controls
+ * keep their room, and the selection's actions scroll inside their own group. The bar reports
+ * its height so the canvas can keep its frame below it.
  */
 import { AppBar } from '@docket/ui/components';
 import { type JSX, type ReactNode, useEffect, useRef } from 'react';
+
+import { CANVAS_OVERLAY_GUTTER } from './canvas-viewport-insets';
 
 /** Props for {@link CanvasFloatingBar}. */
 export interface CanvasFloatingBarProps {
@@ -62,10 +67,8 @@ export default function CanvasFloatingBar({
     };
   }, [onHeightChange]);
 
-  const tail =
-    selection === null ? (
-      trailing
-    ) : (
+  const selectionGroup =
+    selection === null ? null : (
       <div
         role="group"
         aria-label="Selection"
@@ -80,22 +83,22 @@ export default function CanvasFloatingBar({
     <div
       ref={ref}
       className="pointer-events-none absolute top-3 left-3 z-[2000]"
-      style={{ maxWidth: `calc(100% - 1.5rem - ${String(insetRight)}px)` }}
+      style={{ right: CANVAS_OVERLAY_GUTTER + insetRight }}
     >
       <AppBar
         presentation="floating"
         aria-label={ariaLabel}
         title={title}
         navigation={navigation}
-        controls={
+        controls={controls}
+        fill={selectionGroup}
+        actions={
           <>
-            {controls}
-            <span className="min-w-0 flex-1" aria-hidden="true" />
-            {tail}
+            {selection === null ? trailing : null}
+            {actions}
           </>
         }
-        actions={actions}
-        className="pointer-events-auto max-w-full"
+        className="pointer-events-auto w-full"
       />
     </div>
   );

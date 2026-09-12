@@ -297,6 +297,7 @@ function linkEdges(node: PlanNode, byRef: ReadonlyMap<string, PlanNode>): Edge[]
       targetHandle: 'link',
       selectable: false,
       deletable: false,
+      focusable: false,
       data: { kind: 'link' },
     }));
 }

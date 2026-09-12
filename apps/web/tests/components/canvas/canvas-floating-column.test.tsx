@@ -36,6 +36,39 @@ describe('CanvasFloatingColumn', () => {
     expect(onEscape).toHaveBeenCalledTimes(1);
   });
 
+  it('takes focus itself when the focused control unmounts, so Escape still lands', () => {
+    const onEscape = vi.fn();
+    const view = render(
+      <CanvasFloatingColumn label="Selection details" onEscape={onEscape}>
+        <button type="button">Confirm</button>
+      </CanvasFloatingColumn>,
+    );
+    screen.getByRole('button', { name: 'Confirm' }).focus();
+    view.rerender(
+      <CanvasFloatingColumn label="Selection details" onEscape={onEscape}>
+        <p>Created</p>
+      </CanvasFloatingColumn>,
+    );
+    const column = screen.getByTestId('canvas-floating-column');
+    expect(document.activeElement).toBe(column);
+    fireEvent.keyDown(column, { key: 'Escape' });
+    expect(onEscape).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves focus alone when it moves to another control', () => {
+    render(
+      <>
+        <CanvasFloatingColumn label="Selection details">
+          <button type="button">Inside</button>
+        </CanvasFloatingColumn>
+        <button type="button">Outside</button>
+      </>,
+    );
+    screen.getByRole('button', { name: 'Inside' }).focus();
+    screen.getByRole('button', { name: 'Outside' }).focus();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Outside' }));
+  });
+
   it('reports its width on mount and zero on unmount', () => {
     const onWidthChange = vi.fn();
     const view = render(

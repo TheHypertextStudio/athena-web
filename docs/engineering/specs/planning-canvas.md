@@ -4,7 +4,8 @@
 > kind. After reading, you should know where the plan document lives, which module owns each rule,
 > how Athena and the person write to the same document without clobbering each other, and what a
 > confirmation writes.
-> **Status**: shipped 2026-09-06 (`ATHENA-PLAN-CANVAS-001`). Design:
+> **Status**: shipped 2026-09-06 (`ATHENA-PLAN-CANVAS-001`); immersive surface and node craft
+> 2026-09-12 (`ATHENA-PLAN-CANVAS-002`). Design:
 > `docs/superpowers/specs/2026-09-05-athena-planning-canvas-design.md`.
 
 A plan is a personal, durable draft of an initiative, its projects, and their tasks, shaped on the
@@ -92,22 +93,65 @@ but not applied at commit; the created object starts at the workspace's default 
 
 `projectPlan` turns the document into xyflow nodes keyed by ref: an initiative card, a project
 container, and task rows held by containment. Initiative-to-project membership is a dashed
-`planLink` edge into the container's header; dependencies use the shared `DependencyEdge` and run
-from a container's bottom edge into the next one's top edge. `layoutPlan` draws a board rather than
-a dependency graph: on a landscape host the initiative cards stand in a column on the left and the
-containers stack in document order in short columns beside them (`PLAN_MAX_PER_COLUMN` per column);
-on a portrait host the cards sit in a row on top and the containers run down one column beneath, so
-a phone shows the whole plan at full scale. `orientPlanEdges` points membership links at the handle
-that faces the initiative in that orientation. Each container is sized to the rows it holds
-(`projectContainerHeight`), and `usePlanLayout` re-packs only when structure or orientation
-changes. Connection handles rest invisible until their node is hovered, focused, or selected
-(`planHandleClasses`), and the minimap appears once the board spills into a second column.
+`planLink` edge into the container's header; dependencies use the shared `DependencyEdge`, end in
+the shared arrowhead (`dependencyMarkerEnd`), and run from a container's bottom edge into the next
+one's top edge. Both edge kinds take the `outline` stroke so they read in either theme; membership
+keeps a longer dash and no arrowhead, so a dependency still reads heavier. The projection resolves
+actor ids through `resolveActor` (`plan-actors.ts`, built from the members the route already
+fetches) into `PlanActor` values, so a card draws an avatar and a name rather than a string.
+`layoutPlan` draws a board rather than a dependency graph: on a landscape host the initiative
+cards stand in a column on the left and the containers stack in document order in short columns
+beside them (`PLAN_MAX_PER_COLUMN` per column); on a portrait host the cards sit in a row on top
+and the containers run down one column beneath, so a phone shows the whole plan at full scale.
+`orientPlanEdges` points membership links at the handle that faces the initiative in that
+orientation. Each container is sized to the rows it holds (`projectContainerHeight`), and
+`usePlanLayout` re-packs only when structure or orientation changes.
 
-The panel reuses `Canvas`, `GraphInspectorHost`, `CanvasOverlayPanel`, and the viewport toolbar.
+The three renderers share one vocabulary in `plan-status.tsx`. `PlanStateChip` on the `Badge`
+primitive is the single reading of draft and created, on every card and in the inspector;
+`planCardClasses` draws a draft's dashed outline on a card and never on a row, where the glyph and
+the chip carry the state. `PlanDependencyHandle` names what dragging does and takes the accent
+under the pointer; membership handles rest invisible until their node is hovered, focused, or
+selected (`planHandleClasses`). The initiative card is 336×112 and reads like its record: title,
+summary at body size, owner avatar and name, the whole date, nothing for an unset field. A project
+container's header (`plan-project-header.tsx`) carries the lead's avatar, the target, the count,
+and one `PlanAlsoIn` chip for the other initiatives it belongs to, listing them on hover; the band
+takes a tonal step under the pointer. A task row shows its assignee as an avatar and pins the due
+date to the right, so a long name never takes the title's room. The minimap appears once the board
+spills into a second column.
+
+The route is immersive: the board runs edge to edge under floating chrome, and `useOwnPageScroll`
+keeps the page from scrolling under it. `PlanBar` composes the shared `CanvasFloatingBar` (an
+`AppBar` in its `floating` presentation) with the way back, the title, `CanvasSearchField`, "+
+Project", the counts, and the Athena toggle; when something is selected the counts give way to
+`PlanSelectionActions` in the same row. The bar spans the width the floating columns leave it and
+follows the `AppBar` rule for that row: the title takes the room the fixed slots leave and
+truncates first, controls and actions never shrink, and the selection group scrolls in the `fill`
+slot. The inspector floats in `GraphInspectorHost`'s `floating` presentation over the board's right
+edge, and `PlanConversation` floats beside it as a `CanvasFloatingColumn` hosting
+`AthenaConversation` on the organisation thread, which is the session `plan_start` binds to. The
+route registers itself as the Athena host (`registerHost`) while the window is at least 1024px, so
+every "open Athena" on the route lands in that column with any draft seeded through
+`draftRequest`; narrower windows fall back to the shell's sheet. A floating column takes focus
+itself when the control that had focus unmounts, so Escape after Confirm still closes it.
+
+The panel measures its overlays into `CanvasOverlayInsets` (bar height plus the gutter on top;
+inspector plus conversation on the right) and hands them to `Canvas` as `overlayInsets`, so the
+first frame (`frameAnchor="start"`, anchored to the board's left), `revealAdditions`, and every fit
+keep clear of the chrome. When the inspector docks, the panel refits the whole board if the strip
+it leaves is narrower than the board (`boardOverflows`) and otherwise nudges the selection into
+view. Below a 1200px host the inspector and the conversation take turns (`ONE_PANEL_BELOW_PX`):
+opening one closes the other. Below the compact threshold the covering pane and the shell sheet
+still apply. The route asks the shell for its icon rail on any window under 1920px
+(`useShellSidebar().requestCompact`) and for a collapsed right rail (`useShellRail()
+.requestCollapsed`) while mounted; both requests are scoped to the route, never touch the viewer's
+saved choice, and yield to the viewer expanding either for as long as the plan is open.
+
 Selection is xyflow's own: a draft node is not a workspace object and does not enter the global
 object registry. The inspector edits a draft's fields, commits text on blur or Enter, and names
 what Confirm will create through `describeConfirmation`; a confirmed node is read-only there with
-a link to its record.
+a link to its record. Closing the inspector, by Escape or its close button, clears the canvas
+selection too, so the bar's counts return.
 
 Direct gestures map one-to-one onto ops: rename or field edit → `set_fields`; drag a task into
 another container → `move_node`; draw an edge → `add_edge` (like kinds only); delete an edge →
@@ -118,22 +162,19 @@ so the card shows the name as it forms. Task rows carry no xyflow `extent`: a ro
 leave its container for a drop on another container to re-home it, and a drop that changes nothing
 is undone by writing the laid-out positions back (`snapToLayout`), which Re-layout also does.
 
-The route asks the shell for its icon rail while a plan is open on any window under 1920px
-(`useShellSidebar().requestCompact`): a plan is read beside the Athena rail and, once something is
-selected, beside the docked inspector, and on a 1440px window the labelled sidebar left that board
-a 560px strip. The request is scoped to the route, never touches the viewer's saved sidebar choice,
-and yields to the viewer expanding the sidebar for as long as the plan is open.
-
 An entry point that wants the conversation open on arrival navigates with `?athena=start`; the
-route seeds the rail's composer with an opening line once the plan has loaded and drops the flag,
-because the panel provider clears any launch draft on navigation.
+route reveals the column with an opening line once the plan has loaded and drops the flag.
 
 Motion lives in `apps/web/src/app/globals.css` (`plan-node-enter`, `plan-field-changed`) and is
 disabled under reduced motion. The canvas moves the viewport the person chose in one case only:
 when a revision from Athena adds nodes, the frame widens to take them in (`revealAdditions`), so
 what she just drew is never off screen. The "Athena updated" pill shares the slot above the view
 controls with undoable notices, a notice winning when both are due, so no transient surface ever
-overlaps the selection bar.
+overlaps the bar.
+
+The Task graph's focused view (`graph-canvas.tsx`) adopts the same bar through
+`TaskGraphPanel`'s `floatingChrome`, with `GraphViewBar` in its compact form and the bulk
+selection's actions (`BulkSelectionActions`) in the selection slot; its inspector stays docked.
 
 ## Deferred
 

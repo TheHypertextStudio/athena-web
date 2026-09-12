@@ -113,6 +113,7 @@ describe('projectPlan', () => {
     const link = edges.find((e) => e.id === 'link:init>p2');
     expect(link?.type).toBe(PLAN_EDGE_TYPE.link);
     expect(link?.selectable).toBe(false);
+    expect(link?.focusable).toBe(false);
     const dep = edges.find((e) => e.id === 'dep:p1>p2');
     expect(dep?.type).toBe(PLAN_EDGE_TYPE.dependency);
     expect(dep?.data).toEqual({ kind: 'dependency' });

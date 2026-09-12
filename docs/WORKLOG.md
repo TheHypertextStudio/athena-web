@@ -10821,6 +10821,86 @@ states became the `EmptyState` atom; and the description editor's 224px floor ca
   `docs/engineering/ui-verification.md` documents. Clearing it worked first try. Separately, this
   entry had to be written twice: the first copy was lost in a rebase where `main` had also edited
   `docs/WORKLOG.md` and the auto-merge silently kept its version.
+### [ATHENA-PLAN-CANVAS-002] Make the planning canvas immersive
+
+- **Completed**: 2026-09-12
+- **Priority**: P1
+- **Summary**: The planning canvas is now the whole surface. The board runs edge to edge under one
+  floating bar; the inspector and the Athena conversation float over its right edge; the route
+  asks the shell for its icon rail and a collapsed right rail while a plan is open; and the canvas
+  frames the board around the measured chrome so arrival, Athena's additions, and a selection never
+  land under a panel. The conversation moved from the rail's personal-session composer to the
+  organisation thread the plan is bound to. The cards earned the craft of records: a wider
+  initiative card with the owner's avatar and the whole date, project headers with the lead's
+  avatar and one chip for the other initiatives, task rows with an avatar for the assignee and the
+  date pinned right, one state chip on the Badge primitive for draft and created everywhere,
+  named dependency handles, arrowheads on every dependency, and membership links on the outline
+  stroke so they read in the dark theme. The Task graph's focused view adopts the same floating bar.
+  Design: `~/.claude/plans/cheeky-tickling-treasure.md`; audit:
+  `docs/design/audits/2026-09-12-planning-canvas-immersive.md`.
+
+#### Shape
+
+- `AppBar` gains a `floating` presentation with one layout rule for its row: the title takes the
+  room the fixed slots leave and truncates first, controls and actions never shrink, and a `fill`
+  slot is the one flexible region. `CanvasFloatingBar`, `CanvasFloatingColumn`, and
+  `CanvasSearchField` build on it; `GraphInspectorHost` gains a `floating` presentation; `Canvas`
+  gains `overlayInsets`, `frameAnchor`, `dotGrid`, and `onSelectionChange`, with the framing math
+  in pure modules (`canvas-viewport-insets.ts`, `graph-first-frame-viewport.ts`) beside the
+  ledgered `canvas.tsx`.
+- `AppShell` counts collapse requests for the right rail the way it already did for the sidebar
+  (`useCountedRequests`, `ShellRailContext`); the Athena provider lets a route register itself as
+  the conversation's host (`registerHost`) and `AthenaConversation` accepts a `draftRequest`.
+- The plan route: `PlanBar` with `PlanSelectionActions`, `PlanConversation` on the org thread,
+  `PlanCanvasPanel` measuring its overlays into insets, one panel at a time under a 1200px host, a
+  refit when a docked panel leaves a strip narrower than the board, and a floating column that
+  takes focus itself when its focused control unmounts so Escape after Confirm still closes it.
+- Node craft: `PlanActor` resolved through `usePlanActorResolver` from the members the route
+  fetches; `PlanStateChip`, `planCardClasses(..., shape)`, and `PlanDependencyHandle` in
+  `plan-status.tsx`; `plan-project-header.tsx` with `PlanAlsoIn`; sizes 336×112 / 280 / 12 / 72;
+  `dependencyMarkerEnd` shared with the Task graph.
+- The Task graph: `TaskGraphPanel` accepts `floatingChrome`; `BulkActionsBar` splits into
+  `BulkSelectionActions` and `BulkPropertiesDialog`; `GraphViewBar` has a compact form.
+
+#### Files changed
+
+- `packages/ui/src/components/shell/{AppBar,AppShell,ShellRailContext}.tsx`,
+  `packages/ui/src/components/index.ts`
+- `apps/web/src/components/canvas/{canvas,graph-inspector-host,canvas-floating-bar,canvas-floating-column,canvas-search-field,canvas-viewport-insets,graph-first-frame-viewport,dependency-marker,use-task-graph,task-graph-panel,bulk-actions-bar,graph-view-bar,canvas-created-hidden-notice}.*`
+- `apps/web/src/components/athena/{athena-panel-provider,athena-conversation}.tsx`
+- `apps/web/src/components/plan-canvas/` (bar, conversation, panel, nodes, status, project header,
+  actors, layout, link edge, inspector, the three node renderers),
+  `apps/web/src/app/(app)/orgs/[orgId]/plans/[planId]/plan-client.tsx`,
+  `apps/web/src/app/(app)/orgs/[orgId]/graph/graph-canvas.tsx`
+- Tests under `apps/web/tests/{plan-canvas,components/canvas,canvas,athena}` and
+  `packages/ui/tests/components/shell`; `apps/web/e2e/athena/plan-canvas.spec.ts`
+- `docs/engineering/specs/planning-canvas.md`, `docs/design/audits/2026-09-12-planning-canvas-immersive.md`,
+  `docs/design/surface-inventory.md`
+
+#### Validation
+
+- Slice suites green as each phase landed; `apps/web/e2e/athena/plan-canvas.spec.ts` passes against
+  the worktree stack (draft renders under the floating bar, Confirm from the floating inspector
+  creates the project and its tasks, Escape clears the selection and the counts return, Plan with
+  Athena on an initiative lands on the canvas with the conversation open).
+- Captured at 1440, 1280, 1024, 390, and 320 in light and dark: the board takes 89% of a 1440
+  window's width (was 39–51%), 88% at 1280, 85% at 1024; no document overflow at 320px.
+- Root gates (`pnpm typecheck`, `lint`, `format:check`, `test:coverage`, `build`) at the final
+  commit, after `pnpm db:reset`.
+
+#### Learnings
+
+- A flex row cannot give one child priority to shrink by intent alone: any shrinkable container
+  with fixed children overlaps its neighbours as soon as it shrinks. The rule that holds is
+  structural: the title grows into free space up to its own length (`grow basis-0 max-w-fit`),
+  fixed slots are `shrink-0`, and exactly one region is allowed to shrink and owns its overflow.
+- A per-call mock of a shared context (the bulk properties editor test) constrains how a component
+  may be split: pieces that must agree on state take that state as props from one hook call.
+- A control that unmounts while focused drops focus to the body silently; a floating panel that
+  wants Escape to keep working has to notice and take focus itself.
+- xyflow marks non-selectable edges focusable by default; a membership link that cannot be acted on
+  should opt out so Tab from a row lands on something a person can use.
+
 ### [ATHENA-PLAN-CANVAS-001] Plan initiatives on the canvas with Athena
 
 - **Completed**: 2026-09-06

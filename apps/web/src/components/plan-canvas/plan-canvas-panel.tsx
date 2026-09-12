@@ -185,6 +185,20 @@ function revealAdditions(
   };
 }
 
+/**
+ * Whether the board, at the viewport's zoom, is wider than the strip a docked panel leaves it.
+ * A board that no longer fits is refitted rather than nudged, because nudging one node into the
+ * strip pushes another under the panel's far edge.
+ */
+function boardOverflows(
+  flowInstance: ReactFlowInstance | null,
+  boardWidth: number,
+  visibleWidth: number,
+): boolean {
+  if (flowInstance === null) return false;
+  return boardWidth * flowInstance.getViewport().zoom + REVEAL_PADDING * 2 > visibleWidth;
+}
+
 /** What the floating conversation needs from the route. */
 export interface PlanConversationState {
   readonly open: boolean;
@@ -466,7 +480,7 @@ export default function PlanCanvasPanel({
   // A portrait host (a phone) runs the board down the page under the initiative; a landscape
   // host stands the initiative beside it.
   const orientation: PlanOrientation = aspectRatio < 1 ? 'column' : 'row';
-  const { nodes } = usePlanLayout(projected.nodes, layoutEpoch, orientation);
+  const { nodes, bounds } = usePlanLayout(projected.nodes, layoutEpoch, orientation);
   const edges = useMemo(
     () => orientPlanEdges(projected.edges, orientation),
     [projected.edges, orientation],
@@ -748,18 +762,28 @@ export default function PlanCanvasPanel({
     [flowInstance, selectedNode],
   );
 
-  // When the inspector docks for a node the person just added, the pane has just narrowed; take
-  // the whole board in rather than nudging one node into the strip that is left.
+  // When the inspector docks for a node the person just added, or when the strip it leaves is
+  // narrower than the board, take the whole board in rather than nudging one node into the strip.
   const onInspectorDock = useCallback(
     (visibleWidth: number) => {
-      if (focusRef !== null && focusRef === selectedRef) {
+      const justAdded = focusRef !== null && focusRef === selectedRef;
+      if (justAdded || boardOverflows(flowInstance, bounds.width, visibleWidth)) {
         revealAdditions(flowInstance, insets);
         return;
       }
       keepSelectionInView(visibleWidth);
     },
-    [flowInstance, focusRef, insets, keepSelectionInView, selectedRef],
+    [bounds.width, flowInstance, focusRef, insets, keepSelectionInView, selectedRef],
   );
+
+  // Closing the inspector clears the selection on the canvas too, so the bar's counts return and
+  // Escape from inside the inspector means the same as Escape on the board.
+  const clearSelection = useCallback(() => {
+    setSelectedRef(null);
+    flowInstance?.setNodes((current) =>
+      current.map((node) => (node.selected ? { ...node, selected: false } : node)),
+    );
+  }, [flowInstance]);
 
   const bar = (
     <PlanBar
@@ -811,9 +835,7 @@ export default function PlanCanvasPanel({
         onAsk={(ref) => {
           askAbout([ref]);
         }}
-        onClose={() => {
-          setSelectedRef(null);
-        }}
+        onClose={clearSelection}
       />
     ) : null;
 
@@ -828,9 +850,7 @@ export default function PlanCanvasPanel({
         presentation="floating"
         offsetRight={conversationRight}
         onOcclusionChange={setInspectorRight}
-        onClose={() => {
-          setSelectedRef(null);
-        }}
+        onClose={clearSelection}
         onDock={onInspectorDock}
       >
         {bar}

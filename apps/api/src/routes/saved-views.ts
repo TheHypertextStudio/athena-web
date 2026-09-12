@@ -26,6 +26,9 @@ import {
 } from '@docket/work/saved-view-contract';
 import {
   FractionalRank,
+  InitiativeViewDefinition,
+  ProgramViewDefinition,
+  ProjectViewDefinition,
   TaskViewDefinition,
   type WorkViewContext,
 } from '@docket/work/work-view-contract';
@@ -39,11 +42,40 @@ import { NotFoundError, ValidationError } from '../error';
 import type { JsonRoute } from '../lib/hono-rpc';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
+import { parseStoredDefinition } from '../lib/stored-definition';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 type SavedViewRow = typeof savedView.$inferSelect;
+
+/** The current definition schema for one saved-view target. */
+const DEFINITION_SCHEMA = {
+  task: TaskViewDefinition,
+  project: ProjectViewDefinition,
+  program: ProgramViewDefinition,
+  initiative: InitiativeViewDefinition,
+} as const satisfies Record<SavedViewRow['target'], z.ZodType>;
+
+/**
+ * Project a stored row, or `null` when its definition no longer satisfies the current contract.
+ *
+ * @remarks
+ * The list route is unpaginated and org-wide, so throwing here took every member's saved-view list
+ * down over one stale row. A view whose definition cannot be parsed also cannot be represented in
+ * `SavedWorkViewOut`, and it is not usable in the product either — the update route already answers
+ * one with "This saved view requires a current client before its filters can be changed". Dropping
+ * it from the list keeps every other view working; the row id reaches the logs so a backfill can
+ * repair it.
+ *
+ * @param v - The stored saved-view row.
+ * @returns the response shape, or `null` when the stored definition is stale.
+ */
+function toOutOrNull(v: SavedViewRow): z.input<typeof SavedWorkViewOut> | null {
+  const site = { column: 'saved_view.definition', rowId: v.id };
+  if (parseStoredDefinition(DEFINITION_SCHEMA[v.target], v.definition, site) === null) return null;
+  return toOut(v);
+}
 
 function toOut(v: SavedViewRow): z.input<typeof SavedWorkViewOut> {
   const legacy = legacyProjection(v.target, v.definition);
@@ -284,7 +316,8 @@ const savedViews: Hono<AppEnv, SavedViewRoutes> = new Hono<AppEnv>()
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const rows = await db.select().from(savedView).where(visibleSavedView(orgId, actorId));
-      return ok(c, pageOf(SavedWorkViewOut), { items: rows.map(toOut) });
+      const items = rows.map(toOutOrNull).filter((item) => item !== null);
+      return ok(c, pageOf(SavedWorkViewOut), { items });
     },
   )
   .post(

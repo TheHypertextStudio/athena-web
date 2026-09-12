@@ -86,6 +86,56 @@ describe('Hub preferences', () => {
     });
   });
 
+  it('keeps preferences readable and writable when one stored view override went stale', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'HubStaleViewState');
+    const orgId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+    const current = {
+      instanceKey: `builtin:task:${orgId}`,
+      target: 'task',
+      collapsedGroups: [],
+      hiddenBoardColumns: [],
+      favoriteViewIds: [],
+    };
+    const stored = {
+      theme: 'dark',
+      timezone: 'America/Los_Angeles',
+      viewState: [
+        current,
+        // What a removed or renamed work-view field leaves behind. Strict schemas reject the whole
+        // entry, and this used to fail the entire read.
+        { ...current, instanceKey: `builtin:project:${orgId}`, retiredField: 'gone' },
+      ],
+      // The column's own type describes what the *current* contract accepts, which is exactly what
+      // a row written by an earlier deploy does not satisfy.
+    } as unknown as (typeof schema.hub.$inferInsert)['preferences'];
+    await schema.db
+      .update(schema.hub)
+      .set({ preferences: stored })
+      .where(eq(schema.hub.userId, userId));
+    const app = appWithSession(hubRouter, fakeSession(userId));
+
+    const readResponse = await app.request('/preferences');
+    expect(readResponse.status).toBe(200);
+    const read = await body<HubPreferences>(readResponse);
+    expect(read).toMatchObject({ theme: 'dark', timezone: 'America/Los_Angeles' });
+    expect(read.viewState).toHaveLength(1);
+    expect(read.viewState?.[0]).toMatchObject({ instanceKey: `builtin:task:${orgId}` });
+
+    // The write path parses the same column, so a stale entry used to make the row unrepairable
+    // by its own owner.
+    const patchResponse = await app.request('/preferences', {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ density: 'compact' }),
+    });
+    expect(patchResponse.status).toBe(200);
+    expect(await body<HubPreferences>(patchResponse)).toMatchObject({
+      density: 'compact',
+      theme: 'dark',
+    });
+  });
+
   it('requires a session and returns 404 when the caller has no Hub', async () => {
     expect((await appWithSession(hubRouter, null).request('/preferences')).status).toBe(401);
     const schema = await getDb();

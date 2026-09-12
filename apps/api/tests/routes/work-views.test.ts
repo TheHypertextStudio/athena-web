@@ -3091,7 +3091,7 @@ describe('work-view routes', () => {
     expect(await read.json()).toMatchObject({ target: 'project', definition });
   });
 
-  it('returns an owned 500 when a stored organization default violates its output contract', async () => {
+  it('answers as unset when a stored organization default no longer satisfies its contract', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(schema.db, schema);
     await schema.db.execute(sql`
       insert into organization_work_view_default (
@@ -3110,13 +3110,13 @@ describe('work-view routes', () => {
 
     const response = await app.request('/defaults/task');
 
-    expect(response.status).toBe(500);
+    // A default nobody can render is worth exactly as much as no default, and serializing it made
+    // one stale row a 500 for every member of the workspace. Callers already treat the absent case
+    // as "use the built-in definition", so this degrades to a working view instead of an outage.
+    // The row reaches the logs as `stale_stored_definition` so a backfill can repair it.
+    expect(response.status).toBe(404);
     const body = await response.json();
-    expect(body).toMatchObject({
-      status: 500,
-      code: 'internal',
-      title: 'Something went wrong on our side.',
-    });
+    expect(body).toMatchObject({ status: 404, code: 'not_found' });
     expect(body).not.toHaveProperty('fieldErrors');
     expect(JSON.stringify(body)).not.toContain('definition');
   });

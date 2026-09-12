@@ -426,6 +426,13 @@ export function problemTypeUrl(code: string): string {
  * line — method, path, and the real error message/stack — before the response ever encodes the
  * generic public code, so the next unmapped failure leaves evidence instead of just a 500.
  *
+ * A {@link ZodError} is logged too, under its own event. It reaches here when a schema parse escapes
+ * a handler, which on a read path means a *stored* row no longer satisfies its contract — the caller
+ * sent no body to be at fault for. Those were silent: a `GET` answered 422 with `fieldErrors` keyed
+ * by internal schema paths and left nothing behind, so an outage caused by stale stored data was
+ * invisible to the one system that could have named it. Issue paths and codes only; the values are
+ * the stored data itself.
+ *
  * @param err - The thrown error.
  * @param c - The Hono context.
  * @returns a `application/problem+json` response.
@@ -438,19 +445,22 @@ export function onError(err: Error, c: Context) {
         ? new ValidationError(err)
         : new ApiError(500, 'internal', 'Internal server error');
 
-  if (!(err instanceof ApiError) && !(err instanceof ZodError)) {
+  if (!(err instanceof ApiError)) {
     console.error(
       JSON.stringify({
         level: 'error',
         source: 'api',
-        event: 'unhandled_error',
+        event: err instanceof ZodError ? 'schema_validation_error' : 'unhandled_error',
         // Set by Hono's `requestId` middleware and echoed to the client as `X-Request-Id`, so a
         // report of "it failed at 14:03" resolves to exactly one line here.
         requestId: c.get('requestId'),
         method: c.req.method,
         path: c.req.path,
-        message: err.message,
-        stack: err.stack,
+        ...(err instanceof ZodError
+          ? {
+              issues: err.issues.map((issue) => ({ code: issue.code, path: issue.path.join('.') })),
+            }
+          : { message: err.message, stack: err.stack }),
       }),
     );
   }

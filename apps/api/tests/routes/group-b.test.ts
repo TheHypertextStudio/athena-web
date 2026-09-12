@@ -1,5 +1,5 @@
 import { canActor } from '@docket/authz';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -306,6 +306,51 @@ describe('saved-views router', () => {
       'i0',
     ],
   ] as const;
+
+  it('lists the views that still parse when one stored definition went stale', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(r['savedViews'], orgId, ['contribute'], humanActorId);
+    const createResponse = await writer.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        name: 'Current project view',
+        target: 'project',
+        context: { kind: 'organization' },
+        position: 'p0',
+        definition: projectRequest().definition,
+      }),
+    });
+    expect(createResponse.status).toBe(201);
+    const current = await body<{ id: string }>(createResponse);
+
+    const staleResponse = await writer.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        name: 'Stale project view',
+        target: 'project',
+        context: { kind: 'organization' },
+        position: 'p1',
+        definition: projectRequest().definition,
+      }),
+    });
+    expect(staleResponse.status).toBe(201);
+    const stale = await body<{ id: string }>(staleResponse);
+    // Rewrite the stored definition the way a removed or renamed work-view field leaves it: valid
+    // when written, rejected by the contract the next deploy brings. The list is unpaginated and
+    // org-wide, so this one row used to fail the whole list for every member who could see it.
+    await db.execute(sql`
+      update saved_view
+      set definition = ${JSON.stringify({ ...projectRequest().definition, retiredField: 'gone' })}::jsonb
+      where id = ${stale.id}
+    `);
+
+    const listResponse = await writer.request('/');
+    expect(listResponse.status).toBe(200);
+    const list = await body<{ items: { id: string }[] }>(listResponse);
+    expect(list.items.map((item) => item.id)).toEqual([current.id]);
+  });
 
   it.each(nonTaskDefinitions)(
     'keeps rollback-client fields fail-closed for typed %s saved views',

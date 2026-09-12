@@ -101,6 +101,45 @@ const DEFAULT_GC_TIME_MS = 5 * 60_000;
  * @param handlers - Optional global cache handlers (`onError`), wired by the client providers.
  * @returns a configured {@link QueryClient}.
  */
+/**
+ * How many times a transient failure is re-attempted before the surface hears about it.
+ *
+ * @remarks
+ * This was one attempt with no retries at all, which made a single dropped request terminal for
+ * that query. With no persisted cache behind it there was nothing to fall back on either, so one
+ * blip on one request became a failure state on screen. Three attempts over roughly a second and a
+ * half absorb the blips without making a real outage feel slow.
+ */
+const MAX_RETRIES = 3;
+
+/**
+ * Whether re-issuing the identical request could plausibly succeed.
+ *
+ * @remarks
+ * Retrying is for failures that are about the moment, not about the request. A transport failure, a
+ * rate limit, or a server fault may be gone a second later; a refusal, a missing row, or a rejected
+ * body will answer exactly the same way however many times it is asked, and retrying those only
+ * delays the message and multiplies the load. An expired session fails fastest of all, so the
+ * interlock can redirect.
+ */
+export function isWorthRetrying(error: unknown): boolean {
+  if (error instanceof AuthenticationRequiredError) return false;
+  if (!(error instanceof UserFacingError)) return true;
+  const status = error.status;
+  if (status === undefined) return true;
+  // 0 is this layer's convention for "no response arrived" — a dropped connection, or a body the
+  // client could not parse. Both are worth one more look.
+  if (status === 0) return true;
+  if (status === 408 || status === 429) return true;
+  return status >= 500;
+}
+
+/** Exponential backoff with jitter, so a recovering server is not hit by every client at once. */
+function retryDelayMs(failureCount: number): number {
+  const backoff = Math.min(1000 * 2 ** failureCount, 8000);
+  return backoff / 2 + Math.random() * (backoff / 2);
+}
+
 export function createQueryClient(handlers?: {
   onError?: ((error: unknown) => void) | undefined;
 }): QueryClient {
@@ -117,8 +156,8 @@ export function createQueryClient(handlers?: {
         staleTime: STALE.standard,
         gcTime: DEFAULT_GC_TIME_MS,
         refetchOnWindowFocus: true,
-        // A 401 (session expired) is not worth retrying — fail fast so the global handler redirects.
-        retry: (failureCount, error) => !(error instanceof SessionExpiredError) && failureCount < 1,
+        retry: (failureCount, error) => failureCount < MAX_RETRIES && isWorthRetrying(error),
+        retryDelay: retryDelayMs,
       },
       mutations: {
         // Counter-intuitive but deliberate, and now load-bearing for the offline queue. The

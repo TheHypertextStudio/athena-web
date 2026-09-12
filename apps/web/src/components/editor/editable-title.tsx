@@ -203,7 +203,11 @@ export function EditableTitle({
         }
       }}
       className={cn(
-        'm-0 [field-sizing:content] w-full resize-none overflow-hidden border-0 bg-transparent p-0 outline-none',
+        // `block` keeps this field out of an inline formatting context. As `inline-block` it
+        // aligned to its parent's baseline, so the parent reserved descender space beneath it and
+        // grew by 8px at the masthead's type scale — a heading that changed height the moment it
+        // became editable, and a list row that grew when double-clicked into edit.
+        'm-0 block [field-sizing:content] w-full resize-none overflow-hidden border-0 bg-transparent p-0 outline-none',
         // Tapped to focus, so it answers to the same coarse floor every other control does.
         'coarse:min-h-10',
         className,

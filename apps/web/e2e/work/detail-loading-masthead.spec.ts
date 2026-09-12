@@ -11,6 +11,8 @@
  * actually reaches the page on a real click, and that the chips it paints survive the aggregate
  * landing without the masthead moving.
  */
+import type { Page } from '@playwright/test';
+
 import { signUpAndOnboard } from '../helpers/app';
 import { createMobileAuditFixture } from '../helpers/mobile-audit-fixture';
 import { orgHref, TIMEOUTS } from '../helpers/constants';
@@ -66,20 +68,49 @@ test('an Initiative opened from its list states its properties while the rest lo
   const pending = busy.locator('[data-entity-metadata-item] [data-slot="skeleton"]');
   expect(await pending.count()).toBeGreaterThan(0);
 
-  const titleBefore = await busy.getByRole('heading', { level: 1 }).boundingBox();
-  const rowBefore = await busy.locator('.entity-metadata-row').boundingBox();
+  const before = await mastheadGeometry(page);
 
   releaseAggregate();
   await expect(page.getByRole('status', { name: /detail$/ })).toBeHidden({
     timeout: TIMEOUTS.ui,
   });
 
-  // The title is anchored: its glyph is the real one and its own line box never changed.
-  const titleAfter = await page.getByRole('heading', { level: 1 }).first().boundingBox();
-  expect(titleAfter?.y).toBeCloseTo(titleBefore?.y ?? 0, 0);
-
-  // And the property row is the height it always was, which is the invariant `SkeletonChip`
-  // documents: a placeholder pill is the control step a property trigger resolves to.
-  const rowAfter = await page.locator('.entity-metadata-row').first().boundingBox();
-  expect(rowAfter?.height).toBeCloseTo(rowBefore?.height ?? 0, 0);
+  // Nothing in the masthead moves or resizes when the aggregate lands. Each number below was
+  // wrong at some point for its own reason, so each is asserted rather than inferred from the
+  // one beneath it:
+  //
+  // - `title`/`subtitle` are the slots, not the fields. Both fields were always exactly their type
+  //   token's line box; the slots were taller because a `<textarea>` is `inline-block`, so the
+  //   slot reserved descender space under it — 8px at the title, 6px at the summary.
+  // - `row` is the property row's height, the invariant `SkeletonChip` documents: a placeholder
+  //   pill is the control step a property trigger resolves to.
+  // - `rowY` is what a reader actually notices. It is the sum of everything above it, and it is
+  //   the one that stayed wrong each time a single slot was fixed on its own.
+  expect(await mastheadGeometry(page)).toEqual(before);
 });
+
+/** The masthead measurements that must survive the aggregate landing. */
+interface MastheadGeometry {
+  readonly title: number;
+  readonly subtitle: number;
+  readonly row: number;
+  readonly rowY: number;
+}
+
+/**
+ * Measure the masthead's slot heights and the property row's position.
+ *
+ * @param page - The page showing an Initiative, loading or loaded.
+ * @returns The {@link MastheadGeometry}, rounded so sub-pixel text metrics do not make it flaky.
+ */
+async function mastheadGeometry(page: Page): Promise<MastheadGeometry> {
+  const heightOf = async (selector: string): Promise<number> =>
+    Math.round((await page.locator(selector).first().boundingBox())?.height ?? -1);
+  const row = page.locator('.entity-metadata-row').first();
+  return {
+    title: await heightOf('.detail-title'),
+    subtitle: await heightOf('.detail-secondary .text-body-large'),
+    row: Math.round((await row.boundingBox())?.height ?? -1),
+    rowY: Math.round((await row.boundingBox())?.y ?? -1),
+  };
+}

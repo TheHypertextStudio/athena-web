@@ -114,7 +114,12 @@ export function EditableSubtitle({
         }
       }}
       className={cn(
-        'm-0 [field-sizing:content] w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent p-0 outline-none',
+        // `block` is load-bearing, not tidying. A textarea is `inline-block` by default, so it
+        // aligns to its parent's baseline and the parent's line box then reserves descender space
+        // under it — 6px at this type scale. The field itself is exactly its token's 24px line box;
+        // the 6px was the box around it, which is why the placeholder that stands in for this field
+        // looked correct and still settled. The read-only branch above has always been `block`.
+        'm-0 block [field-sizing:content] w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent p-0 outline-none',
         className,
       )}
     />

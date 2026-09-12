@@ -19,6 +19,11 @@ docs
 # domain/package it changes, or left unscoped if it's cross-cutting).
 dx
 hub
+# initiatives: an initiative as a person meets it — opening one, reading it, changing its
+# properties. Pairs with `projects`: the record is the section, so a change to the page you open an
+# initiative into belongs here rather than to whatever component happens to draw it. A change
+# spanning several kinds of record takes the one it was found on.
+initiatives
 integrations
 marketing
 mcp

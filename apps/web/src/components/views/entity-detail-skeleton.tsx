@@ -52,7 +52,36 @@ export interface EntityDetailSkeletonProps {
   title?: string | undefined;
   /** The entity's real one-line summary, when it is already known. */
   subtitle?: string | undefined;
-  /** Core status values carried by a local navigation snapshot. */
+  /**
+   * The entity's glyph, when it can be drawn before the record arrives.
+   *
+   * @remarks
+   * An uncustomized entity's icon and color are derived from its type and id, so a page that knows
+   * what it is opening can paint the real glyph with no network at all. Defaults to a placeholder
+   * for the callers that know neither.
+   */
+  icon?: ReactNode | undefined;
+  /**
+   * Whether a breadcrumb trail is known to be coming.
+   *
+   * @remarks
+   * Defaults to `false`, and the default is the point. The layout renders its eyebrow slot only
+   * when filled, so a placeholder for an entity that turns out to have no parent appears and then
+   * vanishes — the layout shift this component exists to prevent, caused by the component itself.
+   * A navigation snapshot names no parent, so nothing currently knows; pass `true` only from a
+   * caller that does.
+   */
+  hasEyebrow?: boolean | undefined;
+  /**
+   * The metadata row's entire contents, when a local snapshot can state some of it.
+   *
+   * @remarks
+   * Whatever is passed replaces the default row of placeholders outright, so it must account for
+   * every property — a stated chip for each value the snapshot carries and a placeholder in the
+   * slot of each one still being read. {@link import('./entity-snapshot-metadata').EntitySnapshotMetadata}
+   * is that node for every entity with a navigation snapshot; a row of stated chips alone would
+   * claim the page had finished loading.
+   */
   snapshotMetadata?: ReactNode | undefined;
 }
 
@@ -69,23 +98,31 @@ export function EntityDetailSkeleton({
   entityName,
   title,
   subtitle,
+  icon,
+  hasEyebrow = false,
   snapshotMetadata,
 }: EntityDetailSkeletonProps): JSX.Element {
   return (
     <div role="status" aria-busy="true" aria-label={`${entityName} detail`} className="h-full">
       <EntityDetailLayout
-        // placeholder: the breadcrumb trail, which names containers the record has not been read
-        // from yet.
-        eyebrow={<SkeletonText className="w-48" />}
-        // placeholder: the entity's icon.
-        icon={<SkeletonGlyph />}
+        // placeholder (only where a breadcrumb is known to be coming): the trail naming containers
+        // the record has not been read from yet.
+        eyebrow={hasEyebrow ? <SkeletonText className="w-48" /> : undefined}
+        icon={
+          // placeholder (only when the glyph cannot be derived): the entity's icon.
+          icon ?? <SkeletonGlyph />
+        }
         title={
           // placeholder (only when the name is not yet known): the entity's name.
           title ?? <SkeletonText scale="headline" className="w-2/3 max-w-md" />
         }
         subtitle={
           // placeholder (only when the summary is not yet known): the entity's one-line summary.
-          subtitle ?? (hasSubtitle ? <SkeletonText className="w-1/2 max-w-sm" /> : undefined)
+          // The summary renders at `text-body-large`, whose 24px line box is the `title` scale
+          // rather than the default body one — at `h-4` the placeholder was 8px short, and the
+          // whole property row beneath it stepped down when the real summary arrived.
+          subtitle ??
+          (hasSubtitle ? <SkeletonText scale="title" className="w-1/2 max-w-sm" /> : undefined)
         }
         metadata={
           <EntityMetadataRow ariaLabel={`${entityName} details`}>

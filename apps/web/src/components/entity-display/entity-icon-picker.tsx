@@ -2,7 +2,7 @@
 
 import { lazy, Suspense, type JSX, useState } from 'react';
 
-import { EntityIconGlyph } from './entity-icon-glyph';
+import { EntityIconGlyph, EntityIconSlot } from './entity-icon-glyph';
 import type { EntityIconPickerProps } from './entity-icon-picker-loaded';
 
 const LoadedEntityIconPicker = lazy(() => import('./entity-icon-picker-loaded'));
@@ -25,15 +25,7 @@ export function EntityIconPicker(props: EntityIconPickerProps): JSX.Element {
   );
 
   if (!props.editable) {
-    return (
-      <span
-        className="flex shrink-0 items-center justify-center"
-        style={{ width: targetSize, height: targetSize }}
-        title={props.entityName}
-      >
-        {glyph}
-      </span>
-    );
+    return <EntityIconSlot display={props.display} entityName={props.entityName} size={size} />;
   }
 
   if (!editorRequested) {

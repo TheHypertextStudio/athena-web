@@ -62,7 +62,7 @@ import { PropertiesPanel } from '@/components/project-detail/properties-panel';
 import { PublishAction } from '@/components/publishing/publish-action';
 import { RepeatProjectDialog } from '@/components/recurrence/repeat-project-dialog';
 import { useResolvedAccountId } from '@/components/resolved-account';
-import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
+import { ContainerDetailLoading } from '@/components/views/entity-snapshot-metadata';
 import { DetailPrintSummary } from '@/components/views/detail-print-summary';
 import { useDetailTab } from '@/components/views/use-detail-tab';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
@@ -539,17 +539,12 @@ export default function ProjectDetailPage(): JSX.Element {
   if (aggregateState === 'loading') {
     return (
       <>
-        <EntityDetailSkeleton
+        <ContainerDetailLoading
+          target="project"
+          id={projectId}
           entityName={projectNoun}
-          title={navigationSnapshot?.name}
-          snapshotMetadata={
-            navigationSnapshot ? (
-              <span className="text-on-surface-variant text-body-small">
-                {navigationSnapshot.status} · {navigationSnapshot.priority}
-                {navigationSnapshot.health ? ` · ${navigationSnapshot.health}` : ''}
-              </span>
-            ) : undefined
-          }
+          tabCount={4}
+          snapshot={navigationSnapshot}
         />
         {aggregateQ.isError ? (
           <p role="alert" className="text-error text-body-medium mx-auto max-w-7xl px-6 pb-6">

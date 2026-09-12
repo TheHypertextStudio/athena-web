@@ -5,7 +5,10 @@ import { useEffect, useState, type ComponentType, type JSX } from 'react';
 
 import { OfflineContent } from '@/components/offline-state';
 import { TaskDetailLoading } from '@/components/task-detail/task-detail-loading';
-import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
+import {
+  ContainerDetailLoading,
+  type ContainerNavigationSnapshot,
+} from '@/components/views/entity-snapshot-metadata';
 import { useAppLocation } from '@/lib/app-location';
 import { parseAuthenticatedRoute } from '@/lib/authenticated-route';
 import { peekNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
@@ -152,58 +155,41 @@ function matchingSnapshot<TTarget extends EntityNavigationSnapshot['target']>(
   return snapshot as Extract<EntityNavigationSnapshot, { readonly target: TTarget }>;
 }
 
-/** Paint the matching detail layout immediately while the detail route module loads. */
-function NavigationSnapshotLoading({
-  snapshot,
-}: {
+/** Props for {@link NavigationSnapshotLoading}. */
+interface NavigationSnapshotLoadingProps {
+  /** The identity the source row seeded before history changed. */
   readonly snapshot: EntityNavigationSnapshot;
-}): JSX.Element {
-  switch (snapshot.target) {
-    case 'task':
-      return <TaskDetailLoading snapshot={snapshot} />;
-    case 'project':
-      return (
-        <EntityDetailSkeleton
-          entityName="Project"
-          tabCount={4}
-          title={snapshot.name}
-          snapshotMetadata={<SnapshotMetadata snapshot={snapshot} />}
-        />
-      );
-    case 'program':
-      return (
-        <EntityDetailSkeleton
-          entityName="Program"
-          tabCount={4}
-          title={snapshot.name}
-          snapshotMetadata={<SnapshotMetadata snapshot={snapshot} />}
-        />
-      );
-    case 'initiative':
-      return (
-        <EntityDetailSkeleton
-          entityName="Initiative"
-          tabCount={5}
-          title={snapshot.name}
-          snapshotMetadata={<SnapshotMetadata snapshot={snapshot} />}
-        />
-      );
-  }
 }
 
-/** Render the status fields every non-task local snapshot carries. */
-function SnapshotMetadata({
-  snapshot,
-}: {
-  readonly snapshot: Exclude<EntityNavigationSnapshot, { readonly target: 'task' }>;
-}): JSX.Element {
-  const priority = 'priority' in snapshot ? ` · ${snapshot.priority}` : '';
-  const health = snapshot.health === null ? '' : ` · ${snapshot.health}`;
+/**
+ * Paint the matching detail layout immediately while the detail route module loads.
+ *
+ * @param props - The {@link NavigationSnapshotLoadingProps}.
+ * @returns the entity's own loading surface, stating what the snapshot knows.
+ */
+function NavigationSnapshotLoading({ snapshot }: NavigationSnapshotLoadingProps): JSX.Element {
+  if (snapshot.target === 'task') return <TaskDetailLoading snapshot={snapshot} />;
   return (
-    <span className="text-on-surface-variant text-body-small">
-      {snapshot.status}
-      {priority}
-      {health}
-    </span>
+    <ContainerDetailLoading
+      target={snapshot.target}
+      id={snapshot.id}
+      entityName={CONTAINER_ENTITY_NAME[snapshot.target]}
+      tabCount={snapshot.target === 'initiative' ? 5 : 4}
+      snapshot={snapshot}
+    />
   );
 }
+
+/**
+ * The fallback noun for each container's busy region.
+ *
+ * @remarks
+ * This outlet runs before the route module that would read the workspace's own vocabulary, so it
+ * names the default. The name is an accessibility label rather than page copy, so it never reaches
+ * a reader who has renamed the entity.
+ */
+const CONTAINER_ENTITY_NAME: Record<ContainerNavigationSnapshot['target'], string> = {
+  project: 'Project',
+  program: 'Program',
+  initiative: 'Initiative',
+};

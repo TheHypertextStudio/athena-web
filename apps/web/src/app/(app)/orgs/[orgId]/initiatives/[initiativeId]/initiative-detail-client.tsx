@@ -34,16 +34,16 @@ import { useEntityDisplay } from '@/components/entity-display/use-entity-display
 import { LatestUpdateSummary } from '@/components/entity-detail/latest-update-summary';
 import { useWorkStatus } from '@/components/entity-display/use-work-status';
 import { InitiativeRelationshipPanels } from '@/components/initiatives/initiative-relationship-panels';
+import { INITIATIVE_PRIORITY_LABEL } from '@/components/initiatives/priority';
 import {
   INITIATIVE_CADENCE_LABEL,
-  INITIATIVE_PRIORITY_LABEL,
   InitiativePropertiesPanel,
 } from '@/components/initiatives/properties-panel';
 
 import { memberActorOptions } from '@/components/pickers/options';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { PublishAction } from '@/components/publishing/publish-action';
-import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
+import { ContainerDetailLoading } from '@/components/views/entity-snapshot-metadata';
 import { DetailPrintSummary } from '@/components/views/detail-print-summary';
 import { useDetailTab } from '@/components/views/use-detail-tab';
 import {
@@ -291,19 +291,12 @@ export default function InitiativeDetailPage(): JSX.Element {
   if (aggregateState === 'loading')
     return (
       <>
-        <EntityDetailSkeleton
-          tabCount={5}
-
+        <ContainerDetailLoading
+          target="initiative"
+          id={initiativeId}
           entityName={initiativeNoun}
-          title={navigationSnapshot?.name}
-          snapshotMetadata={
-            navigationSnapshot ? (
-              <span className="text-on-surface-variant text-body-small">
-                {navigationSnapshot.status} · {navigationSnapshot.priority}
-                {navigationSnapshot.health ? ` · ${navigationSnapshot.health}` : ''}
-              </span>
-            ) : undefined
-          }
+          tabCount={5}
+          snapshot={navigationSnapshot}
         />
         {aggregateQ.isError ? (
           <p role="alert" className="text-error text-body-medium px-6 pb-6">

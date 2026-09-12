@@ -18,6 +18,7 @@
 import * as React from 'react';
 
 import { cn } from '../lib/utils';
+import { CONTROL, CONTROL_RADIUS, DEFAULT_CONTROL_SIZE } from './control';
 
 /** Animated loading placeholder. Size it with width/height utility classes. */
 export function Skeleton({ className, ...props }: React.ComponentProps<'div'>): React.JSX.Element {
@@ -77,15 +78,24 @@ export function SkeletonText({
  * @returns The sized placeholder.
  *
  * @remarks
- * `min-h-10` and the full rounding mirror `ENTITY_METADATA_CHIP_CLASS`, so a metadata row does
- * not change height when its real pickers arrive.
+ * Every caller of this stands in for a control trigger — a property picker, a status menu, an
+ * assignee button — so its height and its corners are read from the control scale rather than
+ * written out. Both used to be hardcoded, under a comment claiming they mirrored
+ * `ENTITY_METADATA_CHIP_CLASS`, and both were wrong in a way that comment concealed: that constant
+ * sets neither. A trigger is 32px at {@link CONTROL_RADIUS}, so a row of these was 8px taller than
+ * the row it preceded and drawn as pills where the real controls are rounded rectangles.
  */
 export function SkeletonChip({
   className,
   ...props
 }: Omit<React.ComponentProps<'div'>, 'children'>): React.JSX.Element {
   // placeholder: one property picker whose value is unknown until the entity loads.
-  return <Skeleton className={cn('min-h-10 w-24 rounded-full', className)} {...props} />;
+  return (
+    <Skeleton
+      className={cn(CONTROL[DEFAULT_CONTROL_SIZE].minHeight, CONTROL_RADIUS, 'w-24', className)}
+      {...props}
+    />
+  );
 }
 
 /**
@@ -93,11 +103,15 @@ export function SkeletonChip({
  *
  * @param props - Standard div props.
  * @returns The sized placeholder.
+ *
+ * @remarks
+ * That masthead's glyph is a 48px tinted circle, so this is one too. It was a 40px rounded square,
+ * which is a different shape at a different size in the one place it is used.
  */
 export function SkeletonGlyph({
   className,
   ...props
 }: Omit<React.ComponentProps<'div'>, 'children'>): React.JSX.Element {
   // placeholder: the entity's icon, which is part of the record still being read.
-  return <Skeleton className={cn('size-10 rounded-lg', className)} {...props} />;
+  return <Skeleton className={cn('size-12 rounded-full', className)} {...props} />;
 }

@@ -19,6 +19,10 @@ import {
 import { type JSX, useMemo } from 'react';
 
 import {
+  INITIATIVE_PRIORITY_LABEL,
+  INITIATIVE_PRIORITY_ORDER,
+} from '@/components/initiatives/priority';
+import {
   enumOptions,
   HEALTH_OPTIONS,
   labelOptions,
@@ -31,13 +35,6 @@ import {
 } from '@/components/views/entity-detail-layout';
 import { toPlanningTimeframe } from '@/lib/planning-timeframe';
 
-/** Human labels for each Initiative priority (shared with the page's print block). */
-export const INITIATIVE_PRIORITY_LABEL: Record<InitiativePriority, string> = {
-  none: 'No priority',
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-};
 /** Human labels for each Initiative update cadence (shared with the page's print block). */
 export const INITIATIVE_CADENCE_LABEL: Record<InitiativeUpdateCadence, string> = {
   weekly: 'Weekly',
@@ -46,7 +43,6 @@ export const INITIATIVE_CADENCE_LABEL: Record<InitiativeUpdateCadence, string> =
   quarterly: 'Quarterly',
   none: 'None',
 };
-const PRIORITY_ORDER: readonly InitiativePriority[] = ['none', 'low', 'medium', 'high'];
 const CADENCE_ORDER: readonly InitiativeUpdateCadence[] = [
   'weekly',
   'biweekly',
@@ -212,7 +208,7 @@ export function InitiativePropertiesPanel({
       </EntityMetadataItem>
       <EntityMetadataItem priority={4}>
         <EnumPicker<InitiativePriority>
-          options={enumOptions(PRIORITY_ORDER, INITIATIVE_PRIORITY_LABEL)}
+          options={enumOptions(INITIATIVE_PRIORITY_ORDER, INITIATIVE_PRIORITY_LABEL)}
           value={priority}
           onChange={(next) => {
             if (next) onPriorityChange(next);

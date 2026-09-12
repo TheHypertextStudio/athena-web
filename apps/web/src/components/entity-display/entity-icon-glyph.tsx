@@ -17,6 +17,7 @@
 import type {
   EntityDisplayColorKey,
   EntityDisplayGlyph,
+  EntityDisplayOut,
   EntityDisplaySubjectType,
 } from '@docket/work/entity-display-contract';
 import { MaterialSymbol } from '@docket/ui/icons';
@@ -230,6 +231,50 @@ export function EntityIconGlyph({
           {emojiFromHexcode(glyph.hexcode)}
         </span>
       )}
+    </span>
+  );
+}
+
+/** Props for {@link EntityIconSlot}. */
+export interface EntityIconSlotProps {
+  /** The resolved display record, which may be the type's derived default. */
+  display: EntityDisplayOut;
+  /** The entity's name, used as the slot's hover title. */
+  entityName: string;
+  /** The glyph diameter; detail mastheads use 48dp while list surfaces keep 32dp. */
+  size?: number;
+}
+
+/**
+ * The fixed square a masthead glyph occupies, with no editing affordance.
+ *
+ * @remarks
+ * The slot is at least 40dp regardless of the glyph inside it, because the editable picker's
+ * trigger is a 40dp tap target and the two have to occupy the same space. Keeping that floor in one
+ * place is the point: a detail page that paints a derived glyph while its record loads, and then
+ * swaps in the editable picker, must not move by the difference between them.
+ *
+ * @param props - The {@link EntityIconSlotProps}.
+ * @returns the sized, non-interactive glyph.
+ */
+export function EntityIconSlot({
+  display,
+  entityName,
+  size = 32,
+}: EntityIconSlotProps): JSX.Element {
+  return (
+    <span
+      className="flex shrink-0 items-center justify-center"
+      style={{ width: Math.max(40, size), height: Math.max(40, size) }}
+      title={entityName}
+    >
+      <EntityIconGlyph
+        subjectType={display.subjectType}
+        glyph={display.glyph}
+        colorKey={display.colorKey}
+        customColor={display.customColor}
+        size={size}
+      />
     </span>
   );
 }

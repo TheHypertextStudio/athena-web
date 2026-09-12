@@ -28,7 +28,7 @@ import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { LatestUpdateSummary } from '@/components/entity-detail/latest-update-summary';
 import { PageContainer } from '@/components/views/page-layout';
 import { DetailPrintSummary } from '@/components/views/detail-print-summary';
-import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
+import { ContainerDetailLoading } from '@/components/views/entity-snapshot-metadata';
 import { useDetailTab } from '@/components/views/use-detail-tab';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { ProgramProjectsPanel } from '@/components/programs/program-projects-panel';
@@ -227,19 +227,12 @@ export default function ProgramDetailPage(): JSX.Element {
     // created it, the record is cached and the real masthead renders straight away.
     return (
       <>
-        <EntityDetailSkeleton
-          tabCount={4}
-
+        <ContainerDetailLoading
+          target="program"
+          id={programId}
           entityName={programLabel}
-          title={navigationSnapshot?.name}
-          snapshotMetadata={
-            navigationSnapshot ? (
-              <span className="text-on-surface-variant text-body-small">
-                {navigationSnapshot.status}
-                {navigationSnapshot.health ? ` · ${navigationSnapshot.health}` : ''}
-              </span>
-            ) : undefined
-          }
+          tabCount={4}
+          snapshot={navigationSnapshot}
         />
         {aggregateQ.isError ? (
           <p role="alert" className="text-error text-body-medium px-6 pb-6">

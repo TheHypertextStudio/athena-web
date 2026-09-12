@@ -250,6 +250,63 @@ export function EntityDetailLayout({
 export const ENTITY_METADATA_CHIP_CLASS =
   'bg-surface-container-low hover:bg-surface-container-high min-w-0 max-w-full shrink';
 
+/** Props for {@link EntityMetadataStaticChip}. */
+export interface EntityMetadataStaticChipProps {
+  /** The property's glyph, drawn from the same source the editable picker's option uses. */
+  icon?: ReactNode;
+  /** The resolved, human-readable value. */
+  label: string;
+  /**
+   * Names the property this chip states, since the chip itself shows only a value.
+   *
+   * @remarks
+   * Composed with the value into `"<property> — <value>"`, which is the accessible name the
+   * picker that replaces this chip builds. Matching it means a screen reader hears the same
+   * phrasing before and after the record arrives.
+   */
+  ariaLabel: string;
+}
+
+/**
+ * One property stated as a chip, with no affordance to change it.
+ *
+ * @remarks
+ * For the case where a value is known but the control that edits it is not ready — a detail page
+ * painting what a navigation snapshot already carries while the aggregate behind its pickers is
+ * still in flight. It has to be a separate component rather than a picker in `readOnly` mode:
+ * {@link import('@docket/ui/components').PropertyTrigger | PropertyTrigger}'s read-only branch
+ * renders a bare span, so the padding that makes a chip a chip comes from the button it does not
+ * render, and a row of them would resize the moment the real controls arrived.
+ *
+ * The geometry below is therefore the trigger button's, copied deliberately, so a chip and the
+ * picker that replaces it occupy the same box.
+ *
+ * @param props - The {@link EntityMetadataStaticChipProps}.
+ * @returns the stated property.
+ */
+export function EntityMetadataStaticChip({
+  icon,
+  label,
+  ariaLabel,
+}: EntityMetadataStaticChipProps): JSX.Element {
+  return (
+    <span
+      aria-label={`${ariaLabel} — ${label}`}
+      className={cn(
+        ENTITY_METADATA_CHIP_CLASS,
+        'text-on-surface text-body-medium inline-flex h-auto max-w-full items-center justify-start gap-2 rounded-md px-2 py-1.5',
+      )}
+    >
+      {icon ? (
+        <span aria-hidden="true" className="flex shrink-0 items-center">
+          {icon}
+        </span>
+      ) : null}
+      <span className="truncate">{label}</span>
+    </span>
+  );
+}
+
 /** Ordered visibility tier for one property in the inline metadata row. */
 export type EntityMetadataPriority = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 

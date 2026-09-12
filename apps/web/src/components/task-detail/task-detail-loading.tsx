@@ -1,14 +1,49 @@
+'use client';
+
 import type { TaskNavigationSnapshot } from '../../lib/contracts/entity-navigation';
-import { Skeleton, SkeletonChip, SkeletonText } from '@docket/ui/primitives';
+import { StatusIcon } from '@docket/ui/components';
+import { Button, Skeleton, SkeletonChip, SkeletonText } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
+import { useWorkStatus } from '@/components/entity-display/use-work-status';
+
 import { PRIORITY_LABEL } from './priority';
+import { PriorityGlyph } from './PriorityGlyph';
 import { TaskHeaderControls } from './task-header-controls';
 
 /** Props for the structured Task loading layout. */
 export interface TaskDetailLoadingProps {
   /** Identity already known from a list row, if navigation supplied one. */
   snapshot?: TaskNavigationSnapshot | null | undefined;
+}
+
+/** Props for {@link SnapshotStatusControl}. */
+interface SnapshotStatusControlProps {
+  /** The stored status key the snapshot carries. */
+  statusKey: string;
+}
+
+/**
+ * The Task header's status control, stated rather than editable.
+ *
+ * @remarks
+ * Matches {@link import('./StatusPicker').StatusPicker}'s own read-only branch — the outline
+ * trigger it falls back to before the team's workflow arrives — so the control does not resize when
+ * the real picker replaces it. The name comes from the workspace's set: a status key is an
+ * identifier, and printing it showed `in_review` to a workspace that had named that stage something
+ * else.
+ *
+ * @param props - The {@link SnapshotStatusControlProps}.
+ * @returns the stated status control.
+ */
+function SnapshotStatusControl({ statusKey }: SnapshotStatusControlProps): JSX.Element {
+  const status = useWorkStatus('task', statusKey);
+  return (
+    <Button variant="outline" size="sm" disabled className="gap-2">
+      <StatusIcon type={status.category} label={status.name} />
+      {status.name}
+    </Button>
+  );
 }
 
 /**
@@ -18,6 +53,9 @@ export interface TaskDetailLoadingProps {
  * @returns The Task-shaped loading surface.
  */
 export function TaskDetailLoading({ snapshot }: TaskDetailLoadingProps): JSX.Element {
+  // placeholder: the Task's assignee, its actions and its body — the parts of the record that only
+  // the detail read can answer. Its title, status and priority are not among them whenever a
+  // snapshot is in hand, which is why each of those is stated above rather than placeheld.
   return (
     <div
       role="status"
@@ -34,18 +72,17 @@ export function TaskDetailLoading({ snapshot }: TaskDetailLoadingProps): JSX.Ele
         <TaskHeaderControls
           status={
             snapshot ? (
-              <span className="bg-surface-container text-on-surface-variant text-body-small rounded-full px-3 py-1">
-                Status: {snapshot.status.replaceAll('_', ' ')}
-              </span>
+              <SnapshotStatusControl statusKey={snapshot.status} />
             ) : (
               <SkeletonChip className="w-32" />
             )
           }
           priority={
             snapshot ? (
-              <span className="bg-surface-container text-on-surface-variant text-body-small rounded-full px-3 py-1">
-                Priority: {PRIORITY_LABEL[snapshot.priority]}
-              </span>
+              <Button variant="outline" size="sm" disabled className="gap-2">
+                <PriorityGlyph priority={snapshot.priority} />
+                {PRIORITY_LABEL[snapshot.priority]}
+              </Button>
             ) : (
               <SkeletonChip className="w-28" />
             )

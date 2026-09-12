@@ -1237,6 +1237,86 @@ at **zero** violations across the tree, so it enters the ratchet with no ledger 
 
 ---
 
+### [DETAIL-LOADING-001] A loading detail page states what it already knows
+
+- **Completed**: 2026-09-11
+- **Priority**: P1
+- **Summary**: Opening an Initiative from a list showed its real title next to the line
+  `proposed · medium` and a column of grey bars. Nothing there was missing data — a navigation
+  snapshot seeded from the clicked row carries the same status, priority and health the loaded page
+  renders as chips. The page had them and printed them raw.
+- **Approach**: Three separate faults met at that seam, and all three were visible in one
+  screenshot.
+
+  The values rendered as **stored keys**. `{navigationSnapshot.status}` bypassed `useWorkStatus`,
+  and a status key is an identifier into the workspace's own set — a workspace that renamed
+  "Proposed" still saw `proposed`. The priority arrived beside it as a lone word with nothing
+  saying it was a priority. Even the seeded default names that key `Proposed`, so the raw key was
+  never right, not even before anyone renamed anything.
+
+  Supplying a snapshot **deleted the rest of the row**. `EntityDetailSkeleton`'s metadata slot was
+  `{snapshotMetadata ?? Array.from({length: chipCount}, …<SkeletonChip/>)}` — one node or five
+  placeholders, never both. So the row lost its chip geometry and any sign that more was coming,
+  and the span it did render sat outside `EntityMetadataItem`, bypassing the row's own
+  progressive-disclosure measurement.
+
+  And **two placeholders stood for things that were not placeholders**. The eyebrow was an
+  unconditional `SkeletonText`, but `EntityDetailLayout` renders `eyebrow ? … : null` — a top-level
+  Initiative has no breadcrumb, so the bar appeared and then vanished, which is the layout shift
+  the skeleton exists to prevent, caused by the skeleton. The icon was always `SkeletonGlyph` even
+  though `defaultEntityDisplay(subjectType, subjectId)` derives an uncustomized entity's glyph and
+  colour offline, from data the page already has.
+
+  The line was copy-pasted across four surfaces, and the copies had drifted: Project printed a
+  priority its loaded metadata row does not contain at all (Status, Health, Timeline, Program,
+  Initiatives, Labels — no priority). One `EntitySnapshotMetadata` now owns the row for every
+  container, with the rule that a known property is stated the way the loaded page states it and an
+  unknown one keeps a placeholder in its own slot. `ContainerDetailLoading` wraps the whole loading
+  branch, which took each page _below_ its previous complexity ceiling rather than needing a new
+  ledger entry.
+
+  Looking at it in a browser turned up **a fourth fault, in the placeholders themselves**.
+  `SkeletonChip` hardcoded `min-h-10 rounded-full` under a comment claiming both mirrored
+  `ENTITY_METADATA_CHIP_CLASS` — a constant that sets neither a height nor a radius. A property
+  trigger is 32px at `CONTROL_RADIUS`, so a loading row was 8px taller than the row it preceded and
+  drawn as pills where the real controls are rounded rectangles, on every detail page in the app.
+  `SkeletonGlyph` was the same kind of claim: a 40px rounded square standing in for the 48px circle
+  of its one caller. Both read the control scale now. The masthead settle went 18px → 0 for the
+  title and the property row.
+
+  The lesson is in how those were found. Each was a comment asserting a geometric relationship that
+  no test measured, and each had been false since the comment was written.
+
+- **Files changed**:
+  - `apps/web/src/components/views/entity-snapshot-metadata.tsx` (new) — the shared row and
+    `ContainerDetailLoading`
+  - `apps/web/src/components/views/entity-detail-layout.tsx` — `EntityMetadataStaticChip`, whose
+    geometry is the trigger button's on purpose
+  - `apps/web/src/components/views/entity-detail-skeleton.tsx` — `icon` and `hasEyebrow`; subtitle
+    placeholder moved to the `title` scale
+  - `apps/web/src/components/entity-display/entity-icon-glyph.tsx` — `EntityIconSlot`, which the
+    icon picker's read-only branch now uses instead of its own copy
+  - `apps/web/src/components/initiatives/priority.ts` (new) — the label map as a leaf, so a
+    masthead can name a priority without importing every picker the panel mounts
+  - the three `*-detail-client.tsx` loading branches, `pwa/offline-route-outlet.tsx`,
+    `task-detail/task-detail-loading.tsx`
+  - `packages/ui/src/primitives/skeleton.tsx` — `SkeletonChip` height and radius, `SkeletonGlyph`
+    size and shape
+- **Validation**: `pnpm typecheck`, `pnpm lint`, `pnpm test` (27/27 tasks; web 3792, api 5827),
+  `pnpm format:check`. New `apps/web/tests/components/entity-snapshot-metadata.test.tsx` and a
+  browser spec, `apps/web/e2e/work/detail-loading-masthead.spec.ts`, which holds the aggregate
+  request open so the loading masthead is observable and asserts the settle.
+- **Learnings**: The browser found what the unit tests could not. Two of the four faults —
+  `SkeletonChip`'s height and the subtitle placeholder's — were invariants a comment _claimed_ and
+  no test measured, and both had been wrong for as long as the comments had been there. A skeleton
+  is a geometric claim about another component; it is worth asserting as geometry.
+- **Blockers**: None. One residual: the subtitle slot is 24px while loading and 30px loaded,
+  because `EditableSubtitle` is a `field-sizing: content` textarea that renders 6px taller than its
+  own `text-body-large` line box. That is a question about the editor, not the placeholder, and is
+  left for its own change.
+
+---
+
 ### [DETAIL-INSET-001] Every edge of a detail page is measured the same way
 
 - **Completed**: 2026-09-05

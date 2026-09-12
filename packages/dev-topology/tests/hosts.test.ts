@@ -9,6 +9,7 @@ import {
   DELIBERATELY_UNPREFIXED,
   HOST_BEARING_VARS,
   portlessPrefix,
+  portlessServiceUrl,
   prefixDevHosts,
 } from '../src/hosts';
 import { explicitPortTopology, shellExports } from '../src/topology';
@@ -65,6 +66,42 @@ describe('prefixing dev hosts', () => {
     expect(prefixDevHosts('https://clearthedocket.com', 'feature-x')).toBe(
       'https://clearthedocket.com',
     );
+  });
+
+  it.each(['api', 'admin', 'marketing'])(
+    'prefixes a service host even on a branch named %s',
+    (prefix) => {
+      // `api.docket.localhost` with prefix `api` reads both as the API host and as the app host
+      // already prefixed. Reading it as the latter left the worktree on the primary checkout's
+      // API, so a bare service host is always treated as canonical.
+      expect(prefixDevHosts(`http://${prefix}.docket.localhost:1356`, prefix)).toBe(
+        `http://${prefix}.${prefix}.docket.localhost:1356`,
+      );
+      expect(prefixDevHosts('http://docket.localhost:1355', prefix)).toBe(
+        `http://${prefix}.docket.localhost:1355`,
+      );
+    },
+  );
+
+  it('still leaves a doubly-prefixed service host alone', () => {
+    expect(prefixDevHosts('http://api.api.docket.localhost:1356', 'api')).toBe(
+      'http://api.api.docket.localhost:1356',
+    );
+  });
+});
+
+describe('portless service origins', () => {
+  it('names each service on the proxy port, which is implicit', () => {
+    expect(portlessServiceUrl('app', 'feature-x')).toBe('https://feature-x.docket.localhost');
+    expect(portlessServiceUrl('api', 'feature-x')).toBe('https://feature-x.api.docket.localhost');
+    expect(portlessServiceUrl('admin', 'feature-x')).toBe(
+      'https://feature-x.admin.docket.localhost',
+    );
+  });
+
+  it('falls back to the canonical host on the primary checkout', () => {
+    expect(portlessServiceUrl('app', '')).toBe('https://docket.localhost');
+    expect(portlessServiceUrl('admin', '')).toBe('https://admin.docket.localhost');
   });
 });
 
@@ -146,7 +183,9 @@ describe('applying the prefix to an environment', () => {
       .map(([name]) => name);
 
     for (const name of hostNaming) {
-      expect(HOST_BEARING_VARS).toContain(name);
+      // Either the prefix applies to it, or it is one of the values that must stay on the shared
+      // parent. A variable in neither list would be silently left on another checkout's host.
+      expect([...HOST_BEARING_VARS, ...DELIBERATELY_UNPREFIXED]).toContain(name);
     }
   });
 });
@@ -154,6 +193,17 @@ describe('applying the prefix to an environment', () => {
 describe('shell rendering', () => {
   it('quotes every value so a comma-separated list survives eval', () => {
     const rendered = shellExports({ A: 'one,two', B: 'three' });
-    expect(rendered).toBe('export A="one,two"\nexport B="three"');
+    expect(rendered).toBe("export A='one,two'\nexport B='three'");
+  });
+
+  it('renders a metacharacter as data rather than something eval executes', () => {
+    // Git permits `$`, a backtick and a double quote in a refname, and these values carry the
+    // branch name, so a double-quoted rendering let a branch run a command in the caller's eval.
+    const rendered = shellExports({ A: 'http://foo$(id).docket.localhost:1416' });
+    expect(rendered).toBe("export A='http://foo$(id).docket.localhost:1416'");
+  });
+
+  it('survives a value containing a single quote', () => {
+    expect(shellExports({ A: "it's" })).toBe("export A='it'\\''s'");
   });
 });

@@ -51,7 +51,18 @@ export const WORKTREE_SLOTS = 150;
  * `apps/web`, and `.next/dev/lock` admits one server per directory. Stop one before starting the
  * other.
  */
-export const PORTLESS_RUNNER_FLOOR = 2000;
+export const PORTLESS_RUNNER_FLOOR = 2200;
+
+/**
+ * Highest base port a caller can reach by probing forward past a taken block.
+ *
+ * @remarks
+ * `scripts/dev-stack.sh` probes up to 40 strides past the derived base when another checkout holds
+ * it. {@link PORTLESS_RUNNER_FLOOR} has to sit above this, or a heavily-probed block lands on a
+ * port some other checkout's Portless runner is already using.
+ */
+export const HIGHEST_PROBED_WEB_PORT =
+  WORKTREE_PORT_FLOOR + (WORKTREE_SLOTS - 1) * PORT_STRIDE + 40 * PORT_STRIDE;
 
 /**
  * Whether this is a linked worktree rather than the primary checkout.
@@ -121,6 +132,19 @@ export function checkoutSlot(identity: CheckoutIdentity): number {
  */
 export function derivePortlessRunnerPort(identity: CheckoutIdentity): number {
   return PORTLESS_RUNNER_FLOOR + checkoutSlot(identity);
+}
+
+/**
+ * Whether a path is a checkout's root or sits inside it.
+ *
+ * @remarks
+ * Compared on a segment boundary rather than as a substring, so a sibling worktree whose directory
+ * name extends this one's — `…-84f485` beside `…-ea4a45`, or `wt` beside `wt2` — is not read as
+ * belonging to this checkout. Mirrors `path_is_ours` in `scripts/dev-stack.sh`, which keeps its own
+ * copy so that stopping a stack never depends on Node being runnable.
+ */
+export function isPathInside(candidate: string, root: string): boolean {
+  return candidate === root || candidate.startsWith(`${root}/`);
 }
 
 function git(root: string, args: readonly string[]): string {

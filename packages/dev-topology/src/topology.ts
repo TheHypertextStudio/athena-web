@@ -74,6 +74,10 @@ export function explicitPortTopology(identity: CheckoutIdentity, base?: number):
       // prefixed app and api hosts are siblings, so the shared parent is the only valid value.
       BETTER_AUTH_PASSKEY_RP_ID: DEV_DOMAIN,
       NEXT_PUBLIC_PASSKEY_RP_ID: DEV_DOMAIN,
+      // Same rule, same reason: the cookie has to be readable by the app and writable by the API,
+      // which are siblings under the prefix. Set here rather than left to the env file, so a
+      // caller using this map directly gets a stack whose session survives sign-up.
+      BETTER_AUTH_COOKIE_DOMAIN: DEV_DOMAIN,
       BETTER_AUTH_TRUSTED_ORIGINS: `${appUrl},${adminUrl}`,
       BETTER_AUTH_ALLOWED_HOSTS: [
         `${prefix}${DEV_DOMAIN}:${ports.web}`,
@@ -96,9 +100,17 @@ export function explicitPortTopology(identity: CheckoutIdentity, base?: number):
   };
 }
 
-/** Render a topology's env as `export NAME="value"` lines for a shell to `eval`. */
+/**
+ * Render a topology's env as `export NAME='value'` lines for a shell to `eval`.
+ *
+ * @remarks
+ * Single-quoted with every `'` closed, escaped and reopened, because these values carry the branch
+ * name and git permits `$`, a backtick, `"`, `;` and parentheses in a refname. Double quotes would
+ * let a branch called `foo$(id)` run a command inside the caller's `eval`, and a branch containing
+ * a double quote would break the `eval` outright.
+ */
 export function shellExports(env: Readonly<Record<string, string>>): string {
   return Object.entries(env)
-    .map(([name, value]) => `export ${name}="${value}"`)
+    .map(([name, value]) => `export ${name}='${value.replaceAll("'", `'\\''`)}'`)
     .join('\n');
 }

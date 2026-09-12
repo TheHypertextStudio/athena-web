@@ -57,6 +57,7 @@ import {
   applyDevHostPrefix,
   checkDevTopology,
   formatTopologyFindings,
+  portlessServiceUrl,
   portlessPrefix as readPortlessPrefix,
 } from '@docket/dev-topology';
 
@@ -113,7 +114,16 @@ export function portlessPrefix(
 export function applyPortlessPrefix(): readonly string[] {
   const prefix = portlessPrefix();
   if (!prefix) return [];
-  return applyDevHostPrefix(process.env, prefix);
+  const changed = [...applyDevHostPrefix(process.env, prefix)];
+
+  // `ADMIN_URL` is in no env file, and `packages/auth`'s admin-origin check fails closed without
+  // it — so the same check passed under `dev-stack.sh`, which supplies it, and failed here. The
+  // proxy serves every service on 443, so the prefix is all that is needed to name the host.
+  if (!process.env['ADMIN_URL']) {
+    process.env['ADMIN_URL'] = portlessServiceUrl('admin', prefix);
+    changed.push('ADMIN_URL');
+  }
+  return changed;
 }
 
 /**

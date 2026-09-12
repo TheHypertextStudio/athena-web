@@ -81,7 +81,26 @@ describe('dev topology consistency', () => {
     expect(found).toContainEqual(['MCP_ALLOWED_ORIGINS', 'APP_URL']);
   });
 
-  it('names every disagreement and its symptom when it throws', () => {
+  it('carries the disagreeing variables and a symptom on every finding', () => {
+    const env = coherent();
+    env['BETTER_AUTH_TRUSTED_ORIGINS'] = 'http://docket.localhost:1355';
+    const findings = checkDevTopology(env);
+
+    expect(findings).not.toHaveLength(0);
+    for (const finding of findings) {
+      // Structure rather than wording: naming the variables and stating a symptom is the
+      // behaviour, and pinning the prose made a command rename fail a test about neither.
+      expect(finding.variables.length).toBeGreaterThanOrEqual(2);
+      expect(finding.problem.length).toBeGreaterThan(0);
+      expect(finding.consequence.length).toBeGreaterThan(0);
+    }
+    expect(findings.map((finding) => [...finding.variables])).toContainEqual([
+      'BETTER_AUTH_TRUSTED_ORIGINS',
+      'APP_URL',
+    ]);
+  });
+
+  it('throws with every finding rendered when the environment contradicts itself', () => {
     const env = coherent();
     env['BETTER_AUTH_TRUSTED_ORIGINS'] = 'http://docket.localhost:1355';
     let message = '';
@@ -90,13 +109,39 @@ describe('dev topology consistency', () => {
     } catch (error) {
       message = error instanceof Error ? error.message : String(error);
     }
-    expect(message).toContain('BETTER_AUTH_TRUSTED_ORIGINS');
-    // The symptom belongs in the message: recognising it from the outside is the whole point.
-    expect(message).toContain('Invalid origin');
-    expect(message).toContain('pnpm dev:doctor');
+    // The rendered message is the findings' own text, so assert it carries them rather than
+    // restating the words it happens to use.
+    for (const finding of checkDevTopology(env)) {
+      expect(message).toContain(finding.problem);
+      expect(message).toContain(finding.consequence);
+    }
   });
 
   it('ignores values that are not URLs rather than reporting them as mismatches', () => {
     expect(checkDevTopology({ APP_URL: 'not-a-url', API_URL: 'also-not' })).toEqual([]);
+  });
+
+  it('reads the app origin from WEB_URL when APP_URL is absent', () => {
+    // The checked-in env file sets WEB_URL and no APP_URL, so keying only off APP_URL left the
+    // Portless path almost entirely unchecked — absence read as agreement.
+    const env: EnvBag = { ...coherent() };
+    env['WEB_URL'] = env['APP_URL'];
+    delete env['APP_URL'];
+    delete env['NEXT_PUBLIC_APP_URL'];
+    expect(checkDevTopology(env)).toEqual([]);
+
+    env['BETTER_AUTH_TRUSTED_ORIGINS'] = 'http://docket.localhost:1355';
+    expect(variablesOf(env)).toContainEqual(['BETTER_AUTH_TRUSTED_ORIGINS', 'APP_URL']);
+  });
+
+  it('reports a stack that names an API but no app at all', () => {
+    const env: EnvBag = { ...coherent() };
+    delete env['APP_URL'];
+    delete env['WEB_URL'];
+    expect(variablesOf(env)).toContainEqual(['APP_URL', 'WEB_URL']);
+  });
+
+  it('stays quiet when nothing names an API either', () => {
+    expect(checkDevTopology({ BETTER_AUTH_COOKIE_DOMAIN: 'docket.localhost' })).toEqual([]);
   });
 });

@@ -37,7 +37,7 @@ function main(): void {
   }
 
   const args = [...argv];
-  if (!args.includes('--port')) {
+  if (!args.some((arg) => arg === '--port' || arg.startsWith('--port='))) {
     args.push('--port', String(resolveRunnerPort()));
   }
 

@@ -64,6 +64,39 @@ function isRegistrableSuffix(suffix: string, hostname: string): boolean {
   return hostname === suffix || hostname.endsWith(`.${suffix}`);
 }
 
+/**
+ * Read a host-bearing value, resolving the app's URL through the name the env file actually uses.
+ *
+ * @remarks
+ * The checked-in env file sets `WEB_URL` and no `APP_URL`, while the explicit-port topology sets
+ * both. Reading only `APP_URL` made five of the six check groups silent on the Portless path —
+ * absence being treated as agreement — so the mode these checks exist to protect had the least
+ * coverage of any.
+ */
+function valueOf(env: EnvBag, name: string): string | undefined {
+  if (name !== 'APP_URL') return env[name];
+  return env['APP_URL'] ?? env['WEB_URL'];
+}
+
+function checkAppOriginNamed(env: EnvBag): readonly TopologyFinding[] {
+  // Only when the environment carries an allowlist that has to be validated against the app's
+  // origin. A partial environment names no app on purpose — a unit fixture exercising the rewrite,
+  // or a service configured without a web front end — and that is not a contradiction.
+  const guardsAnOrigin = Boolean(
+    env['BETTER_AUTH_TRUSTED_ORIGINS'] ?? env['BETTER_AUTH_ALLOWED_HOSTS'],
+  );
+  if (!guardsAnOrigin || valueOf(env, 'APP_URL')) return [];
+  return [
+    {
+      variables: ['APP_URL', 'WEB_URL'],
+      problem:
+        'an origin allowlist is configured but neither APP_URL nor WEB_URL says where the app is',
+      consequence:
+        'the origin, relying-party and cookie checks have nothing to compare against, so a mismatch starts the app instead of stopping it',
+    },
+  ];
+}
+
 function checkBrowserServerAgreement(env: EnvBag): readonly TopologyFinding[] {
   const pairs: readonly (readonly [string, string])[] = [
     ['API_URL', 'NEXT_PUBLIC_API_URL'],
@@ -72,8 +105,8 @@ function checkBrowserServerAgreement(env: EnvBag): readonly TopologyFinding[] {
   ];
   const findings: TopologyFinding[] = [];
   for (const [server, browser] of pairs) {
-    const a = env[server];
-    const b = env[browser];
+    const a = valueOf(env, server);
+    const b = valueOf(env, browser);
     if (!a || !b || a === b) continue;
     findings.push({
       variables: [server, browser],
@@ -90,7 +123,7 @@ function checkPasskeyRelyingParty(env: EnvBag): readonly TopologyFinding[] {
   if (!rpId) return [];
   const findings: TopologyFinding[] = [];
   for (const name of ['APP_URL', 'API_URL'] as const) {
-    const hostname = hostnameOf(env[name]);
+    const hostname = hostnameOf(valueOf(env, name));
     if (!hostname || isRegistrableSuffix(rpId, hostname)) continue;
     findings.push({
       variables: ['BETTER_AUTH_PASSKEY_RP_ID', name],
@@ -107,7 +140,7 @@ function checkCookieDomain(env: EnvBag): readonly TopologyFinding[] {
   if (!domain) return [];
   const findings: TopologyFinding[] = [];
   for (const name of ['APP_URL', 'API_URL'] as const) {
-    const hostname = hostnameOf(env[name]);
+    const hostname = hostnameOf(valueOf(env, name));
     if (!hostname || isRegistrableSuffix(domain, hostname)) continue;
     findings.push({
       variables: ['BETTER_AUTH_COOKIE_DOMAIN', name],
@@ -120,7 +153,7 @@ function checkCookieDomain(env: EnvBag): readonly TopologyFinding[] {
 }
 
 function checkTrustedOrigins(env: EnvBag): readonly TopologyFinding[] {
-  const appOrigin = originOf(env['APP_URL']);
+  const appOrigin = originOf(valueOf(env, 'APP_URL'));
   const trusted = list(env['BETTER_AUTH_TRUSTED_ORIGINS']);
   if (!appOrigin || trusted.length === 0) return [];
   if (trusted.some((entry) => originOf(entry) === appOrigin)) return [];
@@ -138,7 +171,7 @@ function checkAllowedHosts(env: EnvBag): readonly TopologyFinding[] {
   if (allowed.length === 0) return [];
   const findings: TopologyFinding[] = [];
   for (const name of ['APP_URL', 'API_URL'] as const) {
-    const host = hostOf(env[name]);
+    const host = hostOf(valueOf(env, name));
     if (!host || allowed.includes(host)) continue;
     findings.push({
       variables: ['BETTER_AUTH_ALLOWED_HOSTS', name],
@@ -162,7 +195,7 @@ function checkDerivedUrls(env: EnvBag): readonly TopologyFinding[] {
     });
   }
 
-  const appOrigin = originOf(env['APP_URL']);
+  const appOrigin = originOf(valueOf(env, 'APP_URL'));
   const loginOrigin = originOf(env['OIDC_LOGIN_PAGE_URL']);
   if (appOrigin && loginOrigin && appOrigin !== loginOrigin) {
     findings.push({
@@ -185,6 +218,7 @@ function checkDerivedUrls(env: EnvBag): readonly TopologyFinding[] {
 }
 
 const CHECKS: readonly ((env: EnvBag) => readonly TopologyFinding[])[] = [
+  checkAppOriginNamed,
   checkBrowserServerAgreement,
   checkPasskeyRelyingParty,
   checkCookieDomain,

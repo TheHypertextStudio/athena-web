@@ -38,13 +38,24 @@ port_owner_pid() {
   lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -1
 }
 
+# Whether a path is this checkout's root or sits inside it. Compared on a segment boundary, so a
+# sibling worktree whose directory name merely extends this one's — `…-84f485` beside `…-ea4a45`,
+# or `wt` beside `wt2` — is not mistaken for our own process.
+path_is_ours() {
+  case "$1" in
+    "$ROOT" | "$ROOT"/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 block_is_available() {
-  local base=$1 offset owner
+  local base=$1 offset owner cwd
   for offset in 0 1 2 3; do
     owner=$(port_owner_pid $((base + offset)))
     [ -z "$owner" ] && continue
     # Ours if the listener's working directory is inside this checkout.
-    lsof -a -p "$owner" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | grep -q "^$ROOT" || return 1
+    cwd=$(lsof -a -p "$owner" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
+    path_is_ours "$cwd" || return 1
   done
   return 0
 }
@@ -82,8 +93,11 @@ resolve_ports() {
   RUNNER_PORT="$DOCKET_RUNNER_PORT"
 }
 
-resolve_ports
-STACK_PID_FILE="${TMPDIR:-/tmp}/docket-dev-${UID}-${PREFIX}-${WEB_PORT}.pid"
+# Named after the checkout rather than the port, so `stop` can find it without resolving the
+# topology. Tearing a stack down must not depend on the resolver being runnable: a half-finished
+# `pnpm install` would otherwise leave a running stack that its own script cannot stop, and
+# `scripts/bootstrap-verify` calls `stop` from a trap.
+STACK_PID_FILE="${TMPDIR:-/tmp}/docket-dev-${UID}-$(basename "$ROOT").pid"
 
 print_env() {
   cat <<EOF
@@ -107,9 +121,7 @@ verify_ownership() {
     return 1
   fi
   cwd=$(lsof -a -p "$owner" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
-  case "$cwd" in
-    "$ROOT"*) return 0 ;;
-  esac
+  path_is_ours "$cwd" && return 0
   cat >&2 <<EOF
 dev-stack: port $WEB_PORT is served by another checkout, not this one.
 
@@ -161,7 +173,7 @@ stop_stack() {
   # Remove processes left by the retired proxy-backed stack as well as this supervisor. Every
   # fallback includes this checkout's absolute root; no sibling worktree is touched.
   pkill -f "$ROOT/scripts/dev-stack-supervisor.sh" 2>/dev/null || true
-  pkill -f "$ROOT/node_modules/portless/dist/cli.js proxy start.*--port $WEB_PORT" 2>/dev/null || true
+  pkill -f "$ROOT/node_modules/portless/dist/cli.js proxy start" 2>/dev/null || true
   sleep 2
   if [ -n "$stack_pid" ] && kill -0 "$stack_pid" 2>/dev/null; then
     terminate_tree "$stack_pid" KILL
@@ -170,11 +182,12 @@ stop_stack() {
 }
 
 case "${1:-start}" in
-  env) print_env ;;
+  env) resolve_ports; print_env ;;
   stop) stop_stack; echo "stopped" ;;
-  status) probe ;;
+  status) resolve_ports; probe ;;
   doctor) (cd "$ROOT" && pnpm exec tsx packages/dev-topology/bin/doctor.ts) ;;
   start)
+    resolve_ports
     stop_stack
     : >"$LOG"
     cd "$ROOT" || exit 1

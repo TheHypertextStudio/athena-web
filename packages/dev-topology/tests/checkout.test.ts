@@ -4,8 +4,10 @@ import type { CheckoutIdentity } from '../src/checkout';
 import {
   derivePortlessRunnerPort,
   deriveWebPort,
+  HIGHEST_PROBED_WEB_PORT,
   hostPrefix,
   isLinkedWorktree,
+  isPathInside,
   PORT_STRIDE,
   PORTLESS_RUNNER_FLOOR,
   PRIMARY_WEB_PORT,
@@ -100,6 +102,22 @@ describe('checkout identity', () => {
     expect(ports.size).toBeGreaterThanOrEqual(27);
     // `wrangler dev --local` binds 8787 in every checkout, which is what this replaces.
     expect(ports).not.toContain(8787);
+  });
+
+  it('compares checkout paths on a segment boundary', () => {
+    // Worktree directories share a stem and differ by suffix, so a substring test read a sibling's
+    // process as this checkout's and suppressed the foreign-listener warning.
+    expect(isPathInside('/repo/wt', '/repo/wt')).toBe(true);
+    expect(isPathInside('/repo/wt/apps/web', '/repo/wt')).toBe(true);
+    expect(isPathInside('/repo/wt2/apps/web', '/repo/wt')).toBe(false);
+    expect(isPathInside('/repo/wt-other', '/repo/wt')).toBe(false);
+    expect(isPathInside('/elsewhere', '/repo/wt')).toBe(false);
+  });
+
+  it('keeps the runner range clear of the highest port a probe can reach', () => {
+    // dev-stack.sh probes 40 strides past a taken block; the runner range has to start above that
+    // or a heavily-probed block lands on another checkout's running runner.
+    expect(PORTLESS_RUNNER_FLOOR).toBeGreaterThan(HIGHEST_PROBED_WEB_PORT);
   });
 
   it('uses only the last path segment of a nested branch name as the host prefix', () => {

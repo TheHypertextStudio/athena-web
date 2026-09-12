@@ -15,15 +15,22 @@
  * a problem in every worktree, so the prefix is applied first and the result is what gets checked.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { readCheckoutIdentity, hostPrefix, isLinkedWorktree } from '../src/checkout';
+import { hostPrefix, isLinkedWorktree, isPathInside, readCheckoutIdentity } from '../src/checkout';
 import { checkDevTopology, formatTopologyFindings } from '../src/consistency';
 import { applyDevHostPrefix, type EnvBag } from '../src/hosts';
 import { explicitPortTopology } from '../src/topology';
 
-function listenerOn(port: number): string | undefined {
+/** Who is listening on a port, and whether the process belongs to this checkout. */
+interface Listener {
+  readonly pid: string;
+  readonly cwd: string | undefined;
+  readonly mine: boolean;
+}
+
+function listenerOn(port: number, root: string): Listener | undefined {
   try {
     const pid = execFileSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], {
       encoding: 'utf8',
@@ -35,21 +42,39 @@ function listenerOn(port: number): string | undefined {
       .split('\n')
       .find((line) => line.startsWith('n'))
       ?.slice(1);
-    return `pid ${pid}${cwd ? ` (cwd ${cwd})` : ''}`;
+    // Same rule the shell applies, from the same helper — a substring test read a sibling
+    // worktree's process as our own and suppressed the warning this exists to raise.
+    return { pid, cwd, mine: cwd !== undefined && isPathInside(cwd, root) };
   } catch {
     return undefined;
   }
 }
 
-/** The env a launcher would hand this checkout's processes, from the checked-in file. */
+function describe(listener: Listener): string {
+  return `pid ${listener.pid}${listener.cwd ? ` (cwd ${listener.cwd})` : ''}`;
+}
+
+/**
+ * The env a launcher would hand this checkout's processes, from the checked-in file.
+ *
+ * @remarks
+ * The file is parsed into its own bag rather than inferred from what `process.loadEnvFile` adds to
+ * `process.env`. That inference dropped every variable the caller had already exported — so running
+ * this after `eval "$(dev-stack.sh env)"`, or in any shell where someone had exported `API_URL` by
+ * hand, silently excluded the exact values being diagnosed and then reported the result coherent.
+ */
 function launcherEnv(root: string, prefix: string): EnvBag {
   const envPath = resolve(root, '.env.local');
   const env: EnvBag = {};
   if (existsSync(envPath)) {
-    const before = new Set(Object.keys(process.env));
-    process.loadEnvFile(envPath);
-    for (const [name, value] of Object.entries(process.env)) {
-      if (!before.has(name)) env[name] = value;
+    for (const line of readFileSync(envPath, 'utf8').split('\n')) {
+      const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+      if (!match) continue;
+      const [, name, raw] = match;
+      if (!name || raw === undefined) continue;
+      const trimmed = raw.trim();
+      const quoted = /^(['"])(.*)\1$/.exec(trimmed);
+      env[name] = quoted?.[2] ?? trimmed.replace(/\s+#.*$/, '');
     }
   }
   if (prefix) applyDevHostPrefix(env, prefix.replace(/\.$/, ''));
@@ -82,11 +107,13 @@ function main(): void {
     ['runner', topology.ports.runner],
   ];
   for (const [service, port] of services) {
-    const listener = listenerOn(port);
+    const listener = listenerOn(port, identity.root);
     if (!listener) continue;
-    const mine = listener.includes(`cwd ${identity.root}`);
-    out.push(`  ${service} port ${port} is held by ${listener}${mine ? ' — this checkout' : ''}`);
-    if (!mine) foreign.push(`${service} port ${port}: ${listener}`);
+    const held = describe(listener);
+    out.push(
+      `  ${service} port ${port} is held by ${held}${listener.mine ? ' — this checkout' : ''}`,
+    );
+    if (!listener.mine) foreign.push(`${service} port ${port}: ${held}`);
   }
 
   const findings = checkDevTopology(launcherEnv(root, prefix));

@@ -21,7 +21,9 @@ export {
   derivePortlessRunnerPort,
   deriveWebPort,
   hostPrefix,
+  HIGHEST_PROBED_WEB_PORT,
   isLinkedWorktree,
+  isPathInside,
   PORT_STRIDE,
   PORTLESS_RUNNER_FLOOR,
   PRIMARY_WEB_PORT,
@@ -39,6 +41,7 @@ export {
   DEV_DOMAIN,
   HOST_BEARING_VARS,
   portlessPrefix,
+  portlessServiceUrl,
   prefixDevHosts,
 } from './hosts';
 export type { DevTopology, PortBlock } from './topology';

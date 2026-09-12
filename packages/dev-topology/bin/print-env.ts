@@ -22,6 +22,36 @@ interface Options {
   readonly printBase: boolean;
 }
 
+/** Lowest base port worth accepting: below 1024 needs privilege to bind. */
+const LOWEST_BASE = 1024;
+
+/** Highest base port that still leaves room for the whole stride below 65535. */
+const HIGHEST_BASE = 65_531;
+
+/**
+ * Read a base port, rejecting anything that cannot become a bindable block.
+ *
+ * @remarks
+ * A full-string match, because `parseInt` accepted `1416abc` as 1416 and `0` as a valid integer —
+ * and `base ?? derived` keeps a zero, so the stack came up on ports 0 through 3 and failed in the
+ * supervisor rather than here. `scripts/dev-stack.sh` forwards `DOCKET_DEV_PORT` straight into this
+ * flag, so this is also where a mistyped override is caught.
+ *
+ * @throws When the value is not a decimal integer inside the bindable range.
+ */
+function parseBase(value: string): number {
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`dev-topology: --base must be a decimal port number, got "${value}"`);
+  }
+  const base = Number.parseInt(value, 10);
+  if (base < LOWEST_BASE || base > HIGHEST_BASE) {
+    throw new Error(
+      `dev-topology: --base must be between ${LOWEST_BASE} and ${HIGHEST_BASE}, got ${base}`,
+    );
+  }
+  return base;
+}
+
 function parseArgs(argv: readonly string[]): Options {
   let root = process.cwd();
   let base: number | undefined;
@@ -34,15 +64,12 @@ function parseArgs(argv: readonly string[]): Options {
     }
     const [name, value] = arg.split('=', 2);
     if (name === '--root' && value) root = value;
-    else if (name === '--base' && value) base = Number.parseInt(value, 10);
+    else if (name === '--base' && value !== undefined) base = parseBase(value);
     else if (name === '--mode' && value && value !== 'ports') {
       throw new Error(`dev-topology: unknown mode "${value}"; only "ports" is printable`);
     }
   }
 
-  if (base !== undefined && !Number.isInteger(base)) {
-    throw new Error('dev-topology: --base must be an integer');
-  }
   return { root, base, printBase };
 }
 

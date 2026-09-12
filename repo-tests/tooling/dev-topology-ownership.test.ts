@@ -14,7 +14,7 @@
  * and expensive to discover.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { extname, join, relative, resolve } from 'node:path';
+import { basename, extname, join, relative, resolve } from 'node:path';
 
 import { HOST_BEARING_VARS } from '@docket/dev-topology';
 import { describe, expect, it } from 'vitest';
@@ -68,6 +68,11 @@ function* walk(directory: string): Generator<string> {
     const full = join(directory, entry);
     if (statSync(full).isDirectory()) {
       if (SKIPPED_DIRECTORIES.has(entry)) continue;
+      // `.claude` has to be walked for launch.json, but `.claude/worktrees` holds a full source
+      // tree per linked worktree. Descending into it makes this test read other branches and
+      // report their declarations as violations of this one — and only in the primary checkout,
+      // so a fresh CI clone never shows it.
+      if (entry === 'worktrees' && basename(directory) === '.claude') continue;
       yield* walk(full);
       continue;
     }

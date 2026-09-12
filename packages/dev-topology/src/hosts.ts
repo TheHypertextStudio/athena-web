@@ -134,10 +134,41 @@ export function prefixDevHosts(value: string, prefix: string): string {
   // a scheme is carried through unchanged, and an already-prefixed host is left alone.
   return value.replace(
     new RegExp(String.raw`(^|[/@,\s])((?:[\w-]+\.)*)${DEV_DOMAIN.replace('.', '\\.')}`, 'g'),
-    (match, lead: string, subNames: string) =>
-      subNames.startsWith(`${prefix}.`) ? match : `${lead}${prefix}.${subNames}${DEV_DOMAIN}`,
+    (match, lead: string, subNames: string) => {
+      const prefixed = `${lead}${prefix}.${subNames}${DEV_DOMAIN}`;
+      // A bare service host is always canonical and always gets the prefix. Testing this first is
+      // what a branch named after a service needs: with prefix `api`, `api.docket.localhost` is
+      // both "the API host" and "the app host already prefixed", and reading it as the latter left
+      // the worktree pointing at the primary checkout's API.
+      if (SERVICE_SUBDOMAINS.includes(subNames)) return prefixed;
+      return subNames.startsWith(`${prefix}.`) ? match : prefixed;
+    },
   );
 }
+
+/**
+ * The origin Portless serves a service on.
+ *
+ * @remarks
+ * No port: the proxy answers on 443 for every service, so the prefix is the whole difference
+ * between one checkout's admin host and another's.
+ *
+ * @param service - `app` for the product itself, or a service sub-name such as `admin`.
+ * @param prefix - The portless prefix, or the empty string on the primary checkout.
+ */
+export function portlessServiceUrl(service: 'app' | 'api' | 'admin', prefix: string): string {
+  const host = service === 'app' ? DEV_DOMAIN : `${service}.${DEV_DOMAIN}`;
+  return `https://${prefix ? `${prefix}.` : ''}${host}`;
+}
+
+/**
+ * Host sub-names that belong to a service rather than to a checkout.
+ *
+ * @remarks
+ * The empty string is the product app, which hangs off the domain directly. Used to tell a
+ * canonical service host from one that already carries a checkout prefix.
+ */
+const SERVICE_SUBDOMAINS: readonly string[] = ['', 'api.', 'admin.', 'marketing.'];
 
 /** A mutable env bag, as `process.env` is. */
 export type EnvBag = Record<string, string | undefined>;

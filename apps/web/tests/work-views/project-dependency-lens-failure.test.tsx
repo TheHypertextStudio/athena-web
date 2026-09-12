@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ComponentType } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -57,7 +57,7 @@ describe('ProjectDependencyLens failure states', () => {
     expect(recovery).toBeInTheDocument();
     expect(graphState.rendered).toBe(0);
 
-    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+    fireEvent.click(within(screen.getByRole('alert')).getByRole('button'));
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
@@ -65,7 +65,7 @@ describe('ProjectDependencyLens failure states', () => {
     queryState.isError = true;
 
     const { onRetry } = renderLens();
-    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+    fireEvent.click(within(screen.getByRole('alert')).getByRole('button'));
 
     // The lens must not quietly repair only its own query: the reads behind this surface fail
     // together, and a local refetch would leave the rest broken behind a recovered-looking page.

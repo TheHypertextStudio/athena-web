@@ -269,7 +269,7 @@ const projects = new Hono<AppEnv>()
       summary: 'Create a project',
       capability: 'contribute',
       response: ProjectOut,
-      description: `Create a bounded, dated effort (a Project moves \`planned → active → completed\`, or is \`canceled\`). The \`organizationId\` comes from the path. \`startDate\`/\`targetDate\` are optional ISO dates parsed to timestamps; \`leadId\`, \`teamId\`, and \`programId\` are optional references, \`status\`/\`health\` optionally set the initial lifecycle state (status defaults to \`planned\`), and \`initiativeIds\` is an optional set of themes to associate at creation. Tenant isolation: a supplied \`leadId\` (Actor), \`teamId\` (Team), and \`programId\` (Program) are each re-read scoped to the caller's org and rejected with 404 (\`Lead not found\` / \`Team not found\` / \`Program not found\`, existence-hiding) when they belong to another tenant — the bare FKs target global PKs without a tenant constraint, so this guard is what prevents cross-org attachment. Every \`initiativeIds\` entry is validated to live in the org BEFORE the write (404 \`Initiative not found\` on any miss) and de-duplicated so the \`initiative_project\` join's composite PK never collides. The project row and its initiative links are written in a single transaction, so a partial create (project saved but links lost) is impossible. Side effect: emits a \`created\` observation. Requires \`contribute\`. Returns the created {@link ProjectOut}. Track completion via \`GET /:id/progress\`.`,
+      description: `Create a bounded, dated effort (a Project moves \`planned → active → completed\`, or is \`canceled\`). The \`organizationId\` comes from the path. \`startDate\`/\`targetDate\` are optional ISO dates parsed to timestamps; \`leadId\`, \`teamId\`, and \`programId\` are optional references, \`status\`/\`health\` optionally set the initial lifecycle state (status defaults to \`planned\`), and \`initiativeIds\` is an optional set of themes to associate at creation. Tenant isolation: a supplied \`leadId\` (Actor), \`teamId\` (Team), and \`programId\` (Program) are each re-read scoped to the caller's org and rejected with 404 (\`Lead not found\` / \`Team not found\` / \`Program not found\`, existence-hiding) when they belong to another tenant — the bare FKs target global PKs without a tenant constraint, so this guard is what prevents cross-org attachment. Every \`initiativeIds\` entry is validated to live in the org BEFORE the write (404 \`Initiative not found\` on any miss) and de-duplicated so the \`initiative_project\` join's composite PK never collides. \`milestones\` is an optional ordered list of checkpoints to create inside the new project; each entry's position is its \`sort\` unless it carries one. The project row, its initiative links, and its milestones are written in a single transaction, so a partial create (project saved but links or checkpoints lost) is impossible. Side effect: emits a \`created\` observation. Requires \`contribute\`. Returns the created {@link ProjectOut}. Track completion via \`GET /:id/progress\`.`,
     }),
     zJson(ProjectCreate),
     async (c) => {
@@ -300,6 +300,10 @@ const projects = new Hono<AppEnv>()
         // task does. Resolved against the project's own team, so a team-limited label applies.
         resolveLabelSet(orgId, body.labelIds, { teamId: body.teamId }),
       ]);
+
+      // Filled inside the transaction and read after it commits, so the search index learns about
+      // the new checkpoints without the response waiting on it.
+      let milestoneIds: readonly string[] = [];
 
       const row = await db.transaction(async (tx) => {
         const [settings] = await tx
@@ -373,6 +377,28 @@ const projects = new Hono<AppEnv>()
         if (labels.length > 0) {
           await replaceLabels(tx, 'project', created.id, orgId, labels);
         }
+
+        // The project's checkpoints, in the same transaction and for the same reason as the links
+        // above: a create that saved the project and lost its milestones is not a create anyone
+        // asked for, and the client cannot repair it without risking a second project. A fresh
+        // project has no milestones to append after, so an entry's position in the array is its
+        // `sort` unless it named one.
+        if (body.milestones !== undefined && body.milestones.length > 0) {
+          const rows = await tx
+            .insert(milestone)
+            .values(
+              body.milestones.map((entry, index) => ({
+                organizationId: orgId,
+                projectId: created.id,
+                name: entry.name,
+                description: entry.description ?? null,
+                targetDate: entry.targetDate ? new Date(entry.targetDate) : undefined,
+                sort: entry.sort ?? index,
+              })),
+            )
+            .returning({ id: milestone.id });
+          milestoneIds = rows.map((inserted) => inserted.id);
+        }
         return created;
       });
 
@@ -400,6 +426,11 @@ const projects = new Hono<AppEnv>()
       deferAfterResponse('project-created-search-upsert', () =>
         enqueueSearchUpsert(orgId, 'project', row.id),
       );
+      for (const milestoneId of milestoneIds) {
+        deferAfterResponse('project-created-milestone-search-upsert', () =>
+          enqueueSearchUpsert(orgId, 'milestone', milestoneId),
+        );
+      }
       return created(c, ProjectOut, toOut(row));
     },
   )

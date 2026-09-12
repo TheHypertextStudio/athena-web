@@ -14,16 +14,18 @@
  * `/projects/A/milestones/<a milestone of B>` is a 404 rather than a cross-project edit through a
  * guessed id.
  */
-import { db, milestone, project } from '@docket/db';
+import { db, milestone } from '@docket/db';
 import { MilestoneCreate, MilestoneOut, MilestoneUpdate } from '@docket/work/milestone-contract';
 import { pageOf } from '../contracts/pagination';
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, max } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
+import { one } from '../lib/one';
+import { assertProjectInOrg } from '../lib/project-guard';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -50,19 +52,27 @@ const projectParam = z.object({ id: z.string() });
 const milestoneParam = z.object({ id: z.string(), milestoneId: z.string() });
 
 /**
- * Assert the Project exists in the caller's org.
+ * The position a new milestone takes when the caller did not name one.
+ *
+ * @remarks
+ * Appending is the server's job because the position depends on rows only the server can see.
+ * A client computing it has to read the list first and hope nothing changed — and the add row on
+ * the project Overview deliberately accepts the next name before the previous create has settled,
+ * so its copy of the list is out of date by design. Two appends racing can still tie; `sort` is an
+ * ordering key, not a unique one, and a tie is resolved by whichever the list returns first.
  *
  * @param orgId - The caller's organization.
- * @param id - The Project id from the path.
- * @throws NotFoundError when absent, archived, or belonging to another tenant.
+ * @param projectId - The Project to append within.
+ * @returns one past the highest position in use, or `0` for a project with no milestones.
  */
-async function assertProject(orgId: string, id: string): Promise<void> {
-  const rows = await db
-    .select({ id: project.id })
-    .from(project)
-    .where(and(eq(project.id, id), eq(project.organizationId, orgId), isNull(project.archivedAt)))
-    .limit(1);
-  if (!rows[0]) throw new NotFoundError('Project not found');
+async function appendSort(orgId: string, projectId: string): Promise<number> {
+  const row = await one(
+    db
+      .select({ highest: max(milestone.sort) })
+      .from(milestone)
+      .where(and(eq(milestone.organizationId, orgId), eq(milestone.projectId, projectId))),
+  );
+  return (row?.highest ?? -1) + 1;
 }
 
 /**
@@ -82,19 +92,19 @@ async function loadMilestone(
 ): Promise<MilestoneRow> {
   // The parent first, on the same terms the collection routes use — otherwise a milestone under an
   // archived project stays editable while its own list 404s.
-  await assertProject(orgId, projectId);
-  const rows = await db
-    .select()
-    .from(milestone)
-    .where(
-      and(
-        eq(milestone.id, milestoneId),
-        eq(milestone.organizationId, orgId),
-        eq(milestone.projectId, projectId),
+  await assertProjectInOrg(orgId, projectId);
+  const row = await one(
+    db
+      .select()
+      .from(milestone)
+      .where(
+        and(
+          eq(milestone.id, milestoneId),
+          eq(milestone.organizationId, orgId),
+          eq(milestone.projectId, projectId),
+        ),
       ),
-    )
-    .limit(1);
-  const row = rows[0];
+  );
   if (!row) throw new NotFoundError('Milestone not found');
   return row;
 }
@@ -113,7 +123,7 @@ const milestones = new Hono<AppEnv>()
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      await assertProject(orgId, id);
+      await assertProjectInOrg(orgId, id);
       const rows = await db
         .select()
         .from(milestone)
@@ -131,7 +141,7 @@ const milestones = new Hono<AppEnv>()
       summary: 'Create a milestone',
       capability: 'contribute',
       response: MilestoneOut,
-      description: `Create a milestone inside a Project. The parent comes from the path and is re-read scoped to the caller's org BEFORE inserting (404 \`Project not found\`, existence-hiding for cross-tenant ids), so a milestone can never be parented to another tenant's project. \`description\` is an optional long-form note (omit for none); \`targetDate\` is an optional ISO date (the checkpoint's planned completion, which drives its on-track/at-risk signal relative to today); \`sort\` defaults to \`0\` when omitted and orders the milestone among its siblings. The parent is fixed at creation and cannot be moved later (\`MilestoneUpdate\` has no \`projectId\`). Requires \`contribute\`. Returns the created {@link MilestoneOut}.`,
+      description: `Create a milestone inside a Project. The parent comes from the path and is re-read scoped to the caller's org BEFORE inserting (404 \`Project not found\`, existence-hiding for cross-tenant ids), so a milestone can never be parented to another tenant's project. \`description\` is an optional long-form note (omit for none); \`targetDate\` is an optional ISO date (the checkpoint's planned completion, which drives its on-track/at-risk signal relative to today); \`sort\` orders the milestone among its siblings and, when omitted, appends after the project's current last one — so a client adding checkpoints one at a time never computes a position from a list it read earlier. The parent is fixed at creation and cannot be moved later (\`MilestoneUpdate\` has no \`projectId\`). Requires \`contribute\`. Returns the created {@link MilestoneOut}.`,
     }),
     zParam(projectParam),
     zJson(MilestoneCreate),
@@ -139,7 +149,7 @@ const milestones = new Hono<AppEnv>()
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
-      await assertProject(orgId, id);
+      await assertProjectInOrg(orgId, id);
 
       const inserted = await db
         .insert(milestone)
@@ -149,7 +159,7 @@ const milestones = new Hono<AppEnv>()
           name: body.name,
           description: body.description ?? null,
           targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
-          sort: body.sort ?? 0,
+          sort: body.sort ?? (await appendSort(orgId, id)),
           createdBy: actorId,
         })
         .returning();

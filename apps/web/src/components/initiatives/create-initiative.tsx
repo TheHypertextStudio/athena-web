@@ -156,7 +156,7 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
     globalCreation.targetWorkspaceId === globalCreation.initialWorkspaceId;
   const destinationReady = globalCreation?.ready ?? true;
 
-  const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady, null);
+  const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady);
   const planningCalendar = useFiscalYearStartMonth(orgId, open && destinationReady);
   const { draft, setField, updateDraft } =
     useComposerDraft<InitiativeDraft>(EMPTY_INITIATIVE_DRAFT);

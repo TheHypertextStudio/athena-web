@@ -130,7 +130,7 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
     globalCreation.targetWorkspaceId === globalCreation.initialWorkspaceId;
   const destinationReady = globalCreation?.ready ?? true;
 
-  const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady, null);
+  const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady);
   const { draft, setField, updateDraft } = useComposerDraft<ProgramDraft>({
     name: '',
     summary: '',

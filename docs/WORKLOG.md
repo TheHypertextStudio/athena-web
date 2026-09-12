@@ -54,7 +54,33 @@ Three things the rows carried came out:
 - **`X` as the remove control.** X reads as dismiss. Removing a milestone is a delete, and `Trash2`
   is the app's delete mark everywhere else.
 
-- **Files changed**: `apps/api/src/routes/milestones.ts`, `domains/work/src/contracts/milestone.ts`,
+#### The server owns what the server knows
+
+A cleanup pass moved two rules out of the composer and into the API, which deleted most of the
+client code that had been approximating them.
+
+`POST /projects` now accepts `milestones` and writes them inside the transaction that already
+writes the project's initiative links — the endpoint whose own docs promise a partial create is
+impossible. The composer had been creating the project, then posting each milestone, then holding
+the created project in state so a failed milestone could be retried without making a second
+project. All of that is gone: one request, one completion path, and `ComposerShell` loses the
+`onDismiss` hook that existed to hand the committed project over when someone left mid-retry.
+
+`MilestoneCreate.sort` appends when omitted instead of defaulting to `0`. Every client had been
+computing a position from a list it might have read minutes ago; the project Overview needed a
+mutable ref to keep two quick adds from colliding, and the composer carried a per-draft `sort` so a
+retry would not restart numbering. The position depends on rows only the server can see, so the
+server assigns it.
+
+Also from that pass: the parent-project guard is one exported `assertProjectInOrg` rather than a
+private copy per router; `milestoneWriteKeys` holds the invalidation pair both milestone hooks
+need; `useComposerOptions`'s project scope is optional, so the six callers with no milestone picker
+stopped passing `null`; and the milestone target in the relation picker is scoped to the subject
+task's project — it had been offering nothing at all since the reads were narrowed.
+
+- **Files changed**: `apps/api/src/routes/milestones.ts`, `apps/api/src/routes/projects.ts`,
+  `apps/api/src/lib/project-guard.ts` (new), `domains/work/src/contracts/milestone.ts`,
+  `apps/api/src/contracts/project.ts`,
   `apps/web/src/components/project-detail/project-milestones.tsx`,
   `apps/web/src/components/project-detail/overview-summary.tsx`,
   `apps/web/src/components/editor/freeform-text.tsx`,

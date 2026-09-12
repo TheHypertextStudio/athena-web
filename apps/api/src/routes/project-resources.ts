@@ -1,36 +1,22 @@
 /** URL-only resource routes for Project operating records. */
-import { attachment, db, project } from '@docket/db';
+import { attachment, db } from '@docket/db';
 import { AttachmentOut, AttachmentRemoved } from '@docket/work/attachment-contract';
 import { ProjectResourceCreate } from '../contracts/project';
 import { pageOf } from '../contracts/pagination';
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
+import { assertProjectInOrg } from '../lib/project-guard';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
 const idParam = z.object({ id: z.string() });
 const resourceParam = z.object({ id: z.string(), resourceId: z.string() });
-
-async function loadProject(organizationId: string, projectId: string): Promise<void> {
-  const rows = await db
-    .select({ id: project.id })
-    .from(project)
-    .where(
-      and(
-        eq(project.organizationId, organizationId),
-        eq(project.id, projectId),
-        isNull(project.archivedAt),
-      ),
-    )
-    .limit(1);
-  if (!rows[0]) throw new NotFoundError('Project not found');
-}
 
 function attachmentOut(row: typeof attachment.$inferSelect): z.input<typeof AttachmentOut> {
   return {
@@ -65,7 +51,7 @@ const projectResources = new Hono<AppEnv>()
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      await loadProject(orgId, id);
+      await assertProjectInOrg(orgId, id);
       const rows = await db
         .select()
         .from(attachment)
@@ -98,7 +84,7 @@ const projectResources = new Hono<AppEnv>()
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
-      await loadProject(orgId, id);
+      await assertProjectInOrg(orgId, id);
       const rows = await db
         .insert(attachment)
         .values({
@@ -131,7 +117,7 @@ const projectResources = new Hono<AppEnv>()
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id, resourceId } = c.req.valid('param');
-      await loadProject(orgId, id);
+      await assertProjectInOrg(orgId, id);
       const rows = await db
         .delete(attachment)
         .where(

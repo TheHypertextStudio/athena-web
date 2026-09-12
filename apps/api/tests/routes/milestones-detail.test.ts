@@ -283,3 +283,45 @@ describe('milestones detail: invalid input', () => {
     expect(res.status).toBe(422);
   });
 });
+
+describe('milestones: an omitted sort appends', () => {
+  it('places each new milestone after the project’s current last one', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
+    const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
+
+    /** Create a milestone with no position and report the one the server gave it. */
+    async function append(name: string): Promise<number> {
+      const res = await writer.request(`/${projectId}/milestones`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      return (await json<{ sort: number }>(res)).sort;
+    }
+
+    expect(await append('First')).toBe(0);
+    expect(await append('Second')).toBe(1);
+
+    // Appending reads the highest position in use, not the count — the row at 5 moves the end of
+    // the list even though only three milestones exist.
+    await writer.request(`/${projectId}/milestones`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Explicit', sort: 5 }),
+    });
+    expect(await append('Last')).toBe(6);
+  });
+
+  it('starts at zero for a project with no milestones yet', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
+    const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
+    const res = await writer.request(`/${projectId}/milestones`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Only' }),
+    });
+    expect((await json<{ sort: number }>(res)).sort).toBe(0);
+  });
+});

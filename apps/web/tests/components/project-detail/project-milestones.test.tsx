@@ -105,7 +105,6 @@ function renderPanel(overrides: Partial<Parameters<typeof ProjectMilestonesPanel
       <ProjectMilestonesPanel
         orgId={ORG_ID}
         projectId={PROJECT_ID}
-        projectDetailKey={['org', ORG_ID, 'project', PROJECT_ID]}
         milestones={[]}
         milestoneTasks={[]}
         taskNoun="task"
@@ -223,9 +222,11 @@ describe('ProjectMilestonesPanel', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     await waitFor(() => {
+      // No position: the server appends, because this row accepts the next name before the
+      // previous create has settled and its copy of the list is out of date by design.
       expect(milestonesPost).toHaveBeenCalledWith({
         param: { orgId: ORG_ID, id: PROJECT_ID },
-        json: { name: 'Launch', sort: 0 },
+        json: { name: 'Launch' },
       });
     });
     // The input clears so the next entry can flow straight in.

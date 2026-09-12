@@ -35,7 +35,7 @@ export const MilestoneCreate = z
       .int()
       .optional()
       .describe(
-        'Manual ordering key among the project’s milestones (ascending). Defaults to `0` when omitted; lists order by this, not by date.',
+        'Manual ordering key among the project’s milestones (ascending); lists order by this, not by date. Omit it to append after the project’s current last milestone — a client adding checkpoints one at a time never has to compute a position from a list it may have read some time ago.',
       ),
   })
   .meta({ id: 'MilestoneCreate', description: 'Create a milestone within an organization.' });

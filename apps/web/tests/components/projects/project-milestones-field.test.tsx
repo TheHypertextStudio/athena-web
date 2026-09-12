@@ -91,14 +91,14 @@ describe('ProjectMilestonesField', () => {
     expect(draftNames()).toEqual(['Beta', 'GA']);
   });
 
-  it('starts every draft undated and unnumbered rather than guessing', () => {
+  it('starts every draft undated and empty rather than guessing', () => {
     const onChange = vi.fn();
     render(<Host onChange={onChange} />);
 
     add('Beta');
 
     expect(onChange).toHaveBeenCalledWith([
-      expect.objectContaining({ name: 'Beta', targetDate: null, description: '', sort: null }),
+      expect.objectContaining({ name: 'Beta', targetDate: null, description: '' }),
     ]);
   });
 });

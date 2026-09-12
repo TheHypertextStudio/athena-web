@@ -33,22 +33,12 @@ import { formatCalendarDate } from '@/lib/format-date';
 export interface DraftMilestone {
   /** Local identity for the row, stable across edits so React keeps the fields mounted. */
   readonly key: string;
-  /** The milestone name. Never empty — the add row rejects a blank. */
+  /** The milestone name. The add row rejects a blank, though a row can be emptied afterwards. */
   readonly name: string;
   /** The planned completion day (`YYYY-MM-DD`), or `null` for an undated checkpoint. */
   readonly targetDate: string | null;
   /** The note, empty when none was written. */
   readonly description: string;
-  /**
-   * The `sort` this draft was last sent at, or `null` before it has been attempted.
-   *
-   * @remarks
-   * A draft's position in this list is its `sort` the first time through. It cannot stay that way:
-   * a partial failure narrows the list to the survivors, so re-deriving the position on a retry
-   * would restart numbering at zero and collide with the milestones that already landed. Once
-   * attempted, a draft carries the number it was given.
-   */
-  readonly sort: number | null;
 }
 
 /** Props for {@link ProjectMilestonesField}. */
@@ -57,8 +47,6 @@ export interface ProjectMilestonesFieldProps {
   value: readonly DraftMilestone[];
   /** Report the full next list. */
   onChange: (next: readonly DraftMilestone[]) => void;
-  /** The vocabulary-skinned singular milestone noun. */
-  noun?: string;
 }
 
 /** Build a draft from a typed name, with a key unique within this composer's lifetime. */
@@ -68,7 +56,6 @@ function draftFrom(name: string): DraftMilestone {
     name,
     targetDate: null,
     description: '',
-    sort: null,
   };
 }
 
@@ -76,32 +63,27 @@ function draftFrom(name: string): DraftMilestone {
 export function ProjectMilestonesField({
   value,
   onChange,
-  noun = 'milestone',
 }: ProjectMilestonesFieldProps): JSX.Element {
   /** Replace one draft in place, leaving order (and therefore `sort`) alone. */
   const update = (key: string, patch: Partial<DraftMilestone>): void => {
     onChange(value.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)));
   };
 
-  // The caller supplies the noun lowercase (it reads mid-sentence elsewhere); the heading and the
-  // field labels are the two places it starts one.
-  const Noun = `${noun.charAt(0).toUpperCase()}${noun.slice(1)}`;
-
   return (
-    <section aria-label={`${Noun}s`} className="flex flex-col gap-2">
-      <h3 className="text-on-surface-variant text-label-large">{Noun}s</h3>
+    <section aria-label="Milestones" className="flex flex-col gap-2">
+      <h3 className="text-on-surface-variant text-label-large">Milestones</h3>
 
       {value.map((draft) => {
         // A row can be emptied after it is added, and an aria-label interpolating the name would
         // then read "Remove ". The noun is what the row still is when it has nothing else.
-        const label = draft.name.trim().length > 0 ? draft.name.trim() : Noun;
+        const label = draft.name.trim().length > 0 ? draft.name.trim() : 'Milestone';
         return (
           <div key={draft.key} className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <Input
                 value={draft.name}
-                aria-label={`${Noun} name`}
-                placeholder={`${Noun} name`}
+                aria-label="Milestone name"
+                placeholder="Milestone name"
                 onChange={(event) => {
                   update(draft.key, { name: event.target.value });
                 }}
@@ -147,7 +129,7 @@ export function ProjectMilestonesField({
           onChange([...value, draftFrom(name)]);
         }}
         canEdit
-        noun={noun}
+        noun="milestone"
       />
     </section>
   );

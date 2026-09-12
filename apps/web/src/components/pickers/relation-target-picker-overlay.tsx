@@ -28,13 +28,30 @@ import {
 import { useActionDispatch, useActionRegistry } from '@/lib/actions';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
-import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, STALE, useApiListQuery, useApiQuery } from '@/lib/query';
 
 /** Props for the relation target picker. */
 export interface RelationTargetPickerOverlayProps {
   readonly request: RelationTargetPickerRequest;
   readonly onClose: () => void;
 }
+
+/**
+ * The option list each relation target draws from.
+ *
+ * @remarks
+ * A target kind with no entry has no option list of its own — tasks, teams, and calendar items are
+ * each read by this component directly, on their own terms.
+ */
+const COMPOSER_KIND_BY_TARGET: Readonly<Record<string, ComposerOptionKind | undefined>> = {
+  actor: 'actors',
+  project: 'projects',
+  program: 'programs',
+  initiative: 'initiatives',
+  label: 'labels',
+  cycle: 'cycles',
+  milestone: 'milestones',
+};
 
 /** Choose a target and invoke the same relation action that a pointer drop invokes. */
 export function RelationTargetPickerOverlay({
@@ -48,27 +65,28 @@ export function RelationTargetPickerOverlay({
   const displayTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const relation = RELATION_DEFINITIONS.find(({ id }) => id === request.relationId);
   const targetKind = relation?.targetKind;
-  const composerKind: ComposerOptionKind | null =
-    targetKind === 'actor'
-      ? 'actors'
-      : targetKind === 'project'
-        ? 'projects'
-        : targetKind === 'program'
-          ? 'programs'
-          : targetKind === 'initiative'
-            ? 'initiatives'
-            : targetKind === 'label'
-              ? 'labels'
-              : targetKind === 'cycle'
-                ? 'cycles'
-                : targetKind === 'milestone'
-                  ? 'milestones'
-                  : null;
+  const composerKind = COMPOSER_KIND_BY_TARGET[targetKind ?? ''] ?? null;
+  // A milestone belongs to one Project and a task may only be moved to one of its own, so the
+  // picker has to know which Project before it can offer anything. The relation carries the task,
+  // not its parent, so the parent is read here — the one case where the option list depends on the
+  // subject rather than on the workspace.
+  const milestoneSubject = targetKind === 'milestone' ? (request.subjects[0]?.id ?? null) : null;
+  const subjectTaskQ = useApiQuery(
+    apiQueryOptions(
+      ['org', organizationId, 'task', milestoneSubject ?? ''] as const,
+      () =>
+        api.v1.orgs[':orgId'].tasks[':id'].$get({
+          param: { orgId: organizationId, id: milestoneSubject ?? '' },
+        }),
+      'Could not load this task.',
+      { enabled: milestoneSubject !== null, staleTime: STALE.volatile },
+    ),
+  );
   const composer = useComposerOptions(
     organizationId,
     composerKind === null ? [] : [composerKind],
     composerKind !== null,
-    null,
+    subjectTaskQ.data?.projectId,
   );
   const tasksQ = useApiListQuery(
     apiQueryOptions(

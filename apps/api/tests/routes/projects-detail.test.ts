@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -817,6 +817,59 @@ describe('projects create with initiative associations', () => {
     });
     expect(rejected.status).toBe(404);
     expect(await linkedInitiatives(created.id)).toEqual([replacement]);
+  });
+
+  it('writes the project’s milestones in the same transaction as the project', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
+
+    const res = await writer.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        name: 'Atlas',
+        teamId,
+        milestones: [
+          { name: 'Beta', targetDate: '2026-10-14', description: 'Feature freeze.' },
+          { name: 'Launch' },
+        ],
+      }),
+    });
+    expect(res.status).toBe(201);
+
+    // Position comes from the array, so the order the client drafted them in is the order they
+    // render in — no client-side numbering, and no window where the project has only some of them.
+    const rows = await db
+      .select({ name: schema.milestone.name, sort: schema.milestone.sort })
+      .from(schema.milestone)
+      .where(eq(schema.milestone.projectId, (await json<{ id: string }>(res)).id))
+      .orderBy(asc(schema.milestone.sort));
+    expect(rows).toEqual([
+      { name: 'Beta', sort: 0 },
+      { name: 'Launch', sort: 1 },
+    ]);
+  });
+
+  it('writes no project at all when one of its milestones is invalid', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
+
+    const res = await writer.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        name: 'Rejected',
+        teamId,
+        milestones: [{ name: 'Beta' }, { name: '' }],
+      }),
+    });
+    expect(res.status).toBe(422);
+
+    const projects_ = await db
+      .select({ id: schema.project.id })
+      .from(schema.project)
+      .where(eq(schema.project.name, 'Rejected'));
+    expect(projects_).toEqual([]);
   });
 
   it('creates with no links when initiativeIds is omitted or empty', async () => {

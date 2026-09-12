@@ -230,17 +230,15 @@ function AssociationField({
  *
  * @remarks
  * Milestones belong to a Project, so a selection spanning several has no milestone set to offer.
- * The empty guard is load-bearing: `aggregateScalar` reads `snapshots[0]` without checking, and a
- * Project-only or cleared selection holds no tasks.
+ * The empty check is load-bearing: `commonNonNullValue` reads the first entry without checking, and
+ * a Project-only or cleared selection holds no tasks.
  *
- * @param snapshots - The current selection.
+ * @param tasks - The task snapshots in the current selection.
  * @returns the shared Project id, or `null`.
  */
-function sharedTaskProjectId(snapshots: readonly CanvasPropertySnapshot[]): string | null {
-  const tasks = snapshots.filter(
-    (snapshot): snapshot is Extract<CanvasPropertySnapshot, { kind: 'task' }> =>
-      snapshot.kind === 'task',
-  );
+function sharedProjectId(
+  tasks: readonly Extract<CanvasPropertySnapshot, { kind: 'task' }>[],
+): string | null {
   return tasks.length === 0 ? null : commonNonNullValue(tasks, (task) => task.projectId);
 }
 
@@ -260,7 +258,11 @@ export default function CanvasPropertiesEditor({
           ? null
           : guard.reason;
   const organizationId = snapshots[0]?.organizationId ?? '';
-  const selectionProjectId = sharedTaskProjectId(snapshots);
+  const taskSnapshots = snapshots.filter(
+    (snapshot): snapshot is Extract<CanvasPropertySnapshot, { kind: 'task' }> =>
+      snapshot.kind === 'task',
+  );
+  const selectionProjectId = sharedProjectId(taskSnapshots);
   const options = useComposerOptions(
     organizationId,
     OPTION_KINDS,
@@ -401,10 +403,7 @@ export default function CanvasPropertiesEditor({
   );
 
   if (first.kind === 'task') {
-    const tasks = snapshots.filter(
-      (snapshot): snapshot is Extract<CanvasPropertySnapshot, { kind: 'task' }> =>
-        snapshot.kind === 'task',
-    );
+    const tasks = taskSnapshots;
     const state = aggregateScalar(tasks, (task) => task.state);
     const priority = aggregateScalar(tasks, (task) => task.priority);
     const assignee = aggregateScalar(tasks, (task) => task.assigneeId);

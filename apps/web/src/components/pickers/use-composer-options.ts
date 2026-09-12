@@ -73,7 +73,7 @@ export interface ComposerOptions {
   readonly cycles: readonly CycleOut[];
   /** Cycle display records used when a caller scopes the raw cycle list. */
   readonly cycleDisplays: readonly EntityDisplayOut[];
-  /** The org's raw milestones (each carries its `projectId` so callers can scope to a project). */
+  /** The chosen Project's milestones — the only set a milestone picker may legally offer. */
   readonly milestones: readonly MilestoneOut[];
   /** Milestone display records used when a caller scopes the raw milestone list. */
   readonly milestoneDisplays: readonly EntityDisplayOut[];
@@ -106,7 +106,9 @@ export function useComposerOptions(
   orgId: string,
   include: readonly ComposerOptionKind[],
   enabled: boolean,
-  projectId: string | null,
+  // Only the milestone list is project-scoped, so only a caller that includes `'milestones'` has
+  // any reason to name one. Omitted means no project, which keeps that read dormant.
+  projectId?: string | null,
 ): ComposerOptions {
   const queryClient = useQueryClient();
   const want = useMemo(() => new Set(include), [include]);

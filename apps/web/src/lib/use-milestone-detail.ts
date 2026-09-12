@@ -16,36 +16,20 @@
  * The patch type is {@link MilestoneUpdate} itself rather than a hand-written near-copy. On that
  * type `description` and `targetDate` are optional *and* nullable, and both halves mean something:
  * omitting a field leaves it unchanged, passing `null` clears it. That distinction only exists on
- * the wire, so it stops here — {@link milestoneTargetDate} normalizes the read side to a plain
- * `string | null`, and nothing downstream of this module deals in `undefined`.
+ * the wire, so it stops here: nothing downstream of this module deals in `undefined`. The read side
+ * is normalized by `toDay`, the date module's own coercion for API values documented as days and
+ * delivered as timestamps.
  */
 import type { MilestoneOut, MilestoneUpdate } from '@docket/work/milestone-contract';
 
 import { api } from './api';
 import { userErrorMessage } from './problem';
-import { projectMilestonesDef } from './project-milestones-def';
-import { projectWorkSectionsDef } from './fetch-project-sections';
+import { milestoneWriteKeys } from './project-milestones-def';
 import { unwrap, useApiMutation } from './query';
-
-/**
- * The milestone's target date as a calendar day, or `null` when it is undated.
- *
- * @remarks
- * `MilestoneOut.targetDate` is declared optional *and* nullable and arrives as a full ISO timestamp
- * (the column is a `timestamp`), while every writer takes `YYYY-MM-DD`. Both mismatches are
- * corrected in one place so no caller repeats `value ? value.slice(0, 10) : null`.
- *
- * @param milestone - The milestone as read from the API.
- * @returns the `YYYY-MM-DD` target day, or `null` when there is none.
- */
-export function milestoneTargetDate(milestone: MilestoneOut): string | null {
-  return milestone.targetDate ? milestone.targetDate.slice(0, 10) : null;
-}
 
 /** Edit actions for one Milestone. */
 export interface MilestoneDetailMutations {
   patch: (patch: MilestoneUpdate) => void;
-  pending: boolean;
   mutationError: string | null;
 }
 
@@ -55,7 +39,7 @@ export interface MilestoneDetailMutations {
  * @param orgId - The active org.
  * @param milestoneId - The milestone being edited.
  * @param projectId - The milestone's project, whose work read backs the Overview list.
- * @returns the patch action, its pending state, and its failure in application-owned copy.
+ * @returns the patch action and its failure in application-owned copy.
  */
 export function useMilestoneDetail(
   orgId: string,
@@ -72,17 +56,13 @@ export function useMilestoneDetail(
           }),
         'Could not update this milestone.',
       ),
-    invalidateKeys: [
-      projectWorkSectionsDef(orgId, projectId).queryKey,
-      projectMilestonesDef(orgId, projectId).queryKey,
-    ],
+    invalidateKeys: milestoneWriteKeys(orgId, projectId),
   });
 
   return {
     patch: (patch) => {
       patchMutation.mutate(patch);
     },
-    pending: patchMutation.isPending,
     mutationError: patchMutation.error
       ? userErrorMessage(patchMutation.error, 'Could not update this milestone.')
       : null,

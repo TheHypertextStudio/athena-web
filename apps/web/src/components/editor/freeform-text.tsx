@@ -685,16 +685,6 @@ export interface EditableFreeformTextProps {
 }
 
 /**
- * The editor's minimum writing area.
- *
- * @param compact - Whether the host is a dense surface rather than a page body.
- * @returns the min-height utility for the editor's body.
- */
-function bodyMinHeight(compact: boolean): string {
-  return compact ? 'min-h-10' : 'min-h-28';
-}
-
-/**
  * A document body that treats continuous typing as one autosave session.
  *
  * @remarks
@@ -713,6 +703,10 @@ export function EditableFreeformText({
   compact = false,
 }: EditableFreeformTextProps): JSX.Element {
   const activeOrgId = useActiveOrgIdOptional();
+  const bodyClassName = cn(
+    compact ? 'min-h-10' : 'min-h-28',
+    'flex flex-1 flex-col [&>div]:flex-1',
+  );
   const [draft, setDraft] = useState(value ?? '');
   const [focused, setFocused] = useState(false);
   const focusedRef = useRef(false);
@@ -785,7 +779,7 @@ export function EditableFreeformText({
           onChange={updateDraft}
           placeholder={placeholder}
           ariaLabel="Description"
-          className={cn(bodyMinHeight(compact), 'flex flex-1 flex-col [&>div]:flex-1')}
+          className={bodyClassName}
           contributions={contributions}
         />
       ) : (
@@ -795,7 +789,7 @@ export function EditableFreeformText({
             onChange={updateDraft}
             placeholder={placeholder}
             ariaLabel="Description"
-            className={cn(bodyMinHeight(compact), 'flex flex-1 flex-col [&>div]:flex-1')}
+            className={bodyClassName}
             mentionOrgId={activeOrgId}
             contributions={contributions}
           />

@@ -12,7 +12,7 @@ import { LabelOut } from '@docket/work/label-contract';
 import { ActorId, OrganizationId, TeamId } from '@docket/identity-access/ids';
 import { AgentId } from '@docket/athena/ids';
 import { InitiativeId, LabelId, MilestoneId, ProgramId, ProjectId, TaskId } from '@docket/work/ids';
-import { MilestoneOut } from '@docket/work/milestone-contract';
+import { MilestoneCreate, MilestoneOut } from '@docket/work/milestone-contract';
 import { TaskOut } from '@docket/work/task-model';
 
 /**
@@ -89,6 +89,12 @@ export const ProjectCreate = z
       .array(LabelId)
       .optional()
       .describe('Optional organization-global Labels to attach to the Project.'),
+    milestones: z
+      .array(MilestoneCreate)
+      .optional()
+      .describe(
+        'Optional checkpoints to create inside the new Project, in order — each entry’s position in the array is its `sort` unless it carries one. Written in the same transaction as the Project, so a create never leaves a Project whose milestones are missing. Equivalent to calling `POST /projects/:id/milestones` once per entry afterwards, without the window in which only some of them exist.',
+      ),
   })
   .meta({ id: 'ProjectCreate', description: 'Create a project within an organization.' });
 /** Validated project-create body. */

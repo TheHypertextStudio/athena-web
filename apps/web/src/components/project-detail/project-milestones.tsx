@@ -58,22 +58,19 @@ import {
   DecorativeIcon,
   focusRing,
 } from '@docket/ui/primitives';
-import type { QueryKey } from '@tanstack/react-query';
-import { type JSX, useMemo, useRef, useState } from 'react';
+import { type JSX, useMemo, useState } from 'react';
 
 import type { MilestoneTask } from '@/components/project-detail/milestone-tasks';
 import { DatePicker } from '@docket/ui/components';
 import { EditableFreeformText } from '@/components/editor/freeform-text';
 import { ExcerptMarkdown } from '@/components/mentions/excerpt-markdown';
 import { QuickAddRow } from '@/components/views/quick-add-row';
+import { toDay } from '@/components/date-picker';
 import { formatCalendarDate } from '@/lib/format-date';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { countTasksByMilestone } from '@/lib/milestone-progress';
-import { milestoneTargetDate, useMilestoneDetail } from '@/lib/use-milestone-detail';
+import { useMilestoneDetail } from '@/lib/use-milestone-detail';
 import { useProjectMilestones } from '@/lib/use-project-milestones';
-
-/** The synthesized bucket id for tasks with no milestone (mirrors the Tasks tab). */
-const UNSCHEDULED_KEY = '__unscheduled__';
 
 /** A milestone nothing points at yet. */
 const zeroProgress = { done: 0, total: 0 } as const;
@@ -124,7 +121,7 @@ function MilestoneRow({
 }: MilestoneRowProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const { patch, mutationError } = useMilestoneDetail(orgId, milestone.id, projectId);
-  const targetDate = milestoneTargetDate(milestone);
+  const targetDate = toDay(milestone.targetDate);
   const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
 
   return (
@@ -157,7 +154,9 @@ function MilestoneRow({
               // Markdown source, so printing it raw would read as `**Feature freeze**`. Hidden
               // while open: the editor below is already showing the whole note.
               <ExcerptMarkdown
-                value={milestone.description}
+                // Cut before parsing: one truncated line is all that renders, and the component
+                // otherwise walks the whole note's token tree to build it.
+                value={milestone.description.slice(0, 200)}
                 className="text-on-surface-variant text-body-small truncate"
               />
             )}
@@ -235,8 +234,6 @@ function MilestoneRow({
 export interface ProjectMilestonesPanelProps {
   orgId: string;
   projectId: string;
-  /** The project-detail query key to invalidate after any milestone mutation. */
-  projectDetailKey: QueryKey;
   /** The project's milestones, in any order (sorted here by their `sort` key). */
   milestones: readonly MilestoneOut[];
   /** The project's tasks, each with its resolved milestone, for the per-row progress bar. */
@@ -251,47 +248,21 @@ export interface ProjectMilestonesPanelProps {
 export function ProjectMilestonesPanel({
   orgId,
   projectId,
-  projectDetailKey,
   milestones,
   milestoneTasks,
   taskNoun,
   canEdit,
 }: ProjectMilestonesPanelProps): JSX.Element {
-  const { create, remove, removing, mutationError } = useProjectMilestones(
-    orgId,
-    projectId,
-    projectDetailKey,
-  );
+  const { create, remove, removing, mutationError } = useProjectMilestones(orgId, projectId);
 
   const categoryOf = useCategoryOf('task');
   const progressByMilestone = useMemo(
-    () => countTasksByMilestone(milestoneTasks, UNSCHEDULED_KEY, categoryOf),
+    () => countTasksByMilestone(milestoneTasks, categoryOf),
     [milestoneTasks, categoryOf],
   );
 
   const ordered = useMemo(() => [...milestones].sort((a, b) => a.sort - b.sort), [milestones]);
-  // The highest position in use, not the count: the API never renumbers after a delete, so a list
-  // of 0 and 2 has length 2 and would hand the next milestone a colliding sort.
-  const nextSort = useMemo(
-    () => ordered.reduce((highest, milestone) => Math.max(highest, milestone.sort), -1) + 1,
-    [ordered],
-  );
-  const issued = useRef(-1);
 
-  /**
-   * The `sort` for the next milestone added here.
-   *
-   * @remarks
-   * `nextSort` only moves when the refetch lands, and the add row deliberately accepts the next
-   * name before the previous create has settled — so two names typed in a row would otherwise both
-   * be sent at the same position. The last number handed out is remembered and never repeated.
-   *
-   * @returns the position to create at.
-   */
-  const takeSort = (): number => {
-    issued.current = Math.max(nextSort, issued.current + 1);
-    return issued.current;
-  };
   return (
     <section aria-label="Milestones" className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
@@ -304,7 +275,7 @@ export function ProjectMilestonesPanel({
           No milestones yet — add checkpoints to track this project&apos;s key dates.
         </p>
       ) : (
-        <div role="group" aria-label="Milestones" className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           {ordered.map((milestone) => (
             <MilestoneRow
               key={milestone.id}
@@ -324,7 +295,9 @@ export function ProjectMilestonesPanel({
       )}
 
       <QuickAddRow
-        onAdd={(name) => create({ name, sort: takeSort() })}
+        // No `sort`: the server appends after the project's current last milestone, which is the
+        // only place that number can be read without racing this list's own refetch.
+        onAdd={(name) => create({ name })}
         canEdit={canEdit}
         noun="milestone"
       />

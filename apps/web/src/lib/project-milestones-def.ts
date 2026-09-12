@@ -16,7 +16,10 @@
  */
 import type { MilestoneOut } from '@docket/work/milestone-contract';
 
+import type { QueryKey } from '@tanstack/react-query';
+
 import { api } from './api';
+import { projectWorkSectionsDef } from './fetch-project-sections';
 import { STALE, apiQueryOptions } from './query';
 
 /** A page of milestones, as the nested collection returns them. */
@@ -47,4 +50,25 @@ export function projectMilestonesDef(
     'Could not load milestones.',
     { enabled: (enabled ?? true) && Boolean(projectId), staleTime: STALE.static },
   );
+}
+
+/**
+ * The queries a milestone write makes stale.
+ *
+ * @remarks
+ * Two reads carry a project's milestones: the project-detail work composite behind the Overview,
+ * and this module's standalone list behind every picker. They are separate queries with separate
+ * lifetimes — the list holds its answer for five minutes — so a write that refreshes one and not
+ * the other leaves a picker offering a milestone that is gone. Held here rather than in each
+ * mutation hook so the pair cannot drift.
+ *
+ * @param orgId - The active org.
+ * @param projectId - The Project whose milestones changed.
+ * @returns the query keys to invalidate.
+ */
+export function milestoneWriteKeys(orgId: string, projectId: string): readonly QueryKey[] {
+  return [
+    projectWorkSectionsDef(orgId, projectId).queryKey,
+    projectMilestonesDef(orgId, projectId).queryKey,
+  ];
 }

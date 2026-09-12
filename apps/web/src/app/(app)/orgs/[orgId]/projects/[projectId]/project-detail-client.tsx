@@ -817,7 +817,6 @@ export default function ProjectDetailPage(): JSX.Element {
           <ProjectMilestonesPanel
             orgId={orgId}
             projectId={projectId}
-            projectDetailKey={workDef.queryKey}
             milestones={workQ.data?.milestones ?? []}
             milestoneTasks={milestoneTasks}
             taskNoun={taskNoun}

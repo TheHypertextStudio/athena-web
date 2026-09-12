@@ -70,15 +70,6 @@ export interface ComposerContinuation {
 export interface ComposerShellProps {
   /** Whether the dialog is open (the host page owns this state). */
   open: boolean;
-  /**
-   * Run just before any dismiss path closes the dialog (Esc, backdrop, X, or discard).
-   *
-   * @remarks
-   * For work a composer has already committed and must not lose on the way out — a created entity
-   * whose follow-up writes are still outstanding. It does not close the dialog and it does not run
-   * on a successful submit, where the composer's own completion path owns the handover.
-   */
-  onDismiss?: (() => void) | undefined;
   /** Notify the parent that the open state changed (Esc, backdrop, X, discard, or success). */
   onOpenChange: (open: boolean) => void;
   /**
@@ -194,7 +185,6 @@ export interface ComposerShellProps {
 export function ComposerShell({
   open,
   onOpenChange,
-  onDismiss,
   heading,
   icon,
   context,
@@ -280,15 +270,12 @@ export function ComposerShell({
       setConfirmingDiscard(true);
       return;
     }
-    onDismiss?.();
     onOpenChange(false);
   };
 
   /** Discard the draft and close. */
   const discard = (): void => {
     setConfirmingDiscard(false);
-    // Discarding abandons the *draft*, never work the composer already committed.
-    onDismiss?.();
     onOpenChange(false);
   };
 
@@ -456,7 +443,7 @@ export function ComposerShell({
             hasContents={hasContents}
             freeformFields={propertyLayout === 'freeform' ? children : null}
             trailingFields={trailingFields}
-            creating={creating}
+            editDisabled={editDisabled}
           />
 
           {/* Action bar: pills, then error, then the single primary action — all pinned below the
@@ -510,8 +497,8 @@ interface ComposerBodyRegionProps {
   freeformFields: ReactNode;
   /** Fields for follow-up work the composer also commits, below the description. */
   trailingFields: ReactNode;
-  /** Whether a request is in flight, which locks the trailing fields against it. */
-  creating: boolean;
+  /** Whether the draft's own content is locked (a request in flight, or a committed draft). */
+  editDisabled: boolean;
 }
 
 /**
@@ -535,7 +522,7 @@ function ComposerBodyRegion({
   hasContents,
   freeformFields,
   trailingFields,
-  creating,
+  editDisabled,
 }: ComposerBodyRegionProps): JSX.Element {
   return (
     <DialogBody inset="responsive-inline" className="@container flex flex-col">
@@ -569,14 +556,9 @@ function ComposerBodyRegion({
            *  scroll — see PropertyStrip's placement there for why. */}
           {freeformFields}
 
-          {/*
-           * Locked only while a request is in flight, not by `contentDisabled`. These fields are the
-           * *outstanding* work, not the draft's own content: a composer sets `contentDisabled` once
-           * its entity is committed, and that is exactly the moment the remaining trailing work
-           * still needs correcting. The lock matters: a composer that commits these fields reads
-           * them once when it submits, so an edit made while that pass runs would be dropped.
-           */}
-          <fieldset disabled={creating} className="flex flex-col gap-3">
+          {/* Disabled on the same terms as every other field: a composer reads these when it
+           *  submits, so an edit made while that request is out would be dropped. */}
+          <fieldset disabled={editDisabled} className="flex flex-col gap-3">
             {trailingFields}
           </fieldset>
         </div>

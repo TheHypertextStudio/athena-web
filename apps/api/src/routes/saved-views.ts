@@ -26,9 +26,6 @@ import {
 } from '@docket/work/saved-view-contract';
 import {
   FractionalRank,
-  InitiativeViewDefinition,
-  ProgramViewDefinition,
-  ProjectViewDefinition,
   TaskViewDefinition,
   type WorkViewContext,
 } from '@docket/work/work-view-contract';
@@ -42,44 +39,53 @@ import { NotFoundError, ValidationError } from '../error';
 import type { JsonRoute } from '../lib/hono-rpc';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
-import { parseStoredDefinition } from '../lib/stored-definition';
+import { logStaleStoredDefinition } from '../lib/stored-definition';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 type SavedViewRow = typeof savedView.$inferSelect;
 
-/** The current definition schema for one saved-view target. */
-const DEFINITION_SCHEMA = {
-  task: TaskViewDefinition,
-  project: ProjectViewDefinition,
-  program: ProgramViewDefinition,
-  initiative: InitiativeViewDefinition,
-} as const satisfies Record<SavedViewRow['target'], z.ZodType>;
-
 /**
- * Project a stored row, or `null` when its definition no longer satisfies the current contract.
+ * Project a stored row, or `null` when the current contract cannot represent it.
  *
  * @remarks
  * The list route is unpaginated and org-wide, so throwing here took every member's saved-view list
- * down over one stale row. A view whose definition cannot be parsed also cannot be represented in
- * `SavedWorkViewOut`, and it is not usable in the product either — the update route already answers
- * one with "This saved view requires a current client before its filters can be changed". Dropping
- * it from the list keeps every other view working; the row id reaches the logs so a backfill can
- * repair it.
+ * down over one stale row. This validates the **whole** output rather than just `definition`:
+ * `context`, `scope`, `position` and the legacy projection are all contract-derived stored values
+ * and any of them can be what moved, so checking one column would have left the same outage
+ * reachable through the others.
+ *
+ * A row that fails is not usable in the product either — the update route already answers one with
+ * "This saved view requires a current client before its filters can be changed". Every route treats
+ * it as absent, and the row id reaches the logs so a backfill can repair it rather than the row
+ * being deleted.
  *
  * @param v - The stored saved-view row.
- * @returns the response shape, or `null` when the stored definition is stale.
+ * @returns the validated response shape, or `null` when the row is stale.
  */
-function toOutOrNull(v: SavedViewRow): z.input<typeof SavedWorkViewOut> | null {
-  const site = { column: 'saved_view.definition', rowId: v.id };
-  if (parseStoredDefinition(DEFINITION_SCHEMA[v.target], v.definition, site) === null) return null;
-  return toOut(v);
+function toOutOrNull(v: SavedViewRow): z.infer<typeof SavedWorkViewOut> | null {
+  const result = SavedWorkViewOut.safeParse(savedViewPayload(v));
+  if (result.success) return result.data;
+  logStaleStoredDefinition({ column: 'saved_view', rowId: v.id }, result.error);
+  return null;
 }
 
 function toOut(v: SavedViewRow): z.input<typeof SavedWorkViewOut> {
+  return SavedWorkViewOut.parse(savedViewPayload(v));
+}
+
+/**
+ * Assemble the response shape from a stored row, without validating it.
+ *
+ * @remarks
+ * Returns `unknown` rather than the output's input type: the row's `target` column cannot carry the
+ * correlation the discriminated union needs, and claiming it would be asserting the very thing the
+ * caller is about to check. Validation belongs to {@link toOut} / {@link toOutOrNull}.
+ */
+function savedViewPayload(v: SavedViewRow): unknown {
   const legacy = legacyProjection(v.target, v.definition);
-  return SavedWorkViewOut.parse({
+  return {
     id: v.id,
     organizationId: v.organizationId,
     name: v.name,
@@ -96,7 +102,7 @@ function toOut(v: SavedViewRow): z.input<typeof SavedWorkViewOut> {
     sort: legacy.sort,
     createdAt: v.createdAt.toISOString(),
     updatedAt: v.updatedAt.toISOString(),
-  });
+  };
 }
 
 const idParam = z.object({ id: z.string() });
@@ -254,8 +260,13 @@ function visibleSavedView(organizationId: string, actorId: string): SQL {
 type LegacyProjection = ReturnType<typeof projectTaskViewDefinitionToLegacyFallback>;
 
 function legacyProjection(target: SavedViewRow['target'], definition: unknown): LegacyProjection {
-  return target === 'task'
-    ? projectTaskViewDefinitionToLegacyFallback(TaskViewDefinition.parse(definition))
+  if (target !== 'task') return legacyTaskNoMatchProjection();
+  // Lenient on purpose: this is a rollback-client compatibility projection, and a stored definition
+  // the current contract cannot read must not throw out of a serializer. `toOutOrNull` decides
+  // whether the row is representable at all; this only decides what the legacy fields say.
+  const parsed = TaskViewDefinition.safeParse(definition);
+  return parsed.success
+    ? projectTaskViewDefinitionToLegacyFallback(parsed.data)
     : legacyTaskNoMatchProjection();
 }
 
@@ -393,7 +404,12 @@ const savedViews: Hono<AppEnv, SavedViewRoutes> = new Hono<AppEnv>()
         .limit(1);
       const row = rows[0];
       if (!row) throw new NotFoundError('Saved view not found');
-      return ok(c, SavedWorkViewOut, toOut(row));
+      // A row the current contract cannot represent is absent everywhere, not merely absent from
+      // the list. Answering 422 here told the caller it had sent something wrong about a row it
+      // never sent, for a view the list had already stopped admitting exists.
+      const out = toOutOrNull(row);
+      if (!out) throw new NotFoundError('Saved view not found');
+      return ok(c, SavedWorkViewOut, out);
     },
   )
   .patch(
@@ -505,14 +521,26 @@ const savedViews: Hono<AppEnv, SavedViewRoutes> = new Hono<AppEnv>()
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      // Serialized before the delete, not after. Validating the response afterwards meant a row the
+      // contract could no longer represent was removed from the table and the search index, and
+      // *then* the request answered 422 — the caller told the delete had failed while it had
+      // already happened, and a retry answering 404 left nobody able to say what the truth was.
+      const existing = await db
+        .select()
+        .from(savedView)
+        .where(and(eq(savedView.id, id), visibleSavedView(orgId, actorId)))
+        .limit(1);
+      const found = existing[0];
+      if (!found) throw new NotFoundError('Saved view not found');
+      const out = toOutOrNull(found);
+      if (!out) throw new NotFoundError('Saved view not found');
       const deleted = await db
         .delete(savedView)
         .where(and(eq(savedView.id, id), visibleSavedView(orgId, actorId)))
-        .returning();
-      const row = deleted[0];
-      if (!row) throw new NotFoundError('Saved view not found');
-      await enqueueSearchDelete(orgId, 'saved_view', row.id);
-      return ok(c, SavedWorkViewOut, toOut(row));
+        .returning({ id: savedView.id });
+      if (!deleted[0]) throw new NotFoundError('Saved view not found');
+      await enqueueSearchDelete(orgId, 'saved_view', found.id);
+      return ok(c, SavedWorkViewOut, out);
     },
   );
 

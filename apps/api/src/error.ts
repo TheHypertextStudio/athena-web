@@ -16,6 +16,8 @@ import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ZodError } from 'zod';
 
+import { describeIssues } from './lib/stored-definition';
+
 /** Base class for all mapped API errors. */
 export class ApiError extends Error {
   /** HTTP status to emit. */
@@ -457,9 +459,7 @@ export function onError(err: Error, c: Context) {
         method: c.req.method,
         path: c.req.path,
         ...(err instanceof ZodError
-          ? {
-              issues: err.issues.map((issue) => ({ code: issue.code, path: issue.path.join('.') })),
-            }
+          ? { issues: describeIssues(err.issues) }
           : { message: err.message, stack: err.stack }),
       }),
     );

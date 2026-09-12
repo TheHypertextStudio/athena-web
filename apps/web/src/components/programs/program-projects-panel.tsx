@@ -61,6 +61,7 @@ export function ProgramProjectsPanel({
     [options.projects, programId],
   );
 
+  // placeholder: the projects filed under this program.
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">

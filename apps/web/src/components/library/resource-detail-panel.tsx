@@ -95,6 +95,7 @@ export default function ResourceDetailPanel({
     ),
   );
 
+  // placeholder: the records that reference this resource.
   return (
     <aside
       aria-label={`Details for ${resource.title}`}

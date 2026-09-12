@@ -34,6 +34,7 @@ export function LatestUpdateSummary({
   return (
     <section aria-label="Latest update" className="flex flex-col gap-3">
       <h2 className="text-on-surface text-title-small">Latest update</h2>
+      {/* placeholder: the most recent update written about this record. */}
       {loading ? (
         <div className="bg-surface-container-low h-20 animate-pulse rounded-xl" />
       ) : update === null ? (

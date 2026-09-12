@@ -89,6 +89,7 @@ export default function MentionMenu({
     onRows(state.items, resolvedActiveKey);
   }, [onRows, state.items, resolvedActiveKey]);
 
+  // placeholder: files matching the query, searched in connected providers.
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor virtualRef={anchorRef} />

@@ -70,6 +70,7 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
   const [host, setHost] = useState('');
 
   if (permissionLoading) {
+    // placeholder: this section's publishing controls, which depend on the reader's permission.
     return <Skeleton className="h-72 rounded-xl" />;
   }
 

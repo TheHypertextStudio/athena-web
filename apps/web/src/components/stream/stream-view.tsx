@@ -72,6 +72,7 @@ export interface StreamViewProps {
 function TimelineSkeleton(): JSX.Element {
   return (
     <Surface tone="card" shape="large" className="px-4 py-2" aria-hidden="true">
+      {/* placeholder: the stream's activity entries, each with its actor and its summary. */}
       {[0, 1, 2, 3].map((index) => (
         <div key={index} className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-3 py-4">
           <div className="bg-surface-container-high size-10 animate-pulse rounded-full" />

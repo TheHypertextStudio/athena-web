@@ -230,6 +230,7 @@ export function LabelPickerOverlay({ request, onClose }: LabelPickerOverlayProps
       ? userErrorMessage(labelsQ.error, LABELS_ERROR_FALLBACK)
       : null;
 
+  // placeholder: the workspace's labels, and which of them this record carries.
   return (
     <Popover
       open

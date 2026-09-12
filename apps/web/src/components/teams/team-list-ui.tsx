@@ -214,6 +214,7 @@ export function TeamRows({
 export function ListSkeleton(): JSX.Element {
   return (
     <div className="bg-surface-container-low flex flex-col gap-2 rounded-xl p-2" aria-hidden="true">
+      {/* placeholder: the workspace's teams. */}
       {[0, 1, 2, 3, 4].map((i) => (
         <Skeleton key={i} className="h-14 w-full rounded-lg" />
       ))}

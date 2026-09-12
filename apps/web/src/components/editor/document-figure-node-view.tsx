@@ -170,6 +170,7 @@ function FigureMedia({ attrs, onRetry, onRemove }: FigureMediaProps): JSX.Elemen
           <FileImage aria-hidden="true" className="size-8" />
         </div>
       )}
+      {/* placeholder: the image itself, which exists only once its upload completes. */}
       {attrs.status === 'uploading' ? (
         <div
           role="status"

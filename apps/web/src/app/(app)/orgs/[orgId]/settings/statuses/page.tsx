@@ -242,6 +242,7 @@ export default function StatusesSettingsPage(): JSX.Element {
     },
   ];
 
+  // placeholder: the workspace's own status sets, per kind of work.
   return (
     <SettingsSectionPage
       title="Statuses"

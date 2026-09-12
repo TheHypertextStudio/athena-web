@@ -425,6 +425,8 @@ export function PickerList<TValue extends string = string>({
       >
         {rows.length === 0 ? (
           loading ? (
+            // placeholder: the options matching the current query, which only the caller's
+            // still-pending request can name.
             // Placeholder rows, not "No matches": the request has not answered yet, and a search
             // box that reports absence before it knows is the most reliable way to make someone
             // stop typing a term that would have worked.

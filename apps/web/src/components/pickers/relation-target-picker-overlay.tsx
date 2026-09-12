@@ -202,6 +202,7 @@ export function RelationTargetPickerOverlay({
   const loading = composer.loading || tasksQ.isLoading || teamsQ.isLoading || calendarQ.isLoading;
   const targetNoun = targetKind?.replace('_', ' ') ?? 'item';
 
+  // placeholder: the records of this kind that the relation may point at.
   return (
     <Popover
       open

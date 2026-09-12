@@ -75,6 +75,7 @@ function AddressCard(): JSX.Element {
     ? userErrorMessage(mailboxQ.error, 'Could not load your Athena inbox address.')
     : null;
 
+  // placeholder: the reader's own Athena inbox address.
   if (mailboxQ.isPending) return <Skeleton className="h-20 w-full rounded-xl" />;
   if (error) {
     return (
@@ -271,6 +272,7 @@ export function MailInbox(): JSX.Element {
         </Text>
       ) : listQ.isPending ? (
         <div className="flex flex-col gap-2">
+          {/* placeholder: the messages waiting in the reader's Athena inbox. */}
           <Skeleton className="h-16 w-full rounded-xl" />
           <Skeleton className="h-16 w-full rounded-xl" />
         </div>

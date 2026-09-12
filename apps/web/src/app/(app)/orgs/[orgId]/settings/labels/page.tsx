@@ -208,6 +208,7 @@ export default function LabelsSettingsPage(): JSX.Element {
     },
   });
 
+  // placeholder: the workspace's labels.
   return (
     <SettingsSectionPage
       title="Labels"

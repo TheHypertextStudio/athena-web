@@ -256,6 +256,7 @@ export default function AutomationsTab({
     }
   }
 
+  // placeholder: the automation rules this workspace has defined.
   return (
     <SettingsGroup
       capability={SETTINGS_NODES.workspaceAutomationsRules}

@@ -153,13 +153,18 @@ function sourceFiles(root: string): readonly string[] {
  * attribution from the component that actually renders the placeholder, and the annotation would
  * have to be repeated beside every local instead of once per component.
  *
+ * "Top-level" is enforced by anchoring the `const` form at column zero, which capitalization alone
+ * does not do: an indented local whose name happens to be capitalized — `const Icon = glyphFor(row)`
+ * inside a row renderer — opened a span of its own and swallowed every placeholder after it, so the
+ * component that actually rendered them could never satisfy the rule from its own body.
+ *
  * @param lines - The file's lines.
  * @returns Declarations with their 1-indexed start lines.
  */
 function componentSpans(lines: readonly string[]): readonly ComponentSpan[] {
   const spans: ComponentSpan[] = [];
   const declaration = /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/;
-  const arrow = /^\s*(?:export\s+)?(?:const|let)\s+([A-Z][\w$]*)\s*[:=]/;
+  const arrow = /^(?:export\s+)?(?:const|let)\s+([A-Z][\w$]*)\s*[:=]/;
   lines.forEach((text, index) => {
     const match = declaration.exec(text) ?? arrow.exec(text);
     const name = match?.[1];

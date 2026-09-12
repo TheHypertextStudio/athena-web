@@ -114,6 +114,7 @@ function CycleProgress({ cycle, stats }: CycleRowProps): JSX.Element {
   if (!stats) {
     return (
       <span className="flex items-center gap-2">
+        {/* placeholder: this Cycle's completed-versus-committed counts, read per Cycle. */}
         <Skeleton className="h-1.5 w-14 rounded-full" />
         <Skeleton className="h-3 w-10" />
       </span>
@@ -138,6 +139,7 @@ function CycleProgress({ cycle, stats }: CycleRowProps): JSX.Element {
 
 /** Render one Cycle's capacity or carryover summary. */
 function CyclePoints({ cycle, stats }: CycleRowProps): JSX.Element {
+  // placeholder: this Cycle's capacity or carryover, which comes from the same per-Cycle read.
   if (!stats) return <Skeleton className="h-3 w-12" />;
   if (stats.carryover > 0 && cycle.status !== 'completed') {
     return <span className="text-state-started font-medium">{stats.carryover} open</span>;

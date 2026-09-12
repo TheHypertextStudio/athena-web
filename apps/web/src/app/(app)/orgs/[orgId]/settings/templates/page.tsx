@@ -88,6 +88,7 @@ export default function TemplatesSettingsPage(): JSX.Element {
 
   const templates = query.data?.items ?? [];
 
+  // placeholder: the workspace's templates.
   return (
     <SettingsSectionPage
       title="Templates"

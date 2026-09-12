@@ -115,6 +115,7 @@ export function SettingsSectionPage({
         <SectionHeader title={resolvedTitle} description={resolvedDescription} action={action} />
       </div>
       {loading ? (
+        // placeholder: the section's body, whatever that section reads.
         // One pending shape for every section. The header is already painted, so this stands in
         // only for the body — two group-sized blocks, which is what most sections resolve into.
         <div className="flex flex-col gap-4" role="status" aria-label="Loading">

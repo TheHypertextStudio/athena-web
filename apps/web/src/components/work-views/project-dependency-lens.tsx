@@ -70,6 +70,7 @@ export function ProjectDependencyLens({
   }, [refetch, requestedSelectionAttempt, requestedSelectionId]);
 
   const rows = query.data?.items;
+  // placeholder: the dependency graph — which projects block which, and in what order.
   if (query.isPending) return <Skeleton className="h-full min-h-80 w-full" />;
   // A failed refresh never blanks a graph the viewer can still read, which is the same contract
   // `WorkViewLoadFailure` states for roster rows. Only a lens with nothing to show yields the

@@ -249,6 +249,7 @@ function LensBody(props: {
   if (props.pending) {
     return (
       <Stack gap={3} aria-busy>
+        {/* placeholder: this lens's own heading and body, both read per lens. */}
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-40 w-full" />
       </Stack>

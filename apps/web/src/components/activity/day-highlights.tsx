@@ -83,6 +83,7 @@ export function DayHighlights({ date, mode, headingLevel = 3 }: DayHighlightsPro
   }
 
   if (summary.shape === 'loading') {
+    // placeholder: the day's highlights, which are summarised from that day's activity.
     return shell(
       <Stack gap={2} aria-busy="true">
         {[0, 1, 2].map((row) => (

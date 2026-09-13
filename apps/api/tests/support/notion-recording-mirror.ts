@@ -145,8 +145,20 @@ export class RecordingMirror implements NotionMirrorPort {
   /** Pages whose body Docket read, in order. */
   readonly pageContentReads: string[] = [];
 
+  /** Pages whose body the connection may not read, as without Notion's content capability. */
+  readonly unreadablePages = new Set<string>();
+
   readPageContent(pageId: string): Promise<NotionPageContent> {
     this.pageContentReads.push(pageId);
+    if (this.unreadablePages.has(pageId)) {
+      return Promise.reject(
+        new ProviderError('Notion page-content read failed (restricted_resource)', {
+          provider: 'notion',
+          kind: 'auth',
+          status: 403,
+        }),
+      );
+    }
     if (this.truncatedPages.has(pageId)) {
       return Promise.resolve({ markdown: 'partial', state: 'truncated', unknownBlockIds: ['b1'] });
     }

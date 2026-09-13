@@ -87,7 +87,7 @@ export interface TaskSyncConflict {
   readonly localUpdatedAt: string;
   /** The provider's title at the moment it lost. */
   readonly remoteTitle: string;
-  /** The provider's body/description at the moment it lost, when it carried one. */
+  /** The provider's complete body at the moment it lost; null when it had none or sent only part. */
   readonly remoteBody: string | null;
   /** The provider's due date at the moment it lost (`null` = explicitly unset, `undefined` = absent). */
   readonly remoteDueDate: string | null | undefined;
@@ -208,9 +208,19 @@ function planReturnedRemote(
       remoteUpdatedAt: new Date(remoteMs).toISOString(),
       localUpdatedAt: local.updatedAt.toISOString(),
       remoteTitle: remote.title,
-      remoteBody: remote.body ?? null,
+      remoteBody: fullRemoteBody(remote),
       remoteDueDate: remote.dueDate,
       remoteCompleted: remote.completed,
     },
   };
+}
+
+/**
+ * The provider's body as it stands, or null when the provider could not hand it over in full.
+ *
+ * @param remote - The pulled item.
+ * @returns the complete body, or null.
+ */
+export function fullRemoteBody(remote: ImportedItem): string | null {
+  return remote.bodyUnavailable === true ? null : (remote.body ?? null);
 }

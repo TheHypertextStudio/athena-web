@@ -242,6 +242,21 @@ export function bodyStateColumns(
   return { bodyState: outcome.state, bodyUnknownBlockIds: [...outcome.unknownBlockIds] };
 }
 
+/**
+ * The row columns to record for a page body read by a pull.
+ *
+ * @remarks
+ * An unreadable body is not recorded as `inaccessible`. That state makes the next projection retry
+ * writing Docket's body, and Docket has not read what the page holds now, so the retry could
+ * replace an edit made in Notion.
+ *
+ * @param read - The body read, or `undefined` when the entity has no page body.
+ * @returns the columns to set, empty when there is nothing to record.
+ */
+export function pulledBodyStateColumns(read: PageBodyRead): BodyStateColumns {
+  return read?.state === 'inaccessible' ? {} : bodyStateColumns(read);
+}
+
 /** A contested push: Docket's record, the stored mirror row, and what Notion held when it lost. */
 export interface ContestedRow {
   /** The mirrored entity kind. */
@@ -300,6 +315,10 @@ export function remoteOnlyChanges(contested: ContestedRow): Record<string, Mirro
  * written — new pages, and pages that predate page-body sync — may hold content someone wrote in
  * Notion, and replacing it with nothing would delete it.
  *
+ * A body that matches the stored hash is not written again. A property edit then leaves the page
+ * body alone, including blocks Docket could not read. A body refused for lack of access is the
+ * exception, and is written again until it lands.
+ *
  * A 400 is Notion declining to replace this page's content as it stands, for example because it
  * holds sub-pages. The page is left as it is and recorded `truncated`, the state for a body Docket
  * does not hold in full, so the unchanged-row retry leaves it alone and the next edit tries again.
@@ -308,7 +327,7 @@ export function remoteOnlyChanges(contested: ContestedRow): Record<string, Mirro
  * @param entity - The mirrored entity kind.
  * @param pageId - The Notion page.
  * @param markdown - Docket's body, or `undefined` when the entity has none.
- * @param previousBodyHash - The body hash stored for the page, or null/undefined when none was.
+ * @param previous - The body hash and state stored for the page, or null for a new page.
  * @returns the write result, or `undefined` when nothing was written.
  * @throws When Notion fails for any reason other than missing access or a refused replacement.
  */
@@ -317,10 +336,10 @@ export async function writePageBody(
   entity: NotionMirrorEntity,
   pageId: string,
   markdown: string | undefined,
-  previousBodyHash: string | null | undefined,
+  previous: StoredBody | null,
 ): Promise<Awaited<ReturnType<NotionMirrorPort['writePageContent']>> | undefined> {
   if (markdown === undefined || mirrorBodyField(entity) === undefined) return undefined;
-  if (markdown === '' && (previousBodyHash ?? null) === null) return undefined;
+  if (!bodyWriteNeeded(markdown, previous)) return undefined;
   try {
     return await mirror.writePageContent(pageId, markdown);
   } catch (error) {
@@ -330,6 +349,16 @@ export async function writePageBody(
     if (isRefusedReplacement(error)) return { markdown, state: 'truncated', unknownBlockIds: [] };
     throw error;
   }
+}
+
+/** The body anchors stored for a page, which decide whether its body needs writing. */
+export type StoredBody = Pick<MirrorLocalRow, 'bodyHash' | 'bodyState'>;
+
+/** Whether Docket's body has to be sent to a page, given what was stored for it. */
+function bodyWriteNeeded(markdown: string, previous: StoredBody | null): boolean {
+  // Docket has never written this page's body, so an empty one would delete someone's content.
+  if ((previous?.bodyHash ?? null) === null) return markdown !== '';
+  return previous?.bodyState === 'inaccessible' || previous?.bodyHash !== syncHash(markdown);
 }
 
 /** Whether Notion declined a content replacement as invalid for the page as it stands. */

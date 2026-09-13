@@ -248,7 +248,7 @@ export async function reconcileTasks(
       tally.pulled += 1;
     } else if (action.kind === 'push' && local && writable) {
       const pass = { orgId, actorId, row, writable, tally };
-      await pushLocalEdit(pass, local, action.conflict, remote === undefined);
+      await pushLocalEdit(pass, local, action.conflict, remote);
     } else if (action.kind === 'pushDelete' && local && writable) {
       await pushDelete(local, writable, row.provider);
       await enqueueSearchUpsert(orgId, 'task', local.id);

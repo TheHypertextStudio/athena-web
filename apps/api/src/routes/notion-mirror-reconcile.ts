@@ -71,6 +71,7 @@ import {
 import type { MirrorDatabaseRow } from './notion-mirror-design';
 import {
   bodyStateColumns,
+  pulledBodyStateColumns,
   readPageBody,
   readPulledRow,
   recordSyncState,
@@ -693,7 +694,7 @@ export async function projectEntity(
         design.entityType,
         existing.externalPageId,
         body,
-        existing.bodyHash,
+        existing,
       );
       await db
         .update(notionMirrorRow)
@@ -723,7 +724,7 @@ export async function projectEntity(
         design.entityType,
         result.externalPageId,
         body,
-        existing.bodyHash,
+        existing,
       );
       const pushedAt = pageContent?.externalUpdatedAt ?? result.externalUpdatedAt;
       await db
@@ -912,7 +913,7 @@ export async function pullBackEntity(
                   bodyHash: state.bodyHash,
                 }
               : {}),
-            ...bodyStateColumns(pageContent),
+            ...pulledBodyStateColumns(pageContent),
           })
           .where(eq(notionMirrorRow.id, local.mirrorRowId));
         written += 1;
@@ -1009,7 +1010,7 @@ export async function pullBackEntity(
           design.entityType,
           result.externalPageId,
           body,
-          local.bodyHash,
+          local,
         );
         const pushedAt = pageContent?.externalUpdatedAt ?? result.externalUpdatedAt;
         await db
@@ -1109,7 +1110,6 @@ async function adoptPulledRow(
   const record = await records.get(entityId);
   const state =
     record === undefined ? undefined : recordSyncState(design.entityType, bindings, record, refs);
-  const readInFull = pulled.pageContent?.state !== 'inaccessible';
   await db.insert(notionMirrorRow).values({
     organizationId: ctx.orgId,
     integrationId: ctx.integrationId,
@@ -1117,10 +1117,11 @@ async function adoptPulledRow(
     entityId,
     externalPageId: change.externalPageId,
     externalUpdatedAt: new Date(change.externalUpdatedAt),
-    lastPushedAt: null,
+    // Docket's values were just read from this version of the page, so the row starts clean.
+    lastPushedAt: new Date(change.externalUpdatedAt),
     contentHash: state?.contentHash ?? '',
     ...(state !== undefined ? { propertyAnchors: state.anchors, bodyHash: state.bodyHash } : {}),
-    ...(readInFull ? bodyStateColumns(pulled.pageContent) : {}),
+    ...pulledBodyStateColumns(pulled.pageContent),
   });
   return entityId;
 }

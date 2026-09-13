@@ -12,6 +12,7 @@ import { isProviderMissingObjectError } from '@docket/connections/provider-error
 import type {
   ConnectorProvider,
   ExternalWriteResult,
+  ImportedItem,
   WritableConnector,
 } from '@docket/integrations';
 
@@ -21,6 +22,7 @@ import type { IntegrationRow } from './integration-provider';
 import type { ReconcileResult, ReconcileStatuses } from './integration-reconcile';
 import {
   descriptionHash,
+  fullRemoteBody,
   type ReconcileLocalTask,
   type TaskSyncConflict,
 } from './integration-reconcile-plan';
@@ -44,15 +46,18 @@ export function countWriteContent(
   if (state === 'rejected') tally.contentRejected += 1;
 }
 
+/** How far past its anchor a task's `updatedAt` is left when its content still awaits access. */
+const CONTENT_RETRY_OFFSET_MS = 1;
+
 /**
  * The sync anchors to store after a push.
  *
  * @remarks
  * `updatedAt = externalUpdatedAt` marks the task clean. When the provider refused the task's
- * long-form content for lack of access, `updatedAt` is left one millisecond ahead instead, so the
- * task stays dirty and the next pass sends the content again, which lands once access is granted.
- * The body anchor advances only when the provider's copy now matches the description: a refused
- * body keeps the old anchor, so the next edit to the task tries the content again.
+ * long-form content for lack of access, `updatedAt` is left {@link CONTENT_RETRY_OFFSET_MS} ahead
+ * instead, so the task stays dirty and a later pass sends the content again, which lands once
+ * access is granted. The body anchor advances only when the provider's copy now matches the
+ * description: a refused body keeps the old anchor, so the next edit to the task tries it again.
  */
 function pushedAnchors(result: ExternalWriteResult, description: string | null) {
   const anchor = new Date(result.externalUpdatedAt);
@@ -61,9 +66,41 @@ function pushedAnchors(result: ExternalWriteResult, description: string | null) 
     externalEtag: result.externalEtag ?? null,
     lastPushedAt: anchor,
     externalUpdatedAt: anchor,
-    updatedAt: result.contentState === 'inaccessible' ? new Date(anchor.getTime() + 1) : anchor,
+    updatedAt:
+      result.contentState === 'inaccessible'
+        ? new Date(anchor.getTime() + CONTENT_RETRY_OFFSET_MS)
+        : anchor,
     ...(refused ? {} : { externalBodyHash: descriptionHash(description) }),
   };
+}
+
+/** Whether a task's only unpushed change is long-form content the provider refused for access. */
+function awaitsContentAccess(local: ReconcileLocalTask): boolean {
+  return (
+    local.externalUpdatedAt !== null &&
+    local.updatedAt.getTime() === local.externalUpdatedAt.getTime() + CONTENT_RETRY_OFFSET_MS
+  );
+}
+
+/** A body the provider changed and Docket did not, which a contested push keeps. */
+interface KeptBody {
+  /** The provider's body, which becomes the task's description. */
+  readonly description: string | null;
+}
+
+/**
+ * The provider's body, when only the provider changed it since the last sync.
+ *
+ * @param local - The task about to be pushed.
+ * @param remote - The provider's item.
+ * @returns the body to keep, or `undefined` when Docket changed the description, the provider's
+ *   body is unchanged, or the provider could not hand it over in full.
+ */
+function remoteOnlyBody(local: ReconcileLocalTask, remote: ImportedItem): KeptBody | undefined {
+  if (remote.bodyUnavailable === true) return undefined;
+  if (local.externalBodyHash !== descriptionHash(local.description)) return undefined;
+  const description = fullRemoteBody(remote);
+  return descriptionHash(description) === local.externalBodyHash ? undefined : { description };
 }
 
 /** What one reconcile pass shares with each local edit it pushes. */
@@ -78,32 +115,63 @@ export interface PushPass {
 /**
  * Push one dirty task, recording a lost remote edit first, and count the outcome.
  *
+ * @remarks
+ * On a contested push, a body only the provider changed is kept: the task takes the provider's
+ * body and the provider's copy is left as it is, so neither side's edit is lost. While the
+ * provider refuses long-form content for lack of access, one content retry per pass is sent and the
+ * rest wait for a pass where access works, so a connection without content access does not re-push
+ * every refused task on every sweep.
+ *
  * @param pass - The pass's shared state.
  * @param local - The task to push.
  * @param conflict - The remote values Docket is about to overwrite, when both sides changed.
- * @param absent - Whether the provider's read did not return this task.
+ * @param remote - The provider's item for this task, or `undefined` when its read did not return it.
  */
 export async function pushLocalEdit(
   pass: PushPass,
   local: ReconcileLocalTask,
   conflict: TaskSyncConflict | undefined,
-  absent: boolean,
+  remote: ImportedItem | undefined,
 ): Promise<void> {
   const { orgId, actorId, row, writable, tally } = pass;
+  if (tally.contentInaccessible > 0 && awaitsContentAccess(local)) return;
+  const kept = conflict && remote ? remoteOnlyBody(local, remote) : undefined;
   // Record the losing remote value BEFORE overwriting it — see `recordSyncConflict`.
   if (conflict) {
-    await recordSyncConflict(orgId, actorId, row.id, row.provider, local.id, conflict);
+    const lost = kept === undefined ? conflict : { ...conflict, remoteBody: null };
+    await recordSyncConflict(orgId, actorId, row.id, row.provider, local.id, lost);
     tally.conflicts += 1;
   }
-  const pushed = await pushUpdate(row, local, writable, absent);
+  const pushed = await pushUpdate(row, withKeptBody(local, kept), writable, {
+    absent: remote === undefined,
+    keepsRemoteBody: kept !== undefined,
+  });
   if (pushed === 'missing') return;
   countWriteContent(tally, pushed);
   await enqueueSearchUpsert(orgId, 'task', local.id);
   tally.pushed += 1;
 }
 
+/** The task as it is pushed once a kept provider body has replaced its description. */
+function withKeptBody(local: ReconcileLocalTask, kept: KeptBody | undefined): ReconcileLocalTask {
+  if (kept === undefined) return local;
+  return {
+    ...local,
+    description: kept.description,
+    externalBodyHash: descriptionHash(kept.description),
+  };
+}
+
 /** A push that found no page at the provider, for a task missing from a changed-rows-only read. */
 type PushOutcome = ExternalWriteResult['contentState'] | 'missing';
+
+/** How {@link pushUpdate} treats one task. */
+interface PushUpdateOptions {
+  /** Whether the provider's read did not return this task. */
+  readonly absent: boolean;
+  /** Whether the task's description is the provider's body, to be stored as the push lands. */
+  readonly keepsRemoteBody: boolean;
+}
 
 /**
  * Push a dirty local task's fields to the provider and restamp the anchors from the echo.
@@ -113,7 +181,6 @@ type PushOutcome = ExternalWriteResult['contentState'] | 'missing';
  * stores long-form content apart leaves its copy alone. A title edit on a task whose Notion page
  * Docket could only read in part therefore cannot replace that page with the partial copy.
  *
- * @param absent - Whether the provider's read did not return this task.
  * @returns what happened to the task's long-form content, or `'missing'` when an absent task's item
  *   no longer exists at the provider (unshared or deleted) and nothing was written.
  * @throws When the provider rejects the write for any other reason.
@@ -122,7 +189,7 @@ async function pushUpdate(
   row: IntegrationRow,
   local: ReconcileLocalTask,
   writable: WritableConnector,
-  absent: boolean,
+  { absent, keepsRemoteBody }: PushUpdateOptions,
 ): Promise<PushOutcome> {
   const listId = local.externalListId ?? '@default';
   const notesUnchanged = local.externalBodyHash === descriptionHash(local.description);
@@ -150,7 +217,13 @@ async function pushUpdate(
     throw error;
   }
   if (!result) return undefined;
-  await db.update(task).set(pushedAnchors(result, local.description)).where(eq(task.id, local.id));
+  await db
+    .update(task)
+    .set({
+      ...pushedAnchors(result, local.description),
+      ...(keepsRemoteBody ? { description: local.description } : {}),
+    })
+    .where(eq(task.id, local.id));
   return result.contentState;
 }
 

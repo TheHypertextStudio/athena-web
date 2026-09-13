@@ -1581,6 +1581,19 @@ at **zero** violations across the tree, so it enters the ratchet with no ledger 
   400 on a body write is a refused replacement: linked pushes report `rejected` and the connection
   records `notionLinkedContentKept`, Docket-built rows record `truncated`, and neither fails the
   run. The write-back half of reconcile moved to `integration-reconcile-push.ts`.
+- **Post-deploy review (2026-09-13)**: A second extra-high review of the shipped commit found that
+  mirror pushes still rewrote an unchanged page body on every property edit, that the body anchor
+  was NULL for every task linked before `0131`, that a contested linked push left a Notion-only
+  body edit unpulled, that an unreadable mirror pull queued Docket's body for the access retry,
+  that adopted mirror rows always looked locally dirty, that a connection without content access
+  re-pushed every refused task each sweep, and that the conflict log recorded a clipped body.
+  `writePageBody` now compares the body hash, migration `0132` backfills anchors for in-step tasks,
+  `pushLocalEdit` keeps a Notion-only body and sends one content retry per refused pass,
+  `pulledBodyStateColumns` skips `inaccessible` on reads, and adoption stamps `lastPushedAt`. Two
+  findings were left: every 400 on a body write still counts as a refused replacement, because
+  Notion reports that refusal with the generic `validation_error` code, and a dirty task whose page
+  is gone is still requested each sweep, because marking it clean would drop the edit if the page
+  is shared again.
 - **Validation**: Root `pnpm typecheck`, `pnpm lint` (with the complexity ledger), `pnpm format:check`
   and `pnpm test:coverage --force` pass. The db package was rerun alone after a V8 WebAssembly crash
   in its PGlite worker hung the parallel run.

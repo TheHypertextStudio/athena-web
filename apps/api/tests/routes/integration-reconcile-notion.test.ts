@@ -20,15 +20,33 @@ import { getDb, one, seedBaseOrg } from '../support/routes-harness';
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let planTaskReconcile!: typeof PlanModule.planTaskReconcile;
+let descriptionHash!: typeof PlanModule.descriptionHash;
 let reconcileTasks!: typeof ReconcileModule.reconcileTasks;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  planTaskReconcile = (await import('../../src/routes/integration-reconcile-plan'))
-    .planTaskReconcile;
+  ({ planTaskReconcile, descriptionHash } =
+    await import('../../src/routes/integration-reconcile-plan'));
   reconcileTasks = (await import('../../src/routes/integration-reconcile')).reconcileTasks;
 });
+
+/** A Notion row as the import returns it, edited in Notion on 2026-03-01. */
+function notionRow(over: Partial<ImportedItem> = {}): ImportedItem {
+  return {
+    id: 'notion-page-body',
+    kind: 'issue',
+    title: 'Plan the launch',
+    provenance: {
+      provider: 'notion',
+      externalId: 'notion-page-body',
+      externalListId: 'notion-data-source-1',
+      importedAt: '2026-03-01T00:00:00.000Z',
+      externalUpdatedAt: '2026-03-01T00:00:00.000Z',
+    },
+    ...over,
+  };
+}
 
 /** A dirty local linked task: edited in Docket after the last synced anchor. */
 function dirtyLocal(
@@ -72,6 +90,14 @@ describe('planTaskReconcile — rows absent from a changed-rows-only read', () =
     expect(
       planTaskReconcile(clean, undefined, { writeBack: true, absentIsUnchanged: true }),
     ).toEqual({ kind: 'noop' });
+  });
+
+  it('records no losing body for a conflict whose Notion body arrived clipped', () => {
+    const remote = notionRow({ body: 'Clipped Description property', bodyUnavailable: true });
+    expect(planTaskReconcile(dirtyLocal(), remote, { writeBack: true })).toMatchObject({
+      kind: 'push',
+      conflict: { remoteBody: null },
+    });
   });
 });
 
@@ -205,6 +231,59 @@ describe('reconcileTasks — linked Notion rows', () => {
     expect(tally).toMatchObject({ pushed: 1, contentInaccessible: 1 });
     const after = await taskAfter(row.id);
     expect(after.updatedAt.getTime()).toBeGreaterThan(after.externalUpdatedAt?.getTime() ?? 0);
+
+    // The next pass retries one refused task while access is still missing, not every one.
+    await db.insert(schema.task).values({
+      ...row,
+      id: undefined,
+      externalId: 'notion-page-second',
+      externalUpdatedAt: after.externalUpdatedAt,
+      updatedAt: after.updatedAt,
+    });
+    const pushCalls: unknown[] = [];
+    await reconcileTasks(orgId, humanActorId, integration, teamId, [], {
+      assigneeId: null,
+      writable: {
+        pushTask: async (input) => {
+          pushCalls.push(input);
+          return {
+            externalId: 'notion-page-body',
+            externalUpdatedAt: '2026-02-03T00:00:00.000Z',
+            contentState: 'inaccessible',
+          };
+        },
+      },
+      readChangedOnly: true,
+    });
+    expect(pushCalls).toHaveLength(1);
+  });
+
+  it('keeps a body only Notion changed when both sides edited the row', async () => {
+    const description = '# Launch\n\nFull brief body.';
+    const { orgId, teamId, humanActorId, integration, row } = await seedNotionTask({
+      title: 'Plan the launch party',
+      externalBodyHash: descriptionHash(description),
+    });
+    const pushCalls: unknown[] = [];
+
+    const tally = await reconcileTasks(
+      orgId,
+      humanActorId,
+      integration,
+      teamId,
+      [notionRow({ body: '# Launch\n\nRewritten in Notion.' })],
+      { assigneeId: null, writable: recordingWritable(pushCalls) },
+    );
+
+    expect(tally).toMatchObject({ pushed: 1, conflicts: 1 });
+    expect(pushCalls).toEqual([
+      expect.objectContaining({
+        op: expect.objectContaining({ title: 'Plan the launch party', notesUnchanged: true }),
+      }),
+    ]);
+    const after = await taskAfter(row.id);
+    expect(after.description).toBe('# Launch\n\nRewritten in Notion.');
+    expect(after.externalBodyHash).toBe(descriptionHash(after.description));
   });
 
   it('counts a page Notion would not replace and leaves the task clean', async () => {
@@ -233,20 +312,7 @@ describe('reconcileTasks — linked Notion rows', () => {
       description: null,
       updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     });
-    const truncated: ImportedItem = {
-      id: 'notion-page-body',
-      kind: 'issue',
-      title: 'Plan the launch',
-      body: 'Clipped Description property',
-      bodyUnavailable: true,
-      provenance: {
-        provider: 'notion',
-        externalId: 'notion-page-body',
-        externalListId: 'notion-data-source-1',
-        importedAt: '2026-03-01T00:00:00.000Z',
-        externalUpdatedAt: '2026-03-01T00:00:00.000Z',
-      },
-    };
+    const truncated = notionRow({ body: 'Clipped Description property', bodyUnavailable: true });
     await reconcileTasks(orgId, humanActorId, integration, teamId, [truncated], {
       assigneeId: null,
       writable: null,
@@ -286,20 +352,11 @@ describe('reconcileTasks — linked Notion rows', () => {
     const { orgId, teamId, humanActorId, integration, row } = await seedNotionTask({
       updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     });
-    const item: ImportedItem = {
-      id: 'notion-page-body',
-      kind: 'issue',
+    const item = notionRow({
       title: 'Plan the launch (renamed in Notion)',
       body: 'Clipped Description property',
       bodyUnavailable: true,
-      provenance: {
-        provider: 'notion',
-        externalId: 'notion-page-body',
-        externalListId: 'notion-data-source-1',
-        importedAt: '2026-03-01T00:00:00.000Z',
-        externalUpdatedAt: '2026-03-01T00:00:00.000Z',
-      },
-    };
+    });
 
     const tally = await reconcileTasks(orgId, humanActorId, integration, teamId, [item], {
       assigneeId: null,

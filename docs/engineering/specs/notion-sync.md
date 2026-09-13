@@ -675,16 +675,23 @@ using `replace_content`.
 - **Push.** `NotionProviderClient.pushTask` writes properties, then replaces the page body with the
   task's description. A new page with an empty description gets no content write. A 403 on the
   body write keeps the property write and returns `contentState: 'inaccessible'`. `reconcileTasks`
-  counts it and leaves the task one millisecond dirty, so each pass sends the body again until it
-  lands. `runSync` records `config.notionLinkedContentAccess: 'missing'`, merged into the stored
-  config in one statement, so Connections asks for page-content access; a pass that writes a body
-  records `'granted'`.
+  counts it and leaves the task one millisecond dirty, so a later pass sends the body again until
+  it lands. Once a push in a pass is refused, the pass skips the other tasks whose only pending
+  change is a refused body, so one task per pass checks whether access has been granted.
+  `runSync` records `config.notionLinkedContentAccess: 'missing'`, merged into the stored config
+  in one statement, so Connections asks for page-content access; a pass that writes a body records
+  `'granted'`.
 - **Body anchor.** `task.external_body_hash` holds the hash of the description as of the last sync
   of Notion's copy: set on insert, on a pull (to the pulled body, or to the local description when
   the body could not be read in full), and on a push whose body landed. A push marks the notes
   `notesUnchanged` when the description still matches it, and the client then leaves the page body
   and Description property alone. A title edit on a page Docket only read in part therefore cannot
-  replace that page.
+  replace that page. Migration `0132` anchored every linked task that was in step with its provider
+  when the column arrived; tasks with unpushed edits have no anchor, so their descriptions go out.
+- **Contested body.** When both sides edited a row, Docket's fields win, but a body only Notion
+  changed (the pulled body is complete, differs from the anchor, and the description still matches
+  it) becomes the task's description, and the page body is left as it is. The conflict log records
+  no losing body in that case, or when Notion's body could not be read in full.
 - **Refused replacement.** A 400 on the body write (Notion will not replace content that holds
   sub-pages or databases) keeps the property write and returns `contentState: 'rejected'`. The
   task stays clean with its old body anchor, so the next edit tries again, and `runSync` records
@@ -707,17 +714,21 @@ using `replace_content`.
   (`recordSyncState` in `notion-mirror-body.ts`). Projection, pull-back planning, adoption and the
   post-pull restamp all use it, so a Notion-side body edit on an unchanged record plans as a `pull`
   and is applied without a write back to Notion.
-- **Push.** An empty body is written only over a body Docket wrote before (the row has a
-  `bodyHash`). New pages and pages mirrored before page-body sync keep whatever Notion holds when
-  the description is empty. A body refused with a 403 is retried on later passes. A 400 (Notion
-  will not replace the content as it stands) records the row `truncated`, and a truncated page is
-  left alone until the next edit.
+- **Push.** A body is written only when its hash differs from the row's `bodyHash`, so a property
+  edit leaves the page body, and any blocks Docket could not read, as they are. An empty body is
+  written only over a body Docket wrote before (the row has a `bodyHash`). New pages and pages
+  mirrored before page-body sync keep whatever Notion holds when the description is empty. A body
+  refused with a 403 is retried on later passes. A 400 (Notion will not replace the content as it
+  stands) records the row `truncated`, and a truncated page is left alone until the next
+  description edit.
 - **Pull.** A complete body replaces the body field. A truncated or inaccessible body removes the
   field from the pulled values, so a legacy Description column never overwrites the full
-  description. On a contested edit of a two-way entity, a remote-only body change is merged and the
+  description. A body the pull could not read is not recorded `inaccessible`, because that state
+  queues a write of Docket's body, and Docket has not seen what the page holds now. On a contested edit of a two-way entity, a remote-only body change is merged and the
   conflict log entry is written for tasks. Drift on a projection-only entity is reverted without
   reading its body.
 - **Adoption.** A row created in Notion is adopted with its page body as the description, or with
-  its Description column when the body cannot be read in full.
+  its Description column when the body cannot be read in full. The mirror row starts clean
+  (`lastPushedAt` is the adopted version's edit time), so a later Notion edit to it is a pull.
 - **Status.** `contentStateForRows` reports `complete`, `truncated` or `inaccessible` for every
   entity with a body field, and `not_applicable` for the rest.

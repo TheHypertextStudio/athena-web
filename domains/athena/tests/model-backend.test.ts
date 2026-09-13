@@ -39,6 +39,12 @@ const ROUTER: ModelBackendEnv = {
 
 const DIRECT: ModelBackendEnv = { APP_MODE: 'production', ANTHROPIC_API_KEY: 'anthropic-key' };
 
+const VERTEX: ModelBackendEnv = {
+  APP_MODE: 'production',
+  GOOGLE_CLOUD_PROJECT: 'athena-services',
+  GOOGLE_CLOUD_LOCATION: 'global',
+};
+
 /** A runtime stand-in, so no test constructs a real SDK client. */
 const stubRuntime = (): AgentTurnRuntime => ({}) as AgentTurnRuntime;
 
@@ -56,6 +62,11 @@ describe('selectModelBackendId', () => {
 
   it('prefers the router over direct provider access', () => {
     expect(selectModelBackendId(ROUTER)).toBe('cloudflare-router');
+  });
+
+  it('uses Vertex when the deployment has a Google Cloud identity and no provider key', () => {
+    expect(selectModelBackendId(VERTEX)).toBe('vertex');
+    expect(selectModelBackendId({ ...VERTEX, ...DIRECT })).toBe('anthropic-direct');
   });
 
   it('falls back to direct provider access when nothing else is configured', () => {
@@ -128,8 +139,20 @@ describe('resolveModelBackend', () => {
     expect(descriptor).toMatchObject({ id: 'anthropic-direct', routed: false, baseURL: null });
   });
 
+  it('describes Vertex without a credential or regional endpoint requirement', () => {
+    const { descriptor } = resolveModelBackend(VERTEX, { buildTurnRuntime: stubRuntime });
+    expect(descriptor).toEqual({
+      id: 'vertex',
+      label: 'Docket Vertex AI',
+      routed: false,
+      userSupplied: false,
+      baseURL: 'https://aiplatform.googleapis.com',
+      model: 'gemini-2.5-flash',
+    });
+  });
+
   it('honors a model override on every live tier but not on the scripted one', () => {
-    for (const env of [LATTICE, ROUTER, DIRECT]) {
+    for (const env of [LATTICE, ROUTER, DIRECT, VERTEX]) {
       const { descriptor } = resolveModelBackend(
         { ...env, ATHENA_MODEL: 'claude-custom' },
         { buildTurnRuntime: stubRuntime },
@@ -178,6 +201,7 @@ describe('resolveModelBackend', () => {
     expect(() => resolveModelBackend({}, { force: 'anthropic-direct' })).toThrow(
       ModelBackendConfigError,
     );
+    expect(() => resolveModelBackend({}, { force: 'vertex' })).toThrow(ModelBackendConfigError);
     // The router tier still needs the provider key behind it.
     expect(() =>
       resolveModelBackend(
@@ -208,24 +232,30 @@ describe('resolveModelBackend', () => {
     expect(build).toHaveBeenCalledWith(backend.descriptor, 'lattice-key');
   });
 
-  it('passes the provider key for the two Docket-owned tiers and none for the scripted one', () => {
+  it('passes credentials only to the backends that require them', () => {
     const credentials: string[] = [];
     const capture = (_d: unknown, credential: string): AgentTurnRuntime => {
       credentials.push(credential);
       return stubRuntime();
     };
-    for (const env of [ROUTER, DIRECT]) {
+    for (const env of [ROUTER, DIRECT, VERTEX]) {
       resolveModelBackend(env, { buildTurnRuntime: capture }).turnRuntime();
     }
     resolveModelBackend({ APP_MODE: 'test' }, { buildTurnRuntime: capture }).turnRuntime();
-    expect(credentials).toEqual(['anthropic-key', 'anthropic-key', '']);
+    expect(credentials).toEqual(['anthropic-key', 'anthropic-key', '', '']);
   });
 
   it('lists its tiers in preference order', () => {
-    expect(MODEL_BACKEND_IDS).toEqual(['lattice', 'cloudflare-router', 'anthropic-direct', 'mock']);
+    expect(MODEL_BACKEND_IDS).toEqual([
+      'lattice',
+      'cloudflare-router',
+      'anthropic-direct',
+      'vertex',
+      'mock',
+    ]);
     // The declared order is the order selection actually applies.
-    const envs: ModelBackendEnv[] = [{ ...LATTICE, ...ROUTER }, ROUTER, DIRECT];
-    expect(envs.map(selectModelBackendId)).toEqual(MODEL_BACKEND_IDS.slice(0, 3));
+    const envs: ModelBackendEnv[] = [{ ...LATTICE, ...ROUTER }, ROUTER, DIRECT, VERTEX];
+    expect(envs.map(selectModelBackendId)).toEqual(MODEL_BACKEND_IDS.slice(0, 4));
   });
 
   it('builds a real runtime when no builder is injected', () => {

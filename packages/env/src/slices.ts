@@ -273,13 +273,19 @@ export const mcpServer = {
   MCP_SESSION_STORE_URL: z.string().optional(),
 };
 
-/** Agent runtime (the built-in Athena runtime, backed by the Anthropic Messages API). */
+/** Agent runtime for Athena's configured model backend. */
 export const agentServer = {
   ANTHROPIC_API_KEY: z.string().optional(),
   /** Anthropic-compatible Cloudflare AI Gateway URL. Requires the matching token to activate. */
   CLOUDFLARE_AI_GATEWAY_BASE_URL: z.url().optional(),
   /** Cloudflare token used to authorize an AI Gateway request. */
   CLOUDFLARE_AI_GATEWAY_TOKEN: z.string().min(1).optional(),
+  /** Google Cloud project used by the ADC-backed Vertex backend. */
+  GOOGLE_CLOUD_PROJECT: z.string().min(1).optional(),
+  /** Vertex location. `global` is the production default. */
+  GOOGLE_CLOUD_LOCATION: z.string().min(1).optional(),
+  /** Optional model override for the selected Athena backend. */
+  ATHENA_MODEL: z.string().min(1).optional(),
   // Seals org-held remote-MCP credentials (AES-256-GCM). Base64, exactly 32 bytes when
   // decoded; the connect route refuses to store a credential without it.
   CREDENTIALS_ENCRYPTION_KEY: z.string().optional(),

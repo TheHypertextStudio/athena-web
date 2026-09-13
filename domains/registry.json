@@ -24,6 +24,7 @@
         "./turn/translate",
         "./turn/adapters/anthropic",
         "./turn/adapters/lattice",
+        "./turn/adapters/vertex",
         "./turn/model-backend",
         "./task-drafting/adapters/anthropic",
         "./task-drafting/adapters/deterministic",
@@ -39,6 +40,7 @@
         "@docket/connections",
         "@docket/identity-access",
         "@docket/work",
+        "google-auth-library",
         "zod"
       ],
       "supportedDeployableRuntimes": ["api", "web", "runner", "desktop"]

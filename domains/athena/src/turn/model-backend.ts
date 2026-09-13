@@ -8,15 +8,22 @@
 import type { AgentTurnRuntime } from './turn';
 import { MockAgentTurnRuntime } from './turn';
 import { RealAgentTurnRuntime } from './adapters/anthropic';
+import {
+  DEFAULT_VERTEX_LOCATION,
+  DEFAULT_VERTEX_MODEL,
+  VertexAgentTurnRuntime,
+} from './adapters/vertex';
 
 /** Supported Athena model backend tiers. */
-export type ModelBackendId = 'cloudflare-router' | 'anthropic-direct' | 'lattice' | 'mock';
+export type ModelBackendId =
+  'cloudflare-router' | 'anthropic-direct' | 'vertex' | 'lattice' | 'mock';
 
 /** Every supported tier, in the deliberate preference order Athena uses. */
 export const MODEL_BACKEND_IDS: readonly ModelBackendId[] = [
   'lattice',
   'cloudflare-router',
   'anthropic-direct',
+  'vertex',
   'mock',
 ];
 
@@ -66,6 +73,10 @@ export interface ModelBackendEnv {
   readonly CLOUDFLARE_AI_GATEWAY_TOKEN?: string;
   /** Model override for the selected tier. */
   readonly ATHENA_MODEL?: string;
+  /** Google Cloud project used with Application Default Credentials. */
+  readonly GOOGLE_CLOUD_PROJECT?: string;
+  /** Vertex location. The global endpoint is the default. */
+  readonly GOOGLE_CLOUD_LOCATION?: string;
   /** Operator-supplied Lattice endpoint. */
   readonly ATHENA_LATTICE_BASE_URL?: string;
   /** Operator-supplied Lattice credential. */
@@ -93,6 +104,7 @@ export const MOCK_ATHENA_MODEL = 'mock-turn-script';
 const BACKEND_LABEL: Readonly<Record<ModelBackendId, string>> = {
   'cloudflare-router': 'Docket model router',
   'anthropic-direct': 'Docket direct model access',
+  vertex: 'Docket Vertex AI',
   lattice: 'Your Lovelace Lattice instance',
   mock: 'Local scripted model',
 };
@@ -122,7 +134,40 @@ export function selectModelBackendId(env: ModelBackendEnv): ModelBackendId {
   if (present(env.CLOUDFLARE_AI_GATEWAY_BASE_URL) && present(env.CLOUDFLARE_AI_GATEWAY_TOKEN)) {
     return 'cloudflare-router';
   }
+  if (present(env.ANTHROPIC_API_KEY)) return 'anthropic-direct';
+  if (present(env.GOOGLE_CLOUD_PROJECT)) return 'vertex';
   return 'anthropic-direct';
+}
+
+function describeVertexBackend(env: ModelBackendEnv): ModelBackendDescriptor {
+  if (!present(env.GOOGLE_CLOUD_PROJECT)) {
+    throw new ModelBackendConfigError('vertex', ['GOOGLE_CLOUD_PROJECT']);
+  }
+  return {
+    id: 'vertex',
+    label: BACKEND_LABEL.vertex,
+    routed: false,
+    userSupplied: false,
+    baseURL: 'https://aiplatform.googleapis.com',
+    model: present(env.ATHENA_MODEL) ? env.ATHENA_MODEL : DEFAULT_VERTEX_MODEL,
+  };
+}
+
+function describeAnthropicDirectBackend(
+  env: ModelBackendEnv,
+  model: string,
+): ModelBackendDescriptor {
+  if (!present(env.ANTHROPIC_API_KEY)) {
+    throw new ModelBackendConfigError('anthropic-direct', ['ANTHROPIC_API_KEY']);
+  }
+  return {
+    id: 'anthropic-direct',
+    label: BACKEND_LABEL['anthropic-direct'],
+    routed: false,
+    userSupplied: false,
+    baseURL: null,
+    model,
+  };
 }
 
 /** Build a safe descriptor for one tier, or identify all missing required values. */
@@ -174,24 +219,17 @@ function describeBackend(id: ModelBackendId, env: ModelBackendEnv): ModelBackend
     }
 
     case 'anthropic-direct':
-      if (!present(env.ANTHROPIC_API_KEY)) {
-        throw new ModelBackendConfigError(id, ['ANTHROPIC_API_KEY']);
-      }
-      return {
-        id,
-        label: BACKEND_LABEL[id],
-        routed: false,
-        userSupplied: false,
-        baseURL: null,
-        model,
-      };
+      return describeAnthropicDirectBackend(env, model);
+
+    case 'vertex':
+      return describeVertexBackend(env);
   }
 }
 
 /** Return the selected tier's credential after {@link describeBackend} has validated it. */
 function backendCredential(id: ModelBackendId, env: ModelBackendEnv): string {
   if (id === 'lattice') return env.ATHENA_LATTICE_API_KEY ?? '';
-  if (id === 'mock') return '';
+  if (id === 'mock' || id === 'vertex') return '';
   return env.ANTHROPIC_API_KEY ?? '';
 }
 
@@ -202,6 +240,15 @@ function defaultTurnRuntime(
   env: ModelBackendEnv,
 ): AgentTurnRuntime {
   if (descriptor.id === 'mock') return new MockAgentTurnRuntime();
+  if (descriptor.id === 'vertex') {
+    return new VertexAgentTurnRuntime({
+      projectId: env.GOOGLE_CLOUD_PROJECT ?? '',
+      location: present(env.GOOGLE_CLOUD_LOCATION)
+        ? env.GOOGLE_CLOUD_LOCATION
+        : DEFAULT_VERTEX_LOCATION,
+      model: descriptor.model,
+    });
+  }
 
   return new RealAgentTurnRuntime({
     apiKey: credential,

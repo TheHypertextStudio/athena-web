@@ -94,6 +94,9 @@ export interface AppRuntimeEnv {
   readonly ANTHROPIC_API_KEY?: string;
   readonly CLOUDFLARE_AI_GATEWAY_BASE_URL?: string;
   readonly CLOUDFLARE_AI_GATEWAY_TOKEN?: string;
+  readonly GOOGLE_CLOUD_PROJECT?: string;
+  readonly GOOGLE_CLOUD_LOCATION?: string;
+  readonly ATHENA_MODEL?: string;
   readonly LINEAR_WEBHOOK_SECRET?: string;
   readonly NOTION_WEBHOOK_TOKEN?: string;
   readonly GITHUB_APP_WEBHOOK_SECRET?: string;
@@ -184,6 +187,13 @@ export function toModelBackendEnv(runtimeEnv: AppRuntimeEnv): ModelBackendEnv {
     ...(runtimeEnv.CLOUDFLARE_AI_GATEWAY_TOKEN
       ? { CLOUDFLARE_AI_GATEWAY_TOKEN: runtimeEnv.CLOUDFLARE_AI_GATEWAY_TOKEN }
       : {}),
+    ...(runtimeEnv.GOOGLE_CLOUD_PROJECT
+      ? { GOOGLE_CLOUD_PROJECT: runtimeEnv.GOOGLE_CLOUD_PROJECT }
+      : {}),
+    ...(runtimeEnv.GOOGLE_CLOUD_LOCATION
+      ? { GOOGLE_CLOUD_LOCATION: runtimeEnv.GOOGLE_CLOUD_LOCATION }
+      : {}),
+    ...(runtimeEnv.ATHENA_MODEL ? { ATHENA_MODEL: runtimeEnv.ATHENA_MODEL } : {}),
   };
 }
 

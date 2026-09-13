@@ -46,6 +46,9 @@ function agentRuntimeEnv(): Partial<AppRuntimeEnv> {
     ...(env.CLOUDFLARE_AI_GATEWAY_TOKEN
       ? { CLOUDFLARE_AI_GATEWAY_TOKEN: env.CLOUDFLARE_AI_GATEWAY_TOKEN }
       : {}),
+    ...(env.GOOGLE_CLOUD_PROJECT ? { GOOGLE_CLOUD_PROJECT: env.GOOGLE_CLOUD_PROJECT } : {}),
+    ...(env.GOOGLE_CLOUD_LOCATION ? { GOOGLE_CLOUD_LOCATION: env.GOOGLE_CLOUD_LOCATION } : {}),
+    ...(env.ATHENA_MODEL ? { ATHENA_MODEL: env.ATHENA_MODEL } : {}),
     ...(env.OPENAI_API_KEY ? { OPENAI_API_KEY: env.OPENAI_API_KEY } : {}),
   };
 }

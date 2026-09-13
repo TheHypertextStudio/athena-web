@@ -44,8 +44,11 @@ import {
 import type { StaffRole } from '../packages/db/src/index';
 
 import { parseEnvFile } from './env-file';
+import { API_RUNTIME_SA_ROLES, grantProjectRoles } from './bootstrap/gcp-iam';
 import { reconcileLocalConfig } from './bootstrap/local-config';
 import { cloudflaredConfigYaml, launchAgentPlist, tunnelRegistrationUrls } from './tunnel';
+
+export { API_RUNTIME_SA_ROLES } from './bootstrap/gcp-iam';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const SA_NAME = 'docket-deploy';
@@ -130,6 +133,7 @@ export const REQUIRED_GCP_APIS: readonly string[] = [
   'cloudresourcemanager.googleapis.com',
   'cloudscheduler.googleapis.com', // drives the secret-guarded cron endpoints (pnpm scheduler:setup)
   'cloudidentity.googleapis.com', // reads Workspace group membership for operator SSO
+  'aiplatform.googleapis.com', // runs Athena turns through Vertex with the API service account
 ];
 
 /** Project roles the CI deploy account needs. */
@@ -140,9 +144,6 @@ export const DEPLOY_SA_ROLES: readonly string[] = [
   'roles/iam.serviceAccountUser',
   'roles/cloudscheduler.admin', // create/update the cron jobs from CI (pnpm scheduler:setup)
 ];
-
-/** Project roles the Cloud Run runtime account needs to read its mounted secrets. */
-export const API_RUNTIME_SA_ROLES: readonly string[] = ['roles/secretmanager.secretAccessor'];
 
 /** Org-level role the runtime account needs to resolve Workspace group membership. */
 export const API_RUNTIME_ORG_ROLE = 'roles/cloudidentity.groupsReader';
@@ -607,19 +608,10 @@ function setupGcp(cfg: Config): {
     ok(role);
   }
 
-  exec(`gcloud projects add-iam-policy-binding ${cfg.project} \
-    --member="serviceAccount:${apiRuntimeSaEmail}" \
-    --role="roles/secretmanager.secretAccessor" \
-    --condition=None \
-    --quiet`);
-  ok(`roles/secretmanager.secretAccessor (${API_RUNTIME_SA_NAME})`);
+  grantProjectRoles(cfg.project, apiRuntimeSaEmail, API_RUNTIME_SA_ROLES, exec, ok);
 
-  // Operator SSO reads Workspace group membership as this account. `groupsReader` is an ordinary
-  // ORG-level IAM role, which is why no Workspace admin console step and no domain-wide delegation
-  // are involved — but it only covers SECURITY groups, so the operator groups must be created as
-  // such (`gcloud identity groups create --group-type=security`). Best-effort: a project outside an
-  // organization, or an operator without org-level IAM rights, simply skips it and can grant it
-  // later; every other capability here is unaffected.
+  // This org role only covers security groups. The grant is best-effort because the project can
+  // lack an organization or the operator can lack org-level IAM rights.
   const orgId = tryRun(`gcloud projects describe ${cfg.project} --format='value(parent.id)'`);
   if (orgId) {
     // `tryRun` yields '' on failure and the updated policy on success, so emptiness IS the signal.
@@ -636,9 +628,7 @@ function setupGcp(cfg: Config): {
           'SSO will not resolve groups until someone with org-level IAM rights grants it.',
       );
     }
-    // Independent of the binding above: creating groups needs Workspace administration, granting
-    // the role needs org-level IAM, and an operator may hold either without the other. Skipping
-    // the groups because the binding failed would hide half the setup behind an unrelated failure.
+    // Group creation uses separate Workspace authority, so attempt it even when the IAM grant fails.
     provisionOperatorGroups(cfg, orgId);
   } else {
     warn(

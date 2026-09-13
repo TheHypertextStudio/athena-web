@@ -142,6 +142,10 @@ jobs:
           LATTICE_CLIENT_ID: "${{ vars.LATTICE_CLIENT_ID }}"
           LATTICE_LEGACY_CLIENT_ID: "${{ vars.LATTICE_LEGACY_CLIENT_ID }}"
           AGENT_MAX_TURNS: "${{ vars.AGENT_MAX_TURNS }}"
+          # Vertex uses the Cloud Run service account. No model credential is mounted or copied.
+          GOOGLE_CLOUD_PROJECT: "${{ vars.GCP_PROJECT_ID }}"
+          GOOGLE_CLOUD_LOCATION: global
+          ATHENA_MODEL: gemini-2.5-flash
           ATHENA_ASYNC_RUNNER_ENABLED: "false"
           LATTICE_ACCOUNTS_ISSUER: "${{ vars.LATTICE_ACCOUNTS_ISSUER }}"
           LATTICE_GATEWAY_URL: "${{ vars.LATTICE_GATEWAY_URL }}"

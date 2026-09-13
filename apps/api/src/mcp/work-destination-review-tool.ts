@@ -17,10 +17,45 @@ import { requireScope } from './scope';
 const REVIEW_TIMEOUT_MS = 15_000;
 const RESULT_TOOL_NAME = 'review_result';
 
+const reviewResultInputSchema = {
+  type: 'object',
+  properties: {
+    decision: {
+      type: 'string',
+      enum: ['grant', 'challenge', 'deny'],
+      description: 'The destination review decision.',
+    },
+    reason: {
+      type: 'string',
+      description: 'A concise reason for the decision.',
+    },
+    scope: {
+      type: 'object',
+      description: 'The bounded destination scope. This field is required for a grant.',
+      properties: {
+        kind: {
+          type: 'string',
+          enum: ['origin', 'path_prefix'],
+        },
+        value: {
+          type: 'string',
+          description: 'The normalized origin or URL path prefix to grant.',
+        },
+      },
+      required: ['kind', 'value'],
+    },
+    question: {
+      type: 'string',
+      description: 'The targeted follow-up question. This field is required for a challenge.',
+    },
+  },
+  required: ['decision', 'reason'],
+} satisfies Record<string, unknown>;
+
 const resultTool: TurnToolDef = {
   name: RESULT_TOOL_NAME,
   description: 'Return the only decision for this destination review.',
-  inputSchema: z.toJSONSchema(WorkDestinationReviewOut),
+  inputSchema: reviewResultInputSchema,
 };
 
 function normalizedOrigin(value: string): boolean {

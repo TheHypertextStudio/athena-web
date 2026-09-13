@@ -62,12 +62,18 @@ describe('toModelBackendEnv', () => {
         ANTHROPIC_API_KEY: 'sk-ant',
         CLOUDFLARE_AI_GATEWAY_BASE_URL: 'https://gw.example',
         CLOUDFLARE_AI_GATEWAY_TOKEN: 'tok',
+        GOOGLE_CLOUD_PROJECT: 'athena-services',
+        GOOGLE_CLOUD_LOCATION: 'global',
+        ATHENA_MODEL: 'gemini-2.5-flash',
       }),
     ).toEqual({
       APP_MODE: 'production',
       ANTHROPIC_API_KEY: 'sk-ant',
       CLOUDFLARE_AI_GATEWAY_BASE_URL: 'https://gw.example',
       CLOUDFLARE_AI_GATEWAY_TOKEN: 'tok',
+      GOOGLE_CLOUD_PROJECT: 'athena-services',
+      GOOGLE_CLOUD_LOCATION: 'global',
+      ATHENA_MODEL: 'gemini-2.5-flash',
     });
   });
 

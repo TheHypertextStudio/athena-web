@@ -23,6 +23,7 @@
     "./turn/translate": "./src/turn/translate.ts",
     "./turn/adapters/anthropic": "./src/turn/adapters/anthropic.ts",
     "./turn/adapters/lattice": "./src/turn/adapters/lattice.ts",
+    "./turn/adapters/vertex": "./src/turn/adapters/vertex.ts",
     "./turn/model-backend": "./src/turn/model-backend.ts",
     "./task-drafting/adapters/anthropic": "./src/task-drafting/adapters/anthropic.ts",
     "./task-drafting/adapters/deterministic": "./src/task-drafting/adapters/deterministic.ts",
@@ -47,6 +48,7 @@
     "@docket/connections": "workspace:*",
     "@docket/identity-access": "workspace:*",
     "@docket/work": "workspace:*",
+    "google-auth-library": "^10.9.1",
     "zod": "catalog:"
   },
   "devDependencies": {

@@ -83,12 +83,17 @@ describe('AthenaContextChip', () => {
       </div>,
     );
 
-    const group = container.querySelector('[role="group"]');
-    expect(group).not.toBeNull();
-    expect(group?.className).toMatch(/max-w-full/);
+    // The Chip primitive's outer element (the one carrying its merged `className`) is the one
+    // marked `data-chip-variant="input"`. It must be allowed to shrink below its content size and
+    // must not carry the primitive's default `shrink-0`, or a long label pushes the composer wide.
+    // The primitive also sets an unrelated `[&_svg]:shrink-0` variant on its icon, so these match
+    // "shrink"/"shrink-0" as whole class tokens rather than as a plain substring.
+    const chip = container.querySelector('[data-chip-variant="input"]');
+    expect(chip).not.toBeNull();
+    expect(chip?.className).toMatch(/(?:^|\s)shrink(?:\s|$)/);
+    expect(chip?.className).not.toMatch(/(?:^|\s)shrink-0(?:\s|$)/);
+    expect(chip?.className).toMatch(/(?:^|\s)min-w-0(?:\s|$)/);
 
-    // The Chip primitive wraps its own children in a "min-w-0 truncate" span; the label span this
-    // component renders carries only "truncate", so excluding "min-w-0" isolates it.
     const labelSpan = container.querySelector('span.truncate:not(.min-w-0)');
     expect(labelSpan).not.toBeNull();
     expect(labelSpan?.className).toMatch(/truncate/);

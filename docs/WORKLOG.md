@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-09-12
+> **Last Updated**: 2026-09-13
 
 ---
 
@@ -9,7 +9,7 @@
 
 ### [ATHENA-COMPANION-001] Athena becomes a page-aware companion thread
 
-- **Status**: REVIEW (design awaiting product decisions)
+- **Status**: IN_PROGRESS
 - **Started**: 2026-09-12
 - **Priority**: P0
 - **Description**: The utility-rail Athena panel is a job queue with a ticket view: lanes, lifecycle
@@ -28,7 +28,7 @@
   - [x] Critique the current panel against the engine spec and prior audits
   - [x] Write the design and phased plan
   - [ ] Confirm the four product decisions in §8
-  - [ ] Phase 0: context spine (page context provider, navigation-stable panel, personal thread hook)
+  - [x] Phase 0: context spine (page context provider, navigation-stable panel, personal thread hook)
   - [ ] Phase 1: companion thread replaces the queue in the rail
   - [ ] Phase 2: job cards, Working strip, wide view
   - [ ] Phase 3: heads-up entries and live suggestions
@@ -37,6 +37,9 @@
 - **Notes**: The engine is unchanged. The personal canonical conversation, the personal session SSE
   tail, the presenter, `ProposalGroupCard`, `ElicitationCard`, and the MCP app cards are all
   reused. What goes is the frame: queue → ticket → log.
+- **Phase 0 landed (2026-09-13)**: page context provider, navigation-stable panel, context chip
+  in the rail composer, personal thread hook, browser journey. Validation: root typecheck, lint,
+  format:check, test, and `e2e/athena/companion-context.spec.ts` all green.
 
 ---
 

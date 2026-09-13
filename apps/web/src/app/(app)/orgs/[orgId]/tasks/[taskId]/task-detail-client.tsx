@@ -9,6 +9,7 @@ import { useTypedRoute } from '@/lib/app-location';
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
+import { usePublishPageSource } from '@/components/athena/page-context';
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
@@ -102,8 +103,10 @@ export default function TaskDetailPage(): JSX.Element {
   } = useTaskAttachments(orgId, taskId);
 
   // The tab bar and the browser tab both follow the name on screen, including through a rename.
-  useRegisterTabTitle('task', orgId, taskId, task?.title);
-  useDocumentTitle(task?.title);
+  const taskTitle = task?.title;
+  useRegisterTabTitle('task', orgId, taskId, taskTitle);
+  useDocumentTitle(taskTitle);
+  usePublishPageSource({ type: 'task', id: taskId, ...(taskTitle ? { label: taskTitle } : {}) });
 
   const {
     setState,

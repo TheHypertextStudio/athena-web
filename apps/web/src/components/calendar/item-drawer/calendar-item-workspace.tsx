@@ -36,6 +36,7 @@ import {
 import { type JSX, useState } from 'react';
 
 import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
+import { usePublishPageSource } from '@/components/athena/page-context';
 import { PropertyPanelRow } from '@/components/property-pickers/property-panel';
 
 import { EventArc } from './event-arc';
@@ -78,6 +79,7 @@ export function CalendarItemWorkspace({
   onOpenItem,
 }: CalendarItemWorkspaceProps): JSX.Element {
   const editor = useCoreFieldDrafts({ item, displayTimezone, onDirtyChange });
+  usePublishPageSource({ type: 'calendar_item', id: item.id, label: item.title });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

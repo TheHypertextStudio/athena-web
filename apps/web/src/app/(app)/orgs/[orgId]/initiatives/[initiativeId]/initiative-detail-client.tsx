@@ -52,6 +52,8 @@ import {
   EntityMetadataItem,
   EntityMetadataRow,
 } from '@/components/views/entity-detail-layout';
+import { usePublishPageSource } from '@/components/athena/page-context';
+import type { PersonalAthenaSource } from '@/lib/athena/presentation';
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import { api } from '@/lib/api';
@@ -84,6 +86,14 @@ import { orgMembersDef } from '@/lib/use-org-membership';
 
 type TabId = 'overview' | 'subinitiatives' | 'work' | 'updates' | 'resources';
 const INITIATIVE_TABS = ['overview', 'subinitiatives', 'work', 'updates', 'resources'] as const;
+
+/** Build the Athena page source this route publishes while mounted. */
+function initiativePageSource(
+  initiativeId: string,
+  label: string | undefined,
+): PersonalAthenaSource {
+  return { type: 'initiative', id: initiativeId, ...(label ? { label } : {}) };
+}
 
 /** Printable, document-first Initiative detail composed from the shared entity-detail shell. */
 export default function InitiativeDetailPage(): JSX.Element {
@@ -214,8 +224,10 @@ export default function InitiativeDetailPage(): JSX.Element {
     queryClient.removeQueries({ queryKey: aggregateKey, exact: true });
   }, [aggregateKey, initiativeId, queryClient, terminalFailure]);
 
-  useRegisterTabTitle('initiative', orgId, initiativeId, detail?.name ?? navigationSnapshot?.name);
-  useDocumentTitle(detail?.name ?? navigationSnapshot?.name);
+  const initiativeLabel = detail?.name ?? navigationSnapshot?.name;
+  useRegisterTabTitle('initiative', orgId, initiativeId, initiativeLabel);
+  useDocumentTitle(initiativeLabel);
+  usePublishPageSource(initiativePageSource(initiativeId, initiativeLabel));
 
   const mutations = useInitiativeMutations(
     orgId,

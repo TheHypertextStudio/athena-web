@@ -7,9 +7,8 @@
  * {@link queryKeys.orgs} refreshes every org list *and* every org detail, without any call site
  * enumerating them.
  *
- * Every key begins with `admin` because the console also reads a few product `/v1/*` routes
- * through `productApi`; the shared prefix keeps the two namespaces from ever colliding in one
- * cache.
+ * Every key begins with `admin` because the prefix separates operator data from any other
+ * TanStack Query cache mounted on the same page.
  */
 
 /** A list query's filter arguments, folded into its key so each filter combination caches apart. */

@@ -64,8 +64,8 @@ import mcpAppHostRoutes from './mcp/apps/host-routes';
 import time from './routes/time';
 import { createAdminRoutes } from './routes/admin';
 import { createAdminNotificationRoutes } from './routes/admin-notifications';
+import { createNotificationIntentRoutes } from './routes/notification-intent-routes';
 import { createNotificationPreferenceRoutes } from './routes/notification-preferences';
-import { createNotificationsRoutes } from './routes/notifications';
 import oauthClients from './routes/oauth-clients';
 import orgs from './routes/orgs';
 import {
@@ -212,7 +212,6 @@ function verificationAvailability(identity: {
 const routes = app
   .route('/config', config)
   .route('/orgs', orgs)
-  .route('/notifications', createNotificationsRoutes(notificationInbox, notificationIntents))
   .route('/daily-plan', dailyPlan)
   .route('/schedule-week', scheduleWeek)
   .route('/directive', directiveFeed)
@@ -224,11 +223,11 @@ const routes = app
   .route('/me/work-location', workLocation)
   .route('/me/identities', meIdentities)
   .route('/me/passkeys', mePasskeys)
-  .route('/me/notifications', createMeNotificationsRoutes(notificationInbox))
   .route(
-    '/me/notification-preferences',
+    '/me/notifications/preferences',
     createNotificationPreferenceRoutes(notificationPreferences),
   )
+  .route('/me/notifications', createMeNotificationsRoutes(notificationInbox))
   .route('/me/contact-points', createContactPointRoutes(notificationContactPoints))
   .route(
     '/me/phone-numbers',
@@ -285,7 +284,12 @@ export type AdminInstance = typeof adminApp;
 const adminNotifications = new AdminNotificationService(db, notificationIntents);
 
 /** The directly-composed staff router used by the root server and route-level tests. */
-export const adminRouter = createAdminRoutes(createAdminNotificationRoutes(adminNotifications));
+export const adminRouter = createAdminRoutes(
+  createAdminNotificationRoutes(adminNotifications).route(
+    '/',
+    createNotificationIntentRoutes(notificationIntents),
+  ),
+);
 
 /** The chained admin route tree; its type is the admin RPC contract (`apps/admin` only). */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

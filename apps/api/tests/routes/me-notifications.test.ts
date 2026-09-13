@@ -40,7 +40,7 @@ async function seedNotification(userId: string, title = 'hello'): Promise<string
 }
 
 describe('me notifications router', () => {
-  it('requires a signed-in user for the personal inbox alias', async () => {
+  it('requires a signed-in user for the personal inbox', async () => {
     const app = appWithSession(meNotifications, null);
 
     expect((await app.request('/')).status).toBe(401);

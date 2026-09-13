@@ -247,7 +247,7 @@ describe('conditional requests', () => {
 
   it('works on a resource outside the authoritative-session prefixes', async () => {
     const { app } = await setup();
-    const PREFERENCES = '/v1/me/notification-preferences';
+    const PREFERENCES = '/v1/me/notifications/preferences';
     const tag = (await app.request(PREFERENCES)).headers.get('etag') ?? '';
 
     // The tag is resolved by a sub-request into the `/v1` app, which does not carry the root

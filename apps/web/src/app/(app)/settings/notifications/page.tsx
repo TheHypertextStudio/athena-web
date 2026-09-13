@@ -39,7 +39,7 @@ export default function NotificationsSettingsPage(): JSX.Element {
   const preferencesQ = useApiQuery(
     apiQueryOptions(
       queryKeys.notificationPreferences(),
-      () => api.v1.me['notification-preferences'].$get(),
+      () => api.v1.me.notifications.preferences.$get(),
       'Could not load notification preferences.',
       { staleTime: STALE.standard },
     ),
@@ -56,7 +56,7 @@ export default function NotificationsSettingsPage(): JSX.Element {
   const patchPreferences = useApiMutation({
     mutationFn: (patch: NotificationPreferencePatch) =>
       unwrap(
-        () => api.v1.me['notification-preferences'].$patch({ json: patch }),
+        () => api.v1.me.notifications.preferences.$patch({ json: patch }),
         'Could not save notification preferences.',
       ),
     invalidateKeys: [queryKeys.notificationPreferences()],

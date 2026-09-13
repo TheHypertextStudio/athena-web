@@ -52,13 +52,8 @@ beforeAll(async () => {
   db = schema.db;
   orgs = (await import('../../src/routes/orgs')).default;
   const { NotificationInboxService } = await import('../../src/services/notifications/inbox');
-  const { NotificationIntentService } =
-    await import('../../src/services/notifications/intent-service');
-  const { createNotificationsRoutes } = await import('../../src/routes/notifications');
-  notifications = createNotificationsRoutes(
-    new NotificationInboxService(db),
-    new NotificationIntentService(db),
-  );
+  const { createMeNotificationsRoutes } = await import('../../src/routes/me-notifications');
+  notifications = createMeNotificationsRoutes(new NotificationInboxService(db));
   dailyPlan = (await import('../../src/routes/daily-plan')).default;
   hub = (await import('../../src/routes/hub')).default;
   agentSessions = (await import('../../src/routes/agent-sessions')).default;

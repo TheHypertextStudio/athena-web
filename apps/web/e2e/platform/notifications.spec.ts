@@ -20,7 +20,7 @@ test.describe('notification settings', () => {
 
     const digestEmail = page.getByRole('checkbox', { name: 'Email for Digests' });
     await expect(digestEmail).not.toBeChecked();
-    const channelPatch = waitForApiResponse(page, /\/v1\/me\/notification-preferences(\?|$)/, {
+    const channelPatch = waitForApiResponse(page, /\/v1\/me\/notifications\/preferences(\?|$)/, {
       method: 'PATCH',
     });
     await digestEmail.click();
@@ -30,7 +30,7 @@ test.describe('notification settings', () => {
     const quietHours = page.getByRole('checkbox', { name: 'Quiet hours' });
     await quietHours.check();
     await page.getByLabel('Quiet hours start').fill('19:00');
-    const quietHoursPatch = waitForApiResponse(page, /\/v1\/me\/notification-preferences(\?|$)/, {
+    const quietHoursPatch = waitForApiResponse(page, /\/v1\/me\/notifications\/preferences(\?|$)/, {
       method: 'PATCH',
     });
     await page.getByLabel('Quiet hours end').fill('07:00');

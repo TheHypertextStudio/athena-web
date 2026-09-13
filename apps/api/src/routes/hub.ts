@@ -265,7 +265,7 @@ const hubRouter = new Hono<AppEnv>()
       response: HubTodayOut,
       description: `Aggregate the signed-in person's "what should I do now" across **every organization they belong to**, for a single \`date\` (required query param). Returns the caller's accepted personal plan, its derived \`unplanned\`/\`active\`/\`cleared\` state, a finite Now/After focus sequence, up to four grounded Project or Initiative status stories, and up to three feasible momentum suggestions. Due work remains in \`needsAttention\`; sharing a date never silently accepts a Task into the personal plan.
 
-Candidate queries are tenant-bounded and every Task, Project, and Initiative is filtered through the shared batched resource-access resolver before selection. Ranking is deterministic; Athena supplies the interaction surface, not invented project facts. Requires only an authenticated session because the per-resource gate already ran per row. 401 when unauthenticated. Related: \`/daily-plan\`, \`/schedule/week/day/start\`, \`/notifications/count\`, \`/hub/inbox\`, and the detailed Project/Initiative surfaces.`,
+Candidate queries are tenant-bounded and every Task, Project, and Initiative is filtered through the shared batched resource-access resolver before selection. Ranking is deterministic; Athena supplies the interaction surface, not invented project facts. Requires only an authenticated session because the per-resource gate already ran per row. 401 when unauthenticated. Related: \`/daily-plan\`, \`/schedule/week/day/start\`, \`/v1/me/notifications/count\`, \`/hub/inbox\`, and the detailed Project/Initiative surfaces.`,
     }),
     zQuery(todayQuery),
     async (c) => {
@@ -281,9 +281,9 @@ Candidate queries are tenant-bounded and every Task, Project, and Initiative is 
       tag: 'Hub',
       summary: 'Get the cross-org inbox',
       response: HubInboxOut,
-      description: `Return the caller's notification feed across every organization they belong to, newest first, as the Hub's inbox pane. This is the same underlying cross-org notification set as \`GET /notifications\`, scoped by the mandatory \`userId = session.user.id\` predicate and rendered for the Hub cockpit (each item carries its originating \`organizationId\` org chip). Unlike \`/notifications\` it takes no narrowing filters — it is the full unread-first feed.
+      description: `Return the caller's notification feed across every organization they belong to, newest first, as the Hub's inbox pane. This is the same underlying cross-org notification set as \`GET /v1/me/notifications\`, scoped by the mandatory \`userId = session.user.id\` predicate and rendered for the Hub cockpit (each item carries its originating \`organizationId\` org chip). Unlike \`/v1/me/notifications\` it takes no narrowing filters — it is the full unread-first feed.
 
-Read-only; session-only, no capability. 401 when unauthenticated. To mutate read state use the \`/notifications/*\` read/act endpoints. Related: \`/hub/today\` surfaces the unread *count* in \`needsAttention.inbox\`.`,
+Read-only; session-only, no capability. 401 when unauthenticated. To mutate read state use the \`/v1/me/notifications/*\` read/act endpoints. Related: \`/hub/today\` surfaces the unread *count* in \`needsAttention.inbox\`.`,
     }),
     async (c) => {
       const session = c.get('session');

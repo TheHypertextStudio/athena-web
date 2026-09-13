@@ -2,7 +2,7 @@
 
 > **Status**: Implemented for web, email, SMS seam, push seam, staff announcements, preferences,
 > contact points, and inbound provider events.
-> **Last Updated**: 2026-07-07
+> **Last Updated**: 2026-09-13
 > **Owners**: Platform
 
 The notification service is the cross-platform surface for operational and product notifications.
@@ -44,7 +44,7 @@ explicit send call performs recipient snapshotting and delivery attempts.
 
 ### User Inbox
 
-`/v1/me/notifications` is the preferred personal inbox alias:
+`/v1/me/notifications` is the only public personal inbox family:
 
 | Method | Path        | Behavior                                               |
 | ------ | ----------- | ------------------------------------------------------ |
@@ -55,24 +55,25 @@ explicit send call performs recipient snapshotting and delivery attempts.
 | `POST` | `/:id/read` | Mark one caller-owned notification read.               |
 | `POST` | `/:id/act`  | Apply a low-risk inline action and mark read.          |
 
-The legacy `/v1/notifications` inbox routes remain for compatibility, but new personal UI should
-use `/v1/me/notifications`.
+The prerelease `0.1.0` contract does not retain the legacy `/v1/notifications` aliases. Docket has
+no customers that depend on those aliases, so the public surface keeps one canonical path family.
 
 ### Preferences And Contact Points
 
-| Method  | Path                                | Behavior                                                      |
-| ------- | ----------------------------------- | ------------------------------------------------------------- |
-| `GET`   | `/v1/me/notification-preferences`   | Materialize defaults plus saved overrides.                    |
-| `PATCH` | `/v1/me/notification-preferences`   | Update quiet hours, timezone, and category/channel overrides. |
-| `GET`   | `/v1/me/contact-points`             | List destinations visible to notification preferences.        |
-| `POST`  | `/v1/me/contact-points`             | Create a pending email/phone/push destination.                |
-| `POST`  | `/v1/me/contact-points/:id/verify`  | Verify a pending destination.                                 |
-| `POST`  | `/v1/me/contact-points/:id/primary` | Make a destination primary for its type.                      |
-| `POST`  | `/v1/me/contact-points/:id/disable` | Disable a destination without deleting history.               |
+| Method   | Path                                     | Behavior                                                      |
+| -------- | ---------------------------------------- | ------------------------------------------------------------- |
+| `GET`    | `/v1/me/notifications/preferences`       | Materialize defaults plus saved overrides.                    |
+| `PATCH`  | `/v1/me/notifications/preferences`       | Update quiet hours, timezone, and category/channel overrides. |
+| `GET`    | `/v1/me/contact-points`                  | List destinations visible to notification preferences.        |
+| `POST`   | `/v1/me/contact-points`                  | Create a pending email/phone/push destination.                |
+| `POST`   | `/v1/me/contact-points/:id/verify`       | Verify a pending destination.                                 |
+| `POST`   | `/v1/me/contact-points/:id/make-primary` | Make a destination primary for its type.                      |
+| `DELETE` | `/v1/me/contact-points/:id`              | Disable a destination without deleting history.               |
 
 ### Staff Notification Intents
 
-`/v1/notifications` also hosts the staff-owned intent API:
+`/admin/notifications` owns the entire staff notification API. These operations never appear in
+the public `/v1` RPC contract or OpenAPI document:
 
 | Method | Path              | Behavior                                                                           |
 | ------ | ----------------- | ---------------------------------------------------------------------------------- |
@@ -86,7 +87,7 @@ use `/v1/me/notifications`.
 
 ### Staff Monitoring And Approval
 
-`/admin/notifications` backs the staff console:
+The same staff-only family backs notification review and monitoring:
 
 | Method | Path                  | Behavior                                                                        |
 | ------ | --------------------- | ------------------------------------------------------------------------------- |
@@ -94,8 +95,7 @@ use `/v1/me/notifications`.
 | `GET`  | `/:id`                | Return one intent.                                                              |
 | `GET`  | `/:id/estimate`       | Estimate recipients, channel send/delay/suppression counts, and approval gates. |
 | `GET`  | `/:id/preview`        | Render web/email/SMS/push staff previews.                                       |
-| `POST` | `/:id/approve`        | Move draft/scheduled to `queued` and write operator audit.                      |
-| `POST` | `/:id/reject`         | Cancel a not-yet-delivered intent and write operator audit.                     |
+| `PUT`  | `/:id/decision`       | Approve to queue or reject to cancel, and write operator audit.                 |
 | `GET`  | `/:id/audit`          | List operator audit events for the intent.                                      |
 | `GET`  | `/:id/inbound-events` | List normalized provider events and replies for the intent.                     |
 

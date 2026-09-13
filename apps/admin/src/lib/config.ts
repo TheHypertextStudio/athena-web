@@ -1,4 +1,4 @@
-import { productApi } from '@/lib/api';
+import { PublicConfigOut } from '@docket/identity-access/public-config-contract';
 
 /**
  * Whether the operator console should offer Google Workspace sign-in.
@@ -14,9 +14,9 @@ import { productApi } from '@/lib/api';
  */
 export async function fetchAdminGoogleSso(): Promise<boolean> {
   try {
-    const response = await productApi.v1.config.$get();
+    const response = await fetch('/v1/config', { credentials: 'include' });
     if (!response.ok) return false;
-    const config = await response.json();
+    const config = PublicConfigOut.parse(await response.json());
     return config.adminGoogleSso === true;
   } catch {
     return false;

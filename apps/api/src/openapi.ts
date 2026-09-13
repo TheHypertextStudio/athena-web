@@ -271,7 +271,7 @@ const TAGS = [
   {
     name: 'Notifications',
     description:
-      "The current person's notification inbox across all their orgs: list, unread count, mark-one/all read, and act on a notification. Session-scoped (no org capability needed).",
+      "The current person's notification inbox and delivery preferences across all their orgs: list, unread count, mark-one/all read, act on a notification, and manage quiet hours or category/channel overrides. Session-scoped (no org capability needed).",
   },
   {
     name: 'DailyPlan',
@@ -413,6 +413,11 @@ function buildAdminDocumentation() {
         name: 'Admin',
         description:
           'Staff operations: user/org administration, lifecycle boards, impersonation, billing holds/trial actions, the audit log, and staff management. Gated by `staffMiddleware` (session + staff role).',
+      },
+      {
+        name: 'Admin Notifications',
+        description:
+          'Staff-only notification intent creation, review, delivery, recipient inspection, and provider-event monitoring. Every operation runs behind `staffMiddleware` and stays outside the public `/v1` contract.',
       },
     ],
   };

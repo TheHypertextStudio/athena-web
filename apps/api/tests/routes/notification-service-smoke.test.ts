@@ -21,7 +21,7 @@ beforeAll(async () => {
   db = schema.db;
   const appModule = await import('../../src/app');
   product = appModule.app;
-  admin = appModule.adminRouter;
+  admin = appModule.adminApp;
 });
 
 const J = { 'content-type': 'application/json' };
@@ -48,14 +48,13 @@ describe('notification service smoke', () => {
       valueMasked: 'r***@example.test',
     });
 
-    const staffProduct = appWithSession(product, fakeSession(staff.userId));
     const staffAdmin = appWithSession(admin, fakeSession(staff.userId));
     const recipientProduct = appWithSession(product, fakeSession(recipientId));
     const outbox = await captureOutbox();
     const before = outbox.length;
     const subject = `Maintenance window ${run}`;
 
-    const createdRes = await staffProduct.request('/v1/notifications', {
+    const createdRes = await staffAdmin.request('/admin/notifications', {
       method: 'POST',
       headers: J,
       body: JSON.stringify({
@@ -76,8 +75,11 @@ describe('notification service smoke', () => {
     expect(createdRes.status).toBe(201);
     const created = await json<{ id: string; status: string; createdBy: string }>(createdRes);
     expect(created).toMatchObject({ status: 'draft', createdBy: staff.userId });
+    expect(new URL(createdRes.headers.get('location') ?? '').pathname).toBe(
+      `/admin/notifications/${created.id}`,
+    );
 
-    const testSendRes = await staffProduct.request(`/v1/notifications/${created.id}/test`, {
+    const testSendRes = await staffAdmin.request(`/admin/notifications/${created.id}/test`, {
       method: 'POST',
     });
     expect(testSendRes.status).toBe(200);
@@ -101,7 +103,10 @@ describe('notification service smoke', () => {
       subject: `[Test] ${subject}`,
     });
 
-    const approvedRes = await staffAdmin.request(`/notifications/${created.id}/decision`, {
+    const originalAfterTest = await staffAdmin.request(`/admin/notifications/${created.id}`);
+    expect(await originalAfterTest.json()).toMatchObject({ status: 'draft' });
+
+    const approvedRes = await staffAdmin.request(`/admin/notifications/${created.id}/decision`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ decision: 'approved' }),
@@ -112,7 +117,7 @@ describe('notification service smoke', () => {
       status: 'queued',
     });
 
-    const sentRes = await staffProduct.request(`/v1/notifications/${created.id}/send`, {
+    const sentRes = await staffAdmin.request(`/admin/notifications/${created.id}/send`, {
       method: 'POST',
     });
     expect(sentRes.status).toBe(200);
@@ -129,6 +134,7 @@ describe('notification service smoke', () => {
 
     const inbox = await json<{
       items: {
+        id: string;
         type: string;
         body: {
           title: string;
@@ -160,7 +166,7 @@ describe('notification service smoke', () => {
     );
 
     const deliveries = await json<{ items: { channel: string; status: string }[] }>(
-      await staffProduct.request(`/v1/notifications/${created.id}/deliveries`),
+      await staffAdmin.request(`/admin/notifications/${created.id}/deliveries`),
     );
     expect(deliveries.items).toEqual(
       expect.arrayContaining([
@@ -168,5 +174,18 @@ describe('notification service smoke', () => {
         expect.objectContaining({ channel: 'email', status: 'sent' }),
       ]),
     );
+
+    const recipients = await staffAdmin.request(`/admin/notifications/${created.id}/recipients`);
+    expect(await recipients.json()).toMatchObject({ items: [{ userId: recipientId }] });
+    const beforeRead = await recipientProduct.request('/v1/me/notifications/count');
+    expect(await beforeRead.json()).toMatchObject({ unread: 1 });
+    const notificationId = inbox.items.find((item) => item.body.title === subject)?.id;
+    expect(notificationId).toBeDefined();
+    const marked = await recipientProduct.request(`/v1/me/notifications/${notificationId}/read`, {
+      method: 'POST',
+    });
+    expect(marked.status).toBe(200);
+    const afterRead = await recipientProduct.request('/v1/me/notifications/count');
+    expect(await afterRead.json()).toMatchObject({ unread: 0 });
   });
 });

@@ -95,7 +95,7 @@ export const NotificationOut = z
 export type NotificationOut = z.infer<typeof NotificationOut>;
 
 /**
- * Query filters for the cross-org inbox list (`GET /notifications`).
+ * Query filters for the cross-org inbox list (`GET /v1/me/notifications`).
  *
  * @remarks
  * All filters are optional and AND-combined. `unreadOnly` arrives as a query string
@@ -126,7 +126,7 @@ export const NotificationListQuery = z
 export type NotificationListQuery = z.infer<typeof NotificationListQuery>;
 
 /**
- * The caller's cross-org unread attention counts (`GET /notifications/count`).
+ * The caller's cross-org unread attention counts (`GET /v1/me/notifications/count`).
  *
  * @remarks
  * Feeds the rail attention badges. `unread` is every unread notification across the
@@ -157,7 +157,7 @@ export const NotificationCount = z
 export type NotificationCount = z.infer<typeof NotificationCount>;
 
 /**
- * Body for the bulk mark-all-read action (`POST /notifications/read-all`).
+ * Body for the bulk mark-all-read action (`POST /v1/me/notifications/read-all`).
  *
  * @remarks
  * Both filters are optional and AND-combined: with no body the caller's entire inbox is
@@ -196,7 +196,7 @@ export const NotificationReadAllResult = z
 export type NotificationReadAllResult = z.infer<typeof NotificationReadAllResult>;
 
 /**
- * Body for the one-tap inbox act action (`POST /notifications/:id/act`).
+ * Body for the one-tap inbox act action (`POST /v1/me/notifications/:id/act`).
  *
  * @remarks
  * A low-risk inline action taken on a notification directly from the Inbox (e.g.

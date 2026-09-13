@@ -63,7 +63,7 @@ export function useInboxPage(): InboxPageData {
   const inboxQ = useLiveApiQuery(
     apiQueryOptions(
       queryKeys.notifications(),
-      () => api.v1.notifications.$get({ query: {} }),
+      () => api.v1.me.notifications.$get({ query: {} }),
       'Could not load your inbox.',
     ),
     INBOX_POLL_MS,
@@ -71,7 +71,7 @@ export function useInboxPage(): InboxPageData {
   const countQ = useLiveApiQuery(
     apiQueryOptions(
       queryKeys.notificationsCount(),
-      () => api.v1.notifications.count.$get(),
+      () => api.v1.me.notifications.count.$get(),
       'Could not load your inbox.',
     ),
     INBOX_POLL_MS,
@@ -109,7 +109,7 @@ export function useInboxPage(): InboxPageData {
     async (id: string): Promise<void> => {
       setPending(id, true);
       try {
-        const res = await api.v1.notifications[':id'].act.$post({
+        const res = await api.v1.me.notifications[':id'].act.$post({
           param: { id },
           json: { action: 'approve' },
         });
@@ -131,7 +131,7 @@ export function useInboxPage(): InboxPageData {
     async (id: string): Promise<void> => {
       setPending(id, true);
       try {
-        const res = await api.v1.notifications[':id'].read.$post({ param: { id } });
+        const res = await api.v1.me.notifications[':id'].read.$post({ param: { id } });
         if (!res.ok) {
           await presentRejectedResponse(res, 'Could not mark this item read.');
           return;
@@ -157,7 +157,7 @@ export function useInboxPage(): InboxPageData {
           await presentRejectedResponse(call, 'Could not start the call.');
           return;
         }
-        await api.v1.notifications[':id'].read.$post({ param: { id } });
+        await api.v1.me.notifications[':id'].read.$post({ param: { id } });
         await refreshInbox();
       } catch (caught) {
         presentFailure(caught, 'Could not start the call.');
@@ -179,7 +179,7 @@ export function useInboxPage(): InboxPageData {
           await presentRejectedResponse(undone, 'That change can no longer be undone.');
           return;
         }
-        await api.v1.notifications[':id'].read.$post({ param: { id } });
+        await api.v1.me.notifications[':id'].read.$post({ param: { id } });
         await refreshInbox();
       } catch (caught) {
         presentFailure(caught, 'That change can no longer be undone.');
@@ -193,7 +193,7 @@ export function useInboxPage(): InboxPageData {
   const onMarkAllRead = useCallback(async (): Promise<void> => {
     setMarkingAll(true);
     try {
-      const res = await api.v1.notifications['read-all'].$post({ json: {} });
+      const res = await api.v1.me.notifications['read-all'].$post({ json: {} });
       if (!res.ok) {
         await presentRejectedResponse(res, 'Could not mark everything read.');
         return;

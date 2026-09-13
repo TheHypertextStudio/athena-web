@@ -624,7 +624,7 @@ function AppShellInner({
   const unreadCountQ = useLiveApiQuery(
     apiQueryOptions(
       queryKeys.notificationsCount(),
-      () => api.v1.notifications.count.$get(),
+      () => api.v1.me.notifications.count.$get(),
       'Could not load notifications.',
       { enabled: !identityUnknown, staleTime: STALE.volatile },
     ),

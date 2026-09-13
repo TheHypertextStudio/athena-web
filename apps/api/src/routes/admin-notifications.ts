@@ -55,24 +55,6 @@ export function createAdminNotificationRoutes(notifications: AdminNotificationSe
       },
     )
     .get(
-      '/:id',
-      apiDoc({
-        tag: 'Admin Notifications',
-        summary: 'Get a notification intent',
-        response: NotificationIntentOut,
-        description: 'Return one notification intent for the staff monitoring surface.',
-      }),
-      zParam(idParam),
-      async (c) => {
-        const { userId } = c.get('staffCtx');
-        return ok(
-          c,
-          NotificationIntentOut,
-          await notifications.get(userId, c.req.valid('param').id),
-        );
-      },
-    )
-    .get(
       '/:id/estimate',
       apiDoc({
         tag: 'Admin Notifications',

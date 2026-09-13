@@ -18,7 +18,7 @@ export interface NotificationAnnouncementDraft {
   readonly scheduledAt: string;
 }
 
-/** Create body sent to `/v1/notifications` by the staff console. */
+/** Create body sent to `/admin/notifications` by the staff console. */
 export interface NotificationIntentCreateBody {
   /** Staff creates service announcements from this console. */
   readonly senderType: 'staff';

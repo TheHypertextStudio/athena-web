@@ -12,7 +12,7 @@ import {
   notificationDraftToCreateInput,
   type NotificationAnnouncementDraft,
 } from './notification-console-model';
-import { api, productApi } from '@/lib/api';
+import { api } from '@/lib/api';
 import { readProblemError, toUserFacingError, type UserFacingError } from '@/lib/problem';
 import type {
   AdminNotificationEstimate,
@@ -35,8 +35,8 @@ const emptyDraft: NotificationAnnouncementDraft = {
  * Staff service-announcement console.
  *
  * @remarks
- * A Client Component that composes service announcements through `/v1/notifications` and uses the
- * staff `/admin/notifications/*` safety APIs for estimate, preview, audit, and inbound monitoring.
+ * The staff-gated `/admin/notifications` family owns announcement composition, delivery,
+ * review, and monitoring.
  */
 export default function NotificationsPage(): JSX.Element {
   const [intents, setIntents] = useState<readonly AdminNotificationIntent[]>([]);
@@ -59,7 +59,7 @@ export default function NotificationsPage(): JSX.Element {
         api.admin.notifications[':id'].$get({ param: { id } }),
         api.admin.notifications[':id'].estimate.$get({ param: { id } }),
         api.admin.notifications[':id'].preview.$get({ param: { id } }),
-        productApi.v1.notifications[':id'].deliveries.$get({ param: { id } }),
+        api.admin.notifications[':id'].deliveries.$get({ param: { id } }),
         api.admin.notifications[':id']['inbound-events'].$get({ param: { id } }),
         api.admin.notifications[':id'].audit.$get({ param: { id } }),
       ]);
@@ -147,7 +147,7 @@ export default function NotificationsPage(): JSX.Element {
 
   async function createDraft(): Promise<void> {
     await runAction('create', async () => {
-      const res = await productApi.v1.notifications.$post({
+      const res = await api.admin.notifications.$post({
         json: notificationDraftToCreateInput(draft),
       });
       if (!res.ok) throw await readProblemError(res, 'Could not create notification draft.');
@@ -176,7 +176,7 @@ export default function NotificationsPage(): JSX.Element {
   async function testSend(): Promise<void> {
     if (!selectedIntent) return;
     await runAction('test', async () => {
-      const res = await productApi.v1.notifications[':id'].test.$post({
+      const res = await api.admin.notifications[':id'].test.$post({
         param: { id: selectedIntent.id },
       });
       if (!res.ok) throw await readProblemError(res, 'Could not send test notification.');
@@ -201,7 +201,7 @@ export default function NotificationsPage(): JSX.Element {
   async function sendNow(): Promise<void> {
     if (!selectedIntent) return;
     await runAction('send', async () => {
-      const res = await productApi.v1.notifications[':id'].send.$post({
+      const res = await api.admin.notifications[':id'].send.$post({
         param: { id: selectedIntent.id },
       });
       if (!res.ok) throw await readProblemError(res, 'Could not send notification.');
@@ -213,7 +213,7 @@ export default function NotificationsPage(): JSX.Element {
   async function cancel(): Promise<void> {
     if (!selectedIntent) return;
     await runAction('cancel', async () => {
-      const res = await productApi.v1.notifications[':id'].cancel.$post({
+      const res = await api.admin.notifications[':id'].cancel.$post({
         param: { id: selectedIntent.id },
       });
       if (!res.ok) throw await readProblemError(res, 'Could not cancel notification.');

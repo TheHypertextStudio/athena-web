@@ -33,11 +33,12 @@ export default async function InboxPage(): Promise<JSX.Element> {
     queryClient.prefetchQuery({
       queryKey: queryKeys.notifications(),
       queryFn: () =>
-        unwrap(() => api.v1.notifications.$get({ query: {} }), 'Could not load your inbox.'),
+        unwrap(() => api.v1.me.notifications.$get({ query: {} }), 'Could not load your inbox.'),
     }),
     queryClient.prefetchQuery({
       queryKey: queryKeys.notificationsCount(),
-      queryFn: () => unwrap(() => api.v1.notifications.count.$get(), 'Could not load your inbox.'),
+      queryFn: () =>
+        unwrap(() => api.v1.me.notifications.count.$get(), 'Could not load your inbox.'),
     }),
     queryClient.prefetchQuery({
       queryKey: queryKeys.activity(),

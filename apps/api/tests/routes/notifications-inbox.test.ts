@@ -21,13 +21,8 @@ beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   const { NotificationInboxService } = await import('../../src/services/notifications/inbox');
-  const { NotificationIntentService } =
-    await import('../../src/services/notifications/intent-service');
-  const { createNotificationsRoutes } = await import('../../src/routes/notifications');
-  notifications = createNotificationsRoutes(
-    new NotificationInboxService(db),
-    new NotificationIntentService(db),
-  );
+  const { createMeNotificationsRoutes } = await import('../../src/routes/me-notifications');
+  notifications = createMeNotificationsRoutes(new NotificationInboxService(db));
 });
 
 const MISSING = '01ARZ3NDEKTSV4RRFFQ69G5FAV';

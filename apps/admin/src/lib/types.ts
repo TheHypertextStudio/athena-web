@@ -1,6 +1,6 @@
 import type { InferResponseType } from 'hono/client';
 
-import type { api, productApi } from '@/lib/api';
+import type { api } from '@/lib/api';
 
 /**
  * The operator dashboard metrics (`GET /admin/metrics`).
@@ -83,9 +83,9 @@ export type AdminNotificationInboundPage = InferResponseType<
   (typeof api.admin.notifications)[':id']['inbound-events']['$get']
 >;
 
-/** Notification delivery page (`GET /v1/notifications/:id/deliveries`). */
+/** Notification delivery page (`GET /admin/notifications/:id/deliveries`). */
 export type NotificationDeliveryPage = InferResponseType<
-  (typeof productApi.v1.notifications)[':id']['deliveries']['$get']
+  (typeof api.admin.notifications)[':id']['deliveries']['$get']
 >;
 
 /** The platform resource report: stored bytes by store, plus database size. */

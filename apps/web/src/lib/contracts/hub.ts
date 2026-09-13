@@ -134,7 +134,7 @@ export const HubNeedsAttention = z
       .number()
       .int()
       .describe(
-        "Count of unread notifications across the caller's orgs (the same number as `GET /notifications/count` → `unread`). >= 0.",
+        "Count of unread notifications across the caller's orgs (the same number as `GET /v1/me/notifications/count` → `unread`). >= 0.",
       ),
   })
   .meta({ id: 'HubNeedsAttention', description: "The Today cockpit's needs-attention trio." });
@@ -334,7 +334,7 @@ export const HubInboxOut = z
     items: z
       .array(NotificationOut)
       .describe(
-        "The caller's notifications across every org, newest first, each org-chipped. The same set as `GET /notifications` with no filters.",
+        "The caller's notifications across every org, newest first, each org-chipped. The same set as `GET /v1/me/notifications` with no filters.",
       ),
   })
   .meta({ id: 'HubInboxOut', description: "The caller's cross-org notification inbox." });

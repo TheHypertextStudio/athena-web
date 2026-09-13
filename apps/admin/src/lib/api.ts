@@ -1,4 +1,4 @@
-import type { AdminAppType, AppType } from '@docket/api/rpc-contract';
+import type { AdminAppType } from '@docket/api/rpc-contract';
 import { hc } from 'hono/client';
 
 /**
@@ -27,12 +27,6 @@ import { hc } from 'hono/client';
  * ```
  */
 export const api = hc<AdminAppType>('', {
-  fetch: ((input: RequestInfo | URL, init?: RequestInit) =>
-    fetch(input, { ...init, credentials: 'include' })) as typeof fetch,
-});
-
-/** Staff-authenticated client for `/v1/*` routes used by admin workflows. */
-export const productApi = hc<AppType>('', {
   fetch: ((input: RequestInfo | URL, init?: RequestInit) =>
     fetch(input, { ...init, credentials: 'include' })) as typeof fetch,
 });

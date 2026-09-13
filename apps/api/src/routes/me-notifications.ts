@@ -7,7 +7,7 @@ import { createNotificationInboxRoutes } from './notification-inbox-routes';
 /** Build the `/v1/me/notifications` route group from a directly injected inbox service. */
 export function createMeNotificationsRoutes(inbox: NotificationInboxService) {
   return createNotificationInboxRoutes(inbox, {
-    tag: 'Me Notifications',
+    tag: 'Notifications',
     includeDetail: true,
   });
 }

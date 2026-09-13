@@ -18,7 +18,7 @@ export function createNotificationPreferenceRoutes(preferences: NotificationPref
     .get(
       '/',
       apiDoc({
-        tag: 'Me Notification Preferences',
+        tag: 'Notifications',
         summary: 'Get notification preferences',
         response: NotificationPreferenceOut,
         description:
@@ -32,7 +32,7 @@ export function createNotificationPreferenceRoutes(preferences: NotificationPref
     .patch(
       '/',
       apiDoc({
-        tag: 'Me Notification Preferences',
+        tag: 'Notifications',
         summary: 'Update notification preferences',
         response: NotificationPreferenceOut,
         description:

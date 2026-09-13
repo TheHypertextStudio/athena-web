@@ -1,6 +1,8 @@
 import type * as DbModule from '@docket/db';
 import { eq } from 'drizzle-orm';
+import { Hono } from 'hono';
 import { beforeAll, describe, expect, it } from 'vitest';
+import type { AppEnv } from '../../src/context';
 
 import { appWithSession, fakeSession, getDb, seedUserWithHub } from '../support/routes-harness';
 
@@ -11,14 +13,14 @@ let notifications!: unknown;
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  const { NotificationInboxService } = await import('../../src/services/notifications/inbox');
+  const { staffMiddleware } = await import('../../src/permissions/staff-guard');
   const { NotificationIntentService } =
     await import('../../src/services/notifications/intent-service');
-  const { createNotificationsRoutes } = await import('../../src/routes/notifications');
-  notifications = createNotificationsRoutes(
-    new NotificationInboxService(db),
-    new NotificationIntentService(db),
-  );
+  const { createNotificationIntentRoutes } =
+    await import('../../src/routes/notification-intent-routes');
+  notifications = new Hono<AppEnv>()
+    .use('*', staffMiddleware)
+    .route('/notifications', createNotificationIntentRoutes(new NotificationIntentService(db)));
 });
 
 const J = { 'content-type': 'application/json' };
@@ -62,7 +64,7 @@ describe('notification intent routes', () => {
     const recipientId = await seedUserWithHub(db, schema, 'NotificationCivilianRecipient');
     const app = appWithSession(notifications, fakeSession(callerId));
 
-    const res = await app.request('/', {
+    const res = await app.request('/notifications', {
       method: 'POST',
       headers: J,
       body: JSON.stringify(serviceAnnouncementInput(recipientId)),
@@ -76,7 +78,7 @@ describe('notification intent routes', () => {
     const recipientId = await seedUserWithHub(db, schema, 'NotificationDraftRecipient');
     const app = appWithSession(notifications, fakeSession(staff.userId));
 
-    const res = await app.request('/', {
+    const res = await app.request('/notifications', {
       method: 'POST',
       headers: J,
       body: JSON.stringify(serviceAnnouncementInput(recipientId)),
@@ -104,30 +106,32 @@ describe('notification intent routes', () => {
     const app = appWithSession(notifications, fakeSession(staff.userId));
 
     const created = await body<{ id: string }>(
-      await app.request('/', {
+      await app.request('/notifications', {
         method: 'POST',
         headers: J,
         body: JSON.stringify(serviceAnnouncementInput(recipientId)),
       }),
     );
 
-    const sent = await app.request(`/${created.id}/send`, { method: 'POST' });
+    const sent = await app.request(`/notifications/${created.id}/send`, { method: 'POST' });
     expect(sent.status).toBe(200);
     expect(await body<{ id: string; status: string }>(sent)).toMatchObject({
       id: created.id,
       status: 'sent',
     });
 
-    const fetched = await body<{ id: string; status: string }>(await app.request(`/${created.id}`));
+    const fetched = await body<{ id: string; status: string }>(
+      await app.request(`/notifications/${created.id}`),
+    );
     expect(fetched).toMatchObject({ id: created.id, status: 'sent' });
 
     const recipients = await body<{ items: { userId: string; reason: string }[] }>(
-      await app.request(`/${created.id}/recipients`),
+      await app.request(`/notifications/${created.id}/recipients`),
     );
     expect(recipients.items).toMatchObject([{ userId: recipientId, reason: 'explicit' }]);
 
     const deliveries = await body<{ items: { channel: string; status: string }[] }>(
-      await app.request(`/${created.id}/deliveries`),
+      await app.request(`/notifications/${created.id}/deliveries`),
     );
     expect(deliveries.items).toMatchObject([{ channel: 'web', status: 'sent' }]);
   });
@@ -138,7 +142,7 @@ describe('notification intent routes', () => {
     const app = appWithSession(notifications, fakeSession(staff.userId));
 
     const created = await body<{ id: string; status: string }>(
-      await app.request('/', {
+      await app.request('/notifications', {
         method: 'POST',
         headers: J,
         body: JSON.stringify(
@@ -150,7 +154,7 @@ describe('notification intent routes', () => {
     );
     expect(created.status).toBe('scheduled');
 
-    const canceled = await app.request(`/${created.id}/cancel`, { method: 'POST' });
+    const canceled = await app.request(`/notifications/${created.id}/cancel`, { method: 'POST' });
     expect(canceled.status).toBe(200);
     expect(await body<{ id: string; status: string }>(canceled)).toMatchObject({
       id: created.id,
@@ -163,7 +167,7 @@ describe('notification intent routes', () => {
     const recipientId = await seedUserWithHub(db, schema, 'NotificationTestRecipient');
     const app = appWithSession(notifications, fakeSession(staff.userId));
     const created = await body<{ id: string }>(
-      await app.request('/', {
+      await app.request('/notifications', {
         method: 'POST',
         headers: J,
         body: JSON.stringify(serviceAnnouncementInput(recipientId)),
@@ -172,9 +176,11 @@ describe('notification intent routes', () => {
 
     const civilianId = await seedUserWithHub(db, schema, 'NotificationTestCivilian');
     const civilianApp = appWithSession(notifications, fakeSession(civilianId));
-    expect((await civilianApp.request(`/${created.id}/test`, { method: 'POST' })).status).toBe(403);
+    expect(
+      (await civilianApp.request(`/notifications/${created.id}/test`, { method: 'POST' })).status,
+    ).toBe(403);
 
-    const testSend = await app.request(`/${created.id}/test`, { method: 'POST' });
+    const testSend = await app.request(`/notifications/${created.id}/test`, { method: 'POST' });
     expect(testSend.status).toBe(200);
     expect(
       await body<{ status: string; webNotifications: { userId: string }[] }>(testSend),

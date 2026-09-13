@@ -184,7 +184,7 @@ export function ScheduleEditorDialog({
       }}
     >
       <DialogContent
-        presentation={{ kind: 'centered', size: 'large', height: 'tall' }}
+        presentation={{ kind: 'centered', size: 'large', height: 'content' }}
         containerQuery
       >
         <DialogHeader>
@@ -192,7 +192,7 @@ export function ScheduleEditorDialog({
           <DialogDescription>Choose where you expect to work and when.</DialogDescription>
         </DialogHeader>
         <form className="contents" onSubmit={submit}>
-          <DialogBody className="grid gap-4 @2xl:grid-cols-2">
+          <DialogBody className="grid content-start gap-4 @2xl:grid-cols-2">
             <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
               Place
               <Select

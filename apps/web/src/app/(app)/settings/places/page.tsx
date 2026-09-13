@@ -49,43 +49,19 @@ import {
   workScheduleChangesDef,
 } from '@/components/work-location/work-location-data';
 import { api } from '@/lib/api';
-import { toUserFacingError, UserFacingError, userErrorMessage } from '@/lib/problem';
+import { userErrorMessage } from '@/lib/problem';
 import { queryKeys, unwrap, useApiListQuery, useApiMutation, useApiQuery } from '@/lib/query';
 
-function firstPresent(values: readonly unknown[]): unknown {
-  return values.find((value) => value !== null && value !== undefined);
-}
-
-function mutationMessage(error: unknown, fallback: string): string | null {
-  return error ? userErrorMessage(error, fallback) : null;
-}
-
-function hiddenResolutionError(
-  resolvingChange: WorkScheduleChangeOut | null,
-  error: unknown,
-): unknown {
-  return resolvingChange ? null : error;
-}
-
-function itemsOrEmpty<T>(items: readonly T[] | undefined): readonly T[] {
-  return items ?? [];
-}
-
-function valueOrNull<T>(value: T | undefined): T | null {
-  return value ?? null;
-}
-
-async function noContent(
-  call: () => Promise<{ readonly ok: boolean; readonly status: number }>,
-  fallback: string,
-): Promise<void> {
-  try {
-    const response = await call();
-    if (!response.ok) throw new UserFacingError(fallback, { status: response.status });
-  } catch (error) {
-    throw toUserFacingError(error, fallback);
-  }
-}
+import {
+  createSavePlaceHandler,
+  firstPresent,
+  hiddenResolutionError,
+  itemsOrEmpty,
+  linkPlaceResolution,
+  mutationMessage,
+  noContent,
+  valueOrNull,
+} from './place-page-actions';
 
 function SavedPlaceRow(props: {
   readonly place: WorkPlaceOut;
@@ -567,43 +543,23 @@ export default function PlacesSettingsPage(): JSX.Element {
     setEditingPlace(places.find((place) => place.geofence === null) ?? null);
     setPlaceEditorOpen(true);
   };
-  const savePlace = (value: PlaceEditorValue): void => {
-    const enableAfterSave = placeEditorIntent === 'automatic-setup';
-    const finishAutomaticSetup = (): void => {
-      if (enableAfterSave) automaticLocation.setEnabled(true);
-    };
-    if (editingPlace) {
-      void updatePlace
-        .mutateAsync({ id: editingPlace.id, patch: value })
-        .then(finishAutomaticSetup)
-        .catch(() => undefined);
-    } else if (creatingForChange) {
-      const change = creatingForChange;
-      void createPlace
-        .mutateAsync(value)
-        .then((result) => {
-          setCreatingForChange(null);
-          resolveChange.mutate({
-            id: change.id,
-            resolution: { action: 'link_place', placeId: result.place.id },
-          });
-        })
-        .catch(() => undefined);
-    } else {
-      void createPlace
-        .mutateAsync(value)
-        .then(finishAutomaticSetup)
-        .catch(() => undefined);
-    }
-  };
+  const savePlace = createSavePlaceHandler({
+    editingPlace,
+    creatingForChange,
+    enableAutomatic: placeEditorIntent === 'automatic-setup',
+    create: createPlace.mutateAsync,
+    update: updatePlace.mutateAsync,
+    resolve: resolveChange.mutate,
+    clearCreatingForChange: () => {
+      setCreatingForChange(null);
+    },
+    enableAutomaticLocation: () => {
+      automaticLocation.setEnabled(true);
+    },
+  });
   const resolveName = (): void => {
-    if (!resolvingChange) return;
-    const place = places.find((candidate) => candidate.id === resolutionPlaceId);
-    if (!place) return;
-    resolveChange.mutate({
-      id: resolvingChange.id,
-      resolution: { action: 'link_place', placeId: place.id },
-    });
+    const resolution = linkPlaceResolution(resolvingChange, places, resolutionPlaceId);
+    if (resolution) resolveChange.mutate(resolution);
   };
 
   const loadError = firstPresent([placesQ.error, changesQ.error, pointQ.error]);

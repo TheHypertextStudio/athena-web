@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  Surface,
 } from '@docket/ui/primitives';
 import { type JSX, type SubmitEventHandler, useEffect, useRef, useState } from 'react';
 
@@ -54,7 +55,7 @@ function ReverseAddressSuggestion(props: {
 }): JSX.Element | null {
   if (!props.suggestion) return null;
   return (
-    <div className="border-outline-variant bg-surface-container-low flex flex-col gap-2 rounded-lg border p-3">
+    <Surface tone="card" shape="small" pad="comfortable" className="flex flex-col gap-2">
       <p className="text-on-surface text-body-small">{props.suggestion.address}</p>
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={props.onKeep}>
@@ -71,7 +72,7 @@ function ReverseAddressSuggestion(props: {
           Use suggested address
         </Button>
       </div>
-    </div>
+    </Surface>
   );
 }
 
@@ -105,17 +106,14 @@ export interface PlaceEditorDialogProps {
   readonly onSave: (value: PlaceEditorValue) => void;
 }
 
-/** Render one synchronized address and map editor without a separate map disclosure state. */
-export function PlaceEditorDialog({
+function usePlaceEditorController({
   open,
-  onOpenChange,
   place,
   initialName,
   intent = 'standard',
   pending,
-  error,
   onSave,
-}: PlaceEditorDialogProps): JSX.Element {
+}: PlaceEditorDialogProps) {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [addressConfirmed, setAddressConfirmed] = useState(true);
@@ -161,97 +159,140 @@ export function PlaceEditorDialog({
     setAddressSuggestion(null);
   };
 
+  const changeAddress = (next: string): void => {
+    setAddress(next);
+    setAddressConfirmed(next.trim().length === 0);
+    setAddressSuggestion(null);
+  };
+
+  const changePoint = (next: PlaceMapPoint): void => {
+    setPoint(next);
+    latestPointRef.current = next;
+    setAddressSuggestion(null);
+    reverse.mutate(next);
+  };
+
+  return {
+    name,
+    setName,
+    address,
+    point,
+    addressSuggestion,
+    addressNeedsSelection,
+    pointRequired,
+    cannotSave,
+    submit,
+    resolveAddress,
+    changeAddress,
+    changePoint,
+    reverse,
+    dismissSuggestion: () => {
+      setAddressSuggestion(null);
+    },
+  };
+}
+
+type PlaceEditorController = ReturnType<typeof usePlaceEditorController>;
+
+function PlaceEditorForm(props: {
+  readonly editor: PlaceEditorController;
+  readonly pending: boolean;
+  readonly error?: string | null;
+  readonly submitText: string;
+}): JSX.Element {
+  const { editor } = props;
+
+  return (
+    <form className="contents" onSubmit={editor.submit}>
+      <DialogBody className="flex flex-col gap-4">
+        <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
+          Name
+          <Input
+            autoFocus
+            maxLength={120}
+            value={editor.name}
+            placeholder="Main library"
+            onChange={(event) => {
+              editor.setName(event.target.value);
+            }}
+          />
+        </label>
+        <PlaceAddressAutocomplete
+          value={editor.address}
+          disabled={props.pending}
+          onValueChange={editor.changeAddress}
+          onResolved={editor.resolveAddress}
+        />
+        {editor.addressNeedsSelection ? (
+          <p className="text-on-surface-variant text-body-small" role="status">
+            Choose an address suggestion before saving this address.
+          </p>
+        ) : null}
+        <PlaceMapPicker value={editor.point} onChange={editor.changePoint} />
+        {editor.reverse.isPending ? (
+          <p className="text-on-surface-variant text-body-small" role="status">
+            Looking up this point…
+          </p>
+        ) : null}
+        <ReverseAddressSuggestion
+          suggestion={editor.addressSuggestion}
+          onKeep={editor.dismissSuggestion}
+          onUse={editor.resolveAddress}
+        />
+        {editor.reverse.error ? (
+          <p role="alert" className="text-error text-body-small">
+            {userErrorMessage(
+              editor.reverse.error,
+              'Docket could not suggest an address for that point.',
+            )}
+          </p>
+        ) : null}
+        {editor.pointRequired ? (
+          <p className="text-on-surface-variant text-body-small">
+            Automatic location needs a point on the map.
+          </p>
+        ) : null}
+        {props.error ? (
+          <p role="alert" className="text-error text-body-small">
+            {props.error}
+          </p>
+        ) : null}
+      </DialogBody>
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button type="button" variant="ghost" disabled={props.pending}>
+            Cancel
+          </Button>
+        </DialogClose>
+        <Button type="submit" disabled={editor.cannotSave}>
+          {props.submitText}
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
+/** Render one synchronized address and map editor without a separate map disclosure state. */
+export function PlaceEditorDialog(props: PlaceEditorDialogProps): JSX.Element {
+  const intent = props.intent ?? 'standard';
+  const editor = usePlaceEditorController(props);
   return (
     <Dialog
-      open={open}
+      open={props.open}
       onOpenChange={(next) => {
-        if (!pending) onOpenChange(next);
+        if (!props.pending) props.onOpenChange(next);
       }}
     >
       <DialogContent presentation={{ kind: 'centered', size: 'large', height: 'content' }}>
         <DialogHeader>
-          <DialogTitle>{editorTitle(intent, place)}</DialogTitle>
+          <DialogTitle>{editorTitle(intent, props.place)}</DialogTitle>
         </DialogHeader>
-        <form className="contents" onSubmit={submit}>
-          <DialogBody className="flex flex-col gap-4">
-            <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
-              Name
-              <Input
-                autoFocus
-                maxLength={120}
-                value={name}
-                placeholder="Main library"
-                onChange={(event) => {
-                  setName(event.target.value);
-                }}
-              />
-            </label>
-            <PlaceAddressAutocomplete
-              value={address}
-              disabled={pending}
-              onValueChange={(next) => {
-                setAddress(next);
-                setAddressConfirmed(next.trim().length === 0);
-                setAddressSuggestion(null);
-              }}
-              onResolved={resolveAddress}
-            />
-            {addressNeedsSelection ? (
-              <p className="text-on-surface-variant text-body-small" role="status">
-                Choose an address suggestion before saving this address.
-              </p>
-            ) : null}
-            <PlaceMapPicker
-              value={point}
-              onChange={(next) => {
-                setPoint(next);
-                latestPointRef.current = next;
-                setAddressSuggestion(null);
-                reverse.mutate(next);
-              }}
-            />
-            {reverse.isPending ? (
-              <p className="text-on-surface-variant text-body-small" role="status">
-                Looking up this point…
-              </p>
-            ) : null}
-            <ReverseAddressSuggestion
-              suggestion={addressSuggestion}
-              onKeep={() => {
-                setAddressSuggestion(null);
-              }}
-              onUse={resolveAddress}
-            />
-            {reverse.error ? (
-              <p role="alert" className="text-error text-body-small">
-                {userErrorMessage(
-                  reverse.error,
-                  'Docket could not suggest an address for that point.',
-                )}
-              </p>
-            ) : null}
-            {pointRequired ? (
-              <p className="text-on-surface-variant text-body-small">
-                Automatic location needs a point on the map.
-              </p>
-            ) : null}
-            {error ? (
-              <p role="alert" className="text-error text-body-small">
-                {error}
-              </p>
-            ) : null}
-          </DialogBody>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="ghost" disabled={pending}>
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button type="submit" disabled={cannotSave}>
-              {submitLabel(intent, place)}
-            </Button>
-          </DialogFooter>
-        </form>
+        <PlaceEditorForm
+          editor={editor}
+          pending={props.pending}
+          error={props.error ?? null}
+          submitText={submitLabel(intent, props.place)}
+        />
       </DialogContent>
     </Dialog>
   );

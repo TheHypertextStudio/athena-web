@@ -8,6 +8,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { connectorServer } from '../../src/slices';
+
 /** The minimum a `@docket/env/api` import needs to compose without throwing. */
 function validApiEnv(): Record<string, string> {
   return {
@@ -63,6 +65,21 @@ afterEach(() => {
 });
 
 describe('apiHosts', () => {
+  it('keeps the Mapbox token optional outside production', () => {
+    expect(connectorServer.MAPBOX_ACCESS_TOKEN.parse(undefined)).toBeUndefined();
+    expect(connectorServer.MAPBOX_ACCESS_TOKEN.parse('pk.mapbox-test')).toBe('pk.mapbox-test');
+  });
+
+  it('requires the Mapbox geocoding token in production', async () => {
+    const production = productionBase();
+    delete production['MAPBOX_ACCESS_TOKEN'];
+    stubAll(production);
+
+    await expect(import('../../src/api')).rejects.toThrow(
+      'MAPBOX_ACCESS_TOKEN is required for production saved-place geocoding',
+    );
+  });
+
   it('reads each host from its own variable', async () => {
     stubAll({
       ...validApiEnv(),

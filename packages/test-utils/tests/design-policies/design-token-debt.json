@@ -627,9 +627,6 @@
   "apps/web/src/components/wordmark.tsx": {
     "raw-type-utility": 3
   },
-  "apps/web/src/components/work-location/place-map-picker.tsx": {
-    "ad-hoc-border": 2
-  },
   "apps/web/src/components/work-location/work-location-calendar-components.tsx": {
     "ad-hoc-border": 2
   },

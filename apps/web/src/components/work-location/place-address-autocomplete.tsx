@@ -7,7 +7,7 @@ import type {
   WorkPlaceGeocodeSearchOut,
 } from '@docket/planning/work-location-contract';
 import { MenuListbox, MenuOption } from '@docket/ui/components';
-import { Input } from '@docket/ui/primitives';
+import { Input, Surface } from '@docket/ui/primitives';
 import { type JSX, type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -65,7 +65,7 @@ function AddressSearchFeedback(props: {
   return (
     <>
       {props.menuVisible ? (
-        <div className="border-outline-variant bg-surface-container max-h-64 overflow-y-auto rounded-lg border py-1">
+        <Surface tone="floating" shape="small" className="max-h-64 overflow-y-auto py-1">
           {props.search.pending ? (
             <p className="text-on-surface-variant text-body-small px-4 py-3" role="status">
               Searching addresses…
@@ -90,11 +90,11 @@ function AddressSearchFeedback(props: {
             </MenuListbox>
           )}
           {props.search.data?.attribution ? (
-            <p className="text-on-surface-variant border-outline-variant text-body-small border-t px-4 py-2">
+            <p className="text-on-surface-variant text-body-small px-4 py-2">
               {props.search.data.attribution}
             </p>
           ) : null}
-        </div>
+        </Surface>
       ) : null}
       {props.search.error ? (
         <span role="alert" className="text-error text-body-small">
@@ -110,31 +110,26 @@ function AddressSearchFeedback(props: {
   );
 }
 
-/** Search temporary candidates and permanently resolve the selected one. */
-export function PlaceAddressAutocomplete({
-  value,
-  onValueChange,
-  onResolved,
-  disabled = false,
-}: PlaceAddressAutocompleteProps): JSX.Element {
-  const listboxId = useId();
-  const [activeIndex, setActiveIndex] = useState(0);
+function useAcceptedAddress(value: string) {
   const [acceptedAddress, setAcceptedAddress] = useState(value);
   const directEditRef = useRef(false);
-  const searchValue = value === acceptedAddress ? '' : value;
-  const search = useRemoteSearch({
-    query: searchValue,
-    debounceMs: SEARCH_DEBOUNCE_MS,
-    minChars: 3,
-    enabled: !disabled,
-    key: queryKeys.workLocationGeocoding,
-    fetch: (term) =>
-      api.v1.me['work-location'].places.geocoding.search.$get({ query: { query: term } }),
-    fallbackMessage: 'Docket could not search addresses. Try again.',
-  });
-  const candidates = search.term === searchValue.trim() ? (search.data?.items ?? []) : [];
-  const active = candidates[activeIndex] ?? null;
-  const resolve = useApiMutation({
+
+  useEffect(() => {
+    if (directEditRef.current) {
+      directEditRef.current = false;
+      return;
+    }
+    setAcceptedAddress(value);
+  }, [value]);
+
+  return { acceptedAddress, setAcceptedAddress, directEditRef };
+}
+
+function useAddressResolution(
+  onResolved: (result: WorkPlaceGeocodeResult) => void,
+  setAcceptedAddress: (value: string) => void,
+) {
+  return useApiMutation({
     mutationFn: (candidate: WorkPlaceGeocodeCandidate) =>
       unwrap(
         () =>
@@ -148,18 +143,36 @@ export function PlaceAddressAutocomplete({
       onResolved(result);
     },
   });
+}
+
+/** Search temporary candidates and permanently resolve the selected one. */
+export function PlaceAddressAutocomplete({
+  value,
+  onValueChange,
+  onResolved,
+  disabled = false,
+}: PlaceAddressAutocompleteProps): JSX.Element {
+  const listboxId = useId();
+  const [activeIndex, setActiveIndex] = useState(0);
+  const { acceptedAddress, setAcceptedAddress, directEditRef } = useAcceptedAddress(value);
+  const searchValue = value === acceptedAddress ? '' : value;
+  const search = useRemoteSearch({
+    query: searchValue,
+    debounceMs: SEARCH_DEBOUNCE_MS,
+    minChars: 3,
+    enabled: !disabled,
+    key: queryKeys.workLocationGeocoding,
+    fetch: (term) =>
+      api.v1.me['work-location'].places.geocoding.search.$get({ query: { query: term } }),
+    fallbackMessage: 'Docket could not search addresses. Try again.',
+  });
+  const candidates = search.term === searchValue.trim() ? (search.data?.items ?? []) : [];
+  const active = candidates[activeIndex] ?? null;
+  const resolve = useAddressResolution(onResolved, setAcceptedAddress);
 
   useEffect(() => {
     setActiveIndex(0);
   }, [search.term]);
-
-  useEffect(() => {
-    if (directEditRef.current) {
-      directEditRef.current = false;
-      return;
-    }
-    setAcceptedAddress(value);
-  }, [value]);
 
   const choose = (candidate: WorkPlaceGeocodeCandidate): void => {
     if (!resolve.isPending) resolve.mutate(candidate);

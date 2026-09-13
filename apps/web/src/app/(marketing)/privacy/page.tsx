@@ -20,6 +20,29 @@ function PolicySection({ title, children }: { title: string; children: ReactNode
   );
 }
 
+function InformationCollectedSection(): JSX.Element {
+  return (
+    <PolicySection title="Information we collect">
+      <p>
+        We process account profile details, passkey and session metadata, the organizations and work
+        you create, product settings, support communications, and technical logs needed to secure
+        and operate Docket. We do not store passkey private keys.
+      </p>
+      <p>
+        When you authorize a connector, we also process the provider account identifier, granted
+        scopes, encrypted OAuth access and refresh tokens, synchronization cursors, and the data
+        needed to provide that connector.
+      </p>
+      <p>
+        When you search for a saved-place address, Docket sends the text you type to Mapbox through
+        Docket&apos;s API. Docket does not store temporary autocomplete results. When you choose a
+        result or ask Docket to identify a point on the map, Docket requests a permanent Mapbox
+        result and stores the selected address and coordinates with your saved place.
+      </p>
+    </PolicySection>
+  );
+}
+
 /** Public privacy policy for Docket, including Google API Limited Use disclosures. */
 export default function PrivacyPage(): JSX.Element {
   return (
@@ -43,24 +66,7 @@ export default function PrivacyPage(): JSX.Element {
         </p>
       </PolicySection>
 
-      <PolicySection title="Information we collect">
-        <p>
-          We process account profile details, passkey and session metadata, the organizations and
-          work you create, product settings, support communications, and technical logs needed to
-          secure and operate Docket. We do not store passkey private keys.
-        </p>
-        <p>
-          When you authorize a connector, we also process the provider account identifier, granted
-          scopes, encrypted OAuth access and refresh tokens, synchronization cursors, and the data
-          needed to provide that connector.
-        </p>
-        <p>
-          When you search for a saved-place address, Docket sends the text you type to Mapbox
-          through Docket&apos;s API. Docket does not store temporary autocomplete results. When you
-          choose a result or ask Docket to identify a point on the map, Docket requests a permanent
-          Mapbox result and stores the selected address and coordinates with your saved place.
-        </p>
-      </PolicySection>
+      <InformationCollectedSection />
 
       <PolicySection title="Google user data">
         <p>

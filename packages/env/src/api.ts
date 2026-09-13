@@ -182,6 +182,11 @@ function assertProductionMapbox(e: typeof env, fail: (message: string) => never)
   }
 }
 
+function assertProviderConfig(e: typeof env): void {
+  assertPhoneVerificationConfig(e);
+  assertProductionMapbox(e, failCrossField);
+}
+
 /**
  * Cross-field invariants that a per-var schema cannot express. Runs at module load
  * so a misconfigured contract fails fast, the same as a missing required var.
@@ -190,10 +195,7 @@ function assertProductionMapbox(e: typeof env, fail: (message: string) => never)
  */
 function assertCrossFieldRules(e: typeof env): void {
   const fail = failCrossField;
-
-  assertPhoneVerificationConfig(e);
-  assertProductionMapbox(e, fail);
-
+  assertProviderConfig(e);
   const billingCanaryEnabled =
     e.BILLING_CANARY_EMAILS?.split(',').some((email) => email.trim().length > 0) ?? false;
   const billingCustomerOperationsEnabled = e.BILLING_ENABLED || billingCanaryEnabled;

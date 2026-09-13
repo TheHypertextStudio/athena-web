@@ -72,6 +72,31 @@ describe('sessionMiddleware', () => {
     expect(await res.json()).toEqual({ userId: undefined });
   });
 
+  it('never resolves or refreshes a cookie when a REST request presents Authorization', async () => {
+    const res = await app().request('/v1/orgs', {
+      headers: {
+        authorization: 'Bearer malformed',
+        cookie: 'better-auth.session_token=must-not-be-read',
+      },
+    });
+
+    expect(getSession).not.toHaveBeenCalled();
+    expect(res.headers.getSetCookie()).toEqual([]);
+  });
+
+  it('never resolves or refreshes a cookie when an MCP request presents Authorization', async () => {
+    const res = await app().request('/mcp', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer malformed',
+        cookie: 'better-auth.session_token=must-not-be-read',
+      },
+    });
+
+    expect(getSession).not.toHaveBeenCalled();
+    expect(res.headers.getSetCookie()).toEqual([]);
+  });
+
   it('carries a null session through when nothing is signed in', async () => {
     getSession.mockResolvedValue({ headers: new Headers(), response: null });
 

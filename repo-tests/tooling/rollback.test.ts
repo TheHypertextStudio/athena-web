@@ -16,6 +16,7 @@ function revision(overrides: Partial<Revision> = {}): Revision {
     trafficPercent: 0,
     ready: true,
     createdAt: '2026-09-01T00:00:00.000Z',
+    oauthGrantAware: true,
     ...overrides,
   };
 }
@@ -56,5 +57,32 @@ describe('planRollback', () => {
 
     expect(plan.kind).toBe('refused');
     expect(plan).toMatchObject({ reason: expect.stringContaining('already serves') });
+  });
+
+  it('refuses an API revision that predates resource-bound OAuth grants', () => {
+    const plan = planRollback(
+      [
+        revision({ name: 'current', trafficPercent: 100 }),
+        revision({ name: 'pre-grants', oauthGrantAware: false }),
+      ],
+      'pre-grants',
+      'docket-api',
+    );
+
+    expect(plan).toEqual({
+      kind: 'refused',
+      reason:
+        'pre-grants predates resource-bound OAuth grants; disable OAuth, MCP bearer, and REST bearer access instead of routing API traffic to it',
+    });
+  });
+
+  it('does not apply the API OAuth boundary to another service', () => {
+    const plan = planRollback(
+      [revision({ name: 'old-web', oauthGrantAware: false })],
+      'old-web',
+      'docket-web',
+    );
+
+    expect(plan).toEqual({ kind: 'rollback', service: 'docket-web', to: 'old-web' });
   });
 });

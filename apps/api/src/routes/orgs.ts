@@ -29,7 +29,7 @@ import {
   WorkspaceSettingsUpdate,
 } from '../contracts/organization';
 import { pageOf } from '../contracts/pagination';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';
 
@@ -97,16 +97,23 @@ const orgs = new Hono<AppEnv>()
       tag: 'Orgs',
       summary: 'List organizations',
       response: pageOf(OrgSummary),
-      description: `List every organization the authenticated user belongs to, as compact \`OrgSummary\` rows for the org switcher / rail. Membership is derived from the user's **human Actor** rows: the query joins \`actor\` (where \`kind = 'human'\` and \`user_id\` = the session user) to \`organization\`, so an org appears here only if the caller has a human Actor in it. Personal spaces (\`isPersonal: true\`) are included alongside team orgs. This is the only un-nested org read — it is NOT behind \`orgContextMiddleware\` because it spans orgs; every other org route lives under \`/:orgId\` and resolves a single membership. Requires only an authenticated session (no capability), since it returns only the orgs the caller already belongs to. Results are unpaginated in practice (a user's membership count is small) but still wrapped in the standard \`{ items }\` page envelope. See \`GET /:orgId\` for the full representation of one org.`,
+      description: `List every organization the authenticated caller belongs to, as compact \`OrgSummary\` rows for workspace selection. Docket uses the selected session or OAuth principal's user identity and returns only organizations where that user has an active, unarchived human membership. Personal spaces (\`isPersonal: true\`) are included alongside team organizations. This is the only un-nested organization read because it spans workspaces; every other organization route lives under \`/:orgId\` and resolves one membership. A first-party session needs no extra capability. An OAuth client needs \`work:read\`, and Docket still applies the same membership filter after scope validation. Results use the standard \`{ items }\` page envelope. See \`GET /:orgId\` for the full representation of one organization.`,
     }),
     async (c) => {
-      const session = c.get('session');
-      if (!session?.user) throw new AuthError();
+      const principal = c.get('principal');
+      if (!principal) throw new AuthError();
       const rows = await db
         .select({ org: organization })
         .from(actor)
         .innerJoin(organization, eq(actor.organizationId, organization.id))
-        .where(and(eq(actor.userId, session.user.id), eq(actor.kind, 'human')));
+        .where(
+          and(
+            eq(actor.userId, principal.userId),
+            eq(actor.kind, 'human'),
+            eq(actor.status, 'active'),
+            isNull(actor.archivedAt),
+          ),
+        );
       const items = rows.map((r) => ({
         id: r.org.id,
         name: r.org.name,

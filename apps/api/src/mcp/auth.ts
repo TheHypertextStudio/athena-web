@@ -8,10 +8,10 @@
  * {@link canActor} before touching data. Nothing here bypasses the permission engine;
  * it only establishes *who* is asking, exactly like {@link orgContextMiddleware}.
  */
-import { verifyAccessToken } from '@docket/auth';
-import { actor, db, oauthClient, oauthConsent, user as userTable } from '@docket/db';
-import { and, eq } from 'drizzle-orm';
+import { actor, db } from '@docket/db';
+import { and, eq, isNull } from 'drizzle-orm';
 
+import { oauthIssuer as sharedOauthIssuer, verifyMcpBearer } from '../auth/oauth-bearer';
 import { env } from '../env';
 import { AuthError, CapabilityError, NotFoundError } from '../error';
 import { assertProductCapability } from '../product-capability';
@@ -177,113 +177,26 @@ function bearerToken(headers: Headers): string | null {
  * @returns the issuer identifier, or `null` when the RS is not configured for OAuth.
  */
 export function oauthIssuer(): string | null {
-  const origin = env.MCP_ISSUER_URL?.replace(/\/$/, '');
-  return origin ? `${origin}/api/auth` : null;
-}
-
-/**
- * Whether the caller's grant for `clientId` is still standing.
- *
- * @remarks
- * The check that makes revocation **immediate** rather than eventual: a third-party developer's
- * consent screen must accurately describe live access, so revoking a grant from the user's
- * settings has to make the very next call fail, not merely stop future token issuance. Docket's
- * access tokens are self-contained JWTs, so `verifyAccessToken` alone proves only that this AS minted the
- * token for this resource and that it has not expired — it says nothing about whether the person
- * has since removed the app from their Connected apps screen. Without this lookup a revoked client
- * kept working for the remainder of the token's 15-minute lifetime, which is precisely the window
- * someone revoking a suspicious app is trying to close.
- *
- * The grant record is the `oauthConsent` row `DELETE /v1/me/connected-apps/:clientId` deletes. One
- * class of client legitimately has none: a client registered with `skip_consent` never runs the
- * consent screen, so for those the registration itself *is* the authorization and the client row is
- * what is checked. A `disabled` client fails either way.
- *
- * Cost is one indexed read on `(client_id, user_id)` per call, alongside the user read this path
- * already performs — the earlier "no DB round-trip per call" property was never true of this
- * function, and correctness on revocation is worth strictly more than the round-trip it saves.
- *
- * @param clientId - The `azp` claim: the OAuth client the token was minted for.
- * @param userId - The token's subject.
- * @returns true when the client is registered, enabled, and still authorized by this user.
- */
-async function isGrantLive(clientId: string, userId: string): Promise<boolean> {
-  const clients = await db
-    .select({ disabled: oauthClient.disabled, skipConsent: oauthClient.skipConsent })
-    .from(oauthClient)
-    .where(eq(oauthClient.clientId, clientId))
-    .limit(1);
-
-  const client = clients[0];
-  if (!client || client.disabled === true) return false;
-  if (client.skipConsent === true) return true;
-
-  const consents = await db
-    .select({ id: oauthConsent.id })
-    .from(oauthConsent)
-    .where(and(eq(oauthConsent.clientId, clientId), eq(oauthConsent.userId, userId)))
-    .limit(1);
-
-  return consents.length > 0;
+  return sharedOauthIssuer();
 }
 
 async function resolveBearerContext(token: string): Promise<McpContext> {
-  // Issuer binding (§2.5 item 3): the RS only accepts tokens once it advertises an issuer
-  // + canonical resource. Absent that config, a Bearer token is rejected outright (it
-  // cannot have been minted by *this* AS for *this* resource).
-  const issuer = oauthIssuer();
-  if (!issuer || !env.MCP_RESOURCE_URL) {
-    throw new AuthError('Bearer tokens are not accepted on this resource');
-  }
-
-  let payload: Awaited<ReturnType<typeof verifyAccessToken>>;
+  let principal: Awaited<ReturnType<typeof verifyMcpBearer>>;
   try {
-    payload = await verifyAccessToken(token, {
-      verifyOptions: { audience: env.MCP_RESOURCE_URL, issuer },
-      jwksUrl: `${issuer}/jwks`,
-    });
+    principal = await verifyMcpBearer(token);
   } catch {
     throw new AuthError();
   }
 
-  const userId = typeof payload.sub === 'string' ? payload.sub : null;
-  if (!userId) throw new AuthError();
-
-  // `azp` is the authorized party — the OAuth client the AS minted this token for. Better Auth's
-  // `oauthProvider` stamps it onto every access token it issues, so a token that reaches here
-  // without one did not come from the authorization-code flow and cannot have its grant checked;
-  // refusing is the only answer that keeps revocation meaningful.
-  const clientClaim = payload['azp'];
-  const clientId = typeof clientClaim === 'string' && clientClaim !== '' ? clientClaim : null;
-  if (!clientId) throw new AuthError();
-  if (!(await isGrantLive(clientId, userId))) throw new AuthError();
-
-  const scopeClaim = payload['scope'];
-  const scopes = (typeof scopeClaim === 'string' ? scopeClaim : '')
-    .split(/\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  // The user record backs the display name/email the prompts/resources surface — read
-  // directly by the token's `sub`, independent of any session cookie (there may be none).
-  const rows = await db
-    .select({ name: userTable.name, email: userTable.email })
-    .from(userTable)
-    .where(eq(userTable.id, userId))
-    .limit(1);
-  const row = rows[0];
-  const name = row?.name ?? '';
-
   return {
     principal: {
       kind: 'user',
-      userId,
-      // An empty display name normalizes to null (not the literal `''`).
-      userName: name === '' ? null : name,
-      userEmail: row?.email ?? '',
+      userId: principal.userId,
+      userName: principal.user.name === '' ? null : principal.user.name,
+      userEmail: principal.user.email,
     },
-    scopes,
-    clientId,
+    scopes: principal.scopes,
+    clientId: principal.clientId,
   };
 }
 
@@ -340,6 +253,8 @@ export async function resolveActor(ctx: McpContext, orgId: string): Promise<McpA
         eq(actor.userId, ctx.principal.userId),
         eq(actor.organizationId, orgId),
         eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
       ),
     )
     .limit(1);

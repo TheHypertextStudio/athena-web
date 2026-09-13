@@ -85,11 +85,13 @@ export function sharedTimerEmbedSnippet(statusUrl: string, token: string): strin
  * foreign origin can reach is readable in one file, instead of being assembled by grepping for
  * `cors()` calls scattered through the route tree.
  */
-const timePublic = new Hono<AppEnv>().get('/status', async (c) => {
-  const token = c.req.header(SHARE_TOKEN_HEADER);
-  if (!token) throw new AuthError('Share token is required');
-  c.header('Cache-Control', 'no-store');
-  return ok(c, PublicTimerStatusOut, await readSharedTimerStatus(token));
-});
+const timePublic = new Hono<AppEnv>()
+  .on('HEAD', '/status', (c) => c.body(null, 200))
+  .get('/status', async (c) => {
+    const token = c.req.header(SHARE_TOKEN_HEADER);
+    if (!token) throw new AuthError('Share token is required');
+    c.header('Cache-Control', 'no-store');
+    return ok(c, PublicTimerStatusOut, await readSharedTimerStatus(token));
+  });
 
 export default timePublic;

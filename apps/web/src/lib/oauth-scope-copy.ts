@@ -69,7 +69,8 @@ export const OAUTH_SCOPE_ACCESS_LABEL: Readonly<Record<OAuthScopeAccess, string>
 export const OAUTH_SCOPE_COPY: Readonly<Record<OAuthIssuableScope, OAuthScopeCopy>> = {
   'work:read': {
     label: 'Read your work',
-    detail: 'View your tasks, projects, programs, initiatives, and cycles.',
+    detail:
+      'View workspace structure, work, comments, updates, search, saved views, schedules, calendars, time, and your notifications.',
     access: 'read',
   },
   'work:write': {
@@ -78,18 +79,18 @@ export const OAUTH_SCOPE_COPY: Readonly<Record<OAuthIssuableScope, OAuthScopeCop
     // an app should not learn that from the app's behaviour afterwards.
     label: 'Create and update work',
     detail:
-      'Create tasks, update and organize projects, post comments and status updates, and archive work.',
+      'Create and update work, comments, plans, schedules, time records, notification read state, and published brief content.',
     access: 'write',
   },
   'agents:run': {
-    label: 'Manage agent sessions',
+    label: 'Run Athena and agents',
     detail:
-      'Start and cancel agent work sessions, and approve or reject the actions an agent proposes.',
+      'Start, steer, resume, and cancel Athena or agent sessions, use voice sessions, and approve or reject proposed actions.',
     access: 'write',
   },
   'connectors:link': {
-    label: 'Link external items',
-    detail: 'Connect other tools you use and link items from them to your work.',
+    label: 'Manage connections',
+    detail: 'Connect, configure, disconnect, and run integrations with other tools you use.',
     access: 'write',
   },
   // Not a Docket capability — this is the standard permission that lets the app refresh its own

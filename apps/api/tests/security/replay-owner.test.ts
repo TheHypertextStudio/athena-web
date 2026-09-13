@@ -111,6 +111,22 @@ describe('replay-owner session binding', () => {
     expect(getSession).toHaveBeenCalledTimes(1);
   });
 
+  it('rejects Authorization combined with a replay owner before any session lookup', async () => {
+    const handlerCalls = { count: 0 };
+
+    const response = await replayProbe(handlerCalls).request('/v1/orgs/o1/object-commands', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer valid',
+        [REPLAY_OWNER_HEADER]: 'queued-owner',
+      },
+    });
+
+    expect(response.status).toBe(401);
+    expect(handlerCalls.count).toBe(0);
+    expect(getSession).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['a non-command POST', 'POST', '/v1/orgs/o1/tasks'],
     ['the wrong method on the command route', 'PATCH', '/v1/orgs/o1/object-commands'],

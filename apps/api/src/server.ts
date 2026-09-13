@@ -14,11 +14,18 @@
 import { serve } from '@hono/node-server';
 import { auth } from '@docket/auth';
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { requestId } from 'hono/request-id';
 import { secureHeaders } from 'hono/secure-headers';
 
 import { adminApp, app } from './app';
 import { sessionMiddleware } from './auth/session-middleware';
+import {
+  principalMiddleware,
+  requireSessionForNonGet,
+  requireSessionPrincipal,
+} from './auth/principal-middleware';
+import { restProtectedResourceMetadata } from './auth/rest-resource-metadata';
 import type { AppEnv } from './context';
 import { registerPublicApiBoundary } from './api-version-middleware';
 import { getContainer } from './container';
@@ -53,6 +60,7 @@ import latticeOAuth from './routes/lattice-oauth';
 import { latticeClientMetadata } from './routes/lattice-client-metadata';
 import webhooks from './routes/webhooks';
 import oauthStubProvider from './lib/oauth-stub-provider';
+import { MAX_REQUEST_BYTES, rejectOversizedBody } from './lib/http-limits';
 
 const trustedOrigins =
   env.BETTER_AUTH_TRUSTED_ORIGINS?.split(',')
@@ -88,7 +96,15 @@ server.use('*', secureHeaders({ crossOriginResourcePolicy: 'cross-origin', xFram
 
 registerPublicApiBoundary(server, trustedOrigins);
 
+// The REST byte ceiling sits outside the typed app because its stream/download routes are
+// root-mounted. It also keeps authentication and database reads behind the process-protection
+// boundary for every `/v1` request.
+server.use(
+  '/v1/*',
+  bodyLimit({ maxSize: MAX_REQUEST_BYTES, onError: () => rejectOversizedBody() }),
+);
 server.use('*', sessionMiddleware);
+server.use('*', principalMiddleware);
 // CIMD preflight (mcp-surface.md §2.6): Better Auth resolves authorize clients by exact
 // `client_id`, so URL-form MCP client ids must be fetched/validated/upserted into the OAuth
 // client table BEFORE the authorize handler runs. Registered ahead of `/api/auth/*` so it
@@ -113,6 +129,7 @@ server.get('/mcp/apps/sandbox', mcpAppSandboxHandler);
 // challenge points at, plus the Authorization Server metadata pointer (RFC 8414).
 server.get('/.well-known/oauth-protected-resource', protectedResourceMetadata);
 server.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadata);
+server.get('/.well-known/oauth-protected-resource/v1', restProtectedResourceMetadata);
 server.get('/.well-known/oauth-authorization-server', authorizationServerMetadata);
 // RFC 8414 §3.1: an issuer with a path component (ours is `<origin>/api/auth`) is discovered
 // with the well-known segment inserted BEFORE that path, not at the bare root above — the form
@@ -182,6 +199,8 @@ server.route('/webhooks/mail', inboundMail);
 // User-facing non-RPC edges that stay on `/v1`: the SSE live stream, and the binary account
 // export download (GET registered before the typed app so its path matches; the typed app still
 // owns POST /v1/me/account/exports).
+server.use('/v1/stream/*', requireSessionPrincipal);
+server.use('/v1/me/account/exports/:exportId/file', requireSessionPrincipal);
 server.route('/v1/stream', streamSse);
 server.route('/v1/me/account/exports', meAccountExportDownload);
 // The anonymous published-brief read. Mounted HERE, before the typed `/v1` app, precisely so it
@@ -192,9 +211,11 @@ server.route('/v1/public', publicBriefs);
 // The token-authorized "what am I working on" read, mounted for the same structural reason as
 // the published brief above: it must not live inside the session-gated `/v1` app. Its
 // credential-free CORS policy is declared by path in `cors.ts`. See `routes/time-public.ts`.
+server.use('/v1/public/time/status', requireSessionForNonGet);
 server.route('/v1/public/time', timePublic);
 // The internal staff back-office (`AdminAppType`) under `/admin`, self-gated by staffMiddleware
 // — separate from the public `/v1` app and absent from the public spec.
+server.use('/admin/*', requireSessionPrincipal);
 server.route('/', adminApp);
 server.route('/', app);
 server.route('/v1/health', healthRoutes);

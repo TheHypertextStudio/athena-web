@@ -16,8 +16,8 @@ import { AuthError, NotFoundError } from '../error';
 
 /** Resolve and attach the org-scoped actor context for `/orgs/:orgId/*` routes. */
 export const orgContextMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const session = c.get('session');
-  if (!session?.user) throw new AuthError();
+  const principal = c.get('principal');
+  if (!principal) throw new AuthError();
 
   const orgId = c.req.param('orgId');
   if (!orgId) throw new NotFoundError();
@@ -36,7 +36,7 @@ export const orgContextMiddleware: MiddlewareHandler<AppEnv> = async (c, next) =
     // non-human, and archived records out so downstream handlers never receive usable context.
     .where(
       and(
-        eq(actor.userId, session.user.id),
+        eq(actor.userId, principal.userId),
         eq(actor.organizationId, orgId),
         eq(actor.kind, 'human'),
         eq(actor.status, 'active'),

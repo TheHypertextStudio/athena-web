@@ -2,11 +2,9 @@
  * `@docket/api` — the global authentication gate.
  *
  * @remarks
- * Defense-in-depth authentication for the typed `/v1` app: every RPC route requires an
- * authenticated session UNLESS its exact path is in {@link PUBLIC_PATHS}. This makes
- * authentication **opt-out** — a forgotten per-handler session check can no longer leave a
- * route publicly reachable — rather than the previous opt-in model where each endpoint had
- * to fend for itself.
+ * Defense-in-depth authentication for the typed `/v1` app. The exact operation policy selects a
+ * public, first-party-session, or session-or-OAuth boundary. Any operation without an explicit
+ * OAuth policy stays session-only, so adding a route cannot widen external access by accident.
  *
  * It is purely the authentication floor. Authorization layers on top unchanged:
  * {@link orgContextMiddleware} resolves org membership for `/orgs/:orgId/*`, and
@@ -19,7 +17,10 @@
 import type { MiddlewareHandler } from 'hono';
 
 import type { AppEnv } from '../context';
-import { AuthError } from '../error';
+import type { CallerPrincipal } from '../context';
+import { AuthError, CapabilityError, InsufficientScopeError } from '../error';
+import { resolvePresentedRestBearer } from '../auth/principal-middleware';
+import { accessForOperation } from '../auth/rest-access-policy';
 
 /**
  * Routes reachable without a session:
@@ -29,22 +30,73 @@ import { AuthError } from '../error';
  *   `*` middleware before falling through to the server handler; they must be exempted here or
  *   the gate would 401 them.
  *
- * Every other `/v1` route requires a session.
+ * Every other `/v1` route uses the exact policy returned by {@link accessForOperation}. The
+ * default policy requires a first-party session.
  */
-const PUBLIC_PATHS: ReadonlySet<string> = new Set([
-  '/v1/config',
+const PUBLIC_CONTROL_PATHS: ReadonlySet<string> = new Set([
   '/v1/health',
   '/v1/openapi.json',
   '/v1/docs',
 ]);
 
+function isPublicControlOperation(method: string, path: string): boolean {
+  const safeRead = method === 'GET' || method === 'HEAD';
+  return safeRead && (PUBLIC_CONTROL_PATHS.has(path) || path.startsWith('/v1/docs/assets/'));
+}
+
+async function operationPrincipal(
+  c: Parameters<MiddlewareHandler<AppEnv>>[0],
+): Promise<CallerPrincipal | null> {
+  if (c.req.raw.headers.has('authorization')) return resolvePresentedRestBearer(c);
+  const principal = c.get('principal');
+  if (principal) return principal;
+  const session = c.get('session');
+  if (!session) return null;
+  return {
+    kind: 'session',
+    userId: session.user.id,
+    user: session.user,
+    session: session.session,
+  };
+}
+
+function assertRequiredScopes(
+  principal: Extract<CallerPrincipal, { kind: 'oauth' }>,
+  scopes: readonly (typeof principal.scopes)[number][],
+): void {
+  const missing = scopes.find((scope) => !principal.scopes.includes(scope));
+  if (missing) throw new InsufficientScopeError(missing);
+}
+
+async function enforceOperationAccess(
+  access: ReturnType<typeof accessForOperation>,
+  principal: CallerPrincipal | null,
+  next: () => Promise<void>,
+): Promise<void> {
+  if (!principal) throw new AuthError();
+  if (access.kind === 'session-only' && principal.kind === 'oauth') throw new CapabilityError();
+  if (access.kind === 'session-or-oauth' && principal.kind === 'oauth') {
+    assertRequiredScopes(principal, access.scopes);
+  }
+  if (access.kind === 'share-token') throw new AuthError();
+  await next();
+}
+
 /**
- * Require an authenticated session for every `/v1` route except {@link PUBLIC_PATHS}; throws
- * {@link AuthError} (401) otherwise.
+ * Enforce the exact operation access policy after the caller principal has been resolved.
+ *
+ * @throws {AuthError} When an operation requires authentication and no valid principal exists.
+ * @throws {CapabilityError} When an OAuth caller reaches a session-only operation.
+ * @throws {InsufficientScopeError} When an OAuth token lacks a required operation scope.
  */
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
-  if (!PUBLIC_PATHS.has(c.req.path) && !c.get('session')?.user) {
-    throw new AuthError();
+  const access = accessForOperation(c.req.method, c.req.path);
+  const principal = await operationPrincipal(c);
+  c.set('principal', principal);
+
+  if (access.kind === 'public' || isPublicControlOperation(c.req.method, c.req.path)) {
+    await next();
+    return;
   }
-  await next();
+  await enforceOperationAccess(access, principal, next);
 };

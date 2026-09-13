@@ -5,8 +5,8 @@
  * The spec is generated from the typed `/v1` app by `hono-openapi`'s `openAPIRouteHandler`,
  * which walks the chained routers and reads the `validator` (request) and `describeRoute`
  * (response + tags + capability) annotations attached to each route. Scalar renders it at
- * `/v1/docs`. The bearer requirement is declared once document-wide via `security` (public
- * routes opt out with `security: []` in their `apiDoc` — only `/v1/config` does).
+ * `/v1/docs`. The first-party session requirement is declared document-wide. The runtime access
+ * registry then assigns each operation its exact cookie, OAuth, or public alternative.
  *
  * Two SEPARATE references are served: the **public** `/v1` spec/docs from the `AppType` app, and
  * the **internal** `/admin` spec/docs from the `AdminAppType` app (staff-gated). The machine
@@ -24,6 +24,11 @@ import type { AdminInstance, AppInstance } from './app';
 import type { AppEnv } from './context';
 import { env } from './env';
 import { API_REVISION, API_VERSION } from './api-version';
+import {
+  accessForOperation,
+  REST_OAUTH_SCOPE_DESCRIPTIONS,
+  type ApiAccess,
+} from './auth/rest-access-policy';
 import { API_IDENTITY_COMPONENTS, normalizePublicApiIdentity } from './openapi-identity';
 
 /**
@@ -86,9 +91,10 @@ approval gate layered on top.
 
 ## Conventions
 
-- **Authentication** — a bearer session: \`Authorization: Bearer <token>\`. **Every** endpoint
-  requires it except \`GET /v1/config\` (public bootstrap config). Authentication is enforced by
-  a global gate, not per-handler, so no route is accidentally public.
+- **Authentication** — first-party Docket clients use the secure session cookie. External clients
+  use an OAuth 2.1 access token on operations that explicitly list \`restOAuth\`; the initial REST
+  OAuth surface is \`GET /v1/orgs\` with \`work:read\`. \`GET /v1/config\` is public. Every other
+  operation remains session-only until its runtime access policy adds an OAuth scope requirement.
 - **Identifiers** — every entity has a branded **ULID**: 26 Crockford-base32 chars matching
   \`^[0-9A-HJKMNP-TV-Z]{26}$\`. Each entity type has its own branded id, so ids are not
   interchangeable across resources.
@@ -287,6 +293,60 @@ const TAGS = [
   // must never appear in this public reference.
 ];
 
+const SESSION_COOKIE_SCHEME = {
+  type: 'apiKey' as const,
+  in: 'cookie' as const,
+  name: '__Secure-better-auth.session_token',
+  description:
+    'The first-party Docket browser session cookie. Production uses `__Secure-better-auth.session_token`; local HTTP development uses the unprefixed `better-auth.session_token` cookie.',
+};
+
+const SHARE_TOKEN_SCHEME = {
+  type: 'apiKey' as const,
+  in: 'header' as const,
+  name: 'X-Docket-Share-Token',
+  description:
+    'A revocable share token for the public shared time status operation. It is not a browser session or an OAuth access token.',
+};
+
+const OPENAPI_METHODS = [
+  'get',
+  'put',
+  'post',
+  'delete',
+  'options',
+  'head',
+  'patch',
+  'trace',
+] as const;
+
+type PublicDocument = Parameters<typeof normalizePublicApiIdentity>[0];
+type SecurityRequirement = Record<string, string[]>;
+
+function securityForAccess(access: ApiAccess): readonly SecurityRequirement[] {
+  switch (access.kind) {
+    case 'public':
+      return [];
+    case 'session-or-oauth':
+      return [{ restOAuth: [...access.scopes] }, { sessionCookie: [] }];
+    case 'session-only':
+      return [{ sessionCookie: [] }];
+    case 'share-token':
+      return [{ shareToken: [] }];
+  }
+}
+
+function applyRestOperationSecurity(document: PublicDocument): PublicDocument {
+  for (const [path, pathItem] of Object.entries(document.paths)) {
+    for (const method of OPENAPI_METHODS) {
+      const operation = pathItem[method];
+      if (!operation) continue;
+      operation.security = [...securityForAccess(accessForOperation(method, path))];
+    }
+  }
+  return document;
+}
+
 /** Build the base OpenAPI 3.1 documentation (paths are filled by route annotations). */
 function buildDocumentation() {
   return {
@@ -308,24 +368,23 @@ function buildDocumentation() {
     components: {
       ...API_IDENTITY_COMPONENTS,
       securitySchemes: {
-        bearerAuth: { type: 'http' as const, scheme: 'bearer' },
-        mcpOAuth: {
+        sessionCookie: SESSION_COOKIE_SCHEME,
+        restOAuth: {
           type: 'oauth2' as const,
           flows: {
             authorizationCode: {
-              authorizationUrl: `${env.API_URL}/api/auth/oauth2/authorize`,
+              authorizationUrl: `${env.WEB_URL}/api/auth/oauth2/authorize`,
               tokenUrl: `${env.API_URL}/api/auth/oauth2/token`,
-              scopes: {},
+              scopes: REST_OAUTH_SCOPE_DESCRIPTIONS,
             },
           },
         },
+        shareToken: SHARE_TOKEN_SCHEME,
       },
     },
-    // Global default: every operation requires the bearer session unless it overrides with
-    // `security: []` (only the public `/v1/config` does). OpenAPI applies a document-level
-    // `security` to all operations that don't declare their own — this mirrors the runtime
-    // `requireAuth` gate so the docs truthfully show auth on every protected route.
-    security: [{ bearerAuth: [] }],
+    // The post-generation registry pass installs explicit per-operation requirements. This
+    // default also keeps any consumer that reads only the document root on the safe session path.
+    security: [{ sessionCookie: [] }],
     tags: TAGS,
   };
 }
@@ -346,9 +405,9 @@ function buildAdminDocumentation() {
     },
     servers: [{ url: env.API_URL }],
     components: {
-      securitySchemes: { bearerAuth: { type: 'http' as const, scheme: 'bearer' } },
+      securitySchemes: { sessionCookie: SESSION_COOKIE_SCHEME },
     },
-    security: [{ bearerAuth: [] }],
+    security: [{ sessionCookie: [] }],
     tags: [
       {
         name: 'Admin',
@@ -404,8 +463,8 @@ export function registerOpenapi(
       const body = publicIdentity
         ? new TextEncoder().encode(
             JSON.stringify(
-              normalizePublicApiIdentity(
-                (await generated.json()) as Parameters<typeof normalizePublicApiIdentity>[0],
+              applyRestOperationSecurity(
+                normalizePublicApiIdentity((await generated.json()) as PublicDocument),
               ),
             ),
           )

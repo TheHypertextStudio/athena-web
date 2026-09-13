@@ -5,7 +5,7 @@ import { auth } from '@docket/auth';
 import type { Context, MiddlewareHandler } from 'hono';
 
 import type { AppEnv, AuthSession } from '../context';
-import { AuthError } from '../error';
+import { AuthError, CapabilityError } from '../error';
 import { isReplayOwnerRequest, REPLAY_OWNER_HEADER } from '../replay-owner-contract';
 
 /**
@@ -14,6 +14,33 @@ import { isReplayOwnerRequest, REPLAY_OWNER_HEADER } from '../replay-owner-contr
  * handler's own.
  */
 const AUTH_ROUTE_PREFIX = '/api/auth/';
+
+function authorizationOwnsIdentity(c: Context<AppEnv>): boolean {
+  const path = c.req.path;
+  return (
+    c.req.raw.headers.has('authorization') &&
+    (path === '/v1' ||
+      path.startsWith('/v1/') ||
+      path === '/admin' ||
+      path.startsWith('/admin/') ||
+      path === '/mcp')
+  );
+}
+
+function setSessionPrincipal(c: Context<AppEnv>, session: AuthSession): void {
+  c.set('session', session);
+  c.set(
+    'principal',
+    session
+      ? {
+          kind: 'session',
+          userId: session.user.id,
+          user: session.user,
+          session: session.session,
+        }
+      : null,
+  );
+}
 
 /**
  * Resolve the Better Auth session from request headers into `c.var.session`.
@@ -27,6 +54,14 @@ const AUTH_ROUTE_PREFIX = '/api/auth/';
 export const sessionMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (c.req.path.startsWith(AUTH_ROUTE_PREFIX)) {
     c.set('session', null);
+    c.set('principal', null);
+    await next();
+    return;
+  }
+
+  if (authorizationOwnsIdentity(c)) {
+    c.set('session', null);
+    c.set('principal', null);
     await next();
     return;
   }
@@ -36,7 +71,7 @@ export const sessionMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
     returnHeaders: true,
   });
   for (const cookie of headers.getSetCookie()) c.header('set-cookie', cookie, { append: true });
-  c.set('session', response);
+  setSessionPrincipal(c, response);
   await next();
 };
 
@@ -52,6 +87,7 @@ export const sessionMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
  * weaken device revocation, account deletion, recovery-code issuance, or replay-owner binding.
  */
 export async function readAuthoritativeSession(c: Context<AppEnv>): Promise<AuthSession> {
+  if (c.req.raw.headers.has('authorization') || c.get('principal')?.kind === 'oauth') return null;
   return await auth.api.getSession({
     headers: c.req.raw.headers,
     query: { disableCookieCache: true },
@@ -68,7 +104,15 @@ export async function readAuthoritativeSession(c: Context<AppEnv>): Promise<Auth
  * preserves an explicit database-backed boundary.
  */
 export const authoritativeSessionMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
-  c.set('session', await readAuthoritativeSession(c));
+  if (c.get('principal')?.kind === 'oauth') {
+    c.set('session', null);
+    throw new CapabilityError();
+  }
+  if (c.req.raw.headers.has('authorization')) {
+    c.set('session', null);
+    throw new AuthError();
+  }
+  setSessionPrincipal(c, await readAuthoritativeSession(c));
   await next();
 };
 
@@ -87,9 +131,15 @@ export const replayOwnerSessionMiddleware: MiddlewareHandler<AppEnv> = async (c,
     return;
   }
   if (!isReplayOwnerRequest(c.req.method, c.req.path)) throw new AuthError();
+  if (c.get('principal')?.kind === 'oauth') {
+    throw new CapabilityError();
+  }
+  if (c.req.raw.headers.has('authorization')) {
+    throw new AuthError();
+  }
 
   const liveSession = await readAuthoritativeSession(c);
-  c.set('session', liveSession);
+  setSessionPrincipal(c, liveSession);
   if (liveSession?.user.id !== replayOwnerId) throw new AuthError();
 
   await next();

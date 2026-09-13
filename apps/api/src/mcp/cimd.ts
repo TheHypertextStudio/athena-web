@@ -14,7 +14,7 @@ import { request } from 'node:https';
 import { isIP, type LookupFunction } from 'node:net';
 
 import { db, oauthClient } from '@docket/db';
-import { eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import type { Context, Next } from 'hono';
 
 import { env } from '../env';
@@ -320,12 +320,6 @@ export async function resolveCimdClient(
   return validateMetadata(url.href, metadata);
 }
 
-function isOwnedCimdMetadata(value: unknown, clientId: string): boolean {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
-  const record = value as Record<string, unknown>;
-  return record['cimd'] === true && record['cimdDocumentUrl'] === clientId;
-}
-
 /**
  * Upsert a validated CIMD client into Better Auth's OAuth client table.
  *
@@ -339,17 +333,7 @@ function isOwnedCimdMetadata(value: unknown, clientId: string): boolean {
  * @param client - The validated CIMD client metadata.
  */
 export async function upsertCimdClient(client: CimdClient): Promise<void> {
-  const existing = await db
-    .select({ metadata: oauthClient.metadata })
-    .from(oauthClient)
-    .where(eq(oauthClient.clientId, client.clientId))
-    .limit(1);
-  const first = existing[0];
-  if (first && !isOwnedCimdMetadata(first.metadata, client.clientId)) {
-    throw new CimdError('invalid_client', 'client_id is already registered');
-  }
-
-  const shared = {
+  const mutableMetadata = {
     name: client.name,
     icon: client.logoUri,
     metadata: {
@@ -357,22 +341,34 @@ export async function upsertCimdClient(client: CimdClient): Promise<void> {
       cimdDocumentUrl: client.clientId,
       raw: client.metadata,
     },
-    clientSecret: '',
     redirectUris: [...client.redirectUris],
-    type: 'public' as const,
-    public: true,
-    tokenEndpointAuthMethod: 'none' as const,
-    grantTypes: ['authorization_code'],
-    responseTypes: ['code'],
-    disabled: false,
-    userId: null,
     updatedAt: new Date(),
   };
 
-  await db
+  const refreshed = await db
     .insert(oauthClient)
-    .values({ ...shared, clientId: client.clientId })
-    .onConflictDoUpdate({ target: oauthClient.clientId, set: shared });
+    .values({
+      ...mutableMetadata,
+      clientId: client.clientId,
+      clientSecret: '',
+      disabled: false,
+      grantTypes: ['authorization_code'],
+      public: true,
+      responseTypes: ['code'],
+      tokenEndpointAuthMethod: 'none',
+      type: 'public',
+      userId: null,
+    })
+    .onConflictDoUpdate({
+      target: oauthClient.clientId,
+      set: mutableMetadata,
+      setWhere: sql`${oauthClient.metadata}->>'cimd' = 'true'
+        and ${oauthClient.metadata}->>'cimdDocumentUrl' = ${client.clientId}`,
+    })
+    .returning({ clientId: oauthClient.clientId });
+  if (refreshed.length !== 1) {
+    throw new CimdError('invalid_client', 'client_id is already registered');
+  }
 }
 
 function isUrlFormClientId(clientId: string | null): clientId is string {

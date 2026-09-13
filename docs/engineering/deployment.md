@@ -400,6 +400,15 @@ difference fails. The same check runs in `deploy.yml` before the rollout.
 Traffic-only. Migrations are additive by policy precisely so the previous revision keeps working
 against the newer schema — never roll the schema backward.
 
+Migration `0130` creates the authority records that bind OAuth credentials to one resource and
+record live revocation. A revision from before that migration's application support is not a safe
+API rollback target. That revision ignores the retained grant state and can accept or issue an
+unbound credential after a user revoked access. Keep a Task 2-or-newer token verifier and OAuth
+lifecycle wrapper active during a rollback. If no compatible revision is ready, disable OAuth
+issuance, MCP bearer access, and REST bearer access before shifting traffic. Cookie-session routes
+may remain available. Do not treat the nullable additive columns as proof that the old binary is
+security-compatible.
+
 ```bash
 GCP_PROJECT_ID=<project> pnpm rollback --service docket-api          # list revisions + traffic
 GCP_PROJECT_ID=<project> pnpm rollback --service docket-api --to <revision>
@@ -408,7 +417,10 @@ GCP_PROJECT_ID=<project> pnpm rollback --service docket-api --to <revision>
 Listing marks each revision `ready` or `NOT READY`, so a failed deploy is visible as a revision
 that exists but never became healthy. The rollback refuses a revision that does not exist, one that
 never became ready, and one already serving all traffic — the three mistakes that are easiest to
-make while something is broken. Add `--dry-run` to print the `gcloud` command instead of running it.
+make while something is broken. API deployments also stamp immutable revisions with
+`docket-oauth-grants=v1`. The rollback command refuses an API revision without that marker, which
+prevents an operator from bypassing the resource-grant boundary described above. Add `--dry-run`
+to print the `gcloud` command instead of running it.
 
 ### Rotating a Secret Manager secret
 

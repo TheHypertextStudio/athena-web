@@ -9,8 +9,8 @@
  * route's {@link capabilityGuard}. Request bodies/params are documented automatically by the
  * `validator` calls in {@link ./validate} — this helper only covers the response + metadata.
  *
- * The bearer security requirement is declared once globally (`defaultOptions` in
- * {@link ./../openapi}); public routes opt out with `security: []` here.
+ * The OpenAPI generator derives security from the same operation access registry the runtime
+ * enforces. Route prose and response metadata do not carry a second access-policy source.
  */
 import { type Capability } from '@docket/authz';
 import { describeRoute, resolver } from 'hono-openapi';
@@ -55,7 +55,7 @@ export interface ApiDocOptions {
   description?: string;
   /** Description of the success response body (default 'Success.'). */
   responseDescription?: string;
-  /** Extra `describeRoute` fields (e.g. `security: []` for public routes, more responses). */
+  /** Extra `describeRoute` fields such as operation-specific response headers or extensions. */
   extra?: DescribeRouteOptions;
 }
 

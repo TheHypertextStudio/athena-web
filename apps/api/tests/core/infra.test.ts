@@ -362,13 +362,23 @@ describe('openapi', () => {
       openapi: string;
       info: { title: string };
       externalDocs: { url: string };
-      components: { securitySchemes: { bearerAuth: { scheme: string } } };
+      components: {
+        securitySchemes: {
+          sessionCookie: { type: string; in: string };
+          restOAuth: { type: string };
+          shareToken: { type: string; in: string };
+        };
+      };
       paths: Record<string, unknown>;
     };
     expect(doc.openapi).toBe('3.1.0');
     expect(doc.info.title).toBe('Docket API');
-    expect(doc.externalDocs.url).toMatch(/\/problems$/);
-    expect(doc.components.securitySchemes.bearerAuth.scheme).toBe('bearer');
+    expect(doc.externalDocs.url).toMatch(/\/docs\/developers\/api-versions$/);
+    expect(doc.components.securitySchemes).toMatchObject({
+      sessionCookie: { type: 'apiKey', in: 'cookie' },
+      restOAuth: { type: 'oauth2' },
+      shareToken: { type: 'apiKey', in: 'header' },
+    });
     expect(res.headers.get('cache-control')).toBe(
       'public, max-age=300, stale-while-revalidate=86400',
     );

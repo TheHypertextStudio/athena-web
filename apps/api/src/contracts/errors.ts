@@ -14,6 +14,7 @@ export const ProblemCode = z
     'unsupported_api_version',
     'validation_error',
     'unauthorized',
+    'insufficient_scope',
     'forbidden',
     'not_found',
     'conflict',
@@ -66,6 +67,7 @@ export const ProblemCode = z
       '',
       '- `validation_error` (HTTP 422): request body/params/query failed schema validation; the failing fields and their stable reason codes are in `fieldErrors`.',
       '- `unauthorized` (HTTP 401): no session or an invalid/expired one — sign in.',
+      '- `insufficient_scope` (HTTP 403): a valid OAuth token lacks the named `requiredScope`.',
       '- `forbidden` (HTTP 403): authenticated but lacks the required capability/grant (or, for MCP tokens, the required OAuth scope).',
       '- `not_found` (HTTP 404): the resource does not exist, or is hidden by existence-hiding from a caller who may not see it.',
       '- `conflict` (HTTP 409): the request conflicts with current state (e.g. a non-runnable agent session, a duplicate, an already-consumed invitation).',
@@ -126,6 +128,7 @@ export const PUBLIC_PROBLEM_TITLES = {
   unsupported_api_version: 'The requested API version is not supported.',
   validation_error: 'Some information needs attention.',
   unauthorized: 'Sign in required.',
+  insufficient_scope: 'This access token needs another permission.',
   forbidden: "You don't have permission to do that.",
   not_found: 'That item could not be found.',
   conflict: 'That change conflicts with the current state.',
@@ -179,6 +182,7 @@ export const PUBLIC_PROBLEM_SUMMARIES = {
     'Send the current Docket-Version value or omit the header to use the current contract.',
   validation_error: 'One or more fields could not be accepted.',
   unauthorized: 'Docket could not find a valid session for this request.',
+  insufficient_scope: 'Authorize the required scope and retry with the replacement access token.',
   forbidden: 'Your account does not have the required access.',
   not_found: 'The address may be wrong, or the item may no longer be available.',
   conflict: 'The requested change no longer matches the saved state.',
@@ -246,6 +250,7 @@ const PROBLEM_RECOVERY: Record<ProblemCode, ProblemRecovery> = {
   unsupported_api_version: 'review',
   validation_error: 'review',
   unauthorized: 'sign_in',
+  insufficient_scope: 'reconnect',
   forbidden: 'review',
   not_found: 'return',
   conflict: 'review',
@@ -298,6 +303,7 @@ const PROBLEM_STATUS: Record<ProblemCode, number> = {
   unsupported_api_version: 400,
   validation_error: 422,
   unauthorized: 401,
+  insufficient_scope: 403,
   forbidden: 403,
   not_found: 404,
   conflict: 409,
@@ -459,6 +465,10 @@ export const Problem = z.object({
     .optional()
     .describe('A human-readable explanation specific to this occurrence, when available.'),
   code: ProblemCode.describe('The closed machine-readable code clients branch on.'),
+  requiredScope: z
+    .string()
+    .optional()
+    .describe('The OAuth capability scope required when `code` is `insufficient_scope`.'),
   fieldErrors: z
     .record(z.string(), z.array(FieldIssue))
     .optional()

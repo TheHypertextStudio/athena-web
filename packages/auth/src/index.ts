@@ -28,6 +28,35 @@ export {
  * `@docket/auth` stays the single boundary around the Better Auth configuration.
  */
 export { verifyAccessToken };
+export {
+  effectiveOAuthClientScopes,
+  hashOAuthToken,
+  OAUTH_GRANT_CLAIM,
+  OAuthResourceError,
+  parseAuthorizationResource,
+  resolveRestResourceUrl,
+  resolveTokenResource,
+} from './oauth-resource-contract';
+export {
+  createDocketAuthDatabase,
+  createDocketOAuthProvider,
+  DOCKET_AUTH_DATABASE_SCHEMA,
+  type DocketOAuthResources,
+} from './oauth-resource-provider';
+export {
+  authorizeOAuthBearerState,
+  OAuthBearerStateError,
+  type OAuthBearerGrantState,
+  type OAuthBearerLiveState,
+  type OAuthBearerStateVerification,
+} from './oauth-bearer-state';
+export {
+  ensureTrustedLegacyMcpGrant,
+  revokeConnectedOAuthClient,
+  sweepOAuthLifecycle,
+  type OAuthLifecycleSweepResult,
+  type TrustedLegacyGrantInput,
+} from './oauth-lifecycle';
 export { generateAppleClientSecret, type AppleClientSecretInput } from './apple-secret';
 export {
   createGoogleDirectory,

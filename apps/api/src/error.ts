@@ -17,6 +17,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ZodError } from 'zod';
 
 import { describeIssues } from './lib/stored-definition';
+import { accessForOperation } from './auth/rest-access-policy';
 
 /** Base class for all mapped API errors. */
 export class ApiError extends Error {
@@ -56,21 +57,21 @@ export class CapabilityError extends ApiError {
 }
 
 /**
- * 403 — the access token's OAuth scope set does not cover the requested operation
- * (the MCP scope layer, mcp-surface.md §2.2/§2.6).
+ * 403 — the REST access token's OAuth scope set does not cover the requested operation.
  *
  * @remarks
  * This is the *token-level* (capability-class) gate that sits ABOVE the per-resource
  * {@link CapabilityError} grant gate: a token may carry `work:read` yet attempt a
- * mutation. It drives the `insufficient_scope` step-up `WWW-Authenticate` challenge so a
- * read-only MCP client can re-authorize for the missing scope (RFC 6750 §3.1).
+ * mutation. It drives the REST `insufficient_scope` step-up `WWW-Authenticate` challenge so a
+ * read-only OAuth client can re-authorize for the missing scope (RFC 6750 §3.1). MCP builds its
+ * separate transport response in `mcp/scope.ts`.
  */
 export class InsufficientScopeError extends ApiError {
   /** The scope the operation requires (the single missing capability-class scope). */
   readonly requiredScope: string;
 
   constructor(requiredScope: string, message = `Operation requires scope '${requiredScope}'`) {
-    super(403, 'forbidden', message);
+    super(403, 'insufficient_scope', message);
     this.requiredScope = requiredScope;
   }
 }
@@ -422,6 +423,43 @@ export function problemTypeUrl(code: string): string {
   return `${base}/problems/${code}`;
 }
 
+function restResourceMetadataUrl(): string {
+  const apiOrigin = process.env['API_URL']?.replace(/\/+$/, '') ?? '';
+  return apiOrigin
+    ? `${apiOrigin}/.well-known/oauth-protected-resource/v1`
+    : '/.well-known/oauth-protected-resource/v1';
+}
+
+function docketSessionChallenge(error: ApiError): string {
+  return error instanceof ReauthRequiredError
+    ? 'DocketSession realm="docket", error="reauth_required"'
+    : 'DocketSession realm="docket"';
+}
+
+function authenticationChallenge(error: ApiError, context: Context): string | undefined {
+  const path = context.req.path;
+  const onRest = path === '/v1' || path.startsWith('/v1/');
+  if (error instanceof InsufficientScopeError && onRest) {
+    return `Bearer realm="docket", error="insufficient_scope", scope="${error.requiredScope}", resource_metadata="${restResourceMetadataUrl()}"`;
+  }
+  if (error.status !== 401) return undefined;
+
+  const onAdmin = path === '/admin' || path.startsWith('/admin/');
+  if (!onRest) {
+    return onAdmin ? docketSessionChallenge(error) : `Bearer realm="docket", error="${error.code}"`;
+  }
+  if (context.req.raw.headers.has('authorization')) {
+    return `Bearer realm="docket", error="invalid_token", resource_metadata="${restResourceMetadataUrl()}"`;
+  }
+
+  const access = accessForOperation(context.req.method, path);
+  if (access.kind === 'session-or-oauth') {
+    return `Bearer realm="docket", resource_metadata="${restResourceMetadataUrl()}", scope="${access.scopes.join(' ')}"`;
+  }
+  if (access.kind === 'share-token') return 'DocketShareToken realm="docket"';
+  return docketSessionChallenge(error);
+}
+
 /**
  * The Hono `onError` handler: maps any thrown error to the Problem shape.
  *
@@ -472,13 +510,12 @@ export function onError(err: Error, c: Context) {
     );
   }
 
-  // RFC 9110 §15.5.2 makes `WWW-Authenticate` mandatory on a 401 — it is how a client learns
-  // which scheme to authenticate with rather than merely that it failed. The MCP surface built
-  // its own richer challenges (`mcp/scope.ts`); the product API sent none at all.
-  const challenge =
-    apiErr.status === 401
-      ? { 'WWW-Authenticate': `Bearer realm="docket", error="${apiErr.code}"` }
-      : {};
+  // RFC 9110 §15.5.2 requires a challenge on 401. The challenge follows the operation policy:
+  // external OAuth clients see the REST resource metadata, while session-only browser routes do
+  // not falsely advertise Bearer access. Header presence still selects Bearer and forbids cookie
+  // fallback, so a malformed or invalid presented credential receives `invalid_token`.
+  const authenticate = authenticationChallenge(apiErr, c);
+  const challenge = authenticate ? { 'WWW-Authenticate': authenticate } : {};
 
   const problem = {
     type: problemTypeUrl(apiErr.code),
@@ -487,6 +524,7 @@ export function onError(err: Error, c: Context) {
     title: publicProblemTitle(apiErr.code),
     status: apiErr.status,
     code: apiErr.code,
+    ...(apiErr instanceof InsufficientScopeError ? { requiredScope: apiErr.requiredScope } : {}),
     ...(apiErr.fieldErrors ? { fieldErrors: apiErr.fieldErrors } : {}),
   };
 

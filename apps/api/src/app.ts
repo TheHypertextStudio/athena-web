@@ -121,10 +121,6 @@ app.use(
   }),
 );
 
-// Negotiate before doing any work: a body this API cannot read, or an `Accept` it cannot
-// satisfy, is the client's to fix and should not reach a handler as a 500.
-app.use('*', mediaTypes);
-
 // Every `/v1` body is one person's view of one workspace, and now carries an `ETag`. Saying so
 // — `private, no-cache` plus a `Vary` naming the credentials — is what stops a cache from
 // applying a heuristic lifetime to a validator-bearing response and reusing it for someone else.
@@ -140,6 +136,11 @@ app.use('*', replayOwnerSessionMiddleware);
 // `.route()` chain so it applies to all children; it does not participate in the `AppType`
 // chain (membership/capability authz still layer on top per-route).
 app.use('*', requireAuth);
+
+// Negotiate only after the caller has passed the operation's access policy. A malformed or
+// unauthorized credential must not learn representation details through an earlier 406/415,
+// and a valid OAuth caller on a session-only route must receive the policy's 403.
+app.use('*', mediaTypes);
 
 // Retry safety for creates. Registered after `requireAuth` because keys are scoped to the
 // authenticated user, and before the route chain so every `POST` on `/v1` honors the

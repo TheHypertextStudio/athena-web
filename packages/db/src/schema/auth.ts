@@ -20,14 +20,18 @@
 import {
   bigint,
   boolean,
+  check,
+  foreignKey,
   index,
   integer,
   jsonb,
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 import { genId } from '../id';
 
@@ -265,6 +269,10 @@ export const oauthClient = pgTable(
     requirePKCE: boolean('require_pkce'),
     referenceId: text('reference_id'),
     metadata: jsonb('metadata'),
+    /** Immutable migration cutoff for accepting pre-grant MCP access tokens. */
+    docketLegacyBefore: timestamp('docket_legacy_before', { withTimezone: true }),
+    /** Immutable record that this client was trusted for skip-consent MCP access at cutover. */
+    docketLegacyTrusted: boolean('docket_legacy_trusted').notNull().default(false),
   },
   (t) => [index('oauth_client_user_id_idx').on(t.userId)],
 );
@@ -297,11 +305,23 @@ export const oauthRefreshToken = pgTable(
     revoked: timestamp('revoked'),
     authTime: timestamp('auth_time'),
     scopes: text('scopes').array().notNull(),
+    /** Docket-owned resource grant shared by this refresh token and its rotations. */
+    docketGrantId: text('docket_grant_id'),
   },
   (t) => [
     index('oauth_refresh_token_client_id_idx').on(t.clientId),
     index('oauth_refresh_token_session_id_idx').on(t.sessionId),
     index('oauth_refresh_token_user_id_idx').on(t.userId),
+    index('oauth_refresh_token_docket_grant_id_idx').on(t.docketGrantId),
+    foreignKey({
+      name: 'oauth_refresh_token_grant_owner_fk',
+      columns: [t.docketGrantId, t.clientId, t.userId],
+      foreignColumns: [
+        oauthResourceGrant.id,
+        oauthResourceGrant.clientId,
+        oauthResourceGrant.userId,
+      ],
+    }).onDelete('cascade'),
   ],
 );
 
@@ -368,6 +388,85 @@ export const oauthConsent = pgTable(
   (t) => [
     index('oauth_consent_client_id_idx').on(t.clientId),
     index('oauth_consent_user_id_idx').on(t.userId),
+    index('oauth_consent_client_user_idx').on(t.clientId, t.userId),
+    unique('oauth_consent_id_owner_uq').on(t.id, t.clientId, t.userId),
+  ],
+);
+
+/**
+ * One audience-bound OAuth ceremony and all refresh descendants issued from it.
+ *
+ * @remarks
+ * The provider's consent row authorizes a client broadly and does not retain the RFC 8707
+ * resource. This record binds one ceremony to one exact resource and gives held JWTs durable
+ * revocation state. A recreated consent receives a new id and cannot revive an old grant.
+ */
+export const oauthResourceGrant = pgTable(
+  'oauth_resource_grant',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => oauthClient.clientId, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    consentId: text('consent_id'),
+    authorizationKind: text('authorization_kind').notNull(),
+    resourceUri: text('resource_uri'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    legacyBefore: timestamp('legacy_before', { withTimezone: true }),
+  },
+  (t) => [
+    index('oauth_resource_grant_client_user_idx').on(t.clientId, t.userId),
+    index('oauth_resource_grant_consent_id_idx').on(t.consentId),
+    index('oauth_resource_grant_expires_at_idx').on(t.expiresAt),
+    uniqueIndex('oauth_resource_grant_id_owner_uq').on(t.id, t.clientId, t.userId),
+    uniqueIndex('oauth_resource_grant_legacy_pair_uq')
+      .on(t.clientId, t.userId)
+      .where(sql`${t.legacyBefore} is not null`),
+    foreignKey({
+      name: 'oauth_resource_grant_consent_owner_fk',
+      columns: [t.consentId, t.clientId, t.userId],
+      foreignColumns: [oauthConsent.id, oauthConsent.clientId, oauthConsent.userId],
+    }).onDelete('cascade'),
+    check(
+      'oauth_resource_grant_kind_ck',
+      sql`${t.authorizationKind} in ('consent', 'trusted_mcp')`,
+    ),
+    check(
+      'oauth_resource_grant_consent_ck',
+      sql`(${t.authorizationKind} = 'consent' and ${t.consentId} is not null) or (${t.authorizationKind} = 'trusted_mcp' and ${t.consentId} is null)`,
+    ),
+    check(
+      'oauth_resource_grant_resource_ck',
+      sql`(${t.resourceUri} is null and ${t.legacyBefore} is not null) or (${t.resourceUri} is not null and length(${t.resourceUri}) > 0)`,
+    ),
+    check('oauth_resource_grant_expiry_ck', sql`${t.expiresAt} >= ${t.createdAt}`),
+    check(
+      'oauth_resource_grant_revoked_ck',
+      sql`${t.revokedAt} is null or ${t.revokedAt} >= ${t.createdAt}`,
+    ),
+  ],
+);
+
+/** A SHA-256 digest denylist entry for one revoked self-contained access token. */
+export const oauthJwtRevocation = pgTable(
+  'oauth_jwt_revocation',
+  {
+    tokenDigest: text('token_digest').primaryKey(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('oauth_jwt_revocation_expires_at_idx').on(t.expiresAt),
+    check(
+      'oauth_jwt_revocation_digest_ck',
+      sql`length(${t.tokenDigest}) = 43 and ${t.tokenDigest} ~ '^[A-Za-z0-9_-]{43}$'`,
+    ),
+    check('oauth_jwt_revocation_lifetime_ck', sql`${t.expiresAt} >= ${t.revokedAt}`),
   ],
 );
 

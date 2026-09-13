@@ -1,7 +1,7 @@
 /**
  * `@docket/api` — the split CORS policy for the root server.
  */
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
 import { SESSION_OWNER_HEADER } from '@docket/identity-access/session-contract';
 
@@ -25,6 +25,7 @@ import { isReplayOwnerRequest, REPLAY_OWNER_HEADER } from './replay-owner-contra
 const PUBLIC_OAUTH_PATHS: ReadonlySet<string> = new Set([
   '/.well-known/oauth-protected-resource',
   '/.well-known/oauth-protected-resource/mcp',
+  '/.well-known/oauth-protected-resource/v1',
   '/.well-known/oauth-authorization-server',
   '/.well-known/oauth-authorization-server/api/auth',
   '/.well-known/mcp-client.json',
@@ -108,6 +109,27 @@ function isSessionOwnerRequest(method: string | undefined, path: string): boolea
   return method === 'POST' && path === '/api/auth/sign-out';
 }
 
+function usesPublicCors(path: string): boolean {
+  return (
+    PUBLIC_OAUTH_PATHS.has(path) || PUBLIC_SHARE_PATHS.has(path) || PUBLIC_ICON_PATHS.has(path)
+  );
+}
+
+function requestedCorsHeaders(c: Context<AppEnv>): readonly string[] {
+  if (c.req.method !== 'OPTIONS') return [];
+  return (c.req.header('Access-Control-Request-Headers') ?? '')
+    .split(',')
+    .map((header) => header.trim().toLowerCase());
+}
+
+function usesBearerCors(c: Context<AppEnv>): boolean {
+  const isRestPath = c.req.path === '/v1' || c.req.path.startsWith('/v1/');
+  if (!isRestPath) return false;
+  return (
+    c.req.raw.headers.has('authorization') || requestedCorsHeaders(c).includes('authorization')
+  );
+}
+
 /**
  * Response headers a browser client is allowed to read.
  *
@@ -121,7 +143,6 @@ const EXPOSED_RESPONSE_HEADERS = [
   'Docket-Version',
   'Docket-Revision',
   'X-Request-Id',
-  'Authorization',
   'WWW-Authenticate',
   // Where a 201 put the new resource, and where a 202 reports progress.
   'Location',
@@ -178,13 +199,7 @@ export function buildCorsMiddleware(trustedOrigins: readonly string[]): Middlewa
     exposeHeaders: EXPOSED_RESPONSE_HEADERS,
   });
   return (c, next) => {
-    if (
-      PUBLIC_OAUTH_PATHS.has(c.req.path) ||
-      PUBLIC_SHARE_PATHS.has(c.req.path) ||
-      PUBLIC_ICON_PATHS.has(c.req.path)
-    ) {
-      return publicOAuthCors(c, next);
-    }
+    if (usesPublicCors(c.req.path) || usesBearerCors(c)) return publicOAuthCors(c, next);
 
     const method =
       c.req.method === 'OPTIONS' ? c.req.header('Access-Control-Request-Method') : c.req.method;

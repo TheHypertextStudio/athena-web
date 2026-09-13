@@ -1,0 +1,26 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 49d6fd4862b4b8299416184faa1c538d123d0495..a00482feae4e2ff547d280f74e5b36affa005059 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -521,7 +521,7 @@ async function createUserTokens(ctx, opts, params) {
+ 		exp: iat + (opts.refreshTokenExpiresIn ?? 2592e3),
+ 		sid: sessionId
+ 	}, existingRefreshToken, authTime) : void 0;
+-	const [accessToken, refreshToken, idToken] = await Promise.all([
++	const tokenPromises = [
+ 		isJwtAccessToken ? createJwtAccessToken(ctx, opts, user, client, audience, scopes, referenceId, {
+ 			iat,
+ 			exp,
+@@ -538,6 +538,11 @@ async function createUserTokens(ctx, opts, params) {
+ 		}, existingRefreshToken, authTime) : void 0,
+ 		isIdToken && user ? createIdToken(ctx, opts, user, client, scopes, nonce, sessionId, authTime) : void 0
+-	]);
++	];
++	const tokenOutcome = Promise.all(tokenPromises).then((values) => ({ values }), (error) => ({ error }));
++	await Promise.allSettled(tokenPromises);
++	const outcome = await tokenOutcome;
++	if ("error" in outcome) throw outcome.error;
++	const [accessToken, refreshToken, idToken] = outcome.values;
+ 	return ctx.json({
+ 		...customFields,
+ 		access_token: accessToken,

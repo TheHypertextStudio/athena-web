@@ -337,6 +337,11 @@ jobs:
 
       - uses: ./.github/actions/setup
 
+      - name: Verify OAuth persistence and concurrency on PostgreSQL
+        env:
+          POSTGRES_CONTROL_URL: postgres://docket:docket@127.0.0.1:5432/postgres
+        run: pnpm oauth:test:postgres
+
       - name: Apply PostgreSQL migrations
         # The job already owns a healthy PostgreSQL service. Running the root Turbo task would
         # invoke db:up and try to start a second Docker Compose database inside the runner.

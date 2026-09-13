@@ -24,7 +24,10 @@
  * Deliberately excludes `offline_access`: that scope gates nothing on the resource server, so it
  * must never be assignable where a capability is required (see `apps/api/src/mcp/scope.ts`).
  */
-export type McpCapabilityScope = 'work:read' | 'work:write' | 'agents:run' | 'connectors:link';
+export type OAuthCapabilityScope = 'work:read' | 'work:write' | 'agents:run' | 'connectors:link';
+
+/** Compatibility alias for MCP callers while REST adopts the shared capability scope type. */
+export type McpCapabilityScope = OAuthCapabilityScope;
 
 /**
  * The standard OAuth scope that makes the authorization server mint a refresh token.
@@ -55,6 +58,12 @@ export const OAUTH_ISSUABLE_SCOPES: readonly [
   'connectors:link',
   'offline_access',
 ] = ['work:read', 'work:write', 'agents:run', 'connectors:link', 'offline_access'] as const;
+
+/** The closed resource-operation subset, kept in consent-screen order. */
+export const OAUTH_CAPABILITY_SCOPES: readonly OAuthCapabilityScope[] =
+  OAUTH_ISSUABLE_SCOPES.filter(
+    (scope): scope is OAuthCapabilityScope => scope !== OFFLINE_ACCESS_SCOPE,
+  );
 
 /** One member of {@link OAUTH_ISSUABLE_SCOPES}. */
 export type OAuthIssuableScope = (typeof OAUTH_ISSUABLE_SCOPES)[number];

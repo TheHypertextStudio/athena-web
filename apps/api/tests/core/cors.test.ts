@@ -151,6 +151,7 @@ describe('buildCorsMiddleware — public OAuth AS surface', () => {
   const publicPaths = [
     '/.well-known/oauth-protected-resource',
     '/.well-known/oauth-protected-resource/mcp',
+    '/.well-known/oauth-protected-resource/v1',
     '/.well-known/oauth-authorization-server',
     '/.well-known/oauth-authorization-server/api/auth',
     '/.well-known/mcp-client.json',
@@ -219,5 +220,61 @@ describe('buildCorsMiddleware — public OAuth AS surface', () => {
     expect(res.headers.get('Access-Control-Allow-Headers')?.toLowerCase()).not.toContain(
       'x-docket-session-owner',
     );
+  });
+});
+
+describe('buildCorsMiddleware — REST bearer callers', () => {
+  it('exposes only response metadata and never an Authorization response header', async () => {
+    const app = appWith(['https://clearthedocket.com']);
+    const res = await app.request('/v1/orgs', {
+      headers: { authorization: 'Bearer token', origin: 'https://client.example' },
+    });
+
+    const exposed = (res.headers.get('Access-Control-Expose-Headers') ?? '')
+      .split(',')
+      .map((header) => header.trim().toLowerCase());
+    expect(exposed).toContain('docket-version');
+    expect(exposed).toContain('www-authenticate');
+    expect(exposed).not.toContain('authorization');
+  });
+
+  it('allows an arbitrary bearer origin without credential support', async () => {
+    const app = appWith(['https://clearthedocket.com']);
+    const res = await app.request('/v1/orgs', {
+      headers: { authorization: 'Bearer token', origin: 'https://client.example' },
+    });
+
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(res.headers.get('Access-Control-Allow-Credentials')).toBeNull();
+  });
+
+  it('recognizes Authorization in a mixed-case preflight header list', async () => {
+    const app = appWith(['https://clearthedocket.com']);
+    const res = await app.request('/v1/orgs', {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://client.example',
+        'access-control-request-method': 'GET',
+        'access-control-request-headers': ' Content-Type, aUtHoRiZaTiOn , Docket-Version ',
+      },
+    });
+
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(res.headers.get('Access-Control-Allow-Credentials')).toBeNull();
+  });
+
+  it('does not switch policies for a header whose name merely contains authorization', async () => {
+    const app = appWith(['https://clearthedocket.com']);
+    const res = await app.request('/v1/orgs', {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://client.example',
+        'access-control-request-method': 'GET',
+        'access-control-request-headers': 'X-Authorization-Note',
+      },
+    });
+
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    expect(res.headers.get('Access-Control-Allow-Credentials')).toBe('true');
   });
 });

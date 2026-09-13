@@ -9,7 +9,7 @@
  * lives in `server.ts` alongside `/api/auth` rather than the typed app. `now` is read
  * at request time, never at module scope, and the sweep is safe to retry.
  */
-import { createGoogleDirectory, syncAllStaff } from '@docket/auth';
+import { createGoogleDirectory, sweepOAuthLifecycle, syncAllStaff } from '@docket/auth';
 import { db } from '@docket/db';
 import { Hono } from 'hono';
 
@@ -107,12 +107,14 @@ const cron = new Hono()
     const now = new Date();
     // Suggestion expiry/retention rides the same daily tick (transient proposals, not records).
     const suggestions = await sweepEmailSuggestionLifecycle(now);
+    const oauth = await sweepOAuthLifecycle(now);
     return c.json({
       swept: false,
       reason: 'billing_data_deletion_disabled',
       toPendingDeletion: 0,
       toDeleted: 0,
       suggestions,
+      oauth,
     });
   })
   // Background connector mirroring: re-syncs every due `mirror` integration so connectors

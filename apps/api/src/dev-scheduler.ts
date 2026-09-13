@@ -13,6 +13,7 @@
  * command palette, the search page, the `@` picker — looked broken rather than merely slow, which
  * is a much more expensive kind of wrong to debug.
  */
+import { sweepOAuthLifecycle } from '@docket/auth';
 import { db } from '@docket/db';
 
 import { sweepAccountExports } from './account/export';
@@ -40,6 +41,7 @@ export function startDevScheduler(): void {
       const now = new Date();
       await sweepAccountExports(db, now.toISOString());
       await sweepAccountDeletions(db, now.toISOString());
+      await sweepOAuthLifecycle(now);
       await sweepCalendarSync(now);
       await sweepRecurrenceMaterialization(db, now);
       // Locally there is no Cloud Scheduler, so without this a question's deadline would never

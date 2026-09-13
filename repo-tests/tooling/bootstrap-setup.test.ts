@@ -469,6 +469,10 @@ describe('production account-creation deployment contract', () => {
     expect(workflow).toContain('WORK_LOCATION_PROJECTION_ENABLED: "false"');
   });
 
+  it('marks every compatible API revision so rollback cannot cross the OAuth grant boundary', () => {
+    expect(workflow).toContain('--update-labels=docket-oauth-grants=v1');
+  });
+
   it('keeps the Linear Agent runtime disabled until its protected release gate is enabled', () => {
     expect(workflow).toContain(
       'LINEAR_AGENT_ENABLED: "${{ vars.LINEAR_AGENT_ENABLED || \'false\' }}"',

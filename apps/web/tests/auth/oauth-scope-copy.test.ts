@@ -72,6 +72,52 @@ function everyVisibleString(): { where: string; text: string }[] {
 }
 
 describe('OAuth consent copy', () => {
+  it('states the complete REST authority of each capability without implying session-only access', () => {
+    expect(OAUTH_SCOPE_COPY).toMatchObject({
+      'work:read': {
+        label: 'Read your work',
+        detail:
+          'View workspace structure, work, comments, updates, search, saved views, schedules, calendars, time, and your notifications.',
+      },
+      'work:write': {
+        label: 'Create and update work',
+        detail:
+          'Create and update work, comments, plans, schedules, time records, notification read state, and published brief content.',
+      },
+      'agents:run': {
+        label: 'Run Athena and agents',
+        detail:
+          'Start, steer, resume, and cancel Athena or agent sessions, use voice sessions, and approve or reject proposed actions.',
+      },
+      'connectors:link': {
+        label: 'Manage connections',
+        detail: 'Connect, configure, disconnect, and run integrations with other tools you use.',
+      },
+    });
+
+    const allCopy = everyVisibleString()
+      .map(({ text }) => text)
+      .join(' ');
+    for (const forbidden of [
+      'account',
+      'profile',
+      'billing',
+      'credential',
+      'passkey',
+      'recovery code',
+      'browser session',
+      'member',
+      'invitation',
+      'role',
+      'grant administration',
+      'permission administration',
+      'domain setting',
+      'staff',
+    ]) {
+      expect(allCopy.toLowerCase()).not.toContain(forbidden);
+    }
+  });
+
   it('has a written description for every permission the server can issue', () => {
     // Read through a widened view on purpose. `OAUTH_SCOPE_COPY` is keyed by `OAuthIssuableScope`,
     // so TypeScript already refuses a missing entry — but that guarantee evaporates the moment

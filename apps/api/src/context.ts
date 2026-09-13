@@ -2,12 +2,35 @@
  * `@docket/api` — the Hono environment bindings (`Variables`) shared by every route.
  */
 import type { auth } from '@docket/auth';
+import type { OAuthCapabilityScope } from '@docket/identity-access/oauth-scope-contract';
 import type { RequestIdVariables } from 'hono/request-id';
 
 import type { IdempotencyClaim } from './lib/idempotency';
 
 /** The Better Auth session result (`{ session, user }` or null). */
 export type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
+
+/** The live Better Auth user shape carried by either supported caller kind. */
+export type AuthUser = NonNullable<AuthSession>['user'];
+
+/** The real persisted session record carried only by a cookie caller. */
+export type AuthSessionRecord = NonNullable<AuthSession>['session'];
+
+/** The one authenticated identity selected for a public or staff request. */
+export type CallerPrincipal =
+  | {
+      readonly kind: 'session';
+      readonly userId: string;
+      readonly user: AuthUser;
+      readonly session: AuthSessionRecord;
+    }
+  | {
+      readonly kind: 'oauth';
+      readonly userId: string;
+      readonly user: AuthUser;
+      readonly clientId: string;
+      readonly scopes: readonly OAuthCapabilityScope[];
+    };
 
 /** The service-operator staff tiers, in ascending privilege rank. */
 export type StaffRole = 'support' | 'finance' | 'superadmin';
@@ -41,6 +64,8 @@ export interface AppEnv {
   Variables: RequestIdVariables & {
     /** The authenticated session, or null. */
     session: AuthSession;
+    /** The selected cookie or OAuth caller, or null on anonymous/control requests. */
+    principal: CallerPrincipal | null;
     /** The org-scoped actor context (set on `/orgs/:orgId/*`). */
     actorCtx: ActorCtx;
     /** The service-operator staff context (set on `/admin/*`). */

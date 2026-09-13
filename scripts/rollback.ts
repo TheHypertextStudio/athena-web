@@ -29,6 +29,8 @@ export interface Revision {
   readonly ready: boolean;
   /** ISO creation timestamp, newest first when listed. */
   readonly createdAt: string;
+  /** Whether this immutable revision enforces resource-bound OAuth grants and revocation. */
+  readonly oauthGrantAware: boolean;
 }
 
 /** What a rollback would do, decided before anything is executed. */
@@ -64,6 +66,12 @@ export function planRollback(
     // would replace one outage with another and lose the revision that is at least still serving.
     return { kind: 'refused', reason: `${to} never became ready — it is not a good state` };
   }
+  if (service === 'docket-api' && !target.oauthGrantAware) {
+    return {
+      kind: 'refused',
+      reason: `${to} predates resource-bound OAuth grants; disable OAuth, MCP bearer, and REST bearer access instead of routing API traffic to it`,
+    };
+  }
   if (target.trafficPercent === 100) {
     return { kind: 'refused', reason: `${to} already serves all traffic` };
   }
@@ -72,6 +80,8 @@ export function planRollback(
 
 /** How many revisions back a rollback realistically reaches. */
 const REVISION_WINDOW = 20;
+const OAUTH_GRANT_LABEL = 'docket-oauth-grants';
+const OAUTH_GRANT_LABEL_VALUE = 'v1';
 
 /** Run a gcloud command, reporting its own words on failure rather than a stack trace. */
 function gcloud(args: readonly string[], what: string): string {
@@ -123,12 +133,16 @@ function readRevisions(service: string, region: string, project: string): Revisi
         ...scope,
         `--limit=${REVISION_WINDOW}`,
         '--sort-by=~metadata.creationTimestamp',
-        '--format=json(metadata.name,metadata.creationTimestamp,status.conditions)',
+        '--format=json(metadata.name,metadata.creationTimestamp,metadata.labels,status.conditions)',
       ],
       `list revisions of ${service}`,
     ),
   ) as {
-    metadata?: { name?: string; creationTimestamp?: string };
+    metadata?: {
+      name?: string;
+      creationTimestamp?: string;
+      labels?: Readonly<Record<string, string>>;
+    };
     status?: { conditions?: { type?: string; status?: string }[] };
   }[];
 
@@ -141,6 +155,7 @@ function readRevisions(service: string, region: string, project: string): Revisi
         revision.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True') ??
         false,
       trafficPercent: traffic.get(name) ?? 0,
+      oauthGrantAware: revision.metadata?.labels?.[OAUTH_GRANT_LABEL] === OAUTH_GRANT_LABEL_VALUE,
     };
   });
 }
@@ -151,7 +166,8 @@ function printRevisions(service: string, revisions: readonly Revision[]): void {
   for (const revision of revisions) {
     const serving = revision.trafficPercent > 0 ? `${revision.trafficPercent}% traffic` : '—';
     const state = revision.ready ? 'ready' : 'NOT READY';
-    console.log(`  ${revision.name}\t${state}\t${serving}\t${revision.createdAt}`);
+    const oauth = revision.oauthGrantAware ? 'oauth-grants-v1' : 'PRE-OAUTH-GRANTS';
+    console.log(`  ${revision.name}\t${state}\t${oauth}\t${serving}\t${revision.createdAt}`);
   }
   console.log(`\nRoll back with: pnpm rollback --service ${service} --to <revision>`);
 }

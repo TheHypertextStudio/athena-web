@@ -105,7 +105,9 @@ import {
   oauthAccessToken,
   oauthClient,
   oauthConsent,
+  oauthJwtRevocation,
   oauthRefreshToken,
+  oauthResourceGrant,
   operatorAuditEvent,
   organization,
   organizationBillingAccount,
@@ -229,16 +231,14 @@ describe('genId', () => {
   });
 
   it('returns sortable, unique ids', () => {
-    const a = genId();
-    const b = genId();
+    const [a, b] = [genId(), genId()];
     expect(a).not.toEqual(b);
   });
 });
 
 describe('types + enums + relations', () => {
   it('exposes the default workflow states with the backlog default first', () => {
-    expect(defaultWorkflowStates[0]?.key).toBe('backlog');
-    expect(defaultWorkflowStates).toHaveLength(5);
+    expect([defaultWorkflowStates[0]?.key, defaultWorkflowStates.length]).toEqual(['backlog', 5]);
     const types = defaultWorkflowStates.map((s) => s.type);
     expect(types).toEqual(['backlog', 'unstarted', 'started', 'completed', 'canceled']);
   });
@@ -354,6 +354,8 @@ describe('schema foreign-key references (covers every `.references(() => …)` c
     oauthAccessToken,
     oauthRefreshToken,
     oauthConsent,
+    oauthResourceGrant,
+    oauthJwtRevocation,
     jwks,
     rateLimit,
     hub,
@@ -1271,8 +1273,7 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
       )[0],
     );
 
-    expect(event.calendarId).toBe(cal.id);
-    expect(event.organizer?.email).toBe('ada@example.com');
+    expect([event.calendarId, event.organizer?.email]).toEqual([cal.id, 'ada@example.com']);
 
     await db.delete(account).where(eq(account.id, linkedAccount.id));
     expect(
@@ -1284,7 +1285,6 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
 
   it('serves the relational query API built from the full schema', async () => {
     const orgs = await db.query.organization.findFirst({ with: { actors: true, teams: true } });
-    expect(orgs?.actors.length).toBeGreaterThan(0);
-    expect(orgs?.teams.length).toBeGreaterThan(0);
+    expect(Math.min(orgs?.actors.length ?? 0, orgs?.teams.length ?? 0)).toBeGreaterThan(0);
   });
 });

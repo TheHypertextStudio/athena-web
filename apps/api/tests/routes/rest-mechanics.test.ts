@@ -477,16 +477,13 @@ describe('media types', () => {
 });
 
 describe('authentication challenges', () => {
-  it('carries WWW-Authenticate on a 401, as RFC 9110 requires', async () => {
+  it('advertises the first-party session on a session-only 401', async () => {
     const { app } = await setup();
     getSession.mockResolvedValue(null);
 
     const res = await app.request('/v1/time/categories');
     expect(res.status).toBe(401);
-    // A 401 without this tells a client that it failed but not how to succeed.
-    const challenge = res.headers.get('www-authenticate') ?? '';
-    expect(challenge).toContain('Bearer');
-    expect(challenge).toContain('error="unauthorized"');
+    expect(res.headers.get('www-authenticate')).toBe('DocketSession realm="docket"');
   });
 });
 

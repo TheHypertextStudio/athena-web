@@ -1,4 +1,3 @@
-import { oauthProvider } from '@better-auth/oauth-provider';
 import { passkey } from '@better-auth/passkey';
 import {
   account,
@@ -7,17 +6,8 @@ import {
   genId,
   hub,
   integration,
-  jwks as jwksTable,
-  oauthAccessToken,
-  oauthClient,
-  oauthConsent,
-  oauthRefreshToken,
   passkey as passkeyTable,
-  rateLimit as rateLimitTable,
   session,
-  twoFactor as twoFactorTable,
-  user,
-  verification,
 } from '@docket/db';
 import { isRealValue } from '@docket/env';
 import type { Mailer } from '@docket/mail';
@@ -29,7 +19,6 @@ import { OAUTH_ISSUABLE_SCOPES } from '@docket/identity-access/oauth-scope-contr
 import { PREVIOUSLY_REGISTERED_CODE } from '@docket/identity-access/passkey-errors-contract';
 import { SESSION_OWNER_HEADER } from '@docket/identity-access/session-contract';
 import { type BetterAuthOptions, type BetterAuthPlugin } from 'better-auth';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
 import { genericOAuth, oAuthProxy, twoFactor, jwt } from 'better-auth/plugins';
 import { nextCookies } from 'better-auth/next-js';
@@ -52,6 +41,8 @@ import {
   type RestoreDatabase,
   type RestoreWebAuthn,
 } from './restore-credential';
+import { createDocketAuthDatabase, createDocketOAuthProvider } from './oauth-resource-provider';
+import { resolveRestResourceUrl } from './oauth-resource-contract';
 import { signupChallenge } from './signup-challenge';
 import { INTENT_IDENTIFIER_PREFIX, type SignupIntent } from './signup-intent';
 
@@ -138,6 +129,7 @@ export interface AuthEnv {
   readonly OAUTH_PROXY_SECRET?: string | undefined;
   readonly OAUTH_PROXY_PRODUCTION_URL?: string | undefined;
   readonly OIDC_LOGIN_PAGE_URL?: string | undefined;
+  readonly API_URL?: string | undefined;
   readonly MCP_ISSUER_URL?: string | undefined;
   readonly MCP_RESOURCE_URL?: string | undefined;
 }
@@ -520,6 +512,40 @@ function configuredPasskeyMigration(e: AuthEnv, deps: AuthDeps): BetterAuthPlugi
   return [passkeyMigrationPlugin(e, deps.migrationWebAuthn, deps.migrationDatabase)];
 }
 
+function configuredDocketOAuthProvider(e: AuthEnv): BetterAuthPlugin[] {
+  if (!isRealValue(e.OIDC_LOGIN_PAGE_URL)) return [];
+  const issuer = new URL('/api/auth', e.MCP_ISSUER_URL ?? e.BETTER_AUTH_URL).toString();
+  const consentPage = new URL('/oauth/authorize', new URL(e.OIDC_LOGIN_PAGE_URL).origin).toString();
+  return [
+    // The provider requires the JWT plugin because Docket verifies access tokens locally at each
+    // protected resource. Discovery and RFC 9207 authorization responses use the API auth mount.
+    jwt({ jwt: { issuer } }),
+    createDocketOAuthProvider(
+      {
+        loginPage: e.OIDC_LOGIN_PAGE_URL,
+        consentPage,
+        // This is the only client scope catalog. Separate registration defaults can pin a DCR
+        // client below this ceiling and make later consent unable to add a required capability.
+        scopes: [...OAUTH_ISSUABLE_SCOPES],
+        grantTypes: ['authorization_code', 'refresh_token'],
+        accessTokenExpiresIn: 60 * 15,
+        refreshTokenExpiresIn: 60 * 60 * 24 * 30,
+        allowDynamicClientRegistration: true,
+        allowUnauthenticatedClientRegistration: true,
+      },
+      {
+        issuer,
+        mcpResource: isRealValue(e.MCP_RESOURCE_URL)
+          ? e.MCP_RESOURCE_URL
+          : new URL('/mcp', e.BETTER_AUTH_URL).toString(),
+        restResource: resolveRestResourceUrl(
+          isRealValue(e.API_URL) ? e.API_URL : new URL(e.BETTER_AUTH_URL).origin,
+        ),
+      },
+    ),
+  ];
+}
+
 /**
  * Build the Better Auth configuration from the validated environment + injected boundaries.
  *
@@ -761,68 +787,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
     );
   }
 
-  // The OAuth 2.1 / MCP authorization server. `oauthProvider()` is the single supported
-  // successor to the deprecated `mcp()`/`oidcProvider()` pair Docket ran before — it absorbs
-  // MCP support natively (audience binding via `validAudiences`, no separate `mcp()` plugin
-  // needed) rather than requiring both plugins mounted together. `MCP_RESOURCE_URL` is always
-  // derived from `API_URL` whenever `API_URL` is set (see `@docket/env`) — real environments
-  // always take the `validAudiences` branch; only a deliberately minimal env (e.g. isolated
-  // unit tests) mounts the provider without it.
-  if (isRealValue(e.OIDC_LOGIN_PAGE_URL)) {
-    const consentPage = new URL(
-      '/oauth/authorize',
-      new URL(e.OIDC_LOGIN_PAGE_URL).origin,
-    ).toString();
-    plugins.push(
-      // Required by oauthProvider() (unless `disableJwtPlugin` is set, which Docket does not
-      // set): issues the JWT-formatted, locally-verifiable access tokens the MCP resource
-      // server checks via `verifyAccessToken` — no DB round-trip per tool call.
-      // Browser authorization arrives through the Web app's same-origin rewrite, so its dynamic
-      // base URL is the Web host. OAuth discovery names the API auth mount as the issuer, and
-      // RFC 9207 requires the authorization response to return that exact issuer too.
-      jwt({
-        jwt: {
-          issuer: new URL('/api/auth', e.MCP_ISSUER_URL ?? e.BETTER_AUTH_URL).toString(),
-        },
-      }),
-      oauthProvider({
-        loginPage: e.OIDC_LOGIN_PAGE_URL,
-        consentPage,
-        // `scopes` is deliberately the ONLY scope list. `clientRegistrationDefaultScopes` and
-        // `clientRegistrationAllowedScopes` are intentionally NOT set: a client that registers
-        // without an explicit `scope` (which every MCP client does) has the default written
-        // onto its `oauth_client.scopes` row, and that row is then the hard ceiling for BOTH
-        // `/oauth2/authorize` AND the token exchange. A narrower default therefore pins the
-        // client read-only *permanently* — a later step-up authorize for `work:write` is
-        // rejected with `invalid_scope` before the consent screen is ever reached, and a
-        // refresh grant can only ever narrow. That was the 2026-07 "every write tool 403s"
-        // outage. The plugin validates `allowed ⊆ scopes` at boot but nothing validates
-        // `defaults ⊇ scopes`, so a second list can only ever drift into that failure — in
-        // production only, for dynamically-registered clients only, on write tools only.
-        // Omitting both makes the plugin fall back to `scopes` for each, which is the intent.
-        //
-        // `offline_access` must be an explicit granted scope for oauthProvider() to ever issue
-        // a refresh token (unlike the deprecated mcp() plugin, which issued one unconditionally)
-        // — without it a connected client silently degrades to a 15-minute access token with no
-        // renewal path, so it belongs in the set every client is offered at consent time.
-        //
-        // The array itself now comes from `domain packages` (`OAUTH_ISSUABLE_SCOPES`), which is the
-        // one place the issuable set is written down — the resource server's advertised scopes and
-        // the consent screen's plain-language copy derive from the same constant, so this ceiling
-        // and what a person is shown can no longer disagree.
-        scopes: [...OAUTH_ISSUABLE_SCOPES],
-        accessTokenExpiresIn: 60 * 15,
-        refreshTokenExpiresIn: 60 * 60 * 24 * 30,
-        ...(isRealValue(e.MCP_RESOURCE_URL) ? { validAudiences: [e.MCP_RESOURCE_URL] } : {}),
-        // MCP clients (Claude Desktop, Cursor, …) register themselves before any user session
-        // exists — dynamic client registration necessarily happens unauthenticated. This is
-        // the same capability the deprecated mcp() plugin's registration endpoint already
-        // allowed unconditionally; oauthProvider() makes it an explicit, opt-in flag instead.
-        allowDynamicClientRegistration: true,
-        allowUnauthenticatedClientRegistration: true,
-      }),
-    );
-  }
+  plugins.push(...configuredDocketOAuthProvider(e));
   // oAuthProxy lets preview/branch deployments run social OAuth through production: only prod's
   // callback URL is registered with the provider, and previews (whose URL can't be pre-registered)
   // proxy the flow through it. Mounted only when BOTH the shared secret and the production URL are
@@ -998,26 +963,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
         return;
       }),
     },
-    database: drizzleAdapter(db, {
-      provider: 'pg',
-      schema: {
-        user,
-        session,
-        account,
-        verification,
-        passkey: passkeyTable,
-        twoFactor: twoFactorTable,
-        rateLimit: rateLimitTable,
-        // The oauthProvider OAuth AS models — without these, dynamic client registration and
-        // token issuance 500 at the adapter layer. jwks backs the `jwt()` plugin oauthProvider
-        // requires (signing keypairs), not the OAuth flow directly.
-        oauthClient,
-        oauthAccessToken,
-        oauthRefreshToken,
-        oauthConsent,
-        jwks: jwksTable,
-      },
-    }),
+    database: createDocketAuthDatabase(),
     // Brute-force / abuse protection. Better Auth enables the limiter in production only (dev/test
     // stay unthrottled); `storage: 'database'` (the `rate_limit` table) keeps counters consistent
     // across serverless instances rather than per-process memory. The global `max` is a generous

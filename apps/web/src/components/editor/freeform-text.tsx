@@ -50,9 +50,6 @@ import { createTaskListShortcutExtension } from './task-list-shortcut';
 import { TableControls } from './table-controls';
 import type { SlashCommand } from './slash-commands';
 import { useDocumentFigureUploads } from './use-document-figure-uploads';
-import { editorSurfaceClassName, type FreeformTextEditorPadding } from './freeform-text-surface';
-
-export type { FreeformTextEditorPadding };
 
 /** Props for {@link FreeformTextEditor}. */
 export interface FreeformTextEditorProps {
@@ -74,8 +71,6 @@ export interface FreeformTextEditorProps {
   onCancel?: (() => void) | undefined;
   /** Additional styling for the editor container. */
   className?: string | undefined;
-  /** Padding preset for the editor's own surface div — see {@link FreeformTextEditorPadding}. */
-  padding?: FreeformTextEditorPadding | undefined;
   /**
    * The organization whose entities and connected apps `@` can reference.
    *
@@ -172,7 +167,6 @@ export function FreeformTextEditor({
   onSubmit,
   onCancel,
   className,
-  padding = 'none',
   mentionOrgId,
   contributions = [],
 }: FreeformTextEditorProps): JSX.Element | null {
@@ -550,7 +544,12 @@ export function FreeformTextEditor({
       ref={surfaceRef}
       onMouseDown={placeCaretFromInset}
       data-editor-surface=""
-      className={editorSurfaceClassName(padding, isEditingEnabled, disabled, className)}
+      className={cn(
+        'relative flex min-h-0 max-w-[75ch] flex-1 flex-col [&_.ProseMirror]:min-h-10 [&_.ProseMirror]:flex-1 [&_.ProseMirror]:outline-none [&_.ProseMirror_.is-editor-empty:first-child::before]:hidden [&_.tableWrapper[data-table-controls-visible]]:mt-16 sm:[&_.tableWrapper[data-table-controls-visible]]:mt-14',
+        isEditingEnabled ? 'cursor-text' : '',
+        disabled ? 'cursor-default opacity-60' : '',
+        className,
+      )}
     >
       {/*
        * The empty prompt shares one grid cell with the editor rather than carrying its own inset.

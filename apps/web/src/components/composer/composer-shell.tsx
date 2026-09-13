@@ -43,11 +43,10 @@ import {
   useDocumentContents,
   type DocumentContents,
 } from '@/components/editor/document-contents';
+import { FreeformTextEditor } from '@/components/editor/freeform-text';
 import type { EditorContribution } from '@/components/editor/editor-contribution';
 import MentionHydrationProvider from '@/components/mentions/mention-hydration';
 import { EntityMetadataRow } from '@/components/views/entity-detail-layout';
-
-import { ComposerBodyEditor } from './composer-body-editor';
 
 function composerPresentation(expanded: boolean): DialogPresentation {
   return {
@@ -248,17 +247,19 @@ export function ComposerShell({
 
   const bodyEditor =
     bodyPlaceholder === undefined ? null : (
-      <ComposerBodyEditor
-        bodyResetKey={bodyResetKey}
-        body={body}
-        editDisabled={editDisabled}
-        onBodyChange={onBodyChange}
-        bodyPlaceholder={bodyPlaceholder}
+      <FreeformTextEditor
+        key={bodyResetKey}
+        value={body}
+        disabled={editDisabled}
+        onChange={onBodyChange}
+        placeholder={bodyPlaceholder}
+        ariaLabel={bodyPlaceholder}
         mentionOrgId={mentionOrgId}
-        bodyContributions={bodyContributions}
-        canSubmit={canSubmit}
-        creating={creating}
-        onSubmit={onSubmit}
+        contributions={bodyContributions}
+        onSubmit={() => {
+          if (canSubmit && !creating) onSubmit();
+        }}
+        className="bg-surface-container-low flex min-h-28 flex-1 flex-col overflow-y-auto overscroll-contain rounded-lg p-3 [&>div]:flex-1"
       />
     );
 

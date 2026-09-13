@@ -537,7 +537,7 @@ describe('the document contents rail', () => {
 });
 
 describe('the reading measure', () => {
-  it('caps the text blocks rather than the surface a host paints', async () => {
+  it('caps the surface a host paints, not just its text blocks', async () => {
     renderEditor(
       <ComposerShell
         open
@@ -565,14 +565,16 @@ describe('the reading measure', () => {
     // not what it is worth or how it is spelled: a different value, a token, or another selector
     // should all be free to change without touching this test.
     //
-    // The host paints this element — a tint, a radius, and padding — so a cap on it caps the *box*:
-    // the surface stopped short of its container while the title above and the property pills
-    // below still ran the panel's full width. `max-w-full` and `max-w-none` are not caps and stay
-    // allowed here.
+    // A container is never allowed to draw wider than the text it holds — the host paints this
+    // element a tint, a radius, and padding, and that padding is what a bare `max-w-[75ch]` used
+    // to eat into instead of extending past. `FreeformTextEditor`'s `padding` prop pairs the two
+    // together (see `READABLE_MEASURE_BY_PADDING`), so the *rendered* box lands at exactly the
+    // text measure plus its own padding, not at the panel's full width.
     expect(painted.className).toMatch(/(^|\s)bg-/);
-    expect(painted.className).not.toMatch(/(^|\s)max-w-\[/);
-    // The measure belongs to the top-level blocks, which leaves the contenteditable node itself
-    // full width so a click to the right of a line lands at the end of that line.
+    expect(painted.className).toMatch(/(^|\s)max-w-\[/);
+    // Each top-level block still carries its own cap too, which is what leaves the contenteditable
+    // node full width within the now-capped box, so a click to the right of a line still lands at
+    // the end of that line rather than doing nothing.
     expect(prose.className).toMatch(/\[&>\*[^\]]*\]:max-w-\[/);
   });
 });
@@ -584,12 +586,15 @@ describe('editor insets are symmetric', () => {
   /**
    * Every editor container class string in the app, with its file — both the reusable document
    * card (tagged `entity-document`) and any call site that gives `FreeformTextEditor` its own
-   * tinted background directly (composer bodies, the comment composer). A `bg-*` class is what
-   * marks a `FreeformTextEditor` className as *drawing* the visual container rather than just
-   * forwarding type styling, which is the only case this inset rule applies to.
+   * tinted background directly (composer bodies, the comment composer, an update composer). A
+   * `bg-*` class is what marks a `FreeformTextEditor` className as *drawing* the visual container
+   * rather than just forwarding type styling, which is the only case this rule applies to. `padded`
+   * is true when the call site uses `FreeformTextEditor`'s own `padding` preset instead of styling
+   * padding through `className` directly — that pairing is enforced by the component's typed
+   * `Record` rather than this scan, so a padded container is only checked for a stray `max-w-none`.
    */
-  function editorContainers(): readonly { readonly path: string; readonly classes: string }[] {
-    const found: { path: string; classes: string }[] = [];
+  function editorContainers(): readonly { path: string; classes: string; padded: boolean }[] {
+    const found: { path: string; classes: string; padded: boolean }[] = [];
     const walk = (dir: string): void => {
       for (const entry of readdirSync(dir)) {
         const full = join(dir, entry);
@@ -601,12 +606,12 @@ describe('editor insets are symmetric', () => {
         const text = readFileSync(full, 'utf8');
         const path = relative(REPO_ROOT, full).split(/[\\/]/).join('/');
         for (const match of text.matchAll(/className="([^"]*\bentity-document\b[^"]*)"/g)) {
-          found.push({ path, classes: match[1] ?? '' });
+          found.push({ path, classes: match[1] ?? '', padded: false });
         }
         for (const match of text.matchAll(/<FreeformTextEditor[^]*?\/>/g)) {
-          const classNameMatch = /className="([^"]*)"/.exec(match[0]);
-          const classes = classNameMatch?.[1] ?? '';
-          if (/(^|\s)bg-/.test(classes)) found.push({ path, classes });
+          const classes = /className="([^"]*)"/.exec(match[0])?.[1] ?? '';
+          const padded = match[0].includes('padding="');
+          if (/(^|\s)bg-/.test(classes)) found.push({ path, classes, padded });
         }
       }
     };
@@ -614,14 +619,16 @@ describe('editor insets are symmetric', () => {
     return found;
   }
 
-  it('uses one padding value on all four sides of every visually tinted editor surface', () => {
+  it('pads uniformly and never draws a tinted container wider than its text measure', () => {
     const containers = editorContainers();
     expect(containers.length).toBeGreaterThan(0);
-    for (const container of containers) {
-      // `p-4` — not `px-4 py-3`. An asymmetric inset is the single most common reason an editor
-      // looks subtly wrong, and it is exactly what the launch note calls out.
-      expect(container.classes, container.path).toMatch(/(^|\s)p-\d/);
-      expect(container.classes, container.path).not.toMatch(/(^|\s)p[xytblrse]-\d/);
+    // `p-4` — not `px-4 py-3` — plus a matching box-level cap is the invariant for a call site
+    // still styling this div through raw `className` (entity-document.tsx's outer box). A
+    // `padding`-prop call site gets both from the component itself, so only its `className` is
+    // checked, for a stray override.
+    for (const { classes, path, padded } of containers) {
+      if (!padded) expect(classes, path).toMatch(/(?=.*(^|\s)p-\d)(?=.*max-w-\[calc\(75ch\+)/);
+      expect(classes, path).not.toMatch(/(^|\s)(p[xytblrse]-\d|max-w-none(?:\s|$))/);
     }
   });
 });

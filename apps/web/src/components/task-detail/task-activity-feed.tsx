@@ -92,6 +92,66 @@ function ActivityRow({ entry }: { readonly entry: TaskActivityOut }): JSX.Elemen
   );
 }
 
+/** Props for {@link TaskCommentComposer}. */
+interface TaskCommentComposerProps {
+  /** Posts a comment through the task page's canonical mutation. */
+  onComment: (body: string) => Promise<void>;
+}
+
+/** The "Leave a comment…" composer at the foot of the activity feed. */
+function TaskCommentComposer({ onComment }: TaskCommentComposerProps): JSX.Element {
+  const [body, setBody] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
+
+  async function post(): Promise<void> {
+    const text = body.trim();
+    if (posting || text.length === 0) return;
+    setPosting(true);
+    setPostError(null);
+    try {
+      await onComment(text);
+      setBody('');
+    } catch {
+      setPostError(POST_FAILURE);
+    } finally {
+      setPosting(false);
+    }
+  }
+
+  return (
+    <form
+      className="border-outline-variant bg-surface-container-low flex flex-col gap-2 rounded-xl border p-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void post();
+      }}
+    >
+      <FreeformTextEditor
+        value={body}
+        onChange={setBody}
+        placeholder="Leave a comment…"
+        ariaLabel="Add a comment"
+        onSubmit={() => {
+          void post();
+        }}
+        padding="p-3"
+        className="bg-surface-container rounded-md"
+      />
+      <div className="flex items-center justify-end">
+        <Button type="submit" size="sm" disabled={posting || body.trim().length === 0}>
+          {posting ? 'Posting…' : 'Comment'}
+        </Button>
+      </div>
+      {postError ? (
+        <p role="alert" className="text-error text-body-medium">
+          {postError}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
 /** The task's one chronological Activity history. */
 export function TaskActivityFeed({
   orgId,
@@ -100,9 +160,6 @@ export function TaskActivityFeed({
   canComment = false,
 }: TaskActivityFeedProps): JSX.Element {
   const [filter, setFilter] = useState<ActivityFilter>(ALL_CATEGORIES);
-  const [body, setBody] = useState('');
-  const [posting, setPosting] = useState(false);
-  const [postError, setPostError] = useState<string | null>(null);
   const activityQuery = useMemo(
     () =>
       apiInfiniteQueryOptions(
@@ -125,21 +182,6 @@ export function TaskActivityFeed({
   );
   const query = useInfiniteApiQuery(activityQuery);
   const entries = query.data?.pages.flatMap((page) => page.items) ?? [];
-
-  async function post(): Promise<void> {
-    const text = body.trim();
-    if (!onComment || !canComment || posting || text.length === 0) return;
-    setPosting(true);
-    setPostError(null);
-    try {
-      await onComment(text);
-      setBody('');
-    } catch {
-      setPostError(POST_FAILURE);
-    } finally {
-      setPosting(false);
-    }
-  }
 
   // placeholder: this task's comments and activity, at the chosen filter.
   return (
@@ -215,36 +257,7 @@ export function TaskActivityFeed({
         </div>
       ) : null}
 
-      {canComment && onComment ? (
-        <form
-          className="border-outline-variant bg-surface-container-low flex flex-col gap-2 rounded-xl border p-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void post();
-          }}
-        >
-          <FreeformTextEditor
-            value={body}
-            onChange={setBody}
-            placeholder="Leave a comment…"
-            ariaLabel="Add a comment"
-            onSubmit={() => {
-              void post();
-            }}
-            className="bg-surface-container rounded-md p-3"
-          />
-          <div className="flex items-center justify-end">
-            <Button type="submit" size="sm" disabled={posting || body.trim().length === 0}>
-              {posting ? 'Posting…' : 'Comment'}
-            </Button>
-          </div>
-          {postError ? (
-            <p role="alert" className="text-error text-body-medium">
-              {postError}
-            </p>
-          ) : null}
-        </form>
-      ) : null}
+      {canComment && onComment ? <TaskCommentComposer onComment={onComment} /> : null}
     </section>
   );
 }

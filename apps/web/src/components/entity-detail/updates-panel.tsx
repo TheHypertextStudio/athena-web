@@ -20,45 +20,19 @@ import type { Health } from '@docket/work/capability-contract';
 import type { UpdateOut } from '@docket/work/update-contract';
 import { cn, relativeTime } from '@docket/ui';
 import { ActorAvatar } from '@docket/ui/components';
-import { ChevronDown } from '@docket/ui/icons';
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-  Skeleton,
-} from '@docket/ui/primitives';
+import { Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
-import { useRef, useState } from 'react';
 
-import { useActiveOrgIdOptional } from '@/components/active-org';
 import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
-import { FreeformTextEditor } from '@/components/editor/freeform-text';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
+
+import { UpdatesComposer } from './updates-composer';
 
 /** Resolve an actor id to a display name + kind (passed by the caller). */
 export type ResolveActor = (actorId: string | null | undefined) => {
   name: string;
   kind: 'human' | 'agent' | 'team';
 };
-
-/** The selectable composer health values (empty string = "no change"). */
-type HealthChoice = Health | '';
-
-/** The composer's health options, in lifecycle order, plus the "no change" default. */
-const HEALTH_OPTIONS: readonly { value: HealthChoice; label: string }[] = [
-  { value: '', label: 'No health change' },
-  { value: 'on_track', label: HEALTH_LABEL.on_track },
-  { value: 'at_risk', label: HEALTH_LABEL.at_risk },
-  { value: 'off_track', label: HEALTH_LABEL.off_track },
-];
-
-/** Resolve a composer health choice to its menu/trigger label. */
-function choiceLabel(choice: HealthChoice): string {
-  return HEALTH_OPTIONS.find((option) => option.value === choice)?.label ?? 'No health change';
-}
 
 /** Props for {@link UpdatesPanel}. */
 export interface UpdatesPanelProps {
@@ -106,119 +80,14 @@ export function UpdatesPanel({
   onPost,
   showHealthComposer = true,
 }: UpdatesPanelProps): JSX.Element {
-  const [body, setBody] = useState('');
-  const bodyRef = useRef('');
-  const [composerKey, setComposerKey] = useState(0);
-  const activeOrgId = useActiveOrgIdOptional();
-  const [health, setHealth] = useState<HealthChoice>('');
-
-  /**
-   * Post the draft, clearing the composer only once the update is actually saved.
-   *
-   * @remarks
-   * Clearing optimistically on submit reads fine until the post fails: the panel would surface
-   * {@link UpdatesPanelProps.postError} over an empty box, having already thrown away the text the
-   * author would need to retry. Awaiting the parent's write keeps a failed draft exactly where it
-   * was — the error is recoverable instead of destructive.
-   */
-  async function submit(): Promise<void> {
-    const trimmed = bodyRef.current.trim();
-    if (trimmed.length === 0 || posting) return;
-    try {
-      await onPost(trimmed, health === '' ? undefined : health);
-    } catch {
-      // The parent owns the message and renders it through `postError`; keep the draft to retry.
-      return;
-    }
-    bodyRef.current = '';
-    setBody('');
-    setComposerKey((current) => current + 1);
-    setHealth('');
-  }
-
   return (
     <div className="flex flex-col gap-6">
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void submit();
-        }}
-        className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4"
-      >
-        <p className="text-on-surface text-label-large">Post an update</p>
-        <FreeformTextEditor
-          key={composerKey}
-          value={body}
-          onChange={(next) => {
-            bodyRef.current = next;
-            setBody(next);
-          }}
-          {...(activeOrgId === null ? {} : { mentionOrgId: activeOrgId })}
-          ariaLabel="Post an update"
-          placeholder="Share how this line of work is flowing — wins, risks, or what changed…"
-          className="bg-surface-container-high hover:bg-surface-container-highest min-h-20 max-w-none rounded-lg border border-transparent p-3 transition-colors"
-          disabled={posting}
-          onSubmit={() => {
-            void submit();
-          }}
-        />
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {showHealthComposer ? (
-            <div className="flex items-center gap-2">
-              <span className="text-on-surface-variant text-body-medium">Set health</span>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    {health !== '' ? (
-                      <span
-                        aria-hidden="true"
-                        className={cn('size-1.5 rounded-full', HEALTH_FILL_CLASS[health])}
-                      />
-                    ) : null}
-                    <span>{choiceLabel(health)}</span>
-                    <ChevronDown className="h-4 w-4 opacity-60" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" width="sm">
-                  <DropdownMenuRadioGroup
-                    value={health}
-                    onValueChange={(next) => {
-                      setHealth(next as HealthChoice);
-                    }}
-                  >
-                    {HEALTH_OPTIONS.map((option) => (
-                      <DropdownMenuRadioItem key={option.value || 'none'} value={option.value}>
-                        <span className="flex items-center gap-2">
-                          {option.value !== '' ? (
-                            <span
-                              aria-hidden="true"
-                              className={cn(
-                                'size-1.5 rounded-full',
-                                HEALTH_FILL_CLASS[option.value],
-                              )}
-                            />
-                          ) : null}
-                          {option.label}
-                        </span>
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          ) : (
-            <span />
-          )}
-          <Button type="submit" size="sm" disabled={posting || body.trim().length === 0}>
-            {posting ? 'Posting…' : 'Post update'}
-          </Button>
-        </div>
-        {postError ? (
-          <p role="alert" className="text-error text-body-medium">
-            {postError}
-          </p>
-        ) : null}
-      </form>
+      <UpdatesComposer
+        posting={posting}
+        postError={postError}
+        onPost={onPost}
+        showHealthComposer={showHealthComposer}
+      />
 
       {/* placeholder: the posted updates — how many there are, who wrote each one, when, and what
           it says. The composer above stays usable throughout, so someone can post before the

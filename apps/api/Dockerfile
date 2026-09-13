@@ -31,12 +31,13 @@ COPY --from=pruner /app/out/full/ .
 # serving process starts an esbuild child during every cold start and turns a compiler failure into
 # an API outage before Cloud Run can open the listener.
 FROM base AS builder
+ARG DOCKET_BUILD_REVISION
 WORKDIR /app
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/scripts/install-git-guardrails.sh ./scripts/install-git-guardrails.sh
 RUN pnpm install --frozen-lockfile
 COPY --from=pruner /app/out/full/ .
-RUN pnpm --filter @docket/api build:runtime
+RUN DOCKET_BUILD_REVISION="$DOCKET_BUILD_REVISION" pnpm --filter @docket/api build:runtime
 
 FROM base AS runner
 WORKDIR /app

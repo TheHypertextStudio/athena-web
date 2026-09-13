@@ -1,0 +1,15 @@
+{
+  "releases": [
+    {
+      "version": "0.1.0",
+      "date": "2026-09-12",
+      "status": "prerelease",
+      "summary": "The initial explicit public REST contract establishes compatibility tracking for Docket.",
+      "facts": [
+        "Clients can omit Docket-Version or assert the exact current contract.",
+        "Every public REST response identifies its contract and deployed source revision.",
+        "This release does not mark the introduction date of every documented capability."
+      ]
+    }
+  ]
+}

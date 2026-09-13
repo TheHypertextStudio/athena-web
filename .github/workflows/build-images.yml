@@ -35,11 +35,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # apps/api/Dockerfile declares only NODE_VERSION. The public URLs reach the API through
-          # Cloud Run's environment at run time, so baking them in would be inert.
+          # The API records this same build's source identity. Public URLs still reach it
+          # through Cloud Run's environment at runtime.
           - image: api
             dockerfile: apps/api/Dockerfile
-            extra_build_args: ''
+            extra_build_args: |
+              DOCKET_BUILD_REVISION=${{ github.sha }}
           # apps/admin/Dockerfile declares the four below alongside NODE_VERSION: Next inlines
           # NEXT_PUBLIC_* into the client bundle at build time, so they must be present here
           # rather than supplied to the running service.

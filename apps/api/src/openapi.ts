@@ -23,6 +23,8 @@ import type { Input, MiddlewareHandler } from 'hono';
 import type { AdminInstance, AppInstance } from './app';
 import type { AppEnv } from './context';
 import { env } from './env';
+import { API_REVISION, API_VERSION } from './api-version';
+import { API_IDENTITY_COMPONENTS, normalizePublicApiIdentity } from './openapi-identity';
 
 /**
  * The product overview rendered as the Scalar reference's introduction. This is the front door
@@ -289,19 +291,22 @@ const TAGS = [
 function buildDocumentation() {
   return {
     openapi: '3.1.0',
+    'x-docket-version': API_VERSION,
+    'x-docket-revision': API_REVISION,
     info: {
       title: 'Docket API',
-      version: '0.0.0',
+      version: API_VERSION,
       description: PRODUCT_OVERVIEW,
     },
     // `app` has basePath `/v1`, so generated paths already carry `/v1` — the server URL must
     // NOT repeat it (else paths resolve to `/v1/v1/...`).
     servers: [{ url: env.API_URL }],
     externalDocs: {
-      description: 'Docket problem types and recovery guidance',
-      url: `${(env.WEB_URL || env.API_URL || 'http://localhost').replace(/\/$/, '')}/problems`,
+      description: 'Docket public API version policy',
+      url: `${(env.WEB_URL || env.API_URL || 'http://localhost').replace(/\/$/, '')}/docs/developers/api-versions`,
     },
     components: {
+      ...API_IDENTITY_COMPONENTS,
       securitySchemes: {
         bearerAuth: { type: 'http' as const, scheme: 'bearer' },
         mcpOAuth: {
@@ -332,9 +337,10 @@ function buildDocumentation() {
 function buildAdminDocumentation() {
   return {
     openapi: '3.1.0',
+    'x-docket-revision': API_REVISION,
     info: {
       title: 'Docket Admin API (internal)',
-      version: '0.0.0',
+      version: `internal-${API_REVISION.slice(0, 7)}`,
       description:
         'Internal staff back-office API. **Not part of the public Docket API** — these operations live on the `/admin` mount, require a staff role, and are consumed only by the staff console (`apps/admin`). Staff tiers (`support`/`finance`/`superadmin`) gate the more sensitive actions.',
     },
@@ -373,6 +379,7 @@ export function registerOpenapi(
   const cacheDocument = <Path extends string, RouteInput extends Input>(
     handler: MiddlewareHandler<AppEnv, Path, RouteInput>,
     cacheControl: string,
+    publicIdentity = false,
   ): MiddlewareHandler<AppEnv, Path, RouteInput> => {
     let cached:
       | {
@@ -394,8 +401,17 @@ export function registerOpenapi(
       if (!generated) return generated;
       const headers = new Headers(generated.headers);
       headers.set('cache-control', cacheControl);
+      const body = publicIdentity
+        ? new TextEncoder().encode(
+            JSON.stringify(
+              normalizePublicApiIdentity(
+                (await generated.json()) as Parameters<typeof normalizePublicApiIdentity>[0],
+              ),
+            ),
+          )
+        : new Uint8Array(await generated.arrayBuffer());
       cached = {
-        body: new Uint8Array(await generated.arrayBuffer()),
+        body,
         headers,
         status: generated.status,
         statusText: generated.statusText,
@@ -416,6 +432,7 @@ export function registerOpenapi(
     cacheDocument(
       openAPIRouteHandler(app, { documentation: buildDocumentation() }),
       'public, max-age=300, stale-while-revalidate=86400',
+      true,
     ),
   );
   server.get('/v1/docs', scalar('/v1/openapi.json'));

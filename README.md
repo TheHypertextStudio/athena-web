@@ -3,6 +3,10 @@
 Docket is a local-first workspace for planning and doing work. The repository contains the web
 application, operator console, API, background runner, shared packages, and deployment tooling.
 
+The public REST API accepts an optional exact `Docket-Version` assertion and identifies each
+response with its contract and source revision. See the
+[API version policy](docs/engineering/specs/api-version-policy.md) before changing the contract.
+
 ## From clone to a working app
 
 On macOS or Linux, the supported entrypoint is:

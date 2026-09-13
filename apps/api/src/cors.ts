@@ -86,6 +86,8 @@ const PUBLIC_ICON_PATHS: ReadonlySet<string> = new Set([
  * duplicate create waiting to happen.
  */
 const ALLOWED_REQUEST_HEADERS = [
+  'Docket-Version',
+  'Last-Event-ID',
   'Content-Type',
   'Authorization',
   // Conditional requests (RFC 9110 §13.1) — the write half of the entity-tag contract.
@@ -116,6 +118,9 @@ function isSessionOwnerRequest(method: string | undefined, path: string): boolea
  * build a conditional request even though the server answers them correctly.
  */
 const EXPOSED_RESPONSE_HEADERS = [
+  'Docket-Version',
+  'Docket-Revision',
+  'X-Request-Id',
   'Authorization',
   'WWW-Authenticate',
   // Where a 201 put the new resource, and where a 202 reports progress.

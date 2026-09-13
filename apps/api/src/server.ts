@@ -2,7 +2,8 @@
  * `@docket/api` — runtime entrypoint.
  *
  * @remarks
- * Boot order: CORS (first) → session middleware → `/api/auth/*` (Better Auth) → the
+ * Boot order: response identity → CORS → canonical redirect → version assertion → session →
+ * `/api/auth/*` (Better Auth) → the
  * `/internal/*` machine edges (webhooks/ingest/cron/oauth-callback, each self-authed) → the
  * `/admin` staff app → the `/v1` public app → health/openapi/docs → the Problem `onError`.
  * Three typed surfaces are kept apart: the public `/v1` app (`AppType`), the staff `/admin`
@@ -15,12 +16,11 @@ import { auth } from '@docket/auth';
 import { Hono } from 'hono';
 import { requestId } from 'hono/request-id';
 import { secureHeaders } from 'hono/secure-headers';
-import { trimTrailingSlash } from 'hono/trailing-slash';
 
 import { adminApp, app } from './app';
 import { sessionMiddleware } from './auth/session-middleware';
 import type { AppEnv } from './context';
-import { buildCorsMiddleware } from './cors';
+import { registerPublicApiBoundary } from './api-version-middleware';
 import { getContainer } from './container';
 import { flushDeferredWork } from './lib/after-response';
 import { startDevScheduler } from './dev-scheduler';
@@ -86,20 +86,8 @@ server.use('*', requestId());
 //   it. Framing a JSON response is not an attack this header meaningfully prevents.
 server.use('*', secureHeaders({ crossOriginResourcePolicy: 'cross-origin', xFrameOptions: false }));
 
-server.use('*', buildCorsMiddleware(trustedOrigins));
+registerPublicApiBoundary(server, trustedOrigins);
 
-// One resource, one URI. A trailing slash used to 404; it now redirects permanently to the
-// canonical path, which is what a client following a hand-written or copy-pasted URL deserves.
-// `alwaysRedirect` (rather than the default, which only rewrites an existing 404) is safe here
-// precisely because `rest-conformance.test.ts` proves no route on either surface ends in a
-// slash — and it is also the only form that works, since an unmatched request on this server
-// throws rather than returning a 404 the middleware could inspect afterwards.
-//
-// Registered AFTER CORS, not before: this redirect returns early, so anything ahead of it never
-// runs. A 301 without `Access-Control-Allow-Origin` fails the browser's CORS check on the
-// redirect itself, and the product app — which only ever reaches this API cross-origin — would
-// see an opaque failure instead of following it to the canonical path.
-server.use('*', trimTrailingSlash({ alwaysRedirect: true }));
 server.use('*', sessionMiddleware);
 // CIMD preflight (mcp-surface.md §2.6): Better Auth resolves authorize clients by exact
 // `client_id`, so URL-form MCP client ids must be fetched/validated/upserted into the OAuth

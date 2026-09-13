@@ -196,7 +196,7 @@ main() {
 
   (
     cd "${repo_root}"
-    run_release_env env PORT="${api_port}" pnpm --filter @docket/api exec tsx src/server.ts
+    run_release_env env PORT="${api_port}" node apps/api/dist/server.mjs
   ) >"${api_log}" 2>&1 &
   API_PID=$!
 

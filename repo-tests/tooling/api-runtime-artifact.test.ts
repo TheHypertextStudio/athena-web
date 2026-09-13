@@ -35,4 +35,16 @@ describe('production API runtime artifact', () => {
     expect(deployment).toContain('node /app/packages/db/dist/migrate.mjs');
     expect(deployment).not.toContain('node --import=tsx/esm /app/packages/db/src/migrate.ts');
   });
+
+  it('launches release acceptance through the bundle that embeds the Git revision', () => {
+    const launcher = source('scripts/run-release-acceptance.sh');
+    expect(launcher).toContain('NODE_ENV=production');
+    expect(launcher).toContain(
+      'run_release_env env PORT="${api_port}" node apps/api/dist/server.mjs',
+    );
+    expect(launcher).not.toContain('tsx src/server.ts');
+    expect(source('apps/api/scripts/build-runtime.mjs')).toContain(
+      '__DOCKET_API_REVISION__: JSON.stringify(revision)',
+    );
+  });
 });

@@ -11,6 +11,7 @@ import { z } from 'zod';
 /** The closed set of machine-readable error codes clients may branch on. */
 export const ProblemCode = z
   .enum([
+    'unsupported_api_version',
     'validation_error',
     'unauthorized',
     'forbidden',
@@ -110,6 +111,7 @@ export type ProblemRecovery =
  * renderers must use this catalog while retaining the original exception only for diagnostics.
  */
 export const PUBLIC_PROBLEM_TITLES = {
+  unsupported_api_version: 'The requested API version is not supported.',
   validation_error: 'Some information needs attention.',
   unauthorized: 'Sign in required.',
   forbidden: "You don't have permission to do that.",
@@ -155,6 +157,8 @@ export const PUBLIC_PROBLEM_TITLES = {
 
 /** Occurrence-safe consequences for the public problem reference. */
 export const PUBLIC_PROBLEM_SUMMARIES = {
+  unsupported_api_version:
+    'Send the current Docket-Version value or omit the header to use the current contract.',
   validation_error: 'One or more fields could not be accepted.',
   unauthorized: 'Docket could not find a valid session for this request.',
   forbidden: 'Your account does not have the required access.',
@@ -215,6 +219,7 @@ export interface ProblemDefinition {
 
 /** The recovery action for each problem code. */
 const PROBLEM_RECOVERY: Record<ProblemCode, ProblemRecovery> = {
+  unsupported_api_version: 'review',
   validation_error: 'review',
   unauthorized: 'sign_in',
   forbidden: 'review',
@@ -260,6 +265,7 @@ const PROBLEM_RECOVERY: Record<ProblemCode, ProblemRecovery> = {
 
 /** HTTP status for each stable problem code. */
 const PROBLEM_STATUS: Record<ProblemCode, number> = {
+  unsupported_api_version: 400,
   validation_error: 422,
   unauthorized: 401,
   forbidden: 403,
@@ -396,6 +402,11 @@ export type FieldIssue = z.infer<typeof FieldIssue>;
 
 /** An RFC 9457 problem-details object. */
 export const Problem = z.object({
+  requestedVersion: z.string().optional().describe('The rejected Docket-Version assertion.'),
+  supportedVersions: z
+    .array(z.string())
+    .optional()
+    .describe('The API contracts this deployment accepts.'),
   type: z
     .string()
     .describe(

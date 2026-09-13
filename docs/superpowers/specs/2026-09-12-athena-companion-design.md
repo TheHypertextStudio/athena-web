@@ -35,6 +35,70 @@ Five properties. Each is a test the design has to pass.
    the thread, ranked. The icon badge summarizes the thread; it is never the only signal.
 5. **Feels alive.** Replies stream. Work shows what it is doing as it does it.
 
+### 2.1 Principles: intuitive, AI-first, human-oriented
+
+The brief in one sentence. Each principle below is a rule the design is checked against, with
+the concrete consequence for Athena.
+
+**AI-first** means Athena is the default way to get something done, present on every surface,
+already holding the context, and willing to go first.
+
+1. **Ask before you click.** Anything a person can do by clicking, they can ask for in plain
+   words, and the result lands exactly where the click would have put it. The composer is the
+   primary control on every surface.
+2. **Ambient, not summoned.** Athena knows the open page, the selection, and the person's day
+   without being told. Context is shown as a chip so it is visible and removable, never assumed
+   in silence.
+3. **Initiative with restraint.** Athena speaks first about the one thing that matters, in the
+   thread, with one action attached. One unread heads-up at a time; the rest fold into a digest.
+
+**Human-oriented** means the person stays the author, the decider, and the one the product
+speaks to.
+
+4. **Show the thing, not a description of it.** Outcomes render as the real object: a ghost row
+   on the page, a drafted email you can read, a receipt with what changed. A sentence saying
+   "I moved two tasks" is never the only evidence.
+5. **Human words only.** No session, job, tool, execute, or run in anything a person reads. The
+   surfaces say what Athena did, what she is doing, what needs you, and what she used. Raw tool
+   detail stays behind a disclosure labelled "What Athena used".
+6. **Reversible by default, gated when it matters.** Changes inside Docket carry Undo on the
+   receipt. Actions that leave Docket (send, post, pay) get a Review step with the real content
+   before anything goes out. Two classes, two treatments, and the approval dial moves toward
+   autonomy as trust builds.
+7. **Beside you, never over you.** Athena lives in the panel, in ghost rows, and in cards on
+   the work. She never opens a modal, takes over a page, or moves the person somewhere else.
+8. **Honest at every step.** Every action leaves a receipt. A failure says what did not happen
+   and what Athena needs. Success is never claimed for work that did not run.
+9. **Attributed to a person.** Every change reads "Athena, on behalf of you". Teammates see the
+   change with that attribution; the thread itself is visible only to its owner.
+
+**Intuitive** means no new vocabulary and one obvious way to do each thing.
+
+10. **One composer, one thread, one set of words** across the rail, the wide view, and Today.
+    Only one composer is active on a screen at a time.
+11. **One Athena entry per surface.** The composer and a single "Ask Athena" action. Sparkles
+    on every field is AI everywhere, and AI everywhere is the opposite of AI-first.
+12. **It behaves like a capable colleague.** Terse replies that lead with the answer, numbers
+    you can check, progress that names the object ("Drafting email 2 of 3"), and a question
+    only when the answer changes what happens next.
+
+### 2.2 Where the draft design falls short of these
+
+- Proposals were shown only as cards in the thread. Principle 4 puts them on the page as ghost
+  rows that settle on approval; the card is where the decision is made, the page is where it
+  shows. Added to §4.6 and Phase 2.
+- Sending drafted emails was shown with an inline Approve. Principle 6 makes that a Review with
+  the drafts readable first. The job card's decision block gains a Review action for outward
+  actions.
+- Receipts had no Undo. Principle 6 adds it to every in-Docket change, using the API's existing
+  undo.
+- "Job" and "Technical details" appeared in UI copy. Principle 5 renames them: the card has no
+  type label, and the disclosure reads "What Athena used".
+- Status lines said "Started 2 min ago". Principle 12 makes them name the object and the
+  progress.
+- Home could show two composers at once. Principle 10 demotes the page prompt while the panel
+  is open.
+
 ## 3. Approaches considered
 
 **A. Companion thread in the rail (recommended).** Rebuild the rail panel as the one personal
@@ -137,8 +201,16 @@ session.
   menu entry that delegates a task. Either way it appears as a job card in the thread and a row
   in the Working strip. Nothing about it lives on a separate surface.
 - The card updates over the existing personal session SSE stream. The step list uses the
-  existing presenter, which already strips model reasoning and folds tool payloads under
-  "Technical details".
+  existing presenter, which already strips model reasoning and folds tool payloads under a
+  disclosure, relabelled "What Athena used".
+- While a proposal waits, the affected items render as ghost rows on the page they belong to,
+  and settle into real rows when approved. The card is where the decision is made; the page is
+  where its consequence shows.
+- Decisions come in two classes. Changes inside Docket run on Approve and carry Undo on the
+  receipt. Actions that leave Docket (sending an email, posting to a connected service, paying)
+  show Review, which opens the real content for reading and editing before anything goes out.
+- A running card accepts a Reply: the message quotes the card and steers that work, and Athena
+  acknowledges it in the step list.
 - The task the job was delegated from shows the same card in its own detail page's activity, so
   "sessions live on the task" holds without a second component.
 
@@ -215,13 +287,20 @@ from a task menu landing in the panel with the chip attached.
 
 Objective: delegated work lives in the thread.
 
-- Reduce `AthenaWorkbench` to `AthenaJobCard`: objective, live status, steps, decision block,
-  receipt, overflow menu with Pause / Resume / Cancel.
+- Reduce `AthenaWorkbench` to `AthenaJobCard`: objective, live status that names the object and
+  its progress, steps, decision block, receipt with Undo per in-Docket change, a Reply
+  affordance that steers the running job, and an overflow menu with Pause / Resume / Cancel.
 - Add the Working strip to the panel and the Work ledger (Running / Needs you / Done) to the
   wide view's left column, each row jumping to its card in the thread.
 - Render `ElicitationCard` and `ProposalGroupCard` as thread entries where they are raised.
+- Render pending proposals on the open page as ghost rows (the existing ghost grammar), settling
+  with a view transition on approval; hovering a card's affected items highlights them on the
+  page.
+- Split decisions by class: in-Docket changes get Approve with Undo on the receipt; outward
+  actions (send, post, pay) get Review, which opens the real content before anything leaves.
 - Rebuild `/athena` as the wide view (§4.7). Move "Connect a tool or app" to the attach menu.
 - Show the job card on the source task's detail page.
+- Demote Today's page prompt while the panel is open so one composer is active per screen.
 
 Validation: journey tests for delegate → card appears → decision in strip → receipt in thread;
 SSE reconnect test with `Last-Event-ID`; design review of the wide view and of a 280px panel

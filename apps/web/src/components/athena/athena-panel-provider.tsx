@@ -72,7 +72,9 @@ export interface AthenaPanelValue {
   readonly railStatus: RailPanelStatus | null;
   /** Whether the next piece of work carries the current context. */
   readonly contextAttached: boolean;
+  /** Carry the current page with the next piece of work. */
   readonly attachContext: () => void;
+  /** Send the next piece of work without the current page. */
   readonly detachContext: () => void;
   readonly openAthena: (context?: PersonalAthenaContext | null, draft?: string) => void;
   readonly closeAthena: () => void;

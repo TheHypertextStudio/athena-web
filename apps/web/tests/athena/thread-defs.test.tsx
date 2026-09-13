@@ -18,15 +18,13 @@ import { sendPersonalMessage, usePersonalThread } from '../../src/lib/athena/thr
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
   readonly listeners = new Map<string, (event: MessageEvent) => void>();
+  readonly close = vi.fn();
   onerror: (() => void) | null = null;
   constructor(readonly url: string) {
     FakeEventSource.instances.push(this);
   }
   addEventListener(name: string, listener: (event: MessageEvent) => void): void {
     this.listeners.set(name, listener);
-  }
-  close(): void {
-    return undefined;
   }
 }
 
@@ -119,6 +117,27 @@ describe('usePersonalThread', () => {
     await waitFor(() => {
       expect(screen.getByTestId('count')).toHaveTextContent('1');
     });
+  });
+
+  it('invalidates and refetches the thread when the stream errors', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource);
+    chatGet.mockResolvedValue(okResponse(thread('running')));
+    renderThread();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('count')).toHaveTextContent('0');
+    });
+    const callsBeforeError = chatGet.mock.calls.length;
+
+    const source = FakeEventSource.instances[0];
+    act(() => {
+      source?.onerror?.();
+    });
+
+    await waitFor(() => {
+      expect(chatGet.mock.calls.length).toBe(callsBeforeError + 1);
+    });
+    expect(source?.close).toHaveBeenCalledTimes(1);
   });
 
   it('opens no stream for a settled thread', async () => {

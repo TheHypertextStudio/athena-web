@@ -60,11 +60,7 @@ test('the Athena panel keeps its selected work while the person moves between pa
   await expect(rail.getByRole('heading', { name: /Draft sponsor outreach/ })).toBeVisible();
 
   // Client-side navigation through the sidebar; a full page load would be a different test.
-  await page
-    .getByRole('navigation', { name: 'Home' })
-    .getByRole('link', { name: /Inbox/ })
-    .first()
-    .click();
+  await page.getByRole('navigation', { name: 'Home' }).getByRole('link', { name: /Inbox/ }).click();
   await expect(page).toHaveURL(/\/inbox/);
 
   await expect(rail.getByRole('heading', { name: /Draft sponsor outreach/ })).toBeVisible();

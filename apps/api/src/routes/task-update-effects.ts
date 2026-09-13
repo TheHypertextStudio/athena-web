@@ -14,6 +14,7 @@ import type { resolveStateTransition, TaskRow } from './task-helpers';
 
 type TaskTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+/** Close the current person's matching timer when a patch completes its task. */
 export async function closePatchTimers(
   tx: TaskTransaction,
   actorId: string,
@@ -25,6 +26,7 @@ export async function closePatchTimers(
   return closeCompletingUserTaskTimers(tx, actorId, { before, after });
 }
 
+/** Publish the side effects that must run only after the task patch commits. */
 export async function finishTaskPatch(input: {
   readonly orgId: string;
   readonly actorId: string;

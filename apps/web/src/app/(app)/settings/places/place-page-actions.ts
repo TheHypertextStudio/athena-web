@@ -9,14 +9,17 @@ import type {
 import type { PlaceEditorValue } from '@/components/work-location/place-editor-dialog';
 import { toUserFacingError, UserFacingError, userErrorMessage } from '@/lib/problem';
 
+/** Return the first value that represents settled query data. */
 export function firstPresent(values: readonly unknown[]): unknown {
   return values.find((value) => value !== null && value !== undefined);
 }
 
+/** Keep mutation failures absent until a request has produced one. */
 export function mutationMessage(error: unknown, fallback: string): string | null {
   return error ? userErrorMessage(error, fallback) : null;
 }
 
+/** Hide background resolution failures while an explicit resolution is in progress. */
 export function hiddenResolutionError(
   resolvingChange: WorkScheduleChangeOut | null,
   error: unknown,
@@ -24,14 +27,17 @@ export function hiddenResolutionError(
   return resolvingChange ? null : error;
 }
 
+/** Normalize deferred query results for list consumers. */
 export function itemsOrEmpty<T>(items: readonly T[] | undefined): readonly T[] {
   return items ?? [];
 }
 
+/** Normalize deferred query results for nullable editor values. */
 export function valueOrNull<T>(value: T | undefined): T | null {
   return value ?? null;
 }
 
+/** Convert a no-content mutation response into the shared user-facing error contract. */
 export async function noContent(
   call: () => Promise<{ readonly ok: boolean; readonly status: number }>,
   fallback: string,
@@ -44,6 +50,7 @@ export async function noContent(
   }
 }
 
+/** Build the saved-place resolution only when both the change and place still exist. */
 export function linkPlaceResolution(
   change: WorkScheduleChangeOut | null,
   places: readonly WorkPlaceOut[],
@@ -74,6 +81,7 @@ interface SavePlaceHandlerInput {
   readonly enableAutomaticLocation: () => void;
 }
 
+/** Create the post-save workflow for edits, schedule resolutions, and ordinary additions. */
 export function createSavePlaceHandler(
   input: SavePlaceHandlerInput,
 ): (value: PlaceEditorValue) => void {

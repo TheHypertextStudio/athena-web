@@ -1,9 +1,9 @@
 ---
 title: "MCP tools and resources"
-description: "The 25 tools, the docket:// resource scheme, the bootstrap prompts, and the scopes each one needs."
+description: "The 26 tools, the docket:// resource scheme, the bootstrap prompts, and the scopes each one needs."
 ---
 
-**25 tools**, a set of `docket://` resources, and 3 prompts. Each is named for what the caller is
+**26 tools**, a set of `docket://` resources, and 3 prompts. Each is named for what the caller is
 trying to do.
 
 ## Tools
@@ -61,7 +61,7 @@ trying to do.
     | `repeat_task` | Makes a task recur. |
   </Accordion>
 
-  <Accordion title="Agents, sessions, and connectors: 6 tools">
+  <Accordion title="Agents, sessions, and connectors: 7 tools">
     | Tool | Does |
     | --- | --- |
     | `run_agent` | Starts an agent session. |
@@ -70,6 +70,7 @@ trying to do.
     | `acknowledge_directive` | Acknowledges a directive. |
     | `pause_athena_assignment_trigger` | Pauses a trigger on your Athena assignment. |
     | `remove_athena_assignment_trigger` | Removes a trigger on your Athena assignment. |
+    | `review_work_destination` | Reviews whether a normalized web destination supports one task, with at most one follow-up question. |
   </Accordion>
 </AccordionGroup>
 
@@ -79,7 +80,7 @@ trying to do.
 | --- | --- |
 | `work:read` | `workspaces`, `find`, `list_work`, `get`, `brief`, and every resource read |
 | `work:write` | `capture`, `organize`, `update`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`, `track`, `retrospect`, `acknowledge_directive`, `define_process`, `schedule_process`, `repeat_task` |
-| `agents:run` | `run_agent`, `manage_session`, `pause_athena_assignment_trigger`, `remove_athena_assignment_trigger` |
+| `agents:run` | `run_agent`, `manage_session`, `pause_athena_assignment_trigger`, `remove_athena_assignment_trigger`, `review_work_destination` |
 | `connectors:link` | `link_external` |
 
 See [Authentication](/developers/authentication#scopes) for requesting and stepping up scopes.
@@ -95,6 +96,7 @@ The same data, read as resources. An item you cannot see looks like one that doe
 | `docket://hub/inbox` | What needs a response |
 | `docket://hub/directive` | The current scheduling directive |
 | `docket://hub/portfolio` | Every workspace's programs and projects |
+| `docket://hub/active-work` | Your current running or paused timer and its permission-filtered task context |
 
 Everything else is templated:
 

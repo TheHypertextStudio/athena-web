@@ -14,13 +14,7 @@ import { ApiError, CapabilityError, NotFoundError } from '../../error';
 import { labelsForSubject, replaceLabels, resolveLabelSet } from '../labels';
 import { rawResultRows } from '../raw-result';
 import { diffTaskFields, recordTaskChanges, resolveTaskChangeLabels } from '../task-audit';
-import {
-  applySubtaskCompletionPolicy,
-  closeCompletingUserTaskTimers,
-  emitCompletedTaskTimerStops,
-  finishTaskStateTransition,
-  writeTaskStateTransition,
-} from '../task-state';
+import * as taskState from '../task-state';
 import {
   landingStatus,
   resolveContainerStatus,
@@ -258,6 +252,22 @@ function nullableStringValue(value: unknown, field: string): string | null {
   return value === null ? null : stringValue(value, field);
 }
 
+async function taskTransitionAfterCommit(
+  tx: WorkViewTransaction,
+  actorId: string,
+  mutation: taskState.TaskStateMutation,
+): Promise<AfterCommit> {
+  const timerStops = await taskState.closeCompletingUserTaskTimers(tx, actorId, mutation);
+  const cascades = await taskState.applySubtaskCompletionPolicy(tx, mutation);
+  return async () => {
+    await taskState.finishTaskStateTransition({ actorId }, mutation);
+    await taskState.emitCompletedTaskTimerStops(timerStops);
+    for (const cascade of cascades) {
+      await taskState.finishTaskStateTransition({ actorId: null }, cascade);
+    }
+  };
+}
+
 async function mutateGroup(
   tx: WorkViewTransaction,
   input: ReorderWorkViewInput,
@@ -308,7 +318,7 @@ async function mutateGroup(
         'status',
         tx,
       );
-      const mutation = await writeTaskStateTransition(tx, {
+      const mutation = await taskState.writeTaskStateTransition(tx, {
         before,
         statusId: transition.statusId,
         state: transition.state,
@@ -316,15 +326,7 @@ async function mutateGroup(
         canceledAt: transition.canceledAt,
       });
       if (!mutation) throw new NotFoundError('Work item not found');
-      const timerStops = await closeCompletingUserTaskTimers(tx, actorId, mutation);
-      const cascades = await applySubtaskCompletionPolicy(tx, mutation);
-      return async () => {
-        await finishTaskStateTransition({ actorId }, mutation);
-        await emitCompletedTaskTimerStops(timerStops);
-        for (const cascade of cascades) {
-          await finishTaskStateTransition({ actorId: null }, cascade);
-        }
-      };
+      return taskTransitionAfterCommit(tx, actorId, mutation);
     }
     const status = await resolveContainerStatus(
       organizationId,
@@ -483,22 +485,14 @@ async function mutateGroup(
             isNull(task.archivedAt),
           ),
         );
-      const mutation = await writeTaskStateTransition(tx, {
+      const mutation = await taskState.writeTaskStateTransition(tx, {
         before,
         statusId: destination.id,
         state: destination.key,
         ...stamps,
       });
       if (!mutation) throw new NotFoundError('Work item not found');
-      const timerStops = await closeCompletingUserTaskTimers(tx, actorId, mutation);
-      const cascades = await applySubtaskCompletionPolicy(tx, mutation);
-      return async () => {
-        await finishTaskStateTransition({ actorId }, mutation);
-        await emitCompletedTaskTimerStops(timerStops);
-        for (const cascade of cascades) {
-          await finishTaskStateTransition({ actorId: null }, cascade);
-        }
-      };
+      return taskTransitionAfterCommit(tx, actorId, mutation);
     }
     const scalar = {
       priority: { column: 'priority', reference: null, message: '' },

@@ -123,31 +123,33 @@ export async function writeTaskStateTransition(
  * timer closure atomic. Automation and agent actors have no user id, so they cannot close a
  * person's timer. A record on another task or another user's matching task stays untouched.
  */
-export async function closeCompletingUserTaskTimers(
+export async function closeCompletingUserTaskTimersBatch(
   tx: TaskStateTransaction,
   actorId: string | null,
-  mutation: TaskStateMutation,
+  mutations: readonly TaskStateMutation[],
 ): Promise<CompletedTaskTimerStop[]> {
-  if (
-    actorId === null ||
-    mutation.before.completedAt !== null ||
-    mutation.after.completedAt === null
-  ) {
-    return [];
-  }
+  if (actorId === null) return [];
+  const completingByTaskId = new Map(
+    mutations
+      .filter(
+        (mutation) => mutation.before.completedAt === null && mutation.after.completedAt !== null,
+      )
+      .map((mutation) => [mutation.after.id, mutation] as const),
+  );
+  if (completingByTaskId.size === 0) return [];
+
   const actorRows = await tx
-    .select({ userId: actor.userId })
+    .select({ organizationId: actor.organizationId, userId: actor.userId })
     .from(actor)
-    .where(
-      and(
-        eq(actor.id, actorId),
-        eq(actor.organizationId, mutation.after.organizationId),
-        eq(actor.kind, 'human'),
-      ),
-    )
+    .where(and(eq(actor.id, actorId), eq(actor.kind, 'human')))
     .limit(1);
-  const userId = actorRows[0]?.userId;
-  if (!userId) return [];
+  const actorRow = actorRows[0];
+  const userId = actorRow?.userId;
+  if (!actorRow || !userId) return [];
+  const completingTaskIds = [...completingByTaskId.values()]
+    .filter((mutation) => mutation.after.organizationId === actorRow.organizationId)
+    .map((mutation) => mutation.after.id);
+  if (completingTaskIds.length === 0) return [];
 
   const records = await tx
     .select({ id: timeRecord.id })
@@ -155,7 +157,7 @@ export async function closeCompletingUserTaskTimers(
     .where(
       and(
         eq(timeRecord.createdByUserId, userId),
-        eq(timeRecord.taskId, mutation.after.id),
+        inArray(timeRecord.taskId, completingTaskIds),
         inArray(timeRecord.status, ['open', 'paused']),
       ),
     )
@@ -180,15 +182,31 @@ export async function closeCompletingUserTaskTimers(
     .set({ status: 'closed', closedAt: now, endedAt: now })
     .where(inArray(timeRecord.id, recordIds))
     .returning();
-  return closed.map((record) => ({
-    actorId,
-    organizationId: mutation.after.organizationId,
-    taskId: mutation.after.id,
-    taskTitle: mutation.after.title,
-    userId,
-    record,
-    occurredAt: now,
-  }));
+  return closed.flatMap((record) => {
+    const mutation = record.taskId ? completingByTaskId.get(record.taskId) : undefined;
+    return mutation
+      ? [
+          {
+            actorId,
+            organizationId: mutation.after.organizationId,
+            taskId: mutation.after.id,
+            taskTitle: mutation.after.title,
+            userId,
+            record,
+            occurredAt: now,
+          },
+        ]
+      : [];
+  });
+}
+
+/** Close the completing person's timer for one task transition. */
+export async function closeCompletingUserTaskTimers(
+  tx: TaskStateTransaction,
+  actorId: string | null,
+  mutation: TaskStateMutation,
+): Promise<CompletedTaskTimerStop[]> {
+  return closeCompletingUserTaskTimersBatch(tx, actorId, [mutation]);
 }
 
 /** Publish canonical timer-stop events after the enclosing task transaction commits. */

@@ -16,11 +16,6 @@ import {
   WorkLocationRangeOut,
   WorkLocationRangeQuery,
   WorkLocationSyncOut,
-  WorkPlaceGeocodeResolve,
-  WorkPlaceGeocodeResult,
-  WorkPlaceGeocodeSearchOut,
-  WorkPlaceGeocodeSearchQuery,
-  WorkPlaceReverseGeocode,
   WorkScheduleChangeListOut,
   WorkScheduleChangeResolution,
   WorkScheduleExceptionCreate,
@@ -28,43 +23,31 @@ import {
   WorkScheduleOut,
   WorkSchedulePlanCreate,
   WorkSchedulePlanOut,
-  WorkPlaceCreate,
-  WorkPlaceListOut,
-  WorkPlaceMutationOut,
-  WorkPlaceUpdate,
 } from '@docket/planning/work-location-contract';
-import { WorkLocationAssertionId, WorkPlaceId, WorkScheduleChangeId } from '@docket/planning/ids';
+import { WorkLocationAssertionId, WorkScheduleChangeId } from '@docket/planning/ids';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import type { AppEnv, AuthSession } from '../context';
-import { getContainer } from '../container';
-import { AuthError, ConflictError, GeocodingUnavailableError } from '../error';
+import type { AppEnv } from '../context';
+import { ConflictError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import {
   archiveWorkLocationAssertion,
-  archiveWorkPlace,
   clearManualCurrentWorkLocation,
   clearWorkLocationOccurrence,
   createWorkLocationAssertion,
-  createWorkPlace,
-  enqueuePlaceWorkLocationProjections,
   enqueueProfileWorkLocationProjections,
   enqueueWorkLocationProjection,
   listWorkLocationAssertions,
   listWorkLocationSync,
-  listWorkPlaces,
   loadWorkLocationResolutionState,
   recordDeviceWorkLocation,
-  resolveWorkLocationHubId,
   setManualCurrentWorkLocation,
   setWorkLocationOccurrence,
   updateWorkLocationAssertion,
   updateWorkLocationProfile,
-  updateWorkPlace,
-  workLocationProjectionStates,
 } from '../services/work-location/repository';
 import {
   ignoreWorkScheduleChange,
@@ -75,40 +58,17 @@ import {
   resolveWorkScheduleConflict,
   setWorkScheduleException,
 } from '../services/work-location/schedule-repository';
-import { consumeGeocodingRequest } from '../services/work-location/geocoding-rate-limit';
-import { PlaceGeocoderUnavailable } from '../services/work-location/place-geocoder';
 import {
   resolveExpectedWorkLocationRange,
   resolveWorkLocationPoint,
 } from '@docket/planning/work-location-resolution';
+import { callerHub } from './work-location-route-context';
+import { workPlaceRoutes } from './work-place-routes';
 
-/** Require the signed-in user on this Hub-owned surface. */
-function requireSession(c: { get: (key: 'session') => AuthSession }): NonNullable<AuthSession> {
-  const session = c.get('session');
-  if (!session?.user) throw new AuthError();
-  return session;
-}
-
-const placeParam = z.object({ id: WorkPlaceId }).strict();
 const assertionParam = z.object({ id: WorkLocationAssertionId }).strict();
 const occurrenceParam = z.object({ id: WorkLocationAssertionId, date: DateString }).strict();
 const scheduleDateParam = z.object({ date: DateString }).strict();
 const scheduleChangeParam = z.object({ id: WorkScheduleChangeId }).strict();
-
-async function geocodeForUser<T>(userId: string, operation: () => Promise<T>): Promise<T> {
-  await consumeGeocodingRequest(db, userId);
-  try {
-    return await operation();
-  } catch (error) {
-    if (error instanceof PlaceGeocoderUnavailable) throw new GeocodingUnavailableError();
-    throw error;
-  }
-}
-
-/** Resolve the caller-owned Hub without accepting a Hub id from the request. */
-async function callerHub(c: { get: (key: 'session') => AuthSession }): Promise<string> {
-  return resolveWorkLocationHubId(requireSession(c).user.id);
-}
 
 /** Personal canonical work-location routes mounted at `/v1/me/work-location`. */
 const workLocation = new Hono<AppEnv>()
@@ -154,136 +114,7 @@ const workLocation = new Hono<AppEnv>()
       );
     },
   )
-  .get(
-    '/places',
-    apiDoc({
-      tag: 'Work location',
-      summary: 'List saved work places',
-      response: WorkPlaceListOut,
-      description:
-        'List arbitrary regular places and the independent optional home designation. Places have no fixed home/office kind.',
-    }),
-    async (c) => ok(c, WorkPlaceListOut, await listWorkPlaces(db, await callerHub(c))),
-  )
-  .get(
-    '/places/geocoding/search',
-    apiDoc({
-      tag: 'Work location',
-      summary: 'Search saved-place addresses',
-      response: WorkPlaceGeocodeSearchOut,
-      description:
-        'Return temporary Mapbox autocomplete candidates. A selected candidate must be permanently resolved before storage.',
-    }),
-    zQuery(WorkPlaceGeocodeSearchQuery),
-    async (c) => {
-      const userId = requireSession(c).user.id;
-      const { query } = c.req.valid('query');
-      return ok(
-        c,
-        WorkPlaceGeocodeSearchOut,
-        await geocodeForUser(userId, () => getContainer().placeGeocoder.search(query)),
-      );
-    },
-  )
-  .post(
-    '/places/geocoding/resolutions',
-    apiDoc({
-      tag: 'Work location',
-      summary: 'Resolve a saved-place address',
-      response: WorkPlaceGeocodeResult,
-      description: 'Permanently resolve the Mapbox feature selected from temporary search results.',
-    }),
-    zJson(WorkPlaceGeocodeResolve),
-    async (c) => {
-      const userId = requireSession(c).user.id;
-      const candidate = c.req.valid('json');
-      return ok(
-        c,
-        WorkPlaceGeocodeResult,
-        await geocodeForUser(userId, () => getContainer().placeGeocoder.resolve(candidate)),
-      );
-    },
-  )
-  .post(
-    '/places/geocoding/reverse',
-    apiDoc({
-      tag: 'Work location',
-      summary: 'Suggest an address for a saved-place point',
-      response: WorkPlaceGeocodeResult,
-      description:
-        'Permanently reverse-geocode a map or device point. The client offers the address before replacing saved text.',
-    }),
-    zJson(WorkPlaceReverseGeocode),
-    async (c) => {
-      const userId = requireSession(c).user.id;
-      const point = c.req.valid('json');
-      return ok(
-        c,
-        WorkPlaceGeocodeResult,
-        await geocodeForUser(userId, () => getContainer().placeGeocoder.reverse(point)),
-      );
-    },
-  )
-  .post(
-    '/places',
-    apiDoc({
-      tag: 'Work location',
-      summary: 'Create a saved work place',
-      response: WorkPlaceMutationOut,
-      status: 201,
-      description:
-        'Create an arbitrary named regular place. Provider classifications are account-aware mappings, not intrinsic place kinds.',
-    }),
-    zJson(WorkPlaceCreate),
-    async (c) => {
-      const hubId = await callerHub(c);
-      const place = await createWorkPlace(db, hubId, c.req.valid('json'));
-      return c.json(
-        WorkPlaceMutationOut.parse({
-          place,
-          projections: await workLocationProjectionStates(db, hubId),
-        }),
-        201,
-      );
-    },
-  )
-  .patch(
-    '/places/:id',
-    apiDoc({
-      tag: 'Work location',
-      summary: 'Update a saved work place',
-      response: WorkPlaceMutationOut,
-      description:
-        'Update a saved place and queue new projections for assertions whose rendered provider payload depends on it.',
-    }),
-    zParam(placeParam),
-    zJson(WorkPlaceUpdate),
-    async (c) => {
-      const hubId = await callerHub(c);
-      const { id } = c.req.valid('param');
-      const place = await updateWorkPlace(db, hubId, id, c.req.valid('json'));
-      return ok(c, WorkPlaceMutationOut, {
-        place,
-        projections: await enqueuePlaceWorkLocationProjections(db, hubId, id),
-      });
-    },
-  )
-  .delete(
-    '/places/:id',
-    apiDoc({
-      tag: 'Work location',
-      summary: 'Retire a saved work place',
-      status: 204,
-      description:
-        'Retire an owned place. Current and future schedule references and the independent home designation must be moved or cleared first.',
-    }),
-    zParam(placeParam),
-    async (c) => {
-      const hubId = await callerHub(c);
-      await archiveWorkPlace(db, hubId, c.req.valid('param').id);
-      return c.body(null, 204);
-    },
-  )
+  .route('/', workPlaceRoutes)
   .put(
     '/profile',
     apiDoc({

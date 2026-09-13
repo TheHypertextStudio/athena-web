@@ -27,7 +27,6 @@ import {
   TaskOut,
   TaskReparentBatchIn,
   TaskReparentBatchOut,
-  TaskStateUpdate,
   TaskUpdate,
 } from '@docket/work/task-model';
 import { TaskDetailAggregate } from '../contracts/detail-aggregate';
@@ -62,16 +61,12 @@ import {
 } from '../lib/task-audit';
 import {
   applySubtaskCompletionPolicyForParents,
-  closeCompletingUserTaskTimers,
-  emitCompletedTaskTimerStops,
   finishTaskStateTransition,
-  setTaskState,
 } from '../lib/task-state';
 import { encodeListCursor, pageResult, seekAfter } from '../lib/list-cursor';
 import { landingStatus, terminalStampsFor } from '../lib/work-status';
 import { apiDoc } from '../lib/openapi-route';
 import { serializableTx } from '../lib/serializable-tx';
-import { advanceCompletedProcessTask } from '../lib/recurrence/advance';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { productCapabilityGuard } from '../product-capability';
@@ -103,6 +98,8 @@ import {
 import { attachmentRoutes } from './attachment-routes';
 import { taskActivityRoutes } from './task-activity-routes';
 import { taskDependencyRoutes } from './task-dependency-routes';
+import { taskStateRoutes } from './task-state-routes';
+import { closePatchTimers, finishTaskPatch } from './task-update-effects';
 
 /** Project a stored timestamp column onto the calendar day it names, or null when unset. */
 function dayOf(value: Date | null): string | null {
@@ -1647,13 +1644,7 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
             ? current
             : (await tx.update(task).set(patch).where(where).returning())[0];
         if (!updated) throw new NotFoundError('Task not found');
-        const timerStops =
-          statePatch === undefined
-            ? []
-            : await closeCompletingUserTaskTimers(tx, ctx.actorId, {
-                before: current,
-                after: updated,
-              });
+        const timerStops = await closePatchTimers(tx, ctx.actorId, statePatch, current, updated);
 
         const relatedActivity: { taskId: string; title: string; linked: boolean }[] = [];
         if (patchRelatedTaskIds !== undefined) {
@@ -1798,19 +1789,14 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
           ],
         });
       }
-      await enqueueTaskSearchIndex(orgId, row.id);
-      await emitCompletedTaskTimerStops(timerStops);
-      if (statePatch?.completedAt) {
-        await advanceCompletedProcessTask(db, {
-          organizationId: orgId,
-          actorId: ctx.actorId,
-          completedTaskId: row.id,
-          completedOn: statePatch.completedAt.toISOString().slice(0, 10),
-        });
-      }
-      for (const cascade of cascades) {
-        await finishTaskStateTransition({ actorId: null }, cascade);
-      }
+      await finishTaskPatch({
+        orgId,
+        actorId: ctx.actorId,
+        row,
+        completedAt: statePatch?.completedAt,
+        timerStops,
+        cascades,
+      });
       return ok(c, TaskOut, toOut(row, await labelsForSubject('task', orgId, row.id)));
     },
   )
@@ -1857,31 +1843,7 @@ The write only matches a currently-active task in the caller's org (\`archivedAt
       });
     },
   )
-  .post(
-    '/:id/state',
-    apiDoc({
-      tag: 'Tasks',
-      summary: 'Change task state',
-      capability: 'contribute',
-      response: TaskOut,
-      description: `Move a task to a new workflow state — the focused alternative to a full PATCH when only the state changes (e.g. a board drag-and-drop). Requires \`contribute\`. The \`state\` key must exist in the owning team's \`workflow_states\`; an unknown key is rejected.
-
-The transition is resolved server-side: entering a terminal state derives \`completedAt\` (for the completed category) or \`canceledAt\` (for canceled), and leaving a terminal state clears them — these timestamps are authoritative and never client-set, so progress rollups stay correct. Side effect: emits a \`completed\` observation when the task lands in a completed state, otherwise a \`status_change\` observation carrying the new \`state\` in its payload. A missing/archived task 404s. Returns the updated {@link TaskOut}.`,
-    }),
-    zParam(idParam),
-    zJson(TaskStateUpdate),
-    async (c) => {
-      const { orgId, actorId } = c.get('actorCtx');
-      const { id } = c.req.valid('param');
-      const { state } = c.req.valid('json');
-      const target = await loadTask(orgId, id);
-      await assertTaskCapability(orgId, actorId, target, 'contribute');
-      // Shared with the task.setStatus automation action — one transition implementation.
-      const next = await setTaskState({ organizationId: orgId, taskId: id, state, actorId });
-      if (!next) throw new NotFoundError('Task not found');
-      return ok(c, TaskOut, toOut(next, await labelsForSubject('task', orgId, next.id)));
-    },
-  )
+  .route('/', taskStateRoutes)
   .route('/', taskDependencyRoutes)
   .route('/', taskActivityRoutes)
   .route('/', attachmentRoutes);

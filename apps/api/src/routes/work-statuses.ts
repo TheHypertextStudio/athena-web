@@ -47,17 +47,54 @@ import { zJson, zParam, zQuery } from '../lib/validate';
 import { loadStatusSets, terminalStampsFor, type ResolvedStatus } from '../lib/work-status';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchUpsert } from '../search/write-through';
-import {
-  applySubtaskCompletionPolicyForParents,
-  closeCompletingUserTaskTimers,
-  emitCompletedTaskTimerStops,
-  type CompletedTaskTimerStop,
-  finishTaskStateTransition,
-  type TaskStateMutation,
-  writeTaskStateTransition,
-} from '../lib/task-state';
+import * as taskState from '../lib/task-state';
 
 type WorkStatusRow = typeof workStatus.$inferSelect;
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+const createTaskTransitionEffects = () => ({
+  transitions: [] as taskState.TaskStateMutation[],
+  timerStops: [] as taskState.CompletedTaskTimerStop[],
+  cascades: [] as taskState.TaskStateMutation[],
+});
+
+async function restampTasks(
+  tx: Tx,
+  orgId: string,
+  actorId: string,
+  statusId: string,
+  target: {
+    readonly statusId?: string;
+    readonly state?: string;
+    readonly category: WorkStatusCategory;
+  },
+) {
+  const stamps = terminalStampsFor(target.category);
+  const matches = and(eq(task.organizationId, orgId), eq(task.statusId, statusId));
+  const before = await tx.select().from(task).where(matches).for('update');
+  const effects = createTaskTransitionEffects();
+  for (const entry of before) {
+    const mutation = await taskState.writeTaskStateTransition(tx, {
+      before: entry,
+      statusId: target.statusId ?? entry.statusId,
+      state: target.state ?? entry.state,
+      completedAt: stamps.completedAt,
+      canceledAt: stamps.canceledAt,
+      includeArchived: true,
+    });
+    if (!mutation) continue;
+    effects.transitions.push(mutation);
+    effects.timerStops.push(
+      ...(await taskState.closeCompletingUserTaskTimers(tx, actorId, mutation)),
+    );
+  }
+  effects.cascades = await taskState.applySubtaskCompletionPolicyForParents(
+    tx,
+    orgId,
+    effects.transitions.map((entry) => entry.after.parentTaskId),
+  );
+  return effects;
+}
 
 function toOut(row: WorkStatusRow): z.input<typeof WorkStatusOut> {
   return {
@@ -326,7 +363,7 @@ const workStatuses = new Hono<AppEnv>()
       const { statusId } = c.req.valid('param');
       const body = c.req.valid('json');
 
-      const { updated, restamped, timerStops, cascades } = await db.transaction(async (tx) => {
+      const { updated, transitions, timerStops, cascades } = await db.transaction(async (tx) => {
         const current = (
           await tx
             .select()
@@ -379,49 +416,23 @@ const workStatuses = new Hono<AppEnv>()
 
         // Moving a status across the terminal boundary changes what the work in it *is*, and
         // `completedAt`/`canceledAt` are what progress, capacity and throughput read.
-        const restamped: TaskStateMutation[] = [];
-        const timerStops: CompletedTaskTimerStop[] = [];
-        let cascades: TaskStateMutation[] = [];
-        if (body.category !== undefined && body.category !== current.category) {
-          if (current.entityType === 'task') {
-            const stamps = terminalStampsFor(body.category);
-            const before = await tx
-              .select()
-              .from(task)
-              .where(and(eq(task.organizationId, orgId), eq(task.statusId, statusId)))
-              .for('update');
-            for (const entry of before) {
-              const mutation = await writeTaskStateTransition(tx, {
-                before: entry,
-                statusId: entry.statusId,
-                state: entry.state,
-                completedAt: stamps.completedAt,
-                canceledAt: stamps.canceledAt,
-                includeArchived: true,
-              });
-              if (mutation) {
-                restamped.push(mutation);
-                timerStops.push(...(await closeCompletingUserTaskTimers(tx, actorId, mutation)));
-              }
-            }
-            cascades = await applySubtaskCompletionPolicyForParents(
-              tx,
-              orgId,
-              restamped.map((entry) => entry.after.parentTaskId),
-            );
-          }
-          // Containers carry no terminal timestamps of their own: their progress is computed from
-          // the work inside them, so moving the status between categories is the whole change.
-        }
-        return { updated: row, restamped, timerStops, cascades };
+        // Containers carry no terminal timestamps of their own: their progress is computed from
+        // the work inside them, so moving the status between categories is the whole change.
+        const effects =
+          body.category !== undefined &&
+          body.category !== current.category &&
+          current.entityType === 'task'
+            ? await restampTasks(tx, orgId, actorId, statusId, { category: body.category })
+            : createTaskTransitionEffects();
+        return { updated: row, ...effects };
       });
 
-      for (const transition of restamped) {
-        await finishTaskStateTransition({ actorId }, transition);
+      for (const transition of transitions) {
+        await taskState.finishTaskStateTransition({ actorId }, transition);
       }
-      await emitCompletedTaskTimerStops(timerStops);
+      await taskState.emitCompletedTaskTimerStops(timerStops);
       for (const cascade of cascades) {
-        await finishTaskStateTransition({ actorId: null }, cascade);
+        await taskState.finishTaskStateTransition({ actorId: null }, cascade);
       }
       return ok(c, WorkStatusOut, toOut(updated));
     },
@@ -545,38 +556,16 @@ const workStatuses = new Hono<AppEnv>()
           // move together, which is exactly what the composite foreign key requires.
           const moveTo = { statusId: replacement.id, key: replacement.key };
           let movedIds: string[];
-          const transitions: TaskStateMutation[] = [];
-          const timerStops: CompletedTaskTimerStop[] = [];
-          let cascades: TaskStateMutation[] = [];
+          let effects = createTaskTransitionEffects();
           let remapped: number;
           if (current.entityType === 'task') {
-            const stamps = terminalStampsFor(replacement.category);
-            const before = await tx
-              .select()
-              .from(task)
-              .where(and(eq(task.organizationId, orgId), eq(task.statusId, statusId)))
-              .for('update');
-            for (const entry of before) {
-              const mutation = await writeTaskStateTransition(tx, {
-                before: entry,
-                statusId: moveTo.statusId,
-                state: moveTo.key,
-                completedAt: stamps.completedAt,
-                canceledAt: stamps.canceledAt,
-                includeArchived: true,
-              });
-              if (mutation) {
-                transitions.push(mutation);
-                timerStops.push(...(await closeCompletingUserTaskTimers(tx, actorId, mutation)));
-              }
-            }
-            movedIds = transitions.map((entry) => entry.after.id);
-            remapped = transitions.length;
-            cascades = await applySubtaskCompletionPolicyForParents(
-              tx,
-              orgId,
-              transitions.map((entry) => entry.after.parentTaskId),
-            );
+            effects = await restampTasks(tx, orgId, actorId, statusId, {
+              statusId: moveTo.statusId,
+              state: moveTo.key,
+              category: replacement.category,
+            });
+            movedIds = effects.transitions.map((entry) => entry.after.id);
+            remapped = effects.transitions.length;
           } else if (current.entityType === 'project') {
             const rows = await tx
               .update(project)
@@ -609,9 +598,7 @@ const workStatuses = new Hono<AppEnv>()
             remappedCount: remapped,
             moved: movedIds,
             movedKind: current.entityType,
-            transitions,
-            timerStops,
-            cascades,
+            ...effects,
           };
         });
 
@@ -619,14 +606,14 @@ const workStatuses = new Hono<AppEnv>()
       // moved has to be reindexed rather than only the tasks.
       if (movedKind === 'task') {
         for (const transition of transitions) {
-          await finishTaskStateTransition({ actorId }, transition);
+          await taskState.finishTaskStateTransition({ actorId }, transition);
         }
       } else {
         for (const id of moved) await enqueueSearchUpsert(orgId, movedKind, id);
       }
-      await emitCompletedTaskTimerStops(timerStops);
+      await taskState.emitCompletedTaskTimerStops(timerStops);
       for (const cascade of cascades) {
-        await finishTaskStateTransition({ actorId: null }, cascade);
+        await taskState.finishTaskStateTransition({ actorId: null }, cascade);
       }
       return ok(c, WorkStatusDeleteResult, {
         deleted: toOut(deleted),

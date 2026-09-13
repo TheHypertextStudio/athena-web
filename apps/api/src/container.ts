@@ -55,7 +55,7 @@ import type { InboundMailReceiver, Mailer } from '@docket/mail';
 import { configureNotificationTransports } from '@docket/notifications/dispatch';
 import type { TaskSynthesizer } from '@docket/work/task-drafting';
 
-import { env } from './env';
+import { toAppRuntimeEnv } from './container-runtime-env';
 import {
   CapturePhoneVerificationProvider,
   type PhoneVerificationProvider,
@@ -195,110 +195,7 @@ export function anthropicConfigFromEnv(runtimeEnv: AppRuntimeEnv): AnthropicClie
   return baseURL && gatewayToken ? { apiKey, baseURL, gatewayToken } : { apiKey };
 }
 
-function mapboxRuntimeEnv(): Pick<AppRuntimeEnv, 'MAPBOX_ACCESS_TOKEN'> {
-  return env.MAPBOX_ACCESS_TOKEN ? { MAPBOX_ACCESS_TOKEN: env.MAPBOX_ACCESS_TOKEN } : {};
-}
-
-/** Build the container runtime configuration from the validated API environment. */
-export function toAppRuntimeEnv(): AppRuntimeEnv {
-  return {
-    APP_MODE: env.APP_MODE,
-    PHONE_VERIFICATION_ENABLED: env.PHONE_VERIFICATION_ENABLED,
-    ...(env.PHONE_VERIFICATION_CANARY_EMAILS
-      ? { PHONE_VERIFICATION_CANARY_EMAILS: env.PHONE_VERIFICATION_CANARY_EMAILS }
-      : {}),
-    BILLING_ENABLED: env.BILLING_ENABLED,
-    ...(env.BILLING_CANARY_EMAILS ? { BILLING_CANARY_EMAILS: env.BILLING_CANARY_EMAILS } : {}),
-    ...(env.STRIPE_SECRET_KEY ? { STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY } : {}),
-    ...(env.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID
-      ? { STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: env.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID }
-      : {}),
-    ...(env.STRIPE_WEBHOOK_SECRET ? { STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET } : {}),
-    ...(env.STRIPE_PRICE_DOCKET_PRO
-      ? { STRIPE_PRICE_DOCKET_PRO: env.STRIPE_PRICE_DOCKET_PRO }
-      : {}),
-    ...(env.DOCKET_PRICE_LOOKUP_DOCKET_PRO
-      ? { DOCKET_PRICE_LOOKUP_DOCKET_PRO: env.DOCKET_PRICE_LOOKUP_DOCKET_PRO }
-      : {}),
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- One-release compatibility for the former Docket Team configuration.
-    ...(env.STRIPE_PRICE_TEAM ? { STRIPE_PRICE_TEAM: env.STRIPE_PRICE_TEAM } : {}),
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- One-release compatibility for the former Docket Team configuration.
-    ...(env.DOCKET_PRICE_LOOKUP_TEAM
-      ? // eslint-disable-next-line @typescript-eslint/no-deprecated -- One-release compatibility for the former Docket Team configuration.
-        { DOCKET_PRICE_LOOKUP_TEAM: env.DOCKET_PRICE_LOOKUP_TEAM }
-      : {}),
-    ...(env.STRIPE_BILLING_PORTAL_CONFIG_ID
-      ? { STRIPE_BILLING_PORTAL_CONFIG_ID: env.STRIPE_BILLING_PORTAL_CONFIG_ID }
-      : {}),
-    ...(env.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT
-      ? {
-          STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT:
-            env.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT,
-        }
-      : {}),
-    ...(env.ANTHROPIC_API_KEY ? { ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY } : {}),
-    ...(env.CLOUDFLARE_AI_GATEWAY_BASE_URL
-      ? { CLOUDFLARE_AI_GATEWAY_BASE_URL: env.CLOUDFLARE_AI_GATEWAY_BASE_URL }
-      : {}),
-    ...(env.CLOUDFLARE_AI_GATEWAY_TOKEN
-      ? { CLOUDFLARE_AI_GATEWAY_TOKEN: env.CLOUDFLARE_AI_GATEWAY_TOKEN }
-      : {}),
-    ...(env.LINEAR_WEBHOOK_SECRET ? { LINEAR_WEBHOOK_SECRET: env.LINEAR_WEBHOOK_SECRET } : {}),
-    ...(env.GITHUB_APP_WEBHOOK_SECRET
-      ? { GITHUB_APP_WEBHOOK_SECRET: env.GITHUB_APP_WEBHOOK_SECRET }
-      : {}),
-    ...(env.RESEND_API_KEY ? { RESEND_API_KEY: env.RESEND_API_KEY } : {}),
-    ...(env.RESEND_INBOUND_WEBHOOK_SECRET
-      ? { RESEND_INBOUND_WEBHOOK_SECRET: env.RESEND_INBOUND_WEBHOOK_SECRET }
-      : {}),
-    ...(env.RESEND_RECEIVING_API_BASE
-      ? { RESEND_RECEIVING_API_BASE: env.RESEND_RECEIVING_API_BASE }
-      : {}),
-    ...(env.SMTP_HOST ? { SMTP_HOST: env.SMTP_HOST } : {}),
-    ...(env.SMTP_PORT ? { SMTP_PORT: env.SMTP_PORT } : {}),
-    ...(env.SMTP_SECURE ? { SMTP_SECURE: env.SMTP_SECURE } : {}),
-    ...(env.SMTP_USER ? { SMTP_USER: env.SMTP_USER } : {}),
-    ...(env.SMTP_PASS ? { SMTP_PASS: env.SMTP_PASS } : {}),
-    ...(env.MAIL_FROM ? { MAIL_FROM: env.MAIL_FROM } : {}),
-    ...(env.SMS_ENDPOINT ? { SMS_ENDPOINT: env.SMS_ENDPOINT } : {}),
-    ...(env.SMS_API_KEY ? { SMS_API_KEY: env.SMS_API_KEY } : {}),
-    ...(env.SMS_FROM ? { SMS_FROM: env.SMS_FROM } : {}),
-    ...(env.PUSH_ENDPOINT ? { PUSH_ENDPOINT: env.PUSH_ENDPOINT } : {}),
-    ...(env.PUSH_API_KEY ? { PUSH_API_KEY: env.PUSH_API_KEY } : {}),
-    ...(env.PUSH_APP_ID ? { PUSH_APP_ID: env.PUSH_APP_ID } : {}),
-    ...(env.BLOB_READ_WRITE_TOKEN ? { BLOB_READ_WRITE_TOKEN: env.BLOB_READ_WRITE_TOKEN } : {}),
-    ...(env.EXPORT_BUCKET_URL ? { EXPORT_BUCKET_URL: env.EXPORT_BUCKET_URL } : {}),
-    ...(env.OPENAI_API_KEY ? { OPENAI_API_KEY: env.OPENAI_API_KEY } : {}),
-    ...(env.VOICE_REALTIME_MODEL ? { VOICE_REALTIME_MODEL: env.VOICE_REALTIME_MODEL } : {}),
-    ...(env.VOICE_REALTIME_VOICE ? { VOICE_REALTIME_VOICE: env.VOICE_REALTIME_VOICE } : {}),
-    ...(env.TWILIO_ACCOUNT_SID ? { TWILIO_ACCOUNT_SID: env.TWILIO_ACCOUNT_SID } : {}),
-    ...(env.TWILIO_AUTH_TOKEN ? { TWILIO_AUTH_TOKEN: env.TWILIO_AUTH_TOKEN } : {}),
-    ...(env.TWILIO_PHONE_NUMBER ? { TWILIO_PHONE_NUMBER: env.TWILIO_PHONE_NUMBER } : {}),
-    ...toPhoneVerificationRuntimeEnv(),
-    ...mapboxRuntimeEnv(),
-    ...(env.GITHUB_API_BASE ? { GITHUB_API_BASE: env.GITHUB_API_BASE } : {}),
-    ...(env.LINEAR_API_BASE ? { LINEAR_API_BASE: env.LINEAR_API_BASE } : {}),
-    ...(env.GOOGLE_GMAIL_API_BASE ? { GOOGLE_GMAIL_API_BASE: env.GOOGLE_GMAIL_API_BASE } : {}),
-    ...(env.GOOGLE_CALENDAR_API_BASE
-      ? { GOOGLE_CALENDAR_API_BASE: env.GOOGLE_CALENDAR_API_BASE }
-      : {}),
-    ...(env.GOOGLE_TASKS_API_BASE ? { GOOGLE_TASKS_API_BASE: env.GOOGLE_TASKS_API_BASE } : {}),
-  };
-}
-
-function toPhoneVerificationRuntimeEnv(): Partial<AppRuntimeEnv> {
-  return {
-    ...(env.TWILIO_VERIFY_API_KEY_SID
-      ? { TWILIO_VERIFY_API_KEY_SID: env.TWILIO_VERIFY_API_KEY_SID }
-      : {}),
-    ...(env.TWILIO_VERIFY_API_KEY_SECRET
-      ? { TWILIO_VERIFY_API_KEY_SECRET: env.TWILIO_VERIFY_API_KEY_SECRET }
-      : {}),
-    ...(env.TWILIO_VERIFY_SERVICE_SID
-      ? { TWILIO_VERIFY_SERVICE_SID: env.TWILIO_VERIFY_SERVICE_SID }
-      : {}),
-  };
-}
+export { toAppRuntimeEnv } from './container-runtime-env';
 
 /** Build the real Stripe boundary without consulting the public Checkout feature flag. */
 export function buildStripeBillingGateway(runtimeEnv: AppRuntimeEnv): BillingGateway {
@@ -562,6 +459,21 @@ function buildPushSender(runtimeEnv: AppRuntimeEnv): PushSender {
   return new RealPushSender(pushConfig);
 }
 
+function usesRealBilling(runtimeEnv: AppRuntimeEnv): boolean {
+  if (!localMode(runtimeEnv)) return true;
+  if (runtimeEnv.APP_MODE !== 'local') return false;
+  const hasCanary =
+    runtimeEnv.BILLING_CANARY_EMAILS?.split(',').some((email) => email.trim().length > 0) ?? false;
+  return runtimeEnv.BILLING_ENABLED === true || hasCanary;
+}
+
+function buildPlaceGeocoder(runtimeEnv: AppRuntimeEnv): PlaceGeocoder {
+  if (localMode(runtimeEnv)) return new DeterministicPlaceGeocoder();
+  return new MapboxPlaceGeocoder({
+    accessToken: required('MAPBOX_ACCESS_TOKEN', runtimeEnv.MAPBOX_ACCESS_TOKEN),
+  });
+}
+
 /**
  * Construct the API dependency container for the current runtime mode.
  *
@@ -569,14 +481,10 @@ function buildPushSender(runtimeEnv: AppRuntimeEnv): PushSender {
  */
 export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv()): AppContainer {
   const mock = localMode(runtimeEnv);
-  const billingCanaryEnabled =
-    runtimeEnv.BILLING_CANARY_EMAILS?.split(',').some((email) => email.trim().length > 0) ?? false;
-  const useRealBilling =
-    !mock ||
-    (runtimeEnv.APP_MODE === 'local' &&
-      (runtimeEnv.BILLING_ENABLED === true || billingCanaryEnabled));
   const billing = lazyValue(() =>
-    useRealBilling ? buildStripeBillingGateway(runtimeEnv) : new InMemoryBillingGateway(),
+    usesRealBilling(runtimeEnv)
+      ? buildStripeBillingGateway(runtimeEnv)
+      : new InMemoryBillingGateway(),
   );
   const agentRuntime = lazyValue(() =>
     mock ? new MockAgentRuntime() : new RealProviderRuntime(anthropicConfigFromEnv(runtimeEnv)),
@@ -619,13 +527,7 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
           ...(runtimeEnv.EXPORT_BUCKET_URL ? { baseUrl: runtimeEnv.EXPORT_BUCKET_URL } : {}),
         }),
   );
-  const placeGeocoder = lazyValue<PlaceGeocoder>(() =>
-    mock
-      ? new DeterministicPlaceGeocoder()
-      : new MapboxPlaceGeocoder({
-          accessToken: required('MAPBOX_ACCESS_TOKEN', runtimeEnv.MAPBOX_ACCESS_TOKEN),
-        }),
-  );
+  const placeGeocoder = lazyValue(() => buildPlaceGeocoder(runtimeEnv));
 
   const built: AppContainer = {
     get billing() {

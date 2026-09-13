@@ -8,7 +8,6 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import type * as DbModule from '@docket/db';
-import type { Capability } from '@docket/identity-access/capabilities';
 
 import type { McpContext } from '../../src/mcp/auth';
 import { createMcpCatalog, registerOptionalTaskTool } from '../../src/mcp/catalog';
@@ -17,9 +16,9 @@ import type { registerResources as RegisterResources } from '../../src/mcp/resou
 import type { registerPrompts as RegisterPrompts } from '../../src/mcp/prompts';
 import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 import { defaultCycleName } from '@docket/work/cycle-contract';
+import { seedMcpSurfaceOrg } from './mcp-surface-fixtures';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -35,205 +34,11 @@ beforeAll(async () => {
   registerPrompts = (await import('../../src/mcp/prompts')).registerPrompts;
 });
 
-interface Seed {
-  userId: string;
-  orgId: string;
-  teamId: string;
-  actorId: string;
-  agentActorId: string;
-  taskId: string;
-  task2Id: string;
-  projectId: string;
-  programId: string;
-  initiativeId: string;
-  agentId: string;
-  integrationId: string;
-  cycleId: string;
-  statusId: StatusIdLookup;
-  ctx: McpContext;
-}
-
 /** Seed a self-contained org whose human actor holds `capabilities` org-wide. */
-async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
-  const slug = `ms-${Math.random().toString(36).slice(2, 10)}`;
-  const [org] = await db
-    .insert(schema.organization)
-    .values({ name: slug, slug, lifecycleState: 'active' })
-    .returning({ id: schema.organization.id });
-  const orgId = assertDefined(org).id;
-  const statusId = await seedStatuses(db, schema, orgId);
-
-  const [r] = await db
-    .insert(schema.role)
-    .values({
-      organizationId: orgId,
-      key: 'seeded',
-      name: 'Seeded',
-      capabilities: [...capabilities],
-    })
-    .returning({ id: schema.role.id });
-  const roleId = assertDefined(r).id;
-
-  const email = `${slug}@e.com`;
-  const [u] = await db
-    .insert(schema.user)
-    .values({ name: 'Ada', email })
-    .returning({ id: schema.user.id });
-  const userId = assertDefined(u).id;
-  await db.insert(schema.hub).values({ userId });
-
-  const [human] = await db
-    .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId, roleId })
-    .returning({ id: schema.actor.id });
-  const actorId = assertDefined(human).id;
-
-  if (capabilities.length > 0) {
-    await db.insert(schema.grant).values({
-      organizationId: orgId,
-      subjectKind: 'role',
-      subjectId: roleId,
-      resourceKind: 'organization',
-      resourceId: orgId,
-      capabilities: [...capabilities],
-      effect: 'allow',
-    });
-  }
-
-  const [t] = await db
-    .insert(schema.team)
-    .values({
-      organizationId: orgId,
-      name: 'Core',
-      key: `C${Math.random().toString(36).slice(2, 6)}`,
-    })
-    .returning({ id: schema.team.id });
-  const teamId = assertDefined(t).id;
-
-  const [tk] = await db
-    .insert(schema.task)
-    .values({
-      organizationId: orgId,
-      title: 'Ship',
-      teamId,
-      state: 'todo',
-      statusId: statusId('task', 'todo'),
-      createdBy: actorId,
-    })
-    .returning({ id: schema.task.id });
-  const taskId = assertDefined(tk).id;
-  const [tk2] = await db
-    .insert(schema.task)
-    .values({
-      organizationId: orgId,
-      title: 'Ship 2',
-      teamId,
-      state: 'todo',
-      statusId: statusId('task', 'todo'),
-      createdBy: actorId,
-    })
-    .returning({ id: schema.task.id });
-  const task2Id = assertDefined(tk2).id;
-
-  const [proj] = await db
-    .insert(schema.project)
-    .values({
-      organizationId: orgId,
-      name: 'Proj',
-      teamId,
-      createdBy: actorId,
-      status: 'planned',
-      statusId: statusId('project', 'planned'),
-    })
-    .returning({ id: schema.project.id });
-  const projectId = assertDefined(proj).id;
-
-  const [prog] = await db
-    .insert(schema.program)
-    .values({
-      organizationId: orgId,
-      name: 'Prog',
-      createdBy: actorId,
-      status: 'active',
-      statusId: statusId('program', 'active'),
-    })
-    .returning({ id: schema.program.id });
-  const programId = assertDefined(prog).id;
-
-  const [init] = await db
-    .insert(schema.initiative)
-    .values({
-      organizationId: orgId,
-      name: 'Init',
-      createdBy: actorId,
-      status: 'active',
-      statusId: statusId('initiative', 'active'),
-    })
-    .returning({ id: schema.initiative.id });
-  const initiativeId = assertDefined(init).id;
-
-  const [agentActor] = await db
-    .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'agent', displayName: 'Athena' })
-    .returning({ id: schema.actor.id });
-  const agentActorId = assertDefined(agentActor).id;
-  const [ag] = await db
-    .insert(schema.agent)
-    .values({
-      organizationId: orgId,
-      actorId: agentActorId,
-      createdBy: actorId,
-      connection: { protocol: 'mcp', endpoint: 'https://agent.example/mcp' },
-    })
-    .returning({ id: schema.agent.id });
-  const agentId = assertDefined(ag).id;
-
-  const [intg] = await db
-    .insert(schema.integration)
-    .values({
-      organizationId: orgId,
-      provider: 'github',
-      pattern: 'connector',
-      roles: ['work'],
-      createdBy: actorId,
-    })
-    .returning({ id: schema.integration.id });
-  const integrationId = assertDefined(intg).id;
-
-  const [cy] = await db
-    .insert(schema.cycle)
-    .values({
-      organizationId: orgId,
-      teamId,
-      number: 1,
-      name: 'C1',
-      startsAt: new Date('2026-01-01'),
-      endsAt: new Date('2026-01-14'),
-    })
-    .returning({ id: schema.cycle.id });
-  const cycleId = assertDefined(cy).id;
-
-  const ctx: McpContext = {
-    principal: { kind: 'user', userId, userName: 'Ada', userEmail: email },
-    scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
-  };
-  return {
-    userId,
-    orgId,
-    teamId,
-    actorId,
-    agentActorId,
-    taskId,
-    task2Id,
-    projectId,
-    programId,
-    initiativeId,
-    agentId,
-    integrationId,
-    cycleId,
-    statusId,
-    ctx,
-  };
+function seedOrg(
+  capabilities: Parameters<typeof seedMcpSurfaceOrg>[2],
+): ReturnType<typeof seedMcpSurfaceOrg> {
+  return seedMcpSurfaceOrg(db, schema, capabilities);
 }
 
 const harnesses: { close(): Promise<void> }[] = [];

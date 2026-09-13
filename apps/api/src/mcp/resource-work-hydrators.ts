@@ -32,6 +32,53 @@ export function taskRef(t: {
   return { id: t.id, title: t.title, state: t.state, projectId: t.projectId };
 }
 
+/** Load the relations that turn a task row into its hydrated MCP projection. */
+async function taskRelations(orgId: string, id: string, t: typeof task.$inferSelect) {
+  const cols = {
+    id: task.id,
+    title: task.title,
+    state: task.state,
+    teamId: task.teamId,
+    projectId: task.projectId,
+    programId: task.programId,
+    visibility: task.visibility,
+  };
+  return Promise.all([
+    db
+      .select(cols)
+      .from(taskDependency)
+      .innerJoin(task, eq(taskDependency.blockedTaskId, task.id))
+      .where(
+        and(
+          eq(taskDependency.blockingTaskId, id),
+          eq(taskDependency.organizationId, orgId),
+          isNull(task.archivedAt),
+        ),
+      ),
+    db
+      .select(cols)
+      .from(taskDependency)
+      .innerJoin(task, eq(taskDependency.blockingTaskId, task.id))
+      .where(
+        and(
+          eq(taskDependency.blockedTaskId, id),
+          eq(taskDependency.organizationId, orgId),
+          isNull(task.archivedAt),
+        ),
+      ),
+    db
+      .select(cols)
+      .from(task)
+      .where(
+        and(eq(task.parentTaskId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
+      ),
+    originOf('task', id),
+    // Concurrent with the dependency reads rather than after them: the state type depends only on
+    // the task row already in hand, so serialising it would add a round trip for nothing.
+    teamWorkflows(orgId, [t.teamId]),
+  ]);
+}
+
 /** The latest status update for a subject (drives the subject's current health). */
 export async function latestUpdateFor(
   orgId: string,
@@ -74,49 +121,7 @@ export async function hydrateTask(
   const t = rows[0];
   if (!t) throw new NotFoundError();
 
-  const cols = {
-    id: task.id,
-    title: task.title,
-    state: task.state,
-    teamId: task.teamId,
-    projectId: task.projectId,
-    programId: task.programId,
-    visibility: task.visibility,
-  };
-  const [blocking, blockedBy, subtasks, origin, workflows] = await Promise.all([
-    db
-      .select(cols)
-      .from(taskDependency)
-      .innerJoin(task, eq(taskDependency.blockedTaskId, task.id))
-      .where(
-        and(
-          eq(taskDependency.blockingTaskId, id),
-          eq(taskDependency.organizationId, orgId),
-          isNull(task.archivedAt),
-        ),
-      ),
-    db
-      .select(cols)
-      .from(taskDependency)
-      .innerJoin(task, eq(taskDependency.blockingTaskId, task.id))
-      .where(
-        and(
-          eq(taskDependency.blockedTaskId, id),
-          eq(taskDependency.organizationId, orgId),
-          isNull(task.archivedAt),
-        ),
-      ),
-    db
-      .select(cols)
-      .from(task)
-      .where(
-        and(eq(task.parentTaskId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
-      ),
-    originOf('task', id),
-    // Concurrent with the dependency reads rather than after them: the state type depends only on
-    // the task row already in hand, so serialising it would add a round trip for nothing.
-    teamWorkflows(orgId, [t.teamId]),
-  ]);
+  const [blocking, blockedBy, subtasks, origin, workflows] = await taskRelations(orgId, id, t);
 
   return {
     id: t.id,

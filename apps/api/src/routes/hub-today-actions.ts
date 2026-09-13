@@ -17,6 +17,21 @@ import { assertSharedWorkWritable } from '../product-capability';
 import { toTaskItem } from './hub-helpers';
 import { loadStatusSets } from '../lib/work-status';
 
+async function loadOwnedTodayItem(userId: string, planItemId: string) {
+  const [owned] = await db
+    .select({
+      hubId: hub.id,
+      organizationId: dailyPlanItem.refOrganizationId,
+      taskId: dailyPlanItem.refTaskId,
+    })
+    .from(hub)
+    .innerJoin(dailyPlanItem, eq(dailyPlanItem.hubId, hub.id))
+    .where(and(eq(hub.userId, userId), eq(dailyPlanItem.id, planItemId)))
+    .limit(1);
+  if (!owned) throw new NotFoundError('Today item not found');
+  return owned;
+}
+
 /**
  * Complete one caller-owned Today row and its Task workflow in one transaction.
  *
@@ -28,18 +43,7 @@ export async function completeTodayItem(
   userId: string,
   planItemId: string,
 ): Promise<z.input<typeof HubTodayCompleteOut>> {
-  const ownedRows = await db
-    .select({
-      hubId: hub.id,
-      organizationId: dailyPlanItem.refOrganizationId,
-      taskId: dailyPlanItem.refTaskId,
-    })
-    .from(hub)
-    .innerJoin(dailyPlanItem, eq(dailyPlanItem.hubId, hub.id))
-    .where(and(eq(hub.userId, userId), eq(dailyPlanItem.id, planItemId)))
-    .limit(1);
-  const owned = ownedRows[0];
-  if (!owned) throw new NotFoundError('Today item not found');
+  const owned = await loadOwnedTodayItem(userId, planItemId);
 
   const ref = { organizationId: owned.organizationId, kind: 'task', id: owned.taskId } as const;
   const [access, membershipRows] = await Promise.all([

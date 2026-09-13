@@ -88,6 +88,17 @@ function stringArg(args: Record<string, unknown>, key: string): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function successfulOutcome(result: {
+  readonly summary: string;
+  readonly changeSetId: string | null;
+}): VoiceToolOutcome {
+  return {
+    ok: true,
+    summary: result.summary,
+    ...(result.changeSetId ? { changeSetId: result.changeSetId } : {}),
+  };
+}
+
 /**
  * The real Docket tool surface for voice.
  *
@@ -189,11 +200,7 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
       return { summary, changeSetId };
     });
     if (!created) return { ok: false, summary: 'I couldn’t save that one. Try me again.' };
-    return {
-      ok: true,
-      summary: created.summary,
-      ...(created.changeSetId ? { changeSetId: created.changeSetId } : {}),
-    };
+    return successfulOutcome(created);
   }
 
   private async listOpenTasks(ctx: VoiceSessionContext): Promise<VoiceToolOutcome> {
@@ -393,11 +400,7 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
     for (const cascade of completed.cascades) {
       await finishTaskStateTransition({ actorId: null }, cascade);
     }
-    return {
-      ok: true,
-      summary: completed.summary,
-      ...(completed.changeSetId ? { changeSetId: completed.changeSetId } : {}),
-    };
+    return successfulOutcome(completed);
   }
 }
 

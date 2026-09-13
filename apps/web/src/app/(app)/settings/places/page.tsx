@@ -301,6 +301,23 @@ function PlacesContent(props: {
   );
 }
 
+function currentLocation(
+  data:
+    | {
+        readonly current: {
+          readonly place: { readonly id: WorkPlaceOut['id'] } | null;
+          readonly source: string;
+        };
+      }
+    | null
+    | undefined,
+): { currentPlaceId: WorkPlaceOut['id'] | null; manualCurrent: boolean } {
+  return {
+    currentPlaceId: data?.current.place?.id ?? null,
+    manualCurrent: data?.current.source === 'manual',
+  };
+}
+
 function PlacesDialogs(props: {
   readonly placeEditorOpen: boolean;
   readonly editingPlace: WorkPlaceOut | null;
@@ -522,8 +539,7 @@ export default function PlacesSettingsPage(): JSX.Element {
   const places = useMemo(() => itemsOrEmpty(placesQ.data?.items), [placesQ.data]);
   const changes = useMemo(() => itemsOrEmpty(changesQ.data?.items), [changesQ.data]);
   const mappedPlaces = places.filter((place) => place.geofence !== null);
-  const currentPlaceId = pointQ.data?.current.place?.id ?? null;
-  const manualCurrent = pointQ.data?.current.source === 'manual';
+  const { currentPlaceId, manualCurrent } = currentLocation(pointQ.data);
 
   const openNewPlace = (): void => {
     setPlaceEditorIntent('standard');

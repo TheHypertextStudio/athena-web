@@ -74,12 +74,7 @@ import {
   type RecordedChange,
 } from '../mcp/change-set';
 import { resolveContainerStatus, resolveTaskStatus } from '../lib/work-status';
-import {
-  closeCompletingUserTaskTimers,
-  emitCompletedTaskTimerStops,
-  type CompletedTaskTimerStop,
-  type TaskStateMutation,
-} from '../lib/task-state';
+import * as taskState from '../lib/task-state';
 import {
   diffTaskFields,
   resolveTaskChangeLabelGroups,
@@ -483,13 +478,15 @@ function receiptId(value: unknown, field: string): string | null {
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Dbh = typeof db | Tx;
+const closeTimers = taskState.closeCompletingUserTaskTimersBatch;
 
-interface CommandEffects {
-  readonly taskStateMutations: TaskStateMutation[];
-  readonly timerStops: CompletedTaskTimerStop[];
-  readonly taskFieldChanges: (RecordTaskChangesInput & { readonly assignmentChanged: boolean })[];
-  readonly projectStatusRows: (typeof project.$inferSelect)[];
-}
+const createCommandEffects = () => ({
+  taskStateMutations: [] as taskState.TaskStateMutation[],
+  timerStops: [] as taskState.CompletedTaskTimerStop[],
+  taskFieldChanges: [] as (RecordTaskChangesInput & { readonly assignmentChanged: boolean })[],
+  projectStatusRows: [] as (typeof project.$inferSelect)[],
+});
+type CommandEffects = ReturnType<typeof createCommandEffects>;
 
 interface CommandExecution {
   readonly result: z.input<typeof ObjectCommandResult>;
@@ -993,12 +990,7 @@ async function executeForward(
   idempotencyClaim?: IdempotencyClaim,
 ): Promise<CommandExecution> {
   const apply = async (tx: Tx): Promise<CommandExecution> => {
-    const effects: CommandEffects = {
-      taskStateMutations: [],
-      timerStops: [],
-      taskFieldChanges: [],
-      projectStatusRows: [],
-    };
+    const effects = createCommandEffects();
     const rows =
       command.objectKind === 'task'
         ? await tx
@@ -1071,12 +1063,10 @@ async function executeForward(
           );
         if (!parents[0]) throw new NotFoundError('Task not found');
         await assertResourceCapability(tx, orgId, actorId, 'task', parents[0].id, 'contribute');
-        if (new Set<string>(command.objectIds).has(op.parentId)) {
+        if (new Set<string>(command.objectIds).has(op.parentId))
           throw ownedValidation('A task cannot be its own parent', ['operation', 'parentId']);
-        }
-        if (await taskParentWouldCycleAny(tx, orgId, command.objectIds, op.parentId)) {
+        if (await taskParentWouldCycleAny(tx, orgId, command.objectIds, op.parentId))
           throw new ConflictError('Task hierarchy would contain a cycle');
-        }
       }
       if (command.objectKind === 'task') {
         const taskRows = rows as (typeof task.$inferSelect)[];
@@ -1171,9 +1161,8 @@ async function executeForward(
                     ),
                   )
                   .returning();
-        if (updatedRows.length !== writes.length) {
+        if (updatedRows.length !== writes.length)
           throw new ConflictError('Task changed during update');
-        }
         const updatedById = new Map(updatedRows.map((row) => [row.id, row]));
         for (const write of writes) {
           const updated = updatedById.get(write.id);
@@ -1181,13 +1170,11 @@ async function executeForward(
           if (property === 'state') {
             const mutation = { before: write.before, after: updated };
             effects.taskStateMutations.push(mutation);
-            effects.timerStops.push(
-              ...(await closeCompletingUserTaskTimers(tx, actorId, mutation)),
-            );
           } else {
             changedTasks.push({ before: write.before, after: updated });
           }
         }
+        effects.timerStops.push(...(await closeTimers(tx, actorId, effects.taskStateMutations)));
         const auditedTasks = [...effects.taskStateMutations, ...changedTasks];
         const resolvedChanges = await resolveTaskChangeLabelGroups(
           orgId,
@@ -2154,12 +2141,7 @@ async function executeReplay(
   validateReplayReceipt(receipt);
   const requiredByTarget = replayRequirements(receipt, direction);
   const apply = async (tx: Tx): Promise<CommandExecution> => {
-    const effects: CommandEffects = {
-      taskStateMutations: [],
-      timerStops: [],
-      taskFieldChanges: [],
-      projectStatusRows: [],
-    };
+    const effects = createCommandEffects();
     await assertReceiptMatchesDurableChange(tx, orgId, actorId, receipt);
     const successful: CommandEntry[] = [];
     const conflicting = new Set<string>();
@@ -2433,7 +2415,6 @@ async function executeReplay(
           after: updated as typeof task.$inferSelect,
         };
         effects.taskStateMutations.push(mutation);
-        effects.timerStops.push(...(await closeCompletingUserTaskTimers(tx, actorId, mutation)));
       } else {
         effects.projectStatusRows.push(updated as typeof project.$inferSelect);
       }
@@ -2441,6 +2422,7 @@ async function executeReplay(
         ...(entriesByObject.get(update.id) ?? []).filter((entry) => tupleEntries.has(entry)),
       );
     }
+    effects.timerStops.push(...(await closeTimers(tx, actorId, effects.taskStateMutations)));
 
     const objectUpdates: { id: string; patch: Record<string, unknown> }[] = [];
     for (const [objectId, entries] of entriesByObject) {
@@ -2594,7 +2576,7 @@ const objectCommands = new Hono<AppEnv>()
           ? await executeReplay(orgId, actorId, request, idempotencyClaim)
           : await executeForward(orgId, actorId, request, idempotencyClaim);
       if (idempotencyClaim) c.set('idempotencyCompleted', true);
-      await emitCompletedTaskTimerStops(execution.effects.timerStops);
+      await taskState.emitCompletedTaskTimerStops(execution.effects.timerStops);
       scheduleCommandEffects();
       return ok(c, ObjectCommandResult, execution.result);
     },

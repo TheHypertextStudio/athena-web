@@ -14,6 +14,8 @@ import { resolve } from 'node:path';
 import process from 'node:process';
 
 import { fetchNotionWebhookToken } from './notion-webhook-token';
+import { encodeApplePrivateKeyInput } from './integration-provider-inputs';
+import { MAPBOX_PROVIDER_GROUP } from './integration-provider-mapbox';
 
 // ── environments ────────────────────────────────────────────────────────────────
 
@@ -342,33 +344,6 @@ function encodePrivateKeyInput(raw: string): string {
 /** Suggested OAuth-app name so each environment gets its own clearly-labelled app. */
 function appName(env: Environment): string {
   return `Docket (${env})`;
-}
-
-/**
- * Turn what the user provides for Apple's Sign-in key — a path to the downloaded `.p8`, or pasted
- * PEM text — into the single-line, `\n`-escaped form `APPLE_PRIVATE_KEY` stores. Unlike GitHub's
- * key (base64), Apple's is stored with literal `\n` escapes so `generateAppleClientSecret` can
- * un-escape and parse it directly. An already-escaped value passes through unchanged (idempotent).
- *
- * @param raw - What the user typed: a file path, PEM text, or an existing escaped value.
- * @returns the single-line, `\n`-escaped PEM (or the input unchanged when already escaped).
- */
-function encodeApplePrivateKeyInput(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) return trimmed;
-  // Pasted PEM text → escape its real newlines below.
-  if (trimmed.includes('-----BEGIN')) return trimmed.replace(/\r\n/g, '\n').replace(/\n/g, '\\n');
-  // Otherwise treat it as a path to the downloaded .p8 and read it.
-  try {
-    const path = trimmed.startsWith('~/')
-      ? resolve(process.env['HOME'] ?? '', trimmed.slice(2))
-      : trimmed;
-    const fromFile = readFileSync(path, 'utf8');
-    if (!fromFile.includes('-----BEGIN')) return trimmed; // not a key file → assume already escaped
-    return fromFile.trim().replace(/\r\n/g, '\n').replace(/\n/g, '\\n');
-  } catch {
-    return trimmed; // not a readable path and not PEM → assume already escaped
-  }
 }
 
 const OBSERVABILITY_VARS = [
@@ -761,24 +736,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     ],
     transform: { APPLE_PRIVATE_KEY: encodeApplePrivateKeyInput },
   },
-  {
-    id: 'mapbox',
-    title: 'Mapbox Geocoding Set-up',
-    label: 'Mapbox Geocoding',
-    consoleUrl: 'https://account.mapbox.com/access-tokens/',
-    vars: ['MAPBOX_ACCESS_TOKEN'],
-    instructions: () => [
-      'Docket uses Mapbox Geocoding for saved-place address search and reverse geocoding.',
-      'The API keeps the token on the server and resolves stored results with permanent=true.',
-      '',
-      '1) Open https://account.mapbox.com/access-tokens/ in the Hypertext Studio account.',
-      '2) Confirm that the account has billing or an enterprise agreement that permits permanent',
-      '   geocoding results before production use.',
-      '3) Create a restricted token that can call the Mapbox Geocoding API.',
-      '4) Enter the token as MAPBOX_ACCESS_TOKEN. The wizard stores it in Secret Manager and',
-      '   binds it to the API service. Do not put the token in a browser environment variable.',
-    ],
-  },
+  MAPBOX_PROVIDER_GROUP,
   {
     id: 'stripe',
     title: 'Stripe Integration Set-up',

@@ -1,9 +1,8 @@
-import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { hc, InferResponseType } from 'hono/client';
 import { and, eq, gt, sql, type SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 
-import type * as DbModule from '@docket/db';
 import {
   FractionalRank,
   InitiativeWorkViewQueryRequest,
@@ -20,77 +19,26 @@ import {
   type WorkViewQueryResponse as WorkViewQueryResponseValue,
 } from '@docket/work/work-view-contract';
 import { TimestampString } from '@docket/planning/date-time';
-import { defaultCycleName } from '@docket/work/cycle-contract';
 
 import {
   appWithActor,
   appWithSession,
   fakeSession,
-  getDb,
   seedBaseOrg,
   seedUserWithHub,
 } from '../support/routes-harness';
 import type workViewRoutes from '../../src/routes/work-views';
-import type timeRouter from '../../src/routes/time';
-import type { queryWorkViewFacets as queryWorkViewFacetsFunction } from '../../src/lib/work-views/facets';
-import type { reorderWorkView as reorderWorkViewFunction } from '../../src/lib/work-views/order';
 import { programRequest, projectRequest, taskRequest } from '../work-views/request-fixtures';
-
-process.env['BETTER_AUTH_SECRET'] ??= 'work-view-route-test-secret-at-least-32-characters';
-
-const JSON_HEADERS = { 'content-type': 'application/json' };
-
-let schema!: typeof DbModule;
-let workViews!: typeof workViewRoutes;
-let time!: typeof timeRouter;
-let queryWorkViewFacets!: typeof queryWorkViewFacetsFunction;
-let reorderWorkView!: typeof reorderWorkViewFunction;
-
-beforeAll(async () => {
-  schema = await getDb();
-  workViews = (await import('../../src/routes/work-views')).default;
-  time = (await import('../../src/routes/time')).default;
-  queryWorkViewFacets = (await import('../../src/lib/work-views/facets')).queryWorkViewFacets;
-  reorderWorkView = (await import('../../src/lib/work-views/order')).reorderWorkView;
-});
-
-function initiativeRequest() {
-  return InitiativeWorkViewQueryRequest.parse({
-    target: 'initiative',
-    definition: {
-      version: 2,
-      target: 'initiative',
-      filter: null,
-      arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
-      presentation: {
-        layout: 'list',
-        properties: ['status', 'priority'],
-        density: 'comfortable',
-        showEmptyGroups: false,
-      },
-    },
-    temporaryFilter: null,
-    context: { kind: 'organization' },
-    limit: 100,
-  });
-}
-
-async function grantOrganizationCapability(
-  organizationId: string,
-  actorId: string,
-  capability: 'contribute' | 'assign',
-): Promise<void> {
-  await schema.db.insert(schema.grant).values({
-    organizationId,
-    subjectKind: 'actor',
-    subjectId: actorId,
-    resourceKind: 'organization',
-    resourceId: organizationId,
-    capabilities: [capability],
-    effect: 'allow',
-    cascades: true,
-  });
-}
+import {
+  grantOrganizationCapability,
+  initiativeRequest,
+  JSON_HEADERS,
+  queryWorkViewFacets,
+  reorderWorkView,
+  schema,
+  time,
+  workViews,
+} from './work-views-harness';
 
 describe('work-view routes', () => {
   it('omits Active Project count from Initiative work-view rows', async () => {
@@ -3300,102 +3248,5 @@ describe('work-view routes', () => {
       body: JSON.stringify({ definition: taskRequest().definition }),
     });
     expect(response.status).toBe(422);
-  });
-
-  it('labels a group headed by an unnamed cycle with its window, never its auto-roll number', async () => {
-    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
-    const startsAt = new Date('2026-07-27T00:00:00.000Z');
-    const endsAt = new Date('2026-08-02T23:59:59.999Z');
-    const [cycleRow] = await schema.db
-      .insert(schema.cycle)
-      .values({
-        organizationId: orgId,
-        teamId,
-        number: 1_000_142,
-        name: null,
-        startsAt,
-        endsAt,
-        source: 'native',
-      })
-      .returning({ id: schema.cycle.id });
-    if (!cycleRow) throw new Error('cycle was not seeded');
-    await schema.db.insert(schema.task).values({
-      organizationId: orgId,
-      teamId,
-      title: 'Grouped under an unnamed cycle',
-      state: 'todo',
-      statusId: statusId('task', 'todo'),
-      visibility: 'public',
-      cycleId: cycleRow.id,
-    });
-    const app = appWithActor(workViews, orgId, ['view'], humanActorId);
-
-    const response = await app.request('/query', {
-      method: 'POST',
-      headers: JSON_HEADERS,
-      body: JSON.stringify(
-        taskRequest({
-          definition: {
-            ...taskRequest().definition,
-            arrangement: { groupBy: 'cycle', subGroupBy: null, orderBy: [] },
-          },
-        }),
-      ),
-    });
-
-    expect(response.status).toBe(200);
-    const parsed = WorkViewQueryResponse.parse(await response.json());
-    if (parsed.target !== 'task') throw new Error('expected a Task response');
-    const group = parsed.groups.find((candidate) => candidate.key === cycleRow.id);
-    expect(group?.label).toBe(defaultCycleName(startsAt, endsAt));
-    expect(JSON.stringify(parsed)).not.toMatch(/Cycle \d{5,}/);
-  });
-
-  it('labels the cycle facet option for an unnamed cycle with its window, never its auto-roll number', async () => {
-    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
-    const startsAt = new Date('2026-12-28T00:00:00.000Z');
-    const endsAt = new Date('2027-01-03T23:59:59.999Z');
-    const [cycleRow] = await schema.db
-      .insert(schema.cycle)
-      .values({
-        organizationId: orgId,
-        teamId,
-        number: 1_000_143,
-        name: null,
-        startsAt,
-        endsAt,
-        source: 'native',
-      })
-      .returning({ id: schema.cycle.id });
-    if (!cycleRow) throw new Error('cycle was not seeded');
-    await schema.db.insert(schema.task).values({
-      organizationId: orgId,
-      teamId,
-      title: 'Faceted under an unnamed cycle',
-      state: 'todo',
-      statusId: statusId('task', 'todo'),
-      visibility: 'public',
-      cycleId: cycleRow.id,
-    });
-    const app = appWithActor(workViews, orgId, ['view'], humanActorId);
-
-    const response = await app.request('/facets', {
-      method: 'POST',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({
-        target: 'task',
-        fields: ['cycle'],
-        definition: taskRequest().definition,
-        temporaryFilter: null,
-        context: { kind: 'organization' },
-        limit: 100,
-      }),
-    });
-
-    expect(response.status).toBe(200);
-    const facets = WorkViewFacetResponse.parse(await response.json());
-    const option = facets.buckets[0]?.options.find((candidate) => candidate.value === cycleRow.id);
-    expect(option?.label).toBe(defaultCycleName(startsAt, endsAt));
-    expect(JSON.stringify(facets)).not.toMatch(/Cycle \d{5,}/);
   });
 });

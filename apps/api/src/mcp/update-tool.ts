@@ -21,9 +21,7 @@
  *   quietly rewrote every task in an organization is not a recoverable mistake, even with undo.
  */
 import { db, initiative, organization, program, project, task } from '@docket/db';
-import { Health } from '@docket/work/capability-contract';
 import { InitiativePriority } from '@docket/work/initiative-contract';
-import { DateResolution } from '@docket/work/planning-timeframe';
 import { Priority } from '@docket/work/task-contract';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
@@ -45,18 +43,14 @@ import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { recordChangeSet, trackedFields, type ChangeRecord } from './change-set';
-import { DESCRIPTOR_HINT, resolveOptional } from './descriptors';
-import {
-  isTaskRowVisible,
-  listWork,
-  listWorkFilters,
-  WORK_ENTITIES,
-  type WorkEntity,
-} from './list-work';
-import { WIDGET, widgetMeta } from './apps';
+import { resolveOptional } from './descriptors';
+import { isTaskRowVisible, listWork, listWorkFilters, type WorkEntity } from './list-work';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
-import { orgIdParam, resolveStateTransition } from './tools-shared';
+import { resolveStateTransition } from './tools-shared';
 import { entityHref, entityListHref } from './entity-href';
+import { updateSetFields, updateToolDefinition } from './update-tool-contract';
+
+export { updateSetFields } from './update-tool-contract';
 
 /**
  * The most rows one call will touch.
@@ -70,88 +64,6 @@ const MAX_TARGETS = 100;
 
 /** The table each updatable entity lives in. */
 const TABLES = { task, project, program, initiative } as const;
-
-/**
- * Every field `update` can set, uniform across entities; applicability is checked per call.
- *
- * @remarks
- * Deliberately spoken in the vocabulary a person uses rather than the column names — `title` sets a
- * task's title and a project's `name`, because "rename it" is one idea and an agent should not have
- * to know which table it landed in to express it.
- *
- * A nullable field distinguishes three states a patch genuinely needs: omitted leaves the column
- * alone, `null` clears it, and a value sets it.
- */
-export const updateSetFields = {
-  title: z.string().min(1).optional().describe('Rename it. Sets a task title or a container name.'),
-  description: z
-    .string()
-    .optional()
-    .describe('The full body, as markdown. Pass an empty string to clear it.'),
-  state: z
-    .string()
-    .optional()
-    .describe(
-      "A task's workflow state, by key or display name — \"in review\" resolves against each task's own team. An unknown value comes back with that team's legal states.",
-    ),
-  status: z.string().optional().describe('The status of a project, program, or initiative.'),
-  priority: z.string().optional().describe('The priority of a task or an initiative.'),
-  health: Health.optional().describe(
-    'How a project, program, or initiative is tracking. To say why as well, use report_status.',
-  ),
-  assignee: z
-    .string()
-    .nullable()
-    .optional()
-    .describe(`Who becomes accountable for the task, or null to unassign. ${DESCRIPTOR_HINT}`),
-  delegate: z
-    .string()
-    .nullable()
-    .optional()
-    .describe(`The agent the doing is handed to, or null to take it back. ${DESCRIPTOR_HINT}`),
-  lead: z
-    .string()
-    .nullable()
-    .optional()
-    .describe(`Who leads the project, or null to clear. ${DESCRIPTOR_HINT}`),
-  owner: z
-    .string()
-    .nullable()
-    .optional()
-    .describe(`Who owns the program or initiative, or null to clear. ${DESCRIPTOR_HINT}`),
-  project: z
-    .string()
-    .nullable()
-    .optional()
-    .describe(`The project to file the task under, or null to unfile it. ${DESCRIPTOR_HINT}`),
-  program: z
-    .string()
-    .nullable()
-    .optional()
-    .describe(`The program it rolls up to, or null to detach. ${DESCRIPTOR_HINT}`),
-  team: z.string().optional().describe(`The team that owns it. ${DESCRIPTOR_HINT}`),
-  dueDate: z.iso
-    .date()
-    .nullable()
-    .optional()
-    .describe('When the task is due, as `YYYY-MM-DD`, or null to clear.'),
-  startDate: z.iso
-    .date()
-    .nullable()
-    .optional()
-    .describe('The planned start for a project, or null to clear.'),
-  startDateResolution: DateResolution.nullable()
-    .optional()
-    .describe('The broad Project start resolution; send it with startDate.'),
-  targetDate: z.iso
-    .date()
-    .nullable()
-    .optional()
-    .describe('The target finish for a project or initiative, or null to clear.'),
-  targetDateResolution: DateResolution.nullable()
-    .optional()
-    .describe('The broad target resolution; send it with targetDate.'),
-};
 
 /** One settable field's name. */
 type SetName = keyof typeof updateSetFields;
@@ -485,295 +397,218 @@ export function registerUpdateTool(
   ctx: McpContext,
   sessionId: string | null,
 ): void {
-  server.registerTool(
-    'update',
-    {
-      title: 'Update work',
-      description:
-        'Change work by describing which work, not by listing ids. One call changes up to 100 items: the scope takes the same filters as list_work, so "everything Sarah has open in the migration project" is one call, and `scope.ids` takes as many ids as you have. Never call this once per item — put every id in one call, or the person watching gets a separate card for each one. Every row you may not write is reported back with a reason rather than skipped quietly, and the whole call is reversible with `undo`.',
-      inputSchema: {
-        orgId: orgIdParam,
-        entity: z.enum(WORK_ENTITIES).describe('What kind of work to update.'),
-        scope: z
-          .object({
-            ids: z
-              .array(z.string())
-              .optional()
-              .describe(
-                'Specific items by id, when you already have them — from list_work or find. Names are not accepted here, because a task title is not unique; use the filters to select by name.',
-              ),
-            ...listWorkFilters,
-          })
-          .describe(
-            'Which work to change. Same filters as list_work, so a query you just listed can be acted on verbatim. At least one narrowing filter (or `ids`) is required.',
-          ),
-        set: z
-          .object(updateSetFields)
-          .describe('The fields to change. Anything omitted is left alone.'),
-      },
-      outputSchema: {
-        matched: z.number().int().describe('How many items the scope selected.'),
-        listHref: z
-          .string()
-          .describe('The page listing this kind of work, for what the card cannot fit.'),
-        changed: z.number().int().describe('How many were actually written.'),
-        entity: z
-          .enum(WORK_ENTITIES)
-          .describe('The kind every row in `changes`/`skipped` is — the call scope, echoed back.'),
-        changes: z
-          .array(
-            z.object({
-              id: z.string(),
-              title: z.string(),
-              href: z.string().describe('Where it lives in the product app.'),
-              fields: z.array(z.object({ field: z.string(), from: z.string(), to: z.string() })),
-            }),
-          )
-          .describe(
-            'What moved, per item, as before → after. Empty `fields` means it already matched.',
-          ),
-        skipped: z
-          .array(z.object({ id: z.string(), title: z.string(), reason: z.string() }))
-          .describe(
-            'Items left alone, and why — `not_permitted` means the caller cannot write that one.',
-          ),
-        changeSetId: z
-          .string()
-          .nullable()
-          .describe('Pass to `undo` to take the whole call back. Null when nothing changed.'),
-      },
-      _meta: widgetMeta(WIDGET.changeReport),
-      annotations: {
-        readOnlyHint: false,
-        // It rewrites existing fields in bulk; the caller should see that before approving.
-        destructiveHint: true,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
-    (input) =>
-      runTool(async () => {
-        const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
-        await authorize(actorCtx, 'view', {
-          kind: 'organization',
-          id: input.orgId,
-          orgId: input.orgId,
-        });
+  server.registerTool('update', updateToolDefinition, (input) =>
+    runTool(async () => {
+      const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
+      await authorize(actorCtx, 'view', {
+        kind: 'organization',
+        id: input.orgId,
+        orgId: input.orgId,
+      });
 
-        const entity = input.entity;
-        const set = input.set;
-        assertSettable(entity, set);
-        assertEnums(entity, set);
-        // Resolve this before selecting rows so an unknown workspace status is invalid even when
-        // the requested scope happens to match nothing.
-        const containerStatus =
-          set.status !== undefined && entity !== 'task'
-            ? await resolveContainerStatus(input.orgId, entity, set.status, 'set.status')
-            : undefined;
-        if (Object.keys(set).length === 0) {
-          reject('set', '', 'Nothing to change — name at least one field.', SETTABLE[entity]);
-        }
+      const entity = input.entity;
+      const set = input.set;
+      assertSettable(entity, set);
+      assertEnums(entity, set);
+      // Resolve this before selecting rows so an unknown workspace status is invalid even when
+      // the requested scope happens to match nothing.
+      const containerStatus =
+        set.status !== undefined && entity !== 'task'
+          ? await resolveContainerStatus(input.orgId, entity, set.status, 'set.status')
+          : undefined;
+      if (Object.keys(set).length === 0) {
+        reject('set', '', 'Nothing to change — name at least one field.', SETTABLE[entity]);
+      }
 
-        const { ids, ...filters } = input.scope;
-        const hasNarrowing = NARROWING.some((name) => filters[name] !== undefined);
-        if ((ids === undefined || ids.length === 0) && !hasNarrowing) {
-          // Undo makes a mistake recoverable, not free: an unbounded patch would still notify
-          // every watcher and stamp every row's `updatedAt` before anyone noticed.
-          reject(
-            'scope',
-            '',
-            `An unscoped update would match every ${entity} in the workspace. Name at least one filter, or pass scope.ids.`,
-            NARROWING,
-          );
-        }
+      const { ids, ...filters } = input.scope;
+      const hasNarrowing = NARROWING.some((name) => filters[name] !== undefined);
+      if ((ids === undefined || ids.length === 0) && !hasNarrowing) {
+        // Undo makes a mistake recoverable, not free: an unbounded patch would still notify
+        // every watcher and stamp every row's `updatedAt` before anyone noticed.
+        reject(
+          'scope',
+          '',
+          `An unscoped update would match every ${entity} in the workspace. Name at least one filter, or pass scope.ids.`,
+          NARROWING,
+        );
+      }
 
-        // Selection reuses list_work verbatim, so "what update touches" and "what list_work
-        // showed" can never drift apart. One over the ceiling is enough to know it was exceeded.
-        const selected =
-          ids !== undefined && ids.length > 0
-            ? ids
-            : (
-                await listWork(
-                  input.orgId,
-                  actorCtx.actorId,
-                  entity,
-                  filters,
-                  MAX_TARGETS,
-                  undefined,
-                )
-              ).map((row) => row.id);
-        if (selected.length > MAX_TARGETS) {
-          reject(
-            'scope',
-            '',
-            `That scope matches more than ${MAX_TARGETS} ${entity}s. Narrow it — a change this size belongs in the app, where it can be previewed.`,
-            NARROWING,
-          );
-        }
+      // Selection reuses list_work verbatim, so "what update touches" and "what list_work
+      // showed" can never drift apart. One over the ceiling is enough to know it was exceeded.
+      const selected =
+        ids !== undefined && ids.length > 0
+          ? ids
+          : (
+              await listWork(input.orgId, actorCtx.actorId, entity, filters, MAX_TARGETS, undefined)
+            ).map((row) => row.id);
+      if (selected.length > MAX_TARGETS) {
+        reject(
+          'scope',
+          '',
+          `That scope matches more than ${MAX_TARGETS} ${entity}s. Narrow it — a change this size belongs in the app, where it can be previewed.`,
+          NARROWING,
+        );
+      }
 
-        const table = TABLES[entity] as PgTable & {
-          id: typeof task.id;
-          organizationId: typeof task.organizationId;
-        };
-        const rows: Record<string, unknown>[] =
-          selected.length === 0
-            ? []
-            : await db
-                .select()
-                .from(table)
-                .where(and(inArray(table.id, selected), eq(table.organizationId, input.orgId)));
-        const canViewTask =
-          entity === 'task' ? await buildTaskViewFilter(input.orgId, actorCtx.actorId) : undefined;
-        const visibleRows = canViewTask
-          ? rows.filter((row) => isTaskRowVisible(row, canViewTask))
-          : rows;
+      const table = TABLES[entity] as PgTable & {
+        id: typeof task.id;
+        organizationId: typeof task.organizationId;
+      };
+      const rows: Record<string, unknown>[] =
+        selected.length === 0
+          ? []
+          : await db
+              .select()
+              .from(table)
+              .where(and(inArray(table.id, selected), eq(table.organizationId, input.orgId)));
+      const canViewTask =
+        entity === 'task' ? await buildTaskViewFilter(input.orgId, actorCtx.actorId) : undefined;
+      const visibleRows = canViewTask
+        ? rows.filter((row) => isTaskRowVisible(row, canViewTask))
+        : rows;
 
-        const refs = await resolveReferences(input.orgId, set);
-        const [workspaceSettings] = await db
-          .select({ fiscalYearStartMonth: organization.fiscalYearStartMonth })
-          .from(organization)
-          .where(eq(organization.id, input.orgId))
-          .limit(1);
-        /* v8 ignore next -- @preserve scopedActor proved the workspace exists */
-        if (!workspaceSettings) throw new Error('workspace settings missing');
-        // Changing who is accountable is an `assign`-level act, exactly as the tasks router
-        // gates it; everything else on this tool is `contribute`.
-        const needsAssign =
-          entity === 'task' && (set.assignee !== undefined || set.delegate !== undefined);
+      const refs = await resolveReferences(input.orgId, set);
+      const [workspaceSettings] = await db
+        .select({ fiscalYearStartMonth: organization.fiscalYearStartMonth })
+        .from(organization)
+        .where(eq(organization.id, input.orgId))
+        .limit(1);
+      /* v8 ignore next -- @preserve scopedActor proved the workspace exists */
+      if (!workspaceSettings) throw new Error('workspace settings missing');
+      // Changing who is accountable is an `assign`-level act, exactly as the tasks router
+      // gates it; everything else on this tool is `contribute`.
+      const needsAssign =
+        entity === 'task' && (set.assignee !== undefined || set.delegate !== undefined);
 
-        const changes: ChangeRecord[] = [];
-        const report: {
-          id: string;
-          title: string;
-          href: string;
-          fields: ReturnType<typeof diff>;
-        }[] = [];
-        const skipped: { id: string; title: string; reason: string }[] = [];
+      const changes: ChangeRecord[] = [];
+      const report: {
+        id: string;
+        title: string;
+        href: string;
+        fields: ReturnType<typeof diff>;
+      }[] = [];
+      const skipped: { id: string; title: string; reason: string }[] = [];
 
-        for (const row of visibleRows) {
-          const id = String(row['id']);
-          const title = titleOf(row, id);
-          try {
-            await authorize(actorCtx, 'contribute', { kind: entity, id, orgId: input.orgId });
-            if (needsAssign) {
-              await authorize(actorCtx, 'assign', { kind: entity, id, orgId: input.orgId });
-            }
-          } catch (err) {
-            // A per-row denial is data, not a failure: the caller asked about a set, and the
-            // answer is that part of it was theirs to change and part was not.
-            if (!(err instanceof ApiError)) throw err;
-            skipped.push({ id, title, reason: 'not_permitted' });
-            continue;
+      for (const row of visibleRows) {
+        const id = String(row['id']);
+        const title = titleOf(row, id);
+        try {
+          await authorize(actorCtx, 'contribute', { kind: entity, id, orgId: input.orgId });
+          if (needsAssign) {
+            await authorize(actorCtx, 'assign', { kind: entity, id, orgId: input.orgId });
           }
-
-          const patch = await buildPatch(
-            entity,
-            input.orgId,
-            row,
-            set,
-            refs,
-            workspaceSettings.fiscalYearStartMonth,
-            containerStatus,
-          );
-          const before = trackedFields(entity, row);
-          let next: Record<string, unknown> | undefined;
-          if (entity === 'task' && set.state !== undefined) {
-            const { statusId, state, completedAt, canceledAt, ...remainingPatch } = patch;
-            const result = await db.transaction(async (tx) => {
-              const locked = await tx
-                .select()
-                .from(task)
-                .where(and(eq(task.id, id), eq(task.organizationId, input.orgId)))
-                .for('update')
-                .limit(1);
-              const current = locked[0];
-              if (!current) return null;
-              const mutation = await writeTaskStateTransition(tx, {
-                before: current,
-                statusId: String(statusId),
-                state: String(state),
-                completedAt: completedAt as Date | null,
-                canceledAt: canceledAt as Date | null,
-              });
-              if (!mutation) return null;
-              const timerStops = await closeCompletingUserTaskTimers(
-                tx,
-                actorCtx.actorId,
-                mutation,
-              );
-              const [after] =
-                Object.keys(remainingPatch).length === 0
-                  ? [mutation.after]
-                  : await tx
-                      .update(task)
-                      .set(remainingPatch)
-                      .where(and(eq(task.id, id), eq(task.organizationId, input.orgId)))
-                      .returning();
-              if (!after) return null;
-              const finalMutation = { before: current, after };
-              return {
-                after,
-                mutation: finalMutation,
-                timerStops,
-                cascades: await applySubtaskCompletionPolicy(tx, finalMutation),
-              };
-            });
-            if (!result) continue;
-            await finishTaskStateTransition({ actorId: actorCtx.actorId }, result.mutation);
-            await emitCompletedTaskTimerStops(result.timerStops);
-            for (const cascade of result.cascades) {
-              await finishTaskStateTransition({ actorId: null }, cascade);
-            }
-            next = result.after;
-          } else {
-            const updated = await db
-              .update(table)
-              .set(patch)
-              .where(and(eq(table.id, id), eq(table.organizationId, input.orgId)))
-              .returning();
-            next = updated[0];
-          }
-          /* v8 ignore next -- @preserve defensive: the row was just read in this call */
-          if (!next) continue;
-          const after = trackedFields(entity, next);
-
-          const fields = diff(before, after);
-          report.push({
-            id,
-            title: titleOf(next, id),
-            href: entityHref(input.orgId, entity, id),
-            fields,
-          });
-          if (fields.length > 0) {
-            changes.push({ kind: entity, id, op: 'update', before, after });
-            await enqueueSearchUpsert(input.orgId, entity, id);
-          }
+        } catch (err) {
+          // A per-row denial is data, not a failure: the caller asked about a set, and the
+          // answer is that part of it was theirs to change and part was not.
+          if (!(err instanceof ApiError)) throw err;
+          skipped.push({ id, title, reason: 'not_permitted' });
+          continue;
         }
 
-        const changeSetId = await recordChangeSet({
-          orgId: input.orgId,
-          actorId: actorCtx.actorId,
-          origin: {
-            tool: 'update',
-            ...(sessionId ? { sessionId } : {}),
-            ...(ctx.principal.kind === 'agent' ? { client: ctx.principal.displayName } : {}),
-          },
-          summary:
-            changes.length === 1 && report[0]
-              ? `Updated "${report[0].title}"`
-              : `Updated ${changes.length} ${entity}s`,
-          changes,
-        });
-
-        return jsonResult({
-          matched: visibleRows.length,
-          listHref: entityListHref(input.orgId, entity),
-          changed: changes.length,
+        const patch = await buildPatch(
           entity,
-          changes: report,
-          skipped,
-          changeSetId,
+          input.orgId,
+          row,
+          set,
+          refs,
+          workspaceSettings.fiscalYearStartMonth,
+          containerStatus,
+        );
+        const before = trackedFields(entity, row);
+        let next: Record<string, unknown> | undefined;
+        if (entity === 'task' && set.state !== undefined) {
+          const { statusId, state, completedAt, canceledAt, ...remainingPatch } = patch;
+          const result = await db.transaction(async (tx) => {
+            const locked = await tx
+              .select()
+              .from(task)
+              .where(and(eq(task.id, id), eq(task.organizationId, input.orgId)))
+              .for('update')
+              .limit(1);
+            const current = locked[0];
+            if (!current) return null;
+            const mutation = await writeTaskStateTransition(tx, {
+              before: current,
+              statusId: String(statusId),
+              state: String(state),
+              completedAt: completedAt as Date | null,
+              canceledAt: canceledAt as Date | null,
+            });
+            if (!mutation) return null;
+            const timerStops = await closeCompletingUserTaskTimers(tx, actorCtx.actorId, mutation);
+            const [after] =
+              Object.keys(remainingPatch).length === 0
+                ? [mutation.after]
+                : await tx
+                    .update(task)
+                    .set(remainingPatch)
+                    .where(and(eq(task.id, id), eq(task.organizationId, input.orgId)))
+                    .returning();
+            if (!after) return null;
+            const finalMutation = { before: current, after };
+            return {
+              after,
+              mutation: finalMutation,
+              timerStops,
+              cascades: await applySubtaskCompletionPolicy(tx, finalMutation),
+            };
+          });
+          if (!result) continue;
+          await finishTaskStateTransition({ actorId: actorCtx.actorId }, result.mutation);
+          await emitCompletedTaskTimerStops(result.timerStops);
+          for (const cascade of result.cascades) {
+            await finishTaskStateTransition({ actorId: null }, cascade);
+          }
+          next = result.after;
+        } else {
+          const updated = await db
+            .update(table)
+            .set(patch)
+            .where(and(eq(table.id, id), eq(table.organizationId, input.orgId)))
+            .returning();
+          next = updated[0];
+        }
+        /* v8 ignore next -- @preserve defensive: the row was just read in this call */
+        if (!next) continue;
+        const after = trackedFields(entity, next);
+
+        const fields = diff(before, after);
+        report.push({
+          id,
+          title: titleOf(next, id),
+          href: entityHref(input.orgId, entity, id),
+          fields,
         });
-      }),
+        if (fields.length > 0) {
+          changes.push({ kind: entity, id, op: 'update', before, after });
+          await enqueueSearchUpsert(input.orgId, entity, id);
+        }
+      }
+
+      const changeSetId = await recordChangeSet({
+        orgId: input.orgId,
+        actorId: actorCtx.actorId,
+        origin: {
+          tool: 'update',
+          ...(sessionId ? { sessionId } : {}),
+          ...(ctx.principal.kind === 'agent' ? { client: ctx.principal.displayName } : {}),
+        },
+        summary:
+          changes.length === 1 && report[0]
+            ? `Updated "${report[0].title}"`
+            : `Updated ${changes.length} ${entity}s`,
+        changes,
+      });
+
+      return jsonResult({
+        matched: visibleRows.length,
+        listHref: entityListHref(input.orgId, entity),
+        changed: changes.length,
+        entity,
+        changes: report,
+        skipped,
+        changeSetId,
+      });
+    }),
   );
 }

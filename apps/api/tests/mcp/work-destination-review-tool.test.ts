@@ -493,10 +493,10 @@ describe('review_work_destination', () => {
     expect(resultPayload(await pending)).toMatchObject({ decision: 'deny' });
   });
 
-  it('denies a vague Instagram request even when Athena proposes a grant', async () => {
+  it('challenges a vague Instagram request without running Athena', async () => {
     const seed = await seedWorkspace();
     const client = await connect(seed);
-    vi.spyOn(getContainer().agentTurn, 'streamTurn').mockImplementation(
+    const stream = vi.spyOn(getContainer().agentTurn, 'streamTurn').mockImplementation(
       reviewTurn({
         decision: 'grant',
         reason: 'Social media research.',
@@ -509,7 +509,13 @@ describe('review_work_destination', () => {
       arguments: request(seed, 'I need Instagram for social media.'),
     });
 
-    expect(resultPayload(result)).toMatchObject({ decision: 'deny' });
+    expect(resultPayload(result)).toEqual({
+      decision: 'challenge',
+      reason: 'The justification does not identify task work or an output.',
+      question:
+        'What will you do on Instagram, what will you produce, and how will that output advance this task?',
+    });
+    expect(stream).not.toHaveBeenCalled();
   });
 
   it('allows the concrete Instagram research request to receive a bounded grant', async () => {

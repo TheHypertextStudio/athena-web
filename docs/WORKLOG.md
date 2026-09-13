@@ -15663,3 +15663,26 @@ xhigh` passes (10 finder angles each, one-vote verification, a gap sweep) agains
   kept as a search alias so existing muscle memory still finds it), and the disconnect dialog's copy
   was rewritten shorter and plainer. No behavior changed, labels only — reverified with the same
   typecheck/lint/test suite, all green.
+
+## [MCP-DESTINATION-REVIEW-001] Challenge a vague destination request once — 2026-09-13
+
+- **Status**: COMPLETED
+- **State**: RETROSPECTING
+- **Priority**: P0
+- **Description**: Correct the live `review_work_destination` behavior so the first vague but
+  relevant Instagram justification receives the one allowed challenge instead of an immediate
+  denial. The follow-up answer still reaches Athena, which must grant or deny it.
+- **Approach**: Preserve the deterministic guard for the required vague example, but return a
+  targeted question on the initial request. Apply the guard only when `challengeAnswer` is absent
+  so one request can never receive a second challenge. Update the reviewer prompt to match the same
+  rule.
+- **Files changed**: `apps/api/src/mcp/work-destination-review-tool.ts`,
+  `apps/api/tests/mcp/work-destination-review-tool.test.ts`, and `docs/WORKLOG.md`.
+- **Validation**: The focused API test failed before the implementation because the tool returned
+  `deny`; it now passes all 33 destination-review tests after rebasing onto `origin/main`. The API
+  build and lint tasks pass. The API typecheck passes with the repository's 4 GB Node heap setting;
+  a first run without that setting exhausted Node's default 2 GB heap rather than reporting a type
+  error. Prettier and `git diff --check` pass on every changed file.
+- **Learnings**: The release contract and the test encoded opposite outcomes for the same sentence.
+  Live native-host acceptance exposed that mismatch before the browser flow could conceal it behind
+  a generic denial screen.

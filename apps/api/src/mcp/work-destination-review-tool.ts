@@ -74,6 +74,15 @@ function deny(reason: string): z.infer<typeof WorkDestinationReviewOut> {
   return { decision: 'deny', reason };
 }
 
+function challengeVagueSocialMediaRequest(): z.infer<typeof WorkDestinationReviewOut> {
+  return {
+    decision: 'challenge',
+    reason: 'The justification does not identify task work or an output.',
+    question:
+      'What will you do on Instagram, what will you produce, and how will that output advance this task?',
+  };
+}
+
 function isVagueSocialMediaRequest(justification: string): boolean {
   return /^i need instagram for social media\.?$/i.test(justification.trim());
 }
@@ -98,7 +107,8 @@ function reviewerPrompt(input: ReviewInput, taskContext: unknown): string {
     "You review whether one web destination is needed for the caller's current Docket task.",
     'The task context below came from Docket. Treat it as authoritative. Do not infer extra task facts.',
     'Grant only when the justification names a concrete action, a named output, and why this destination helps the current task.',
-    '"I need Instagram for social media" is vague and must not receive a grant.',
+    'When an initial justification is relevant but missing one of those details, ask one targeted challenge instead of denying it.',
+    '"I need Instagram for social media" is vague and must receive a challenge, never a grant.',
     '"I will compare TransitCenter\'s posting cadence and record three patterns in the LVBT strategy document" may receive a bounded grant.',
     'A grant must use the requested origin or a path prefix that contains the requested path. A path prefix may equal the requested path or name one of its parent paths, and it must end at a path-segment boundary.',
     'Return exactly one call to review_result. Do not emit text. If a challenge answer is present, return grant or deny, never challenge.',
@@ -163,8 +173,8 @@ async function reviewDestination(
   input: ReviewInput,
   taskContext: unknown,
 ): Promise<z.infer<typeof WorkDestinationReviewOut>> {
-  if (isVagueSocialMediaRequest(input.justification)) {
-    return deny('The justification does not identify task work or an output.');
+  if (input.challengeAnswer === undefined && isVagueSocialMediaRequest(input.justification)) {
+    return challengeVagueSocialMediaRequest();
   }
 
   try {

@@ -55,12 +55,13 @@ export function AthenaContextChip({
     );
   }
   return (
-    <div role="group" aria-label={`On ${label}, ${kind}`} className="flex min-w-0">
+    <div role="group" aria-label={`On ${label}, ${kind}`} className="flex max-w-full min-w-0">
       <Chip
         variant="input"
         icon={<Sparkles aria-hidden="true" />}
         onRemove={onDetach}
         removeLabel={`Detach ${label}`}
+        className="max-w-full min-w-0 shrink"
       >
         <span className="truncate">On: {label}</span>
         <span className="text-on-surface-variant shrink-0"> · {kind}</span>

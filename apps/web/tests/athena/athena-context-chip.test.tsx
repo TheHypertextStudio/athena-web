@@ -69,4 +69,28 @@ describe('AthenaContextChip', () => {
     fireEvent.click(screen.getByRole('button', { name: /Fall fundraiser launch/ }));
     expect(onAttach).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps a long label inside its container', () => {
+    const longLabel = 'x'.repeat(200);
+    const longContext = {
+      workspaceId: 'ws_1',
+      workspaceName: 'Harbor Health',
+      source: { type: 'task' as const, id: 'task_1', label: longLabel },
+    };
+    const { container } = render(
+      <div style={{ width: '240px' }}>
+        <AthenaContextChip context={longContext} attached onDetach={vi.fn()} onAttach={vi.fn()} />
+      </div>,
+    );
+
+    const group = container.querySelector('[role="group"]');
+    expect(group).not.toBeNull();
+    expect(group?.className).toMatch(/max-w-full/);
+
+    // The Chip primitive wraps its own children in a "min-w-0 truncate" span; the label span this
+    // component renders carries only "truncate", so excluding "min-w-0" isolates it.
+    const labelSpan = container.querySelector('span.truncate:not(.min-w-0)');
+    expect(labelSpan).not.toBeNull();
+    expect(labelSpan?.className).toMatch(/truncate/);
+  });
 });

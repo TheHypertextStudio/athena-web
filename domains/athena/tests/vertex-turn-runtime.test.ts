@@ -235,7 +235,7 @@ describe('Vertex turn adapter', () => {
         maxOutputTokens: 64,
       }),
     ).toBe(
-      'https://aiplatform.googleapis.com/v1/projects/athena-services/locations/global/publishers/google/models/gemini-2.5-flash%3AgenerateContent',
+      'https://aiplatform.googleapis.com/v1/projects/athena-services/locations/global/publishers/google/models/gemini-2.5-flash:generateContent',
     );
     expect(
       vertexEndpoint({
@@ -245,7 +245,7 @@ describe('Vertex turn adapter', () => {
         maxOutputTokens: 64,
       }),
     ).toBe(
-      'https://us-central1-aiplatform.googleapis.com/v1/projects/athena-services/locations/us-central1/publishers/google/models/gemini-2.5-flash%3AgenerateContent',
+      'https://us-central1-aiplatform.googleapis.com/v1/projects/athena-services/locations/us-central1/publishers/google/models/gemini-2.5-flash:generateContent',
     );
   });
 

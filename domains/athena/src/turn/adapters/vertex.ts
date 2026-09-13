@@ -171,11 +171,11 @@ export function vertexEndpoint(config: Required<VertexAgentTurnRuntimeConfig>): 
     'publishers',
     'google',
     'models',
-    `${config.model}:generateContent`,
+    config.model,
   ]
     .map(encodeURIComponent)
     .join('/');
-  return `https://${host}/${path}`;
+  return `https://${host}/${path}:generateContent`;
 }
 
 /** Send one request with the Cloud Run service account or local ADC identity. */

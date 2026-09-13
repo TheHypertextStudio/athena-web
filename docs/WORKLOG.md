@@ -7,6 +7,36 @@
 
 ## Active Tasks
 
+### [AUTH-ANDROID-DAL-001] Restore Android passkey domain association
+
+- **Status**: REVIEW
+- **Started**: 2026-09-13
+- **Priority**: P0
+- **Description**: Publish the Digital Asset Links declaration required for the installed Docket
+  Android build to use passkeys with the production `clearthedocket.com` relying party.
+- **Subtasks**:
+  - [x] Add a failing production-contract test for the Android app association.
+  - [x] Publish the direct JSON association under `/.well-known/assetlinks.json`.
+  - [x] Run focused and repository validation.
+  - [ ] Verify the live URL and physical-device sign-in after deployment.
+- **Files changed**: `apps/web/public/.well-known/assetlinks.json`,
+  `apps/web/tests/config/android-asset-links.test.ts`, and this work log.
+- **Validation**: The new test failed first because the file did not exist, then passed with the
+  neighboring Apple association suite. Root `pnpm typecheck`, `pnpm lint`, `pnpm test`, and
+  `pnpm build` pass. The web package contributes 499 coverage files and 3,944 tests to the green
+  root run; its broader non-coverage run also passed 500 files and 3,946 tests.
+- **Learnings**: The API can issue a valid WebAuthn challenge while Android still rejects the
+  ceremony before assertion. `./run doctor:passkeys` caught that boundary directly: the production
+  RP had changed to `clearthedocket.com`, but only `hypertext.studio` still published the Android
+  association.
+- **Blockers**: The live association URL still returns HTTP 404 until this commit is pushed and the
+  Web app is deployed. Credential Manager sign-in on the installed builds cannot be accepted before
+  that live 200 JSON response exists.
+- **Notes**: The declaration is limited to the `studio.hypertext.docket` package and the certificate
+  fingerprint of the physical-device debug build being validated.
+
+---
+
 ### [DEVTOPO-001] One resolver decides which hosts and ports a checkout serves
 
 - **Completed**: 2026-09-12

@@ -62,6 +62,7 @@ import {
   AthenaRailPanel,
   useAthenaPanel,
 } from '@/components/athena/athena-panel-provider';
+import { PageContextProvider, type PageWorkspace } from '@/components/athena/page-context';
 import { useAuthenticationInterlock } from '@/components/authentication-interlock';
 import { BillingRecovery } from '@/components/billing/billing-recovery';
 import {
@@ -405,7 +406,6 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
                     sessionRejected={sessionRejected}
                     settingsSurface={settingsSurface}
                     calendarSurface={calendarSurface}
-                    locationKey={pathname}
                     routeOrgId={routeOrgId}
                     userId={renderedStorageUserId}
                     offline={
@@ -569,7 +569,6 @@ interface AppShellInnerProps {
   sessionRejected: boolean;
   settingsSurface: boolean;
   calendarSurface: boolean;
-  locationKey: string;
   routeOrgId: string | null;
   userId: string | null;
   /**
@@ -677,7 +676,6 @@ function AppShellInner({
   sessionRejected,
   settingsSurface,
   calendarSurface,
-  locationKey,
   routeOrgId,
   userId,
   offline,
@@ -880,9 +878,8 @@ function AppShellInner({
           timerStatus={timerStatus}
           settingsSurface={settingsSurface}
           calendarSurface={calendarSurface}
-          locationKey={locationKey}
           sessionOwnerUserId={userId}
-          context={
+          workspace={
             resolvedOrgId
               ? { workspaceId: resolvedOrgId, workspaceName: activeWorkspaceName }
               : null
@@ -909,10 +906,9 @@ interface AthenaShellProps {
   readonly timerStatus: TimerStatus;
   readonly settingsSurface: boolean;
   readonly calendarSurface: boolean;
-  readonly locationKey: string;
   /** Account id captured by the shell for destructive session commands. */
   readonly sessionOwnerUserId: string | null;
-  readonly context: PersonalAthenaContext | null;
+  readonly workspace: PageWorkspace | null;
   readonly standingNotice: ReactNode;
   readonly hasQueuedWork: boolean;
   readonly unavailable: boolean;
@@ -925,8 +921,7 @@ interface AthenaShellProps {
 function AthenaShell({
   settingsSurface,
   calendarSurface,
-  context,
-  locationKey,
+  workspace,
   sessionOwnerUserId,
   ...props
 }: AthenaShellProps): JSX.Element {
@@ -947,38 +942,38 @@ function AthenaShell({
   );
 
   return (
-    <AthenaPanelProvider
-      context={context}
-      locationKey={locationKey}
-      railVisible={athenaRailVisible}
-      onRevealRail={
-        calendarSurface || settingsSurface
-          ? undefined
-          : () => {
-              revealRailPanel('athena');
-            }
-      }
-      onOpenFullAthena={openFullAthena}
-    >
-      <AthenaShellChrome
-        {...props}
-        settingsSurface={settingsSurface}
-        calendarSurface={calendarSurface}
-        railRequest={railRequest}
-        onAthenaRailVisibilityChange={setAthenaRailVisible}
-      />
-      <CommandPaletteHost
-        panelsAvailable={!settingsSurface && !calendarSurface}
-        onOpenPanel={revealRailPanel}
-        sessionOwnerUserId={sessionOwnerUserId}
-      />
-    </AthenaPanelProvider>
+    <PageContextProvider workspace={workspace}>
+      <AthenaPanelProvider
+        railVisible={athenaRailVisible}
+        onRevealRail={
+          calendarSurface || settingsSurface
+            ? undefined
+            : () => {
+                revealRailPanel('athena');
+              }
+        }
+        onOpenFullAthena={openFullAthena}
+      >
+        <AthenaShellChrome
+          {...props}
+          settingsSurface={settingsSurface}
+          calendarSurface={calendarSurface}
+          railRequest={railRequest}
+          onAthenaRailVisibilityChange={setAthenaRailVisible}
+        />
+        <CommandPaletteHost
+          panelsAvailable={!settingsSurface && !calendarSurface}
+          onOpenPanel={revealRailPanel}
+          sessionOwnerUserId={sessionOwnerUserId}
+        />
+      </AthenaPanelProvider>
+    </PageContextProvider>
   );
 }
 
 interface AthenaShellChromeProps extends Omit<
   AthenaShellProps,
-  'context' | 'locationKey' | 'sessionOwnerUserId'
+  'workspace' | 'sessionOwnerUserId'
 > {
   readonly railRequest: { readonly panelId: string; readonly version: number } | undefined;
   readonly onAthenaRailVisibilityChange: (visible: boolean) => void;

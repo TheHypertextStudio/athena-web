@@ -37,6 +37,7 @@ import MentionTextarea from '@/components/mentions/mention-textarea';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 
 import { AthenaWorkbench } from './athena-workbench';
+import { usePageContext } from './page-context';
 import { useAthenaActions } from './use-athena-actions';
 
 /** Whether a keydown event is the personal Athena shortcut. */
@@ -82,9 +83,7 @@ const AthenaPanelContext = createContext<AthenaPanelValue | null>(null);
 /** Props for the shared Athena session state. */
 export interface AthenaPanelProviderProps {
   readonly children: ReactNode;
-  readonly context?: PersonalAthenaContext | null | undefined;
   readonly transport?: PersonalAthenaTransport | undefined;
-  readonly locationKey?: string | undefined;
   /** Ask the owning shell to select and expand Athena's utility-rail panel. */
   readonly onRevealRail?: (() => void) | undefined;
   /** Whether the shell is currently displaying Athena's rail panel. */
@@ -98,41 +97,30 @@ export interface AthenaPanelProviderProps {
  * Keep Athena's personal session state available to contextual entry points.
  *
  * The provider owns no viewport-level chrome. The shared shell owns where the compact panel opens,
- * and the full `/athena` route remains the place for broad operations work.
+ * and the full `/athena` route remains the place for broad operations work. Selection and any
+ * draft survive navigation; only the page context underneath them changes.
  */
 export function AthenaPanelProvider({
   children,
-  context: initialContext = null,
   transport = personalAthenaTransport,
-  locationKey = '',
   onRevealRail,
   railVisible = false,
   onOpenFullAthena,
 }: AthenaPanelProviderProps): JSX.Element {
   const queryClient = useQueryClient();
-  const [context, setContext] = useState<PersonalAthenaContext | null>(initialContext);
+  const pageContext = usePageContext();
+  const [context, setContext] = useState<PersonalAthenaContext | null>(pageContext);
   const [selectedId, setSelectedId] = useState('');
   const [launchDraft, setLaunchDraft] = useState<string | null>(null);
   const pulse = useLiveApiQuery(personalAthenaPulseDef(transport), 5_000);
   const queue = useLiveApiQuery(personalAthenaQueueDef(transport, railVisible), 5_000);
-  const shellWorkspaceId = initialContext?.workspaceId;
-  const shellWorkspaceName = initialContext?.workspaceName;
-  const shellContext = useMemo<PersonalAthenaContext | null>(
-    () =>
-      shellWorkspaceId || shellWorkspaceName
-        ? {
-            ...(shellWorkspaceId ? { workspaceId: shellWorkspaceId } : {}),
-            ...(shellWorkspaceName ? { workspaceName: shellWorkspaceName } : {}),
-          }
-        : null,
-    [shellWorkspaceId, shellWorkspaceName],
-  );
 
+  // The page moves under the panel; the panel keeps what the person was doing. Only an idle
+  // panel (no selection, no draft) follows the page.
   useEffect(() => {
-    setContext(shellContext);
-    setLaunchDraft(null);
-    setSelectedId('');
-  }, [locationKey, shellContext]);
+    if (selectedId || launchDraft !== null) return;
+    setContext(pageContext);
+  }, [launchDraft, pageContext, selectedId]);
 
   const detailId = launchDraft === null ? selectedId : '';
   const detail = useLiveApiQuery(personalAthenaDetailDef(detailId, transport, railVisible), 3_000);
@@ -167,14 +155,16 @@ export function AthenaPanelProvider({
   );
   const openAthena = useCallback(
     (nextContext?: PersonalAthenaContext | null, draft?: string) => {
-      const startsNewWork = nextContext !== undefined;
-      const resolvedContext = nextContext === undefined ? shellContext : nextContext;
+      const effective =
+        nextContext === undefined && pageContext?.source ? pageContext : nextContext;
+      const startsNewWork = effective !== undefined;
+      const resolvedContext = effective === undefined ? pageContext : effective;
       setContext(resolvedContext);
       setSelectedId('');
       setLaunchDraft(startsNewWork ? (draft?.trim() ?? '') : null);
       reveal(resolvedContext, startsNewWork ? draft : undefined);
     },
-    [reveal, shellContext],
+    [pageContext, reveal],
   );
   const closeAthena = useCallback(() => {
     setSelectedId('');

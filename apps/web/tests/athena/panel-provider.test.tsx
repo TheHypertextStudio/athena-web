@@ -10,6 +10,7 @@ import {
   AthenaRailPanel,
   useAthenaPanel,
 } from '../../src/components/athena/athena-panel-provider';
+import { PageContextProvider, PageSource } from '../../src/components/athena/page-context';
 import type { PersonalAthenaTransport } from '../../src/lib/athena/query-defs';
 import type { PersonalAthenaSessionDetail } from '../../src/lib/athena/presentation';
 import { okResponse } from '../support/query';
@@ -61,6 +62,14 @@ function AthenaLaunchers(): ReactNode {
         }}
       >
         Open contextual Athena
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          openAthena();
+        }}
+      >
+        Open ambient Athena
       </button>
     </>
   );
@@ -162,14 +171,13 @@ describe('AthenaPanelProvider', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const view = render(
       <QueryClientProvider client={client}>
-        <AthenaPanelProvider
-          context={{ workspaceId: 'workspace_1', workspaceName: 'Hypertext Studio' }}
-          transport={api}
-          railVisible
-          onRevealRail={vi.fn()}
+        <PageContextProvider
+          workspace={{ workspaceId: 'workspace_1', workspaceName: 'Hypertext Studio' }}
         >
-          <AthenaRailPanel />
-        </AthenaPanelProvider>
+          <AthenaPanelProvider transport={api} railVisible onRevealRail={vi.fn()}>
+            <AthenaRailPanel />
+          </AthenaPanelProvider>
+        </PageContextProvider>
       </QueryClientProvider>,
     );
 
@@ -180,20 +188,87 @@ describe('AthenaPanelProvider', () => {
 
     view.rerender(
       <QueryClientProvider client={client}>
-        <AthenaPanelProvider
-          context={{ workspaceId: 'workspace_1', workspaceName: 'Hypertext Studio' }}
-          transport={api}
-          railVisible
-          onRevealRail={vi.fn()}
+        <PageContextProvider
+          workspace={{ workspaceId: 'workspace_1', workspaceName: 'Hypertext Studio' }}
         >
-          <AthenaRailPanel />
-        </AthenaPanelProvider>
+          <AthenaPanelProvider transport={api} railVisible onRevealRail={vi.fn()}>
+            <AthenaRailPanel />
+          </AthenaPanelProvider>
+        </PageContextProvider>
       </QueryClientProvider>,
     );
 
     expect(
       await screen.findByRole('heading', { name: 'Confirm the private launch review change' }),
     ).toBeVisible();
+  });
+
+  it('keeps the selected session when the page underneath changes', async () => {
+    const api = transport();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const tree = (source: ReactNode): ReactNode => (
+      <QueryClientProvider client={client}>
+        <PageContextProvider
+          workspace={{ workspaceId: 'workspace_1', workspaceName: 'Hypertext Studio' }}
+        >
+          {source}
+          <AthenaPanelProvider transport={api} railVisible onRevealRail={vi.fn()}>
+            <AthenaRailPanel />
+          </AthenaPanelProvider>
+        </PageContextProvider>
+      </QueryClientProvider>
+    );
+    const view = render(
+      tree(<PageSource type="task" id="task_1" label="Confirm venue contract" />),
+    );
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Confirm the private launch review change/ }),
+    );
+    expect(await screen.findByRole('button', { name: 'Back' })).toBeVisible();
+
+    view.rerender(
+      tree(<PageSource type="project" id="project_1" label="Fall fundraiser launch" />),
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Confirm the private launch review change' }),
+    ).toBeVisible();
+  });
+
+  it('starts new work with the open page as its context', async () => {
+    const api = transport();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <PageContextProvider
+          workspace={{ workspaceId: 'workspace_1', workspaceName: 'Hypertext Studio' }}
+        >
+          <PageSource type="project" id="project_1" label="Fall fundraiser launch" />
+          <AthenaPanelProvider transport={api} railVisible onRevealRail={vi.fn()}>
+            <AthenaLaunchers />
+            <AthenaRailPanel />
+          </AthenaPanelProvider>
+        </PageContextProvider>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open ambient Athena' }));
+    fireEvent.change(await screen.findByLabelText('Athena objective'), {
+      target: { value: 'What is at risk here?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
+
+    await waitFor(() => {
+      expect(api.create).toHaveBeenCalledWith({
+        prompt: 'What is at risk here?',
+        context: {
+          workspaceId: 'workspace_1',
+          workspaceName: 'Hypertext Studio',
+          source: { type: 'project', id: 'project_1', label: 'Fall fundraiser launch' },
+        },
+      });
+    });
   });
 
   it('opens a contextual composer in the rail and retains the context in the full-workspace URL', async () => {

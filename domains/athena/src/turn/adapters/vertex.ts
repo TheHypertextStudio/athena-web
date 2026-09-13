@@ -52,7 +52,7 @@ export interface VertexTurnRequest {
       readonly functionDeclarations: readonly {
         readonly name: string;
         readonly description: string;
-        readonly parametersJsonSchema: Record<string, unknown>;
+        readonly parameters: Record<string, unknown>;
       }[];
     },
   ];
@@ -146,7 +146,7 @@ export function buildVertexTurnRequest(
               functionDeclarations: input.tools.map((tool) => ({
                 name: tool.name,
                 description: tool.description,
-                parametersJsonSchema: tool.inputSchema,
+                parameters: tool.inputSchema,
               })),
             },
           ] as const,

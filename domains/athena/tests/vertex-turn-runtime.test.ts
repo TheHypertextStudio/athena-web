@@ -43,7 +43,7 @@ describe('Vertex turn adapter', () => {
             {
               name: 'review_result',
               description: 'Return the review decision.',
-              parametersJsonSchema: input.tools[0]?.inputSchema,
+              parameters: input.tools[0]?.inputSchema,
             },
           ],
         },

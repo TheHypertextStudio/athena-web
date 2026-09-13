@@ -82,8 +82,10 @@ async function adaptedResponse<TApi, TView>(
   };
 }
 
-/** Strip display-only source labels before sending an invocation context to the API. */
-function apiContext(context?: PersonalAthenaContext): AthenaInvocationContext | undefined {
+/** Strip display-only labels so a context matches the API's invocation shape. */
+export function toInvocationContext(
+  context?: PersonalAthenaContext,
+): AthenaInvocationContext | undefined {
   if (!context?.workspaceId && !context?.source) return undefined;
   return AthenaInvocationContext.parse({
     ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}),
@@ -118,7 +120,7 @@ export const personalAthenaTransport: PersonalAthenaTransport = {
       },
     ),
   create: (input) => {
-    const context = apiContext(input.context);
+    const context = toInvocationContext(input.context);
     return adaptedResponse(
       api.v1.me.athena.sessions.$post({
         json: { prompt: input.prompt, ...(context ? { context } : {}) },

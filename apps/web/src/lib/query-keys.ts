@@ -264,6 +264,8 @@ export const queryKeys = {
   workLocationSync: () => ['me', 'work-location', 'sync-state'] as const,
   hubPreferences: () => ['me', 'hub-preferences'] as const,
   athena: () => ['me', 'athena'] as const,
+  /** The person's one Athena conversation. */
+  athenaChat: () => ['me', 'athena', 'chat'] as const,
   athenaPulse: () => ['me', 'athena', 'pulse'] as const,
   athenaSession: (sessionId: string) => ['me', 'athena', 'sessions', sessionId] as const,
   latticeConnection: () => ['me', 'athena', 'lattice'] as const,

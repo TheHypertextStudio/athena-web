@@ -39,6 +39,7 @@ const SKIPPED_DIRECTORIES = new Set([
   'e2e',
   'docs',
   'repo-tests',
+  'worktrees',
 ]);
 
 /**

@@ -1520,6 +1520,75 @@ at **zero** violations across the tree, so it enters the ratchet with no ledger 
 
 ---
 
+### [NOTION-BODY-001] Record descriptions reach their linked Notion rows
+
+- **Status**: COMPLETED (2026-09-13)
+- **Started**: 2026-09-12
+- **Priority**: P1
+- **Description**: Descriptions did not reliably reach Notion on either sync path. For existing
+  databases, an edit to a row that nobody touched in Notion waited for the daily full sync. A
+  description over 2,000 characters made Notion reject the whole property write. A missing
+  content permission was skipped silently. A pull whose page body could not be read erased the
+  local description. For Docket-built databases, projects sent their one-line summary as the page
+  body, initiatives, programs and milestones sent no body, and a Notion-side body edit was always
+  treated as a local change and overwritten.
+- **Subtasks**:
+  - [x] Existing databases: push dirty rows absent from an incremental read
+  - [x] Existing databases: split long Description property text into Notion-sized segments
+  - [x] Existing databases: report missing content access; keep bodies on unreadable pulls
+  - [x] Docket-built databases: one catalog-owned body field per entity
+  - [x] Docket-built databases: consistent property+body hash on pull
+  - [x] Spec, validation, commits
+- **Approach**:
+  - _Existing databases._ Notion is the one provider whose import honors `since`, now declared as
+    `INCREMENTAL_IMPORT_PROVIDER_IDS`. On an incremental pass `reconcileTasks` gets
+    `readChangedOnly`, and `planTaskReconcile` pushes a dirty task whose row is absent when its
+    database is one the pass read. `MockConnector` filters Notion reads by `since` the same way,
+    so the sweep test exercises the real shape. `notionRichTextChunks` splits the Description
+    property on code points. `pushTask` returns `contentState`; the run stores
+    `config.notionLinkedContentAccess`, and the Notion panel shows the existing permission alert
+    for it. `importWork` marks unreadable bodies `bodyUnavailable` and `applyPull` keeps the
+    local description.
+  - _Docket-built databases._ `MirrorEntitySpec.bodyField` is the single source for which field is
+    the page body. `recordSyncState` computes projected properties, body and the combined hash for
+    projection, pull planning, adoption and restamping. A pull with a truncated or unreadable body
+    drops the body field so the clipped legacy column cannot overwrite it. Adoption reads the
+    page body. The unchanged-row body retry now runs for `inaccessible` rows only; a truncated
+    page is left alone, and an adopted row whose body could not be read is never marked for it.
+- **Files changed**: `packages/integrations/src/{connector,notion,notion-mapping,mock-connector}.ts`;
+  `domains/connections/src/contracts/{integration,provider-catalog}.ts`;
+  `domains/connections/src/notion/mirror-schema{.ts,/catalog.ts}`;
+  `apps/api/src/routes/{integration-reconcile,integration-sync,notion-mirror-reconcile,notion-mirror-entities,notion-mirror-design}.ts`;
+  `apps/web/src/components/settings/notion/{notion-mirror-panel.tsx,use-notion-mirror-controller.ts,notion-copy.ts}`;
+  tests beside each; `docs/engineering/specs/notion-sync.md` §8.9 and §9.
+- **Learnings**:
+  - Two hash formulas for one stored column is a silent direction bug: every pull planned as a
+    push. One helper now owns the formula.
+  - "Absent from an incremental read" means "unchanged" only for providers that honor the
+    cursor. Treating it that way for all providers would push to deleted or filtered items.
+  - Linked-database tasks sync only through the connector cadence; entity writes wake the
+    Docket-built mirror and nothing else.
+- **Review follow-up**: An extra-high code review found that an empty description would have wiped
+  Notion-authored page bodies on the first projection, that an unreadable body dropped the
+  Description text for new tasks, that a 404 on an absent-row push failed the whole run, that
+  push-only drift read page bodies for nothing, that the access flag was a racy read-modify-write,
+  and that a refused body was never retried. All are fixed with tests. The size ratchet then split
+  `notion-mirror-body.ts`, `notion-mirror-pulled-values.ts` and `integration-reconcile-plan.ts` out
+  of their parents, and moved the new tests into their own files.
+- **Second follow-up (2026-09-13)**: The two remaining findings are fixed. `task.external_body_hash`
+  (migration `0131`) anchors each linked task's description to the last synced copy, and pushes send
+  `notesUnchanged` when it matches, so a partially read page is never replaced by a stale copy. A
+  400 on a body write is a refused replacement: linked pushes report `rejected` and the connection
+  records `notionLinkedContentKept`, Docket-built rows record `truncated`, and neither fails the
+  run. The write-back half of reconcile moved to `integration-reconcile-push.ts`.
+- **Validation**: Root `pnpm typecheck`, `pnpm lint` (with the complexity ledger), `pnpm format:check`
+  and `pnpm test:coverage --force` pass. The db package was rerun alone after a V8 WebAssembly crash
+  in its PGlite worker hung the parallel run.
+- **Not verified**: A live Notion workspace was not exercised; the Notion Markdown endpoint shapes
+  were checked against Notion's API reference and the adapters' existing tests.
+  Project conflicts merge a remote-only body edit, and the conflict log stays task-only because
+  `recordSyncConflict` writes a task audit subject.
+
 ### [DETAIL-INSET-001] Every edge of a detail page is measured the same way
 
 - **Completed**: 2026-09-05

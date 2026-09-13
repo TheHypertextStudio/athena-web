@@ -531,6 +531,51 @@ export function mapNotionPage(
 }
 
 /**
+ * The description a push should write, or `undefined` when the page's copy stays as it is.
+ *
+ * @param op - The create or update op.
+ * @returns the notes (`null` clears them), or `undefined` when the op carries none or they are
+ *   unchanged since the last sync.
+ */
+export function notesToWrite(
+  op: Extract<TaskPushOp, { kind: 'create' | 'update' }>,
+): string | null | undefined {
+  if (op.kind === 'update' && op.notesUnchanged === true) return undefined;
+  return op.notes;
+}
+
+/** The most characters Notion accepts in one rich-text object's `text.content`. */
+const NOTION_RICH_TEXT_SEGMENT_LIMIT = 2000;
+/** The most rich-text objects Notion accepts in one property value. */
+const NOTION_RICH_TEXT_SEGMENT_COUNT = 100;
+
+/**
+ * Split text into the segments a Notion rich-text property accepts.
+ *
+ * @remarks
+ * Each segment holds at most 2,000 UTF-16 code units and a property holds at most 100 segments.
+ * Splits fall on code-point boundaries so a surrogate pair is never cut in half. Text past the
+ * 100th segment is left out of the property; the page body carries the full text.
+ *
+ * @param text - The text to split.
+ * @returns the segments, in order.
+ */
+export function notionRichTextChunks(text: string): string[] {
+  const segments: string[] = [];
+  let current = '';
+  for (const character of text) {
+    if (current.length + character.length > NOTION_RICH_TEXT_SEGMENT_LIMIT) {
+      segments.push(current);
+      if (segments.length === NOTION_RICH_TEXT_SEGMENT_COUNT) return segments;
+      current = '';
+    }
+    current += character;
+  }
+  if (current.length > 0) segments.push(current);
+  return segments;
+}
+
+/**
  * Build the `properties` patch body that writes a Docket task's fields onto a Notion page.
  *
  * @remarks
@@ -558,11 +603,14 @@ export function notionPushProperties(
       title: [{ type: 'text', text: { content: op.title } }],
     };
   }
-  if (op.notes !== undefined && schema.descriptionProperty !== null) {
-    properties[schema.descriptionProperty] =
-      op.notes === null
-        ? { rich_text: [] }
-        : { rich_text: [{ type: 'text', text: { content: op.notes } }] };
+  const notes = notesToWrite(op);
+  if (notes !== undefined && schema.descriptionProperty !== null) {
+    properties[schema.descriptionProperty] = {
+      rich_text: notionRichTextChunks(notes ?? '').map((content) => ({
+        type: 'text',
+        text: { content },
+      })),
+    };
   }
   if (op.dueDate !== undefined && schema.dueDateProperty !== null) {
     properties[schema.dueDateProperty] =

@@ -348,7 +348,7 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       external_updated_at timestamp,
       external_etag text,
       external_list_id text,
-      last_pushed_at timestamp,
+      last_pushed_at timestamp, external_body_hash text,
       completed_at timestamp,
       canceled_at timestamp,
       auto_completed_by_subtasks boolean not null default false,

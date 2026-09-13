@@ -112,6 +112,12 @@ export interface ImportedItem {
   readonly title: string;
   /** Optional body/description. */
   readonly body?: string;
+  /**
+   * Set when the provider holds a body Docket could not read in full (truncated, or the connection
+   * lacks content access). `body` is then a partial copy at best: a new task may start from it, and
+   * reconciliation keeps an existing task's description instead of replacing it.
+   */
+  readonly bodyUnavailable?: true;
   /** Whether the source item is completed/done (work items that carry a status). */
   readonly completed?: boolean;
   /** Due date (RFC3339 date) when the source carries one; `null` means explicitly unset. */
@@ -276,6 +282,11 @@ export type TaskPushOp =
       readonly etag?: string;
       readonly title?: string;
       readonly notes?: string | null;
+      /**
+       * Set when `notes` has not changed since the last sync of the provider's copy. A provider
+       * that stores long-form content apart from its fields leaves that content as it is.
+       */
+      readonly notesUnchanged?: true;
       readonly dueDate?: string | null;
       readonly completed?: boolean;
     }
@@ -295,6 +306,13 @@ export interface ExternalWriteResult {
   readonly externalEtag?: string;
   /** The provider's canonical URL for a newly created or updated item, when returned. */
   readonly externalUrl?: string;
+  /**
+   * What happened to the item's long-form content, for providers that store it apart from its
+   * fields. `inaccessible` means the fields were written and the content was refused because the
+   * connection lacks permission to edit it. `rejected` means the fields were written and the
+   * provider would not replace the content as it stands, for example because it holds sub-pages.
+   */
+  readonly contentState?: 'written' | 'inaccessible' | 'rejected';
 }
 
 /** Input to push one task change to a writable provider. */

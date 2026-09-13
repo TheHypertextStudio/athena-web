@@ -169,15 +169,7 @@ describe('reconcileTasks', () => {
     });
 
     // The row is simply invisible to reconciliation — no crash, no action taken on it.
-    expect(tally).toEqual({
-      inserted: 0,
-      pulled: 0,
-      pushed: 0,
-      deleted: 0,
-      archived: 0,
-      created: 0,
-      conflicts: 0,
-    });
+    expect(new Set(Object.values(tally))).toEqual(new Set([0]));
   });
 
   it('pull: applies a newer remote onto a clean local task and tallies pulled', async () => {

@@ -19,11 +19,11 @@
  * tested without a database; {@link reconcileTasks} orchestrates the DB reads/writes and the
  * connector pushes.
  */
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db, task, team } from '@docket/db';
 import { ConnectorConfig } from '@docket/connections/integration-contract';
 import { type WorkStatusCategory } from '@docket/work/work-status-contract';
-import type { ConnectorProvider, ImportedItem } from '@docket/integrations';
+import type { ExternalWriteResult, ImportedItem } from '@docket/integrations';
 import type { WritableConnector } from '@docket/integrations';
 
 import { ConflictError } from '../error';
@@ -38,162 +38,22 @@ import { serializableTx } from '../lib/serializable-tx';
 import { enqueueSearchUpsert } from '../search/write-through';
 
 import { type IntegrationRow } from './integration-provider';
-import { recordSyncConflict } from './sync-notion';
+import {
+  descriptionHash,
+  planTaskReconcile,
+  pulledBodyHash,
+  type ReconcileLocalTask,
+} from './integration-reconcile-plan';
+import {
+  countWriteContent,
+  pushDelete,
+  pushLocalEdit,
+  pushNativeCreates,
+  type ReconcileTally,
+} from './integration-reconcile-push';
 import { wouldCreateSubtaskCycle } from './task-helpers';
 
-/** A linked task projected to just the fields reconciliation needs to decide a direction. */
-export interface ReconcileLocalTask {
-  /** The Docket task id. */
-  readonly id: string;
-  /** Current title. */
-  readonly title: string;
-  /** Current description (null when unset). */
-  readonly description: string | null;
-  /** The task's status key. */
-  readonly state: string;
-  /** The category {@link ReconcileLocalTask.state} behaves as (drives completion/cancel mapping). */
-  readonly stateType: WorkStatusCategory;
-  /** Current due date (null when unset). */
-  readonly dueDate: Date | null;
-  /** Last local modification (auto-bumped on every write that doesn't set it explicitly). */
-  readonly updatedAt: Date;
-  /** The provider's external id for this task (a linked task always has one). */
-  readonly externalId: string;
-  /** The LWW anchor: the provider's last-write timestamp as of the last sync (null = never). */
-  readonly externalUpdatedAt: Date | null;
-  /** The provider entity tag for optimistic-concurrency writes. */
-  readonly externalEtag: string | null;
-  /** The external list the task belongs to (for addressing the write-back). */
-  readonly externalListId: string | null;
-}
-
-/**
- * The record of a genuine two-sided conflict: both Docket and the provider changed the same
- * linked item since the last sync.
- *
- * @remarks
- * Emitted by {@link planTaskReconcile} alongside the `push` it resolves to, so the losing remote
- * values are *data* the caller persists rather than something discarded on the way to a decision.
- * `remoteTitle`/`remoteDueDate`/`remoteCompleted` are the provider's values at the moment they
- * lost — the conflict log's whole reason to exist (see {@link recordSyncConflict}).
- */
-export interface TaskSyncConflict {
-  /** The provider's external id for the conflicted item. */
-  readonly externalId: string;
-  /** The provider's last-write timestamp (RFC3339) that lost. */
-  readonly remoteUpdatedAt: string;
-  /** Docket's `updatedAt` at the moment it won (ISO-8601). */
-  readonly localUpdatedAt: string;
-  /** The provider's title at the moment it lost. */
-  readonly remoteTitle: string;
-  /** The provider's body/description at the moment it lost, when it carried one. */
-  readonly remoteBody: string | null;
-  /** The provider's due date at the moment it lost (`null` = explicitly unset, `undefined` = absent). */
-  readonly remoteDueDate: string | null | undefined;
-  /** The provider's completion flag at the moment it lost, when the provider carries one. */
-  readonly remoteCompleted: boolean | undefined;
-}
-
-/** One reconciliation decision for a (local, remote) pair. */
-export type ReconcileAction =
-  | { readonly kind: 'noop' }
-  /** Remote item with no local counterpart → create a linked task. */
-  | { readonly kind: 'insert' }
-  /** Remote is the newer side → apply its fields to the local task. */
-  | { readonly kind: 'pull' }
-  /**
-   * Local is the newer/dirty side → push its fields to the provider.
-   *
-   * @remarks
-   * `conflict` is set only when the REMOTE ALSO changed since the last sync and Docket won
-   * anyway. An ordinary uncontested push carries no conflict.
-   */
-  | { readonly kind: 'push'; readonly conflict?: TaskSyncConflict }
-  /** Local task was canceled → delete it at the provider. */
-  | { readonly kind: 'pushDelete' }
-  /** Remote tombstone → archive the local linked task. */
-  | { readonly kind: 'archive' };
-
-/** Whether a linked task has local edits not yet pushed (the dirty rule). */
-function isDirty(local: ReconcileLocalTask): boolean {
-  return (
-    local.externalUpdatedAt !== null &&
-    local.updatedAt.getTime() > local.externalUpdatedAt.getTime()
-  );
-}
-
-/**
- * Decide which way one task should flow this sync — the pure heart of reconciliation.
- *
- * @remarks
- * `writeBack` gates every local→remote direction: a read-only mirror never pushes, so a locally
- * dirty mirrored task simply yields to the provider (or no-ops when the provider hasn't changed).
- * A remote is only ever *archived* on an explicit tombstone (`removed`), never on mere absence —
- * a task missing from the pull is most likely filtered out by the integration's `listIds`, not
- * deleted, so absence must not destroy local work.
- *
- * **Docket is the source of truth on conflict.** When BOTH sides changed since the last sync,
- * Docket's value wins regardless of which timestamp is newer, and the losing remote values are
- * returned on the action as a {@link TaskSyncConflict} so the caller can record them. This
- * replaces the previous last-write-wins tie-break, under which a later external edit silently
- * overwrote local work and the losing value was kept nowhere — the opposite of what a two-way
- * sync whose purpose is to let Docket supersede the incumbent tool has to do.
- *
- * A one-sided remote change is NOT a conflict: if Docket is clean, the provider's newer value is
- * simply pulled. "Docket wins" settles contested edits; it does not stop Docket from learning.
- *
- * @param local - The local linked task, or `undefined` when the provider has one we don't.
- * @param remote - The pulled item, or `undefined` when we have a linked task the pull didn't return.
- * @param opts - `writeBack` enables the push directions.
- */
-export function planTaskReconcile(
-  local: ReconcileLocalTask | undefined,
-  remote: ImportedItem | undefined,
-  opts: { readonly writeBack: boolean },
-): ReconcileAction {
-  if (!local) {
-    if (!remote || remote.removed) return { kind: 'noop' };
-    return { kind: 'insert' };
-  }
-  if (!remote) {
-    // The remote wasn't in this pull (likely list-filtered). Only a local cancel needs to escape.
-    if (opts.writeBack && local.stateType === 'canceled' && isDirty(local)) {
-      return { kind: 'pushDelete' };
-    }
-    return { kind: 'noop' };
-  }
-  if (remote.removed) return { kind: 'archive' };
-
-  const dirty = isDirty(local);
-  const remoteMs = remote.provenance.externalUpdatedAt
-    ? Date.parse(remote.provenance.externalUpdatedAt)
-    : undefined;
-  const anchorMs = local.externalUpdatedAt?.getTime();
-  const remoteNewer = remoteMs !== undefined && (anchorMs === undefined || remoteMs > anchorMs);
-
-  if (opts.writeBack && dirty) {
-    if (local.stateType === 'canceled') return { kind: 'pushDelete' };
-    // `remoteNewer` is only ever true when `remoteMs` is a real number (see its definition), so
-    // this single check narrows both facts at once.
-    if (!remoteNewer) return { kind: 'push' };
-    // Both sides changed since the last sync. Docket is the source of truth, so Docket's value
-    // wins even when the remote edit is newer — and the remote's losing values ride along so the
-    // caller can record them instead of dropping them.
-    return {
-      kind: 'push',
-      conflict: {
-        externalId: local.externalId,
-        remoteUpdatedAt: new Date(remoteMs).toISOString(),
-        localUpdatedAt: local.updatedAt.toISOString(),
-        remoteTitle: remote.title,
-        remoteBody: remote.body ?? null,
-        remoteDueDate: remote.dueDate,
-        remoteCompleted: remote.completed,
-      },
-    };
-  }
-  return remoteNewer ? { kind: 'pull' } : { kind: 'noop' };
-}
+export { planTaskReconcile, type ReconcileLocalTask } from './integration-reconcile-plan';
 
 /** The statuses reconciliation moves a linked task between, from one team's Task set. */
 export interface ReconcileStatuses {
@@ -258,6 +118,12 @@ export interface ReconcileResult {
    * and the durable record cannot disagree, because they are incremented by the same branch.
    */
   readonly conflicts: number;
+  /** Pushes whose long-form content the provider accepted. */
+  readonly contentWritten: number;
+  /** Pushes whose fields landed but whose long-form content the connection may not edit. */
+  readonly contentInaccessible: number;
+  /** Pushes whose fields landed but whose long-form content the provider would not replace. */
+  readonly contentRejected: number;
 }
 
 /** Options for {@link reconcileTasks}. */
@@ -266,6 +132,12 @@ export interface ReconcileOptions {
   readonly assigneeId: string | null;
   /** The write-back seam, when the connector supports it (null = read-only). */
   readonly writable: WritableConnector | null;
+  /**
+   * Whether `items` holds only the rows the provider reports changed since a cursor. A linked
+   * task missing from such a read, in a container the read covered, is unchanged at the provider,
+   * so its local edits are pushed.
+   */
+  readonly readChangedOnly?: boolean;
 }
 
 /**
@@ -328,7 +200,7 @@ export async function reconcileTasks(
   const taskIdByExternalId = new Map<string, string>();
   for (const t of localRows) if (t.externalId) taskIdByExternalId.set(t.externalId, t.id);
 
-  const tally = {
+  const tally: ReconcileTally = {
     inserted: 0,
     pulled: 0,
     pushed: 0,
@@ -336,31 +208,27 @@ export async function reconcileTasks(
     archived: 0,
     created: 0,
     conflicts: 0,
+    contentWritten: 0,
+    contentInaccessible: 0,
+    contentRejected: 0,
   };
+  const countContent = (state: ExternalWriteResult['contentState']): void => {
+    countWriteContent(tally, state);
+  };
+  const absentIsUnchanged = absentUnchangedRule(options.readChangedOnly, config.listIds);
 
   const externalIds = new Set<string>([...localById.keys(), ...remoteById.keys()]);
   for (const externalId of orderParentsFirst(externalIds, remoteById)) {
     const localRow = localById.get(externalId);
     const remote = remoteById.get(externalId);
-    const local: ReconcileLocalTask | undefined = localRow
-      ? {
-          id: localRow.id,
-          title: localRow.title,
-          description: localRow.description,
-          state: localRow.state,
-          stateType: keys.typeOf(localRow.state),
-          dueDate: localRow.dueDate,
-          updatedAt: localRow.updatedAt,
-          externalId, // the map key — localById only holds tasks that have an external id
-          externalUpdatedAt: localRow.externalUpdatedAt,
-          externalEtag: localRow.externalEtag,
-          externalListId: localRow.externalListId,
-        }
-      : undefined;
+    const local = localRow && toReconcileLocal(localRow, externalId, keys);
 
     // The action kind guarantees which of local/remote/writable are present; the explicit
     // guards re-narrow that for the type system (the repo forbids non-null assertions).
-    const action = planTaskReconcile(local, remote, { writeBack });
+    const action = planTaskReconcile(local, remote, {
+      writeBack,
+      absentIsUnchanged: absentIsUnchanged(local),
+    });
     if (action.kind === 'insert' && remote) {
       const insertedId = await insertLinked(
         orgId,
@@ -379,14 +247,8 @@ export async function reconcileTasks(
       await enqueueSearchUpsert(orgId, 'task', local.id);
       tally.pulled += 1;
     } else if (action.kind === 'push' && local && writable) {
-      // Record the losing remote value BEFORE overwriting it — see `recordSyncConflict`.
-      if (action.conflict) {
-        await recordSyncConflict(orgId, actorId, row.id, row.provider, local.id, action.conflict);
-        tally.conflicts += 1;
-      }
-      await pushUpdate(row, local, writable);
-      await enqueueSearchUpsert(orgId, 'task', local.id);
-      tally.pushed += 1;
+      const pass = { orgId, actorId, row, writable, tally };
+      await pushLocalEdit(pass, local, action.conflict, remote === undefined);
     } else if (action.kind === 'pushDelete' && local && writable) {
       await pushDelete(local, writable, row.provider);
       await enqueueSearchUpsert(orgId, 'task', local.id);
@@ -400,17 +262,35 @@ export async function reconcileTasks(
 
   // Optionally push brand-new native tasks in the target team out to the provider.
   if (writable && row.writeBack && config.pushNativeTasks && config.defaultListId) {
-    tally.created = await pushNativeCreates(
-      orgId,
-      row,
+    tally.created = await pushNativeCreates(orgId, row, writable, {
       teamId,
-      config.defaultListId,
+      defaultListId: config.defaultListId,
       keys,
-      writable,
-    );
+      countContent,
+    });
   }
 
   return tally;
+}
+
+/**
+ * Build the rule for whether a linked task missing from this read is unchanged at the provider.
+ *
+ * @param readChangedOnly - Whether the read returned only rows changed since a cursor.
+ * @param listIds - The containers the read covered; absent or empty means all of them.
+ * @returns a predicate that is true for a task in a covered container of a changed-rows-only read.
+ */
+function absentUnchangedRule(
+  readChangedOnly: boolean | undefined,
+  listIds: readonly string[] | undefined,
+): (local: ReconcileLocalTask | undefined) => boolean {
+  if (readChangedOnly !== true) return () => false;
+  if (listIds === undefined || listIds.length === 0) return () => true;
+  const covered = new Set(listIds);
+  return (local) => {
+    const listId = local?.externalListId;
+    return typeof listId === 'string' && covered.has(listId);
+  };
 }
 
 /**
@@ -504,6 +384,8 @@ async function insertLinked(
         sourceSyncMode: 'mirror',
         externalListId: item.provenance.externalListId ?? null,
         externalEtag: item.provenance.externalEtag ?? null,
+        // The new task's description is `item.body`, so that is the copy it starts in step with.
+        externalBodyHash: descriptionHash(item.body ?? null),
         // Echo guard: stamp updatedAt == externalUpdatedAt so the task is born clean.
         ...(anchor ? { externalUpdatedAt: anchor, updatedAt: anchor } : {}),
         createdBy: actorId,
@@ -544,7 +426,8 @@ async function applyPull(
   const status = item.completed ? keys.completed : keys.open;
   const patch = {
     title: item.title,
-    description: item.body ?? null,
+    // A body the provider could not hand over in full leaves the local description as it is.
+    ...(item.bodyUnavailable === true ? {} : { description: item.body ?? null }),
     dueDate: item.dueDate ? new Date(item.dueDate) : null,
     ...(item.startDate !== undefined
       ? { startDate: item.startDate ? new Date(item.startDate) : null }
@@ -582,7 +465,11 @@ async function applyPull(
       const cyclic = await wouldCreateSubtaskCycle(tx, orgId, taskId, resolvedParent);
       await tx
         .update(task)
-        .set({ ...patch, ...(cyclic ? {} : { parentTaskId: resolvedParent }) })
+        .set({
+          ...patch,
+          externalBodyHash: pulledBodyHash(item, current.description),
+          ...(cyclic ? {} : { parentTaskId: resolvedParent }),
+        })
         .where(eq(task.id, taskId))
         .returning();
       const mutation = await writeTaskStateTransition(tx, {
@@ -616,7 +503,11 @@ async function applyPull(
       .limit(1);
     const current = before[0];
     if (!current) return null;
-    await tx.update(task).set(patch).where(eq(task.id, taskId)).returning();
+    await tx
+      .update(task)
+      .set({ ...patch, externalBodyHash: pulledBodyHash(item, current.description) })
+      .where(eq(task.id, taskId))
+      .returning();
     const mutation = await writeTaskStateTransition(tx, {
       before: current,
       statusId: status.id,
@@ -639,60 +530,26 @@ async function applyPull(
   await finishHierarchyCascades(result.cascades);
 }
 
-/** Push a dirty local task's fields to the provider and restamp the anchors from the echo. */
-async function pushUpdate(
-  row: IntegrationRow,
-  local: ReconcileLocalTask,
-  writable: WritableConnector,
-): Promise<void> {
-  const listId = local.externalListId ?? '@default';
-  const result = await writable.pushTask({
-    connectionId: row.id,
-    provider: asProvider(row.provider),
-    op: {
-      kind: 'update',
-      listId,
-      externalId: local.externalId,
-      ...(local.externalEtag ? { etag: local.externalEtag } : {}),
-      title: local.title,
-      notes: local.description,
-      dueDate: local.dueDate ? local.dueDate.toISOString() : null,
-      completed: local.stateType === 'completed',
-    },
-  });
-  if (!result) return;
-  const anchor = new Date(result.externalUpdatedAt);
-  await db
-    .update(task)
-    .set({
-      externalEtag: result.externalEtag ?? null,
-      lastPushedAt: anchor,
-      externalUpdatedAt: anchor,
-      updatedAt: anchor,
-    })
-    .where(eq(task.id, local.id));
-}
-
-/** Delete a locally-canceled task at the provider and mark the local row clean. */
-async function pushDelete(
-  local: ReconcileLocalTask,
-  writable: WritableConnector,
-  provider: string,
-): Promise<void> {
-  await writable.pushTask({
-    connectionId: local.externalListId ?? local.id,
-    provider: asProvider(provider),
-    op: {
-      kind: 'delete',
-      listId: local.externalListId ?? '@default',
-      externalId: local.externalId,
-    },
-  });
-  const now = new Date();
-  await db
-    .update(task)
-    .set({ lastPushedAt: now, externalUpdatedAt: now, updatedAt: now })
-    .where(eq(task.id, local.id));
+/** Project a stored linked task to what {@link planTaskReconcile} decides from. */
+function toReconcileLocal(
+  row: typeof task.$inferSelect,
+  externalId: string,
+  keys: ReconcileStatuses,
+): ReconcileLocalTask {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    state: row.state,
+    stateType: keys.typeOf(row.state),
+    dueDate: row.dueDate,
+    updatedAt: row.updatedAt,
+    externalId, // the map key — only tasks that have an external id are indexed
+    externalUpdatedAt: row.externalUpdatedAt,
+    externalEtag: row.externalEtag,
+    externalListId: row.externalListId,
+    externalBodyHash: row.externalBodyHash,
+  };
 }
 
 /** Archive a local linked task whose remote was tombstoned. */
@@ -742,65 +599,4 @@ async function archiveLocal(
   if (!result) return;
   await finishTaskStateTransition({ actorId: null }, result.mutation);
   await finishHierarchyCascades(result.cascades);
-}
-
-/** Push every native task in the target team with no external id out as a new provider task. */
-async function pushNativeCreates(
-  orgId: string,
-  row: IntegrationRow,
-  teamId: string,
-  defaultListId: string,
-  keys: ReconcileStatuses,
-  writable: WritableConnector,
-): Promise<number> {
-  const natives = await db
-    .select()
-    .from(task)
-    .where(
-      and(
-        eq(task.organizationId, orgId),
-        eq(task.teamId, teamId),
-        eq(task.source, 'native'),
-        isNull(task.externalId),
-      ),
-    );
-  let created = 0;
-  for (const t of natives) {
-    const result = await writable.pushTask({
-      connectionId: row.id,
-      provider: asProvider(row.provider),
-      op: {
-        kind: 'create',
-        listId: defaultListId,
-        title: t.title,
-        notes: t.description,
-        dueDate: t.dueDate ? t.dueDate.toISOString() : null,
-        completed: keys.typeOf(t.state) === 'completed',
-      },
-    });
-    if (!result) continue;
-    const anchor = new Date(result.externalUpdatedAt);
-    await db
-      .update(task)
-      .set({
-        source: 'linked',
-        sourceIntegrationId: row.id,
-        sourceSyncMode: 'mirror',
-        externalId: result.externalId,
-        externalListId: defaultListId,
-        externalEtag: result.externalEtag ?? null,
-        lastPushedAt: anchor,
-        externalUpdatedAt: anchor,
-        updatedAt: anchor,
-      })
-      .where(eq(task.id, t.id));
-    await enqueueSearchUpsert(orgId, 'task', t.id);
-    created += 1;
-  }
-  return created;
-}
-
-/** Narrow a stored provider string for the connector push input (already validated upstream). */
-function asProvider(provider: string): ConnectorProvider {
-  return provider as ConnectorProvider;
 }

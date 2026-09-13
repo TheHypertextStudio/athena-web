@@ -12,6 +12,11 @@ import { z } from 'zod';
 import { ActorId, OrganizationId } from '@docket/identity-access/ids';
 import { IntegrationId } from '../ids';
 import { CONNECTOR_PROVIDER_IDS, DIRECTORY_PROVIDER_IDS } from './provider-catalog';
+import {
+  NotionLinkedContentAccess,
+  NotionLinkedContentKept,
+  NotionMappingProfiles,
+} from './notion-linked';
 
 /** Integration pattern: replace (migration), complement (connector), or an app-actor front door (agent). */
 export const IntegrationPattern = z
@@ -57,33 +62,7 @@ export const SyncMode = z
 /** Sync-mode value. */
 export type SyncMode = z.infer<typeof SyncMode>;
 
-/** How confidently Docket assigned a Notion property to a linked task field. */
-export const NotionMappingConfidence = z.enum(['structural', 'high', 'review']);
-/** One persisted mapping decision for a linked Notion data source. */
-export const NotionMappingProfileField = z.object({
-  field: z.enum([
-    'title',
-    'completed',
-    'dueDate',
-    'description',
-    'priority',
-    'assignee',
-    'project',
-    'parentTask',
-  ]),
-  property: z.string().min(1),
-  confidence: NotionMappingConfidence,
-});
-/** A versioned, reviewable profile for one linked Notion data source. */
-export const NotionMappingProfile = z.object({
-  version: z.literal(1),
-  dataSourceId: z.string().min(1),
-  fields: z.array(NotionMappingProfileField),
-});
-/** Persisted mapping profiles keyed by the Notion data-source id. */
-export const NotionMappingProfiles = z.record(z.string(), NotionMappingProfile);
-/** Mapping profile inferred from an existing database. */
-export type NotionMappingProfile = z.infer<typeof NotionMappingProfile>;
+export { NotionMappingProfile } from './notion-linked';
 
 /** An external integration's connection metadata (never the secret itself). */
 export const IntegrationConnection = z
@@ -194,6 +173,8 @@ export const ConnectorConfig = z
     notionMappingProfiles: NotionMappingProfiles.optional().describe(
       'Versioned field mappings inferred from linked Notion data sources. A `review` confidence value is not applied until Docket can resolve it safely.',
     ),
+    notionLinkedContentAccess: NotionLinkedContentAccess.optional(),
+    notionLinkedContentKept: NotionLinkedContentKept.optional(),
     pushNativeTasks: z
       .boolean()
       .optional()

@@ -123,13 +123,13 @@ export const MIRROR_FAILED_TITLE = 'The last update to Notion didn’t finish.';
 export const PAGE_CONTENT_PERMISSION_TITLE = 'Notion page content needs permission.';
 /** Why reconnecting is necessary while metadata sync keeps running. */
 export const PAGE_CONTENT_PERMISSION_DETAIL =
-  'Docket is still syncing properties, but it cannot read or replace some Task or Project bodies. Reconnect Notion to grant page-content access.';
+  'Docket is still syncing properties, but it cannot read or replace some page bodies. Reconnect Notion to grant page-content access.';
 
 /** The safe warning when Notion omitted blocks from its Markdown response. */
-export const PAGE_CONTENT_TRUNCATED_TITLE = 'Some Notion page content could not be read.';
-/** The outcome of a truncated Markdown response. */
+export const PAGE_CONTENT_TRUNCATED_TITLE = 'Some Notion page content was kept as it is.';
+/** The outcome of a truncated Markdown response, or of a page Notion would not let Docket replace. */
 export const PAGE_CONTENT_TRUNCATED_DETAIL =
-  'Docket kept the existing body unchanged. Unsupported Notion blocks are not copied or removed.';
+  'Those pages hold blocks or sub-pages Docket can’t copy or replace, so their bodies stay as they are. Everything else on them still syncs.';
 
 /** The follow-up line on the hub's broken-connection alert, beside {@link RECONNECT_ACTION}. */
 export const CONNECTION_ERROR_DETAIL =

@@ -46,6 +46,27 @@ export const ACTIVITY_PROVIDER_IDS = ['github', 'gmail'] as const;
 /** Activity-provider id value. */
 export type ActivityProviderId = (typeof ACTIVITY_PROVIDER_IDS)[number];
 
+/**
+ * Provider ids whose work import honors `ImportWorkInput.since` and returns only rows changed
+ * since that cursor.
+ *
+ * @remarks
+ * For these providers a linked task missing from an incremental read is unchanged at the provider,
+ * so the reconciler pushes its local edits. Every other provider returns its full read, where a
+ * missing task was filtered out or removed.
+ */
+export const INCREMENTAL_IMPORT_PROVIDER_IDS = ['notion'] as const;
+
+/**
+ * Whether a provider's work import returns only rows changed since the requested cursor.
+ *
+ * @param provider - The provider id to check.
+ * @returns true for providers listed in {@link INCREMENTAL_IMPORT_PROVIDER_IDS}.
+ */
+export function importsChangedRowsOnly(provider: string): boolean {
+  return (INCREMENTAL_IMPORT_PROVIDER_IDS as readonly string[]).includes(provider);
+}
+
 /** Provider ids shown in the Connections directory. */
 export const DIRECTORY_PROVIDER_IDS = [...CONNECTOR_PROVIDER_IDS] as const;
 /** Directory-provider id value. */

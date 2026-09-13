@@ -15,7 +15,7 @@ import type {
   listSyncConflicts as ListSyncConflicts,
   recordSyncConflict as RecordSyncConflict,
 } from '../../src/routes/sync-notion';
-import type { TaskSyncConflict } from '../../src/routes/integration-reconcile';
+import type { TaskSyncConflict } from '../../src/routes/integration-reconcile-plan';
 import { getDb, seedBaseOrg } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 

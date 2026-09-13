@@ -37,6 +37,7 @@ import {
   mapNotionPage,
   notionPageUrl,
   notionPlainText,
+  notesToWrite,
   notionPushProperties,
   readNotionSchema,
 } from './notion-mapping';
@@ -57,6 +58,12 @@ const NOTION_PAGE_SIZE = 100;
 const NOTION_HEADERS: Readonly<Record<string, string>> = {
   'Notion-Version': NOTION_API_VERSION,
 };
+
+/** Page-content write failures that leave a successful property write standing, by HTTP status. */
+const CONTENT_REFUSALS: ReadonlyMap<number, 'inaccessible' | 'rejected'> = new Map([
+  [403, 'inaccessible'],
+  [400, 'rejected'],
+]);
 
 /** The envelope every Notion list endpoint returns. */
 interface NotionListPayload {
@@ -213,15 +220,17 @@ export class NotionProviderClient implements WritableConnectorProviderClient {
    * A missing content capability is a degraded connection, not an empty description and not a
    * reason to stop the metadata sync that the same connection can still perform.
    */
-  private async pageMarkdown(pageId: string): Promise<string | undefined> {
+  private async pageMarkdown(pageId: string): Promise<PageMarkdown> {
     try {
       const payload = asRecord(
         await this.http.getJson(`/pages/${pageId}/markdown`, NOTION_HEADERS),
       );
-      if (payload?.['truncated'] === true) return undefined;
-      return typeof payload?.['markdown'] === 'string' ? payload['markdown'] : undefined;
+      if (payload?.['truncated'] === true) return { state: 'unavailable' };
+      return typeof payload?.['markdown'] === 'string'
+        ? { state: 'complete', markdown: payload['markdown'] }
+        : { state: 'unavailable' };
     } catch (error) {
-      if (isConnectorError(error) && error.status === 403) return undefined;
+      if (isConnectorError(error) && error.status === 403) return { state: 'unavailable' };
       throw error;
     }
   }
@@ -312,15 +321,25 @@ export class NotionProviderClient implements WritableConnectorProviderClient {
         const item = mapNotionPage(record, schema, importedAt);
         if (item === undefined) continue;
         const mapped = { ...item, notionMappingProfile: profile };
-        if (mapped.removed === true) {
-          items.push(mapped);
-          continue;
-        }
-        const markdown = await this.pageMarkdown(mapped.id);
-        items.push(markdown === undefined ? mapped : { ...mapped, body: markdown });
+        items.push(mapped.removed === true ? mapped : await this.withPageBody(mapped));
       }
     }
     return items;
+  }
+
+  /**
+   * Replace an imported row's body with its full Markdown page content.
+   *
+   * @remarks
+   * The Description property is a flattened, clipped copy at best. When the page body cannot be
+   * read in full, the item keeps that copy for a new task and is marked `bodyUnavailable`, so
+   * reconciliation keeps an existing task's description.
+   */
+  private async withPageBody(item: ImportedItem): Promise<ImportedItem> {
+    const content = await this.pageMarkdown(item.id);
+    return content.state === 'complete'
+      ? { ...item, body: content.markdown }
+      : { ...item, bodyUnavailable: true };
   }
 
   /**
@@ -377,44 +396,62 @@ export class NotionProviderClient implements WritableConnectorProviderClient {
     );
 
     const externalId = str(payload, 'id');
-    let externalUpdatedAt = str(payload, 'last_edited_time');
+    const externalUpdatedAt = str(payload, 'last_edited_time');
     if (externalId === undefined || externalUpdatedAt === undefined) {
       throw new ConnectorError('Notion accepted the write but returned no page anchor', {
         provider: 'notion',
         kind: 'provider',
       });
     }
-    if (op.notes !== undefined) {
-      try {
-        await this.http.patchJson(
-          `/pages/${externalId}/markdown`,
-          { type: 'replace_content', replace_content: { new_str: op.notes ?? '' } },
-          NOTION_HEADERS,
-        );
-        const page = asRecord(await this.http.getJson(`/pages/${externalId}`, NOTION_HEADERS));
-        externalUpdatedAt = str(page, 'last_edited_time');
-        if (externalUpdatedAt === undefined) {
-          throw new ConnectorError('Notion content update returned no page anchor', {
-            provider: 'notion',
-            kind: 'provider',
-          });
-        }
-      } catch (error) {
-        // A grant without content access still has property access. Keep that sync healthy rather
-        // than reclassifying the unchanged metadata as a failed write.
-        if (!(isConnectorError(error) && error.status === 403)) throw error;
-      }
+    const notes = notesToWrite(op);
+    // A new page is already empty, so an empty description needs no content write.
+    if (notes === undefined || (op.kind === 'create' && (notes ?? '') === '')) {
+      return { externalId, externalUpdatedAt };
     }
-    const anchor = externalUpdatedAt;
-    if (anchor === undefined) {
+    return this.writePageMarkdown(externalId, notes ?? '', externalUpdatedAt);
+  }
+
+  /**
+   * Replace a page's content with Markdown and return the anchor Notion reports afterwards.
+   *
+   * @remarks
+   * A connection without content access can still edit properties. That write already landed, so
+   * a 403 here returns the property anchor with `contentState: 'inaccessible'` for the sync run to
+   * report, rather than failing the whole write or claiming the content was written. A 400 is
+   * Notion declining to replace this page's content as it stands (for example, it holds sub-pages
+   * that `replace_content` will not delete); the page is left as it is and reported `rejected`.
+   */
+  private async writePageMarkdown(
+    externalId: string,
+    markdown: string,
+    propertyAnchor: string,
+  ): Promise<ExternalWriteResult> {
+    try {
+      await this.http.patchJson(
+        `/pages/${externalId}/markdown`,
+        { type: 'replace_content', replace_content: { new_str: markdown } },
+        NOTION_HEADERS,
+      );
+    } catch (error) {
+      const refused = isConnectorError(error) ? CONTENT_REFUSALS.get(error.status ?? 0) : undefined;
+      if (refused === undefined) throw error;
+      return { externalId, externalUpdatedAt: propertyAnchor, contentState: refused };
+    }
+    const page = asRecord(await this.http.getJson(`/pages/${externalId}`, NOTION_HEADERS));
+    const externalUpdatedAt = str(page, 'last_edited_time');
+    if (externalUpdatedAt === undefined) {
       throw new ConnectorError('Notion content update returned no page anchor', {
         provider: 'notion',
         kind: 'provider',
       });
     }
-    return { externalId, externalUpdatedAt: anchor };
+    return { externalId, externalUpdatedAt, contentState: 'written' };
   }
 }
+
+/** The outcome of reading one page's Markdown body. */
+type PageMarkdown =
+  { readonly state: 'complete'; readonly markdown: string } | { readonly state: 'unavailable' };
 
 /** Narrow a client to the Notion one (used by the connector's structural capability tests). */
 export function isNotionProviderClient(

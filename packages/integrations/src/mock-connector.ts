@@ -10,6 +10,7 @@
  */
 import {
   PROVIDER_CATALOG,
+  importsChangedRowsOnly,
   providerSourceSystem,
 } from '@docket/connections/provider-catalog-contract';
 
@@ -43,6 +44,7 @@ import type {
   WritableConnector,
 } from './connector';
 import { WRITE_BACK_CAPABLE_PROVIDERS } from './connector';
+import { notesToWrite } from './notion-mapping';
 import type {
   FetchThreadInput,
   ListThreadsInput,
@@ -151,7 +153,14 @@ export class MockConnector implements Connector {
 
   /** {@inheritDoc Connector.importWork} */
   async importWork(input: ImportWorkInput): Promise<ImportedItem[]> {
-    return [...CONNECTOR_ITEMS[input.provider]];
+    const items = CONNECTOR_ITEMS[input.provider];
+    if (input.since === undefined || !importsChangedRowsOnly(input.provider)) return [...items];
+    // Providers that honor `since` return only rows changed at or after it, like the real client.
+    const since = Date.parse(input.since);
+    return items.filter((item) => {
+      const updated = item.provenance.externalUpdatedAt;
+      return updated !== undefined && Date.parse(updated) >= since;
+    });
   }
 
   /** {@inheritDoc Connector.mirrorStatus} */
@@ -208,6 +217,10 @@ export class MockConnector implements Connector {
       externalId: op.kind === 'create' ? this.nextId('gtask') : op.externalId,
       externalUpdatedAt: stamp,
       externalEtag: `etag_${this.counter.toString().padStart(6, '0')}`,
+      // Notion stores long-form content apart from its properties and reports what happened to it.
+      ...(this.provider === 'notion' && notesToWrite(op) !== undefined
+        ? { contentState: 'written' as const }
+        : {}),
     };
   }
 

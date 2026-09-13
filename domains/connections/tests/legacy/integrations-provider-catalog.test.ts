@@ -5,6 +5,7 @@ import {
   DIRECTORY_PROVIDER_IDS,
   WEBHOOK_PROVIDER_IDS,
   connectorIdentityProvider,
+  importsChangedRowsOnly,
   providerSourceSystem,
   sourceIdentityProvider,
 } from '../../src/contracts/provider-catalog';
@@ -22,6 +23,11 @@ describe('provider catalog', () => {
     ]);
     expect(DIRECTORY_PROVIDER_IDS).toEqual([...CONNECTOR_PROVIDER_IDS]);
     expect(WEBHOOK_PROVIDER_IDS).toEqual(['github', 'linear', 'notion']);
+  });
+
+  test('identifies the providers whose import returns only rows changed since a cursor', () => {
+    expect(CONNECTOR_PROVIDER_IDS.filter((id) => importsChangedRowsOnly(id))).toEqual(['notion']);
+    expect(importsChangedRowsOnly('not-a-provider')).toBe(false);
   });
 
   test('lets a provider observe webhooks without emitting activity events', () => {

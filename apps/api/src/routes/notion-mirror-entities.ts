@@ -37,11 +37,18 @@ import { defaultCycleName } from '@docket/work/cycle-contract';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { setTaskState } from '../lib/task-state';
-import { landingStatus, loadStatusSets, type ResolvedStatus } from '../lib/work-status';
+import { landingStatus } from '../lib/work-status';
 import { enqueueSearchUpsert } from '../search/write-through';
 
 import { resolveImportTeam } from './integration-import';
 import type { IntegrationRow } from './integration-provider';
+import {
+  pulledDate,
+  pulledEnumOption,
+  pulledNumber,
+  pulledProjectStatus,
+  pulledText,
+} from './notion-mirror-pulled-values';
 
 /** One Docket record, ready to resolve and then project. */
 export interface MirrorEntityRecord {
@@ -162,6 +169,26 @@ async function actorNames(orgId: string): Promise<Map<string, string>> {
   return new Map(rows.map((row) => [row.id, row.displayName]));
 }
 
+/** A person-valued field's values, keyed by field and by its native-Notion companion. */
+type PersonFields = (field: string, id: string | null) => Record<string, MirrorSourceValue>;
+
+/**
+ * Build the writer for person-valued fields, resolving display names from one lookup.
+ *
+ * @param names - Actor id to display name.
+ * @returns a function emitting one person as both its own column and its native-Notion companion.
+ */
+function personFieldsFor(names: ReadonlyMap<string, string>): PersonFields {
+  return (field, id) => {
+    const actorRef: MirrorSourceValue = {
+      kind: 'actor',
+      actorId: id,
+      displayName: id === null ? null : (names.get(id) ?? null),
+    };
+    return { [field]: actorRef, [personCompanionKey(field)]: actorRef };
+  };
+}
+
 /**
  * Load every projectable record for one entity, with its values.
  *
@@ -186,16 +213,7 @@ export async function loadEntityRows(
   integrationId: string,
   entity: NotionMirrorEntity,
 ): Promise<MirrorEntityRecord[]> {
-  const names = await actorNames(orgId);
-  /** One person-valued field, as both its own column and its native-Notion companion. */
-  const personFields = (field: string, id: string | null): Record<string, MirrorSourceValue> => {
-    const actorRef: MirrorSourceValue = {
-      kind: 'actor',
-      actorId: id,
-      displayName: id === null ? null : (names.get(id) ?? null),
-    };
-    return { [field]: actorRef, [personCompanionKey(field)]: actorRef };
-  };
+  const personFields = personFieldsFor(await actorNames(orgId));
 
   switch (entity) {
     case 'task': {
@@ -262,6 +280,7 @@ export async function loadEntityRows(
           targetDate: date(row.targetDate),
           startDate: date(row.startDate),
           summary: text(row.summary),
+          description: text(row.description),
           program: ref('program', row.programId),
           team: ref('team', row.teamId),
           initiatives: refs('initiative', initiativesByProject.get(row.id) ?? []),
@@ -303,6 +322,7 @@ export async function loadEntityRows(
           targetDate: date(row.targetDate),
           updateCadence: option(row.updateCadence),
           summary: text(row.summary),
+          description: text(row.description),
           projects: refs('project', projectsByInitiative.get(row.id) ?? []),
           programs: refs('program', programsByInitiative.get(row.id) ?? []),
           docketUrl: docketUrl(orgId, `initiatives/${row.id}`),
@@ -337,6 +357,7 @@ export async function loadEntityRows(
           health: option(row.health),
           ...personFields('owner', row.ownerId),
           summary: text(row.summary),
+          description: text(row.description),
           projects: refs('project', projectsByProgram.get(row.id) ?? []),
           docketUrl: docketUrl(orgId, `programs/${row.id}`),
         },
@@ -475,86 +496,6 @@ export async function loadEntityRows(
   }
 }
 
-/** Read a `text`-kind value, or undefined when the value is absent or a different kind. */
-function pulledText(
-  values: Readonly<Record<string, MirrorValue>>,
-  field: string,
-): string | undefined {
-  const value = values[field];
-  if (value?.kind !== 'text') return undefined;
-  return value.value ?? '';
-}
-
-/** Read a `date`-kind value as a `Date`, or undefined when the value is absent or a different kind. */
-function pulledDate(
-  values: Readonly<Record<string, MirrorValue>>,
-  field: string,
-): Date | null | undefined {
-  const value = values[field];
-  if (value?.kind !== 'date') return undefined;
-  return value.value === null ? null : new Date(value.value);
-}
-
-/** Read a `number`-kind value, or undefined when the value is absent or a different kind. */
-function pulledNumber(
-  values: Readonly<Record<string, MirrorValue>>,
-  field: string,
-): number | null | undefined {
-  const value = values[field];
-  if (value?.kind !== 'number') return undefined;
-  return value.value;
-}
-
-/**
- * Read an `option`-kind value, but only when it exactly matches one of Docket's own enum values.
- *
- * @remarks
- * A Notion select is free text, edited by whoever has access to the page. Docket's `priority`/
- * `status`/`health` columns are not — writing an unrecognized option name would either fail the
- * query or, worse, succeed with a value the rest of the product does not know how to render. An
- * unrecognized option is treated as "not read", the same as an absent property: the column keeps
- * whatever Docket already had, rather than being cleared or corrupted by a rename in Notion.
- */
-function pulledEnumOption<T extends string>(
-  values: Readonly<Record<string, MirrorValue>>,
-  field: string,
-  allowed: readonly T[],
-): T | undefined {
-  const value = values[field];
-  if (value?.kind !== 'option' || value.value === null) return undefined;
-  return (allowed as readonly string[]).includes(value.value) ? (value.value as T) : undefined;
-}
-
-/**
- * Read the `status` property as one of the workspace's own Project statuses.
- *
- * @remarks
- * A Project's status is workspace-defined rather than a fixed enum, so the pulled option is
- * matched against the workspace's Project set by key or display name, case-insensitively — the
- * same two spellings the write routes accept. An option naming no status in the set is treated as
- * "not read", exactly like an unrecognized `priority`/`health` option: the column keeps whatever
- * Docket already had.
- *
- * Returning the whole status is what lets the caller write the `status` key and the `status_id`
- * the composite foreign key holds it to, from one answer.
- *
- * @param orgId - The tenant whose Project set the option is read against.
- * @param values - Field values read from Notion, keyed by the catalog's field keys.
- * @returns the named status, or undefined when the property is absent, empty, or unrecognized.
- */
-async function pulledProjectStatus(
-  orgId: string,
-  values: Readonly<Record<string, MirrorValue>>,
-): Promise<ResolvedStatus | undefined> {
-  const value = values['status'];
-  if (value?.kind !== 'option' || value.value === null) return undefined;
-  const needle = value.value.trim().toLowerCase();
-  const sets = await loadStatusSets(orgId, { entityTypes: ['project'] });
-  return sets
-    .for('project')
-    .find((status) => status.key.toLowerCase() === needle || status.name.toLowerCase() === needle);
-}
-
 /**
  * Apply Notion-sourced field values onto an existing two-way entity.
  *
@@ -666,6 +607,7 @@ async function applyPulledProject(
 ): Promise<boolean> {
   const name = pulledText(values, 'name');
   const summary = pulledText(values, 'summary');
+  const description = pulledText(values, 'description');
   const targetDate = pulledDate(values, 'targetDate');
   const startDate = pulledDate(values, 'startDate');
   const status = await pulledProjectStatus(orgId, values);
@@ -674,6 +616,9 @@ async function applyPulledProject(
   const patch = {
     ...(name !== undefined ? { name: name.length > 0 ? name : 'Untitled' } : {}),
     ...(summary !== undefined ? { summary: summary.length > 0 ? summary : null } : {}),
+    ...(description !== undefined
+      ? { description: description.length > 0 ? description : null }
+      : {}),
     ...(targetDate !== undefined ? { targetDate } : {}),
     ...(startDate !== undefined ? { startDate } : {}),
     ...(status !== undefined ? { status: status.key, statusId: status.id } : {}),
@@ -788,6 +733,7 @@ async function adoptProject(
 
   const name = pulledText(values, 'name');
   const summary = pulledText(values, 'summary');
+  const description = pulledText(values, 'description');
   const targetDate = pulledDate(values, 'targetDate');
   const startDate = pulledDate(values, 'startDate');
   const status =
@@ -801,6 +747,7 @@ async function adoptProject(
       teamId,
       name: name !== undefined && name.length > 0 ? name : 'Untitled',
       summary: summary !== undefined && summary.length > 0 ? summary : null,
+      description: description !== undefined && description.length > 0 ? description : null,
       ...(targetDate !== undefined ? { targetDate } : {}),
       ...(startDate !== undefined ? { startDate } : {}),
       status: status.key,

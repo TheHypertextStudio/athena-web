@@ -11,20 +11,8 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import { MockNotionMirror } from '@docket/connections/notion/adapters/in-memory';
-import type {
-  MirrorChange,
-  MirrorCreatedRow,
-  MirrorDatabaseSpec,
-  MirrorExternalPerson,
-  MirrorParentPage,
-  MirrorParentPageList,
-  MirrorRowOp,
-  MirrorRowResult,
-  NotionMirrorPort,
-  ProvisionedMirrorDatabase,
-} from '@docket/connections/notion/mirror-port';
+import type { MirrorDatabaseSpec } from '@docket/connections/notion/mirror-port';
 import { ConnectorError } from '@docket/integrations';
-import { ProviderError } from '@docket/connections/provider-error';
 import { MIRROR_ENTITY_ORDER, orderedColumns } from '@docket/connections/notion/mirror-schema';
 import {
   projectRow,
@@ -34,8 +22,8 @@ import {
 
 import * as container from '../../src/container';
 import { loadEntityRows } from '../../src/routes/notion-mirror-entities';
-import { ensureDesigns, type MirrorDatabaseRow } from '../../src/routes/notion-mirror-design';
 import { wakeNotionMirror } from '../../src/routes/notion-mirror-wake';
+import { mirrorContentHash } from '../../src/routes/notion-mirror-body';
 import {
   projectEntity,
   provisionMirror,
@@ -43,28 +31,10 @@ import {
   recoverCreationIntents,
   runNotionMirrorSync,
   sweepNotionMirror,
-  type MirrorContext,
 } from '../../src/routes/notion-mirror-reconcile';
-import { clearDocketPro, getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { clearDocketPro, getDb, one } from '../support/routes-harness';
+import { NO_PAGES, findDesign, seedMirror } from '../support/notion-recording-mirror';
 import { assertDefined } from '@docket/test-utils';
-
-/**
- * A pass that knows nothing: nobody matched, and no entity projected yet.
- *
- * @remarks
- * The default for cases that are not about references. Every entity carries an entry so a missing
- * page reads as "not written yet" (deferred) rather than "will never exist" — the state a first
- * pass is genuinely in.
- */
-const NO_PAGES: MirrorReferences = {
-  notionUserByActor: new Map<string, string>(),
-  pages: new Map(
-    MIRROR_ENTITY_ORDER.map((entity) => [
-      entity,
-      { pageByEntityId: new Map<string, string>(), settled: false },
-    ]),
-  ),
-};
 
 /** A pass whose People database holds one page, for the person-relation cases. */
 function withPersonPage(actorId: string, pageId: string): MirrorReferences {
@@ -80,176 +50,6 @@ beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
 });
-
-class RecordingMirror implements NotionMirrorPort {
-  readonly writes: MirrorRowOp[] = [];
-  readonly provisions: MirrorDatabaseSpec[] = [];
-  readonly schemaUpdates: MirrorDatabaseSpec[] = [];
-  changes: MirrorChange[] = [];
-  omitWriteResults = false;
-  includeProvisionUrl = true;
-  failProvisionAfterCreate = false;
-  failRowAfterCreate = false;
-  readonly createdRows: MirrorCreatedRow[] = [];
-  readonly ownedDatabases = new Map<string, ProvisionedMirrorDatabase[]>();
-  readonly pageContentWrites: { pageId: string; markdown: string }[] = [];
-  readonly pageContents = new Map<string, string>();
-  private sequence = 0;
-
-  botId(): Promise<string> {
-    return Promise.resolve('notion-bot');
-  }
-
-  listParentPages(): Promise<MirrorParentPageList> {
-    return Promise.resolve({ items: [{ id: 'parent-1', title: 'Workspace' }], nextCursor: null });
-  }
-
-  describePage(pageId: string): Promise<MirrorParentPage> {
-    return Promise.resolve({ id: pageId, title: 'Workspace' });
-  }
-
-  listWorkspaceUsers(): Promise<MirrorExternalPerson[]> {
-    return Promise.resolve([]);
-  }
-
-  provisionDatabase(spec: MirrorDatabaseSpec): Promise<ProvisionedMirrorDatabase> {
-    this.sequence += 1;
-    this.provisions.push(spec);
-    const suffix = String(this.sequence);
-    const provisioned = {
-      externalDatabaseId: `db-${suffix}`,
-      externalDataSourceId: `ds-${suffix}`,
-      ...(this.includeProvisionUrl ? { url: `https://notion.example/db-${suffix}` } : {}),
-      propertyIds: Object.fromEntries(
-        spec.columns.map((column) => [column.field, `property-${suffix}-${column.field}`]),
-      ),
-    };
-    this.ownedDatabases.set(spec.entityType, [provisioned]);
-    if (this.failProvisionAfterCreate) {
-      return Promise.reject(new Error('connection lost after Notion created the database'));
-    }
-    return Promise.resolve(provisioned);
-  }
-
-  findProvisionedDatabases(spec: MirrorDatabaseSpec): Promise<ProvisionedMirrorDatabase[]> {
-    return Promise.resolve(this.ownedDatabases.get(spec.entityType) ?? []);
-  }
-
-  /** Data sources deleted at the provider, which answer `object_not_found` from then on. */
-  readonly missingDataSources = new Set<string>();
-
-  /** Delete a data source. */
-  deleteDataSource(dataSourceId: string): void {
-    this.missingDataSources.add(dataSourceId);
-  }
-
-  updateDatabaseSchema(
-    dataSourceId: string,
-    spec: MirrorDatabaseSpec,
-  ): Promise<{ propertyIds: Record<string, string> }> {
-    if (this.missingDataSources.has(dataSourceId)) {
-      return Promise.reject(
-        new ProviderError(`Notion schema update for "${spec.title}" failed (object_not_found)`, {
-          provider: 'notion',
-          kind: 'provider',
-          status: 404,
-        }),
-      );
-    }
-    this.schemaUpdates.push(spec);
-    return Promise.resolve({
-      propertyIds: Object.fromEntries(
-        spec.columns.map((column) => [column.field, `property-${dataSourceId}-${column.field}`]),
-      ),
-    });
-  }
-
-  queryCreatedRows(_dataSourceId: string, _since: string): Promise<MirrorCreatedRow[]> {
-    return Promise.resolve(this.createdRows);
-  }
-
-  readPageContent(
-    pageId: string,
-  ): Promise<{ markdown: string; state: 'complete'; unknownBlockIds: string[] }> {
-    return Promise.resolve({
-      markdown: this.pageContents.get(pageId) ?? '',
-      state: 'complete',
-      unknownBlockIds: [],
-    });
-  }
-
-  writePageContent(
-    pageId: string,
-    markdown: string,
-  ): Promise<{ markdown: string; state: 'complete'; unknownBlockIds: string[] }> {
-    this.pageContentWrites.push({ pageId, markdown });
-    this.pageContents.set(pageId, markdown);
-    return Promise.resolve({ markdown, state: 'complete', unknownBlockIds: [] });
-  }
-
-  writeRow(op: MirrorRowOp): Promise<MirrorRowResult | undefined> {
-    this.sequence += 1;
-    this.writes.push(op);
-    if (op.kind === 'delete') return Promise.resolve(undefined);
-    if (this.omitWriteResults) return Promise.resolve(undefined);
-    const result = {
-      externalPageId: op.externalPageId ?? `page-${String(this.sequence)}`,
-      externalUpdatedAt: `2026-08-${String(10 + this.sequence).padStart(2, '0')}T12:00:00.000Z`,
-    };
-    if (op.kind === 'create') {
-      this.createdRows.push({
-        ...result,
-        externalCreatedAt: result.externalUpdatedAt,
-        createdBy: 'notion-bot',
-      });
-      if (this.failRowAfterCreate) {
-        return Promise.reject(new Error('connection lost after Notion created the page'));
-      }
-    }
-    return Promise.resolve(result);
-  }
-
-  queryChanges(_dataSourceId: string, _since?: string): Promise<MirrorChange[]> {
-    return Promise.resolve(this.changes);
-  }
-}
-
-async function seedMirror() {
-  const base = await seedBaseOrg(db, schema);
-  const integration = one(
-    await db
-      .insert(schema.integration)
-      .values({
-        organizationId: base.orgId,
-        provider: 'notion',
-        pattern: 'connector',
-        status: 'connected',
-        createdBy: base.humanActorId,
-        config: { notionMirror: { containerPageId: 'parent-1' } },
-      })
-      .returning(),
-  );
-  const designs = await ensureDesigns(base.orgId, integration.id, base.humanActorId);
-  const mirror = new RecordingMirror();
-  const ctx: MirrorContext = {
-    orgId: base.orgId,
-    integrationId: integration.id,
-    integrationRow: integration,
-    actorId: base.humanActorId,
-    mirror,
-    now: new Date('2026-08-10T12:00:00.000Z'),
-  };
-  return { ...base, integration, designs, mirror, ctx };
-}
-
-function findDesign(
-  designs: readonly MirrorDatabaseRow[],
-  entity: MirrorDatabaseRow['entityType'],
-) {
-  const design = designs.find((candidate) => candidate.entityType === entity);
-  if (!design) throw new Error(`${entity} design was not seeded`);
-  return design;
-}
 
 describe('Notion mirror reconciliation', () => {
   it('does not capture or call Notion after integrations access ends', async () => {
@@ -762,7 +562,14 @@ describe('Notion mirror reconciliation', () => {
     };
     await db
       .update(schema.notionMirrorRow)
-      .set({ contentHash: projectionFor(pullTask.id).contentHash })
+      .set({
+        contentHash: mirrorContentHash(
+          'task',
+          bindings,
+          assertDefined(records.find((candidate) => candidate.entityId === pullTask.id)),
+          NO_PAGES,
+        ),
+      })
       .where(eq(schema.notionMirrorRow.externalPageId, 'page-pull'));
     mirror.changes = [
       {

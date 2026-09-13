@@ -464,6 +464,10 @@ export const task = pgTable(
     externalEtag: text('external_etag'),
     externalListId: text('external_list_id'),
     lastPushedAt: timestamp('last_pushed_at'),
+    // Hash of the description as of the last sync that read or wrote the provider's copy of it.
+    // A push rewrites the provider's long-form content only when the description has changed
+    // since, so a body Docket never held in full is not replaced by a stale local copy.
+    externalBodyHash: text('external_body_hash'),
     completedAt: timestamp('completed_at'),
     canceledAt: timestamp('canceled_at'),
     autoCompletedBySubtasks: boolean('auto_completed_by_subtasks').notNull().default(false),

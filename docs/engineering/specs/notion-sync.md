@@ -4,7 +4,8 @@
 > Docket-wins conflict resolution + the incremental `last_edited_time` cursor, §4/§8.9).
 > **Docket-designed databases** provision, project, pull Notion edits back onto Task/Project
 > (including `task.state`, via `setTaskState`), and adopt Notion-created rows as new tasks/projects
-> — all under the shared sync lease, driven by webhooks with polling as the safety net.
+> — all under the shared sync lease, driven by webhooks with polling as the safety net. Both modes
+> carry descriptions as Notion page bodies (§9).
 > **Ownership**: The generic linked-database connector remains in
 > `@docket/integrations` (`packages/integrations/src/notion*.ts`). The Docket-designed mirror's
 > contracts, rules, port, and adapters live under
@@ -651,3 +652,72 @@ path (`integration-sync.ts`) passes `ImportWorkInput.since` on every non-full sy
 `NotionProviderClient.queryDataSource` (`notion.ts`) filters both the live and trashed queries to
 `last_edited_time.on_or_after` it — the same full-vs-incremental policy the work-graph branch
 already used, now shared by the flat path so Notion stops re-reading every row on every sweep.
+
+An incremental read returns only rows Notion reports changed, so a linked task edited in Docket
+whose Notion row nobody touched is absent from it. `INCREMENTAL_IMPORT_PROVIDER_IDS`
+(`provider-catalog.ts`) lists the providers whose import honors `since`; for those,
+`reconcileTasks` receives `readChangedOnly: true` on a non-full pass and `planTaskReconcile` pushes
+a dirty task whose row is absent, provided the task's database is one the pass read. Such a push
+carries no conflict, because Notion reported no edit in the lookback window. Providers that return
+their full read keep the absence rule from §4: only a local cancel escapes it.
+
+---
+
+## 9. Page bodies
+
+A record's long-form description is Markdown in Docket (`task.description`, `project.description`,
+`initiative.description`, `program.description`, `milestone.description`). In Notion it is the page
+body, read with `GET /v1/pages/{id}/markdown` and written with `PATCH /v1/pages/{id}/markdown`
+using `replace_content`.
+
+### 9.1 Linked databases
+
+- **Push.** `NotionProviderClient.pushTask` writes properties, then replaces the page body with the
+  task's description. A new page with an empty description gets no content write. A 403 on the
+  body write keeps the property write and returns `contentState: 'inaccessible'`. `reconcileTasks`
+  counts it and leaves the task one millisecond dirty, so each pass sends the body again until it
+  lands. `runSync` records `config.notionLinkedContentAccess: 'missing'`, merged into the stored
+  config in one statement, so Connections asks for page-content access; a pass that writes a body
+  records `'granted'`.
+- **Body anchor.** `task.external_body_hash` holds the hash of the description as of the last sync
+  of Notion's copy: set on insert, on a pull (to the pulled body, or to the local description when
+  the body could not be read in full), and on a push whose body landed. A push marks the notes
+  `notesUnchanged` when the description still matches it, and the client then leaves the page body
+  and Description property alone. A title edit on a page Docket only read in part therefore cannot
+  replace that page.
+- **Refused replacement.** A 400 on the body write (Notion will not replace content that holds
+  sub-pages or databases) keeps the property write and returns `contentState: 'rejected'`. The
+  task stays clean with its old body anchor, so the next edit tries again, and `runSync` records
+  `config.notionLinkedContentKept: true` for Connections to mention.
+- **Absent rows.** A dirty task pushed because its row was absent from an incremental read, whose
+  page Notion answers with 404 (unshared or deleted), is skipped without failing the run.
+- **Description property.** When the database has a Description-like `rich_text` property, it also
+  receives the description, split into 2,000-character segments (at most 100, Notion's limits) on
+  code-point boundaries. The page body always carries the full text.
+- **Pull.** A complete Markdown read becomes `ImportedItem.body`. A truncated read or a 403 sets
+  `ImportedItem.bodyUnavailable` and keeps the Description property as `body`: a new task starts
+  from it, and `applyPull` leaves an existing task's description unchanged.
+
+### 9.2 Docket-designed databases
+
+- **Which field.** `MirrorEntitySpec.bodyField` (`mirror-schema/catalog.ts`) names the body field:
+  `description` for tasks, projects, initiatives, programs and milestones. Teams, cycles, labels
+  and people have none. Summaries stay property columns.
+- **Hashes.** A mirror row's `contentHash` covers projected properties and the body together
+  (`recordSyncState` in `notion-mirror-body.ts`). Projection, pull-back planning, adoption and the
+  post-pull restamp all use it, so a Notion-side body edit on an unchanged record plans as a `pull`
+  and is applied without a write back to Notion.
+- **Push.** An empty body is written only over a body Docket wrote before (the row has a
+  `bodyHash`). New pages and pages mirrored before page-body sync keep whatever Notion holds when
+  the description is empty. A body refused with a 403 is retried on later passes. A 400 (Notion
+  will not replace the content as it stands) records the row `truncated`, and a truncated page is
+  left alone until the next edit.
+- **Pull.** A complete body replaces the body field. A truncated or inaccessible body removes the
+  field from the pulled values, so a legacy Description column never overwrites the full
+  description. On a contested edit of a two-way entity, a remote-only body change is merged and the
+  conflict log entry is written for tasks. Drift on a projection-only entity is reverted without
+  reading its body.
+- **Adoption.** A row created in Notion is adopted with its page body as the description, or with
+  its Description column when the body cannot be read in full.
+- **Status.** `contentStateForRows` reports `complete`, `truncated` or `inaccessible` for every
+  entity with a body field, and `not_applicable` for the rest.

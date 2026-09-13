@@ -62,6 +62,7 @@ import {
 import { NotionConnectAction } from './notion-connect-action';
 import { NotionSetupCard } from './notion-setup-card';
 import {
+  type NotionMirrorModel,
   useNotionMirror,
   useNotionMirrorSync,
   useNotionPeople,
@@ -129,6 +130,18 @@ function DatabaseRow({
   );
 }
 
+/** Whether any Notion sync on this connection was refused permission to read or write page bodies. */
+function pageContentNeedsPermission(model: NotionMirrorModel): boolean {
+  if (model.linkedContent.needsPermission) return true;
+  return model.databases.some((database) => database.content.state === 'inaccessible');
+}
+
+/** Whether any Notion sync on this connection left page bodies as they are. */
+function pageContentKeptAsIs(model: NotionMirrorModel): boolean {
+  if (model.linkedContent.keptAsIs) return true;
+  return model.databases.some((database) => database.content.state === 'truncated');
+}
+
 /** The Docket-in-Notion hub. */
 export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps): JSX.Element {
   const model = useNotionMirror(orgId);
@@ -180,12 +193,8 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
   // A mirror that failed while the credential still works. Suppressed when the connection itself
   // is broken, because then the alert above already says the true, more actionable thing.
   const mirrorBroken = !connectionBroken && health.lastRun === 'failed';
-  const contentNeedsPermission = model.databases.some(
-    (database) => database.content.state === 'inaccessible',
-  );
-  const contentTruncated = model.databases.some(
-    (database) => database.content.state === 'truncated',
-  );
+  const contentNeedsPermission = pageContentNeedsPermission(model);
+  const contentTruncated = pageContentKeptAsIs(model);
   const mappingsNeedingReview = model.mappingProfiles.flatMap((profile) =>
     profile.fields
       .filter((field) => field.confidence === 'review')

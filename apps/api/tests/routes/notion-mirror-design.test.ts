@@ -61,10 +61,21 @@ describe('Notion mirror designs', () => {
         { bodyState: 'inaccessible', bodyUnknownBlockIds: [] },
       ]),
     ).toEqual({ state: 'inaccessible', unknownBlockCount: 1 });
-    expect(contentStateForRows('initiative', [])).toEqual({
+    expect(contentStateForRows('team', [])).toEqual({
       state: 'not_applicable',
       unknownBlockCount: 0,
     });
+  });
+
+  it('reports body-content state for every entity whose pages carry a description', () => {
+    for (const entity of ['project', 'initiative', 'program', 'milestone'] as const) {
+      expect(
+        contentStateForRows(entity, [{ bodyState: 'truncated', bodyUnknownBlockIds: ['b'] }]),
+      ).toEqual({ state: 'truncated', unknownBlockCount: 1 });
+    }
+    for (const entity of ['team', 'cycle', 'label', 'person'] as const) {
+      expect(contentStateForRows(entity, []).state).toBe('not_applicable');
+    }
   });
 
   it('seeds every catalog entity once, in designer order, using workspace vocabulary', async () => {

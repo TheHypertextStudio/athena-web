@@ -22,13 +22,14 @@ import {
   providerErrorKind,
   type ProviderErrorKind,
 } from '@docket/connections/provider-error';
+import { importsChangedRowsOnly } from '@docket/connections/provider-catalog-contract';
 import type { ConnectorProvider } from '@docket/integrations';
 import {
   MAIL_CAPABLE_PROVIDERS,
   type ImportedItem,
   type NotionMappingProfile,
 } from '@docket/integrations';
-import { and, eq, inArray, isNotNull, isNull, lt, notInArray, or } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import { resolveProductCapability } from '@docket/billing/application/entitlement';
 
@@ -40,7 +41,7 @@ import {
   resolveConnectorToken,
 } from './integration-provider';
 import { resolveImportTeam } from './integration-import';
-import { reconcileTasks } from './integration-reconcile';
+import { type ReconcileResult, reconcileTasks } from './integration-reconcile';
 import { reconcileWorkGraph } from './integration-reconcile-graph';
 
 /** The selected `sync_run` row shape. */
@@ -126,6 +127,69 @@ async function persistInferredNotionMappings(
     .update(integration)
     .set({ config: { ...row.config, notionMappingProfiles } })
     .where(eq(integration.id, row.id));
+}
+
+/**
+ * Whether this pass's import returns only rows the provider reports changed.
+ *
+ * @param provider - The provider being synced.
+ * @param full - Whether the pass is a full read, which never passes `since`.
+ * @returns true for an incremental read from a provider that honors `since`.
+ */
+function readsChangedRowsOnly(provider: ConnectorProvider, full: boolean): boolean {
+  return !full && importsChangedRowsOnly(provider);
+}
+
+/** What a sync pass's pushes reported about linked page content. */
+type LinkedContentTally = Pick<
+  ReconcileResult,
+  'contentWritten' | 'contentInaccessible' | 'contentRejected'
+>;
+
+/**
+ * The connector-config keys a pass's page-content outcomes set.
+ *
+ * @remarks
+ * `notionLinkedContentAccess` is `missing` when any body was refused for lack of access. A body
+ * Notion wrote or declined to replace proves access, so it records `granted` otherwise.
+ * `notionLinkedContentKept` is only knowable when access worked, so it is set only then.
+ *
+ * @returns the keys to merge, empty when the pass pushed no page content.
+ */
+function linkedContentConfig(tally: LinkedContentTally): Record<string, string | boolean> {
+  const reached = tally.contentWritten + tally.contentRejected;
+  if (reached === 0 && tally.contentInaccessible === 0) return {};
+  return {
+    notionLinkedContentAccess: tally.contentInaccessible > 0 ? 'missing' : 'granted',
+    ...(reached > 0 ? { notionLinkedContentKept: tally.contentRejected > 0 } : {}),
+  };
+}
+
+/**
+ * Record what linked Notion databases did with page content on this pass.
+ *
+ * @remarks
+ * A connection without content access, or a page Notion will not replace, still syncs properties,
+ * so the run itself succeeds. These flags are what let Connections say so instead of showing a
+ * healthy sync while page bodies go nowhere. A pass that pushed no page content leaves the last
+ * answer in place. The keys are merged into the stored config in one statement, so a settings
+ * change saved while the pass ran is kept, and a row that already holds the answer is not written.
+ *
+ * @param row - The integration that was synced.
+ * @param tally - What the pass's pushes reported about page content.
+ */
+export async function persistLinkedContentAccess(
+  row: IntegrationRow,
+  tally: LinkedContentTally,
+): Promise<void> {
+  if (row.provider !== 'notion') return;
+  const keys = linkedContentConfig(tally);
+  if (Object.keys(keys).length === 0) return;
+  const patch = JSON.stringify(keys);
+  await db
+    .update(integration)
+    .set({ config: sql`${integration.config} || ${patch}::jsonb` })
+    .where(and(eq(integration.id, row.id), sql`not (${integration.config} @> ${patch}::jsonb)`));
 }
 
 /**
@@ -455,9 +519,8 @@ export async function runSync(
     // one is stale, or a manual trigger all force a complete re-read. `since` is advisory — most
     // flat connectors have no incremental-read support and simply ignore it (see `ImportWorkInput`
     // .since's own doc comment); the ones that do (Notion) stop re-reading every row on every
-    // sweep. An absent row from an incremental read is unchanged, never gone — `reconcileTasks`
-    // already treats "not in this batch" that way for local-only tasks, so nothing there needed to
-    // change for this to be safe.
+    // sweep. An absent row from an incremental read is unchanged, never gone, so `reconcileTasks`
+    // pushes local edits to it for providers that honor `since`.
     const flatLastSyncedAt = row.lastSyncedAt;
     const full =
       row.lastFullSyncedAt === null ||
@@ -478,7 +541,9 @@ export async function runSync(
     const tally = await reconcileTasks(row.organizationId, opts.actorId, row, teamId, items, {
       assigneeId: null,
       writable: connector.asWritable?.() ?? null,
+      readChangedOnly: readsChangedRowsOnly(provider, full),
     });
+    await persistLinkedContentAccess(row, tally);
     const processed =
       tally.inserted + tally.pulled + tally.pushed + tally.deleted + tally.archived + tally.created;
     return { processed, total: items.length, stampFullSync: full };

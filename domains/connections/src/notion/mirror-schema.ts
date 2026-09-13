@@ -7,6 +7,7 @@
 export {
   MIRROR_ENTITY_ORDER,
   MIRROR_ENTITY_SPECS,
+  mirrorBodyField,
   personCompanionKey,
   type MirrorEntitySpec,
   type MirrorField,

@@ -39,6 +39,7 @@ function local(over: Partial<Local> = {}): Local {
     externalUpdatedAt: D('2026-01-01T00:00:00.000Z'),
     externalEtag: 'etag1',
     externalListId: '@default',
+    externalBodyHash: null,
     ...over,
   };
 }
@@ -66,9 +67,8 @@ describe('planTaskReconcile', () => {
   });
 
   it('ignores a tombstone for an item we never had', () => {
-    expect(planTaskReconcile(undefined, remote({ removed: true }), { writeBack: true })).toEqual({
-      kind: 'noop',
-    });
+    const tombstone = remote({ removed: true });
+    expect(planTaskReconcile(undefined, tombstone, { writeBack: true })).toEqual({ kind: 'noop' });
   });
 
   it('never archives on mere absence — a list-filtered task is left alone', () => {

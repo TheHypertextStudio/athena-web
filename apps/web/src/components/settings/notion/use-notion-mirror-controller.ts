@@ -104,6 +104,16 @@ export interface NotionMirrorModel {
   containerPage: { title: string | null; url: string | null } | null;
   /** Linked-database mappings whose relation targets require a human decision. */
   mappingProfiles: readonly NotionMappingProfile[];
+  /** What the last sync to linked Notion databases found when it wrote page bodies. */
+  linkedContent: LinkedContentState;
+}
+
+/** The page-body outcomes recorded by the last sync to linked Notion databases. */
+export interface LinkedContentState {
+  /** Whether the sync was refused permission to write page bodies. */
+  needsPermission: boolean;
+  /** Whether some pages kept their bodies because Notion would not let Docket replace them. */
+  keptAsIs: boolean;
 }
 
 /** Read the Notion connection and the databases designed against it. */
@@ -147,6 +157,7 @@ export function useNotionMirror(orgId: string): NotionMirrorModel {
 
   const databases: readonly NotionMirrorDatabaseOut[] = databasesQ.data?.items ?? [];
   const loadError = integrationsQ.error ?? databasesQ.error;
+  const config = integration?.config;
 
   return {
     loading: integrationsQ.isPending || (integration !== null && databasesQ.isPending),
@@ -160,8 +171,18 @@ export function useNotionMirror(orgId: string): NotionMirrorModel {
       databases.map((d) => d.lastPushedAt).filter((v): v is string => v !== null),
     ),
     health: mirrorHealth(integration, runsQ.data?.items ?? []),
-    containerPage: readContainerPage(integration?.config),
-    mappingProfiles: readNotionMappingProfiles(integration?.config),
+    containerPage: readContainerPage(config),
+    mappingProfiles: readNotionMappingProfiles(config),
+    linkedContent: readLinkedContent(config),
+  };
+}
+
+/** Read the page-body outcomes the last linked-database sync recorded. */
+function readLinkedContent(config: Record<string, unknown> | undefined): LinkedContentState {
+  const parsed = ConnectorConfig.safeParse(config ?? {}).data;
+  return {
+    needsPermission: parsed?.notionLinkedContentAccess === 'missing',
+    keptAsIs: parsed?.notionLinkedContentKept === true,
   };
 }
 

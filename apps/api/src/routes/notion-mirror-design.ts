@@ -92,7 +92,7 @@ export function contentStateForRows(
     readonly bodyUnknownBlockIds: readonly string[];
   }[],
 ): NotionMirrorContentStatus {
-  if (entityType !== 'task' && entityType !== 'project') {
+  if (MIRROR_ENTITY_SPECS[entityType].bodyField === undefined) {
     return { state: 'not_applicable', unknownBlockCount: 0 };
   }
   const unknownBlockCount = rows.reduce((count, row) => count + row.bodyUnknownBlockIds.length, 0);

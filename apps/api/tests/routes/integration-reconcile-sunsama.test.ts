@@ -120,6 +120,9 @@ describe('Sunsama → Docket, end to end on the fixture', () => {
       archived: 0,
       created: 0,
       conflicts: 0,
+      contentWritten: 0,
+      contentInaccessible: 0,
+      contentRejected: 0,
     });
 
     const rows = await db
@@ -223,6 +226,9 @@ describe('Sunsama → Docket, end to end on the fixture', () => {
       archived: 0,
       created: 0,
       conflicts: 0,
+      contentWritten: 0,
+      contentInaccessible: 0,
+      contentRejected: 0,
     });
 
     const afterSecond = await db

@@ -61,6 +61,8 @@ vi.mock('../../../src/lib/auth-client', () => ({ authClient: { linkSocial } }));
 import { NotionMirrorPanel } from '../../../src/components/settings/notion/notion-mirror-panel';
 // Imported rather than spelled out, so the wording stays a product decision the copy module owns.
 import {
+  PAGE_CONTENT_PERMISSION_TITLE,
+  PAGE_CONTENT_TRUNCATED_TITLE,
   RECONNECT_ACTION,
   SETUP_ACTION,
   SETUP_TITLE,
@@ -313,6 +315,28 @@ describe('NotionMirrorPanel — saying whether the sync actually works', () => {
     expect(screen.getByRole('button', { name: RECONNECT_ACTION })).toBeInTheDocument();
   });
 
+  it('asks for reauthorization when linked databases refused page bodies', async () => {
+    integrationsGet.mockResolvedValue(
+      okResponse({ items: [integration({ notionLinkedContentAccess: 'missing' })] }),
+    );
+    databasesGet.mockResolvedValue(okResponse({ items: [] }));
+    renderPanel();
+
+    expect(await screen.findByText(PAGE_CONTENT_PERMISSION_TITLE)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: RECONNECT_ACTION })).toBeInTheDocument();
+  });
+
+  it('asks for nothing once linked databases accept page bodies again', async () => {
+    integrationsGet.mockResolvedValue(
+      okResponse({ items: [integration({ notionLinkedContentAccess: 'granted' })] }),
+    );
+    databasesGet.mockResolvedValue(okResponse({ items: [database()] }));
+    renderPanel();
+
+    expect(await screen.findByRole('button', { name: SETUP_ACTION })).toBeInTheDocument();
+    expect(screen.queryByText(PAGE_CONTENT_PERMISSION_TITLE)).not.toBeInTheDocument();
+  });
+
   it('warns without clearing anything when Notion truncates page content', async () => {
     databasesGet.mockResolvedValue(
       okResponse({
@@ -326,9 +350,16 @@ describe('NotionMirrorPanel — saying whether the sync actually works', () => {
     );
     renderPanel();
 
-    expect(
-      await screen.findByText(/Some Notion page content could not be read/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(new RegExp(PAGE_CONTENT_TRUNCATED_TITLE))).toBeInTheDocument();
+  });
+
+  it('notes linked pages whose bodies Notion would not let Docket replace', async () => {
+    integrationsGet.mockResolvedValue(
+      okResponse({ items: [integration({ notionLinkedContentKept: true })] }),
+    );
+    renderPanel();
+
+    expect(await screen.findByText(new RegExp(PAGE_CONTENT_TRUNCATED_TITLE))).toBeInTheDocument();
   });
 
   it('ignores another purpose running against the same connection', async () => {

@@ -46,6 +46,11 @@ export interface MirrorEntitySpec {
   readonly fields: readonly MirrorField[];
   /** The fields enabled in a newly-created design, in column order. */
   readonly defaultColumns: readonly string[];
+  /**
+   * The long-form Markdown field written as the Notion page body, when the entity has one. It is
+   * a record value, not a column, so it syncs whether or not the design shows a matching property.
+   */
+  readonly bodyField?: 'description';
 }
 
 /**
@@ -97,6 +102,7 @@ const AUTHORED_ENTITY_SPECS: Record<NotionMirrorEntity, MirrorEntitySpec> = {
       DOCKET_URL_FIELD,
     ],
     defaultColumns: ['title', 'state', 'assignee', 'dueDate', 'project', 'priority'],
+    bodyField: 'description',
   },
   project: {
     entity: 'project',
@@ -122,6 +128,7 @@ const AUTHORED_ENTITY_SPECS: Record<NotionMirrorEntity, MirrorEntitySpec> = {
       DOCKET_URL_FIELD,
     ],
     defaultColumns: ['name', 'status', 'health', 'lead', 'targetDate', 'program'],
+    bodyField: 'description',
   },
   initiative: {
     entity: 'initiative',
@@ -142,6 +149,7 @@ const AUTHORED_ENTITY_SPECS: Record<NotionMirrorEntity, MirrorEntitySpec> = {
       DOCKET_URL_FIELD,
     ],
     defaultColumns: ['name', 'status', 'health', 'owner', 'targetDate'],
+    bodyField: 'description',
   },
   program: {
     entity: 'program',
@@ -158,6 +166,7 @@ const AUTHORED_ENTITY_SPECS: Record<NotionMirrorEntity, MirrorEntitySpec> = {
       DOCKET_URL_FIELD,
     ],
     defaultColumns: ['name', 'status', 'health', 'owner'],
+    bodyField: 'description',
   },
   team: {
     entity: 'team',
@@ -201,6 +210,7 @@ const AUTHORED_ENTITY_SPECS: Record<NotionMirrorEntity, MirrorEntitySpec> = {
       DOCKET_URL_FIELD,
     ],
     defaultColumns: ['name', 'targetDate', 'project'],
+    bodyField: 'description',
   },
   label: {
     entity: 'label',
@@ -261,6 +271,16 @@ export const MIRROR_ENTITY_SPECS: Record<NotionMirrorEntity, MirrorEntitySpec> =
     withPersonCompanions(spec),
   ]),
 ) as Record<NotionMirrorEntity, MirrorEntitySpec>;
+
+/**
+ * The record field an entity writes as its Notion page body.
+ *
+ * @param entity - The mirrored entity kind.
+ * @returns the body field, or `undefined` when the entity's pages carry properties only.
+ */
+export function mirrorBodyField(entity: NotionMirrorEntity): 'description' | undefined {
+  return MIRROR_ENTITY_SPECS[entity].bodyField;
+}
 
 /** Every entity kind in the order the designer presents them. */
 export const MIRROR_ENTITY_ORDER: readonly NotionMirrorEntity[] = [

@@ -1,0 +1,1 @@
+ALTER TABLE "task" ADD COLUMN "external_body_hash" text;

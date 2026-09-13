@@ -11,6 +11,7 @@ import {
   defaultDatabaseTitle,
   defaultPropertyMap,
   fieldsByPropertyId,
+  mirrorBodyField,
   mirrorField,
   orderedColumns,
   personCompanionKey,
@@ -24,6 +25,14 @@ const OVERRIDDEN: VocabularySkin = {
   preset: 'startup',
   overrides: { task: { singular: 'Ticket', plural: 'Tickets' } },
 };
+
+describe('mirror page bodies', () => {
+  it('writes a description body for every entity that has a long-form description', () => {
+    const withBody = MIRROR_ENTITY_ORDER.filter((entity) => mirrorBodyField(entity) !== undefined);
+    expect(withBody).toEqual(['task', 'project', 'initiative', 'program', 'milestone']);
+    for (const entity of withBody) expect(mirrorBodyField(entity)).toBe('description');
+  });
+});
 
 describe('mirror entity catalog', () => {
   it('covers every entity kind the database enum accepts', () => {

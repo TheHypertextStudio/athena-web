@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -333,5 +333,39 @@ describe('AthenaPanelProvider', () => {
       await screen.findByText("Athena is temporarily unavailable. We'll keep checking."),
     ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Back' })).toBeVisible();
+  });
+
+  it('starts work without the page once the chip is detached', async () => {
+    const api = transport();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <PageContextProvider
+          workspace={{ workspaceId: 'workspace_1', workspaceName: 'Hypertext Studio' }}
+        >
+          <PageSource type="project" id="project_1" label="Fall fundraiser launch" />
+          <AthenaPanelProvider transport={api} railVisible onRevealRail={vi.fn()}>
+            <AthenaLaunchers />
+            <AthenaRailPanel />
+          </AthenaPanelProvider>
+        </PageContextProvider>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open ambient Athena' }));
+    const form = await screen.findByRole('form', { name: 'Start Athena work' });
+    expect(within(form).getByRole('group', { name: /Fall fundraiser launch/ })).toBeVisible();
+
+    fireEvent.click(within(form).getByRole('button', { name: /Detach/ }));
+    expect(within(form).queryByRole('group', { name: /Fall fundraiser launch/ })).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Athena objective'), {
+      target: { value: 'Plan my afternoon' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
+
+    await waitFor(() => {
+      expect(api.create).toHaveBeenCalledWith({ prompt: 'Plan my afternoon' });
+    });
   });
 });

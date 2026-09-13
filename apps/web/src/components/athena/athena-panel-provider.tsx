@@ -36,6 +36,7 @@ import { queryKeys, useLiveApiQuery } from '@/lib/query';
 import MentionTextarea from '@/components/mentions/mention-textarea';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 
+import { AthenaContextChip } from './athena-context-chip';
 import { AthenaWorkbench } from './athena-workbench';
 import { usePageContext } from './page-context';
 import { useAthenaActions } from './use-athena-actions';
@@ -69,6 +70,10 @@ export interface AthenaPanelValue {
   readonly pending: boolean;
   readonly createPending: boolean;
   readonly railStatus: RailPanelStatus | null;
+  /** Whether the next piece of work carries the current context. */
+  readonly contextAttached: boolean;
+  readonly attachContext: () => void;
+  readonly detachContext: () => void;
   readonly openAthena: (context?: PersonalAthenaContext | null, draft?: string) => void;
   readonly closeAthena: () => void;
   readonly selectSession: (session: PersonalAthenaSessionSummary) => void;
@@ -112,6 +117,7 @@ export function AthenaPanelProvider({
   const [context, setContext] = useState<PersonalAthenaContext | null>(pageContext);
   const [selectedId, setSelectedId] = useState('');
   const [launchDraft, setLaunchDraft] = useState<string | null>(null);
+  const [contextAttached, setContextAttached] = useState(true);
   const pulse = useLiveApiQuery(personalAthenaPulseDef(transport), 5_000);
   const queue = useLiveApiQuery(personalAthenaQueueDef(transport, railVisible), 5_000);
 
@@ -161,6 +167,7 @@ export function AthenaPanelProvider({
       const resolvedContext = effective === undefined ? pageContext : effective;
       setContext(resolvedContext);
       setSelectedId('');
+      setContextAttached(true);
       setLaunchDraft(startsNewWork ? (draft?.trim() ?? '') : null);
       reveal(resolvedContext, startsNewWork ? draft : undefined);
     },
@@ -169,6 +176,7 @@ export function AthenaPanelProvider({
   const closeAthena = useCallback(() => {
     setSelectedId('');
     setLaunchDraft(null);
+    setContextAttached(true);
   }, []);
 
   useEffect(() => {
@@ -214,6 +222,13 @@ export function AthenaPanelProvider({
       pending: actions.pending,
       createPending: actions.createPending,
       railStatus,
+      contextAttached,
+      attachContext: () => {
+        setContextAttached(true);
+      },
+      detachContext: () => {
+        setContextAttached(false);
+      },
       openAthena,
       closeAthena,
       selectSession: (session) => {
@@ -232,13 +247,14 @@ export function AthenaPanelProvider({
         actions.decide({ id, option, kind: selected?.decision?.kind });
       },
       create: (prompt) => {
-        actions.create({ prompt, ...(context ? { context } : {}) });
+        actions.create({ prompt, ...(context && contextAttached ? { context } : {}) });
       },
     }),
     [
       actions,
       closeAthena,
       context,
+      contextAttached,
       detail.isPending,
       detail.isError,
       launchDraft,
@@ -414,6 +430,12 @@ function AthenaRailComposer(): JSX.Element {
           Athena keeps moving in the background. Return here when it needs direction.
         </p>
       </div>
+      <AthenaContextChip
+        context={athena.context}
+        attached={athena.contextAttached}
+        onDetach={athena.detachContext}
+        onAttach={athena.attachContext}
+      />
       <MentionTextarea
         aria-label="Athena objective"
         rows={5}

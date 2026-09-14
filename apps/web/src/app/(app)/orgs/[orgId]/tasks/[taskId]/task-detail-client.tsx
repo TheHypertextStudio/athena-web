@@ -9,10 +9,8 @@ import { useTypedRoute } from '@/lib/app-location';
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
-import { usePublishPageSource } from '@/components/athena/page-context';
-import { useDocumentTitle } from '@/components/tabs/use-document-title';
-import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
+import { useTaskPageIdentity } from './use-task-page-identity';
 import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -102,11 +100,7 @@ export default function TaskDetailPage(): JSX.Element {
     actionError: resourceActionError,
   } = useTaskAttachments(orgId, taskId);
 
-  // The tab bar and the browser tab both follow the name on screen, including through a rename.
-  const taskTitle = task?.title;
-  useRegisterTabTitle('task', orgId, taskId, taskTitle);
-  useDocumentTitle(taskTitle);
-  usePublishPageSource({ type: 'task', id: taskId, ...(taskTitle ? { label: taskTitle } : {}) });
+  useTaskPageIdentity(orgId, taskId, task?.title);
 
   const {
     setState,

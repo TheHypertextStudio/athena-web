@@ -66,11 +66,8 @@ import { ContainerDetailLoading } from '@/components/views/entity-snapshot-metad
 import { DetailPrintSummary } from '@/components/views/detail-print-summary';
 import { useDetailTab } from '@/components/views/use-detail-tab';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
-import { usePublishPageSource } from '@/components/athena/page-context';
-import type { PersonalAthenaSource } from '@/lib/athena/presentation';
-import { useDocumentTitle } from '@/components/tabs/use-document-title';
-import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import { api } from '@/lib/api';
+import { useProjectPageIdentity } from './use-project-page-identity';
 import { useTypedRoute } from '@/lib/app-location';
 import {
   aggregateLoadState,
@@ -166,11 +163,6 @@ function activitySummary(activity: { body: Record<string, unknown>; type: string
   }
   const text = activity.body['text'];
   return typeof text === 'string' ? text : activity.type;
-}
-
-/** Build the Athena page source this route publishes while mounted. */
-function projectPageSource(projectId: string, label: string | undefined): PersonalAthenaSource {
-  return { type: 'project', id: projectId, ...(label ? { label } : {}) };
 }
 
 /** Render a Project from its local snapshot before one bounded aggregate reconciles it. */
@@ -393,10 +385,7 @@ export default function ProjectDetailPage(): JSX.Element {
   useEffect(() => {
     if (aggregate) seedNavigationSnapshot(aggregate.snapshot);
   }, [aggregate]);
-  const projectLabel = project?.name ?? navigationSnapshot?.name;
-  useRegisterTabTitle('project', orgId, projectId, projectLabel);
-  useDocumentTitle(projectLabel);
-  usePublishPageSource(projectPageSource(projectId, projectLabel));
+  useProjectPageIdentity(orgId, projectId, project?.name ?? navigationSnapshot?.name);
 
   const addResource = useApiMutation<AttachmentOut, { title: string; url: string }>({
     mutationFn: (json) =>

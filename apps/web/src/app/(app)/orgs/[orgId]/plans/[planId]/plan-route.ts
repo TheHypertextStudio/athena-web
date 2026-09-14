@@ -4,20 +4,19 @@
  * `plans/[planId]/plan-route` — the plan route's state, one concern per hook.
  *
  * @remarks
- * The shell requests the route makes while mounted, the plan and its editing controllers, and the
- * conversation the route hosts beside the board. `plan-client.tsx` composes these into the panel.
+ * The shell requests the route makes while mounted, and the plan with its editing controllers.
+ * `plan-client.tsx` composes these with the rail conversation into the panel.
  */
 import { useShellRail, useShellSidebar } from '@docket/ui/components';
 import type { PlanCommitOut, PlanDraftOut, PlanOp } from '@docket/work/plan-draft-contract';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { usePlanActorResolver } from '@/components/plan-canvas/plan-actors';
 import type { PlanCanvasPanelProps } from '@/components/plan-canvas/plan-canvas-panel';
+import { PLAN_RAIL_WIDE_PX } from '@/components/plan-canvas/plan-panel-support';
 import { EMPTY_PLAN_DIFF, planDiff, type PlanDiff } from '@/components/plan-canvas/plan-diff';
 import { api } from '@/lib/api';
-import { useAppRouter } from '@/lib/interactions/navigation';
 import type { PlanOpsController } from '@/lib/plan-draft/defs';
 import { useCommitPlan, usePlan, usePlanAthenaSync, usePlanOps } from '@/lib/plan-draft/defs';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
@@ -25,13 +24,13 @@ import { useOrgCapability } from '@/lib/use-org-capability';
 
 const OPTION_KINDS = ['actors', 'initiatives'] as const;
 
-/** The conversation floats beside the board from this width; below it, the shell's sheet serves. */
-export const CONVERSATION_BESIDE_CANVAS_QUERY = '(min-width: 1024px)';
-
 /** The sidebar drops to its icon rail on any window narrower than this while a plan is open. */
 const COMPACT_SIDEBAR_BELOW_PX = 1920;
 
-/** Ask the shell for room while the route is mounted: the icon rail, and a collapsed right rail. */
+/**
+ * Ask the shell for room while the route is mounted: the sidebar drops to its icon rail, and on a
+ * narrower window the right rail rests collapsed until the conversation is asked for.
+ */
 export function usePlanShellRequests(): void {
   const { requestCompact } = useShellSidebar();
   useEffect(() => {
@@ -39,7 +38,10 @@ export function usePlanShellRequests(): void {
     return requestCompact();
   }, [requestCompact]);
   const { requestCollapsed } = useShellRail();
-  useEffect(() => requestCollapsed(), [requestCollapsed]);
+  useEffect(() => {
+    if (window.innerWidth >= PLAN_RAIL_WIDE_PX) return undefined;
+    return requestCollapsed();
+  }, [requestCollapsed]);
 }
 
 /**
@@ -148,78 +150,4 @@ export function usePlanRouteData(orgId: string, planId: string): PlanRouteData {
     initiativeOptions: options.initiativeOptions,
     resolveActor,
   };
-}
-
-/** What {@link usePlanConversation} returns. */
-export interface PlanConversationHost {
-  readonly open: boolean;
-  readonly setOpen: (open: boolean) => void;
-  readonly draftRequest: { readonly text: string; readonly version: number } | null;
-  /** Open the conversation with a draft about this plan. */
-  readonly ask: (text: string) => void;
-}
-
-/** The context an "open Athena" from this plan carries. */
-function planContext(orgId: string, plan: PlanDraftOut | undefined) {
-  return {
-    workspaceId: orgId,
-    ...(plan?.rootInitiativeId
-      ? { source: { type: 'initiative' as const, id: plan.rootInitiativeId, label: plan.title } }
-      : {}),
-  };
-}
-
-/**
- * The conversation this route hosts beside the board. While the window is wide enough the route
- * registers as Athena's host and claims the rail's Athena icon, so every "open Athena" lands in
- * the floating column; on a compact viewport the shell's sheet serves instead. The column is open
- * on arrival where it fits, and an entry point that asks for a start opens it with an opening line.
- */
-export function usePlanConversation(
-  orgId: string,
-  planId: string,
-  plan: PlanDraftOut | undefined,
-  startRequested: boolean,
-): PlanConversationHost {
-  const router = useAppRouter();
-  const { openAthena, registerHost } = useAthenaPanel();
-  const { claimPanel } = useShellRail();
-  const [open, setOpen] = useState(false);
-  const [draftRequest, setDraftRequest] = useState<PlanConversationHost['draftRequest']>(null);
-  useEffect(() => {
-    if (!window.matchMedia(CONVERSATION_BESIDE_CANVAS_QUERY).matches) return undefined;
-    const releaseHost = registerHost({
-      reveal: (draft) => {
-        setOpen(true);
-        if (draft === undefined) return;
-        setDraftRequest((current) => ({ text: draft, version: (current?.version ?? 0) + 1 }));
-      },
-    });
-    const releaseClaim = claimPanel('athena', () => {
-      setOpen((current) => !current);
-    });
-    return () => {
-      releaseHost();
-      releaseClaim();
-    };
-  }, [claimPanel, registerHost]);
-  const revealed = useRef(false);
-  useEffect(() => {
-    if (revealed.current || startRequested) return;
-    revealed.current = true;
-    if (window.matchMedia(CONVERSATION_BESIDE_CANVAS_QUERY).matches) setOpen(true);
-  }, [startRequested]);
-  useEffect(() => {
-    if (!startRequested || !plan) return;
-    revealed.current = true;
-    openAthena(planContext(orgId, plan), `Help me plan "${plan.title}". `);
-    router.replace(`/orgs/${orgId}/plans/${planId}`);
-  }, [openAthena, orgId, plan, planId, router, startRequested]);
-  const ask = useCallback(
-    (text: string) => {
-      openAthena(planContext(orgId, plan), text);
-    },
-    [openAthena, orgId, plan],
-  );
-  return { open, setOpen, draftRequest, ask };
 }

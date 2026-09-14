@@ -6,8 +6,7 @@
  * @remarks
  * Overlays measure the floating chrome into insets; selection keeps the selected node in view and
  * lets go of it; expansion decides which containers show their rows; notices hold the transient
- * pill and notice; the one-panel rule makes the inspector and the conversation take turns on a
- * narrow host; search names the nodes to dim around.
+ * pill and notice; search names the nodes to dim around.
  */
 import type { PlanDraftOut } from '@docket/work/plan-draft-contract';
 import type { Node, ReactFlowInstance } from '@xyflow/react';
@@ -16,7 +15,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CANVAS_OVERLAY_GUTTER,
   type CanvasOverlayInsets,
-  occludedRight,
 } from '@/components/canvas/canvas-viewport-insets';
 import { keepNodeInViewDeltaX } from '@/components/canvas/graph-inspector-geometry';
 import { prefersReducedMotion } from '@/lib/motion';
@@ -24,50 +22,31 @@ import { prefersReducedMotion } from '@/lib/motion';
 import { changedFieldCount, type PlanDiff } from './plan-diff';
 import { planNodeData } from './plan-nodes';
 import {
-  ONE_PANEL_BELOW_PX,
   PILL_VISIBLE_MS,
   type PlanNotice,
   boardOverflows,
   parentsOfAddedTasks,
   revealAdditions,
   revisionPillText,
-  useElementWidth,
   withSearchMatches,
 } from './plan-panel-support';
 
 /** What {@link usePlanOverlays} returns. */
 export interface PlanOverlays {
-  readonly attachHost: (node: HTMLDivElement | null) => void;
-  /** Whether the host is narrow enough that the two floating columns take turns. */
-  readonly onePanel: boolean;
   readonly insets: CanvasOverlayInsets;
-  /** Pixels the conversation column takes on the right, for the inspector's offset. */
-  readonly conversationRight: number;
   readonly setBarHeight: (height: number) => void;
   readonly setInspectorRight: (right: number) => void;
-  readonly setConversationWidth: (width: number) => void;
 }
 
 /** Measure the floating chrome into the insets the canvas frames around. */
-export function usePlanOverlays(conversationOpen: boolean): PlanOverlays {
-  const [hostWidth, attachHost] = useElementWidth();
+export function usePlanOverlays(): PlanOverlays {
   const [barHeight, setBarHeight] = useState(0);
   const [inspectorRight, setInspectorRight] = useState(0);
-  const [conversationWidth, setConversationWidth] = useState(0);
-  const conversationRight = occludedRight([{ open: conversationOpen, width: conversationWidth }]);
   const insets = useMemo<CanvasOverlayInsets>(
-    () => ({ top: barHeight + CANVAS_OVERLAY_GUTTER, right: inspectorRight + conversationRight }),
-    [barHeight, inspectorRight, conversationRight],
+    () => ({ top: barHeight + CANVAS_OVERLAY_GUTTER, right: inspectorRight }),
+    [barHeight, inspectorRight],
   );
-  return {
-    attachHost,
-    onePanel: hostWidth > 0 && hostWidth < ONE_PANEL_BELOW_PX,
-    insets,
-    conversationRight,
-    setBarHeight,
-    setInspectorRight,
-    setConversationWidth,
-  };
+  return { insets, setBarHeight, setInspectorRight };
 }
 
 /** Pan just enough that a node's right edge clears a docked panel; nothing when it already does. */
@@ -259,39 +238,6 @@ export function usePlanNotices(
     };
   }, [flowInstance, insets, remoteDiff]);
   return { notice, setNotice, pill };
-}
-
-/** What {@link useOnePanelRule} needs. */
-export interface OnePanelRuleInput {
-  readonly onePanel: boolean;
-  readonly conversationOpen: boolean;
-  readonly toggleConversation: (open: boolean) => void;
-  readonly selectedRef: string | null;
-  readonly clearSelected: () => void;
-}
-
-/**
- * On a narrow host the two floating columns take turns: a selection closes the conversation, and
- * opening the conversation clears the selection.
- */
-export function useOnePanelRule({
-  onePanel,
-  conversationOpen,
-  toggleConversation,
-  selectedRef,
-  clearSelected,
-}: OnePanelRuleInput): void {
-  const previousOpen = useRef(conversationOpen);
-  useEffect(() => {
-    if (!onePanel) return;
-    const conversationJustOpened = conversationOpen && !previousOpen.current;
-    previousOpen.current = conversationOpen;
-    if (conversationJustOpened) {
-      clearSelected();
-      return;
-    }
-    if (selectedRef !== null && conversationOpen) toggleConversation(false);
-  }, [clearSelected, conversationOpen, onePanel, selectedRef, toggleConversation]);
 }
 
 /** What {@link usePlanSearch} returns. */

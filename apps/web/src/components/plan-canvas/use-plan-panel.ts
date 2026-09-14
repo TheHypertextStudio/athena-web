@@ -35,7 +35,6 @@ import {
   type PlanOverlays,
   type PlanSearchView,
   type PlanSelection,
-  useOnePanelRule,
   usePlanExpansion,
   usePlanNotices,
   usePlanOverlays,
@@ -64,7 +63,6 @@ export interface PlanPanelModel {
   /** Add a project under the plan's root initiative; null when the viewer cannot edit. */
   readonly addProjectAtRoot: (() => void) | null;
   readonly navigate: (ref: string) => void;
-  readonly askAbout: (refs: readonly string[]) => void;
   readonly planActions: PlanCanvasActions;
   readonly canvasActions: CanvasActions;
   readonly startState: PlanStartState;
@@ -99,12 +97,12 @@ interface PlanBoardState {
 
 /** Project the plan, lay it out, and measure the chrome around it. */
 function usePlanBoardState(props: PlanCanvasPanelProps): PlanBoardState {
-  const { plan, orgId, canEdit, remoteDiff, conversation } = props;
+  const { plan, orgId, canEdit, remoteDiff } = props;
   const { containerRef, aspectRatio, ready: layoutReady } = useCanvasAspectRatio();
   const [layoutEpoch, setLayoutEpoch] = useState(0);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [search, setSearch] = useState('');
-  const overlays = usePlanOverlays(conversation.open);
+  const overlays = usePlanOverlays();
   const byRef = useMemo(
     () => new Map(plan.document.nodes.map((node) => [node.ref, node])),
     [plan.document.nodes],
@@ -168,7 +166,7 @@ function usePlanBoardState(props: PlanCanvasPanelProps): PlanBoardState {
 
 /** Compose the plan panel's state. */
 export function usePlanPanel(props: PlanCanvasPanelProps): PlanPanelModel {
-  const { plan, canEdit, remoteDiff, conversation, onOpen, onAskAthena } = props;
+  const { plan, canEdit, remoteDiff, onOpen } = props;
   const board = usePlanBoardState(props);
   const { byRef, overlays, expansion, nodes, flowInstance } = board;
   const [selectedRefs, setSelectedRefs] = useState<readonly string[]>([]);
@@ -197,23 +195,11 @@ export function usePlanPanel(props: PlanCanvasPanelProps): PlanPanelModel {
     expandTasks: expansion.expandTasks,
     setNotice: notices.setNotice,
   });
-  const clearSelected = useCallback(() => {
-    selection.setSelectedRef(null);
-  }, [selection]);
-  useOnePanelRule({
-    onePanel: overlays.onePanel,
-    conversationOpen: conversation.open,
-    toggleConversation: conversation.onToggle,
-    selectedRef: selection.selectedRef,
-    clearSelected,
-  });
   const searchView = usePlanSearch(nodes, board.search);
   const actions = usePlanActions({
     plan,
     canEdit,
     onOpen,
-    onAskAthena,
-    byRef,
     nodeEdits,
     edgeEdits,
     expansion,
@@ -246,8 +232,6 @@ interface PlanActionsInput {
   readonly plan: PlanDraftOut;
   readonly canEdit: boolean;
   readonly onOpen: (href: string) => void;
-  readonly onAskAthena: (text: string) => void;
-  readonly byRef: ReadonlyMap<string, PlanNode>;
   readonly nodeEdits: PlanNodeEdits;
   readonly edgeEdits: PlanEdgeEdits;
   readonly expansion: PlanExpansion;
@@ -255,15 +239,13 @@ interface PlanActionsInput {
 }
 
 /** What {@link usePlanActions} returns: the callbacks the board's nodes and edges reach for. */
-type PlanActions = Pick<PlanPanelModel, 'navigate' | 'askAbout' | 'planActions' | 'canvasActions'>;
+type PlanActions = Pick<PlanPanelModel, 'navigate' | 'planActions' | 'canvasActions'>;
 
 /** The actions the canvas contexts carry to the plan's nodes and the shared dependency edge. */
 function usePlanActions({
   plan,
   canEdit,
   onOpen,
-  onAskAthena,
-  byRef,
   nodeEdits,
   edgeEdits,
   expansion,
@@ -275,15 +257,6 @@ function usePlanActions({
       if (href) onOpen(href);
     },
     [onOpen, plan.objects],
-  );
-  const askAbout = useCallback(
-    (refs: readonly string[]) => {
-      const titles = refs
-        .map((ref) => byRef.get(ref)?.fields.title)
-        .filter((title): title is string => title !== undefined);
-      onAskAthena(titles.length > 0 ? `About "${titles.join('", "')}": ` : '');
-    },
-    [byRef, onAskAthena],
   );
   const planActions = useMemo<PlanCanvasActions>(
     () => ({
@@ -310,5 +283,5 @@ function usePlanActions({
     }),
     [canEdit, navigate, edgeEdits.removeDependency],
   );
-  return { navigate, askAbout, planActions, canvasActions };
+  return { navigate, planActions, canvasActions };
 }

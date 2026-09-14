@@ -467,11 +467,13 @@ export function AppShell({
     if (!railRequest || handledRailRequest.current === railRequest.version) return;
     handledRailRequest.current = railRequest.version;
     if (!panels.some((panel) => panel.id === railRequest.panelId)) return;
+    // A host's explicit reveal wins over a surface's standing collapse request, as the icon does.
+    railCollapse.override();
     setRail({ activeId: railRequest.panelId, collapsed: false });
     writeRailState(RAIL_ACTIVE_KEY, railRequest.panelId);
     writeRailState(RAIL_COLLAPSED_KEY, '0');
     if (!isDesktop) setOverlayPanelOpen(true);
-  }, [isDesktop, panels, railRequest]);
+  }, [isDesktop, panels, railCollapse, railRequest]);
 
   React.useEffect(() => {
     onRailStateChange?.({

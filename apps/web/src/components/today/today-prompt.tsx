@@ -456,7 +456,7 @@ export function TodayPrompt({
             iconOnly
             disabled={!canSubmit}
             onClick={submit}
-            aria-label={mode === 'task' ? 'Add task' : 'Ask Athena'}
+            aria-label={mode === 'task' ? 'Add task' : 'Send'}
             // Same corner as the box it sits in, so the control reads as part of the field.
             className="ml-auto rounded-xl"
           >

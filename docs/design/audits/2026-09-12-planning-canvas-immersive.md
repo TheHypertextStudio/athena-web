@@ -85,7 +85,7 @@ every visible action is wired) · Screenshots ✅
 The owner read the first pass and asked for four things, all landed and recaptured:
 
 1. Concentric corners. Every nested radius is its parent's radius less the gap between them. The shell's main surface rounds at 16px; the bar, the bottom toolbar, and the floating columns sit 8px inside it and round at 10px; their 2px padding leaves the 8px controls inside, and a column's header keeps a 2px inset around its close button. A project container (16px) keeps an 8px inset around 8px rows and its miniature list. The Athena column's corner, which had rounded at 16px twelve pixels inside a 14px surface, is the case that set the rule.
-2. No Athena button in the bar. The route claims the rail's Athena icon, so the icon the shell already shows opens and closes the floating conversation; Ask Athena on a selection and the arrival flag remain.
+2. No Athena button in the bar. The route claims the rail's Athena icon, so the icon the shell already shows opens and closes the floating conversation; the arrival flag remains.
 3. A calmer top bar. The counts collapse to the draft count, Open and Remove become icon buttons, and the row has room to breathe at 1024.
 4. One family of bottom controls. Zoom out, zoom in, and fit to view sit in the same toolbar as Fit selection and Re-layout, on the same tone and shape, instead of a separate stack of squares.
 
@@ -94,7 +94,7 @@ The owner read the first pass and asked for four things, all landed and recaptur
    triggers that read as fields rather than as text with an icon; the footer is one small Confirm
    naming what it creates on its tooltip; Remove moved into the header's overflow menu, away from
    the primary action; and Ask Athena left the inspector, since the conversation is one click away
-   on the rail's icon and on a selection.
+   on the rail's icon.
 6. A bar that belongs to the selection. At 1024 the Task graph's bar had shown seven characters of
    its title, a filter glyph beside a Properties glyph that read as a second filter, and outlined
    buttons on a floating surface. While something is selected the bar is now the selection's: a
@@ -115,6 +115,27 @@ The owner read the first pass and asked for four things, all landed and recaptur
    the conversation, because the host opens for any non-null aside and the plan handed it an
    element that rendered nothing. The plan now hands it null, and the journey asserts the column
    is absent before the first selection.
+10. Athena outside the canvas. Two full-height panels inside the canvas read as clutter, and a
+    column beside the board but still inside `<main>` was not the fix either: the conversation is
+    a peer of the whole canvas, so it now lives in the shell's right rail, the sibling of `<main>`
+    where the Calendar panel lives. The route hands the rail its conversation while mounted and
+    the rail's own icon collapses it; only the inspector floats over the board. The rail's header
+    is the Athena mark and an icon to the full page; its empty state is one line; and the shared
+    composer is one filled block with a three-line field over a row of Connect and Send, so it
+    has room and matches the inspector's fields. Below a 1280px window the rail rests collapsed
+    until asked for, since a plan beside an open rail on a narrower window leaves no board to
+    read; the shell now lets a host's reveal expand a rail a surface asked to collapse.
+
+11. No "Ask Athena" buttons. A button that asks Athena beside the real controls conveys her as
+    a feature bolted onto the product, when she is the product's way of working; the button left
+    the selection bar, the Today empty state, and the calendar peek, and the Today prompt's send
+    control is named for what it does. The conversation is always one click away on the rail.
+
+12. An inspector whose chrome stays put. Confirm sat wherever the body ended; it is now pinned
+    in a footer below the scrolling body, and both the header and the footer take a tonal step
+    while content runs under them, with no drawn line. Filled fields lost their activation
+    indicator and square bottom corners: a filled field is a rounded container on the control
+    radius, which reads as a control rather than as a box on a line.
 
 The owner also found task rows at the initiative altitude unpolished. A project container now rests collapsed and names its tasks in miniature (three titles, then a count); the miniature block and the header's chevron show the rows on a dedicated click, a search or a revision from Athena opens the containers involved, and the layout re-packs as containers open. A quick pair of updates once surfaced a skipped view transition as an unhandled error at 1024; the shared helper now settles a skipped transition quietly.
 

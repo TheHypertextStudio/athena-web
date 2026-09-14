@@ -25,19 +25,11 @@ export interface ShellRailState {
    * @returns a release that withdraws the request; call it when the surface unmounts.
    */
   readonly requestCollapsed: () => () => void;
-  /**
-   * Claim a rail panel's icon while a surface hosts that panel's content itself. A click on the
-   * icon calls the handler instead of expanding the rail.
-   *
-   * @returns a release that withdraws the claim; call it when the surface unmounts.
-   */
-  readonly claimPanel: (id: string, onClick: () => void) => () => void;
 }
 
 const ShellRailContext = React.createContext<ShellRailState>({
   collapsed: false,
   requestCollapsed: () => () => undefined,
-  claimPanel: () => () => undefined,
 });
 
 /** Provider wrapping the shell's content with the rail's collapse state. */

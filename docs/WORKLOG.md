@@ -10847,6 +10847,16 @@ states became the `EmptyState` atom; and the description editor's 224px floor ca
   and a glyph soup; handing the row to the selection (Clear where the way back was, labeled
   actions, no controls) reads at every width. Floating surfaces carry filled, tonal, and text
   buttons only; an outlined button on a tinted floating surface draws a box inside a box.
+- A panel's one committing action belongs in a pinned footer, and the header and footer should
+  step their tone as content runs under them; a line drawn for either edge is a box inside a box.
+- An "Ask Athena" button beside the real controls reads as a bolted-on feature; Athena is the
+  product's way of working, so the conversation is one click away on the rail and nothing on a
+  surface asks for her by name.
+- Two panels floating over one canvas compete with it, and a column beside the board inside
+  `<main>` still reads as part of the canvas. A conversation that is a peer of the whole board
+  belongs where the shell keeps a peer of `<main>`: the rail. Handing the rail content from the
+  route (`provideRailContent`) kept the shell owning rail state and removed the panel claim, the
+  route host, and the one-panel rule in one move.
 - A host that opens for any non-null child cannot be handed a component that decides to render
   nothing: the decision has to be made by the caller, or the host shows an empty column.
 - A task row is the most granular thing on the board, so it wears no state glyph and sits at

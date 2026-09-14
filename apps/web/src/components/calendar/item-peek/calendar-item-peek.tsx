@@ -14,7 +14,7 @@
  * padding itself out with headings and apologies.
  */
 import type { CalendarItemOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
-import { FileText, MapPin, Maximize, Sparkles, Trash2, Users } from '@docket/ui/icons';
+import { FileText, MapPin, Maximize, Trash2, Users } from '@docket/ui/icons';
 import { Badge, Button, ControlGroup } from '@docket/ui/primitives';
 import { type JSX, type ReactNode } from 'react';
 
@@ -42,8 +42,6 @@ export interface CalendarItemPeekProps {
   titleId: string;
   /** Escalate to the full event detail. */
   onOpenDetail: () => void;
-  /** Hand this event to Athena. */
-  onAskAthena: () => void;
   /** Ask the host to close and raise its own delete confirmation. */
   onRequestDelete: () => void;
 }
@@ -58,7 +56,6 @@ export function CalendarItemPeek({
   displayTimezone,
   titleId,
   onOpenDetail,
-  onAskAthena,
   onRequestDelete,
 }: CalendarItemPeekProps): JSX.Element {
   const KindIcon = CALENDAR_ITEM_KIND_ICON[item.kind];
@@ -102,10 +99,6 @@ export function CalendarItemPeek({
         <Button type="button" onClick={onOpenDetail}>
           <Maximize aria-hidden="true" />
           Open
-        </Button>
-        <Button type="button" variant="ghost" onClick={onAskAthena}>
-          <Sparkles aria-hidden="true" />
-          Athena
         </Button>
         {canDeleteCalendarItem(item) ? (
           <Button

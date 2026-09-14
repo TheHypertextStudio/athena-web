@@ -36,7 +36,10 @@ function renderLink(href: string, content: React.ReactNode, className?: string):
 }
 
 /** Render the shell with one rail panel on a desktop-width window. */
-function renderWithRail(main: React.ReactNode): void {
+function renderWithRail(
+  main: React.ReactNode,
+  railRequest?: { readonly panelId: string; readonly version: number },
+): void {
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: true,
     media: query,
@@ -62,6 +65,7 @@ function renderWithRail(main: React.ReactNode): void {
           />
         }
         aside={{ panels: [TASKS_PANEL], defaultPanelId: 'tasks' }}
+        railRequest={railRequest}
       >
         {main}
       </AppShell>
@@ -72,13 +76,6 @@ function renderWithRail(main: React.ReactNode): void {
 function CollapseRailWhileMounted(): React.JSX.Element {
   const { requestCollapsed } = useShellRail();
   React.useEffect(() => requestCollapsed(), [requestCollapsed]);
-  return <div>Canvas</div>;
-}
-
-function ClaimTasksWhileMounted({ onClick }: { readonly onClick: () => void }): React.JSX.Element {
-  const { requestCollapsed, claimPanel } = useShellRail();
-  React.useEffect(() => requestCollapsed(), [requestCollapsed]);
-  React.useEffect(() => claimPanel('tasks', onClick), [claimPanel, onClick]);
   return <div>Canvas</div>;
 }
 
@@ -131,23 +128,18 @@ describe('AppShell rail requests', () => {
     expect(window.localStorage.getItem('docket.rail.collapsed')).toBe('0');
   });
 
+  it('expands the rail for a host request over a surface request, as the icon does', () => {
+    window.localStorage.setItem('docket.rail.collapsed', '0');
+    renderWithRail(<CollapseRailWhileMounted />, { panelId: 'tasks', version: 1 });
+    expect(screen.getByRole('complementary', { name: 'Tasks' })).not.toHaveClass('w-0');
+  });
+
   it('lets the viewer expand the rail over a request, and still saves nothing', () => {
     window.localStorage.setItem('docket.rail.collapsed', '0');
     renderWithRail(<CollapseRailWhileMounted />);
     const activityBar = screen.getByRole('navigation', { name: 'Panels' });
     fireEvent.click(within(activityBar).getByRole('button', { name: 'Tasks' }));
     expect(screen.getByRole('complementary', { name: 'Tasks' })).not.toHaveClass('w-0');
-    expect(window.localStorage.getItem('docket.rail.collapsed')).toBe('0');
-  });
-
-  it('hands a claimed panel icon to the surface and leaves the rail collapsed', () => {
-    window.localStorage.setItem('docket.rail.collapsed', '0');
-    const onClick = vi.fn();
-    renderWithRail(<ClaimTasksWhileMounted onClick={onClick} />);
-    const activityBar = screen.getByRole('navigation', { name: 'Panels' });
-    fireEvent.click(within(activityBar).getByRole('button', { name: 'Tasks' }));
-    expect(onClick).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-0');
     expect(window.localStorage.getItem('docket.rail.collapsed')).toBe('0');
   });
 });

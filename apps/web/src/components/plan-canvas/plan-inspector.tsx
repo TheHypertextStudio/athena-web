@@ -376,11 +376,7 @@ function DraftProperties(props: DraftProps): JSX.Element {
 function DraftBody(
   props: Omit<PlanInspectorProps, 'nodeRef' | 'onClose' | 'onRemove'> & { readonly node: PlanNode },
 ): JSX.Element {
-  const { plan, node, canEdit, committing, onApply, onConfirm } = props;
-  const confirmation = useMemo(
-    () => describeConfirmation(plan.document, [node.ref]),
-    [plan.document, node.ref],
-  );
+  const { node, onApply } = props;
   const setField = (fields: Record<string, unknown>): void => {
     void onApply([{ op: 'set_fields', ref: node.ref, fields }]);
   };
@@ -388,22 +384,35 @@ function DraftBody(
     <div className="flex flex-col gap-4">
       <DraftText {...props} setField={setField} />
       <DraftProperties {...props} setField={setField} />
-      {canEdit ? (
-        <div className="flex justify-end pt-2">
-          <Button
-            type="button"
-            size="sm"
-            disabled={committing || confirmation.count === 0}
-            title={confirmation.label}
-            onClick={() => {
-              onConfirm([node.ref]);
-            }}
-          >
-            <CheckCircle2 className="size-4" /> Confirm
-          </Button>
-        </div>
-      ) : null}
     </div>
+  );
+}
+
+/** The one action a draft's inspector keeps reachable: Confirm, naming what it creates. */
+function ConfirmFooter({
+  plan,
+  node,
+  committing,
+  onConfirm,
+}: Pick<PlanInspectorProps, 'plan' | 'committing' | 'onConfirm'> & {
+  readonly node: PlanNode;
+}): JSX.Element {
+  const confirmation = useMemo(
+    () => describeConfirmation(plan.document, [node.ref]),
+    [plan.document, node.ref],
+  );
+  return (
+    <Button
+      type="button"
+      size="sm"
+      disabled={committing || confirmation.count === 0}
+      title={confirmation.label}
+      onClick={() => {
+        onConfirm([node.ref]);
+      }}
+    >
+      <CheckCircle2 className="size-4" /> Confirm
+    </Button>
   );
 }
 
@@ -428,7 +437,7 @@ function DraftMenu({ onRemove }: { readonly onRemove: () => void }): JSX.Element
 
 /** The inspector for the selected plan node. */
 export default function PlanInspector(props: PlanInspectorProps): JSX.Element | null {
-  const { plan, nodeRef, canEdit, onRemove, onClose } = props;
+  const { plan, nodeRef, canEdit, committing, onConfirm, onRemove, onClose } = props;
   const node = plan.document.nodes.find((candidate) => candidate.ref === nodeRef);
   if (!node) return null;
   const title = plan.objects[node.ref]?.name ?? node.fields.title;
@@ -439,6 +448,11 @@ export default function PlanInspector(props: PlanInspectorProps): JSX.Element | 
       leading={<PlanStatusGlyph status={node.status} />}
       closeLabel={`Close ${KIND_LABEL[node.kind].toLowerCase()} details`}
       onClose={onClose}
+      footer={
+        draft && canEdit ? (
+          <ConfirmFooter plan={plan} node={node} committing={committing} onConfirm={onConfirm} />
+        ) : undefined
+      }
       actions={
         draft && canEdit ? (
           <DraftMenu

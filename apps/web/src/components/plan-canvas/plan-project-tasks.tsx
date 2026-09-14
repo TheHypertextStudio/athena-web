@@ -123,7 +123,7 @@ export interface PlanProjectBodyProps {
 export function PlanProjectBody({ id, node, actions }: PlanProjectBodyProps): JSX.Element | null {
   if (!node.expanded && node.tasks.length > 0) {
     return (
-      <div className="px-2">
+      <div className="px-2 pt-2">
         <PlanMiniTaskList
           tasks={node.tasks}
           onExpand={() => {

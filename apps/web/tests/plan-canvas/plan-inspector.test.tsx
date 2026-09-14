@@ -76,15 +76,18 @@ vi.mock('@/components/canvas/canvas-inspector', () => ({
     onClose,
     closeLabel,
     actions,
+    footer,
   }: {
     title: string;
     children: ReactNode;
     onClose: () => void;
     closeLabel: string;
     actions?: ReactNode;
+    footer?: ReactNode;
   }) => (
     <section aria-label={title}>
       {actions}
+      {footer}
       <button type="button" aria-label={closeLabel} onClick={onClose} />
       {children}
     </section>

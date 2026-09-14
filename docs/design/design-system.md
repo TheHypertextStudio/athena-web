@@ -432,11 +432,11 @@ function Badge(
 One recipe. Three variants. No shadow in any state — default, hover, focus, filled, disabled, or
 error.
 
-| Variant    | Border                          | Fill                        | Use for                                                                                                  |
-| ---------- | ------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `outlined` | 1px `outline`                   | transparent                 | **default** — the outline is the whole affordance                                                        |
-| `filled`   | 1px bottom activation indicator | `surface-container-highest` | a container plus an indicator, no outline                                                                |
-| `plain`    | none until hover                | none                        | inline editors that must sit on the same axis as the text they replace (a row title you click to rename) |
+| Variant    | Border             | Fill                        | Use for                                                                                                  |
+| ---------- | ------------------ | --------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `outlined` | 1px `outline`      | transparent                 | **default** — the outline is the whole affordance                                                        |
+| `filled`   | none (transparent) | `surface-container-highest` | a rounded container, no outline and no indicator, on a tonal panel                                       |
+| `plain`    | none until hover   | none                        | inline editors that must sit on the same axis as the text they replace (a row title you click to rename) |
 
 Every variant renders a 1px border; `plain` makes it transparent. So a `filled` field and an
 `outlined` field side by side are the same box to the pixel, and changing a field's variant never
@@ -450,9 +450,9 @@ resting outline drifted onto `outline-variant` — a role the spec never names f
 
 The two variants answer "how do I tell this is a field" differently, and neither uses a fill to do
 it. `outlined` has no container token at all: the 1px `outline` is the affordance, at 3.43:1 in
-light and 3.39:1 in dark. `filled` has no outline: `surface-container-highest` plus a bottom
-activation indicator, and the indicator is the mark that carries, because the container alone is
-1.07:1 against a `surface-container-high` panel.
+light and 3.39:1 in dark. `filled` has no outline and, in its expressive reading, no activation indicator either:
+`surface-container-highest` on the control radius, which is why it belongs on a panel that sits
+lower on the ramp and beside a label, and why the focus ring is the mark that carries.
 
 A fill can never carry it alone — the surface ramp spans L 0.93–0.995 in light, so the widest gap it
 offers is about 1.2:1, and 3:1 would take roughly L 0.55, a mid-grey slab. That is the reason MD3

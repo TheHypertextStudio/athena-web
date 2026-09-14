@@ -165,17 +165,13 @@ export function fieldSurface({
     // `md.comp.outlined-text-field`: `outline` at 1px, `on-surface` on hover, and no container
     // token at all — the outline is the whole affordance.
     variant === 'outlined' && 'hover:border-on-surface border-outline bg-transparent',
-    // `md.comp.filled-text-field`: `surface-container-highest` plus an activation indicator, and
-    // no outline. The indicator is the mark that identifies the field — the container alone is
-    // 1.07:1 against a `surface-container-high` panel. Drawn as a bottom border so a filled field
-    // occupies the same 1px box every other variant does and swapping variants shifts nothing.
-    variant === 'filled' &&
-      cn(
-        'bg-surface-container-highest border-transparent border-b-on-surface-variant hover:border-b-on-surface',
-        // `corner-extra-small-top`: the activation indicator is a straight full-width line, and a
-        // rounded bottom curves it away at both ends until it stops reading as one.
-        'rounded-b-none',
-      ),
+    // `md.comp.filled-text-field` in its expressive reading: `surface-container-highest` on the
+    // control radius, no outline, and no activation indicator. The indicator's straight line and
+    // the square bottom corners it needs are what made a filled field read as a box on a line
+    // rather than as a control; the container carries the field, and focus carries the ring. The
+    // transparent border keeps the same 1px box every other variant has, so swapping variants
+    // shifts nothing.
+    variant === 'filled' && 'bg-surface-container-highest border-transparent',
     // `plain` is the exception on purpose: it is the inline editor for a row title or a page
     // heading, where a resting box would draw a rectangle around text that is not being edited.
     // Its affordance is hover and focus.

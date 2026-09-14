@@ -104,42 +104,37 @@ function renderPanel(
   return api;
 }
 
-function HostedConversation({ reveal }: { readonly reveal: (draft?: string) => void }): ReactNode {
-  const { registerHost, launchDraft } = useAthenaPanel();
-  useEffect(() => registerHost({ reveal }), [registerHost, reveal]);
-  return <span data-testid="launch-draft">{launchDraft ?? 'none'}</span>;
+function RailContentWhileMounted(): ReactNode {
+  const { provideRailContent } = useAthenaPanel();
+  useEffect(
+    () => provideRailContent(<div data-testid="rail-content">Plan thread</div>),
+    [provideRailContent],
+  );
+  return null;
 }
 
-function renderHosted(reveal: (draft?: string) => void, onRevealRail: () => void): void {
+function renderWithRailContent(onRevealRail: () => void): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
       <AthenaPanelProvider transport={transport()} railVisible={false} onRevealRail={onRevealRail}>
         <AthenaLaunchers />
-        <HostedConversation reveal={reveal} />
+        <RailContentWhileMounted />
+        <AthenaRailPanel />
       </AthenaPanelProvider>
     </QueryClientProvider>,
   );
 }
 
-describe('AthenaPanelProvider with a route host', () => {
-  it('reveals into the host with the draft and holds no launch draft for the rail', () => {
-    const reveal = vi.fn();
+describe('AthenaPanelProvider with route rail content', () => {
+  it('shows the route’s content in the rail panel and still reveals the rail on open', () => {
     const onRevealRail = vi.fn();
-    renderHosted(reveal, onRevealRail);
+    renderWithRailContent(onRevealRail);
+    expect(
+      within(screen.getByRole('region', { name: 'Athena' })).getByTestId('rail-content'),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open contextual Athena' }));
-    expect(reveal).toHaveBeenCalledTimes(1);
-    expect(onRevealRail).not.toHaveBeenCalled();
-    expect(screen.getByTestId('launch-draft')).toHaveTextContent('none');
-  });
-
-  it('routes the keyboard shortcut to the host as well', () => {
-    const reveal = vi.fn();
-    const onRevealRail = vi.fn();
-    renderHosted(reveal, onRevealRail);
-    fireEvent.keyDown(document.body, { key: 'j', metaKey: true });
-    expect(reveal).toHaveBeenCalledTimes(1);
-    expect(onRevealRail).not.toHaveBeenCalled();
+    expect(onRevealRail).toHaveBeenCalledTimes(1);
   });
 });
 

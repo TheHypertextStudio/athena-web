@@ -5,7 +5,7 @@
  *
  * @remarks
  * The board runs edge to edge: the page owns its scroll, the sidebar drops to its icon rail on
- * most windows, and the shell's right rail collapses because the conversation floats on the canvas.
+ * most windows, and the conversation sits in the shell's right rail, a peer of the whole board.
  * Everything the route holds lives in `plan-route.ts`; this file says what renders in each state.
  */
 import { AppBar, EmptyState, useOwnPageScroll } from '@docket/ui/components';
@@ -23,12 +23,12 @@ import { type JSX, type ReactNode, useCallback } from 'react';
 
 import Link from '@/components/docket-link';
 import PlanCanvasPanel from '@/components/plan-canvas/plan-canvas-panel';
+import { usePlanAthena } from '@/components/plan-canvas/plan-conversation';
 import { useAppLocation, useTypedRoute } from '@/lib/app-location';
 import { useAppRouter } from '@/lib/interactions/navigation';
-import { athenaHref } from '@/lib/athena/query-defs';
 import { userErrorMessage } from '@/lib/problem';
 
-import { usePlanConversation, usePlanRouteData, usePlanShellRequests } from './plan-route';
+import { usePlanRouteData, usePlanShellRequests } from './plan-route';
 
 const START_QUERY = 'athena';
 const START_VALUE = 'start';
@@ -98,7 +98,7 @@ export default function PlanClient(): JSX.Element {
   const { searchParams } = useAppLocation();
   const startRequested = searchParams.get(START_QUERY) === START_VALUE;
   const data = usePlanRouteData(orgId, planId);
-  const conversation = usePlanConversation(orgId, planId, data.plan, startRequested);
+  usePlanAthena(orgId, planId, data.plan, startRequested);
   const open = useCallback(
     (href: string) => {
       router.push(href);
@@ -139,19 +139,12 @@ export default function PlanClient(): JSX.Element {
         committing={data.committing}
         onCommit={data.onCommit}
         remoteDiff={data.remoteDiff}
-        onAskAthena={conversation.ask}
         onOpen={open}
         memberOptions={data.memberOptions}
         resolveActor={data.resolveActor}
         initiativeOptions={data.initiativeOptions}
         className="min-h-0 flex-1"
         chrome={{ title: data.plan.title, navigation }}
-        conversation={{
-          open: conversation.open,
-          draftRequest: conversation.draftRequest,
-          fullHref: athenaHref({ workspaceId: orgId }),
-          onToggle: conversation.setOpen,
-        }}
       />
     </Surface>
   );

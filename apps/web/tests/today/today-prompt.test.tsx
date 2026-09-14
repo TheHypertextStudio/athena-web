@@ -76,7 +76,7 @@ describe('TodayPrompt', () => {
   it('puts both destinations in one segmented control, with Athena armed', () => {
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
     expect(screen.getByLabelText('Ask Athena about today')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
 
     // One control with two positions, not two adjacent chips. The chevron this replaces kept the
     // armed destination off-screen, so the same Enter key inserted a row or started an agent
@@ -91,7 +91,7 @@ describe('TodayPrompt', () => {
     const first = render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
     typeDraft('Plan the launch');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ask Athena' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     expect(openAthena).toHaveBeenCalledOnce();
     expect(capturePost).not.toHaveBeenCalled();
@@ -100,7 +100,7 @@ describe('TodayPrompt', () => {
     first.unmount();
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
     });
   });
 
@@ -125,7 +125,7 @@ describe('TodayPrompt', () => {
     render(<TodayPrompt orgId={ORG} orgLabel="Space" onStartSession={onStartSession} />);
     typeDraft('Plan the launch');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ask Athena' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     // Exactly one surface. Firing both put the dock on top of the page that had just become the
     // same conversation — two Athena surfaces at once, which is the thing the model forbids.
@@ -137,7 +137,7 @@ describe('TodayPrompt', () => {
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
     typeDraft('Plan the launch');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ask Athena' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     expect(openAthena).toHaveBeenCalledOnce();
   });
@@ -154,13 +154,13 @@ describe('TodayPrompt', () => {
 
   it('keeps the send disabled until there is something to send', () => {
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
-    expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
 
     typeDraft('   ');
-    expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
 
     typeDraft('Real work');
-    expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
   });
 
   it('accepts dropped files, arms Task mode, and collapses past three behind a count', () => {
@@ -199,7 +199,7 @@ describe('TodayPrompt', () => {
     const box = screen.getByLabelText('Ask Athena about today').closest('div[style]');
 
     // Athena still needs words; a task does not, and the composer already accepted the file.
-    expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
     fireEvent.drop(assertDefined(box), {
       dataTransfer: { files: [new File(['x'], 'brief.pdf')], types: ['Files'] },
     });

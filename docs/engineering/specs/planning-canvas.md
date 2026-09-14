@@ -119,24 +119,30 @@ spills into a second column.
 
 The route is immersive: the board runs edge to edge under floating chrome, and `useOwnPageScroll`
 keeps the page from scrolling under it. `PlanBar` composes the shared `CanvasFloatingBar` (an
-`AppBar` in its `floating` presentation) with the way back, the title, `CanvasSearchField`, "+ Project", and the draft count; when something is selected the count gives way to `PlanSelectionActions` in the same row, with Open and Remove as icon buttons. The bar carries no Athena button: the route claims the rail's Athena icon (`useShellRail().claimPanel`) so that icon opens and closes the floating conversation instead of expanding the rail. The bar spans the width the floating columns leave it and
+`AppBar` in its `floating` presentation) with the way back, the title, `CanvasSearchField`, "+ Project", and the draft count; when something is selected the count gives way to `PlanSelectionActions` in the same row, with Open and Remove as icon buttons. The bar carries no Athena button: the conversation is the shell's rail, and the rail's own Athena icon opens and closes it. The bar spans the width the floating inspector leaves it and
 follows the `AppBar` rule for that row: the title takes the room the fixed slots leave and
 truncates first, controls and actions never shrink, and the selection group scrolls in the `fill`
 slot. The inspector floats in `GraphInspectorHost`'s `floating` presentation over the board's right
-edge, and `PlanConversation` floats beside it as a `CanvasFloatingColumn` hosting
-`AthenaConversation` on the organisation thread, which is the session `plan_start` binds to. The
-route registers itself as the Athena host (`registerHost`) while the window is at least 1024px, so
-every "open Athena" on the route lands in that column with any draft seeded through
-`draftRequest`; narrower windows fall back to the shell's sheet. A floating column takes focus
-itself when the control that had focus unmounts, so Escape after Confirm still closes it.
+edge. The conversation is a peer of the whole board, so it lives where the shell keeps a peer of
+`<main>`: the right rail's Athena panel. While the route is mounted, `usePlanAthena` in
+`plan-conversation.tsx` hands the rail `PlanRailConversation` through the Athena provider's
+`provideRailContent`, and `AthenaRailPanel` shows that in place of the queue: the Athena mark, an
+icon to the full page, and `AthenaConversation` on the organisation thread, which is the session
+`plan_start` binds to, with a one-line empty state since the board beside it is the subject. The
+route reveals the rail on arrival, and an entry point that asks for a start (`?athena=start`)
+opens it with an opening line, which the thread's composer takes from the provider's launch
+draft. The rail's own icon collapses and expands it, and the shell's sheet serves it on a compact
+window. Below a 1280px window (`PLAN_RAIL_WIDE_PX`) the route asks the shell to rest the rail
+collapsed so the board keeps the room, and a start or the rail's icon still expands it: a host's rail
+request overrides a surface's collapse request in the shell, as the icon does. The inspector's column takes focus itself when the control that had focus unmounts, so
+Escape after Confirm still closes it.
 
 The panel measures its overlays into `CanvasOverlayInsets` (bar height plus the gutter on top;
-inspector plus conversation on the right) and hands them to `Canvas` as `overlayInsets`, so the
+the inspector on the right) and hands them to `Canvas` as `overlayInsets`, so the
 first frame (`frameAnchor="start"`, anchored to the board's left), `revealAdditions`, and every fit
 keep clear of the chrome. When the inspector docks, the panel refits the whole board if the strip
 it leaves is narrower than the board (`boardOverflows`) and otherwise nudges the selection into
-view. Below a 1200px host the inspector and the conversation take turns (`ONE_PANEL_BELOW_PX`):
-opening one closes the other. Below the compact threshold the covering pane and the shell sheet
+view. Below the compact threshold the covering pane and the shell sheet
 still apply. The route asks the shell for its icon rail on any window under 1920px
 (`useShellSidebar().requestCompact`) and for a collapsed right rail (`useShellRail()
 .requestCollapsed`) while mounted; both requests are scoped to the route, never touch the viewer's

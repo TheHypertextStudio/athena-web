@@ -12,7 +12,7 @@
 import { useVocabulary } from '@docket/ui/hooks';
 import { Sparkles } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
-import type { JSX } from 'react';
+import { type JSX, useSyncExternalStore } from 'react';
 
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { useCreatePlan } from '@/lib/plan-draft/defs';
@@ -25,6 +25,17 @@ export interface PlanWithAthenaActionProps {
   readonly enabled: boolean;
 }
 
+const subscribeToNothing = (): (() => void) => () => undefined;
+
+/** Whether React has hydrated this tree; false during the server render and the first client paint. */
+function useHydrated(): boolean {
+  return useSyncExternalStore(
+    subscribeToNothing,
+    () => true,
+    () => false,
+  );
+}
+
 /** The Plan with Athena action. */
 export function PlanWithAthenaAction({
   orgId,
@@ -34,11 +45,13 @@ export function PlanWithAthenaAction({
   const noun = useVocabulary('initiative');
   const router = useAppRouter();
   const createPlan = useCreatePlan();
+  const hydrated = useHydrated();
   if (!enabled) return null;
   return (
     <Button
       variant="ghost"
-      disabled={createPlan.isPending}
+      // Disabled until hydration so a click on the server-rendered button is never lost.
+      disabled={!hydrated || createPlan.isPending}
       aria-label={`Plan this ${noun.toLowerCase()} with Athena`}
       data-testid="plan-with-athena"
       onClick={() => {

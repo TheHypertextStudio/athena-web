@@ -58,9 +58,10 @@ scale — that wins, and this file gets corrected first.
 | `focus-active-indicator-color`  | `primary`                                         |
 | `focus-active-indicator-height` | 2px (v0_192); the unversioned file hardcodes 3px  |
 
-A filled field has **no outline**. The container and the activation indicator identify it, which is
-why the fill alone measuring 1.07:1 against a `surface-container-high` panel is not the whole story
-— the indicator is the mark that carries.
+A filled field has **no outline**. Docket's expressive reading draws no activation indicator
+either: the container on the control radius identifies the field beside its label, and the focus
+ring is the mark that carries while editing; the fill alone measures 1.07:1 against a
+`surface-container-high` panel, so a filled field belongs on a lower panel with a label.
 
 ## Where Docket differs, and why
 

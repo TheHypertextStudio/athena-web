@@ -18,7 +18,7 @@
 import { parseMcpAppPresentation } from '@docket/integrations/mcp-apps-contract';
 import { type SessionActivityOut } from '@docket/athena/agent-contract';
 import { EmptyState } from '@docket/ui/components';
-import { Cable, Sparkles } from '@docket/ui/icons';
+import { ArrowUp, Cable, Sparkles } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import {
   Button,
@@ -51,8 +51,22 @@ import { useSessionDetail } from '@/lib/use-session-detail';
 import { startViewTransition } from '@/lib/view-transition';
 import MentionTextarea from '@/components/mentions/mention-textarea';
 
+/** What the thread shows before its first message. */
+export interface ConversationEmptyState {
+  readonly title: string;
+  readonly body?: string | undefined;
+}
+
+/** The empty state a standalone door shows; a door with its own subject passes a shorter one. */
+const DEFAULT_EMPTY_STATE: ConversationEmptyState = {
+  title: 'This is your line to Athena',
+  body: 'Try "What should I focus on today?" or "Create a plan to make sure I get more sleep."',
+};
+
 /** Props for {@link AthenaConversation}. */
 export interface AthenaConversationProps {
+  /** What to show before the first message; defaults to the standalone door's prompt. */
+  emptyState?: ConversationEmptyState | undefined;
   /** The org whose persistent chat thread to render. */
   orgId: string;
   /** Extra class names for the root element (host controls height/width). */
@@ -145,6 +159,7 @@ function useThreadWrites(orgId: string, onError: (message: string) => void): Thr
 
 /** AthenaConversation renders the org's persistent Athena conversation. */
 export default function AthenaConversation({
+  emptyState,
   orgId,
   className,
   initialDraft,
@@ -154,6 +169,7 @@ export default function AthenaConversation({
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const { draft, setDraft, composerRef } = useComposerDraft(initialDraft, draftRequest);
+  const empty = emptyState ?? DEFAULT_EMPTY_STATE;
   const [connectOpen, setConnectOpen] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const { commitThread, reloadWithTransition, sendWidgetMessage } = useThreadWrites(
@@ -218,12 +234,7 @@ export default function AthenaConversation({
             ) : null}
           </>
         ) : (
-          <EmptyState
-            icon={Sparkles}
-            title="This is your line to Athena"
-            body='Try "What should I focus on today?" or "Create a plan to make sure I get more sleep."'
-            frame="none"
-          />
+          <EmptyState icon={Sparkles} title={empty.title} body={empty.body} frame="none" />
         )}
         {sending ? (
           <p className="text-on-surface-variant text-body-medium italic" aria-live="polite">
@@ -241,7 +252,10 @@ export default function AthenaConversation({
 
       <form
         ref={composerRef}
-        className="flex items-end gap-2 pt-2"
+        className={cn(
+          surfaceToneColor('prominent'),
+          'focus-within:ring-ring mt-2 flex flex-col gap-1 rounded-lg p-2 transition-shadow focus-within:ring-1',
+        )}
         onSubmit={(event) => {
           event.preventDefault();
           void send();
@@ -250,7 +264,7 @@ export default function AthenaConversation({
         <MentionTextarea
           aria-label="Message Athena"
           placeholder="Ask Athena anything…"
-          rows={2}
+          rows={3}
           value={draft}
           disabled={sending}
           onChange={setDraft}
@@ -262,35 +276,36 @@ export default function AthenaConversation({
               void send();
             }
           }}
-          className={cn(
-            surfaceToneColor('canvas'),
-            'border-outline-variant placeholder:text-on-surface-variant text-body-medium w-full resize-none rounded-xl border px-4 py-3',
-            'focus-visible:ring-ring transition-colors outline-none focus-visible:ring-1 disabled:opacity-50',
-          )}
+          className="placeholder:text-on-surface-variant text-body-medium w-full resize-none bg-transparent px-2 py-1.5 outline-none disabled:opacity-50"
         />
-        <Button type="submit" disabled={sending || draft.trim().length === 0}>
-          {sending ? 'Sending…' : 'Send'}
-        </Button>
-      </form>
-
-      <div className="flex items-center justify-end gap-1 pt-1">
-        {/* There is no "New chat" control, and that is deliberate: a person has one Athena
+        <div className="flex items-center justify-between">
+          {/* There is no "New chat" control, and that is deliberate: a person has one Athena
             conversation, and its topics are derived by {@link AthenaConversationBrowser} rather
             than declared by hand. Starting a second thread was the only way to file a change of
             subject, and it cost you every earlier one. */}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="text-on-surface-variant gap-1.5"
-          onClick={() => {
-            setConnectOpen(true);
-          }}
-        >
-          <Cable aria-hidden="true" className="size-4" />
-          Connect a tool or app
-        </Button>
-      </div>
+          <Button
+            type="button"
+            variant="ghost"
+            iconOnly
+            aria-label="Connect a tool or app"
+            title="Connect a tool or app"
+            onClick={() => {
+              setConnectOpen(true);
+            }}
+          >
+            <Cable aria-hidden="true" className="size-4" />
+          </Button>
+          <Button
+            type="submit"
+            iconOnly
+            aria-label={sending ? 'Sending' : 'Send'}
+            title="Send"
+            disabled={sending || draft.trim().length === 0}
+          >
+            <ArrowUp aria-hidden="true" className="size-4" />
+          </Button>
+        </div>
+      </form>
 
       <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
         <DialogContent>

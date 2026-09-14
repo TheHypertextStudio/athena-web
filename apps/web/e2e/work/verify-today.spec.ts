@@ -63,7 +63,7 @@ test('capture today + calendar baseline', async ({ page }, testInfo) => {
     timeout: 30_000,
   });
   await page.getByRole('textbox', { name: 'Ask Athena about today' }).fill('Help me plan today');
-  await page.getByRole('button', { name: 'Ask Athena', exact: true }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Athena', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Close Athena' })).toBeVisible();
   await page.getByRole('button', { name: 'Close Athena' }).click();
@@ -151,7 +151,7 @@ test('capture today + calendar baseline', async ({ page }, testInfo) => {
   await page.screenshot({ path: testInfo.outputPath('today-baseline.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   for (const control of [
-    page.getByRole('button', { name: 'Ask Athena' }),
+    page.getByRole('button', { name: 'Send' }),
     page.getByRole('button', { name: /Switch to Add a task/ }),
   ]) {
     expect((await control.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(40);

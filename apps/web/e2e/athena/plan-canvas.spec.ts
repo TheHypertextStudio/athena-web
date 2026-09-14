@@ -145,5 +145,10 @@ test.describe('Planning canvas', () => {
     const root = page.locator('[data-plan-ref="root"]');
     await expect(root).toBeVisible({ timeout: TIMEOUTS.pageReady });
     await expect(root).toHaveAttribute('data-plan-status', 'confirmed');
+    // The conversation is the shell's rail, a peer of the whole board, seeded with the opening line.
+    const rail = page.getByRole('complementary', { name: 'Athena' });
+    await expect(rail.getByLabel('Message Athena')).toHaveValue(/Help me plan/, {
+      timeout: TIMEOUTS.ui,
+    });
   });
 });

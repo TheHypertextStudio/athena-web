@@ -151,9 +151,6 @@ export default function TodayPage(): JSX.Element {
           onAdd={actions.add}
           onStart={actions.start}
           busy={actions.suggestionBusy}
-          onAskAthena={() => {
-            openTodayAthena('What else can I move today?');
-          }}
         />
       ) : null}
 

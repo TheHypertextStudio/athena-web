@@ -28,7 +28,6 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX, useId, useState } from 'react';
 
-import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 import { useApiListQuery } from '@/lib/query';
 
 import { calendarLayersDef } from '../calendar-data';
@@ -121,18 +120,8 @@ function OpenCalendarItemPeek({
 }: OpenCalendarItemPeekProps): JSX.Element {
   const anchored = useMediaQuery(ANCHORED_PEEK_QUERY);
   const titleId = useId();
-  const { openAthena } = useAthenaPanel();
   const layersQuery = useApiListQuery(calendarLayersDef());
   const layer = layersQuery.data?.items.find((candidate) => candidate.id === item.layerId);
-
-  const askAthena = (): void => {
-    const workspaceId = item.linkedTasks[0]?.organizationId;
-    onClose();
-    openAthena({
-      ...(workspaceId ? { workspaceId } : {}),
-      source: { type: 'calendar_item', id: item.id, label: item.title },
-    });
-  };
 
   const body = (
     <CalendarItemPeek
@@ -141,7 +130,6 @@ function OpenCalendarItemPeek({
       displayTimezone={displayTimezone}
       titleId={titleId}
       onOpenDetail={onOpenDetail}
-      onAskAthena={askAthena}
       onRequestDelete={onRequestDelete}
     />
   );

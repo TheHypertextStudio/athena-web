@@ -1,7 +1,7 @@
 'use client';
 
 import type { HubTodaySuggestion } from '../../lib/contracts/hub';
-import { ArrowRight, Play, Plus, Sparkles, X } from '@docket/ui/icons';
+import { ArrowRight, Play, Plus, X } from '@docket/ui/icons';
 import { Button, ControlGroup } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { type JSX, useMemo, useState } from 'react';
@@ -16,7 +16,6 @@ export interface SuggestedTasksProps {
   readonly orgName: (organizationId: string) => string;
   readonly onAdd: (suggestion: HubTodaySuggestion) => void;
   readonly onStart: (suggestion: HubTodaySuggestion) => void;
-  readonly onAskAthena?: () => void;
   readonly busy?: boolean;
   readonly blockedPlan?: boolean;
 }
@@ -27,7 +26,6 @@ export default function SuggestedTasks({
   orgName,
   onAdd,
   onStart,
-  onAskAthena,
   busy = false,
   blockedPlan = false,
 }: SuggestedTasksProps): JSX.Element {
@@ -122,11 +120,6 @@ export default function SuggestedTasks({
               ? 'Open the blocked task to resolve its dependency, or ask Athena to rebuild the plan.'
               : 'No remaining task fits the time left. Athena can rebuild the rest of the day.'}
           </p>
-          {onAskAthena ? (
-            <Button type="button" variant="outline" className="mt-3" onClick={onAskAthena}>
-              <Sparkles aria-hidden="true" /> Ask Athena
-            </Button>
-          ) : null}
         </div>
       )}
     </TodaySection>

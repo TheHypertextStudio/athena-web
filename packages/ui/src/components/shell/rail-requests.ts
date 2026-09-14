@@ -128,8 +128,7 @@ export interface RailPanelClicks {
  * @remarks
  * The activity bar exists only at desktop widths (it hides itself in CSS), so this always means
  * "toggle the docked panel" — there is no width at which the same control does something else.
- * A surface that hosts a panel's content itself claims that panel's icon; the click goes to the
- * surface and the rail stays where it is. Expanding over a surface's collapse request is the
+ * Expanding over a surface's collapse request is the
  * viewer's call for as long as that surface is open; it says nothing about what they want
  * elsewhere, so nothing is saved.
  */
@@ -139,20 +138,8 @@ export function useRailPanelClicks({
   activePanelId,
   setRail,
 }: RailPanelClicksInput): RailPanelClicks {
-  const panelClaims = React.useRef(new Map<string, () => void>());
-  const claimPanel = React.useCallback((id: string, onClick: () => void) => {
-    panelClaims.current.set(id, onClick);
-    return () => {
-      if (panelClaims.current.get(id) === onClick) panelClaims.current.delete(id);
-    };
-  }, []);
   const handlePanelIconClick = React.useCallback(
     (id: string) => {
-      const claimed = panelClaims.current.get(id);
-      if (claimed) {
-        claimed();
-        return;
-      }
       if (railCollapse.requested) {
         railCollapse.override();
         if (id !== activePanelId) setRail((current) => ({ ...current, activeId: id }));
@@ -170,8 +157,8 @@ export function useRailPanelClicks({
     [activePanelId, railCollapse, railCollapsed, setRail],
   );
   const railState = React.useMemo<ShellRailState>(
-    () => ({ collapsed: railCollapsed, requestCollapsed: railCollapse.request, claimPanel }),
-    [claimPanel, railCollapse.request, railCollapsed],
+    () => ({ collapsed: railCollapsed, requestCollapsed: railCollapse.request }),
+    [railCollapse.request, railCollapsed],
   );
   return { handlePanelIconClick, railState };
 }

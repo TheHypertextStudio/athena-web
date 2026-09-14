@@ -48,6 +48,5 @@ describe('ambient Athena entry points', () => {
     const today = read('apps/web/src/app/(app)/today/page.tsx');
     expect(today).not.toContain('TodaySession');
     expect(today).toContain("openTodayAthena('Plan today')");
-    expect(today).toContain("openTodayAthena('What else can I move today?')");
   });
 });

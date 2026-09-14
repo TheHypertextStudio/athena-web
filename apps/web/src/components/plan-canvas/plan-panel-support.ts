@@ -14,7 +14,6 @@ import type {
   PlanOp,
 } from '@docket/work/plan-draft-contract';
 import type { Node, ReactFlowInstance } from '@xyflow/react';
-import { useCallback, useRef, useState } from 'react';
 
 import {
   type CanvasOverlayInsets,
@@ -23,17 +22,17 @@ import {
 
 import { PLAN_NODE_TYPE } from './plan-nodes';
 
+/**
+ * Below this window width the rail's conversation stays collapsed until asked for, and the board
+ * keeps the room: a plan beside an open rail on a narrower window leaves no board to read.
+ */
+export const PLAN_RAIL_WIDE_PX = 1280;
 /** How long the "Athena updated" pill stays up. */
 export const PILL_VISIBLE_MS = 4_000;
 /** Zoom floor when widening the viewport around what Athena added; below it a row is unreadable. */
 export const REVEAL_MIN_ZOOM = 0.5;
 /** The gutter a reveal keeps clear inside the visible board, before any floating chrome. */
 export const REVEAL_PADDING = 32;
-/**
- * Below this host width the inspector and the conversation take turns: opening one closes the
- * other, because two floating columns beside each other would leave no board to read.
- */
-export const ONE_PANEL_BELOW_PX = 1200;
 /** The dot grid under a plan: sparser and lighter than the graphs', since containers tile it. */
 export const PLAN_DOT_GRID = {
   gap: 32,
@@ -266,22 +265,4 @@ export function planStartState(
   if (plan.document.nodes.length === 0) return 'empty';
   if (projectCount === 0 && rootInitiativeRef !== null) return 'initiative-only';
   return 'underway';
-}
-
-/** The measured inline size of an element, 0 until it is known. */
-export function useElementWidth(): [number, (node: HTMLDivElement | null) => void] {
-  const [width, setWidth] = useState(0);
-  const observer = useRef<ResizeObserver | null>(null);
-  const attach = useCallback((node: HTMLDivElement | null) => {
-    observer.current?.disconnect();
-    observer.current = null;
-    if (node === null || typeof ResizeObserver === 'undefined') return;
-    setWidth(node.getBoundingClientRect().width);
-    observer.current = new ResizeObserver((entries) => {
-      const next = entries[0]?.contentRect.width;
-      if (typeof next === 'number') setWidth(next);
-    });
-    observer.current.observe(node);
-  }, []);
-  return [width, attach];
 }

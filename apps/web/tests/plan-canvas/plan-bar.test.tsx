@@ -71,7 +71,6 @@ function selection(refs: readonly string[]): PlanSelectionActionsProps {
     committing: false,
     onConfirm: vi.fn(),
     onRemove: vi.fn(),
-    onAsk: vi.fn(),
     onOpen: vi.fn(),
   };
 }

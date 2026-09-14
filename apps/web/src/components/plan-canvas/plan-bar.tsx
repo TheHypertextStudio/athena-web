@@ -9,7 +9,7 @@
  * way to the selection's actions in that same row, so nothing floats over the board and covers a
  * node. The conversation opens from the rail's Athena icon, which the route claims.
  */
-import { CheckCircle2, OpenInNew, Plus, Sparkles, Trash2 } from '@docket/ui/icons';
+import { CheckCircle2, OpenInNew, Plus, Trash2 } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Button } from '@docket/ui/primitives';
 import type { PlanDraftOut } from '@docket/work/plan-draft-contract';
@@ -32,13 +32,11 @@ export interface PlanSelectionActionsProps {
   readonly onConfirm: (refs: readonly string[]) => void;
   /** Remove these draft refs. */
   readonly onRemove: (refs: readonly string[]) => void;
-  /** Open the conversation about these refs. */
-  readonly onAsk: (refs: readonly string[]) => void;
   /** Open a confirmed node's real record. */
   readonly onOpen: (href: string) => void;
 }
 
-/** The actions for the current selection: count, Confirm, Open, Ask Athena, Remove. */
+/** The actions for the current selection: count, Confirm, Open, Remove. */
 export function PlanSelectionActions({
   plan,
   refs,
@@ -46,7 +44,6 @@ export function PlanSelectionActions({
   committing,
   onConfirm,
   onRemove,
-  onAsk,
   onOpen,
 }: PlanSelectionActionsProps): JSX.Element {
   const confirmation = useMemo(() => describeConfirmation(plan.document, refs), [plan, refs]);
@@ -87,18 +84,6 @@ export function PlanSelectionActions({
           <OpenInNew className="size-4" />
         </Button>
       ) : null}
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        aria-label="Ask Athena"
-        title="Ask Athena"
-        onClick={() => {
-          onAsk(refs);
-        }}
-      >
-        <Sparkles className="size-4" /> <span className="hidden @lg:inline">Ask Athena</span>
-      </Button>
       {canEdit && drafts.length > 0 ? (
         <Button
           type="button"

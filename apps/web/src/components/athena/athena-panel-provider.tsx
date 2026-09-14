@@ -13,7 +13,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react';
 import { type UseQueryResult, useQueryClient } from '@tanstack/react-query';
@@ -58,15 +57,6 @@ export function isAthenaShortcut(event: KeyboardEvent): boolean {
   );
 }
 
-/**
- * A surface that hosts the conversation itself, so an "open Athena" from anywhere on the route
- * lands in it instead of the shell's rail.
- */
-export interface AthenaConversationHost {
-  /** Show the conversation, seeding the composer with `draft` when one is given. */
-  readonly reveal: (draft?: string) => void;
-}
-
 /** State and controls shared by contextual Athena entry points and its utility-rail panel. */
 export interface AthenaPanelValue {
   readonly context: PersonalAthenaContext | null;
@@ -88,11 +78,14 @@ export interface AthenaPanelValue {
   readonly detachContext: () => void;
   readonly openAthena: (context?: PersonalAthenaContext | null, draft?: string) => void;
   readonly closeAthena: () => void;
+  /** What a route asked the rail's Athena panel to show in place of the queue, if anything. */
+  readonly railContent: ReactNode | null;
   /**
-   * Register the route's own conversation host. While one is registered, every reveal goes to it
-   * and no launch draft is held for the rail. Returns the release; call it on unmount.
+   * Hand the rail's Athena panel this content while the route is mounted: a surface whose subject
+   * is a conversation shows it where the shell keeps a peer of `<main>`. Returns the release;
+   * call it on unmount.
    */
-  readonly registerHost: (host: AthenaConversationHost) => () => void;
+  readonly provideRailContent: (content: ReactNode) => () => void;
   readonly selectSession: (session: PersonalAthenaSessionSummary) => void;
   readonly sendMessage: (body: string) => void;
   readonly lifecycle: (action: 'run' | 'pause' | 'resume' | 'cancel') => void;
@@ -115,38 +108,13 @@ export interface AthenaPanelProviderProps {
     ((context: PersonalAthenaContext | null, draft: string | undefined) => void) | undefined;
 }
 
-/** What {@link useAthenaReveal} returns. */
-interface AthenaReveal {
-  /** Whether a route currently hosts the conversation itself. */
-  readonly hosted: () => boolean;
-  readonly registerHost: (host: AthenaConversationHost) => () => void;
-  /** Reveal the conversation where it lives: the host, the rail, or the full page. */
-  readonly reveal: (nextContext: PersonalAthenaContext | null, draft: string | undefined) => void;
-}
-
-/**
- * Where "open Athena" lands. A route that hosts the conversation itself registers as the host
- * and takes every reveal, draft included; otherwise the rail, and failing that the full page.
- */
+/** Where "open Athena" lands: the shell's rail when it offers one, else the full page. */
 function useAthenaReveal(
   onRevealRail: (() => void) | undefined,
   onOpenFullAthena: AthenaPanelProviderProps['onOpenFullAthena'],
-): AthenaReveal {
-  const hostRef = useRef<AthenaConversationHost | null>(null);
-  const hosted = useCallback(() => hostRef.current !== null, []);
-  const registerHost = useCallback((host: AthenaConversationHost): (() => void) => {
-    hostRef.current = host;
-    return () => {
-      if (hostRef.current === host) hostRef.current = null;
-    };
-  }, []);
-  const reveal = useCallback(
+): (nextContext: PersonalAthenaContext | null, draft: string | undefined) => void {
+  return useCallback(
     (nextContext: PersonalAthenaContext | null, draft: string | undefined): void => {
-      const host = hostRef.current;
-      if (host) {
-        host.reveal(draft);
-        return;
-      }
       if (onRevealRail) {
         onRevealRail();
         return;
@@ -155,7 +123,24 @@ function useAthenaReveal(
     },
     [onOpenFullAthena, onRevealRail],
   );
-  return { hosted, registerHost, reveal };
+}
+
+/** What a route asked the rail's Athena panel to show, and the way to ask. */
+interface RailContent {
+  readonly railContent: ReactNode | null;
+  readonly provideRailContent: (content: ReactNode) => () => void;
+}
+
+/** The rail content a route provides while mounted; releasing it restores the queue. */
+function useRailContent(): RailContent {
+  const [railContent, setRailContent] = useState<ReactNode | null>(null);
+  const provideRailContent = useCallback((content: ReactNode): (() => void) => {
+    setRailContent(content);
+    return () => {
+      setRailContent(null);
+    };
+  }, []);
+  return { railContent, provideRailContent };
 }
 
 /**
@@ -209,7 +194,8 @@ export function AthenaPanelProvider({
     },
   });
 
-  const { hosted, registerHost, reveal } = useAthenaReveal(onRevealRail, onOpenFullAthena);
+  const reveal = useAthenaReveal(onRevealRail, onOpenFullAthena);
+  const { railContent, provideRailContent } = useRailContent();
   const openAthena = useCallback(
     (nextContext?: PersonalAthenaContext | null, draft?: string) => {
       const effective =
@@ -219,9 +205,7 @@ export function AthenaPanelProvider({
       setContext(resolvedContext);
       setSelectedId('');
       setContextAttached(true);
-      // A hosted conversation takes the draft itself; the rail's "Start this work" composer only
-      // holds one when the rail is where the reveal lands.
-      setLaunchDraft(startsNewWork && !hosted() ? (draft?.trim() ?? '') : null);
+      setLaunchDraft(startsNewWork ? (draft?.trim() ?? '') : null);
       reveal(resolvedContext, startsNewWork ? draft : undefined);
     },
     [pageContext, reveal],
@@ -284,7 +268,8 @@ export function AthenaPanelProvider({
       },
       openAthena,
       closeAthena,
-      registerHost,
+      railContent,
+      provideRailContent,
       selectSession: (session) => {
         setLaunchDraft(null);
         setContext({
@@ -315,7 +300,8 @@ export function AthenaPanelProvider({
       openAthena,
       queue,
       railStatus,
-      registerHost,
+      railContent,
+      provideRailContent,
       selected,
       selectedId,
     ],
@@ -324,9 +310,30 @@ export function AthenaPanelProvider({
   return <AthenaPanelContext.Provider value={value}>{children}</AthenaPanelContext.Provider>;
 }
 
-/** Render Athena's compact rail, which shows either the queue or one selected work session. */
+/**
+ * Render Athena's compact rail: a route's own conversation when one provides it, else the queue
+ * or one selected work session.
+ */
 export function AthenaRailPanel(): JSX.Element {
-  // placeholder: Athena's work queue, or the detail of the item selected in it.
+  const { railContent } = useAthenaPanel();
+  if (railContent) {
+    return (
+      <Surface
+        as="section"
+        tone="page"
+        shape="none"
+        className="flex h-full min-h-0 flex-col"
+        aria-label="Athena"
+      >
+        {railContent}
+      </Surface>
+    );
+  }
+  return <AthenaRailQueue />;
+}
+
+/** The queue, or the detail of the item selected in it. */
+function AthenaRailQueue(): JSX.Element {
   const athena = useAthenaPanel();
   const groups = useMemo(() => {
     const sessions = athena.queue.data

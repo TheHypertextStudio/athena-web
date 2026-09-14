@@ -205,9 +205,6 @@
   "apps/web/src/components/calendar/item-drawer/relation-row.tsx": {
     "raw-radius-utility": 1
   },
-  "apps/web/src/components/canvas/canvas-inspector.tsx": {
-    "ad-hoc-border": 2
-  },
   "apps/web/src/components/canvas/canvas-properties-editor.tsx": {
     "ad-hoc-border": 2
   },

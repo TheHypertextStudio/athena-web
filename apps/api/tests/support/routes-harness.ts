@@ -55,6 +55,27 @@ function drainingDeferredWork<T extends Hono<AppEnv>>(app: T): T {
   return app;
 }
 
+/**
+ * The composed `/v1` app behind the session middleware, in the root server's order.
+ *
+ * @remarks
+ * `sessionMiddleware` is registered on the root server rather than on `app`, so a test driving
+ * `app` alone would reach `requireAuth` with no session set. Wrapping it here reproduces the
+ * production order (resolve the session, then gate) without booting a listener. Use it when a
+ * test depends on the global middleware, such as media-type negotiation or `Location` URLs.
+ *
+ * @returns an app whose `request` runs the full `/v1` middleware stack.
+ */
+export async function composedV1App(): Promise<Hono> {
+  const { app: v1 } = await import('../../src/app');
+  const { sessionMiddleware } = await import('../../src/auth/session-middleware');
+  const app = new Hono();
+  app.use('*', sessionMiddleware as never);
+  app.route('/', v1 as never);
+  app.onError(onError);
+  return app;
+}
+
 /** Mount a router behind an injected actor context (and optional session). */
 export function appWithActor(
   router: unknown,

@@ -1,11 +1,44 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-09-13
+> **Last Updated**: 2026-09-14
 
 ---
 
 ## Active Tasks
+
+### [ATHENA-SSE-406-001] A browser can open an Athena activity stream
+
+- **Completed**: 2026-09-14
+- **Priority**: P1
+- **Summary**: Every `EventSource` connection to a session stream answered `406 not_acceptable`.
+  The browser sends `Accept: text/event-stream`, and the global media-type middleware accepted
+  only JSON, so it refused the request before the route ran. The org chat thread and the planning
+  canvas logged two 406 errors per load and fell back to polling. The personal Athena thread and
+  the agent-updates stream had the same refusal.
+
+#### Change
+
+`producesEventStream` in `apps/api/src/lib/media-types.ts` registers a handler in a stream route's
+chain. The middleware reads the request's matched handlers, and a registered one adds
+`text/event-stream` to what that route can produce. `describeEventStream` in `openapi-route.ts`
+documents the `200` as `text/event-stream` and registers the same middleware, so the documented
+media type and the negotiated one come from one declaration. The org session stream, the personal
+session stream, and the agent-updates stream use it. Every other endpoint still answers an
+event-stream `Accept` with `406`, and errors on a stream route stay `application/problem+json`.
+
+- **Files changed**: `apps/api/src/lib/media-types.ts`, `apps/api/src/lib/openapi-route.ts`,
+  `apps/api/src/routes/agent-sessions.ts`, `apps/api/src/routes/me-athena.ts`,
+  `apps/api/tests/routes/event-stream-negotiation.test.ts`, `apps/api/tests/routes/rest-mechanics.test.ts`,
+  `apps/api/tests/support/routes-harness.ts` (`composedV1App`, the full `/v1` stack both suites
+  now share).
+- **Validation**: the new suite failed with 406 before the change and passes after it. The 23
+  API suites covering sessions, personal Athena, REST mechanics, and the OpenAPI spec pass. Root
+  `typecheck`, `lint`, and the complexity ledger are green.
+- **Learnings**: route tests that mount a bare router skip the global middleware, so the existing
+  stream test passed while the browser was refused. Negotiation checks belong on the composed
+  `/v1` app. The agent-sessions route file sits exactly at its line ceiling, so the declaration had
+  to fit inside the existing `describeRoute` call.
 
 ### [ATHENA-COMPANION-001] Athena becomes a page-aware companion thread
 

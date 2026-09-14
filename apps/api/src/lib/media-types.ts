@@ -19,7 +19,8 @@
  * `415` says the true thing — the body could not be read at all — and names what to declare.
  */
 import { accepts } from 'hono/accepts';
-import type { MiddlewareHandler } from 'hono';
+import { matchedRoutes } from 'hono/route';
+import type { Context, MiddlewareHandler } from 'hono';
 
 import type { AppEnv } from '../context';
 import { NotAcceptableError, UnsupportedMediaTypeError } from '../error';
@@ -29,6 +30,9 @@ const JSON_MEDIA_TYPE = 'application/json';
 
 /** Everything this API can produce. Errors are the problem+json flavour of the same thing. */
 const PRODUCED = [JSON_MEDIA_TYPE, 'application/problem+json'];
+
+/** The Server-Sent Events representation, produced only by {@link producesEventStream} routes. */
+export const EVENT_STREAM_MEDIA_TYPE = 'text/event-stream';
 
 /** Sentinel for "nothing on offer satisfies this request", which `accepts` has no notion of. */
 const UNACCEPTABLE = 'none';
@@ -49,6 +53,38 @@ const BODIED = new Set(['POST', 'PUT', 'PATCH']);
 /** The bare media type, without parameters like `; charset=utf-8` or a multipart boundary. */
 function bare(value: string): string {
   return (value.split(';')[0] ?? '').trim().toLowerCase();
+}
+
+/** Route handlers registered through {@link producesEventStream}. */
+const eventStreamHandlers = new WeakSet();
+
+/**
+ * Declare that the route carrying this handler answers with Server-Sent Events.
+ *
+ * @remarks
+ * {@link mediaTypes} runs before any route middleware, so it finds the registered handler among
+ * the request's matched handlers.
+ *
+ * @param handler - A handler in the stream route's chain.
+ * @returns the same handler, now registered.
+ */
+export function producesEventStream<T extends object>(handler: T): T {
+  eventStreamHandlers.add(handler);
+  return handler;
+}
+
+/**
+ * Whether one accepted media range is satisfied by what the matched route produces.
+ *
+ * @param type - The lowercased media range from `Accept`.
+ * @param c - The request context, read only when the range names an event stream.
+ * @returns true when this API has a representation inside the range.
+ */
+function covers(type: string, c: Context<AppEnv>): boolean {
+  if (type === '*/*' || type === 'application/*') return true;
+  if (PRODUCED.includes(type) || type.endsWith('+json')) return true;
+  if (type !== EVENT_STREAM_MEDIA_TYPE && type !== 'text/*') return false;
+  return matchedRoutes(c).some((route) => eventStreamHandlers.has(route.handler));
 }
 
 /**
@@ -90,14 +126,7 @@ export const mediaTypes: MiddlewareHandler<AppEnv> = async (c, next) => {
         // Lowercased before comparing: a media type is case-insensitive, and Hono's parser
         // hands back whatever the client wrote, so `Accept: APPLICATION/JSON` would otherwise
         // match nothing on offer and be refused with `406`.
-        .map((range) => range.type.toLowerCase())
-        .some(
-          (type) =>
-            type === '*/*' ||
-            type === 'application/*' ||
-            PRODUCED.includes(type) ||
-            type.endsWith('+json'),
-        )
+        .some((range) => covers(range.type.toLowerCase(), c))
         ? JSON_MEDIA_TYPE
         : UNACCEPTABLE,
   });

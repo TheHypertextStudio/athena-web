@@ -28,7 +28,7 @@ import type { AppEnv } from '../context';
 import { ConflictError } from '../error';
 import { accepted, created, ok } from '../lib/ok';
 import { declareStreaming } from '../lib/sse-headers';
-import { apiDoc, describeRoute } from '../lib/openapi-route';
+import { apiDoc, describeEventStream } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchUpsert } from '../search/write-through';
@@ -350,7 +350,7 @@ Behavior & side effects: atomically claims a durable \`agent_session_run\` gener
   )
   .get(
     '/:id/stream',
-    describeRoute({
+    describeEventStream({
       tags: ['Agents'],
       summary: 'Stream agent session activity (SSE)',
       description: `Stream a session's Activity entries as **Server-Sent Events** (\`text/event-stream\`), rather than a JSON envelope. Each persisted activity is emitted as one SSE message whose \`id\` is the activity id, whose \`event\` name is the activity \`type\` (\`thought\` | \`action\` | \`response\` | \`elicitation\` | \`error\`), and whose \`data\` is the JSON-serialized {@link SessionActivityOut}. A client subscribes (e.g. via \`EventSource\`) to render the agent's reasoning, proposed actions, questions, and results as they arrive — the live counterpart to the one-shot \`GET /:id\` transcript.

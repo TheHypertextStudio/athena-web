@@ -51,7 +51,7 @@ import type { AppEnv } from '../context';
 import { AuthError, ConflictError, NotFoundError } from '../error';
 import { accepted, ok } from '../lib/ok';
 import { declareStreaming } from '../lib/sse-headers';
-import { apiDoc, describeRoute } from '../lib/openapi-route';
+import { apiDoc, describeEventStream } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { assertProductCapability } from '../product-capability';
 
@@ -837,7 +837,7 @@ const meAthena = new Hono<AppEnv>()
   )
   .get(
     '/agents/stream',
-    describeRoute({
+    describeEventStream({
       tags: ['Athena'],
       summary: 'Stream every running agent’s updates (SSE)',
       description:
@@ -851,12 +851,7 @@ const meAthena = new Hono<AppEnv>()
           schema: { type: 'string' },
         },
       ],
-      responses: {
-        200: {
-          description: 'Merged agent updates as Server-Sent Events.',
-          content: { 'text/event-stream': { schema: { type: 'string' } } },
-        },
-      },
+      streamDescription: 'Merged agent updates as Server-Sent Events.',
     }),
     async (c) => {
       const owner = requestOwner(c);
@@ -1126,7 +1121,7 @@ const meAthena = new Hono<AppEnv>()
   )
   .get(
     '/sessions/:id/stream',
-    describeRoute({
+    describeEventStream({
       tags: ['Athena'],
       summary: 'Stream personal Athena activity (SSE)',
       description:
@@ -1141,12 +1136,7 @@ const meAthena = new Hono<AppEnv>()
           schema: { type: 'string' },
         },
       ],
-      responses: {
-        200: {
-          description: 'Replay and live-tail activity as Server-Sent Events.',
-          content: { 'text/event-stream': { schema: { type: 'string' } } },
-        },
-      },
+      streamDescription: 'Replay and live-tail activity as Server-Sent Events.',
     }),
     zParam(idParam),
     async (c) =>

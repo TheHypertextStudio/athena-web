@@ -19,6 +19,8 @@ import type { z } from 'zod';
 
 import type { StatusCode } from 'hono/utils/http-status';
 
+import { EVENT_STREAM_MEDIA_TYPE, producesEventStream } from './media-types';
+
 export { describeRoute, resolver };
 
 /** Options for {@link apiDoc}. */
@@ -97,4 +99,34 @@ export function apiDoc(opts: ApiDocOptions) {
     ...opts.extra,
   };
   return describeRoute(spec);
+}
+
+/** Options for {@link describeEventStream}. */
+export interface EventStreamDocOptions extends DescribeRouteOptions {
+  /** Description of the `200` event stream (default 'Server-Sent Events.'). */
+  streamDescription?: string;
+}
+
+/**
+ * Build the `describeRoute` middleware for a Server-Sent Events route.
+ *
+ * @remarks
+ * Documents the `200` response as {@link EVENT_STREAM_MEDIA_TYPE} and registers the same
+ * middleware with {@link producesEventStream}, so negotiation accepts the documented type.
+ *
+ * @param opts - The operation's tags, summary, description, and parameters.
+ * @returns the route's documentation middleware.
+ */
+export function describeEventStream({ streamDescription, ...spec }: EventStreamDocOptions) {
+  return producesEventStream(
+    describeRoute({
+      ...spec,
+      responses: {
+        200: {
+          description: streamDescription ?? 'Server-Sent Events.',
+          content: { [EVENT_STREAM_MEDIA_TYPE]: { schema: { type: 'string' } } },
+        },
+      },
+    }),
+  );
 }

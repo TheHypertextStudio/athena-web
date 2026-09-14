@@ -16,29 +16,14 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { AppEnv } from '../../src/context';
 import { getSession } from '../support/auth-mock';
-import { getDb, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
+import { composedV1App, getDb, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
-/**
- * The composed `/v1` app plus the migrated database, both memoized.
- *
- * @remarks
- * `sessionMiddleware` is registered on the root server rather than on `app`, so a test driving
- * `app` alone would reach `requireAuth` with no session set. Wrapping it here reproduces the
- * production order — resolve the session, then gate — without booting a listener.
- */
+/** The composed `/v1` app plus the migrated database. */
 async function setup() {
   const schema = await getDb();
-  const { app: v1 } = await import('../../src/app');
-  const { sessionMiddleware } = await import('../../src/auth/session-middleware');
-  const { onError } = await import('../../src/error');
-  const { Hono } = await import('hono');
-  const app = new Hono();
-  app.use('*', sessionMiddleware as never);
-  app.route('/', v1 as never);
-  app.onError(onError);
-  return { schema, db: schema.db, app };
+  return { schema, db: schema.db, app: await composedV1App() };
 }
 
 let userId: string;

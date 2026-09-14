@@ -21,4 +21,20 @@ describe('Initiative Markdown contents', () => {
   it('returns no contents for documents without headings', () => {
     expect(extractMarkdownHeadings('A short paragraph.')).toEqual([]);
   });
+
+  it('displays plain text, not the Markdown source Tiptap serialized it as', () => {
+    expect(
+      extractMarkdownHeadings(String.raw`## 3\*4
+## **Launch** plan
+## _Q3_ goals
+## Ask \`support\`
+## [Docket](https://example.com) rollout`),
+    ).toEqual([
+      { level: 2, text: '3*4', id: '34' },
+      { level: 2, text: 'Launch plan', id: 'launch-plan' },
+      { level: 2, text: 'Q3 goals', id: 'q3-goals' },
+      { level: 2, text: 'Ask `support`', id: 'ask-support' },
+      { level: 2, text: 'Docket rollout', id: 'docket-rollout' },
+    ]);
+  });
 });

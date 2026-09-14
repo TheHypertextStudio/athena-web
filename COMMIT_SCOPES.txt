@@ -46,6 +46,7 @@ projects
 sidebar
 takeout
 tasks
+templates
 time
 ui
 work-location

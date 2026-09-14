@@ -1,7 +1,8 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-09-18
+> **Last Updated**: 2026-09-19
+> **Last Updated**: 2026-09-14
 
 ---
 
@@ -271,6 +272,40 @@ chunk, and back or forward all swap instantly.
   `apps/web/.data/design-review/2026-09-19-borders/{before,after}`.
 
 ### [ATHENA-PLAN-FLOW-001] Athena plans a feature launch and the confirmation is undoable
+
+### [WORK-TEMPLATES-001] Work templates give every piece of work a reusable definition
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-09-14
+- **Priority**: P1
+- **Description**: Templates, label groups used as stand-in types, and repeating-work process
+  definitions each hold part of what a kind of work is, and none stays attached to the work it
+  produced. Work templates give every Initiative, Program, Project, and Task exactly one template
+  holding its outline, the child work it creates, and that work's timing, with Programs running
+  schedules that create templated work. Statuses, rules, and properties per template are designed
+  for and built later.
+- **Plan**: `docs/superpowers/specs/2026-09-14-work-templates-overview-design.md` — purpose,
+  vocabulary, 39 numbered decisions from the brainstorm, the model, blueprint behavior, what
+  happens to the repeating-work engine, the experience, agents, errors, testing, four delivery
+  layers, risks, and three decisions to confirm.
+- **Subtasks**:
+  - [x] Brainstorm the product model with the owner and record the decisions
+  - [x] Write the overview design
+  - [ ] Confirm the three decisions in §15 of the design
+  - [ ] Layer 1: identity — spec, plan, build
+  - [ ] Layer 2: blueprints — spec, plan, build
+  - [ ] Layer 3: Program schedules — spec, plan, build
+  - [ ] Layer 4: Athena and the gallery — spec, plan, build
+- **Blockers**: None.
+- **Notes**: Option C was chosen for the repeating-work engine after comparing it with building on
+  top and replacing everything: its scheduling half (series, runs, exceptions, calendar bindings)
+  stays, and its blueprint half becomes work templates, because process steps name specific teams
+  and people, create work without describing it, fix dates at creation, and cannot include one
+  another. The product says "Work templates"; code says "type".
+
+---
+
+### [ATHENA-COMPANION-001] Athena becomes a page-aware companion thread
 
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18

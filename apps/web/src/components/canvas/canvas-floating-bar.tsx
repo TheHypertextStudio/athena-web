@@ -13,9 +13,33 @@
  * its height so the canvas can keep its frame below it.
  */
 import { AppBar } from '@docket/ui/components';
-import { type JSX, type ReactNode, useEffect, useRef } from 'react';
+import { cn } from '@docket/ui/lib/utils';
+import { type JSX, type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { CANVAS_OVERLAY_GUTTER } from './canvas-viewport-insets';
+
+/**
+ * Whether a scrolling group's content runs past its box; while it does, the group fades at its
+ * end so a cut-off label reads as "more this way" rather than as a mistake.
+ */
+function useOverflowing(): [boolean, (node: HTMLDivElement | null) => void] {
+  const [overflowing, setOverflowing] = useState(false);
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!node) return undefined;
+    const measure = (): void => {
+      setOverflowing(node.scrollWidth > node.clientWidth + 1);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+    };
+  }, [node]);
+  return [overflowing, setNode];
+}
 
 /** Props for {@link CanvasFloatingBar}. */
 export interface CanvasFloatingBarProps {
@@ -67,13 +91,19 @@ export default function CanvasFloatingBar({
     };
   }, [onHeightChange]);
 
+  const [overflowing, attachGroup] = useOverflowing();
   const selectionGroup =
     selection === null ? null : (
       <div
+        ref={attachGroup}
         role="group"
         aria-label="Selection"
         data-testid="canvas-selection-bar"
-        className="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto"
+        data-overflowing={overflowing || undefined}
+        className={cn(
+          'flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto',
+          overflowing && '[mask-image:linear-gradient(to_right,black_calc(100%-2rem),transparent)]',
+        )}
       >
         {selection}
       </div>

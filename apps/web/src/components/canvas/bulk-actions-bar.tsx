@@ -10,7 +10,15 @@
  * the canvas, with the dialog beside it. A host with a floating bar puts the actions in that
  * bar's selection slot and renders the dialog alone.
  */
-import { Ellipsis, Folder, RefreshCw, Trash2, TuneRounded, Undo } from '@docket/ui/icons';
+import {
+  CheckCircle2,
+  Ellipsis,
+  Folder,
+  RefreshCw,
+  Trash2,
+  TuneRounded,
+  Undo,
+} from '@docket/ui/icons';
 import {
   Button,
   Dialog,
@@ -57,31 +65,42 @@ export function BulkSelectionActions({ commands }: BulkSelectionProps): React.JS
   return (
     <>
       <span className="text-label-large shrink-0 px-2 whitespace-nowrap">{count} selected</span>
-      <Button type="button" size="sm" variant="ghost" onClick={commands.openSelection}>
-        <Folder className="size-4" /> Open
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        aria-label="Open"
+        title="Open"
+        onClick={commands.openSelection}
+      >
+        <Folder className="size-4" /> <span className="hidden @4xl:inline">Open</span>
       </Button>
       <Button
         type="button"
         size="sm"
         variant="ghost"
         disabled={!commands.canEdit}
+        aria-label="Properties"
+        title="Properties"
         onClick={(event) => {
           commands.openProperties(event.currentTarget);
         }}
       >
-        <TuneRounded className="size-4" /> Properties
+        <TuneRounded className="size-4" /> <span className="hidden @4xl:inline">Properties</span>
       </Button>
       {commands.objectKind === 'task' && commands.canEdit && taskActions !== null && count === 1 ? (
         <Button
           type="button"
           size="sm"
           variant="ghost"
+          aria-label="Mark done"
+          title="Mark done"
           onClick={() => {
             const task = commands.selectedObjects[0];
             if (task !== undefined) taskActions.setComplete(task.id, true);
           }}
         >
-          Mark done
+          <CheckCircle2 className="size-4" /> <span className="hidden @4xl:inline">Mark done</span>
         </Button>
       ) : null}
       <Button
@@ -89,9 +108,11 @@ export function BulkSelectionActions({ commands }: BulkSelectionProps): React.JS
         size="sm"
         variant="ghost"
         disabled={!commands.canTrash || commands.pending}
+        aria-label="Move to trash"
+        title="Move to trash"
         onClick={commands.trashSelection}
       >
-        <Trash2 className="size-4" /> Move to trash
+        <Trash2 className="size-4" /> <span className="hidden @4xl:inline">Move to trash</span>
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

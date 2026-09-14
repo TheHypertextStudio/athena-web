@@ -21,7 +21,8 @@
  * by the caller over the surface. In that row the title is what gives way: it takes the room the
  * fixed slots leave, up to its own length, and truncates before anything else moves. `controls`
  * and `actions` never shrink. The `fill` slot is the one flexible region, for a group that
- * scrolls inside its own box when the row runs short.
+ * scrolls inside its own box when the row runs short. The bar is a container, so a slot can
+ * collapse its own labels against the bar's width rather than the window's.
  *
  * ## The navigation slot is an icon, not a sentence
  *
@@ -118,7 +119,7 @@ export function AppBar({
         tone="floating"
         shape="large"
         aria-label={ariaLabel}
-        className={cn('flex min-w-0 flex-nowrap items-center gap-2 p-2', className)}
+        className={cn('@container flex min-w-0 flex-nowrap items-center gap-2 p-2', className)}
       >
         {navigation}
         {typeof title === 'string' ? (

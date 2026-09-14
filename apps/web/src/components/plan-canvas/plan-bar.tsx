@@ -91,11 +91,13 @@ export function PlanSelectionActions({
         type="button"
         size="sm"
         variant="ghost"
+        aria-label="Ask Athena"
+        title="Ask Athena"
         onClick={() => {
           onAsk(refs);
         }}
       >
-        <Sparkles className="size-4" /> Ask Athena
+        <Sparkles className="size-4" /> <span className="hidden @3xl:inline">Ask Athena</span>
       </Button>
       {canEdit && drafts.length > 0 ? (
         <Button

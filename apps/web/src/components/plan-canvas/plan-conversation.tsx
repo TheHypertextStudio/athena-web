@@ -51,7 +51,7 @@ export default function PlanConversation({
       onWidthChange={onWidthChange}
       className="w-[clamp(17.5rem,17vw,22rem)]"
     >
-      <div className="border-outline-variant flex shrink-0 items-center gap-2 border-b px-3 py-2">
+      <div className="flex shrink-0 items-center gap-2 py-0.5 pr-0.5 pl-3">
         <Sparkles aria-hidden="true" className="text-primary size-4" />
         <span className="text-on-surface text-label-large min-w-0 flex-1 truncate">Athena</span>
         <Button variant="ghost" size="sm" asChild>

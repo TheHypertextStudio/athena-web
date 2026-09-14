@@ -98,8 +98,8 @@ describe('GraphInspectorHost floating presentation', () => {
 
   it('reports the canvas width left of the panel, and how much of the edge it covers', () => {
     const { onDock, onOcclusionChange } = renderFloating(true, 300);
-    expect(onDock).toHaveBeenCalledWith(hostWidth - COLUMN_WIDTH - 12 - 300);
-    expect(onOcclusionChange).toHaveBeenCalledWith(COLUMN_WIDTH + 12);
+    expect(onDock).toHaveBeenCalledWith(hostWidth - COLUMN_WIDTH - 8 - 300);
+    expect(onOcclusionChange).toHaveBeenCalledWith(COLUMN_WIDTH + 8);
   });
 
   it('reports zero coverage once it closes', () => {

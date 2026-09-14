@@ -97,7 +97,7 @@ export function PlanSelectionActions({
           onAsk(refs);
         }}
       >
-        <Sparkles className="size-4" /> <span className="hidden @3xl:inline">Ask Athena</span>
+        <Sparkles className="size-4" /> <span className="hidden @lg:inline">Ask Athena</span>
       </Button>
       {canEdit && drafts.length > 0 ? (
         <Button
@@ -138,6 +138,8 @@ export interface PlanBarProps {
   readonly onAddProject: (() => void) | null;
   /** The selection's actions; the bar shows them in place of the counts while refs are selected. */
   readonly selection: PlanSelectionActionsProps;
+  /** Let go of the selection, from the bar's clear button. */
+  readonly onClearSelection: () => void;
   /** Pixels spoken for on the right by floating columns. */
   readonly insetRight: number;
   readonly onHeightChange: (height: number) => void;
@@ -152,6 +154,7 @@ export default function PlanBar({
   counts,
   onAddProject,
   selection,
+  onClearSelection,
   insetRight,
   onHeightChange,
 }: PlanBarProps): JSX.Element {
@@ -168,7 +171,7 @@ export default function PlanBar({
           {onAddProject ? (
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
               aria-label="Add project"
               onClick={onAddProject}
@@ -191,6 +194,7 @@ export default function PlanBar({
         </span>
       }
       selection={selection.refs.length > 0 ? <PlanSelectionActions {...selection} /> : null}
+      onClearSelection={onClearSelection}
     />
   );
 }

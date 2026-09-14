@@ -45,7 +45,7 @@
  *
  * 1. **Floor.** `<main>` is never narrower than 40% of the viewport, and never below 416px. Below
  *    `lg` it is the *entire* viewport; at `lg` and up it is the viewport minus a constant 328px of
- *    chrome (240px sidebar, 48px activity bar, 40px of gutters) minus the rail. Measured floor:
+ *    chrome (240px sidebar, 40px activity bar, 32px of gutters) minus the rail. Measured floor:
  *    40.6% (416px) at 1024px with the rail expanded, rising to 57.8% by 1440px.
  *
  *    This floor used to be a *majority*, and the rail was sized by whatever was left under it —
@@ -78,7 +78,7 @@
 import * as React from 'react';
 
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { readStoredBoolean, readStoredString, writeStoredValue } from '../../lib/browser-storage';
+import { readStoredBoolean } from '../../lib/browser-storage';
 import { Menu, X } from '../../icons';
 import { cn } from '../../lib/utils';
 import { focusRing } from '../../primitives/focus';
@@ -93,6 +93,7 @@ import {
 import { MobilePanelSwitcher } from './MobilePanelSwitcher';
 import { useContextState } from './ContextProvider';
 import {
+  RAIL_GAP_PX,
   RAIL_MAX_INLINE_SIZE_PX,
   RAIL_MIN_INLINE_SIZE_PX,
   RAIL_VIEWPORT_SHARE,
@@ -102,15 +103,23 @@ import {
 import { usePageScrollOwner } from './page-scroll';
 import { startNavigationTransition } from './navigation-transition';
 import { ShellDrawerProvider } from './ShellDrawerContext';
+import {
+  collapsedByChoiceOrRequest,
+  INITIAL_RAIL_STATE,
+  RAIL_ACTIVE_KEY,
+  RAIL_COLLAPSED_KEY,
+  type RailState,
+  readRailState,
+  useCountedRequests,
+  useRailPanelClicks,
+  writeRailState,
+} from './rail-requests';
 import { ShellRailProvider } from './ShellRailContext';
+import { useRebindFade } from './use-rebind-fade';
 import { ShellSidebarProvider } from './ShellSidebarContext';
 import { ShellOverlayProvider } from './ShellOverlayContext';
 import { ShellRailDock } from './ShellRailDock';
 import { ShellTopBar } from './ShellTopBar';
-
-/** localStorage keys for the shell-owned rail state (active panel + collapsed), persisted across sessions. */
-const RAIL_ACTIVE_KEY = 'docket.rail.active';
-const RAIL_COLLAPSED_KEY = 'docket.rail.collapsed';
 
 /** localStorage key for the viewer's own sidebar choice, which always outranks the width default. */
 const SIDEBAR_COLLAPSED_KEY = 'docket.sidebar.collapsed';
@@ -138,8 +147,8 @@ export const SHELL_DESKTOP_MIN_PX = 1024;
 
 /**
  * The fixed chrome, in px, that the desktop shell takes out of the viewport before the rail with
- * the sidebar **expanded**: the 240px sidebar, the 48px activity bar, and 40px of gutters (16px of
- * shell padding + three 8px column gaps).
+ * the sidebar **expanded**: the 240px sidebar, the 40px activity bar, and 32px of gutters (16px of
+ * shell padding + two 8px column gaps). An open rail brings its own gap ({@link RAIL_GAP_PX}).
  *
  * @remarks
  * Exported because it is half of the shell's layout contract: `<main>` = viewport − this − rail.
@@ -147,7 +156,7 @@ export const SHELL_DESKTOP_MIN_PX = 1024;
  * strictly increase with viewport width. Documented and asserted rather than merely true today —
  * see `tests/components/shell/shell-layout-contract.test.tsx`.
  */
-export const SHELL_DESKTOP_CHROME_PX = 328;
+export const SHELL_DESKTOP_CHROME_PX = 312;
 
 /**
  * The same chrome with the sidebar collapsed to its labeled MD3 rail: an 80px region in place of
@@ -155,12 +164,12 @@ export const SHELL_DESKTOP_CHROME_PX = 328;
  * 64px navigation column, and the 8px gap before `<main>`.
  *
  * @remarks
- * The column *count* is unchanged, so the 40px of gutters and the 48px activity bar are identical —
+ * The column *count* is unchanged, so the 32px of gutters and the 40px activity bar are identical —
  * only the sidebar region's width moves, and it moves by a constant. Collapsing therefore hands
  * `<main>` a flat 176px at every width rather than a share, which is why it can be offered at all
  * widths without putting a slope anywhere in the contract.
  */
-export const SHELL_DESKTOP_CHROME_COLLAPSED_PX = 152;
+export const SHELL_DESKTOP_CHROME_COLLAPSED_PX = 136;
 
 /**
  * The viewport width at or above which the sidebar starts out expanded.
@@ -211,8 +220,8 @@ export const SHELL_MAIN_MIN_VIEWPORT_SHARE = 0.4;
  *
  * @example
  * ```ts
- * shellMainInlineSize(1440, true); // 832 — a majority of the viewport
- * shellMainInlineSize(1024, true, true); // 560 — the same window, sidebar collapsed
+ * shellMainInlineSize(1440, true); // 840 — a majority of the viewport
+ * shellMainInlineSize(1024, true, true); // 600 — the same window, sidebar collapsed
  * ```
  */
 export function shellMainInlineSize(
@@ -226,51 +235,10 @@ export function shellMainInlineSize(
     ? Math.min(
         Math.max(RAIL_VIEWPORT_SHARE * viewportWidth, RAIL_MIN_INLINE_SIZE_PX),
         RAIL_MAX_INLINE_SIZE_PX,
-      )
+      ) + RAIL_GAP_PX
     : 0;
   const chrome = sidebarCollapsed ? SHELL_DESKTOP_CHROME_COLLAPSED_PX : SHELL_DESKTOP_CHROME_PX;
   return viewportWidth - chrome - rail;
-}
-
-/** The shell-owned, persisted rail state: which panel is active, and whether its host is collapsed. */
-interface RailState {
-  /** The persisted panel id, resolved against the route's panels at render time. */
-  readonly activeId: string | null;
-  /** Whether the panel host is collapsed to zero width. */
-  readonly collapsed: boolean;
-}
-
-/**
- * The rail state every first render uses — on the server and on the client's hydrating render.
- *
- * @remarks
- * Expanded, matching the product: the day plan sits beside the calendar so a task can be dragged
- * onto the grid, which needs both on screen at once. The floor in {@link SHELL_MAIN_MIN_VIEWPORT_SHARE}
- * is therefore an *unconditional* guarantee rather than one that depends on the viewer closing a
- * panel — `<main>` keeps a majority of the window at every width **with the rail open**, with no
- * interaction at all.
- *
- * It is deliberately *width-independent*, which the layout contract depends on: a default that
- * varied by viewport would put the cliff this shell exists to prevent back in, across page loads
- * instead of across a resize.
- */
-const INITIAL_RAIL_STATE: RailState = { activeId: null, collapsed: false };
-
-/**
- * The persisted rail state, or {@link INITIAL_RAIL_STATE} when unset / unreadable.
- *
- * @remarks
- * Read in an effect rather than in `useState`'s initializer, because the rail is now server-rendered
- * (that is what keeps the desktop chrome a constant width from the very first paint). React does not
- * patch up attribute mismatches it finds while hydrating, so an initializer that returned the
- * *persisted* value on the client and the *default* on the server left the DOM stuck on whichever
- * class the server emitted — the rail silently ignored the viewer's saved choice.
- */
-function readRailState(): RailState {
-  return {
-    activeId: readStoredString(RAIL_ACTIVE_KEY),
-    collapsed: readStoredBoolean(RAIL_COLLAPSED_KEY) ?? INITIAL_RAIL_STATE.collapsed,
-  };
 }
 
 /**
@@ -293,47 +261,6 @@ function readSidebarCollapsed(): boolean {
   // default the server already rendered.
   if (typeof window === 'undefined') return false;
   return window.innerWidth < SHELL_SIDEBAR_EXPAND_MIN_PX;
-}
-
-/**
- * Counted requests from surfaces that need room: a canvas asks for the icon rail, or for the
- * right-hand rail to collapse, while it is mounted. The count is how many are asking; the override
- * is the viewer opening the thing anyway, which stands until every request is released.
- */
-function useCountedRequests(): {
-  readonly requested: boolean;
-  readonly request: () => () => void;
-  readonly override: () => void;
-} {
-  const [count, setCount] = React.useState(0);
-  const [overridden, setOverridden] = React.useState(false);
-  const request = React.useCallback((): (() => void) => {
-    setCount((current) => current + 1);
-    let released = false;
-    return () => {
-      if (released) return;
-      released = true;
-      setCount((current) => {
-        const next = Math.max(0, current - 1);
-        if (next === 0) setOverridden(false);
-        return next;
-      });
-    };
-  }, []);
-  const override = React.useCallback(() => {
-    setOverridden(true);
-  }, []);
-  return { requested: count > 0 && !overridden, request, override };
-}
-
-/** Whether the rail is collapsed: the viewer's saved choice, or a surface's standing request. */
-function collapsedByChoiceOrRequest(chosen: boolean, requested: boolean): boolean {
-  return chosen || requested;
-}
-
-/** Persist a rail-state value. Storage failures are absorbed by {@link writeStoredValue}. */
-function writeRailState(key: string, value: string): void {
-  writeStoredValue(key, value);
 }
 
 /** A host request for the shell to select and expand one of its existing rail panels. */
@@ -561,49 +488,12 @@ export function AppShell({
     railCollapsed,
   ]);
 
-  // Click a panel icon: collapse if it is the already-active, visible panel; otherwise switch to it
-  // and expand. Only explicit clicks persist, so passive resolution never overwrites a real choice.
-  //
-  // The activity bar exists only at desktop widths (it hides itself in CSS), so this always means
-  // "toggle the docked panel" — there is no width at which the same control does something else.
-  // A surface that hosts a panel's content itself claims that panel's icon; the click goes to
-  // the surface and the rail stays where it is.
-  const panelClaims = React.useRef(new Map<string, () => void>());
-  const claimPanel = React.useCallback((id: string, onClick: () => void) => {
-    panelClaims.current.set(id, onClick);
-    return () => {
-      if (panelClaims.current.get(id) === onClick) panelClaims.current.delete(id);
-    };
-  }, []);
-  const handlePanelIconClick = React.useCallback(
-    (id: string) => {
-      const claimed = panelClaims.current.get(id);
-      if (claimed) {
-        claimed();
-        return;
-      }
-      if (railCollapse.requested) {
-        // Expanding over a surface's request is the viewer's call for as long as that surface is
-        // open; it says nothing about what they want elsewhere, so nothing is saved.
-        railCollapse.override();
-        if (id !== activePanelIdResolved) setRail((current) => ({ ...current, activeId: id }));
-        return;
-      }
-      if (id === activePanelIdResolved && !railCollapsed) {
-        setRail((current) => ({ ...current, collapsed: true }));
-        writeRailState(RAIL_COLLAPSED_KEY, '1');
-        return;
-      }
-      setRail({ activeId: id, collapsed: false });
-      writeRailState(RAIL_ACTIVE_KEY, id);
-      writeRailState(RAIL_COLLAPSED_KEY, '0');
-    },
-    [activePanelIdResolved, railCollapse, railCollapsed],
-  );
-  const railState = React.useMemo(
-    () => ({ collapsed: railCollapsed, requestCollapsed: railCollapse.request, claimPanel }),
-    [claimPanel, railCollapse.request, railCollapsed],
-  );
+  const { handlePanelIconClick, railState } = useRailPanelClicks({
+    railCollapse,
+    railCollapsed,
+    activePanelId: activePanelIdResolved,
+    setRail,
+  });
 
   // Stable dismiss callback handed to the drawer-rendered sidebar so a nav selection closes the
   // drawer (the static desktop rail sits under a `null` provider, so it never closes anything).
@@ -611,24 +501,9 @@ export function AppShell({
     setDrawerOpen(false);
   }, []);
 
-  // Org-rebind cross-fade: when the bound org changes (not on first mount), replay a short
-  // fade-in on the main panel so the context switch is legible. A transient class — not a
-  // key-based remount, which would destroy route/page state.
-  const [rebinding, setRebinding] = React.useState(false);
-  const prevOrgIdRef = React.useRef(activeOrgId);
-  React.useEffect(() => {
-    if (prevOrgIdRef.current === activeOrgId) return undefined;
-    const previousOrgId = prevOrgIdRef.current;
-    prevOrgIdRef.current = activeOrgId;
-    if (previousOrgId === null) return undefined;
-    setRebinding(true);
-    const timer = setTimeout(() => {
-      setRebinding(false);
-    }, 240);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [activeOrgId]);
+  // Org-rebind cross-fade: when the bound org changes, the main panel replays a short fade-in so
+  // the context switch is legible.
+  const rebinding = useRebindFade(activeOrgId);
 
   return (
     <ShellOverlayProvider host={overlayHost}>
@@ -769,7 +644,7 @@ export function AppShell({
               // border plus a drop shadow on the outermost frame drew a second box around content
               // that already had one.
               surfaceToneColor('page'),
-              '@container min-h-0 flex-1 outline-none lg:rounded-xl',
+              'lg:rounded-corner-lg @container min-h-0 flex-1 outline-none',
               // The default: `<main>` is the shell's one scroll container, with a stable gutter so
               // content does not shift when it grows past the viewport.
               pageScrollOwner === 'shell' &&
@@ -793,7 +668,7 @@ export function AppShell({
 
         {/* Right-hand rail. Both columns are rendered at EVERY width whenever the route offers panels
           and hide themselves below `lg` in CSS — no JS gate, no conditional mount. That is what
-          holds the desktop chrome at a constant 328px across the whole desktop range: when the host
+          holds the desktop chrome at a constant 312px across the whole desktop range: when the host
           was mounted conditionally its flex gap alone cost `<main>` 7px the moment the condition
           flipped, and the panel itself cost 352px more. Collapsed the host is still here, at zero
           width, so collapsing and expanding move exactly one number. */}

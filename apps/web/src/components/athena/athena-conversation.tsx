@@ -36,6 +36,7 @@ import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
+import type { AgentSessionDetailOut } from '@docket/athena/agent-contract';
 import { PLAN_TOOL_NAMES } from '@docket/work/plan-draft-contract';
 
 import { ProposalGroupCard } from '@/components/agents/proposal-group-card';
@@ -72,19 +73,74 @@ export interface AthenaConversationProps {
   draftRequest?: { readonly text: string; readonly version: number } | null;
 }
 
-/** A requested draft replaces the composer's text and takes focus, once per version. */
-function useDraftRequest(
+/** The composer's draft, its form, and how a requested draft lands in it. */
+interface ComposerDraft {
+  readonly draft: string;
+  readonly setDraft: (text: string) => void;
+  readonly composerRef: React.RefObject<HTMLFormElement | null>;
+}
+
+/**
+ * The composer's text. Seeded once from `initialDraft`; a requested draft replaces it and takes
+ * focus, once per version.
+ */
+function useComposerDraft(
+  initialDraft: string | undefined,
   request: { readonly text: string; readonly version: number } | null,
-  setDraft: (text: string) => void,
-  composer: React.RefObject<HTMLFormElement | null>,
-): void {
+): ComposerDraft {
+  const [draft, setDraft] = useState(initialDraft ?? '');
+  const composerRef = useRef<HTMLFormElement | null>(null);
   const version = request?.version ?? null;
   const text = request?.text ?? '';
   useEffect(() => {
     if (version === null) return;
     setDraft(text);
-    composer.current?.querySelector('textarea')?.focus({ preventScroll: true });
-  }, [version, text, setDraft, composer]);
+    composerRef.current?.querySelector('textarea')?.focus({ preventScroll: true });
+  }, [version, text]);
+  return { draft, setDraft, composerRef };
+}
+
+/** The thread's writes: commit a thread, reload it with a transition, send from a widget. */
+interface ThreadWrites {
+  readonly commitThread: (data: AgentSessionDetailOut) => void;
+  readonly reloadWithTransition: () => Promise<void>;
+  readonly sendWidgetMessage: (text: string) => Promise<boolean>;
+}
+
+/** The writes every part of the conversation reaches for. */
+function useThreadWrites(orgId: string, onError: (message: string) => void): ThreadWrites {
+  const queryClient = useQueryClient();
+  const commitThread = useCallback(
+    (data: AgentSessionDetailOut): void => {
+      queryClient.setQueryData(queryKeys.chatThread(orgId), data);
+    },
+    [queryClient, orgId],
+  );
+
+  const reloadWithTransition = useCallback(async (): Promise<void> => {
+    try {
+      const data = await fetchOrgChatThread(orgId);
+      startViewTransition(() => {
+        commitThread(data);
+      });
+    } catch (caught) {
+      onError(userErrorMessage(caught, 'Something went wrong opening the conversation.'));
+    }
+  }, [orgId, commitThread, onError]);
+
+  const sendWidgetMessage = useCallback(
+    async (text: string): Promise<boolean> => {
+      try {
+        commitThread(await sendOrgChatMessage(orgId, text));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [orgId, commitThread],
+  );
+
+  return { commitThread, reloadWithTransition, sendWidgetMessage };
 }
 
 /** AthenaConversation renders the org's persistent Athena conversation. */
@@ -97,12 +153,13 @@ export default function AthenaConversation({
   const mentionOrgId = useMentionOrgId(orgId);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [draft, setDraft] = useState(initialDraft ?? '');
+  const { draft, setDraft, composerRef } = useComposerDraft(initialDraft, draftRequest);
   const [connectOpen, setConnectOpen] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
-  const composerRef = useRef<HTMLFormElement | null>(null);
-  const queryClient = useQueryClient();
-  useDraftRequest(draftRequest, setDraft, composerRef);
+  const { commitThread, reloadWithTransition, sendWidgetMessage } = useThreadWrites(
+    orgId,
+    setSendError,
+  );
 
   const query = useOrgChatThread(orgId);
   const thread = query.data ?? null;
@@ -111,28 +168,10 @@ export default function AthenaConversation({
     sendError ??
     (query.isError ? userErrorMessage(query.error, 'Could not open the conversation.') : null);
 
-  const commitThread = useCallback(
-    (data: NonNullable<typeof thread>): void => {
-      queryClient.setQueryData(queryKeys.chatThread(orgId), data);
-    },
-    [queryClient, orgId],
-  );
-
   // Called after a proposal group settles (via `ChatProposals`'s `onSettled`), so the group's
   // ghost rows — each carrying a stable `view-transition-name` — morph out in place instead of
   // the list just popping. The fetch happens first and the cache write goes inside the
   // transition, which is why this does not simply `refetch()`.
-  const reloadWithTransition = useCallback(async (): Promise<void> => {
-    try {
-      const data = await fetchOrgChatThread(orgId);
-      startViewTransition(() => {
-        commitThread(data);
-      });
-    } catch (caught) {
-      setSendError(userErrorMessage(caught, 'Something went wrong opening the conversation.'));
-    }
-  }, [orgId, commitThread]);
-
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
   }, [thread?.activities.length]);
@@ -154,18 +193,6 @@ export default function AthenaConversation({
   }, [orgId, draft, sending, commitThread]);
 
   // A widget speaking as the user posts into THIS thread, exactly as if typed into the composer.
-  const sendWidgetMessage = useCallback(
-    async (text: string): Promise<boolean> => {
-      try {
-        commitThread(await sendOrgChatMessage(orgId, text));
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    [orgId, commitThread],
-  );
-
   return (
     <div className={cn('flex h-full w-full flex-col', className)}>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-4">

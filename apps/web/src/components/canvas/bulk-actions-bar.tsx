@@ -10,15 +10,7 @@
  * the canvas, with the dialog beside it. A host with a floating bar puts the actions in that
  * bar's selection slot and renders the dialog alone.
  */
-import {
-  CheckCircle2,
-  Ellipsis,
-  Folder,
-  RefreshCw,
-  Trash2,
-  TuneRounded,
-  Undo,
-} from '@docket/ui/icons';
+import { CheckCircle2, Edit, Ellipsis, Folder, RefreshCw, Trash2, Undo } from '@docket/ui/icons';
 import {
   Button,
   Dialog,
@@ -73,7 +65,7 @@ export function BulkSelectionActions({ commands }: BulkSelectionProps): React.JS
         title="Open"
         onClick={commands.openSelection}
       >
-        <Folder className="size-4" /> <span className="hidden @4xl:inline">Open</span>
+        <Folder className="size-4" /> <span className="hidden @lg:inline">Open</span>
       </Button>
       <Button
         type="button"
@@ -86,23 +78,8 @@ export function BulkSelectionActions({ commands }: BulkSelectionProps): React.JS
           commands.openProperties(event.currentTarget);
         }}
       >
-        <TuneRounded className="size-4" /> <span className="hidden @4xl:inline">Properties</span>
+        <Edit className="size-4" /> <span className="hidden @lg:inline">Properties</span>
       </Button>
-      {commands.objectKind === 'task' && commands.canEdit && taskActions !== null && count === 1 ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          aria-label="Mark done"
-          title="Mark done"
-          onClick={() => {
-            const task = commands.selectedObjects[0];
-            if (task !== undefined) taskActions.setComplete(task.id, true);
-          }}
-        >
-          <CheckCircle2 className="size-4" /> <span className="hidden @4xl:inline">Mark done</span>
-        </Button>
-      ) : null}
       <Button
         type="button"
         size="sm"
@@ -112,7 +89,7 @@ export function BulkSelectionActions({ commands }: BulkSelectionProps): React.JS
         title="Move to trash"
         onClick={commands.trashSelection}
       >
-        <Trash2 className="size-4" /> <span className="hidden @4xl:inline">Move to trash</span>
+        <Trash2 className="size-4" /> <span className="hidden @lg:inline">Move to trash</span>
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -127,6 +104,20 @@ export function BulkSelectionActions({ commands }: BulkSelectionProps): React.JS
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {commands.objectKind === 'task' &&
+          commands.canEdit &&
+          taskActions !== null &&
+          count === 1 ? (
+            <DropdownMenuItem
+              onSelect={() => {
+                const task = commands.selectedObjects[0];
+                if (task !== undefined) taskActions.setComplete(task.id, true);
+              }}
+            >
+              <CheckCircle2 />
+              Mark done
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem
             disabled={!commands.canUndo || commands.pending}
             onSelect={() => {

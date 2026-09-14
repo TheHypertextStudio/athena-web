@@ -31,7 +31,7 @@ afterEach(() => {
 describe('PlanWithAthenaAction', () => {
   it('starts or reopens the plan, seeds the rail, and opens the canvas', async () => {
     mutateAsync.mockResolvedValue({ id: 'plan_9' });
-    render(<PlanWithAthenaAction orgId="org_1" initiativeId="ini_1" noun="Initiative" enabled />);
+    render(<PlanWithAthenaAction orgId="org_1" initiativeId="ini_1" enabled />);
     fireEvent.click(screen.getByTestId('plan-with-athena'));
     await waitFor(() => {
       expect(push).toHaveBeenCalledWith('/orgs/org_1/plans/plan_9?athena=start');
@@ -42,9 +42,7 @@ describe('PlanWithAthenaAction', () => {
   });
 
   it('renders nothing when the viewer cannot plan here', () => {
-    render(
-      <PlanWithAthenaAction orgId="org_1" initiativeId="ini_1" noun="Initiative" enabled={false} />,
-    );
+    render(<PlanWithAthenaAction orgId="org_1" initiativeId="ini_1" enabled={false} />);
     expect(screen.queryByTestId('plan-with-athena')).toBeNull();
   });
 });

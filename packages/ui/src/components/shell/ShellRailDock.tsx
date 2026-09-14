@@ -46,7 +46,7 @@ export function ShellRailDock({
   return (
     <div className="hidden h-full min-h-0 shrink-0 flex-col lg:flex">
       {tabBarPresent ? <div aria-hidden="true" className={TAB_BAR_BLOCK_SIZE_CLASS} /> : null}
-      <div className="flex min-h-0 flex-1 gap-2">
+      <div className="flex min-h-0 flex-1">
         <ShellAside panel={panel} collapsed={collapsed} />
         <ShellActivityBar
           panels={panels}

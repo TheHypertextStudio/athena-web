@@ -104,6 +104,8 @@ export interface FilterToolbarProps<T> {
    * after a flexible spacer so it sits opposite the controls.
    */
   saveSlot?: ReactNode;
+  /** The controls' weight: outlined on a band, text on a floating bar. Default `outline`. */
+  buttonVariant?: 'outline' | 'ghost';
 }
 
 /**
@@ -124,6 +126,7 @@ export function FilterToolbar<T>({
   displayExtras,
   leading,
   saveSlot,
+  buttonVariant = 'outline',
 }: FilterToolbarProps<T>): JSX.Element {
   const groupable = groupableFields(catalog);
   const sortable = sortableFields(catalog);
@@ -162,6 +165,7 @@ export function FilterToolbar<T>({
             activeCount={state.filters.length}
             {...(filterTriggerLabel ? { triggerLabel: filterTriggerLabel } : {})}
             {...(alwaysShowFilterLabel ? { alwaysShowLabel: true } : {})}
+            buttonVariant={buttonVariant}
           />
         ) : null}
 
@@ -169,7 +173,7 @@ export function FilterToolbar<T>({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant="outline"
+                variant={buttonVariant}
                 size="sm"
                 className="min-h-10 gap-1.5 @2xl:min-h-8"
                 aria-label={activeGroupLabel ? `Display · ${activeGroupLabel}` : 'Display'}
@@ -254,39 +258,55 @@ export function FilterToolbar<T>({
         ) : null}
       </div>
 
-      {/*
-        Active predicates stay visible as removable chips. This is what lets Filter be a single
-        control: the applied state lives here in the open, rather than being implied by a row of
-        controls each of which must be read to know what is in effect.
-      */}
-      {state.filters.length > 0 ? (
-        <ul className="flex flex-wrap items-center gap-2" aria-label="Active filters">
-          {state.filters.map((filter, index) => {
-            const description = describeFilterTerm(filter, catalog);
-            return (
-              <li key={`${filter.field}-${filter.op}-${index}`}>
-                <span className="border-outline-variant bg-surface-container text-body-small inline-flex items-center gap-1.5 rounded-md border py-1 pr-1 pl-2.5">
-                  <Filter className="text-on-surface-variant size-3.5" aria-hidden="true" />
-                  <span>{description}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      removeFilter(index);
-                    }}
-                    aria-label={`Remove filter ${description}`}
-                    className={cn(
-                      'hover:bg-surface-container-high rounded p-0.5 outline-none',
-                      focusRing,
-                    )}
-                  >
-                    <X className="size-3.5" aria-hidden="true" />
-                  </button>
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
+      <ActiveFilterChips filters={state.filters} catalog={catalog} onRemove={removeFilter} />
     </div>
+  );
+}
+
+/** Props for {@link ActiveFilterChips}. */
+interface ActiveFilterChipsProps<T> {
+  readonly filters: readonly ViewFilterTerm[];
+  readonly catalog: FieldCatalog<T>;
+  readonly onRemove: (index: number) => void;
+}
+
+/**
+ * Active predicates stay visible as removable chips. This is what lets Filter be a single
+ * control: the applied state lives here in the open, rather than being implied by a row of
+ * controls each of which must be read to know what is in effect.
+ */
+function ActiveFilterChips<T>({
+  filters,
+  catalog,
+  onRemove,
+}: ActiveFilterChipsProps<T>): JSX.Element | null {
+  if (filters.length === 0) return null;
+  return (
+    <ul className="flex flex-wrap items-center gap-2" aria-label="Active filters">
+      {filters.map((filter, index) => {
+        const description = describeFilterTerm(filter, catalog);
+        return (
+          <li key={`${filter.field}-${filter.op}-${index}`}>
+            <span className="border-outline-variant bg-surface-container text-body-small inline-flex items-center gap-1.5 rounded-md border py-1 pr-1 pl-2.5">
+              <Filter className="text-on-surface-variant size-3.5" aria-hidden="true" />
+              <span>{description}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  onRemove(index);
+                }}
+                aria-label={`Remove filter ${description}`}
+                className={cn(
+                  'hover:bg-surface-container-high rounded p-0.5 outline-none',
+                  focusRing,
+                )}
+              >
+                <X className="size-3.5" aria-hidden="true" />
+              </button>
+            </span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

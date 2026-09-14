@@ -1941,69 +1941,6 @@ at **zero** violations across the tree, so it enters the ratchet with no ledger 
   production migration, provider operation, or physical-device operation was performed here.
 
 ---
-### [ATHENA-PLAN-CANVAS-001] Design the interactive planning canvas
-### [ATHENA-PLAN-CANVAS-001] Plan initiatives on the canvas with Athena
-
-- **Status**: IN_PROGRESS
-- **Started**: 2026-09-05
-- **Priority**: P1
-- **Description**: Let a person plan a large body of work by talking to Athena while the graph
-  canvas fills in beside the conversation. Athena drafts an initiative, its projects, and their
-  tasks into a durable personal plan draft; the person edits directly or through conversation and
-  confirms parts of the plan into real objects whenever the conversation settles them.
-- **Subtasks**:
-  - [x] Map the Athena rail, proposal system, `organize` tool, templates, and the shared canvas modules.
-  - [x] Settle durability, depth, confirmation semantics, direct editing, entry points, and surface form with the user.
-  - [x] Align the surface with the Task graph chrome, the swimlane container, and the ghost grammar.
-  - [x] Write and approve the design specification and the implementation plan.
-  - [x] Plan document contract and reducer (`@docket/work/plan-draft`).
-  - [x] `plan_draft` table, store, `/v1/me/plans` routes, and the commit over the shared organize placement.
-  - [x] Athena's `plan_start`, `plan_read`, `plan_draft`, `plan_commit` tools with the private-draft approval exemption and prompt guidance.
-  - [x] Web data layer, projection, layout, diff, and the canvas surface with its inspector and selection bar.
-  - [x] Entry points: the thread's plan card and Plan with Athena on an initiative.
-  - [x] Screenshot verification and design critique on a seeded plan (`docs/design/audits/2026-09-06-planning-canvas.md`).
-  - [x] End-to-end journey (`apps/web/e2e/athena/plan-canvas.spec.ts`) and engineering spec.
-  - [ ] Release gates: `pnpm db:reset`, `typecheck`, `lint`, `format:check`, `test:coverage`, `build`.
-- **Files**:
-  - `docs/superpowers/specs/2026-09-05-athena-planning-canvas-design.md`
-  - `docs/superpowers/plans/2026-09-05-athena-planning-canvas.md`
-  - `docs/engineering/specs/planning-canvas.md`
-  - `domains/work/src/{contracts/plan-draft.ts,plan-draft.ts}`
-  - `packages/db/src/schema/plan-draft.ts`, `packages/db/drizzle/0125_plan_draft.sql`
-  - `apps/api/src/lib/plan-draft/`, `apps/api/src/lib/organize/place.ts`, `apps/api/src/routes/me-plans.ts`
-  - `apps/api/src/mcp/plan-draft-tools.ts`, `apps/api/src/agent/{approval-policy,toolbox,system-prompt,loop}.ts`
-  - `apps/web/src/lib/plan-draft/defs.ts`, `apps/web/src/components/plan-canvas/`
-  - `apps/web/src/app/(app)/orgs/[orgId]/plans/[planId]/`
-  - `apps/web/src/components/athena/athena-conversation.tsx`, `apps/web/src/components/initiatives/plan-with-athena-action.tsx`
-- **Blockers**: None.
-- **Notes**: The decision that shapes everything else is a private plan draft whose Athena edits
-  execute without approval, because the draft has no workspace consequence until a commit. The
-  approval engine gains one first-party annotation for that, and every workspace write, including
-  Athena's own `plan_commit`, stays gated. Initiative-to-project links are edges because the
-  relationship is many-to-many; project-to-task ownership is containment because a task has one
-  project.
-### [ATHENA-PLAN-CANVAS-002] Make the planning canvas immersive
-
-- **Status**: IN_PROGRESS
-- **Started**: 2026-09-12
-- **Priority**: P1
-- **Description**: A designer-lens critique of the shipped planning canvas found the board sitting
-  under three rows of chrome beside two docked panels, a root card that reads like a list row,
-  faint directionless edges, rows that truncate their titles for text assignees, and two visual
-  systems for one draft/created dimension. The approved direction is an immersive surface: a
-  full-bleed canvas over which one floating bar, a floating inspector, and a floating Athena
-  conversation sit, plus a craft pass on nodes, edges, and rows. Shared canvas pieces change so the
-  Task graph benefits too. Plan: `~/.claude/plans/cheeky-tickling-treasure.md`.
-- **Subtasks**:
-  - [ ] Shared shell and canvas capabilities: floating `AppBar`, rail collapse requests, canvas overlay insets, first-frame anchor and dot grid, dependency arrowheads, floating inspector host, floating bar/column/search components, Athena host hook.
-  - [ ] The plan route goes immersive: floating bar with selection actions, floating conversation on the org thread, floating inspector, insets-aware fit.
-  - [ ] Node, edge, and row craft: root card, state chip, dependency handles, avatars, quieter links, quieter grid, left-anchored first frame.
-  - [ ] The Task graph adopts the shared floating bar.
-  - [ ] Design review at 1440 and 1024 in both themes, journey rerun, engineering spec, release gates.
-- **Blockers**: None.
-- **Notes**: `canvas.tsx` and `graph-initial-frame.ts` are in the complexity ledger, so new
-  framing logic lives in pure modules beside them. The plan's conversation moves from the rail's
-  personal-session composer to the org chat thread, which is the session `plan_start` binds to.
 
 ### [DOCS-VERIFY-001] The documentation site is checked after every release
 
@@ -10821,6 +10758,7 @@ states became the `EmptyState` atom; and the description editor's 224px floor ca
   `docs/engineering/ui-verification.md` documents. Clearing it worked first try. Separately, this
   entry had to be written twice: the first copy was lost in a rebase where `main` had also edited
   `docs/WORKLOG.md` and the auto-merge silently kept its version.
+
 ### [ATHENA-PLAN-CANVAS-002] Make the planning canvas immersive
 
 - **Completed**: 2026-09-12
@@ -10896,6 +10834,28 @@ states became the `EmptyState` atom; and the description editor's 224px floor ca
   may be split: pieces that must agree on state take that state as props from one hook call.
 - A control that unmounts while focused drops focus to the body silently; a floating panel that
   wants Escape to keep working has to notice and take focus itself.
+- After the owner's second look: the inspector's fields are filled and its pickers tonal so
+  they read as controls, its footer is one small Confirm with Remove in the header's overflow, and
+  Ask Athena left it. Rebasing onto a main that had gained a line-count ratchet meant splitting
+  the plan panel, the plan route, the shell's rail logic, the canvas chrome, and the plan tools
+  into focused modules; a file the ratchet has never seen has no ledger entry, so it must meet
+  the target outright.
+- A union merge on the work log keeps both sides' lines: an entry moved from active to completed
+  across commits comes back twice and must be pruned by hand after the rebase.
+- A floating bar has one row and two owners: the view while nothing is selected, the selection
+  while something is. Trying to keep both in the row at 1024 produced seven characters of title
+  and a glyph soup; handing the row to the selection (Clear where the way back was, labeled
+  actions, no controls) reads at every width. Floating surfaces carry filled, tonal, and text
+  buttons only; an outlined button on a tinted floating surface draws a box inside a box.
+- A host that opens for any non-null child cannot be handed a component that decides to render
+  nothing: the decision has to be made by the caller, or the host shows an empty column.
+- A task row is the most granular thing on the board, so it wears no state glyph and sits at
+  32px; the container above it already says what state its tasks are in. With the border rule
+  now covering the web app, no plan card draws an outline for its state either: the chip is the
+  one reading, and every corner sits on a named radius scale.
+- Nested radii step by the gap between them, from the shell inward: main 16px, an 8px gutter,
+  floating chrome at 10px with 2px padding, 8px controls. A column rounding at 16px twelve pixels
+  inside a 14px surface was the tell.
 - A rail panel's icon is the natural entry point for a surface that hosts that panel's content itself; letting the surface claim the icon (`claimPanel`) keeps the shell owning rail state and spares the bar a button.
 - xyflow marks non-selectable edges focusable by default; a membership link that cannot be acted on
   should opt out so Tab from a row lands on something a person can use.
@@ -10927,7 +10887,7 @@ states became the `EmptyState` atom; and the description editor's 224px floor ca
 #### Files changed
 
 - `domains/work/src/{contracts/plan-draft.ts,plan-draft.ts}`, `domains/registry.json`
-- `packages/db/src/schema/plan-draft.ts`, `packages/db/drizzle/0125_plan_draft.sql`
+- `packages/db/src/schema/plan-draft.ts`, `packages/db/drizzle/0133_plan_draft.sql`
 - `apps/api/src/lib/plan-draft/`, `apps/api/src/lib/organize/place.ts`,
   `apps/api/src/routes/me-plans.ts`, `apps/api/src/mcp/plan-draft-tools.ts`,
   `apps/api/src/agent/{approval-policy,toolbox,system-prompt,loop}.ts`

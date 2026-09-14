@@ -24,21 +24,15 @@ export interface CanvasViewportToolbarProps {
 /** How long a viewport move from the toolbar takes. */
 const MOVE_MS = 300;
 
-/** Zoom, fit, selection framing, and re-layout in one row. */
-export default function CanvasViewportToolbar({
-  onRelayout,
-  fitPadding = 0.3,
-}: CanvasViewportToolbarProps): React.JSX.Element {
-  const { fitView, getNodes, zoomIn, zoomOut } = useReactFlow();
-  const hasSelection = useStore((state) => state.nodes.some(({ selected }) => selected));
+/** Zoom out, zoom in, and fit the whole graph to the view. */
+function ZoomControls({
+  fitPadding,
+}: {
+  readonly fitPadding: NonNullable<FitViewOptions['padding']>;
+}): React.JSX.Element {
+  const { fitView, zoomIn, zoomOut } = useReactFlow();
   return (
-    <Surface
-      tone="floating"
-      shape="large"
-      className="pointer-events-auto flex shrink-0 items-center gap-1 p-2"
-      role="toolbar"
-      aria-label="Canvas view controls"
-    >
+    <>
       <Button
         type="button"
         variant="ghost"
@@ -78,6 +72,26 @@ export default function CanvasViewportToolbar({
       >
         <FitScreen className="size-4" />
       </Button>
+    </>
+  );
+}
+
+/** Zoom, fit, selection framing, and re-layout in one row. */
+export default function CanvasViewportToolbar({
+  onRelayout,
+  fitPadding = 0.3,
+}: CanvasViewportToolbarProps): React.JSX.Element {
+  const { fitView, getNodes } = useReactFlow();
+  const hasSelection = useStore((state) => state.nodes.some(({ selected }) => selected));
+  return (
+    <Surface
+      tone="floating"
+      shape="small"
+      className="pointer-events-auto flex shrink-0 items-center gap-1 p-0.5"
+      role="toolbar"
+      aria-label="Canvas view controls"
+    >
+      <ZoomControls fitPadding={fitPadding} />
       <span aria-hidden="true" className="bg-outline-variant mx-1 h-5 w-px shrink-0" />
       <Button
         type="button"

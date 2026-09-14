@@ -167,7 +167,7 @@ export default function NodePeek({
             <Button
               type="button"
               size="sm"
-              variant="outline"
+              variant="secondary"
               className="ml-auto"
               onClick={() => {
                 onSetComplete(node.id, !isDone);

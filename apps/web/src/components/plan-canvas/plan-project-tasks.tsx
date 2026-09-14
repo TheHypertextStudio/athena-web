@@ -5,7 +5,7 @@
  *
  * @remarks
  * At the altitude a plan is read, a project's tasks are a detail. A container rests collapsed and
- * names its tasks in miniature: a few titles with their status glyphs, then a count. That block is
+ * names its tasks in miniature: a few titles, then a count. That block is
  * one click target, and the header's chevron is the same command, so showing the rows is a
  * deliberate act rather than the default. Expanded, the rows are real nodes and the container
  * ends with its Add task row; a container with no tasks yet shows only that row.
@@ -23,7 +23,6 @@ import {
   type PlanMiniTask,
   type PlanProjectNodeData,
 } from './plan-nodes';
-import { PlanStatusGlyph } from './plan-status';
 
 /** The accessible name of the command that shows or hides a container's rows. */
 export function tasksToggleLabel(expanded: boolean, count: number): string {
@@ -55,7 +54,7 @@ export function PlanMiniTaskList({ tasks, onExpand }: PlanMiniTaskListProps): JS
       }}
       className={cn(
         surfaceToneColor('floating'),
-        'nodrag nopan text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex w-full flex-col rounded-md px-2.5 py-1.5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none',
+        'nodrag nopan text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex w-full flex-col rounded-md px-1 py-1.5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none',
       )}
     >
       {shown.map((task) => (
@@ -64,7 +63,6 @@ export function PlanMiniTaskList({ tasks, onExpand }: PlanMiniTaskListProps): JS
           className="text-label-small flex min-w-0 items-center gap-1.5"
           style={{ height: PLAN_MINI_ROW }}
         >
-          <PlanStatusGlyph status={task.status} className="size-3" />
           <span className="min-w-0 flex-1 truncate">{task.title}</span>
         </span>
       ))}
@@ -73,7 +71,7 @@ export function PlanMiniTaskList({ tasks, onExpand }: PlanMiniTaskListProps): JS
           className="text-label-small flex items-center gap-1.5"
           style={{ height: PLAN_MINI_ROW }}
         >
-          <span aria-hidden="true" className="size-3 shrink-0" />+{more} more
+          +{more} more
         </span>
       ) : null}
     </button>

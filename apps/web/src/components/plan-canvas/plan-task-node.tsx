@@ -4,8 +4,9 @@
  * `components/plan-canvas/plan-task-node` — one task row inside its project container.
  *
  * @remarks
- * The Task graph's card at a row's proportions: glyph, title, and the two facts a planner reads
- * at a glance, who and when. The assignee is an avatar rather than a name so a long name never
+ * A task is the most granular thing on the board, so its row is the leanest: the title and the two
+ * facts a planner reads at a glance, who and when. The state glyph belongs to the container and
+ * the cards above it; a row wears none. The assignee is an avatar rather than a name so a long name never
  * takes the title's room; the name rides on the avatar and the row's accessible label. A draft
  * row can be dragged into another container; a created row stays where its real record says it is.
  */
@@ -21,7 +22,6 @@ import type { PlanTaskNodeData } from './plan-nodes';
 import {
   PlanDependencyHandle,
   PlanField,
-  PlanStatusGlyph,
   planCardClasses,
   planNodeTransitionName,
 } from './plan-status';
@@ -47,12 +47,11 @@ function PlanTaskNodeComponent({ id, data, selected }: NodeProps): JSX.Element {
       style={{ viewTransitionName: planNodeTransitionName(id) }}
       className={cn(
         surfaceToneColor('floating'),
-        'group relative flex size-full items-center gap-2 rounded-md px-2.5',
-        planCardClasses(node.status, node.entered, selected, 'row'),
+        'group relative flex size-full items-center gap-2 rounded-md px-2',
+        planCardClasses(node.entered, selected),
       )}
     >
       <PlanDependencyHandle id="dep-in" type="target" position={Position.Top} size="!size-1.5" />
-      <PlanStatusGlyph status={node.status} className="size-3.5" />
       <PlanField
         changed={changed.has('title')}
         className="text-on-surface text-body-small min-w-0 flex-1 truncate"

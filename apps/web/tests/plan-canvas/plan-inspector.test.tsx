@@ -75,13 +75,16 @@ vi.mock('@/components/canvas/canvas-inspector', () => ({
     children,
     onClose,
     closeLabel,
+    actions,
   }: {
     title: string;
     children: ReactNode;
     onClose: () => void;
     closeLabel: string;
+    actions?: ReactNode;
   }) => (
     <section aria-label={title}>
+      {actions}
       <button type="button" aria-label={closeLabel} onClick={onClose} />
       {children}
     </section>
@@ -162,7 +165,6 @@ function renderInspector(
   const onApply = vi.fn(() => Promise.resolve(null));
   const onConfirm = vi.fn();
   const onRemove = vi.fn();
-  const onAsk = vi.fn();
   const onClose = vi.fn();
   render(
     <PlanInspector
@@ -176,12 +178,11 @@ function renderInspector(
       onApply={onApply}
       onConfirm={onConfirm}
       onRemove={onRemove}
-      onAsk={onAsk}
       onClose={onClose}
       {...overrides}
     />,
   );
-  return { onApply, onConfirm, onRemove, onAsk, onClose };
+  return { onApply, onConfirm, onRemove, onClose };
 }
 
 afterEach(() => {
@@ -215,9 +216,9 @@ describe('PlanInspector', () => {
   it('names what Confirm will create for a project with tasks', () => {
     const { onConfirm } = renderInspector('p1');
     const confirm = screen.getByRole('button', { name: /confirm/i });
-    expect(confirm).toHaveTextContent('initiative');
-    expect(confirm).toHaveTextContent('project');
-    expect(confirm).toHaveTextContent('task');
+    expect(confirm.title).toMatch(/initiative/);
+    expect(confirm.title).toMatch(/project/);
+    expect(confirm.title).toMatch(/task/);
     fireEvent.click(confirm);
     expect(onConfirm).toHaveBeenCalledWith(['p1']);
   });
@@ -266,11 +267,22 @@ describe('PlanInspector', () => {
     expect(screen.queryByRole('button', { name: /remove/i })).toBeNull();
   });
 
-  it('offers Athena and closes', () => {
-    const { onAsk, onClose } = renderInspector('t1');
-    fireEvent.click(screen.getByRole('button', { name: /ask athena/i }));
-    expect(onAsk).toHaveBeenCalledWith('t1');
+  it('closes from its header and keeps Remove in the overflow, away from Confirm', async () => {
+    const { onClose, onRemove } = renderInspector('t1');
+    expect(screen.queryByRole('button', { name: /remove/i })).toBeNull();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /remove from plan/i }));
+    expect(onRemove).toHaveBeenCalledWith('t1');
     fireEvent.click(screen.getByRole('button', { name: /close task details/i }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('confirms from one small footer control that names what it creates', () => {
+    const { onConfirm } = renderInspector('p1');
+    const confirm = screen.getByRole('button', { name: /^Confirm$/ });
+    expect(confirm.title).toMatch(/project/);
+    fireEvent.click(confirm);
+    expect(onConfirm).toHaveBeenCalledWith(['p1']);
+    expect(screen.queryByRole('button', { name: /ask athena/i })).toBeNull();
   });
 });

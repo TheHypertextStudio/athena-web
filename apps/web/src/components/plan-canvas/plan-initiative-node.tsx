@@ -11,19 +11,19 @@
  * thing projects hang off.
  */
 import { ActorAvatar } from '@docket/ui/components';
-import { ArrowRight, Plus, Target } from '@docket/ui/icons';
+import { Plus, Target } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { surfaceToneColor } from '@docket/ui/primitives';
 import { Handle, NodeToolbar, type NodeProps, Position } from '@xyflow/react';
 import { memo, type JSX } from 'react';
 
-import Link from '@/components/docket-link';
 import { formatCalendarDate } from '@/lib/format-date';
 
 import { usePlanCanvasActions } from './plan-canvas-context';
 import { PLAN_INITIATIVE_SIZE, type PlanInitiativeNodeData } from './plan-nodes';
 import {
   PlanField,
+  PlanOpenLink,
   PlanStateChip,
   planCardClasses,
   planHandleClasses,
@@ -70,6 +70,27 @@ function PlanInitiativeMeta({
   );
 }
 
+/** The card's one edit affordance: a toolbar above it with Add project. */
+function PlanInitiativeToolbar({
+  onAddProject,
+}: {
+  readonly onAddProject: () => void;
+}): JSX.Element {
+  return (
+    <NodeToolbar position={Position.Top} offset={8}>
+      <div className={cn(surfaceToneColor('floating'), 'flex items-center gap-1 rounded-lg p-1')}>
+        <button
+          type="button"
+          onClick={onAddProject}
+          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface text-label-medium inline-flex items-center gap-1 rounded-md px-2 py-1"
+        >
+          <Plus aria-hidden="true" className="size-3.5" /> Project
+        </button>
+      </div>
+    </NodeToolbar>
+  );
+}
+
 function PlanInitiativeNodeComponent({
   id,
   data,
@@ -91,46 +112,21 @@ function PlanInitiativeNodeComponent({
       className={cn(
         surfaceToneColor('floating'),
         'group relative flex flex-col justify-center gap-1.5 overflow-hidden rounded-xl py-3 pr-3.5 pl-4',
-        planCardClasses(node.status, node.entered, selected),
+        planCardClasses(node.entered, selected),
       )}
     >
       {node.isRoot ? (
         <span aria-hidden="true" className="bg-primary absolute inset-y-0 left-0 w-1" />
       ) : null}
       {actions?.canEdit ? (
-        <NodeToolbar position={Position.Top} offset={8}>
-          <div
-            className={cn(
-              surfaceToneColor('canvas'),
-              'border-outline-variant flex items-center gap-1 rounded-lg border p-1',
-            )}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                actions.addProject(id);
-              }}
-              className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface text-label-medium inline-flex items-center gap-1 rounded px-2 py-1"
-            >
-              <Plus aria-hidden="true" className="size-3.5" /> Project
-            </button>
-          </div>
-        </NodeToolbar>
+        <PlanInitiativeToolbar
+          onAddProject={() => {
+            actions.addProject(id);
+          }}
+        />
       ) : null}
       {node.href !== null ? (
-        <Link
-          href={node.href}
-          aria-label={`Open ${node.title}`}
-          onClick={(event) => {
-            event.stopPropagation();
-          }}
-          className={cn(
-            surfaceToneColor('prominent'),
-            'nodrag nopan hover:bg-secondary-container hover:text-on-secondary-container focus-visible:ring-ring absolute top-1.5 right-1.5 z-10 inline-flex size-6 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none',
-          )}
-        >
-          <ArrowRight className="size-4" />
-        </Link>
+        <PlanOpenLink href={node.href} title={node.title} placement="corner" />
       ) : null}
       <div className="flex min-w-0 items-center gap-2">
         <Target aria-hidden="true" className="text-primary size-4 shrink-0" />

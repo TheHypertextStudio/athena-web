@@ -23,7 +23,7 @@
  * breakpoint. Continuity is the whole fix for the shell's worst layout bug: a fixed 22rem rail that
  * docked at a threshold made `<main>` **narrower at a wider window** (measured: 1119px of main at
  * 1439px of viewport, 760px at 1440px). A width that is continuous, and whose slope stays under 1,
- * cannot do that — see the contract on {@link AppShell}. Concretely `<main>` = viewport − 328px of
+ * cannot do that — see the contract on {@link AppShell}. Concretely `<main>` = viewport − 312px of
  * fixed chrome − this rail.
  *
  * The floor is a deliberate departure from "a share and nothing else". A pure share bottoms out at
@@ -80,6 +80,12 @@ export const RAIL_MIN_INLINE_SIZE_PX = 280;
 /** The rail's maximum inline size in px (the `22rem` cap in {@link RAIL_INLINE_SIZE}). */
 export const RAIL_MAX_INLINE_SIZE_PX = 352;
 
+/**
+ * The gap between an open rail and the activity bar, in px. It belongs to the rail: a collapsed
+ * rail has no width and no gap, so the bar sits one shell gutter from `<main>` and hugs its icons.
+ */
+export const RAIL_GAP_PX = 8;
+
 /** The Tailwind width utility for {@link RAIL_INLINE_SIZE}; kept literal so the scanner emits it. */
 const RAIL_WIDTH_CLASS = 'w-[clamp(17.5rem,17vw,22rem)]';
 
@@ -95,7 +101,7 @@ const RAIL_TOGGLE_DURATION_MS = 240;
  * part of the rail that is always on screen, which makes it the only honest place to say "this is
  * still happening" without a second, competing surface elsewhere in the shell.
  *
- * Kept to a tone and a sentence rather than an arbitrary node so the bar's fixed `w-12` cannot be
+ * Kept to a tone and a sentence rather than an arbitrary node so the bar's fixed `w-10` cannot be
  * disturbed by whatever a panel decides to render, and so the state reaches a screen reader rather
  * than being a coloured dot only sighted people can act on.
  */
@@ -143,7 +149,7 @@ export interface ShellAsideProps {
  * Hidden below `lg` **in CSS, not in JS**, and rendered by {@link AppShell} at every desktop width.
  * Both details are load-bearing for the layout contract: a CSS-only presence means the first paint is
  * already the final layout (no hydration reflow), and being present at every desktop width — even
- * collapsed, at zero width — keeps the shell's fixed chrome the *same* 328px at 1024px as at 1920px.
+ * collapsed, at zero width — keeps the shell's fixed chrome the *same* 312px at 1024px as at 1920px.
  * When the host was conditionally mounted, its flex gap alone made `<main>` 7px narrower at 1440 than
  * at 1439.
  *
@@ -187,8 +193,8 @@ export function ShellAside({ panel, collapsed }: ShellAsideProps): React.JSX.Ele
         // continuous motion. Collapsed → zero width; the always-visible activity bar is the reopen.
         surfaceToneColor('page'),
         '@container hidden h-full min-h-0 shrink-0 overflow-hidden rounded-xl lg:block',
-        animating && 'transition-[width] duration-(--dur-slow) ease-in-out',
-        open ? RAIL_WIDTH_CLASS : 'w-0',
+        animating && 'transition-[width,margin] duration-(--dur-slow) ease-in-out',
+        open ? cn(RAIL_WIDTH_CLASS, 'mr-2') : 'w-0',
       )}
     >
       {/* Inner pinned to the expanded width so the content never reflows while the wrapper animates

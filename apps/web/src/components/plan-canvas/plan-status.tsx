@@ -4,19 +4,21 @@
  * `components/plan-canvas/plan-status` — the small vocabulary every plan node shares.
  *
  * @remarks
- * A draft node borrows the proposal system's ghost grammar: a dashed outline at reduced weight on
- * a card, a dashed glyph, and a `draft` chip. A confirmed node is the ordinary tonal card with a
+ * A draft node borrows the proposal system's ghost grammar: a dashed glyph on a card or a
+ * container, and a `draft` chip. A confirmed node is the ordinary tonal card with a
  * filled check and a `created` chip. One chip component carries both states so the three
- * renderers and the inspector cannot drift into three readings of "not real yet". A row inside a
- * container never draws the dashed outline: at that size the glyph and the chip are enough, and
- * a dashed border on every row turns a container into a field of stitching.
+ * renderers and the inspector cannot drift into three readings of "not real yet". A task row
+ * wears neither: it is the most granular thing on the board, and its container already says
+ * what state its tasks are in.
  */
 import type { PlanNodeStatus } from '@docket/work/plan-draft-contract';
-import { CheckCircle2, CircleDashed } from '@docket/ui/icons';
+import { ArrowRight, CheckCircle2, CircleDashed } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { Badge } from '@docket/ui/primitives';
+import { Badge, surfaceToneColor } from '@docket/ui/primitives';
 import { Handle, type HandleType, type Position } from '@xyflow/react';
 import type { CSSProperties, JSX, ReactNode } from 'react';
+
+import Link from '@/components/docket-link';
 
 /** The view-transition name a plan node carries so confirmation morphs it in place. */
 export function planNodeTransitionName(ref: string): string {
@@ -57,9 +59,9 @@ export function PlanStateChip({
   if (status === 'draft') {
     return (
       <Badge
-        variant="outline"
+        variant="secondary"
         data-plan-state="draft"
-        className={cn('border-primary/40 text-primary', className)}
+        className={cn('bg-primary/10 text-primary', className)}
       >
         draft
       </Badge>
@@ -97,27 +99,12 @@ export function PlanField({
   );
 }
 
-/** How a plan node is drawn: a standalone card, or a row inside a container. */
-export type PlanCardShape = 'card' | 'row';
-
 /**
- * The classes a plan card wears for its status and its arrival.
- *
- * @param shape - A `card` draws the draft's dashed outline; a `row` leaves the glyph and chip to
- * carry the state.
+ * The classes a plan card wears for its arrival and its selection. State is the chip's to carry:
+ * a card draws no outline for it, so the board stays one tonal surface per node.
  */
-export function planCardClasses(
-  status: PlanNodeStatus,
-  entered: boolean,
-  selected: boolean,
-  shape: PlanCardShape = 'card',
-): string {
-  return cn(
-    'transition-colors',
-    status === 'draft' && shape === 'card' && 'border-primary/40 border border-dashed',
-    entered && 'plan-node-enter',
-    selected && 'ring-primary ring-2',
-  );
+export function planCardClasses(entered: boolean, selected: boolean): string {
+  return cn('transition-colors', entered && 'plan-node-enter', selected && 'ring-primary ring-2');
 }
 
 /** The size utility a handle takes. */
@@ -166,5 +153,37 @@ export function PlanDependencyHandle({
       aria-label="Drag to add a dependency"
       className={cn(planHandleClasses(size), 'hover:!bg-primary z-10 transition-colors')}
     />
+  );
+}
+
+/** Props for {@link PlanOpenLink}. */
+export interface PlanOpenLinkProps {
+  readonly href: string;
+  /** The record's name, for the link's accessible name. */
+  readonly title: string;
+  /** Where the corner affordance sits; a card pins it, a header row lets it flow. */
+  readonly placement: 'corner' | 'inline';
+}
+
+/**
+ * The corner affordance that opens a created node's real record. It rests invisible and surfaces
+ * with the card, so a board of drafts and records reads the same until a pointer arrives.
+ */
+export function PlanOpenLink({ href, title, placement }: PlanOpenLinkProps): JSX.Element {
+  return (
+    <Link
+      href={href}
+      aria-label={`Open ${title}`}
+      onClick={(event) => {
+        event.stopPropagation();
+      }}
+      className={cn(
+        surfaceToneColor('prominent'),
+        'nodrag nopan hover:bg-secondary-container hover:text-on-secondary-container focus-visible:ring-ring inline-flex size-6 shrink-0 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none',
+        placement === 'corner' && 'absolute top-1.5 right-1.5 z-10',
+      )}
+    >
+      <ArrowRight className="size-4" />
+    </Link>
   );
 }

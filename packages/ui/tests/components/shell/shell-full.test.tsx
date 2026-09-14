@@ -23,7 +23,6 @@ import {
   type ActiveContext,
 } from '../../../src/components/shell/ContextProvider';
 import { ShellDrawerProvider } from '../../../src/components/shell/ShellDrawerContext';
-import { useShellRail } from '../../../src/components/shell/ShellRailContext';
 import { ShellSidebarProvider } from '../../../src/components/shell/ShellSidebarContext';
 import { Sidebar } from '../../../src/components/shell/Sidebar';
 import { SidebarNavItem } from '../../../src/components/shell/SidebarNavItem';
@@ -233,7 +232,7 @@ describe('AppShell', () => {
     // tonal step from the canvas onto `surface` and nothing else — no border and no drop shadow,
     // which together drew a second box around content that already read as a panel.
     const main = screen.getByRole('main');
-    expect(main).toHaveClass('bg-surface', 'lg:rounded-xl');
+    expect(main).toHaveClass('bg-surface', 'lg:rounded-corner-lg');
     expect(main.parentElement).not.toHaveClass('lg:gap-2');
     expect(screen.getByTestId('sync-banner').parentElement).toHaveAttribute(
       'data-slot',
@@ -375,50 +374,6 @@ describe('AppShell rail', () => {
     );
   }
 
-  function CollapseRailWhileMounted(): React.JSX.Element {
-    const { requestCollapsed } = useShellRail();
-    React.useEffect(() => requestCollapsed(), [requestCollapsed]);
-    return <div>Canvas</div>;
-  }
-
-  it('collapses the rail while a surface asks for room, without saving that choice', () => {
-    window.localStorage.setItem('docket.rail.collapsed', '0');
-    renderWithRail(() => true, undefined, <CollapseRailWhileMounted />);
-    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-0');
-    expect(window.localStorage.getItem('docket.rail.collapsed')).toBe('0');
-  });
-
-  it('lets the viewer expand the rail over a request, and still saves nothing', () => {
-    window.localStorage.setItem('docket.rail.collapsed', '0');
-    renderWithRail(() => true, undefined, <CollapseRailWhileMounted />);
-    const activityBar = screen.getByRole('navigation', { name: 'Panels' });
-    fireEvent.click(within(activityBar).getByRole('button', { name: 'Tasks' }));
-    expect(screen.getByRole('complementary', { name: 'Tasks' })).not.toHaveClass('w-0');
-    expect(window.localStorage.getItem('docket.rail.collapsed')).toBe('0');
-  });
-
-  function ClaimTasksWhileMounted({
-    onClick,
-  }: {
-    readonly onClick: () => void;
-  }): React.JSX.Element {
-    const { requestCollapsed, claimPanel } = useShellRail();
-    React.useEffect(() => requestCollapsed(), [requestCollapsed]);
-    React.useEffect(() => claimPanel('tasks', onClick), [claimPanel, onClick]);
-    return <div>Canvas</div>;
-  }
-
-  it('hands a claimed panel icon to the surface and leaves the rail collapsed', () => {
-    window.localStorage.setItem('docket.rail.collapsed', '0');
-    const onClick = vi.fn();
-    renderWithRail(() => true, undefined, <ClaimTasksWhileMounted onClick={onClick} />);
-    const activityBar = screen.getByRole('navigation', { name: 'Panels' });
-    fireEvent.click(within(activityBar).getByRole('button', { name: 'Tasks' }));
-    expect(onClick).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-0');
-    expect(window.localStorage.getItem('docket.rail.collapsed')).toBe('0');
-  });
-
   it('renders the panel host and switcher at EVERY width, hiding them in CSS below lg', () => {
     // The old shell mounted these on a JS media query, so crossing the query added a whole column
     // of chrome in one pixel of window growth. They are unconditional now: the layout the server
@@ -429,31 +384,6 @@ describe('AppShell rail', () => {
     const bar = screen.getByRole('navigation', { name: 'Panels' });
     expect(host).toHaveClass('hidden', 'lg:block');
     expect(bar).toHaveClass('hidden', 'lg:flex');
-  });
-
-  it('opens to a share of the viewport, never a fixed column', () => {
-    renderWithRail(() => true);
-
-    // A viewport *share*, floored at 17.5rem and capped at 22rem. The bare fixed width this
-    // replaced is what let a docked rail take 352px out of a 1024px window the moment a media
-    // query flipped; the floor is what keeps the rail readable at the bottom of the range without
-    // reintroducing that step.
-    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass(
-      'w-[clamp(17.5rem,17vw,22rem)]',
-    );
-  });
-
-  it('collapses and re-expands from its own activity-bar icon', () => {
-    renderWithRail(() => true);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse Tasks' }));
-    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-0');
-
-    const activityBar = screen.getByRole('navigation', { name: 'Panels' });
-    fireEvent.click(within(activityBar).getByRole('button', { name: 'Tasks' }));
-    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass(
-      'w-[clamp(17.5rem,17vw,22rem)]',
-    );
   });
 
   it('keeps the activity-bar interaction intact beside a visible document row', () => {
@@ -530,30 +460,20 @@ describe('AppShell rail', () => {
   it('arms the width transition only for the duration of the collapse/expand motion', async () => {
     renderWithRail(() => true);
     const host = screen.getByRole('complementary', { name: 'Tasks' });
-    expect(host).not.toHaveClass('transition-[width]');
+    expect(host).not.toHaveClass('transition-[width,margin]');
 
     fireEvent.click(screen.getByRole('button', { name: 'Collapse Tasks' }));
-    expect(host).toHaveClass('transition-[width]', 'w-0');
+    expect(host).toHaveClass('transition-[width,margin]', 'w-0');
 
     // Once the 240ms motion completes, the transition class is dropped so a later viewport
     // resize (which also changes the rail's width) never gets caught by the same animation.
     await waitFor(
       () => {
-        expect(host).not.toHaveClass('transition-[width]');
+        expect(host).not.toHaveClass('transition-[width,margin]');
       },
       { timeout: 1000 },
     );
     expect(host).toHaveClass('w-0');
-  });
-
-  it('adopts a persisted collapsed choice after mount rather than at hydration', () => {
-    // React does not patch attribute mismatches it finds while hydrating, so reading storage in
-    // `useState`'s initializer left the server's class on the element forever and the viewer's saved
-    // choice was silently dropped — visible now that the rail is server-rendered at every width.
-    window.localStorage.setItem('docket.rail.collapsed', '1');
-    renderWithRail(() => true);
-
-    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-0');
   });
 
   it('presents one full-window utility pane below lg', async () => {

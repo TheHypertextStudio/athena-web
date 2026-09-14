@@ -70,6 +70,7 @@ function parseRailWidthLaw(className: string): {
   share: number;
   floorPx: number;
   capPx: number;
+  gapPx: number;
 } {
   const match = /w-\[clamp\((\d+(?:\.\d+)?)rem,(\d+(?:\.\d+)?)vw,(\d+(?:\.\d+)?)rem\)\]/.exec(
     className,
@@ -79,10 +80,14 @@ function parseRailWidthLaw(className: string): {
       `The rail must size itself as a viewport share floored and capped in rem — got "${className}"`,
     );
   }
+  // An open rail carries the gap to the activity bar as its own margin, so a collapsed rail costs
+  // nothing at all and the bar hugs its icons one shell gutter from <main>.
+  const gap = /(?:^| )mr-(\d+)(?: |$)/.exec(className);
   return {
     floorPx: Number(match[1]) * 16,
     share: Number(match[2]) / 100,
     capPx: Number(match[3]) * 16,
+    gapPx: gap?.[1] === undefined ? 0 : spacingPx(Number(gap[1])),
   };
 }
 
@@ -165,6 +170,7 @@ interface ShellGeometry {
   readonly railShare: number;
   readonly railFloorPx: number;
   readonly railCapPx: number;
+  readonly railGapPx: number;
 }
 
 /**
@@ -192,7 +198,7 @@ function readGeometry(): ShellGeometry {
   const barWidth = columnWidthPx(bar, '');
   const dockRow = bar.parentElement;
   const dockGap = dockRow ? /(?:^| )gap-(\d+)(?: |$)/.exec(dockRow.className) : null;
-  if (navWidth === null || barWidth === null || !dockGap?.[1]) {
+  if (navWidth === null || barWidth === null) {
     throw new Error('The sidebar and the activity bar must each declare a fixed column width');
   }
 
@@ -201,12 +207,13 @@ function readGeometry(): ShellGeometry {
     chromePx:
       spacingPx(Number(padding[1])) * 2 +
       spacingPx(Number(gap[1])) * (desktopColumns.length - 1) +
-      spacingPx(Number(dockGap[1])) +
+      (dockGap?.[1] === undefined ? 0 : spacingPx(Number(dockGap[1]))) +
       navWidth +
       barWidth,
     railShare: rail.share,
     railFloorPx: rail.floorPx,
     railCapPx: rail.capPx,
+    railGapPx: rail.gapPx,
   };
 }
 
@@ -219,7 +226,8 @@ function mainWidth(
 ): number {
   if (viewport < SHELL_DESKTOP_MIN_PX) return viewport;
   const rail = railExpanded
-    ? Math.min(Math.max(geometry.railShare * viewport, geometry.railFloorPx), geometry.railCapPx)
+    ? Math.min(Math.max(geometry.railShare * viewport, geometry.railFloorPx), geometry.railCapPx) +
+      geometry.railGapPx
     : 0;
   // Collapsing the sidebar swaps one column's width for another; it adds no column and removes
   // none, so the gutters and the activity bar in `chromePx` are unchanged.

@@ -48,7 +48,7 @@ describe('CanvasFloatingBar', () => {
       />,
     );
     const wrapper = screen.getByRole('region', { name: 'Plan' }).parentElement;
-    expect(wrapper?.style.right).toBe('304px');
+    expect(wrapper?.style.right).toBe('300px');
     expect(onHeightChange).toHaveBeenCalledWith(expect.any(Number));
   });
 });

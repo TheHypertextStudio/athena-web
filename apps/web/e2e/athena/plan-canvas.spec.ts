@@ -90,6 +90,8 @@ test.describe('Planning canvas', () => {
     const bar = page.getByRole('region', { name: 'Plan' });
     await expect(bar).toBeVisible();
     await expect(bar.getByTestId('plan-counts')).toContainText('5 drafts');
+    // Nothing selected, so no inspector column floats beside the board.
+    await expect(page.getByRole('complementary', { name: 'Selection details' })).toHaveCount(0);
 
     // --- Selecting a project floats the inspector naming what Confirm creates -----------
     // The container's centre is a task row (its own node), so aim at the header band.
@@ -98,7 +100,7 @@ test.describe('Planning canvas', () => {
     await expect(inspector).toBeVisible({ timeout: TIMEOUTS.ui });
     await expect(inspector.locator('[data-presentation="floating"]')).toBeVisible();
     const confirm = inspector.getByRole('button', { name: /^Confirm/ });
-    await expect(confirm).toContainText('2 tasks');
+    await expect(confirm).toHaveAttribute('title', /2 tasks/);
     await confirm.click();
 
     // --- The project and its tasks are real now; the initiative came along --------------

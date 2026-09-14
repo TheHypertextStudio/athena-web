@@ -23,14 +23,12 @@ describe('PlanStateChip', () => {
 });
 
 describe('planCardClasses', () => {
-  it('draws the dashed outline on a draft card and leaves a row to its glyph', () => {
-    expect(planCardClasses('draft', false, false)).toContain('border-dashed');
-    expect(planCardClasses('draft', false, false, 'row')).not.toContain('border-dashed');
-    expect(planCardClasses('confirmed', false, false)).not.toContain('border-dashed');
+  it('draws no outline at rest, leaving the state to the chip', () => {
+    expect(planCardClasses(false, false)).not.toMatch(/border|ring-2|plan-node-enter/);
   });
 
   it('adds the arrival motion and the selection ring', () => {
-    const classes = planCardClasses('confirmed', true, true, 'row');
+    const classes = planCardClasses(true, true);
     expect(classes).toContain('plan-node-enter');
     expect(classes).toContain('ring-2');
   });

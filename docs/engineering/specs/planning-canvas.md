@@ -19,7 +19,7 @@ created nodes side by side.
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | Document, ops, and API contracts        | `domains/work/src/contracts/plan-draft.ts`                                                                           |
 | The reducer every edit goes through     | `domains/work/src/plan-draft.ts`                                                                                     |
-| Table                                   | `packages/db/src/schema/plan-draft.ts` (`plan_draft`, migration 0125)                                                |
+| Table                                   | `packages/db/src/schema/plan-draft.ts` (`plan_draft`, migration 0133)                                                |
 | Store: load, create, patch, hydrate     | `apps/api/src/lib/plan-draft/store.ts`                                                                               |
 | Commit                                  | `apps/api/src/lib/plan-draft/commit.ts` over `apps/api/src/lib/organize/place.ts`                                    |
 | Personal routes                         | `apps/api/src/routes/me-plans.ts` → `/v1/me/plans`                                                                   |
@@ -109,12 +109,12 @@ orientation. Each container is sized to the rows it holds (`projectContainerHeig
 
 The three renderers share one vocabulary in `plan-status.tsx`. `PlanStateChip` on the `Badge`
 primitive is the single reading of draft and created, on every card and in the inspector;
-`planCardClasses` draws a draft's dashed outline on a card and never on a row, where the glyph and
-the chip carry the state. `PlanDependencyHandle` names what dragging does and takes the accent
+`planCardClasses` carries only arrival and selection; no card or row draws an outline for its
+state, so a node is one tonal surface with the chip reading draft or created. `PlanDependencyHandle` names what dragging does and takes the accent
 under the pointer; membership handles rest invisible until their node is hovered, focused, or
 selected (`planHandleClasses`). The initiative card is 336×112 and reads like its record: title,
 summary at body size, owner avatar and name, the whole date, nothing for an unset field. A project
-container's header (`plan-project-header.tsx`) carries the lead's avatar, the target, the count, and one `PlanAlsoIn` chip for the other initiatives it belongs to, listing them on hover; the band takes a tonal step under the pointer. A container rests collapsed at the altitude a plan is read: below its header it names its tasks in miniature (`PlanMiniTaskList` in `plan-project-tasks.tsx`, three titles with their glyphs and a count), and that block or the header's chevron shows the rows on a dedicated click. Expanded, the rows are real nodes, and `PLAN_PROJECT_PADDING` keeps the container, its miniature list, and its rows concentric. The panel owns the expanded set: a search opens the containers holding matches, a revision from Athena opens the containers her tasks landed in, adding or moving a task opens its container, and collapsing a container lets go of a row selected inside it. A task row shows its assignee as an avatar and pins the due date to the right, so a long name never takes the title's room. The minimap appears once the board
+container's header (`plan-project-header.tsx`) carries the lead's avatar, the target, the count, and one `PlanAlsoIn` chip for the other initiatives it belongs to, listing them on hover; the band takes a tonal step under the pointer. A container rests collapsed at the altitude a plan is read: below its header it names its tasks in miniature (`PlanMiniTaskList` in `plan-project-tasks.tsx`, three titles and a count), and that block or the header's chevron shows the rows on a dedicated click. Expanded, the rows are real nodes, and `PLAN_PROJECT_PADDING` keeps the container, its miniature list, and its rows concentric. The panel owns the expanded set: a search opens the containers holding matches, a revision from Athena opens the containers her tasks landed in, adding or moving a task opens its container, and collapsing a container lets go of a row selected inside it. A task row is the leanest thing on the board: no state glyph, a 32px height, its assignee as an avatar, and the due date pinned to the right, so a long name never takes the title's room. The minimap appears once the board
 spills into a second column.
 
 The route is immersive: the board runs edge to edge under floating chrome, and `useOwnPageScroll`
@@ -143,7 +143,7 @@ still apply. The route asks the shell for its icon rail on any window under 1920
 saved choice, and yield to the viewer expanding either for as long as the plan is open.
 
 Selection is xyflow's own: a draft node is not a workspace object and does not enter the global
-object registry. The inspector edits a draft's fields, commits text on blur or Enter, and names
+object registry. The inspector (`plan-inspector.tsx`, with its text field in `plan-commit-text.tsx`) edits a draft's fields in filled text fields and tonal pickers, commits text on blur or Enter, and names
 what Confirm will create through `describeConfirmation`; a confirmed node is read-only there with
 a link to its record. Closing the inspector, by Escape or its close button, clears the canvas
 selection too, so the bar's counts return.

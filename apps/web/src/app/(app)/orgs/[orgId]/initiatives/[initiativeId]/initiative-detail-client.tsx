@@ -549,12 +549,7 @@ export default function InitiativeDetailPage(): JSX.Element {
         // what makes the publish icon and the overflow icon provably the same size
         // rather than the same size until someone edits one of them.
         <ControlGroup controlSize="xl">
-          <PlanWithAthenaAction
-            orgId={orgId}
-            initiativeId={initiativeId}
-            noun={initiativeNoun}
-            enabled={canEdit}
-          />
+          <PlanWithAthenaAction orgId={orgId} initiativeId={initiativeId} enabled={canEdit} />
           <PublishAction
             orgId={orgId}
             subjectKind="initiative"

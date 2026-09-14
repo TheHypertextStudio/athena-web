@@ -229,6 +229,7 @@ export default function GraphViewBar({
       onGroupByChange={onGroupByChange}
       onSortChange={onSortChange}
       leading={search}
+      buttonVariant="ghost"
       displayExtras={
         <GraphDisplayExtras
           display={display}

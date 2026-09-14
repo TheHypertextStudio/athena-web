@@ -55,12 +55,12 @@ const PRIVATE_DRAFT_ANNOTATIONS = {
   openWorldHint: false,
 } as const;
 
-const planIdParam = z.string().min(1).describe('The plan id `plan_start` returned.');
+const planIdParam = z.string().min(1);
 
 const planCountsSchema = z.object({
   projects: z.number().int(),
   tasks: z.number().int(),
-  draft: z.number().int().describe('How many nodes are still drafts.'),
+  draft: z.number().int(),
 });
 
 /**
@@ -105,29 +105,37 @@ export function registerPlanDraftTools(
   ctx: McpContext,
   sessionId: string | null,
 ): void {
+  registerPlanStart(server, ctx, sessionId);
+  registerPlanRead(server, ctx);
+  registerPlanDraft(server, ctx);
+  registerPlanCommit(server, ctx, sessionId);
+}
+
+/** Register plan_start: open or resume the plan this conversation shapes. */
+function registerPlanStart(server: McpRegistrar, ctx: McpContext, sessionId: string | null): void {
   server.registerTool(
     PLAN_TOOL_NAMES.start,
     {
       title: 'Start a plan',
       description:
-        'Open a planning draft on the canvas, or reopen the one rooted on an initiative. Use it the moment the person describes initiative-sized work, and tell them in one sentence the plan is open. Returns the document, the canvas link, and the templates each kind may apply. Nothing reaches the workspace until `plan_commit`.',
+        'Open a planning draft on the canvas, or reopen the one on an initiative.\n\nUse it as soon as the person describes initiative-sized work, and say so in a sentence. Returns the document, its link, and the templates each kind may apply. Nothing is created until `plan_commit`.',
       inputSchema: {
         orgId: orgIdParam,
         initiative: z
           .string()
           .optional()
           .describe(`An existing initiative to plan under, when there is one. ${DESCRIPTOR_HINT}`),
-        title: z.string().min(1).max(200).optional().describe('A working title for the plan.'),
+        title: z.string().min(1).max(200).optional(),
       },
       outputSchema: {
         planId: z.string(),
-        href: z.string().describe('The canvas route to send the person to.'),
+        href: z.string(),
         title: z.string(),
         status: z.string(),
         revision: z.number().int(),
         counts: planCountsSchema,
         document: PlanDocument,
-        templates: z.array(PlanTemplateOption).describe('Templates each kind may apply.'),
+        templates: z.array(PlanTemplateOption),
       },
       _meta: { ...PRIVATE_DRAFT_META },
       annotations: PRIVATE_DRAFT_ANNOTATIONS,
@@ -157,13 +165,16 @@ export function registerPlanDraftTools(
         });
       }),
   );
+}
 
+/** Register plan_read: the current document and revision. */
+function registerPlanRead(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     PLAN_TOOL_NAMES.read,
     {
       title: 'Read a plan',
       description:
-        'The plan document and its revision. Call it at the start of every turn while a plan is active, since the person may have edited the canvas, and pass the revision to `plan_draft`.',
+        'The plan document and its revision.\n\nRead it at the start of each turn while a plan is active, since the person may have edited the canvas, and pass the revision to `plan_draft`.',
       inputSchema: { planId: planIdParam },
       outputSchema: {
         planId: z.string(),
@@ -187,13 +198,16 @@ export function registerPlanDraftTools(
         return jsonResult({ ...planSummary(row), document: row.document });
       }),
   );
+}
 
+/** Register plan_draft: apply a batch of ops against a revision. */
+function registerPlanDraft(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     PLAN_TOOL_NAMES.draft,
     {
       title: 'Draft on the canvas',
       description:
-        'Edit the plan in one batch: add or update nodes (invent a short `ref`, name parents by ref), set fields, move a task, remove a draft node, add or remove a dependency, or apply a template. Write a whole turn in ONE call so it lands together; the batch applies whole or not at all. Created nodes cannot be edited here; use `update` on the real object.',
+        'Edit the plan in one batch of ops; it applies whole or not at all.\n\nAdd or update nodes (invent a short `ref`, name parents by ref), set fields, move a task, remove a draft node, add or remove a dependency, or apply a template. Write a whole turn in one call so it lands together. Created nodes cannot be edited here; use `update` on the real object.',
       inputSchema: {
         planId: planIdParam,
         revision: z
@@ -203,15 +217,15 @@ export function registerPlanDraftTools(
           .describe(
             'The revision you last read. A stale revision is refused; read again and retry.',
           ),
-        ops: z.array(PlanOp).min(1).max(200).describe('The batch, applied in order.'),
+        ops: z.array(PlanOp).min(1).max(200),
       },
       outputSchema: {
         planId: z.string(),
-        revision: z.number().int().describe('The new revision to pass next time.'),
+        revision: z.number().int(),
         counts: planCountsSchema,
-        added: z.array(z.string()).describe('Refs this batch introduced.'),
-        changed: z.array(z.string()).describe('Refs whose fields or place changed.'),
-        removed: z.array(z.string()).describe('Refs this batch removed.'),
+        added: z.array(z.string()),
+        changed: z.array(z.string()),
+        removed: z.array(z.string()),
       },
       _meta: { ...PRIVATE_DRAFT_META },
       annotations: PRIVATE_DRAFT_ANNOTATIONS,
@@ -232,23 +246,26 @@ export function registerPlanDraftTools(
         });
       }),
   );
+}
 
+/** Register plan_commit: confirm part of the plan into real records. */
+function registerPlanCommit(server: McpRegistrar, ctx: McpContext, sessionId: string | null): void {
   server.registerTool(
     PLAN_TOOL_NAMES.commit,
     {
       title: 'Confirm part of a plan',
       description:
-        'Create the named draft nodes as real work, in one transaction; draft ancestors come along, and anything already there by that name is matched rather than duplicated. Call it only for a part the person has settled, and say what it will create.',
+        'Create the named draft nodes as real work, in one transaction.\n\nDraft ancestors come along, and anything already there by that name is matched rather than duplicated. Call it only for a part the person has settled, and say what it will create.',
       inputSchema: {
         planId: planIdParam,
-        refs: z.array(z.string()).min(1).max(200).describe('The refs to confirm.'),
+        refs: z.array(z.string()).min(1).max(200),
       },
       outputSchema: {
         planId: z.string(),
         revision: z.number().int(),
         status: z.string(),
         counts: planCountsSchema,
-        placed: z.array(PlanPlaced).describe('Every node this commit touched, parents first.'),
+        placed: z.array(PlanPlaced),
         created: z.number().int(),
         matched: z.number().int(),
         changeSetId: z

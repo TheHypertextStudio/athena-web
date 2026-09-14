@@ -16,8 +16,15 @@ export interface CanvasOverlayInsets {
   readonly right?: number;
 }
 
-/** The gap floating chrome keeps from the canvas edge and from each other. */
-export const CANVAS_OVERLAY_GUTTER = 12;
+/**
+ * The gap floating chrome keeps from the canvas edge and from each other.
+ *
+ * @remarks
+ * The shell's main surface rounds at 16px and floating chrome at 10px, so an 8px gap keeps the
+ * two curves nested where a bar or a column sits in the surface's corner, and the chrome's 2px
+ * padding leaves its 8px controls concentric with it.
+ */
+export const CANVAS_OVERLAY_GUTTER = 8;
 
 /** A CSS pixel length, the unit form xyflow's `fitView` padding accepts. */
 export type PixelLength = `${number}px`;

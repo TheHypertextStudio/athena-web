@@ -87,6 +87,7 @@ function renderBar(refs: readonly string[], overrides: Partial<PlanSelectionActi
       counts={{ projects: 2, tasks: 0, draft: 2 }}
       onAddProject={vi.fn()}
       selection={actions}
+      onClearSelection={vi.fn()}
       insetRight={0}
       onHeightChange={vi.fn()}
     />,

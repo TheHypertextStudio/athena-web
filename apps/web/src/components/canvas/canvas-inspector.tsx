@@ -30,6 +30,8 @@ export interface CanvasInspectorProps {
   readonly closeLabel: string;
   /** Dismiss the inspector. */
   readonly onClose: () => void;
+  /** Header actions before the close button: an overflow menu, a secondary command. */
+  readonly actions?: ReactNode;
   /** The inspector's body. */
   readonly children: ReactNode;
 }
@@ -40,15 +42,17 @@ export function CanvasInspector({
   leading,
   closeLabel,
   onClose,
+  actions,
   children,
 }: CanvasInspectorProps): JSX.Element {
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="border-outline-variant flex min-h-12 shrink-0 items-center gap-2 border-b py-1 pr-1 pl-3">
+      <div className="border-outline-variant flex min-h-12 shrink-0 items-center gap-2 border-b py-0.5 pr-0.5 pl-3">
         {leading}
         <span className="text-on-surface text-title-small min-w-0 flex-1 truncate" title={title}>
           {title}
         </span>
+        {actions}
         <Button variant="ghost" controlSize="xl" iconOnly aria-label={closeLabel} onClick={onClose}>
           <X aria-hidden="true" />
         </Button>

@@ -50,6 +50,8 @@ export interface CanvasCommandContextValue extends CanvasCommandHistoryControls 
   readonly closeProperties: () => void;
   /** Request recoverable trash, with confirmation when risk warrants it. */
   readonly trashSelection: () => void;
+  /** Let go of the whole selection, in the provider and on the canvas. */
+  readonly clearSelection: () => void;
   /** Keyboard handler for Delete and Backspace while the canvas owns focus. */
   readonly onCanvasKeyDown: (event: React.KeyboardEvent) => void;
 }
@@ -76,6 +78,8 @@ export interface CanvasCommandProviderProps {
   readonly onOpenObject: (object: ObjectRef) => void;
   /** Observe the selected objects when the shared Properties editor opens. */
   readonly onOpenProperties?: ((objects: readonly ObjectRef[]) => void) | undefined;
+  /** Clear the canvas's own selected state, which mirrors into the provider. */
+  readonly onClearSelection?: (() => void) | undefined;
   /** Canvas content and overlays. */
   readonly children: ReactNode;
 }
@@ -147,32 +151,32 @@ export function CanvasCommandProvider({
   return <CanvasCommandProviderWithHistory {...props} history={history} />;
 }
 
-/** Provide canvas actions from the same history instance that panel gestures execute through. */
-export function CanvasCommandProviderWithHistory({
-  objectKind,
-  canEdit,
-  canTrash = canEdit,
-  onCreateObject,
-  onOpenObject,
-  onOpenProperties,
-  history,
-  children,
-}: CanvasCommandProviderWithHistoryProps): JSX.Element {
-  const selection = useSelection();
-  const [pendingTrash, setPendingTrash] = useState<CanvasTrashConfirmation | null>(null);
+/** What the shared bulk-properties shell exposes to the command context. */
+interface PropertiesShell {
+  readonly openProperties: (invoker?: HTMLElement | null) => void;
+  readonly propertiesOpen: boolean;
+  readonly closeProperties: () => void;
+}
+
+/**
+ * The open/closed state of the bulk-properties shell, remembering the control that opened it so
+ * closing can hand focus back. An empty selection closes the shell.
+ */
+function usePropertiesShell(
+  onOpenProperties: ((objects: readonly ObjectRef[]) => void) | undefined,
+  selectedObjects: readonly ObjectRef[],
+  count: number,
+): PropertiesShell {
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const propertiesInvokerRef = useRef<HTMLElement | null>(null);
-  const canUndo = history.canUndo;
-  const canRedo = history.canRedo;
-
   const openProperties = useCallback(
     (invoker?: HTMLElement | null): void => {
       propertiesInvokerRef.current =
         invoker ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
       setPropertiesOpen(true);
-      onOpenProperties?.(selection.selectedObjects);
+      onOpenProperties?.(selectedObjects);
     },
-    [onOpenProperties, selection.selectedObjects],
+    [onOpenProperties, selectedObjects],
   );
   const closeProperties = useCallback((): void => {
     setPropertiesOpen(false);
@@ -182,12 +186,35 @@ export function CanvasCommandProviderWithHistory({
       if (invoker?.isConnected) invoker.focus();
     });
   }, []);
-
   useEffect(() => {
-    if (selection.count !== 0) return;
+    if (count !== 0) return;
     setPropertiesOpen(false);
     propertiesInvokerRef.current = null;
-  }, [selection.count]);
+  }, [count]);
+  return { openProperties, propertiesOpen, closeProperties };
+}
+
+/** Provide canvas actions from the same history instance that panel gestures execute through. */
+export function CanvasCommandProviderWithHistory({
+  objectKind,
+  canEdit,
+  canTrash = canEdit,
+  onCreateObject,
+  onOpenObject,
+  onOpenProperties,
+  onClearSelection,
+  history,
+  children,
+}: CanvasCommandProviderWithHistoryProps): JSX.Element {
+  const selection = useSelection();
+  const [pendingTrash, setPendingTrash] = useState<CanvasTrashConfirmation | null>(null);
+  const { openProperties, propertiesOpen, closeProperties } = usePropertiesShell(
+    onOpenProperties,
+    selection.selectedObjects,
+    selection.count,
+  );
+  const canUndo = history.canUndo;
+  const canRedo = history.canRedo;
 
   const applyTrash = useCallback(
     async (objects: readonly ObjectRef[]): Promise<void> => {
@@ -278,6 +305,10 @@ export function CanvasCommandProviderWithHistory({
       propertiesOpen,
       closeProperties,
       trashSelection,
+      clearSelection: () => {
+        selection.clear();
+        onClearSelection?.();
+      },
       onCanvasKeyDown,
     }),
     [
@@ -288,12 +319,13 @@ export function CanvasCommandProviderWithHistory({
       history,
       objectKind,
       onCanvasKeyDown,
+      onClearSelection,
       onCreateObject,
       onOpenObject,
       openProperties,
       propertiesOpen,
       closeProperties,
-      selection.selectedObjects,
+      selection,
       trashSelection,
     ],
   );

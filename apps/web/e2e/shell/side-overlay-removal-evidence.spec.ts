@@ -105,7 +105,7 @@ test('the graph inspector docks beside the canvas and covers it only when narrow
   }
 
   // 1440 gives the graph host room for a docked column; 1024 does not, because `<main>` is the
-  // viewport minus 328px of chrome minus the rail — which is the whole reason the threshold is
+  // viewport minus 312px of chrome minus the rail — which is the whole reason the threshold is
   // measured on the host rather than on the window.
   for (const { width, height, expected } of [
     { width: 1440, height: 900, expected: 'docked' as const },

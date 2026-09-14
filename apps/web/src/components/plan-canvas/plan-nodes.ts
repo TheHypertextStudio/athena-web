@@ -39,10 +39,13 @@ export const PLAN_INITIATIVE_SIZE = { width: 336, height: 112 } as const;
 export const PLAN_PROJECT_WIDTH = 304;
 /** Inset between the container edge and its rows. */
 export const PLAN_PROJECT_PADDING = 8;
-/** A task row inside its container, in canvas units: the container's width less its insets. */
+/**
+ * A task row inside its container, in canvas units: the container's width less its insets, at
+ * the height of a list row rather than a card.
+ */
 export const PLAN_TASK_SIZE = {
   width: PLAN_PROJECT_WIDTH - PLAN_PROJECT_PADDING * 2,
-  height: 40,
+  height: 32,
 } as const;
 /** The container's header band: glyph, title, meta line. */
 export const PLAN_PROJECT_HEADER = 64;
@@ -53,7 +56,7 @@ export const PLAN_TASK_GAP = 4;
 /** The ghost "Add task" row an editable draft container ends with. */
 export const PLAN_PROJECT_FOOTER = 32;
 /** One line of the miniature task list a collapsed container shows. */
-export const PLAN_MINI_ROW = 18;
+export const PLAN_MINI_ROW = 16;
 /** How many task titles the miniature list names before the rest become a count. */
 export const PLAN_MINI_SHOWN = 3;
 /** Vertical inset inside the miniature list. */

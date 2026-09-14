@@ -16,16 +16,31 @@
  * `template` would close an import cycle.
  */
 import { sql } from 'drizzle-orm';
-import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 import type { PlanDocument } from '@docket/work/plan-draft-contract';
 
-import { planDraftStatus } from '../enums';
 import { genId } from '../id';
 import { agentSession } from './agents';
 import { user } from './auth';
 import { notBlank } from './constraints';
 import { organization } from './identity';
 import { initiative } from './work';
+
+/**
+ * A plan draft's lifecycle: `active` while it holds draft nodes, `committed` once every node has
+ * been confirmed into a real object, and `archived` when the person walked away without creating
+ * anything.
+ */
+export const planDraftStatus = pgEnum('plan_draft_status', ['active', 'committed', 'archived']);
 
 /** A personal planning draft. */
 export const planDraft = pgTable(

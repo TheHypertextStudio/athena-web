@@ -37,8 +37,8 @@ import type { SessionApprovalDecision } from '@docket/athena/agent-contract';
 import { and, asc, desc, eq } from 'drizzle-orm';
 
 import { assertProductCapability } from '../product-capability';
-import { activePlanForSession } from '../lib/plan-draft/store';
-import { planCounts } from '@docket/work/plan-draft';
+import { activePlanContext } from '../lib/plan-draft/context';
+import { summarizeToolCall } from './tool-call-summary';
 import { ConflictError, NotFoundError } from '../error';
 import { env } from '../env';
 import { internalUserContext } from '../mcp/internal-session';
@@ -53,7 +53,7 @@ import {
 import { classifyTool, decideUserOwnedToolExecution } from './approval-policy';
 import { assertHostedExecutionSurface } from './execution-surface';
 import { markProvenance } from './provenance';
-import { buildSystemPrompt, type ActivePlanContext } from './system-prompt';
+import { buildSystemPrompt } from './system-prompt';
 import {
   ASK_USER_TOOL,
   DOCKET_CONNECTION,
@@ -137,18 +137,6 @@ async function principalAthenaPreferences(session: SessionRow): Promise<{
   };
 }
 
-/** The plan this conversation is shaping on the canvas, as the system prompt describes it. */
-async function activePlanContext(sessionId: string): Promise<ActivePlanContext | null> {
-  const plan = await activePlanForSession(sessionId);
-  if (!plan) return null;
-  return {
-    id: plan.id,
-    title: plan.title,
-    revision: plan.revision,
-    counts: planCounts(plan.document),
-  };
-}
-
 /** Return the workspace named by a Docket tool input, when present. */
 function toolOrganizationId(input: unknown): string | null {
   if (!input || typeof input !== 'object') return null;
@@ -209,19 +197,6 @@ function toolUsesOf(message: TurnMessage): ToolUse[] {
   return message.content.flatMap((b) =>
     b.type === 'tool_use' ? [{ id: b.id, name: b.name, input: b.input }] : [],
   );
-}
-
-/** Turn a `snake_case` tool identifier into a lowercase phrase, e.g. `update_task` → `update task`. */
-function humanizeToolName(name: string): string {
-  return name.replace(/_/g, ' ');
-}
-
-/** Build a human-readable one-line summary for a tool call (the UI's action headline). */
-function summarizeToolCall(name: string, input: unknown): string {
-  const obj = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
-  const title = typeof obj['title'] === 'string' ? obj['title'] : undefined;
-  const phrase = humanizeToolName(name);
-  return title ? `${phrase}: "${title}"` : phrase;
 }
 
 /** Insert one activity row and return it. */
@@ -484,8 +459,7 @@ async function driveSessionWithAdmission(
   const turnRuntime = deps.turnRuntime ?? (await resolveOwnerTurnRuntime(session.ownerUserId));
   let toolbox: Awaited<ReturnType<typeof openToolbox>> | null = null;
   try {
-    const openedToolbox = await openToolbox(executor, sessionId);
-    toolbox = openedToolbox;
+    const openedToolbox = (toolbox = await openToolbox(executor, sessionId));
     const settleOwned = async (
       status: 'awaiting_input' | 'awaiting_approval' | 'completed' | 'failed' | 'canceled',
       lastError?: string,

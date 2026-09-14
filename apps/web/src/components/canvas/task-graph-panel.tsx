@@ -51,23 +51,18 @@ import type { ObjectRef } from '@/lib/actions';
 import { taskNodesToPropertySnapshots } from '@/components/canvas/canvas-properties-model';
 import { CanvasSelectionRetentionProvider } from '@/components/canvas/canvas-selection-retention';
 
-import BulkActionsBar, { BulkPropertiesDialogHost, BulkSelectionActions } from './bulk-actions-bar';
 import Canvas from './canvas';
-import CanvasFloatingBar from './canvas-floating-bar';
-import { CANVAS_OVERLAY_GUTTER, type CanvasOverlayInsets } from './canvas-viewport-insets';
 import CanvasCommandNotice from './canvas-command-notice';
-import {
-  CanvasCommandProviderWithHistory,
-  useCanvasCommandContext,
-} from './canvas-command-context';
-import CanvasCreatedHiddenNotice from './canvas-created-hidden-notice';
+import { CanvasCommandProviderWithHistory } from './canvas-command-context';
 import CanvasSelectionBridge from './canvas-selection-bridge';
 import CanvasSelectionFrame from './canvas-selection-frame';
 import { type CanvasActions, CanvasActionsProvider } from './canvas-actions-context';
 import DependencyEdge from './dependency-edge';
 import { DEFAULT_GRAPH_DISPLAY, type GraphDisplayState } from './graph-display';
 import { buildGraphCatalog, UNSET } from './graph-catalog';
-import GraphViewBar, { type GraphCounts, GraphCountsLabel } from './graph-view-bar';
+import GraphViewBar from './graph-view-bar';
+import { useDeselectAll } from './canvas-frame-support';
+import * as graphChrome from './task-graph-chrome';
 import GroupNode from './group-node';
 import { edgeKind } from './use-graph-interactions';
 import { type GroupSpec } from './use-grouped-layout';
@@ -91,13 +86,6 @@ import { prefersReducedMotion } from '@/lib/motion';
 const NODE_TYPES = { task: TaskNode, taskBranch: TaskBranchNode, group: GroupNode };
 const EDGE_TYPES = { default: DependencyEdge };
 
-/** The chrome a floating host names: the title and the way back. */
-export interface TaskGraphFloatingChrome {
-  readonly title: string;
-  /** The way back: an icon button before the title. */
-  readonly navigation?: React.ReactNode;
-}
-
 /** Props for {@link TaskGraphPanel}. */
 export interface TaskGraphPanelProps {
   /** The scope to render (org / project / task-neighborhood). */
@@ -119,7 +107,7 @@ export interface TaskGraphPanelProps {
    * controls, the counts, and the selection's actions. The alternative to `renderChrome` for a
    * host that owns the whole page.
    */
-  floatingChrome?: TaskGraphFloatingChrome;
+  floatingChrome?: graphChrome.TaskGraphFloatingChrome;
   /** Controlled query state (URL-backed); falls back to internal state when omitted. */
   viewState?: ViewState;
   /** Replace the active filter predicates; paired with `viewState`. */
@@ -134,83 +122,6 @@ export interface TaskGraphPanelProps {
   onExpand?: () => void;
   /** Extra classes for the container. */
   className?: string;
-}
-
-/** Whether a host asked for the view bar, in a band or floating. */
-function hasChrome(
-  renderChrome: TaskGraphPanelProps['renderChrome'],
-  floatingChrome: TaskGraphFloatingChrome | undefined,
-): boolean {
-  return renderChrome !== undefined || floatingChrome !== undefined;
-}
-
-/** What a floating bar changes about the canvas: the frame's insets and where notices sit. */
-interface FloatingLayout {
-  readonly insets: CanvasOverlayInsets | undefined;
-  readonly noticeClass: string | undefined;
-}
-
-function floatingLayout(
-  chrome: TaskGraphFloatingChrome | undefined,
-  barHeight: number,
-): FloatingLayout {
-  if (chrome === undefined) return { insets: undefined, noticeClass: undefined };
-  return { insets: { top: barHeight + CANVAS_OVERLAY_GUTTER }, noticeClass: '!top-20' };
-}
-
-/** Props for {@link TaskGraphFloatingBar}. */
-interface TaskGraphFloatingBarProps {
-  readonly chrome: TaskGraphFloatingChrome;
-  readonly controls: React.ReactNode;
-  readonly counts: GraphCounts;
-  readonly onHeightChange: (height: number) => void;
-}
-
-/**
- * The floating bar over the canvas. Mounted only under a floating host, inside the command
- * provider, so the selection's actions can read the canvas commands.
- */
-function TaskGraphFloatingBar({
-  chrome,
-  controls,
-  counts,
-  onHeightChange,
-}: TaskGraphFloatingBarProps): React.JSX.Element {
-  const commands = useCanvasCommandContext();
-  const selection =
-    commands !== null && commands.selectedObjects.length > 0 ? (
-      <BulkSelectionActions commands={commands} />
-    ) : null;
-  return (
-    <CanvasFloatingBar
-      title={chrome.title}
-      ariaLabel="Task graph"
-      navigation={chrome.navigation}
-      controls={controls}
-      trailing={<GraphCountsLabel counts={counts} />}
-      selection={selection}
-      onHeightChange={onHeightChange}
-    />
-  );
-}
-
-/** Props for {@link TaskGraphChromeSlot}. */
-interface TaskGraphChromeSlotProps extends Omit<TaskGraphFloatingBarProps, 'chrome'> {
-  readonly chrome: TaskGraphFloatingChrome | undefined;
-}
-
-/** The floating bar when a host asked for one; nothing under a band host. */
-function TaskGraphChromeSlot({
-  chrome,
-  ...rest
-}: TaskGraphChromeSlotProps): React.JSX.Element | null {
-  if (chrome === undefined) return null;
-  return <TaskGraphFloatingBar chrome={chrome} {...rest} />;
-}
-
-/** The selection's chrome: the embed's own panel, or only the dialog under a floating bar. */
-function BulkSlot({ floating }: { readonly floating: boolean }): React.JSX.Element {
-  return floating ? <BulkPropertiesDialogHost /> : <BulkActionsBar />;
 }
 
 /** Minimap node color by status-category token (the canvas is generic; the host injects this). */
@@ -375,10 +286,9 @@ export default function TaskGraphPanel({
     queryKeys.tasks(orgId),
   ]);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const deselectAll = useDeselectAll(flowInstance);
   // A floating bar's height keeps the frame below it.
-  const [barHeight, setBarHeight] = useState(0);
-  const chromed = hasChrome(renderChrome, floatingChrome);
-  const floating = floatingLayout(floatingChrome, barHeight);
+  const chrome = graphChrome.useTaskGraphChrome(renderChrome, floatingChrome);
   const resolveTaskTitle = useCallback(
     (id: string): string => {
       const node = nodes.find((candidate) => candidate.id === id);
@@ -472,7 +382,7 @@ export default function TaskGraphPanel({
   // fit below, which is why it is presentation state rather than another filter chip.
   const needle = display.search.trim().toLowerCase();
   const filtered = useMemo(() => {
-    if (!chromed) return { nodes, edges };
+    if (!chrome.chromed) return { nodes, edges };
     const byPredicate = filterRows(nodes, viewState.filters, catalog);
     const bySearch =
       needle.length === 0
@@ -483,7 +393,7 @@ export default function TaskGraphPanel({
       bySearch.map(({ id }) => id),
     );
     return { nodes: keptNodes, edges: pruneEdges(keptNodes, edges) };
-  }, [chromed, nodes, edges, viewState.filters, catalog, needle]);
+  }, [chrome.chromed, nodes, edges, viewState.filters, catalog, needle]);
 
   const navigate = useCallback(
     (id: string) => {
@@ -712,7 +622,7 @@ export default function TaskGraphPanel({
       showDepth={isNeighborhood}
       depth={depth}
       counts={counts}
-      compact={floatingChrome !== undefined}
+      compact={chrome.compact}
     />
   );
 
@@ -746,15 +656,11 @@ export default function TaskGraphPanel({
           onOpenObject={(object) => {
             setSelectedId(object.id);
           }}
+          onClearSelection={deselectAll}
         >
           <CanvasSelectionFrame label="Task graph">
             <CanvasActionsProvider value={canvasActions}>
-              <TaskGraphChromeSlot
-                chrome={floatingChrome}
-                controls={bar}
-                counts={counts}
-                onHeightChange={setBarHeight}
-              />
+              <graphChrome.TaskGraphChromeSlot {...chrome.slot} controls={bar} counts={counts} />
               <Canvas
                 nodes={canvasNodes}
                 edges={filtered.edges}
@@ -765,8 +671,8 @@ export default function TaskGraphPanel({
                 disableLayout
                 layoutReady={aspectReady}
                 nodeColor={taskStateColor}
-                minimap={chromed ? true : display.minimap}
-                overlayInsets={floating.insets}
+                minimap={chrome.chromed ? true : display.minimap}
+                overlayInsets={chrome.insets}
                 interactive={canEdit}
                 highlightIds={display.critical ? criticalIds : null}
                 focusOn={focusOn}
@@ -786,7 +692,7 @@ export default function TaskGraphPanel({
                   activeError !== null ? (
                     <Surface
                       tone="prominent"
-                      shape="large"
+                      shape="small"
                       role="alert"
                       className="text-state-canceled pointer-events-auto flex w-full max-w-[min(32rem,calc(100vw-2rem))] flex-col items-stretch gap-2 px-3 py-2 sm:w-auto sm:flex-row sm:items-center"
                     >
@@ -818,36 +724,26 @@ export default function TaskGraphPanel({
                   }
                   onRequestedSelectionApplied={applyCreatedSelection}
                 />
-                <BulkSlot floating={floatingChrome !== undefined} />
-                {createdHidden ? (
-                  <CanvasCreatedHiddenNotice
-                    className={floating.noticeClass}
-                    message="Created, but hidden by current filters"
-                    actionLabel="Clear filters"
-                    onAction={() => {
-                      setFilters([]);
-                      patchDisplay({ search: '' });
-                      setSettledCreatedSelectionId(null);
-                      void queryClient.invalidateQueries({ queryKey: graphKey }).then(() => {
-                        setSettledCreatedSelectionId(createdSelectionId);
-                      });
-                    }}
-                  />
-                ) : null}
-                {createdOutsideScopeId !== null ? (
-                  <CanvasCreatedHiddenNotice
-                    className={floating.noticeClass}
-                    message={
-                      scope.projectId !== undefined
-                        ? 'Created, but outside this Project'
-                        : 'Created, but outside this Task neighborhood'
-                    }
-                    actionLabel="Open Task"
-                    onAction={() => {
-                      navigate(createdOutsideScopeId);
-                    }}
-                  />
-                ) : null}
+                <graphChrome.BulkSlot floating={chrome.compact} />
+                <graphChrome.CreatedNotices
+                  className={chrome.noticeClass}
+                  hiddenByFilters={createdHidden}
+                  onClearFilters={() => {
+                    setFilters([]);
+                    patchDisplay({ search: '' });
+                    setSettledCreatedSelectionId(null);
+                    void queryClient.invalidateQueries({ queryKey: graphKey }).then(() => {
+                      setSettledCreatedSelectionId(createdSelectionId);
+                    });
+                  }}
+                  outsideScopeId={createdOutsideScopeId}
+                  outsideScopeMessage={
+                    scope.projectId !== undefined
+                      ? 'Created, but outside this Project'
+                      : 'Created, but outside this Task neighborhood'
+                  }
+                  onOpen={navigate}
+                />
                 {isEmpty ? (
                   <CanvasOverlayPanel position="top-center" className="!top-1/2 !-translate-y-1/2">
                     <EmptyState

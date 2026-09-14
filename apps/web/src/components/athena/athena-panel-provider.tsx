@@ -115,6 +115,49 @@ export interface AthenaPanelProviderProps {
     ((context: PersonalAthenaContext | null, draft: string | undefined) => void) | undefined;
 }
 
+/** What {@link useAthenaReveal} returns. */
+interface AthenaReveal {
+  /** Whether a route currently hosts the conversation itself. */
+  readonly hosted: () => boolean;
+  readonly registerHost: (host: AthenaConversationHost) => () => void;
+  /** Reveal the conversation where it lives: the host, the rail, or the full page. */
+  readonly reveal: (nextContext: PersonalAthenaContext | null, draft: string | undefined) => void;
+}
+
+/**
+ * Where "open Athena" lands. A route that hosts the conversation itself registers as the host
+ * and takes every reveal, draft included; otherwise the rail, and failing that the full page.
+ */
+function useAthenaReveal(
+  onRevealRail: (() => void) | undefined,
+  onOpenFullAthena: AthenaPanelProviderProps['onOpenFullAthena'],
+): AthenaReveal {
+  const hostRef = useRef<AthenaConversationHost | null>(null);
+  const hosted = useCallback(() => hostRef.current !== null, []);
+  const registerHost = useCallback((host: AthenaConversationHost): (() => void) => {
+    hostRef.current = host;
+    return () => {
+      if (hostRef.current === host) hostRef.current = null;
+    };
+  }, []);
+  const reveal = useCallback(
+    (nextContext: PersonalAthenaContext | null, draft: string | undefined): void => {
+      const host = hostRef.current;
+      if (host) {
+        host.reveal(draft);
+        return;
+      }
+      if (onRevealRail) {
+        onRevealRail();
+        return;
+      }
+      onOpenFullAthena?.(nextContext, draft);
+    },
+    [onOpenFullAthena, onRevealRail],
+  );
+  return { hosted, registerHost, reveal };
+}
+
 /**
  * Keep Athena's personal session state available to contextual entry points.
  *
@@ -166,28 +209,7 @@ export function AthenaPanelProvider({
     },
   });
 
-  const hostRef = useRef<AthenaConversationHost | null>(null);
-  const registerHost = useCallback((host: AthenaConversationHost): (() => void) => {
-    hostRef.current = host;
-    return () => {
-      if (hostRef.current === host) hostRef.current = null;
-    };
-  }, []);
-  const reveal = useCallback(
-    (nextContext: PersonalAthenaContext | null, draft: string | undefined): void => {
-      const host = hostRef.current;
-      if (host) {
-        host.reveal(draft);
-        return;
-      }
-      if (onRevealRail) {
-        onRevealRail();
-        return;
-      }
-      onOpenFullAthena?.(nextContext, draft);
-    },
-    [onOpenFullAthena, onRevealRail],
-  );
+  const { hosted, registerHost, reveal } = useAthenaReveal(onRevealRail, onOpenFullAthena);
   const openAthena = useCallback(
     (nextContext?: PersonalAthenaContext | null, draft?: string) => {
       const effective =
@@ -199,7 +221,7 @@ export function AthenaPanelProvider({
       setContextAttached(true);
       // A hosted conversation takes the draft itself; the rail's "Start this work" composer only
       // holds one when the rail is where the reveal lands.
-      setLaunchDraft(startsNewWork && hostRef.current === null ? (draft?.trim() ?? '') : null);
+      setLaunchDraft(startsNewWork && !hosted() ? (draft?.trim() ?? '') : null);
       reveal(resolvedContext, startsNewWork ? draft : undefined);
     },
     [pageContext, reveal],

@@ -42,9 +42,8 @@ function PlanProjectNodeComponent({ id, data, selected }: NodeProps): JSX.Elemen
       style={{ viewTransitionName: planNodeTransitionName(id) }}
       className={cn(
         surfaceToneColor('card'),
-        'group relative size-full rounded-2xl',
-        node.status === 'confirmed' && 'border-outline-variant border',
-        planCardClasses(node.status, node.entered, selected),
+        'group rounded-corner-lg relative size-full',
+        planCardClasses(node.entered, selected),
       )}
     >
       <Handle

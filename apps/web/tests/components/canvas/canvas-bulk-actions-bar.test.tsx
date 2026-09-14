@@ -25,6 +25,7 @@ const state = vi.hoisted(() => ({
     openSelection: vi.fn(),
     openProperties: vi.fn(),
     trashSelection: vi.fn(),
+    clearSelection: vi.fn(),
     undo: vi.fn(),
     redo: vi.fn(),
   },

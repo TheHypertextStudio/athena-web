@@ -13,7 +13,7 @@ export default function CanvasCommandNotice(): React.JSX.Element | null {
   return (
     <Surface
       tone="prominent"
-      shape="large"
+      shape="small"
       role={commands.notice.tone === 'error' ? 'alert' : 'status'}
       className="pointer-events-auto flex w-full max-w-[min(32rem,calc(100vw-2rem))] min-w-0 flex-col items-stretch gap-2 px-3 py-2 sm:w-auto sm:flex-row sm:items-center"
     >

@@ -10,17 +10,15 @@
  * reads as one thing you can grab, where its rows read as things you can move.
  */
 import { ActorAvatar } from '@docket/ui/components';
-import { ArrowRight, Layers } from '@docket/ui/icons';
-import { cn } from '@docket/ui/lib/utils';
-import { Badge, surfaceToneColor } from '@docket/ui/primitives';
+import { Layers } from '@docket/ui/icons';
+import { Badge } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
-import Link from '@/components/docket-link';
 import { formatCalendarDate } from '@/lib/format-date';
 
 import { PLAN_PROJECT_HEADER, type PlanProjectNodeData } from './plan-nodes';
 import { PlanTasksToggle } from './plan-project-tasks';
-import { PlanField, PlanStateChip, PlanStatusGlyph } from './plan-status';
+import { PlanField, PlanOpenLink, PlanStateChip, PlanStatusGlyph } from './plan-status';
 
 /** Props for {@link PlanAlsoIn}. */
 export interface PlanAlsoInProps {
@@ -73,7 +71,7 @@ export function PlanProjectHeader({
   return (
     <div
       style={{ height: PLAN_PROJECT_HEADER }}
-      className="group-hover:bg-surface-container-high flex flex-col justify-center gap-1 rounded-t-2xl px-3 transition-colors"
+      className="group-hover:bg-surface-container-high rounded-t-corner-lg flex flex-col justify-center gap-1 px-3 transition-colors"
     >
       <div className="flex min-w-0 items-center gap-2">
         <PlanStatusGlyph status={node.status} />
@@ -92,19 +90,7 @@ export function PlanProjectHeader({
           />
         ) : null}
         {node.href !== null ? (
-          <Link
-            href={node.href}
-            aria-label={`Open ${node.title}`}
-            onClick={(event) => {
-              event.stopPropagation();
-            }}
-            className={cn(
-              surfaceToneColor('prominent'),
-              'nodrag nopan hover:bg-secondary-container hover:text-on-secondary-container focus-visible:ring-ring inline-flex size-6 shrink-0 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none',
-            )}
-          >
-            <ArrowRight className="size-4" />
-          </Link>
+          <PlanOpenLink href={node.href} title={node.title} placement="inline" />
         ) : null}
       </div>
       <div className="text-on-surface-variant text-label-medium flex min-w-0 items-center gap-x-1.5">

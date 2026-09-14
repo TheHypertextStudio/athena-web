@@ -1,23 +1,27 @@
 'use client';
 
 /**
- * `components/plan-canvas/plan-inspector` — the docked editor for one plan node.
+ * `components/plan-canvas/plan-inspector` — the details column for a selected plan node.
  *
  * @remarks
- * For a draft node this is where the fields live: title, summary, description, the accountable
- * person, the date, the template, and for a project the initiatives it also belongs to. Text
- * commits on blur or Enter rather than per keystroke, so a sentence lands as one revision and
- * Athena sees a finished thought. The footer names what Confirm will create and offers the rail.
- *
- * A confirmed node is read-only here: its record is the real one, so the inspector shows what
- * the workspace says about it and sends the person there to edit.
+ * A draft node is edited here: its text fields commit on blur or Enter (the title also while
+ * typing, after a pause), its properties are pickers that read as fields, and the footer holds
+ * one small Confirm. Remove lives in the header's overflow, away from the primary action. A
+ * created node is read-only here with a link to its record. Every field is filled and every
+ * picker outlined so the column's controls stand off the floating panel they sit on.
  */
 import type { PickerOption } from '@docket/ui/components';
 import { ActorPicker, DatePicker, EnumPicker } from '@docket/ui/components';
-import { CheckCircle2, OpenInNew, Sparkles, Trash2, X } from '@docket/ui/icons';
-import { Button, Input, Textarea } from '@docket/ui/primitives';
+import { CheckCircle2, Ellipsis, OpenInNew, Trash2, X } from '@docket/ui/icons';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@docket/ui/primitives';
 import type { PlanDraftOut, PlanNode, PlanOp } from '@docket/work/plan-draft-contract';
-import { type JSX, useEffect, useMemo, useRef, useState } from 'react';
+import { type JSX, useMemo } from 'react';
 
 import { CanvasInspector } from '@/components/canvas/canvas-inspector';
 import Link from '@/components/docket-link';
@@ -25,6 +29,7 @@ import { HEALTH_LABEL } from '@/components/entity-display/health';
 import { templatesOfKindDef } from '@/components/templates/queries';
 import { useApiListQuery } from '@/lib/query';
 
+import { CommitText } from './plan-commit-text';
 import { describeConfirmation } from './plan-confirm';
 import { PlanStateChip, PlanStatusGlyph } from './plan-status';
 
@@ -45,7 +50,6 @@ export interface PlanInspectorProps {
   readonly onApply: (ops: readonly PlanOp[]) => Promise<unknown>;
   readonly onConfirm: (refs: readonly string[]) => void;
   readonly onRemove: (ref: string) => void;
-  readonly onAsk: (ref: string) => void;
   readonly onClose: () => void;
 }
 
@@ -56,111 +60,11 @@ const KIND_LABEL: Record<PlanNode['kind'], string> = {
   task: 'Task',
 };
 
-/** A text field that commits on blur or Enter and resets on Escape. */
-/** How long typing pauses before a live field commits what it holds so far. */
-const LIVE_COMMIT_MS = 400;
+/** The classes a picker trigger takes so it reads as a field beside the text fields. */
+const FIELD_TRIGGER =
+  'bg-surface-container-highest hover:bg-surface-container-high w-full justify-start';
 
-function CommitText({
-  id,
-  label,
-  value,
-  multiline = false,
-  placeholder,
-  disabled,
-  autoFocus = false,
-  live = false,
-  onCommit,
-}: {
-  readonly id: string;
-  readonly label: string;
-  readonly value: string;
-  readonly multiline?: boolean;
-  readonly placeholder: string;
-  readonly disabled: boolean;
-  /** Take focus on mount with the text selected, so typing replaces it. */
-  readonly autoFocus?: boolean;
-  /** Also commit while typing, after a short pause, so the canvas shows the new text as it forms. */
-  readonly live?: boolean;
-  readonly onCommit: (next: string) => void;
-}): JSX.Element {
-  const [draft, setDraft] = useState(value);
-  const focused = useRef(false);
-  useEffect(() => {
-    // A value that changed underneath a field being typed in would erase the keystrokes; the
-    // field's own draft wins until it blurs.
-    if (!focused.current) setDraft(value);
-  }, [value]);
-  const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
-  useEffect(() => {
-    if (!autoFocus || disabled) return;
-    fieldRef.current?.focus();
-    fieldRef.current?.select();
-  }, [autoFocus, disabled, id]);
-  const commit = (): void => {
-    const trimmed = draft.trim();
-    if (trimmed !== value) onCommit(trimmed);
-  };
-  useEffect(() => {
-    if (!live || !focused.current) return undefined;
-    const trimmed = draft.trim();
-    if (trimmed.length === 0 || trimmed === value) return undefined;
-    const timer = window.setTimeout(() => {
-      onCommit(trimmed);
-    }, LIVE_COMMIT_MS);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [draft, live, onCommit, value]);
-  const shared = {
-    id,
-    value: draft,
-    disabled,
-    placeholder,
-    onFocus: () => {
-      focused.current = true;
-    },
-    onBlur: () => {
-      focused.current = false;
-      commit();
-    },
-    onKeyDown: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      if (event.key === 'Escape') {
-        setDraft(value);
-        event.currentTarget.blur();
-      } else if (event.key === 'Enter' && !multiline) {
-        event.preventDefault();
-        event.currentTarget.blur();
-      }
-    },
-  };
-  return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-on-surface-variant text-label-medium">
-        {label}
-      </label>
-      {multiline ? (
-        <Textarea
-          {...shared}
-          ref={fieldRef as React.Ref<HTMLTextAreaElement>}
-          rows={3}
-          onChange={(event) => {
-            setDraft(event.target.value);
-          }}
-        />
-      ) : (
-        <Input
-          {...shared}
-          ref={fieldRef as React.Ref<HTMLInputElement>}
-          onChange={(event) => {
-            setDraft(event.target.value);
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-/** A labelled row wrapping a picker. */
+/** A labelled row wrapping a picker that reads as a field. */
 function Field({
   label,
   children,
@@ -171,7 +75,7 @@ function Field({
   return (
     <div className="flex flex-col gap-1">
       <span className="text-on-surface-variant text-label-medium">{label}</span>
-      <div className="-ml-2">{children}</div>
+      {children}
     </div>
   );
 }
@@ -179,12 +83,14 @@ function Field({
 type PersonKey = 'ownerId' | 'leadId' | 'assigneeId';
 
 /** The person field a kind carries. */
-function personField(kind: PlanNode['kind']): {
-  key: PersonKey;
-  label: string;
-  placeholder: string;
-  clearLabel: string;
-} {
+interface PersonField {
+  readonly key: PersonKey;
+  readonly label: string;
+  readonly placeholder: string;
+  readonly clearLabel: string;
+}
+
+function personField(kind: PlanNode['kind']): PersonField {
   switch (kind) {
     case 'initiative':
     case 'program':
@@ -202,26 +108,28 @@ function personField(kind: PlanNode['kind']): {
 }
 
 /** The date field a kind carries, if any. */
-function dateField(
-  kind: PlanNode['kind'],
-): { key: 'targetDate' | 'dueDate'; label: string; placeholder: string } | null {
+interface DateField {
+  readonly key: 'targetDate' | 'dueDate';
+  readonly label: string;
+  readonly placeholder: string;
+}
+
+function dateField(kind: PlanNode['kind']): DateField | null {
   if (kind === 'task') return { key: 'dueDate', label: 'Due', placeholder: 'Set due date' };
   if (kind === 'program') return null;
   return { key: 'targetDate', label: 'Target', placeholder: 'Set target date' };
 }
 
-/** The templates that create this node's kind, as a picker. */
-function TemplateField({
-  orgId,
-  node,
-  disabled,
-  onApply,
-}: {
+/** Props for {@link TemplateField}. */
+interface TemplateFieldProps {
   readonly orgId: string;
   readonly node: PlanNode;
   readonly disabled: boolean;
   readonly onApply: PlanInspectorProps['onApply'];
-}): JSX.Element {
+}
+
+/** The templates that create this node's kind, as a picker. */
+function TemplateField({ orgId, node, disabled, onApply }: TemplateFieldProps): JSX.Element {
   const templates = useApiListQuery(templatesOfKindDef(orgId, node.kind));
   const options = useMemo<readonly PickerOption[]>(
     () =>
@@ -239,6 +147,8 @@ function TemplateField({
         value={node.templateId}
         placeholder={options.length === 0 ? 'No templates' : 'Apply a template'}
         disabled={disabled || options.length === 0}
+        triggerVariant="ghost"
+        triggerClassName={FIELD_TRIGGER}
         onChange={(templateId) => {
           if (templateId !== null) {
             void onApply([{ op: 'apply_template', ref: node.ref, templateId } as PlanOp]);
@@ -249,6 +159,15 @@ function TemplateField({
   );
 }
 
+/** Props for {@link AlsoInField}. */
+interface AlsoInFieldProps {
+  readonly plan: PlanDraftOut;
+  readonly node: PlanNode;
+  readonly initiativeOptions: readonly PickerOption[];
+  readonly canEdit: boolean;
+  readonly onApply: PlanInspectorProps['onApply'];
+}
+
 /** The other initiatives a project belongs to, with a picker to join another. */
 function AlsoInField({
   plan,
@@ -256,13 +175,7 @@ function AlsoInField({
   initiativeOptions,
   canEdit,
   onApply,
-}: {
-  readonly plan: PlanDraftOut;
-  readonly node: PlanNode;
-  readonly initiativeOptions: readonly PickerOption[];
-  readonly canEdit: boolean;
-  readonly onApply: PlanInspectorProps['onApply'];
-}): JSX.Element {
+}: AlsoInFieldProps): JSX.Element {
   const joined = node.initiativeIds.map((id) => ({
     id,
     label: initiativeOptions.find((option) => option.value === id)?.label ?? 'Initiative',
@@ -307,19 +220,19 @@ function AlsoInField({
           ))}
         </ul>
       ) : null}
-      <div className="-ml-2">
-        <EnumPicker
-          options={joinable}
-          value={null}
-          placeholder="Add an initiative"
-          searchable
-          searchPlaceholder="Search initiatives"
-          disabled={!canEdit || joinable.length === 0}
-          onChange={(initiativeId) => {
-            if (initiativeId !== null) setMembership([...node.initiativeIds, initiativeId]);
-          }}
-        />
-      </div>
+      <EnumPicker
+        options={joinable}
+        value={null}
+        placeholder="Add an initiative"
+        searchable
+        searchPlaceholder="Search initiatives"
+        disabled={!canEdit || joinable.length === 0}
+        triggerVariant="ghost"
+        triggerClassName={FIELD_TRIGGER}
+        onChange={(initiativeId) => {
+          if (initiativeId !== null) setMembership([...node.initiativeIds, initiativeId]);
+        }}
+      />
     </div>
   );
 }
@@ -328,11 +241,9 @@ function AlsoInField({
 function ConfirmedBody({
   plan,
   node,
-  onAsk,
 }: {
   readonly plan: PlanDraftOut;
   readonly node: PlanNode;
-  readonly onAsk: (ref: string) => void;
 }): JSX.Element {
   const live = plan.objects[node.ref];
   return (
@@ -351,57 +262,27 @@ function ConfirmedBody({
         This {KIND_LABEL[node.kind].toLowerCase()} exists in the workspace now. Edit it there, or
         ask Athena to change it.
       </p>
-      <div className="flex flex-col gap-2">
-        {live ? (
-          <Button asChild variant="outline" size="sm">
-            <Link href={live.href}>
-              <OpenInNew className="size-4" /> Open {KIND_LABEL[node.kind].toLowerCase()}
-            </Link>
-          </Button>
-        ) : null}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            onAsk(node.ref);
-          }}
-        >
-          <Sparkles className="size-4" /> Ask Athena about this
+      {live ? (
+        <Button asChild variant="secondary" size="sm" className="self-start">
+          <Link href={live.href}>
+            <OpenInNew className="size-4" /> Open {KIND_LABEL[node.kind].toLowerCase()}
+          </Link>
         </Button>
-      </div>
+      ) : null}
     </div>
   );
 }
 
-/** The editor for a draft node. */
-function DraftBody({
-  plan,
-  node,
-  orgId,
-  canEdit,
-  committing,
-  focusTitle = false,
-  memberOptions,
-  initiativeOptions,
-  onApply,
-  onConfirm,
-  onRemove,
-  onAsk,
-}: Omit<PlanInspectorProps, 'nodeRef' | 'onClose'> & { readonly node: PlanNode }): JSX.Element {
-  const person = personField(node.kind);
-  const date = dateField(node.kind);
-  const confirmation = useMemo(
-    () => describeConfirmation(plan.document, [node.ref]),
-    [plan.document, node.ref],
-  );
-  const disabled = !canEdit;
-  const setField = (fields: Record<string, unknown>): void => {
-    void onApply([{ op: 'set_fields', ref: node.ref, fields }]);
-  };
+/** What the draft editor's pieces share. */
+type DraftProps = Omit<PlanInspectorProps, 'nodeRef' | 'onClose' | 'onRemove'> & {
+  readonly node: PlanNode;
+  readonly setField: (fields: Record<string, unknown>) => void;
+};
 
+/** The text a draft carries: title, summary for a container, description. */
+function DraftText({ node, focusTitle = false, canEdit, setField }: DraftProps): JSX.Element {
   return (
-    <div className="flex flex-col gap-4">
+    <>
       <CommitText
         id={`plan-title-${node.ref}`}
         autoFocus={focusTitle}
@@ -409,7 +290,7 @@ function DraftBody({
         label="Title"
         value={node.fields.title}
         placeholder={`${KIND_LABEL[node.kind]} name`}
-        disabled={disabled}
+        disabled={!canEdit}
         onCommit={(title) => {
           if (title.length > 0) setField({ title });
         }}
@@ -420,7 +301,7 @@ function DraftBody({
           label="Summary"
           value={node.fields.summary ?? ''}
           placeholder="One line on the outcome"
-          disabled={disabled}
+          disabled={!canEdit}
           onCommit={(summary) => {
             setField({ summary });
           }}
@@ -432,18 +313,31 @@ function DraftBody({
         value={node.fields.description ?? ''}
         multiline
         placeholder="What this is and why it matters"
-        disabled={disabled}
+        disabled={!canEdit}
         onCommit={(description) => {
           setField({ description });
         }}
       />
+    </>
+  );
+}
+
+/** The properties a draft carries: who, when, a template, and a project's other initiatives. */
+function DraftProperties(props: DraftProps): JSX.Element {
+  const { node, canEdit, memberOptions, setField } = props;
+  const person = personField(node.kind);
+  const date = dateField(node.kind);
+  return (
+    <>
       <Field label={person.label}>
         <ActorPicker
           options={memberOptions}
           value={node.fields[person.key] ?? null}
           placeholder={person.placeholder}
           clearLabel={person.clearLabel}
-          disabled={disabled}
+          disabled={!canEdit}
+          triggerVariant="ghost"
+          triggerClassName={FIELD_TRIGGER}
           onChange={(value) => {
             setField({ [person.key]: value });
           }}
@@ -454,91 +348,113 @@ function DraftBody({
           <DatePicker
             value={node.fields[date.key] ?? null}
             placeholder={date.placeholder}
-            ariaLabel={` date`}
-            disabled={disabled}
+            ariaLabel={`${date.label} date`}
+            disabled={!canEdit}
+            triggerVariant="ghost"
+            triggerClassName={FIELD_TRIGGER}
             onChange={(value) => {
               setField({ [date.key]: value });
             }}
           />
         </Field>
       ) : null}
-      <TemplateField orgId={orgId} node={node} disabled={disabled} onApply={onApply} />
+      <TemplateField orgId={props.orgId} node={node} disabled={!canEdit} onApply={props.onApply} />
       {node.kind === 'project' ? (
         <AlsoInField
-          plan={plan}
+          plan={props.plan}
           node={node}
-          initiativeOptions={initiativeOptions}
+          initiativeOptions={props.initiativeOptions}
           canEdit={canEdit}
-          onApply={onApply}
+          onApply={props.onApply}
         />
       ) : null}
-      <div className="border-outline-variant flex flex-col gap-2 border-t pt-3">
-        {canEdit ? (
+    </>
+  );
+}
+
+/** The editor for a draft node. */
+function DraftBody(
+  props: Omit<PlanInspectorProps, 'nodeRef' | 'onClose' | 'onRemove'> & { readonly node: PlanNode },
+): JSX.Element {
+  const { plan, node, canEdit, committing, onApply, onConfirm } = props;
+  const confirmation = useMemo(
+    () => describeConfirmation(plan.document, [node.ref]),
+    [plan.document, node.ref],
+  );
+  const setField = (fields: Record<string, unknown>): void => {
+    void onApply([{ op: 'set_fields', ref: node.ref, fields }]);
+  };
+  return (
+    <div className="flex flex-col gap-4">
+      <DraftText {...props} setField={setField} />
+      <DraftProperties {...props} setField={setField} />
+      {canEdit ? (
+        <div className="flex justify-end pt-2">
           <Button
             type="button"
             size="sm"
             disabled={committing || confirmation.count === 0}
+            title={confirmation.label}
             onClick={() => {
               onConfirm([node.ref]);
             }}
           >
-            <CheckCircle2 className="size-4" /> {confirmation.label}
+            <CheckCircle2 className="size-4" /> Confirm
           </Button>
-        ) : null}
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="flex-1"
-            onClick={() => {
-              onAsk(node.ref);
-            }}
-          >
-            <Sparkles className="size-4" /> Ask Athena
-          </Button>
-          {canEdit ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-error"
-              onClick={() => {
-                onRemove(node.ref);
-              }}
-            >
-              <Trash2 className="size-4" /> Remove
-            </Button>
-          ) : null}
         </div>
-      </div>
+      ) : null}
     </div>
+  );
+}
+
+/** The header's overflow: what a draft can be taken out of the plan with. */
+function DraftMenu({ onRemove }: { readonly onRemove: () => void }): JSX.Element {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" controlSize="xl" iconOnly aria-label="More actions">
+          <Ellipsis aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem className="text-error" onSelect={onRemove}>
+          <Trash2 />
+          Remove from plan
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
 /** The inspector for the selected plan node. */
 export default function PlanInspector(props: PlanInspectorProps): JSX.Element | null {
-  const { plan, nodeRef, onClose } = props;
+  const { plan, nodeRef, canEdit, onRemove, onClose } = props;
   const node = plan.document.nodes.find((candidate) => candidate.ref === nodeRef);
   if (!node) return null;
   const title = plan.objects[node.ref]?.name ?? node.fields.title;
+  const draft = node.status === 'draft';
   return (
     <CanvasInspector
       title={title}
       leading={<PlanStatusGlyph status={node.status} />}
       closeLabel={`Close ${KIND_LABEL[node.kind].toLowerCase()} details`}
       onClose={onClose}
+      actions={
+        draft && canEdit ? (
+          <DraftMenu
+            onRemove={() => {
+              onRemove(node.ref);
+            }}
+          />
+        ) : undefined
+      }
     >
       <div className="flex flex-col gap-3">
         <div className="text-on-surface-variant text-label-medium flex items-center gap-2">
           <span>{KIND_LABEL[node.kind]}</span>
           <PlanStateChip status={node.status} />
         </div>
-        {node.status === 'draft' ? (
-          <DraftBody {...props} node={node} />
-        ) : (
-          <ConfirmedBody plan={plan} node={node} onAsk={props.onAsk} />
-        )}
+        {draft ? <DraftBody {...props} node={node} /> : <ConfirmedBody plan={plan} node={node} />}
       </div>
     </CanvasInspector>
   );

@@ -227,29 +227,7 @@ export async function commitPlanNodes(input: CommitPlanInput): Promise<CommitPla
   const landing = await resolveLandingTarget(orgId, actorId);
   if (!landing) throw new NotFoundError('No team to plan into');
 
-  // Descriptors and workflow states resolve before the transaction opens, exactly as `organize`
-  // does: a bad reference fails before a single row is written, and no read runs on a connection
-  // the transaction already holds.
-  const prepared = await Promise.all(
-    ordered.map(async (item, index) => {
-      const refs = await resolveItem(orgId, item);
-      const state =
-        item.state === undefined
-          ? {
-              statusId: landing.statusId,
-              state: landing.state,
-              completedAt: null,
-              canceledAt: null,
-            }
-          : await resolveStateTransition(
-              orgId,
-              refs.teamId ?? landing.teamId,
-              item.state,
-              `refs.${index}.status`,
-            );
-      return { item, refs, state };
-    }),
-  );
+  const prepared = await prepareItems(orgId, ordered, landing);
 
   const placed: Placed[] = [];
   const placedByRef = new Map<string, Placed>();
@@ -304,6 +282,45 @@ export async function commitPlanNodes(input: CommitPlanInput): Promise<CommitPla
   /* v8 ignore next -- @preserve defensive: the transaction always sets the outcome */
   if (!outcome) throw new Error('plan commit produced no outcome');
   return { row: outcome.row, placed, changeSetId: outcome.changeSetId };
+}
+
+/** One item resolved and ready to place: its descriptors and its workflow state. */
+interface PreparedItem {
+  readonly item: OrganizeItem;
+  readonly refs: Awaited<ReturnType<typeof resolveItem>>;
+  readonly state: Awaited<ReturnType<typeof resolveStateTransition>>;
+}
+
+/**
+ * Resolve every item's descriptors and workflow state before the transaction opens, exactly as
+ * `organize` does: a bad reference fails before a single row is written, and no read runs on a
+ * connection the transaction already holds.
+ */
+async function prepareItems(
+  orgId: string,
+  ordered: readonly OrganizeItem[],
+  landing: NonNullable<Awaited<ReturnType<typeof resolveLandingTarget>>>,
+): Promise<PreparedItem[]> {
+  return Promise.all(
+    ordered.map(async (item, index) => {
+      const refs = await resolveItem(orgId, item);
+      const state =
+        item.state === undefined
+          ? {
+              statusId: landing.statusId,
+              state: landing.state,
+              completedAt: null,
+              canceledAt: null,
+            }
+          : await resolveStateTransition(
+              orgId,
+              refs.teamId ?? landing.teamId,
+              item.state,
+              `refs.${index}.status`,
+            );
+      return { item, refs, state };
+    }),
+  );
 }
 
 /** Where one item lands: a parent placed in this commit wins over a resolved descriptor. */

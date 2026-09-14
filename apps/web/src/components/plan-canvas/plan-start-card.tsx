@@ -77,7 +77,7 @@ export default function PlanStartCard({ plan, className }: PlanStartCardProps): 
     <Surface
       tone="canvas"
       shape="medium"
-      className={cn('border-primary/30 mr-auto w-full max-w-[85%] border', className)}
+      className={cn('mr-auto w-full max-w-[85%]', className)}
       data-testid="plan-start-card"
     >
       <Link

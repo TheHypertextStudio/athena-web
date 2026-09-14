@@ -7,14 +7,16 @@
  * A canvas that fills its panel keeps its chrome in a single floating row at the top left: the
  * way back, the title, the view controls, and the counts. When something is selected the counts
  * give way to the selection's actions in the same row, so no second bar ever floats over the
- * graph and covers a node. The bar spans the width the floating columns leave it, so its layout
- * holds still as counts change and a selection comes and goes: the title truncates, the controls
- * keep their room, and the selection's actions scroll inside their own group. The bar reports
- * its height so the canvas can keep its frame below it.
+ * graph and covers a node. While something is selected the bar is the selection's bar: a clear
+ * button where the way back was, the count and labeled actions, and nothing else competing for
+ * the row. The bar spans the width the floating columns leave it and reports its height so the
+ * canvas can keep its frame below it.
  */
 import { AppBar } from '@docket/ui/components';
+import { X } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { type JSX, type ReactNode, useEffect, useRef, useState } from 'react';
+import { Button } from '@docket/ui/primitives';
+import { type JSX, type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
 
 import { CANVAS_OVERLAY_GUTTER } from './canvas-viewport-insets';
 
@@ -41,6 +43,28 @@ function useOverflowing(): [boolean, (node: HTMLDivElement | null) => void] {
   return [overflowing, setNode];
 }
 
+/** Reports the referenced element's height to `onHeightChange` now and whenever it changes. */
+function useReportedHeight(
+  onHeightChange: ((height: number) => void) | undefined,
+): RefObject<HTMLDivElement | null> {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || !onHeightChange) return undefined;
+    const report = (): void => {
+      onHeightChange(node.getBoundingClientRect().height);
+    };
+    report();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(report);
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+    };
+  }, [onHeightChange]);
+  return ref;
+}
+
 /** Props for {@link CanvasFloatingBar}. */
 export interface CanvasFloatingBarProps {
   readonly title: string;
@@ -56,6 +80,11 @@ export interface CanvasFloatingBarProps {
   readonly selection?: ReactNode | null;
   /** Page-level actions pinned to the end. */
   readonly actions?: ReactNode;
+  /**
+   * Let go of the selection. While something is selected the bar is the selection's bar: this
+   * replaces the way back, the title and the controls step aside, and the actions carry labels.
+   */
+  readonly onClearSelection?: (() => void) | undefined;
   /** Pixels spoken for on the right by floating columns, so the bar never runs under them. */
   readonly insetRight?: number;
   /** Receives the bar's measured height when it changes. */
@@ -71,26 +100,11 @@ export default function CanvasFloatingBar({
   trailing,
   selection = null,
   actions,
+  onClearSelection,
   insetRight = 0,
   onHeightChange,
 }: CanvasFloatingBarProps): JSX.Element {
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!node || !onHeightChange) return undefined;
-    const report = (): void => {
-      onHeightChange(node.getBoundingClientRect().height);
-    };
-    report();
-    if (typeof ResizeObserver === 'undefined') return undefined;
-    const observer = new ResizeObserver(report);
-    observer.observe(node);
-    return () => {
-      observer.disconnect();
-    };
-  }, [onHeightChange]);
-
+  const ref = useReportedHeight(onHeightChange);
   const [overflowing, attachGroup] = useOverflowing();
   const selectionGroup =
     selection === null ? null : (
@@ -112,15 +126,31 @@ export default function CanvasFloatingBar({
   return (
     <div
       ref={ref}
-      className="pointer-events-none absolute top-3 left-3 z-[2000]"
+      className="pointer-events-none absolute top-2 left-2 z-[2000]"
       style={{ right: CANVAS_OVERLAY_GUTTER + insetRight }}
     >
       <AppBar
         presentation="floating"
         aria-label={ariaLabel}
-        title={title}
-        navigation={navigation}
-        controls={controls}
+        title={selection === null ? title : <span className="sr-only">{title}</span>}
+        navigation={
+          selection !== null && onClearSelection ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              iconOnly
+              aria-label="Clear selection"
+              title="Clear selection"
+              onClick={onClearSelection}
+            >
+              <X className="size-4" />
+            </Button>
+          ) : (
+            navigation
+          )
+        }
+        controls={selection === null ? controls : undefined}
         fill={selectionGroup}
         actions={
           <>

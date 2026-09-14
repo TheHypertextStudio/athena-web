@@ -26,6 +26,8 @@ interface AddFilterMenuProps<T> {
   triggerLabel?: string;
   /** Keep the trigger copy visible in narrow containers. */
   alwaysShowLabel?: boolean;
+  /** The trigger's weight: outlined on a band, text on a floating bar. */
+  buttonVariant?: 'outline' | 'ghost';
   /** Number of currently active filters, shown as a compact count when non-zero. */
   activeCount?: number;
 }
@@ -37,13 +39,14 @@ export function AddFilterMenu<T>({
   triggerLabel = 'Add filter',
   alwaysShowLabel = false,
   activeCount = 0,
+  buttonVariant = 'outline',
 }: AddFilterMenuProps<T>): JSX.Element {
   const [open, setOpen] = useState(false);
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="outline"
+          variant={buttonVariant}
           size="sm"
           className="text-on-surface min-h-10 gap-1.5 px-2.5 @2xl:min-h-8 @2xl:px-3"
           aria-label={

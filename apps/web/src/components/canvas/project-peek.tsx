@@ -194,7 +194,7 @@ export default function ProjectPeek({
         <NeighborList label="Waiting on" neighbors={blockedBy} onSelect={onSelect} />
         <NeighborList label="Blocking" neighbors={blocks} onSelect={onSelect} />
 
-        <Button asChild size="sm" variant="outline" className="gap-1.5 self-start">
+        <Button asChild size="sm" variant="secondary" className="gap-1.5 self-start">
           <Link href={`/orgs/${orgId}/projects/${project.id}`}>
             Open project <ArrowRight className="size-4" aria-hidden />
           </Link>

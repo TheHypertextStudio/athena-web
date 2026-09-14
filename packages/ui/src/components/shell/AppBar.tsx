@@ -18,10 +18,10 @@
  *
  * A surface that runs edge to edge underneath its chrome, such as a canvas, asks for the
  * `floating` presentation instead: one row on the floating tone, controls beside the title, placed
- * by the caller over the surface. In that row the title is what gives way: it takes the room the
- * fixed slots leave, up to its own length, and truncates before anything else moves. `controls`
- * and `actions` never shrink. The `fill` slot is the one flexible region, for a group that
- * scrolls inside its own box when the row runs short. The bar is a container, so a slot can
+ * by the caller over the surface. In that row the title keeps its full text down to a floor wide
+ * enough for a short name, then truncates; `controls` and `actions` never shrink. The `fill`
+ * slot is the one flexible region, for a group that scrolls inside its own box when the row runs
+ * short. The bar is a container, so a slot can
  * collapse its own labels against the bar's width rather than the window's.
  *
  * ## The navigation slot is an icon, not a sentence
@@ -117,15 +117,13 @@ export function AppBar({
       <Surface
         as="section"
         tone="floating"
-        shape="large"
+        shape="small"
         aria-label={ariaLabel}
-        className={cn('@container flex min-w-0 flex-nowrap items-center gap-2 p-2', className)}
+        className={cn('@container flex min-w-0 flex-nowrap items-center gap-2 p-0.5', className)}
       >
         {navigation}
         {typeof title === 'string' ? (
-          <h1 className="text-on-surface text-title-medium max-w-fit min-w-16 grow basis-0 truncate">
-            {title}
-          </h1>
+          <h1 className="text-on-surface text-title-medium min-w-40 shrink truncate">{title}</h1>
         ) : (
           title
         )}

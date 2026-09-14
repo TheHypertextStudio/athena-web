@@ -47,7 +47,7 @@ export function ShellActivityBar({
   return (
     <nav
       aria-label="Panels"
-      className="hidden h-full w-12 shrink-0 flex-col items-center gap-1 py-2 lg:flex"
+      className="hidden h-full w-10 shrink-0 flex-col items-center gap-1 py-2 lg:flex"
     >
       {panels.map((panel) => {
         const isActive = panel.id === activeId;
@@ -79,7 +79,7 @@ export function ShellActivityBar({
           >
             {panel.icon}
             {/* Positioned absolutely inside the existing size-10 box so the bar stays exactly
-                w-12 whatever a panel reports — the shell's fixed chrome width is a layout
+                w-10 whatever a panel reports — the shell's fixed chrome width is a layout
                 invariant, not a coincidence. The name above carries this for a screen reader. */}
             {panel.status ? (
               <span

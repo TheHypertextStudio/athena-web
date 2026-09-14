@@ -743,16 +743,6 @@ export const templateTargetType = pgEnum('template_target_type', [
   'program',
 ]);
 
-/**
- * A plan draft's lifecycle.
- *
- * @remarks
- * `active` while it still holds draft nodes; `committed` once every node has been confirmed into
- * a real object, so the canvas can say the plan is done without inspecting the document; and
- * `archived` when the person walked away without creating anything.
- */
-export const planDraftStatus = pgEnum('plan_draft_status', ['active', 'committed', 'archived']);
-
 /** Broad information architecture family for one indexed search document. */
 export const searchDocumentFamily = pgEnum('search_document_family', [
   'work',

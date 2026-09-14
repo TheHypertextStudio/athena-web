@@ -9,6 +9,7 @@
  * opening line. The rail is revealed here rather than by the plan route so the seeded draft
  * survives arrival; the route only reveals when nothing has been seeded.
  */
+import { useVocabulary } from '@docket/ui/hooks';
 import { Sparkles } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
@@ -20,8 +21,6 @@ import { useCreatePlan } from '@/lib/plan-draft/defs';
 export interface PlanWithAthenaActionProps {
   readonly orgId: string;
   readonly initiativeId: string;
-  /** The workspace's word for an initiative, for the accessible name. */
-  readonly noun: string;
   /** Whether the viewer may plan here; renders nothing otherwise. */
   readonly enabled: boolean;
 }
@@ -30,9 +29,9 @@ export interface PlanWithAthenaActionProps {
 export function PlanWithAthenaAction({
   orgId,
   initiativeId,
-  noun,
   enabled,
 }: PlanWithAthenaActionProps): JSX.Element | null {
+  const noun = useVocabulary('initiative');
   const router = useAppRouter();
   const createPlan = useCreatePlan();
   if (!enabled) return null;

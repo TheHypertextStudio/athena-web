@@ -397,6 +397,28 @@ describe('AppShell rail', () => {
     expect(window.localStorage.getItem('docket.rail.collapsed')).toBe('0');
   });
 
+  function ClaimTasksWhileMounted({
+    onClick,
+  }: {
+    readonly onClick: () => void;
+  }): React.JSX.Element {
+    const { requestCollapsed, claimPanel } = useShellRail();
+    React.useEffect(() => requestCollapsed(), [requestCollapsed]);
+    React.useEffect(() => claimPanel('tasks', onClick), [claimPanel, onClick]);
+    return <div>Canvas</div>;
+  }
+
+  it('hands a claimed panel icon to the surface and leaves the rail collapsed', () => {
+    window.localStorage.setItem('docket.rail.collapsed', '0');
+    const onClick = vi.fn();
+    renderWithRail(() => true, undefined, <ClaimTasksWhileMounted onClick={onClick} />);
+    const activityBar = screen.getByRole('navigation', { name: 'Panels' });
+    fireEvent.click(within(activityBar).getByRole('button', { name: 'Tasks' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-0');
+    expect(window.localStorage.getItem('docket.rail.collapsed')).toBe('0');
+  });
+
   it('renders the panel host and switcher at EVERY width, hiding them in CSS below lg', () => {
     // The old shell mounted these on a JS media query, so crossing the query added a whole column
     // of chrome in one pixel of window growth. They are unconditional now: the layout the server

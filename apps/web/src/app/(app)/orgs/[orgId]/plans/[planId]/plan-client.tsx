@@ -136,7 +136,7 @@ export default function PlanClient(): JSX.Element {
     if (window.innerWidth >= COMPACT_SIDEBAR_BELOW_PX) return undefined;
     return requestCompact();
   }, [requestCompact]);
-  const { requestCollapsed } = useShellRail();
+  const { requestCollapsed, claimPanel } = useShellRail();
   useEffect(() => requestCollapsed(), [requestCollapsed]);
   const { searchParams } = useAppLocation();
   const startRequested = searchParams.get(START_QUERY) === START_VALUE;
@@ -169,21 +169,28 @@ export default function PlanClient(): JSX.Element {
   const resolveActor = usePlanActorResolver(members);
 
   // The conversation floats on the canvas. While the window is wide enough, this route hosts it:
-  // every "open Athena" on the route (the bar's toggle, Ask Athena on a node, the keyboard
+  // every "open Athena" on the route (the rail's Athena icon, Ask Athena on a node, the keyboard
   // shortcut, an entry point's opening line) lands in the column rather than the shell's rail.
   const { openAthena, registerHost } = athena;
   const [conversationOpen, setConversationOpen] = useState(false);
   const [draftRequest, setDraftRequest] = useState<{ text: string; version: number } | null>(null);
   useEffect(() => {
     if (!window.matchMedia(CONVERSATION_BESIDE_CANVAS_QUERY).matches) return undefined;
-    return registerHost({
+    const releaseHost = registerHost({
       reveal: (draft) => {
         setConversationOpen(true);
         if (draft === undefined) return;
         setDraftRequest((current) => ({ text: draft, version: (current?.version ?? 0) + 1 }));
       },
     });
-  }, [registerHost]);
+    const releaseClaim = claimPanel('athena', () => {
+      setConversationOpen((open) => !open);
+    });
+    return () => {
+      releaseHost();
+      releaseClaim();
+    };
+  }, [claimPanel, registerHost]);
 
   // A plan is shaped by talking: the conversation is open on arrival where it fits beside the
   // board. On a compact viewport it stays one tap away in the shell.

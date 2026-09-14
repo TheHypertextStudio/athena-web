@@ -17,6 +17,7 @@ import {
   PLAN_PROJECT_WIDTH,
   PLAN_TASK_GAP,
   PLAN_TASK_SIZE,
+  miniTaskListHeight,
 } from '../../src/components/plan-canvas/plan-nodes';
 
 function mustFind(nodes: readonly Node[], id: string): Node {
@@ -36,8 +37,8 @@ function make(
 
 const NODES: Node[] = [
   make('init', PLAN_NODE_TYPE.initiative),
-  make('p1', PLAN_NODE_TYPE.project, {}, { canAddTask: true }),
-  make('p2', PLAN_NODE_TYPE.project, {}, { canAddTask: false }),
+  make('p1', PLAN_NODE_TYPE.project, {}, { canAddTask: true, expanded: true }),
+  make('p2', PLAN_NODE_TYPE.project, {}, { canAddTask: false, expanded: true }),
   make('t1', PLAN_NODE_TYPE.task, { parentId: 'p1' }),
   make('t2', PLAN_NODE_TYPE.task, { parentId: 'p1' }),
   make('t3', PLAN_NODE_TYPE.task, { parentId: 'p2' }),
@@ -147,6 +148,29 @@ describe('layoutPlan', () => {
     const { nodes, bounds } = layoutPlan([]);
     expect(nodes).toEqual([]);
     expect(bounds).toEqual({ width: 0, height: 0 });
+  });
+});
+
+describe('projectContainerHeight', () => {
+  it('sizes a collapsed container to its miniature list, or its Add task row when empty', () => {
+    const chrome = PLAN_PROJECT_HEADER + PLAN_PROJECT_PADDING * 2;
+    expect(projectContainerHeight(2, true, false)).toBe(chrome + miniTaskListHeight(2));
+    expect(projectContainerHeight(5, true, false)).toBe(chrome + miniTaskListHeight(5));
+    expect(miniTaskListHeight(5)).toBeGreaterThan(miniTaskListHeight(2));
+    expect(projectContainerHeight(0, true, false)).toBe(projectContainerHeight(0, true, true));
+    expect(projectContainerHeight(2, true, false)).toBeLessThan(projectContainerHeight(2, true));
+  });
+
+  it('re-packs the column when a container opens', () => {
+    const collapsed = layoutPlan(
+      NODES.map((node) =>
+        node.id === 'p1' ? { ...node, data: { ...node.data, expanded: false } } : node,
+      ),
+    );
+    const open = layoutPlan(NODES);
+    expect(mustFind(collapsed.nodes, 'p2').position.y).toBeLessThan(
+      mustFind(open.nodes, 'p2').position.y,
+    );
   });
 });
 

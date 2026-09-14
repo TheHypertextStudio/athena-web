@@ -19,6 +19,7 @@ import Link from '@/components/docket-link';
 import { formatCalendarDate } from '@/lib/format-date';
 
 import { PLAN_PROJECT_HEADER, type PlanProjectNodeData } from './plan-nodes';
+import { PlanTasksToggle } from './plan-project-tasks';
 import { PlanField, PlanStateChip, PlanStatusGlyph } from './plan-status';
 
 /** Props for {@link PlanAlsoIn}. */
@@ -57,16 +58,22 @@ export interface PlanProjectHeaderProps {
   readonly node: PlanProjectNodeData;
   /** Field names the latest revision changed. */
   readonly changed: ReadonlySet<string>;
+  /** Show or hide the rows; omitted, the header carries no toggle. */
+  readonly onToggleTasks?: (() => void) | undefined;
 }
 
 /** The header band: identity row, then the meta row. */
-export function PlanProjectHeader({ node, changed }: PlanProjectHeaderProps): JSX.Element {
+export function PlanProjectHeader({
+  node,
+  changed,
+  onToggleTasks,
+}: PlanProjectHeaderProps): JSX.Element {
   const target = formatCalendarDate(node.targetDate, { month: 'short', year: 'numeric' });
   const count = `${String(node.taskCount)} ${node.taskCount === 1 ? 'task' : 'tasks'}`;
   return (
     <div
       style={{ height: PLAN_PROJECT_HEADER }}
-      className="group-hover:bg-surface-container-high flex flex-col justify-center gap-1 rounded-t-xl px-3 transition-colors"
+      className="group-hover:bg-surface-container-high flex flex-col justify-center gap-1 rounded-t-2xl px-3 transition-colors"
     >
       <div className="flex min-w-0 items-center gap-2">
         <PlanStatusGlyph status={node.status} />
@@ -77,6 +84,13 @@ export function PlanProjectHeader({ node, changed }: PlanProjectHeaderProps): JS
           {node.title}
         </PlanField>
         <PlanStateChip status={node.status} />
+        {onToggleTasks !== undefined && node.tasks.length > 0 ? (
+          <PlanTasksToggle
+            expanded={node.expanded}
+            count={node.tasks.length}
+            onToggle={onToggleTasks}
+          />
+        ) : null}
         {node.href !== null ? (
           <Link
             href={node.href}

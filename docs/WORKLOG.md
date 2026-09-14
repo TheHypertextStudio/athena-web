@@ -10833,9 +10833,7 @@ states became the `EmptyState` atom; and the description editor's 224px floor ca
   organisation thread the plan is bound to. The cards earned the craft of records: a wider
   initiative card with the owner's avatar and the whole date, project headers with the lead's
   avatar and one chip for the other initiatives, task rows with an avatar for the assignee and the
-  date pinned right, one state chip on the Badge primitive for draft and created everywhere,
-  named dependency handles, arrowheads on every dependency, and membership links on the outline
-  stroke so they read in the dark theme. The Task graph's focused view adopts the same floating bar.
+  date pinned right, one state chip on the Badge primitive for draft and created everywhere, named dependency handles, arrowheads on every dependency, and membership links on the outline stroke so they read in the dark theme. The Task graph's focused view adopts the same floating bar. After the owner's review: concentric corners on every nested surface, no Athena button in the bar (the route claims the rail's Athena icon), a calmer bar with only the draft count and icon-only Open and Remove, one bottom toolbar for zoom, fit, and layout, and project containers that rest collapsed with a miniature task list and open on a dedicated click.
   Design: `~/.claude/plans/cheeky-tickling-treasure.md`; audit:
   `docs/design/audits/2026-09-12-planning-canvas-immersive.md`.
 
@@ -10898,6 +10896,7 @@ states became the `EmptyState` atom; and the description editor's 224px floor ca
   may be split: pieces that must agree on state take that state as props from one hook call.
 - A control that unmounts while focused drops focus to the body silently; a floating panel that
   wants Escape to keep working has to notice and take focus itself.
+- A rail panel's icon is the natural entry point for a surface that hosts that panel's content itself; letting the surface claim the icon (`claimPanel`) keeps the shell owning rail state and spares the bar a button.
 - xyflow marks non-selectable edges focusable by default; a membership link that cannot be acted on
   should opt out so Tab from a row lands on something a person can use.
 

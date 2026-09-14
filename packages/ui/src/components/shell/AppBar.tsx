@@ -118,7 +118,7 @@ export function AppBar({
         tone="floating"
         shape="large"
         aria-label={ariaLabel}
-        className={cn('flex min-w-0 flex-nowrap items-center gap-2 px-2 py-1.5', className)}
+        className={cn('flex min-w-0 flex-nowrap items-center gap-2 p-2', className)}
       >
         {navigation}
         {typeof title === 'string' ? (

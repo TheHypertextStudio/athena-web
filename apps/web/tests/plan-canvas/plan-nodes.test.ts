@@ -91,6 +91,7 @@ const options = {
     return null;
   },
   initiativeName: (id: string) => (id === 'ini_existing' ? 'Existing initiative' : null),
+  expandedRefs: new Set(['p1']),
 };
 
 describe('projectPlan', () => {
@@ -135,9 +136,20 @@ describe('projectPlan', () => {
     });
     expect(p1.taskCount).toBe(1);
     expect(p1.canAddTask).toBe(false);
+    expect(p1.expanded).toBe(true);
+    expect(p1.tasks.map((task) => task.ref)).toEqual(['t1']);
     const p2 = nodes.find((n) => n.id === 'p2')?.data as PlanProjectNodeData;
     expect(p2.alsoIn).toEqual(['Brand refresh', 'Existing initiative']);
     expect(p2.canAddTask).toBe(true);
+  });
+
+  it("keeps a collapsed container's rows out of the graph and names them in miniature", () => {
+    const { nodes } = projectPlan(PLAN, options);
+    expect(nodes.find((n) => n.id === 't1')?.hidden).toBe(false);
+    expect(nodes.find((n) => n.id === 't2')?.hidden).toBe(true);
+    const p2 = nodes.find((n) => n.id === 'p2')?.data as PlanProjectNodeData;
+    expect(p2.expanded).toBe(false);
+    expect(p2.tasks).toEqual([{ ref: 't2', title: 'Daily posts', status: 'draft' }]);
   });
 
   it('marks entered nodes and changed fields from the diff', () => {

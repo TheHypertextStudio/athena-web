@@ -20,6 +20,7 @@ import { cn } from '@docket/ui/lib/utils';
 import { Button, Surface } from '@docket/ui/primitives';
 import type {
   PlanCommitOut,
+  PlanDocument,
   PlanDraftOut,
   PlanNode,
   PlanOp,
@@ -197,6 +198,34 @@ function boardOverflows(
 ): boolean {
   if (flowInstance === null) return false;
   return boardWidth * flowInstance.getViewport().zoom + REVEAL_PADDING * 2 > visibleWidth;
+}
+
+/** The project refs the person opened, plus every container holding a task the search names. */
+function withSearchMatches(
+  plan: PlanDraftOut,
+  expanded: ReadonlySet<string>,
+  search: string,
+): ReadonlySet<string> {
+  const needle = search.trim().toLowerCase();
+  if (needle.length === 0) return expanded;
+  const next = new Set(expanded);
+  for (const node of plan.document.nodes) {
+    if (node.kind !== 'task' || node.parentRef === null) continue;
+    const title = plan.objects[node.ref]?.name ?? node.fields.title;
+    if (title.toLowerCase().includes(needle)) next.add(node.parentRef);
+  }
+  return next;
+}
+
+/** The containers holding the tasks a revision added, so what Athena wrote is in view. */
+function parentsOfAddedTasks(document: PlanDocument, added: ReadonlySet<string>): string[] {
+  const parents = new Set<string>();
+  for (const node of document.nodes) {
+    if (node.kind === 'task' && node.parentRef !== null && added.has(node.ref)) {
+      parents.add(node.parentRef);
+    }
+  }
+  return [...parents];
 }
 
 /** What the floating conversation needs from the route. */
@@ -448,6 +477,17 @@ export default function PlanCanvasPanel({
   const [selectedRef, setSelectedRef] = useState<string | null>(null);
   // The node the person just added by hand: its title takes focus so typing renames it at once.
   const [focusRef, setFocusRef] = useState<string | null>(null);
+  // Containers rest collapsed; a person opens the ones they are working in, and a search or a
+  // revision that adds tasks opens the containers those tasks live in.
+  const [expandedRefs, setExpandedRefs] = useState<ReadonlySet<string>>(() => new Set());
+  const expandTasks = useCallback((refs: readonly string[]) => {
+    setExpandedRefs((current) => {
+      if (refs.every((ref) => current.has(ref))) return current;
+      const next = new Set(current);
+      for (const ref of refs) next.add(ref);
+      return next;
+    });
+  }, []);
   const [layoutEpoch, setLayoutEpoch] = useState(0);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [notice, setNotice] = useState<PlanNotice | null>(null);
@@ -473,9 +513,21 @@ export default function PlanCanvasPanel({
     [initiativeOptions],
   );
 
+  const expandedForView = useMemo(
+    () => withSearchMatches(plan, expandedRefs, search),
+    [plan, expandedRefs, search],
+  );
   const projected = useMemo(
-    () => projectPlan(plan, { orgId, diff: remoteDiff, canEdit, resolveActor, initiativeName }),
-    [plan, orgId, remoteDiff, canEdit, resolveActor, initiativeName],
+    () =>
+      projectPlan(plan, {
+        orgId,
+        diff: remoteDiff,
+        canEdit,
+        resolveActor,
+        initiativeName,
+        expandedRefs: expandedForView,
+      }),
+    [plan, orgId, remoteDiff, canEdit, resolveActor, initiativeName, expandedForView],
   );
   // A portrait host (a phone) runs the board down the page under the initiative; a landscape
   // host stands the initiative beside it.
@@ -581,6 +633,7 @@ export default function PlanCanvasPanel({
   const addTask = useCallback(
     (projectRef: string) => {
       const ref = freshRef('task');
+      expandTasks([projectRef]);
       void apply([
         {
           op: 'upsert_node',
@@ -593,7 +646,7 @@ export default function PlanCanvasPanel({
         revealAdditions(flowInstance, insets);
       });
     },
-    [apply, flowInstance, insets],
+    [apply, expandTasks, flowInstance, insets],
   );
 
   const removeRefs = useCallback(
@@ -688,10 +741,14 @@ export default function PlanCanvasPanel({
         return;
       }
       void apply([{ op: 'move_node', ref: node.id, parentRef: target.id }]).then((result) => {
-        if (!result) snapToLayout(flowInstance, nodes);
+        if (!result) {
+          snapToLayout(flowInstance, nodes);
+          return;
+        }
+        expandTasks([target.id]);
       });
     },
-    [apply, flowInstance, nodes],
+    [apply, expandTasks, flowInstance, nodes],
   );
 
   const askAbout = useCallback(
@@ -704,10 +761,6 @@ export default function PlanCanvasPanel({
     [byRef, onAskAthena],
   );
 
-  const planActions = useMemo<PlanCanvasActions>(
-    () => ({ canEdit, addProject, addTask, removeDependency, open: onOpen }),
-    [canEdit, addProject, addTask, removeDependency, onOpen],
-  );
   // The shared dependency edge reads its remove affordance from the graph actions context.
   const canvasActions = useMemo<CanvasActions>(
     () => ({
@@ -785,6 +838,33 @@ export default function PlanCanvasPanel({
     );
   }, [flowInstance]);
 
+  // Hiding a container's rows also lets go of a row selected inside it.
+  const toggleTasks = useCallback(
+    (projectRef: string) => {
+      const hiding = expandedRefs.has(projectRef);
+      setExpandedRefs((current) => {
+        const next = new Set(current);
+        if (next.has(projectRef)) next.delete(projectRef);
+        else next.add(projectRef);
+        return next;
+      });
+      if (hiding && selectedNode?.parentId === projectRef) clearSelection();
+    },
+    [clearSelection, expandedRefs, selectedNode],
+  );
+  const planActions = useMemo<PlanCanvasActions>(
+    () => ({ canEdit, addProject, addTask, toggleTasks, removeDependency, open: onOpen }),
+    [canEdit, addProject, addTask, toggleTasks, removeDependency, onOpen],
+  );
+
+  // A revision that adds tasks opens the containers they landed in.
+  const latestDocument = useRef(plan.document);
+  latestDocument.current = plan.document;
+  useEffect(() => {
+    const parents = parentsOfAddedTasks(latestDocument.current, remoteDiff.added);
+    if (parents.length > 0) expandTasks(parents);
+  }, [expandTasks, remoteDiff]);
+
   const bar = (
     <PlanBar
       title={chrome.title}
@@ -809,8 +889,6 @@ export default function PlanCanvasPanel({
         onAsk: askAbout,
         onOpen,
       }}
-      conversationOpen={conversation.open}
-      onToggleConversation={conversation.onToggle}
       insetRight={insets.right ?? 0}
       onHeightChange={setBarHeight}
     />

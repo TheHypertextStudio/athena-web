@@ -31,6 +31,7 @@ import {
   PLAN_PROJECT_WIDTH,
   PLAN_TASK_GAP,
   PLAN_TASK_SIZE,
+  miniTaskListHeight,
   type PlanProjectNodeData,
 } from './plan-nodes';
 
@@ -71,11 +72,21 @@ interface Rect {
   height: number;
 }
 
-/** The height a container needs for its rows and, when editable, its Add task row. */
-export function projectContainerHeight(taskCount: number, canAddTask: boolean): number {
-  const rows = taskCount * PLAN_TASK_SIZE.height + Math.max(0, taskCount - 1) * PLAN_TASK_GAP;
+/**
+ * The height a container needs. Expanded, that is its rows and, when editable, its Add task row;
+ * collapsed, its miniature task list, or the Add task row alone when it has no tasks yet.
+ */
+export function projectContainerHeight(
+  taskCount: number,
+  canAddTask: boolean,
+  expanded = true,
+): number {
   const footer = canAddTask ? PLAN_PROJECT_FOOTER : 0;
-  return PLAN_PROJECT_HEADER + PLAN_PROJECT_PADDING + rows + footer + PLAN_PROJECT_PADDING;
+  const rows = taskCount * PLAN_TASK_SIZE.height + Math.max(0, taskCount - 1) * PLAN_TASK_GAP;
+  const body = expanded
+    ? rows + footer
+    : miniTaskListHeight(taskCount) + (taskCount === 0 ? footer : 0);
+  return PLAN_PROJECT_HEADER + PLAN_PROJECT_PADDING + body + PLAN_PROJECT_PADDING;
 }
 
 /** Group task rows under their container, in document order. */
@@ -115,7 +126,11 @@ function stackProjects(
       columnHeight = 0;
     }
     const data = node.data as PlanProjectNodeData;
-    const height = projectContainerHeight(grouped.get(node.id)?.length ?? 0, data.canAddTask);
+    const height = projectContainerHeight(
+      grouped.get(node.id)?.length ?? 0,
+      data.canAddTask,
+      data.expanded,
+    );
     rects.set(node.id, {
       x: column * (PLAN_PROJECT_WIDTH + COLUMN_GAP),
       y: columnHeight,
@@ -254,8 +269,9 @@ function planStructureKey(nodes: readonly Node[]): string {
     .filter((node) => node.type !== PLAN_NODE_TYPE.task)
     .map((node) => {
       const rows = grouped.get(node.id) ?? [];
-      const footer = (node.data as { canAddTask?: boolean }).canAddTask === true ? 'f' : '';
-      return `${node.id}:${node.type ?? ''}:${rows.map((row) => row.id).join('+')}${footer}`;
+      const data = node.data as { canAddTask?: boolean; expanded?: boolean };
+      const flags = `${data.canAddTask === true ? 'f' : ''}${data.expanded === false ? 'c' : ''}`;
+      return `${node.id}:${node.type ?? ''}:${rows.map((row) => row.id).join('+')}${flags}`;
     })
     .join('|');
 }

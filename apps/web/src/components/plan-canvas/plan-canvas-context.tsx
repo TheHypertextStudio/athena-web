@@ -18,6 +18,8 @@ export interface PlanCanvasActions {
   readonly addProject: (initiativeRef: string) => void;
   /** Add a draft task inside a project and select it. */
   readonly addTask: (projectRef: string) => void;
+  /** Show or hide a container's task rows. */
+  readonly toggleTasks: (projectRef: string) => void;
   /** Remove a dependency edge (`blocking → blocked`). */
   readonly removeDependency: (fromRef: string, toRef: string) => void;
   /** Open a confirmed node's real record. */

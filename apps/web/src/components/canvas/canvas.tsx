@@ -15,7 +15,6 @@
 import {
   Background,
   BackgroundVariant,
-  Controls,
   type Edge,
   MiniMap,
   type Node,
@@ -626,23 +625,6 @@ function CanvasInner({
               </div>
             )}
             <div className="col-start-1 row-start-2 self-end sm:row-span-2 sm:row-start-1">
-              <Controls
-                showInteractive={false}
-                className={cn(
-                  surfaceToneColor('floating'),
-                  '[&_button]:!fill-on-surface-variant pointer-events-auto !static !m-0 shrink-0 overflow-hidden !rounded-lg !shadow-none [&_button]:!border-0 [&_button]:!bg-inherit [&_button:hover]:!bg-(--canvas-control-hover)',
-                )}
-                style={
-                  {
-                    '--canvas-control-hover': `var(${surfaceToneVariable('prominent')})`,
-                  } as CSSProperties
-                }
-              />
-            </div>
-            <div
-              data-testid="canvas-bottom-center"
-              className="col-start-2 row-start-2 flex min-w-0 justify-center"
-            >
               <CanvasViewportToolbar
                 fitPadding={fitPadding}
                 onRelayout={() => {
@@ -659,7 +641,7 @@ function CanvasInner({
                   {...(nodeColor !== undefined ? { nodeColor } : {})}
                   maskColor="color-mix(in srgb, var(--color-surface) 70%, transparent)"
                   bgColor="var(--color-surface-container-low)"
-                  className="pointer-events-auto !static !m-0 !h-[150px] !w-[200px] shrink-0 !rounded-lg"
+                  className="pointer-events-auto !static !m-0 !h-[150px] !w-[200px] shrink-0 !rounded-2xl"
                 />
               ) : (
                 <div aria-hidden className="w-10 shrink-0" />

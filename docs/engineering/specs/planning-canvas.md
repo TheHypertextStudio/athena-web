@@ -114,17 +114,12 @@ the chip carry the state. `PlanDependencyHandle` names what dragging does and ta
 under the pointer; membership handles rest invisible until their node is hovered, focused, or
 selected (`planHandleClasses`). The initiative card is 336×112 and reads like its record: title,
 summary at body size, owner avatar and name, the whole date, nothing for an unset field. A project
-container's header (`plan-project-header.tsx`) carries the lead's avatar, the target, the count,
-and one `PlanAlsoIn` chip for the other initiatives it belongs to, listing them on hover; the band
-takes a tonal step under the pointer. A task row shows its assignee as an avatar and pins the due
-date to the right, so a long name never takes the title's room. The minimap appears once the board
+container's header (`plan-project-header.tsx`) carries the lead's avatar, the target, the count, and one `PlanAlsoIn` chip for the other initiatives it belongs to, listing them on hover; the band takes a tonal step under the pointer. A container rests collapsed at the altitude a plan is read: below its header it names its tasks in miniature (`PlanMiniTaskList` in `plan-project-tasks.tsx`, three titles with their glyphs and a count), and that block or the header's chevron shows the rows on a dedicated click. Expanded, the rows are real nodes, and `PLAN_PROJECT_PADDING` keeps the container, its miniature list, and its rows concentric. The panel owns the expanded set: a search opens the containers holding matches, a revision from Athena opens the containers her tasks landed in, adding or moving a task opens its container, and collapsing a container lets go of a row selected inside it. A task row shows its assignee as an avatar and pins the due date to the right, so a long name never takes the title's room. The minimap appears once the board
 spills into a second column.
 
 The route is immersive: the board runs edge to edge under floating chrome, and `useOwnPageScroll`
 keeps the page from scrolling under it. `PlanBar` composes the shared `CanvasFloatingBar` (an
-`AppBar` in its `floating` presentation) with the way back, the title, `CanvasSearchField`, "+
-Project", the counts, and the Athena toggle; when something is selected the counts give way to
-`PlanSelectionActions` in the same row. The bar spans the width the floating columns leave it and
+`AppBar` in its `floating` presentation) with the way back, the title, `CanvasSearchField`, "+ Project", and the draft count; when something is selected the count gives way to `PlanSelectionActions` in the same row, with Open and Remove as icon buttons. The bar carries no Athena button: the route claims the rail's Athena icon (`useShellRail().claimPanel`) so that icon opens and closes the floating conversation instead of expanding the rail. The bar spans the width the floating columns leave it and
 follows the `AppBar` rule for that row: the title takes the room the fixed slots leave and
 truncates first, controls and actions never shrink, and the selection group scrolls in the `fill`
 slot. The inspector floats in `GraphInspectorHost`'s `floating` presentation over the board's right
@@ -172,7 +167,7 @@ what she just drew is never off screen. The "Athena updated" pill shares the slo
 controls with undoable notices, a notice winning when both are due, so no transient surface ever
 overlaps the bar.
 
-The Task graph's focused view (`graph-canvas.tsx`) adopts the same bar through
+Every canvas keeps one bar of viewport commands at the bottom-left corner (`CanvasViewportToolbar`: zoom out, zoom in, fit to view, then Fit selection and Re-layout), on the same tone and shape as the floating bar. The Task graph's focused view (`graph-canvas.tsx`) adopts the same bar through
 `TaskGraphPanel`'s `floatingChrome`, with `GraphViewBar` in its compact form and the bulk
 selection's actions (`BulkSelectionActions`) in the selection slot; its inspector stays docked.
 

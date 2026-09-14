@@ -81,12 +81,15 @@ test.describe('Planning canvas', () => {
     const outreach = page.locator('[data-plan-ref="p-outreach"]');
     await expect(outreach).toBeVisible({ timeout: TIMEOUTS.pageReady });
     await expect(outreach).toHaveAttribute('data-plan-status', 'draft');
+    // A container rests collapsed, naming its tasks in miniature; one click shows the rows.
+    await expect(outreach.getByTestId('plan-mini-tasks')).toContainText('Segment lapsed donors');
+    await expect(page.locator('[data-plan-ref="t1"]')).toBeHidden();
+    await outreach.getByRole('button', { name: 'Show 2 tasks' }).first().click();
     await expect(page.locator('[data-plan-ref="t1"]')).toBeVisible();
     // The chrome floats over the board: one bar as a region, and no band above the canvas.
     const bar = page.getByRole('region', { name: 'Plan' });
     await expect(bar).toBeVisible();
-    await expect(bar.getByTestId('plan-counts')).toContainText('2 projects');
-    await expect(bar.getByTestId('plan-counts')).toContainText('5 draft');
+    await expect(bar.getByTestId('plan-counts')).toContainText('5 drafts');
 
     // --- Selecting a project floats the inspector naming what Confirm creates -----------
     // The container's centre is a task row (its own node), so aim at the header band.

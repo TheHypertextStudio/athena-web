@@ -38,7 +38,7 @@ export const PLAN_INITIATIVE_SIZE = { width: 336, height: 112 } as const;
 /** The project container's width; its height follows its rows. */
 export const PLAN_PROJECT_WIDTH = 304;
 /** Inset between the container edge and its rows. */
-export const PLAN_PROJECT_PADDING = 12;
+export const PLAN_PROJECT_PADDING = 8;
 /** A task row inside its container, in canvas units: the container's width less its insets. */
 export const PLAN_TASK_SIZE = {
   width: PLAN_PROJECT_WIDTH - PLAN_PROJECT_PADDING * 2,
@@ -52,6 +52,23 @@ export const PLAN_DEPENDENCY_STROKE = 'var(--color-outline)';
 export const PLAN_TASK_GAP = 4;
 /** The ghost "Add task" row an editable draft container ends with. */
 export const PLAN_PROJECT_FOOTER = 32;
+/** One line of the miniature task list a collapsed container shows. */
+export const PLAN_MINI_ROW = 18;
+/** How many task titles the miniature list names before the rest become a count. */
+export const PLAN_MINI_SHOWN = 3;
+/** Vertical inset inside the miniature list. */
+export const PLAN_MINI_PADDING = 6;
+
+/**
+ * The height of a collapsed container's miniature task list, or 0 when it has no tasks.
+ *
+ * @param taskCount - Rows the container holds.
+ */
+export function miniTaskListHeight(taskCount: number): number {
+  if (taskCount === 0) return 0;
+  const lines = Math.min(taskCount, PLAN_MINI_SHOWN) + (taskCount > PLAN_MINI_SHOWN ? 1 : 0);
+  return lines * PLAN_MINI_ROW + PLAN_MINI_PADDING * 2;
+}
 
 /** A person, agent, or team a plan field names, resolved for display. */
 export interface PlanActor {
@@ -87,6 +104,13 @@ export interface PlanInitiativeNodeData extends PlanNodeBaseData {
   readonly isRoot: boolean;
 }
 
+/** One task as the miniature list names it. */
+export interface PlanMiniTask {
+  readonly ref: string;
+  readonly title: string;
+  readonly status: PlanNode['status'];
+}
+
 /** The project container. */
 export interface PlanProjectNodeData extends PlanNodeBaseData {
   readonly kind: 'project';
@@ -94,6 +118,10 @@ export interface PlanProjectNodeData extends PlanNodeBaseData {
   readonly lead: PlanActor | null;
   readonly targetDate: string | null;
   readonly taskCount: number;
+  /** The tasks in document order, for the miniature list a collapsed container shows. */
+  readonly tasks: readonly PlanMiniTask[];
+  /** Whether the container shows its task rows; collapsed, it shows the miniature list. */
+  readonly expanded: boolean;
   /** Names of the other initiatives this project also belongs to. */
   readonly alsoIn: readonly string[];
   /** Whether the container ends with an Add task row. */
@@ -124,6 +152,8 @@ export interface ProjectPlanOptions {
   readonly resolveActor: (actorId: string) => PlanActor | null;
   /** Resolve an existing initiative id to its name, or null when unknown. */
   readonly initiativeName: (initiativeId: string) => string | null;
+  /** The project refs whose task rows are shown; every other container is collapsed. */
+  readonly expandedRefs: ReadonlySet<string>;
 }
 
 function baseData(
@@ -178,7 +208,7 @@ function projectNode(
   plan: PlanDraftOut,
   options: ProjectPlanOptions,
   byRef: ReadonlyMap<string, PlanNode>,
-  taskCount: number,
+  tasks: readonly PlanMiniTask[],
 ): Node<PlanProjectNodeData> {
   const alsoIn = [
     ...node.initiativeRefs.map((ref) => byRef.get(ref)?.fields.title ?? null),
@@ -194,7 +224,9 @@ function projectNode(
       summary: node.fields.summary ?? null,
       lead: actorOf(node.fields.leadId, options),
       targetDate: node.fields.targetDate ?? null,
-      taskCount,
+      taskCount: tasks.length,
+      tasks,
+      expanded: options.expandedRefs.has(node.ref),
       alsoIn,
       canAddTask: options.canEdit && node.status === 'draft',
     },
@@ -214,6 +246,9 @@ function taskNode(
     // No `extent`: a row must be able to leave its container, because dragging it into another
     // container is how a person moves a task; the drop handler re-homes it or snaps it back.
     draggable: options.canEdit && node.status === 'draft',
+    // A collapsed container names its tasks in miniature; the rows themselves stay out of the
+    // graph, and so do the edges that end on them.
+    hidden: node.parentRef === null || !options.expandedRefs.has(node.parentRef),
     data: {
       ...baseData(node, plan, options),
       kind: 'task',
@@ -244,7 +279,7 @@ export function projectPlan(
   options: ProjectPlanOptions,
 ): { nodes: Node[]; edges: Edge[] } {
   const byRef = new Map(plan.document.nodes.map((node) => [node.ref, node]));
-  const taskCounts = countTasks(plan.document.nodes);
+  const tasksByProject = miniTasks(plan);
   const rootRef = plan.document.nodes.find((node) => node.kind === 'initiative')?.ref ?? null;
 
   const initiatives: Node[] = [];
@@ -257,7 +292,7 @@ export function projectPlan(
         initiatives.push(initiativeNode(node, plan, options, node.ref === rootRef));
         break;
       case 'project':
-        projects.push(projectNode(node, plan, options, byRef, taskCounts.get(node.ref) ?? 0));
+        projects.push(projectNode(node, plan, options, byRef, tasksByProject.get(node.ref) ?? []));
         links.push(...linkEdges(node, byRef));
         break;
       case 'task':
@@ -275,14 +310,20 @@ export function projectPlan(
   };
 }
 
-/** How many task rows each project holds. */
-function countTasks(nodes: readonly PlanNode[]): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const node of nodes) {
+/** Each project's tasks in document order, as the miniature list names them. */
+function miniTasks(plan: PlanDraftOut): Map<string, PlanMiniTask[]> {
+  const grouped = new Map<string, PlanMiniTask[]>();
+  for (const node of plan.document.nodes) {
     if (node.kind !== 'task' || node.parentRef === null) continue;
-    counts.set(node.parentRef, (counts.get(node.parentRef) ?? 0) + 1);
+    const list = grouped.get(node.parentRef) ?? [];
+    list.push({
+      ref: node.ref,
+      title: plan.objects[node.ref]?.name ?? node.fields.title,
+      status: node.status,
+    });
+    grouped.set(node.parentRef, list);
   }
-  return counts;
+  return grouped;
 }
 
 /** The membership edges from every initiative a project belongs to. */

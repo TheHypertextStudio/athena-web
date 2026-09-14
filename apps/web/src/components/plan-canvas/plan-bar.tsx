@@ -7,7 +7,7 @@
  * The way back, the plan's title, a search that rests as a button, Add project, and the counts
  * share a single row over the top-left of the board. When something is selected the counts give
  * way to the selection's actions in that same row, so nothing floats over the board and covers a
- * node. The Athena toggle pins to the end.
+ * node. The conversation opens from the rail's Athena icon, which the route claims.
  */
 import { CheckCircle2, OpenInNew, Plus, Sparkles, Trash2 } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
@@ -77,11 +77,14 @@ export function PlanSelectionActions({
           type="button"
           size="sm"
           variant="ghost"
+          iconOnly
+          aria-label="Open"
+          title="Open"
           onClick={() => {
             onOpen(href);
           }}
         >
-          <OpenInNew className="size-4" /> Open
+          <OpenInNew className="size-4" />
         </Button>
       ) : null}
       <Button
@@ -99,12 +102,15 @@ export function PlanSelectionActions({
           type="button"
           size="sm"
           variant="ghost"
+          iconOnly
+          aria-label="Remove"
+          title="Remove"
           className="text-error"
           onClick={() => {
             onRemove(drafts.map((node) => node?.ref ?? '').filter((ref) => ref.length > 0));
           }}
         >
-          <Trash2 className="size-4" /> Remove
+          <Trash2 className="size-4" />
         </Button>
       ) : null}
     </>
@@ -130,9 +136,6 @@ export interface PlanBarProps {
   readonly onAddProject: (() => void) | null;
   /** The selection's actions; the bar shows them in place of the counts while refs are selected. */
   readonly selection: PlanSelectionActionsProps;
-  /** Whether the conversation column is open, for the toggle's pressed state. */
-  readonly conversationOpen: boolean;
-  readonly onToggleConversation: (open: boolean) => void;
   /** Pixels spoken for on the right by floating columns. */
   readonly insetRight: number;
   readonly onHeightChange: (height: number) => void;
@@ -147,8 +150,6 @@ export default function PlanBar({
   counts,
   onAddProject,
   selection,
-  conversationOpen,
-  onToggleConversation,
   insetRight,
   onHeightChange,
 }: PlanBarProps): JSX.Element {
@@ -178,34 +179,16 @@ export default function PlanBar({
       }
       trailing={
         <span
-          className="text-on-surface-variant text-label-medium hidden shrink-0 whitespace-nowrap @md:inline"
+          className={cn(
+            'text-label-medium hidden shrink-0 px-2 whitespace-nowrap @md:inline',
+            counts.draft > 0 ? 'text-primary' : 'text-on-surface-variant',
+          )}
           data-testid="plan-counts"
         >
-          <span className="hidden @2xl:inline">
-            {counts.projects} {counts.projects === 1 ? 'project' : 'projects'} · {counts.tasks}{' '}
-            {counts.tasks === 1 ? 'task' : 'tasks'} ·{' '}
-          </span>
-          <span className={cn(counts.draft > 0 && 'text-primary')}>
-            {counts.draft} {counts.draft === 1 ? 'draft' : 'drafts'}
-          </span>
+          {counts.draft} {counts.draft === 1 ? 'draft' : 'drafts'}
         </span>
       }
       selection={selection.refs.length > 0 ? <PlanSelectionActions {...selection} /> : null}
-      actions={
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-pressed={conversationOpen}
-          className="shrink-0"
-          data-plan-athena-toggle="true"
-          onClick={() => {
-            onToggleConversation(!conversationOpen);
-          }}
-        >
-          <Sparkles className="size-4" /> Athena
-        </Button>
-      }
     />
   );
 }

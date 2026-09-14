@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { PlanProjectNodeData } from '../../src/components/plan-canvas/plan-nodes';
 import {
@@ -21,6 +21,12 @@ const NODE: PlanProjectNodeData = {
   lead: { kind: 'human', name: 'Sam Rivera', avatarUrl: null },
   targetDate: '2026-04-30',
   taskCount: 3,
+  tasks: [
+    { ref: 't1', title: 'Segment lapsed donors', status: 'draft' },
+    { ref: 't2', title: 'Write the appeal letter', status: 'draft' },
+    { ref: 't3', title: 'Book the mail house', status: 'draft' },
+  ],
+  expanded: false,
   alsoIn: [],
   canAddTask: true,
 };
@@ -33,6 +39,13 @@ describe('PlanProjectHeader', () => {
     expect(screen.getByText(/3 tasks/)).toBeInTheDocument();
     expect(screen.getByText(/Apr 2026/)).toBeInTheDocument();
     expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('carries the rows toggle when a host wires one', () => {
+    const onToggleTasks = vi.fn();
+    render(<PlanProjectHeader node={NODE} changed={new Set()} onToggleTasks={onToggleTasks} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show 3 tasks' }));
+    expect(onToggleTasks).toHaveBeenCalledTimes(1);
   });
 
   it('omits an unset lead rather than naming its absence', () => {

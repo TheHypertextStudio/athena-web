@@ -47,7 +47,7 @@ function PlanTaskNodeComponent({ id, data, selected }: NodeProps): JSX.Element {
       style={{ viewTransitionName: planNodeTransitionName(id) }}
       className={cn(
         surfaceToneColor('floating'),
-        'group relative flex size-full items-center gap-2 rounded-lg px-2.5',
+        'group relative flex size-full items-center gap-2 rounded-md px-2.5',
         planCardClasses(node.status, node.entered, selected, 'row'),
       )}
     >

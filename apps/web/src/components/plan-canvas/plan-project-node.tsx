@@ -10,20 +10,15 @@
  * is how the many-to-many relationship stays visible without a second frame. Membership links land
  * on the quiet handles; dependencies are drawn from the named ones.
  */
-import { Plus } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { surfaceToneColor } from '@docket/ui/primitives';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import { memo, type JSX } from 'react';
 
 import { usePlanCanvasActions } from './plan-canvas-context';
-import {
-  PLAN_PROJECT_FOOTER,
-  PLAN_PROJECT_HEADER,
-  PLAN_PROJECT_PADDING,
-  type PlanProjectNodeData,
-} from './plan-nodes';
+import { PLAN_PROJECT_HEADER, PLAN_PROJECT_PADDING, type PlanProjectNodeData } from './plan-nodes';
 import { PlanProjectHeader } from './plan-project-header';
+import { PlanProjectBody } from './plan-project-tasks';
 import {
   PlanDependencyHandle,
   planCardClasses,
@@ -47,7 +42,7 @@ function PlanProjectNodeComponent({ id, data, selected }: NodeProps): JSX.Elemen
       style={{ viewTransitionName: planNodeTransitionName(id) }}
       className={cn(
         surfaceToneColor('card'),
-        'group relative size-full rounded-xl',
+        'group relative size-full rounded-2xl',
         node.status === 'confirmed' && 'border-outline-variant border',
         planCardClasses(node.status, node.entered, selected),
       )}
@@ -67,20 +62,18 @@ function PlanProjectNodeComponent({ id, data, selected }: NodeProps): JSX.Elemen
         className={planHandleClasses('!size-2')}
       />
       <PlanDependencyHandle id="dep-in" type="target" position={Position.Top} size="!size-2" />
-      <PlanProjectHeader node={node} changed={changed} />
-      {node.canAddTask && actions !== null ? (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            actions.addTask(id);
-          }}
-          style={{ height: PLAN_PROJECT_FOOTER }}
-          className="nodrag nopan text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring text-label-medium absolute right-3 bottom-2 left-3 inline-flex items-center gap-1.5 rounded-lg px-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
-        >
-          <Plus aria-hidden="true" className="size-3.5" /> Add task
-        </button>
-      ) : null}
+      <PlanProjectHeader
+        node={node}
+        changed={changed}
+        onToggleTasks={
+          actions === null
+            ? undefined
+            : () => {
+                actions.toggleTasks(id);
+              }
+        }
+      />
+      <PlanProjectBody id={id} node={node} actions={actions} />
       <PlanDependencyHandle id="dep-out" type="source" position={Position.Bottom} size="!size-2" />
     </div>
   );

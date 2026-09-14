@@ -78,7 +78,6 @@ function selection(refs: readonly string[]): PlanSelectionActionsProps {
 
 function renderBar(refs: readonly string[], overrides: Partial<PlanSelectionActionsProps> = {}) {
   const actions = { ...selection(refs), ...overrides };
-  const onToggleConversation = vi.fn();
   render(
     <PlanBar
       title="Spring giving campaign"
@@ -88,13 +87,11 @@ function renderBar(refs: readonly string[], overrides: Partial<PlanSelectionActi
       counts={{ projects: 2, tasks: 0, draft: 2 }}
       onAddProject={vi.fn()}
       selection={actions}
-      conversationOpen={false}
-      onToggleConversation={onToggleConversation}
       insetRight={0}
       onHeightChange={vi.fn()}
     />,
   );
-  return { actions, onToggleConversation };
+  return { actions };
 }
 
 describe('PlanBar', () => {
@@ -128,13 +125,5 @@ describe('PlanBar', () => {
     expect(actions.onOpen).toHaveBeenCalledWith('/orgs/org_1/projects/prj_2');
     expect(screen.queryByRole('button', { name: /^Confirm/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull();
-  });
-
-  it('toggles the conversation from its pressed button', () => {
-    const { onToggleConversation } = renderBar([]);
-    const toggle = screen.getByRole('button', { name: /Athena/ });
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(toggle);
-    expect(onToggleConversation).toHaveBeenCalledWith(true);
   });
 });

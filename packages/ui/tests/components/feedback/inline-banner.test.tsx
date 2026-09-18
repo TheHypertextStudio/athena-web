@@ -6,6 +6,24 @@ import { describe, expect, it, vi } from 'vitest';
 import { InlineBanner } from '../../../src/components/feedback/InlineBanner';
 
 describe('InlineBanner', () => {
+  it('tightens its inset and controls when compact', () => {
+    render(
+      <InlineBanner
+        tone="critical"
+        density="compact"
+        title="Labels did not load"
+        action={{ label: 'Try again', onSelect: vi.fn() }}
+      >
+        Check your connection.
+      </InlineBanner>,
+    );
+
+    const banner = screen.getByRole('alert');
+    expect(banner).toHaveAttribute('data-density', 'compact');
+    expect(banner).toHaveClass('p-2');
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
   it('announces its title and message without optional controls', () => {
     render(
       <InlineBanner tone="info" title="Recovery codes needed">

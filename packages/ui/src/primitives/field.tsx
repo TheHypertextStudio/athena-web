@@ -450,10 +450,29 @@ export function Field({
           </Text>
         )
       ) : (
-        <Text token="body-small" tone="error" role="alert">
-          {error}
-        </Text>
+        <FieldError>{error}</FieldError>
       )}
     </div>
+  );
+}
+
+/** Props for {@link FieldError}. */
+export interface FieldErrorProps {
+  /** Application-owned error copy; see {@link FieldProps.error} for what may not go here. */
+  readonly children: string;
+  /** An id the control can name through `aria-describedby`. */
+  readonly id?: string | undefined;
+}
+
+/**
+ * The one sanctioned inline error: application-owned copy directly under the control it is
+ * about. {@link Field} renders it for its own control; use it directly for a control `Field`
+ * cannot wrap, such as a custom autocomplete or a radio group.
+ */
+export function FieldError({ children, id }: FieldErrorProps): React.JSX.Element {
+  return (
+    <Text token="body-small" tone="error" role="alert" id={id}>
+      {children}
+    </Text>
   );
 }

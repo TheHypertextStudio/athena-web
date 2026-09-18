@@ -107,6 +107,8 @@ export {
 } from './dropdown-menu';
 export {
   Field,
+  FieldError,
+  type FieldErrorProps,
   FIELD_VARIANTS,
   type FieldProps,
   type FieldSurfaceOptions,

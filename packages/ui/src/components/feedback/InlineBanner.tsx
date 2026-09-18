@@ -24,10 +24,15 @@ export interface InlineBannerAction {
   readonly onSelect: () => void;
 }
 
+/** How much room a banner takes: `comfortable` in a page, `compact` inside an overlay list. */
+export type InlineBannerDensity = 'comfortable' | 'compact';
+
 /** Props for {@link InlineBanner}. */
 export interface InlineBannerProps {
   /** The banner's semantic urgency. */
   readonly tone: InlineBannerTone;
+  /** Default `comfortable`. */
+  readonly density?: InlineBannerDensity | undefined;
   /** The short status heading announced before the message. */
   readonly title: string;
   /** The explanatory message. */
@@ -56,6 +61,7 @@ const TONE_CLASS: Readonly<Record<InlineBannerTone, string>> = {
  */
 export function InlineBanner({
   tone,
+  density = 'comfortable',
   title,
   children,
   icon,
@@ -64,13 +70,15 @@ export function InlineBanner({
   onDismiss,
 }: InlineBannerProps): React.JSX.Element {
   const canDismiss = dismissLabel !== undefined && onDismiss !== undefined;
+  const compact = density === 'compact';
 
   return (
     <Surface
       as="section"
       tone="floating"
       shape="small"
-      pad="comfortable"
+      pad={compact ? 'tight' : 'comfortable'}
+      data-density={density}
       // A critical banner reports something that failed, so it interrupts; every other tone is
       // informational and waits its turn. Announcing an error politely means a screen-reader user
       // hears it only after whatever they were already reading, which for a failed action is after
@@ -87,7 +95,7 @@ export function InlineBanner({
         <Button
           type="button"
           variant="ghost"
-          controlSize="xl"
+          controlSize={compact ? 'sm' : 'xl'}
           iconOnly
           aria-label={dismissLabel}
           onClick={onDismiss}
@@ -100,7 +108,7 @@ export function InlineBanner({
         <Button
           type="button"
           variant="link"
-          controlSize="md"
+          controlSize={compact ? 'sm' : 'md'}
           onClick={action.onSelect}
           className={
             icon ? 'col-start-2 justify-self-start px-0' : 'col-span-2 justify-self-start px-0'

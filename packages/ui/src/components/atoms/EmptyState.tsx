@@ -47,7 +47,7 @@ import { cn } from '../../lib/utils';
 import { Button } from '../../primitives/button';
 
 /** The supporting tone for an {@link EmptyState}'s glyph disc. */
-export type EmptyStateTone = 'neutral' | 'positive' | 'accent';
+export type EmptyStateTone = 'neutral' | 'positive' | 'accent' | 'critical';
 
 /** A structured primary call-to-action for an {@link EmptyState}. */
 export interface EmptyStateCta {
@@ -112,6 +112,9 @@ const TONE_DISC_CLASS: Record<EmptyStateTone, string> = {
   neutral: 'bg-surface-container-high text-on-surface-variant',
   positive: 'bg-state-completed/12 text-state-completed',
   accent: 'bg-primary/12 text-primary',
+  // A region that could not load, paired with a recovery action. Only the disc is tinted; the
+  // panel stays calm so the failure reads as a state of this region, not an alarm on the page.
+  critical: 'bg-error-container text-on-error-container',
 };
 
 /**

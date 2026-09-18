@@ -157,6 +157,14 @@ describe('EmptyState', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  it('tints only the glyph disc for a critical tone, keeping the panel calm', () => {
+    const { container } = render(
+      <EmptyState tone="critical" title="Projects did not load" body="Try again." />,
+    );
+    expect(container.querySelector('[aria-hidden="true"]')).toHaveClass('bg-error-container');
+    expect(container.firstElementChild).not.toHaveClass('bg-error-container');
+  });
+
   it('tints the glyph disc for a positive tone', () => {
     const { container } = render(
       <EmptyState tone="positive" title="Inbox zero" body="Nothing needs you." />,

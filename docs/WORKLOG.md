@@ -9,8 +9,9 @@
 
 ### [DRAFTS-001] Composers keep autosaved drafts
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-09-18
+- **Completed**: 2026-09-18
 - **Priority**: P0
 - **Description**: The create composers (task, project, initiative, program, team) hold their draft in
   React state and reset on every open, and the discard prompt's "Keep editing" appears to create the
@@ -31,6 +32,17 @@
 - **Notes**: The "Keep editing" report was three ungated submit paths behind the prompt, not the
   button. Sonner-style state in `packages/ui` is module-level, so composer tests clear it in
   `afterEach`. Hono's typed `$delete` names only its 204, so the delete reads a plain `Response`.
+- **Validation**: `e2e/work/composer-drafts.spec.ts` runs the whole journey against the real stack
+  (save, sidebar entry and badge, chip, Drafts page, resume with the setting on, discard), and
+  `composer-drafts-shots.spec.ts` captures the close prompt, the chip list, and the Drafts page at
+  1440 and 390 in both themes with an overflow probe. The drafts, composer, provider, and shell
+  suites pass.
+- **Learnings**: Two bugs only the real app showed. A write that checked "am I disposed" when it
+  ran, not when it was queued, dropped the draft when Save draft was pressed inside the 600 ms
+  debounce. A composer that decided what to resume before the preference had loaded read it as off,
+  so resuming worked only when the preference was cached; the decision now waits for it (bounded,
+  and the shell keeps it warm). Unit tests with fake timers had passed both, because they advanced
+  the clock between typing and answering.
 - **Blockers**: None.
 
 ### [ERRORS-001] One error-presentation system replaces inline plaintext errors

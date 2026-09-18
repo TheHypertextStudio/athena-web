@@ -111,7 +111,9 @@ export function ComposerDraftsChip({
               Drafts ({count})
             </Button>
           </PopoverTrigger>
-          <PopoverContent presentation="panel" width="md" align="start">
+          {/* Above the trigger: the chip sits on the composer's bottom edge, so the list opens
+              over the form rather than past the dialog. Wide enough for a title and its time. */}
+          <PopoverContent presentation="panel" width="wide" side="top" align="start">
             <PopoverHeader>
               <Text as="p" token="title-small">
                 Drafts

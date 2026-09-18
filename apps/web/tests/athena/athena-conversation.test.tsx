@@ -6,9 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { okResponse } from '../support/query';
 
-const { chatGet, chatPost } = vi.hoisted(() => ({
+const { chatGet, personalPost } = vi.hoisted(() => ({
   chatGet: vi.fn(),
-  chatPost: vi.fn(),
+  personalPost: vi.fn(),
 }));
 
 vi.mock('../../src/lib/api', () => ({
@@ -19,11 +19,11 @@ vi.mock('../../src/lib/api', () => ({
           sessions: {
             chat: {
               $get: chatGet,
-              messages: { $post: chatPost },
             },
           },
         },
       },
+      me: { athena: { chat: { messages: { $post: personalPost } } } },
     },
   },
 }));
@@ -176,9 +176,10 @@ describe('AthenaConversation MCP app cards', () => {
     expect(screen.queryByTestId('mcp-app-view')).not.toBeInTheDocument();
   });
 
-  it('sends composer messages to this org thread and renders the returned turn', async () => {
-    chatGet.mockResolvedValue(okResponse(thread([])));
-    chatPost.mockResolvedValue(
+  it('sends composer messages through the personal door and renders the re-read turn', async () => {
+    chatGet.mockResolvedValueOnce(okResponse(thread([])));
+    personalPost.mockResolvedValue(okResponse(thread([])));
+    chatGet.mockResolvedValueOnce(
       okResponse(
         thread([
           {
@@ -199,10 +200,7 @@ describe('AthenaConversation MCP app cards', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => {
-      expect(chatPost).toHaveBeenCalledWith({
-        param: { orgId: 'org_1' },
-        json: { body: 'Plan my day' },
-      });
+      expect(personalPost).toHaveBeenCalledWith({ json: { body: 'Plan my day' } });
     });
     expect(await screen.findByText('Plan my day')).toBeVisible();
   });

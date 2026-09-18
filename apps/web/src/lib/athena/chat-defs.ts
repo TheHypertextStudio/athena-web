@@ -9,6 +9,10 @@
  * session's Server-Sent Events stream, so activities — including MCP app cards — land in the
  * thread as the turn produces them rather than on the next poll. The focus-gated poll stays on
  * underneath as the delivery guarantee; the stream only ever makes it faster.
+ *
+ * Sends go through the personal message route rather than the org write route: it is the one
+ * that accepts an attached page, and the thread is re-read through the org door afterward so
+ * every reader still sees one shape.
  */
 import type { AgentSessionDetailOut, SessionActivityOut } from '@docket/athena/agent-contract';
 import { useQueryClient, type QueryClient, type UseQueryResult } from '@tanstack/react-query';
@@ -18,6 +22,9 @@ import { api } from '@/lib/api';
 import { readProblemError } from '@/lib/problem';
 import { apiQueryOptions, STALE } from '@/lib/query-core';
 import { queryKeys, useApiQuery } from '@/lib/query';
+
+import type { PersonalAthenaContext } from './presentation';
+import { toInvocationContext } from './query-defs';
 
 /** Session states after which the API closes the activity stream. */
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'canceled']);
@@ -60,23 +67,28 @@ export async function fetchOrgChatThread(orgId: string): Promise<AgentSessionDet
 }
 
 /**
- * Append one entry to the org thread and drive a fresh turn over it.
+ * Append one entry to the conversation, carrying the page it was asked from, and drive a turn.
  *
- * @param orgId - The org whose thread receives the entry.
+ * The write goes through the personal door because that is the one that accepts a page context;
+ * the thread is then re-read through the door it is cached under so every reader sees one shape.
+ *
+ * @param orgId - The workspace whose door the thread is read through.
  * @param body - The message content, attributed to the caller.
- * @returns the updated thread, which the caller should write into the query cache.
- * @throws the problem-detail error when the API refuses the message.
+ * @param context - The page attached to the message, if any; display labels are stripped.
+ * @returns the updated thread, for the caller to write into the cache.
+ * @throws the problem-detail error when the API refuses the message or the re-read.
  */
 export async function sendOrgChatMessage(
   orgId: string,
   body: string,
+  context?: PersonalAthenaContext | null,
 ): Promise<AgentSessionDetailOut> {
-  const response = await api.v1.orgs[':orgId'].sessions.chat.messages.$post({
-    param: { orgId },
-    json: { body },
+  const invocation = toInvocationContext(context ?? undefined);
+  const response = await api.v1.me.athena.chat.messages.$post({
+    json: { body, ...(invocation ? { context: invocation } : {}) },
   });
   if (!response.ok) throw await readProblemError(response, 'Athena could not answer right now.');
-  return await response.json();
+  return await fetchOrgChatThread(orgId);
 }
 
 /** Insert one streamed activity into the cached thread, deduplicating by activity id. */

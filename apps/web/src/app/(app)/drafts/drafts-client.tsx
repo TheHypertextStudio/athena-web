@@ -62,7 +62,7 @@ function DraftItem({ draft, workspaceName, onOpen, onDelete }: DraftItemProps): 
   const label = draft.title ?? `Untitled ${noun.toLowerCase()}`;
   return (
     <ListRow
-      className="bg-surface-container rounded-corner-xs first:rounded-t-corner-lg last:rounded-b-corner-lg min-h-14 px-4"
+      className="bg-surface-container rounded-corner-xs first:rounded-t-corner-lg last:rounded-b-corner-lg px-4 py-0"
       onActivate={() => {
         onOpen(draft);
       }}

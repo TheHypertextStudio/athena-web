@@ -248,4 +248,19 @@ describe('TodayPrompt', () => {
     );
     expect(screen.getByRole('button', { name: 'Add files' })).toBeEnabled();
   });
+
+  it('captures only while the conversation is open', async () => {
+    render(<TodayPrompt orgId={ORG} orgLabel="Space" captureOnly />);
+
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+
+    const field = screen.getByLabelText('Add a task');
+    fireEvent.change(field, { target: { value: 'Buy milk' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(capturePost).toHaveBeenCalledOnce();
+    });
+    expect(openAthena).not.toHaveBeenCalled();
+  });
 });

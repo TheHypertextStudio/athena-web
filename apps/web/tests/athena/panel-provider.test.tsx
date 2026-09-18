@@ -87,10 +87,11 @@ function transport(): PersonalAthenaTransport {
 }
 
 function AthenaLaunchers(): ReactNode {
-  const { openAthena, railStatus } = useAthenaPanel();
+  const { openAthena, railStatus, railVisible } = useAthenaPanel();
   return (
     <>
       <span data-testid="athena-rail-status">{railStatus?.tone ?? 'none'}</span>
+      <span data-testid="athena-rail-visible">{String(railVisible)}</span>
       <button
         type="button"
         onClick={() => {
@@ -313,6 +314,11 @@ describe('AthenaPanelProvider', () => {
     await waitFor(() => {
       expect(screen.getByRole('group', { name: /Winter grant cycle/ })).toBeVisible();
     });
+  });
+
+  it('reflects the shell’s railVisible prop on the panel value', () => {
+    renderPanel({ railVisible: false });
+    expect(screen.getByTestId('athena-rail-visible')).toHaveTextContent('false');
   });
 
   it('seeds the composer each time an opening line is handed over', async () => {

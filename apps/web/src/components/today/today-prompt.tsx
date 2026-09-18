@@ -103,6 +103,56 @@ interface CaptureNotice {
  */
 type CaptureMode = 'task' | 'athena';
 
+/**
+ * The mode the composer actually sends to: the armed destination, unless the conversation is
+ * already open elsewhere on the screen, in which case the box only ever captures a task.
+ */
+function resolveCaptureMode(mode: CaptureMode, captureOnly: boolean): CaptureMode {
+  return captureOnly ? 'task' : mode;
+}
+
+/** The composer's placeholder, given the effective mode and whether the destination is hidden. */
+function composerPlaceholder(effectiveMode: CaptureMode, captureOnly: boolean): string {
+  if (captureOnly) return 'Add a task';
+  return effectiveMode === 'athena' ? 'Ask Athena about today…' : 'What task needs capturing?';
+}
+
+/** Props for {@link DestinationToggle}. */
+interface DestinationToggleProps {
+  /** The currently armed destination. */
+  mode: CaptureMode;
+  /** Whether the conversation is already open elsewhere; hides the toggle entirely. */
+  captureOnly: boolean;
+  /** Arms a new destination when the person switches tabs. */
+  onModeChange: (next: CaptureMode) => void;
+}
+
+/**
+ * The Task/Athena segmented control, or nothing while the conversation is open elsewhere on the
+ * screen and the box only captures tasks.
+ */
+function DestinationToggle({
+  mode,
+  captureOnly,
+  onModeChange,
+}: DestinationToggleProps): JSX.Element | null {
+  if (captureOnly) return null;
+  return (
+    <Tabs
+      value={mode}
+      tone="accent"
+      onValueChange={(next) => {
+        onModeChange(next as CaptureMode);
+      }}
+    >
+      <TabList label="Send this to">
+        <Tab value="athena">Athena</Tab>
+        <Tab value="task">Task</Tab>
+      </TabList>
+    </Tabs>
+  );
+}
+
 /** Props for {@link TodayPrompt}. */
 export interface TodayPromptProps {
   /** The active workspace's org id (capture/session target); `null` before resolution. */
@@ -120,6 +170,11 @@ export interface TodayPromptProps {
    * persistent thread — so this only decides where it appears, not how many there are.
    */
   onStartSession?: ((draft: string) => void) | undefined;
+  /**
+   * Hide the Athena destination while the conversation is open elsewhere on the screen; the box
+   * only captures tasks.
+   */
+  captureOnly?: boolean | undefined;
 }
 
 /** The hybrid prompt box: capture a task, or hand the thought to Athena. */
@@ -128,6 +183,7 @@ export function TodayPrompt({
   orgLabel,
   onCaptured,
   onStartSession,
+  captureOnly = false,
 }: TodayPromptProps): JSX.Element {
   const { openAthena } = useAthenaPanel();
   const [text, setText] = useState('');
@@ -135,6 +191,7 @@ export function TodayPrompt({
   const [busy, setBusy] = useState<'capture' | null>(null);
   const [notice, setNotice] = useState<CaptureNotice | null>(null);
   const [mode, setModeState] = useState<CaptureMode>('athena');
+  const effectiveMode = resolveCaptureMode(mode, captureOnly);
   const [files, setFiles] = useState<readonly File[]>([]);
   const [dropping, setDropping] = useState(false);
   const filePicker = useRef<HTMLInputElement>(null);
@@ -156,7 +213,7 @@ export function TodayPrompt({
   const canSubmit =
     orgId !== null &&
     busy === null &&
-    (text.trim().length > 0 || (mode === 'task' && files.length > 0));
+    (text.trim().length > 0 || (effectiveMode === 'task' && files.length > 0));
 
   const capture = useCallback(async (): Promise<void> => {
     if (!orgId) return;
@@ -243,9 +300,9 @@ export function TodayPrompt({
 
   /** Send the draft wherever the active mode points. */
   const submit = useCallback((): void => {
-    if (mode === 'athena') askAthena();
+    if (effectiveMode === 'athena') askAthena();
     else void capture();
-  }, [mode, askAthena, capture]);
+  }, [effectiveMode, askAthena, capture]);
 
   const setMode = useCallback((next: CaptureMode): void => {
     setModeState(next);
@@ -359,8 +416,8 @@ export function TodayPrompt({
           rows={3}
           autoGrow
           maxRows={16}
-          placeholder={mode === 'athena' ? 'Ask Athena about today…' : 'What task needs capturing?'}
-          aria-label={mode === 'athena' ? 'Ask Athena about today' : 'Add a task'}
+          placeholder={composerPlaceholder(effectiveMode, captureOnly)}
+          aria-label={effectiveMode === 'athena' ? 'Ask Athena about today' : 'Add a task'}
           disabled={orgId === null}
           className="placeholder:text-on-surface-variant text-body-large w-full resize-none bg-transparent px-2 pt-1 outline-none disabled:opacity-50"
         />
@@ -434,24 +491,13 @@ export function TodayPrompt({
           >
             <Plus aria-hidden="true" />
           </Button>
-          <Tabs
-            value={mode}
-            tone="accent"
-            onValueChange={(next) => {
-              setMode(next as CaptureMode);
-            }}
-          >
-            <TabList label="Send this to">
-              <Tab value="athena">Athena</Tab>
-              <Tab value="task">Task</Tab>
-            </TabList>
-          </Tabs>
+          <DestinationToggle mode={mode} captureOnly={captureOnly} onModeChange={setMode} />
           <Button
             type="button"
             iconOnly
             disabled={!canSubmit}
             onClick={submit}
-            aria-label={mode === 'task' ? 'Add task' : 'Send'}
+            aria-label={effectiveMode === 'task' ? 'Add task' : 'Send'}
             // Same corner as the box it sits in, so the control reads as part of the field.
             className="ml-auto rounded-xl"
           >

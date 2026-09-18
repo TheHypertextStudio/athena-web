@@ -47,7 +47,7 @@ export default function TodayPage(): JSX.Element {
   const { data, loading, error, refetch, orgName, heading, activeOrgId, date, displayTimezone } =
     useTodayData();
   const actions = useTodayActions(date);
-  const { openAthena } = useAthenaPanel();
+  const { openAthena, railVisible } = useAthenaPanel();
   // Once per payload rather than once per render: Today re-renders on every query settle, timer
   // tick and inline mutation, and fresh array identities here would defeat memoisation downstream.
   const attention = useMemo(() => {
@@ -83,6 +83,7 @@ export default function TodayPage(): JSX.Element {
         orgId={activeOrgId}
         orgLabel={activeOrgId ? orgName(activeOrgId) : 'your workspace'}
         onCaptured={refetch}
+        captureOnly={railVisible}
       />
 
       {error ? (

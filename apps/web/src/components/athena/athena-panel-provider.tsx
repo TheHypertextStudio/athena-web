@@ -63,6 +63,8 @@ export interface AthenaPanelValue {
   readonly detachContext: () => void;
   readonly openAthena: (context?: PersonalAthenaContext | null, draft?: string) => void;
   readonly closeAthena: () => void;
+  /** Whether the shell is showing the conversation in the rail right now. */
+  readonly railVisible: boolean;
   /** What a route asked the rail's Athena panel to show in place of the conversation, if anything. */
   readonly railContent: ReactNode | null;
   /**
@@ -135,9 +137,7 @@ export function AthenaPanelProvider({
   children,
   transport = personalAthenaTransport,
   onRevealRail,
-  // The queue this gated is gone; kept only because the shell still passes it and may again once
-  // delegated work returns to the rail.
-  railVisible: _railVisible = false,
+  railVisible = false,
   onOpenFullAthena,
 }: AthenaPanelProviderProps): JSX.Element {
   const pageContext = usePageContext();
@@ -223,6 +223,7 @@ export function AthenaPanelProvider({
       },
       openAthena,
       closeAthena,
+      railVisible,
       railContent,
       provideRailContent,
     }),
@@ -233,6 +234,7 @@ export function AthenaPanelProvider({
       launchDraft,
       openAthena,
       railStatus,
+      railVisible,
       railContent,
       provideRailContent,
     ],

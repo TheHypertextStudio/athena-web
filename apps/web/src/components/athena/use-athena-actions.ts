@@ -1,5 +1,7 @@
 'use client';
 
+import type { PhoneCallUndoOut as AthenaUndoOut } from '@docket/athena/voice';
+
 import {
   type PersonalAthenaLifecycle,
   type PersonalAthenaTransport,
@@ -26,7 +28,10 @@ export function useAthenaActions({
   onSelected,
   onCreated = onSelected,
 }: AthenaActionsOptions) {
-  const common = (failureTitle: string, success: (next: PersonalAthenaSessionDetail) => void) => ({
+  const common = <T = PersonalAthenaSessionDetail>(
+    failureTitle: string,
+    success: (next: T) => void,
+  ) => ({
     invalidateKeys: [queryKeys.athena()],
     failureTitle,
     onSuccess: success,
@@ -74,13 +79,20 @@ export function useAthenaActions({
       unwrap(() => transport.create(input), 'Athena could not start this work.'),
     ...common('Athena could not start this work.', onCreated),
   });
+  const undo = useApiMutation<AthenaUndoOut, string>({
+    mutationFn: (changeSetId) =>
+      unwrap(() => transport.undoChange(changeSetId), 'Could not undo this change.'),
+    ...common<AthenaUndoOut>('Could not undo this change.', () => undefined),
+  });
 
   return {
-    pending: sendMessage.isPending || lifecycle.isPending || decide.isPending || create.isPending,
+    pending: [sendMessage, lifecycle, decide, create, undo].some((m) => m.isPending),
     sendMessage: sendMessage.mutate,
     lifecycle: lifecycle.mutate,
     decide: decide.mutate,
     create: create.mutate,
     createPending: create.isPending,
+    undo: undo.mutate,
+    undoPending: undo.isPending,
   } as const;
 }

@@ -133,6 +133,7 @@ function jobTransport(detail: PersonalAthenaSessionSummary): PersonalAthenaTrans
     sendMessage: vi.fn(),
     decide: vi.fn(),
     lifecycle: vi.fn(),
+    undoChange: vi.fn(),
   };
 }
 

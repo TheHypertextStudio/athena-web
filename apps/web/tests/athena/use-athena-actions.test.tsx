@@ -36,6 +36,7 @@ function transport(): PersonalAthenaTransport {
     sendMessage: vi.fn().mockResolvedValue(failed('message provider secret')),
     decide: vi.fn().mockResolvedValue(failed('decision provider secret')),
     lifecycle: vi.fn().mockResolvedValue(failed('lifecycle provider secret')),
+    undoChange: vi.fn().mockResolvedValue(failed('undo provider secret')),
   };
 }
 
@@ -76,6 +77,14 @@ function Harness({ api }: { readonly api: PersonalAthenaTransport }): JSX.Elemen
       >
         Lifecycle
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          actions.undo('change_1');
+        }}
+      >
+        Undo
+      </button>
     </div>
   );
 }
@@ -96,7 +105,7 @@ describe('useAthenaActions', () => {
       </QueryClientProvider>,
     );
 
-    for (const button of ['Create', 'Message', 'Decide', 'Lifecycle']) {
+    for (const button of ['Create', 'Message', 'Decide', 'Lifecycle', 'Undo']) {
       fireEvent.click(screen.getByRole('button', { name: button }));
       expect(await screen.findByRole('alert')).not.toHaveTextContent('provider secret');
       dismissAllNotices();

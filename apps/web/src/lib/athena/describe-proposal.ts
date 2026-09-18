@@ -11,6 +11,62 @@ import type { ProposalItemOut } from '@docket/athena/agent-contract';
 import { DEFAULT_WORK_STATUSES } from '@docket/work/work-status-contract';
 
 /**
+ * A tool name whose call leaves Docket — a message sent, an invitation issued, a charge run —
+ * rather than only changing a record this workspace already owns.
+ *
+ * @remarks
+ * Docket's own writes (`create_task`, `update_task`, …) are reversible through the change-set
+ * ledger, which is what makes Approve-with-Undo the right decision shape for them. A tool that
+ * hands something to the outside world cannot be undone once it runs, so it earns the slower
+ * Review-before-Approve shape instead — see §4.6 of the companion design.
+ */
+export function isOutwardTool(tool: string): boolean {
+  return /send|post|publish|mail|email|invite|pay|charge/i.test(tool);
+}
+
+/** One label/value row of an outward proposal's raw input, for the Review expansion. */
+export interface ProposalInputRow {
+  readonly label: string;
+  readonly value: string;
+}
+
+/** Fields shown first in an outward proposal's Review expansion, ahead of anything else it carries. */
+const OUTWARD_FIELD_PRIORITY = ['to', 'subject', 'body'] as const;
+
+/** Render one input value as review-page text: a string as itself, anything else as JSON. */
+function describeInputValue(value: unknown): string {
+  return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+/**
+ * Order one outward proposal's raw input as label/value rows for the Review expansion.
+ *
+ * @remarks
+ * `to`, `subject`, and `body` lead when present — the fields a reviewer most needs before
+ * approving something that leaves Docket — followed by every other field in the order the tool
+ * call carried it.
+ *
+ * @param input - The proposed tool input.
+ * @returns the rows in display order.
+ */
+export function orderedInputRows(
+  input: Readonly<Record<string, unknown>>,
+): readonly ProposalInputRow[] {
+  const seen = new Set<string>();
+  const rows: ProposalInputRow[] = [];
+  for (const field of OUTWARD_FIELD_PRIORITY) {
+    if (!(field in input)) continue;
+    rows.push({ label: field, value: describeInputValue(input[field]) });
+    seen.add(field);
+  }
+  for (const [key, value] of Object.entries(input)) {
+    if (seen.has(key)) continue;
+    rows.push({ label: key, value: describeInputValue(value) });
+  }
+  return rows;
+}
+
+/**
  * Default task-status labels, keyed by the seed status key an agent proposes into `state`.
  *
  * @remarks

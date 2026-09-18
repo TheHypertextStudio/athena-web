@@ -46,6 +46,7 @@ function transportFor(detail: PersonalAthenaSessionDetail): PersonalAthenaTransp
     sendMessage: vi.fn().mockResolvedValue(okResponse(detail)),
     decide: vi.fn().mockResolvedValue(okResponse(detail)),
     lifecycle: vi.fn().mockResolvedValue(okResponse(detail)),
+    undoChange: vi.fn().mockResolvedValue(okResponse({ changeSetId: 'change_1', undone: true })),
   };
 }
 
@@ -163,6 +164,7 @@ describe('AthenaJobCard', () => {
           return Promise.resolve(okResponse(runningDetail));
         }),
         lifecycle: vi.fn(),
+        undoChange: vi.fn(),
       };
 
       render(
@@ -315,5 +317,85 @@ describe('AthenaJobCard', () => {
     expect(screen.getByText('Thu 2:00 PM')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reply' })).not.toBeInTheDocument();
+  });
+
+  it('offers Undo on a finished step and its receipt, marking both Undone once reversed', async () => {
+    const detail = detailWith({
+      status: 'completed',
+      queueState: 'finished',
+      activities: [
+        {
+          id: 'tool_1',
+          type: 'tool',
+          createdAt: '2026-07-15T16:02:00.000Z',
+          service: 'Docket',
+          action: 'Created task',
+          technical: { toolName: 'create_task', output: { changeSetId: 'cs_1' } },
+        },
+      ],
+      result: {
+        title: 'Task created',
+        summary: 'Booked the inspection.',
+      },
+    });
+    const api = renderCard(job({ status: 'completed', queueState: 'finished' }), detail);
+
+    const undoButtons = await screen.findAllByRole('button', { name: 'Undo' });
+    expect(undoButtons).toHaveLength(2);
+
+    fireEvent.click(undoButtons[0] as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(api.undoChange).toHaveBeenCalledWith('cs_1');
+    });
+    expect(await screen.findAllByText('Undone')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+  });
+
+  it('reads Review on an outward decision and reveals what would go out before it reads Approve', async () => {
+    const decision: PersonalAthenaDecision = {
+      kind: 'approval',
+      id: 'proposal_1',
+      title: 'Send the launch update',
+      options: [
+        { id: 'approve', label: 'Approve' },
+        { id: 'reject', label: 'Keep it a draft' },
+      ],
+    };
+    const api = renderCard(
+      job({ status: 'awaiting_approval', queueState: 'needs_you' }),
+      detailWith({
+        status: 'awaiting_approval',
+        queueState: 'needs_you',
+        decision,
+        activities: [
+          {
+            id: 'tool_1',
+            type: 'tool',
+            createdAt: '2026-07-15T16:02:00.000Z',
+            service: 'Gmail',
+            action: 'Drafted the update',
+            technical: {
+              toolName: 'send_email',
+              input: { to: 'team@example.com', subject: 'Launch update', body: 'It shipped.' },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(await screen.findByRole('button', { name: 'Review' })).toBeVisible();
+    expect(screen.queryByText('team@example.com')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+    expect(api.decide).not.toHaveBeenCalled();
+    expect(screen.getByText('team@example.com')).toBeVisible();
+    expect(screen.getByText('Launch update')).toBeVisible();
+    expect(screen.getByText('It shipped.')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    await waitFor(() => {
+      expect(api.decide).toHaveBeenCalledWith('session_1', 'proposal_1', 'approve');
+    });
   });
 });

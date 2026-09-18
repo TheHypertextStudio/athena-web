@@ -174,6 +174,40 @@ describe('ProposalGroupCard', () => {
     });
   });
 
+  it('reads Review before an outward proposal is expanded, then Approve once it is', () => {
+    const onDecide = vi.fn();
+    render(
+      <ProposalGroupCard
+        group={group([
+          item({
+            tool: 'send_email',
+            summary: 'send the email',
+            input: { to: 'ada@example.com', subject: 'Launch update', body: 'We shipped it.' },
+          }),
+        ])}
+        canAct
+        pending={false}
+        onDecide={onDecide}
+        onEdit={vi.fn()}
+      />,
+    );
+
+    const section = screen.getByRole('region', { name: /Proposed changes/ });
+    expect(within(section).getByRole('button', { name: 'Review' })).toBeVisible();
+    expect(within(section).queryByText('ada@example.com')).not.toBeInTheDocument();
+
+    fireEvent.click(within(section).getByRole('button', { name: 'Review' }));
+    expect(onDecide).not.toHaveBeenCalled();
+
+    expect(within(section).getByText('ada@example.com')).toBeVisible();
+    expect(within(section).getByText('Launch update')).toBeVisible();
+    expect(within(section).getByText('We shipped it.')).toBeVisible();
+
+    const approveButton = within(section).getByRole('button', { name: 'Approve' });
+    fireEvent.click(approveButton);
+    expect(onDecide).toHaveBeenCalledWith('group_1', 'approve');
+  });
+
   it('renders no action row when the reviewer cannot act', () => {
     render(
       <ProposalGroupCard

@@ -68,6 +68,7 @@ function emptyQueueTransport(): PersonalAthenaTransport {
     sendMessage: vi.fn(),
     decide: vi.fn(),
     lifecycle: vi.fn(),
+    undoChange: vi.fn(),
   };
 }
 
@@ -124,6 +125,7 @@ describe('AthenaRailConversation', () => {
       sendMessage: vi.fn(),
       decide: vi.fn(),
       lifecycle: vi.fn(),
+      undoChange: vi.fn(),
     };
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
@@ -166,6 +168,7 @@ describe('AthenaRailConversation', () => {
       sendMessage: vi.fn(),
       decide: vi.fn(),
       lifecycle: vi.fn(),
+      undoChange: vi.fn(),
     };
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(

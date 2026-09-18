@@ -83,6 +83,7 @@ function transport(): PersonalAthenaTransport {
     create: vi.fn(),
     decide: vi.fn(),
     lifecycle: vi.fn(),
+    undoChange: vi.fn(),
   };
 }
 

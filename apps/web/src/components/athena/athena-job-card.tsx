@@ -152,6 +152,7 @@ export function AthenaJobCard({
         expanded={expanded}
         mentionOrgId={mentionOrgId}
         pending={actions.pending}
+        undoPending={actions.undoPending}
         onChoose={(decision, optionId) => {
           actions.decide({ id: decision.id, option: optionId, kind: decision.kind });
         }}
@@ -160,6 +161,9 @@ export function AthenaJobCard({
         }}
         onSend={(body) => {
           actions.sendMessage(body);
+        }}
+        onUndo={(changeSetId, onReverted) => {
+          actions.undo(changeSetId, { onSuccess: onReverted });
         }}
       />
     </article>

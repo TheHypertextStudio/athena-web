@@ -211,6 +211,9 @@ session.
 - Decisions come in two classes. Changes inside Docket run on Approve and carry Undo on the
   receipt. Actions that leave Docket (sending an email, posting to a connected service, paying)
   show Review, which opens the real content for reading and editing before anything goes out.
+  Undo sits on the finished step that recorded the change as well as on the receipt, and Review
+  toggles the same primary button to Approve once the outward call's raw fields (`to`, `subject`,
+  `body` first) have been expanded for reading.
 - A running card accepts a Reply: the message quotes the card and steers that work, and Athena
   acknowledges it in the step list.
 - The task the job was delegated from shows the same card in its own detail page's activity, so

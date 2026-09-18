@@ -23,8 +23,10 @@ import {
 import { MoreHorizontal } from '@docket/ui/icons';
 import { type JSX, type SyntheticEvent, useMemo, useState } from 'react';
 
-import { McpAppPresentationCard } from '@/components/athena/mcp-app-presentation-card';
+import { JobSteps, newestChangeSetId, StepUndo } from '@/components/athena/job-card-steps';
+import { ProposalInputRows } from '@/components/athena/proposal-input-rows';
 import MentionTextarea from '@/components/mentions/mention-textarea';
+import { isOutwardTool } from '@/lib/athena/describe-proposal';
 import {
   presentAthenaActivity,
   type AthenaActivityPresentation,
@@ -33,7 +35,6 @@ import {
   type PersonalAthenaSessionSummary,
 } from '@/lib/athena/presentation';
 import { jobStatusLine } from '@/lib/athena/job-presentation';
-import { postWidgetMessage } from '@/lib/athena/mcp-app-defs';
 
 /**
  * Shared field chrome for the one-line answer/reply controls below.
@@ -45,9 +46,6 @@ import { postWidgetMessage } from '@/lib/athena/mcp-app-defs';
  */
 const MENTION_FIELD_CLASS =
   'text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring text-body-medium min-h-10 w-full resize-none rounded-lg bg-transparent px-3 py-2 outline-none focus-visible:ring-2 disabled:opacity-60';
-
-/** How many of the newest steps a running job shows before offering "Show all". */
-const COLLAPSED_STEP_COUNT = 3;
 
 /** A lifecycle command the overflow menu can send. */
 export type JobLifecycleAction = 'pause' | 'resume' | 'cancel';
@@ -112,90 +110,32 @@ export function JobLifecycleMenu({
   );
 }
 
-/** Props for {@link JobSteps}. */
-export interface JobStepsProps {
-  /** The card's steps, oldest first — the same shape the workbench's work log renders. */
-  readonly activities: readonly AthenaActivityPresentation[];
-  /** Show every step regardless of count: the job is finished, or the card was asked to expand. */
-  readonly forceExpanded: boolean;
+/** The newest `tool`-kind step, or `undefined` when the card has taken none yet. */
+function newestToolStep(
+  activities: readonly AthenaActivityPresentation[],
+): AthenaActivityPresentation | undefined {
+  for (let index = activities.length - 1; index >= 0; index -= 1) {
+    const entry = activities[index];
+    if (entry?.kind === 'tool') return entry;
+  }
+  return undefined;
 }
 
 /**
- * The card's step list: title, detail, an MCP app card when the tool call left one, and the
- * technical disclosure — lifted from the workbench's work log and relabelled "What Athena used".
+ * The newest tool step's raw input, only when that step's tool leaves Docket.
  *
  * @remarks
- * A running job collapses to its newest {@link COLLAPSED_STEP_COUNT} steps behind a "Show all N"
- * control, so a long-running job's card does not grow without bound in the thread; a finished job,
- * or one the caller has already expanded, shows every step.
+ * The decision itself carries no tool name — only the newest tool step does — so an outward
+ * decision is read from that step rather than from the decision, matching the plan's rule for the
+ * job card's decision block.
  */
-export function JobSteps({ activities, forceExpanded }: JobStepsProps): JSX.Element | null {
-  const [expanded, setExpanded] = useState(false);
-  if (activities.length === 0) return null;
-
-  const collapsed = !forceExpanded && !expanded && activities.length > COLLAPSED_STEP_COUNT;
-  const visible = collapsed ? activities.slice(-COLLAPSED_STEP_COUNT) : activities;
-
-  return (
-    <ol aria-label="What Athena did">
-      {collapsed ? (
-        <li className="pb-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="min-h-10"
-            onClick={() => {
-              setExpanded(true);
-            }}
-          >
-            {`Show all ${String(activities.length)}`}
-          </Button>
-        </li>
-      ) : null}
-      {visible.map((entry) => (
-        <li key={entry.id} className="py-3 first:pt-0">
-          <p className="text-on-surface text-body-medium break-words">{entry.title}</p>
-          {entry.detail ? (
-            <p className="text-on-surface-variant text-body-medium mt-0.5 break-words whitespace-pre-wrap">
-              {entry.detail}
-            </p>
-          ) : null}
-          {entry.presentation ? (
-            <div className="mt-3">
-              <McpAppPresentationCard
-                presentation={entry.presentation}
-                activityId={entry.id}
-                onMessage={postWidgetMessage}
-              />
-            </div>
-          ) : entry.presentationUnavailable ? (
-            <p
-              className="text-on-surface-variant text-body-small mt-2"
-              data-testid="mcp-app-view-failure"
-            >
-              Interactive view unavailable.
-            </p>
-          ) : null}
-          {entry.technical ? (
-            <details className="text-on-surface-variant text-body-small mt-2">
-              <summary className="focus-visible:ring-ring min-h-10 w-fit cursor-pointer py-2 focus-visible:ring-2 focus-visible:outline-none">
-                What Athena used
-              </summary>
-              <pre
-                className={cn(
-                  surfaceToneColor('floating'),
-                  'text-label-small mt-1 max-w-full overflow-x-auto rounded-md p-3',
-                )}
-              >
-                {JSON.stringify(entry.technical, null, 2)}
-              </pre>
-            </details>
-          ) : null}
-        </li>
-      ))}
-    </ol>
-  );
+export function outwardDecisionInput(
+  activities: readonly AthenaActivityPresentation[],
+): Record<string, unknown> | null {
+  const toolName = newestToolStep(activities)?.technical?.toolName;
+  if (!toolName || !isOutwardTool(toolName)) return null;
+  const input = newestToolStep(activities)?.technical?.input;
+  return input && typeof input === 'object' ? (input as Record<string, unknown>) : null;
 }
 
 /** Props for {@link JobDecision}. */
@@ -203,23 +143,74 @@ export interface JobDecisionProps {
   readonly decision: PersonalAthenaDecision;
   readonly pending: boolean;
   readonly mentionOrgId: string | undefined;
+  /** The proposed outward call's raw input, when the decision would send something out. */
+  readonly outwardInput: Record<string, unknown> | null;
   readonly onChoose: (optionId: string) => void;
   readonly onAnswer: (body: string) => void;
 }
 
+/** Props for {@link JobDecisionOptions}. */
+interface JobDecisionOptionsProps {
+  readonly options: PersonalAthenaDecision['options'];
+  readonly pending: boolean;
+  /** Whether the primary option still owes a Review before it may be chosen. */
+  readonly needsReview: boolean;
+  readonly onReview: () => void;
+  readonly onChoose: (optionId: string) => void;
+}
+
+/** The decision's option buttons; the primary one reads "Review" until `needsReview` clears. */
+function JobDecisionOptions({
+  options,
+  pending,
+  needsReview,
+  onReview,
+  onChoose,
+}: JobDecisionOptionsProps): JSX.Element {
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {options.map((option, index) => {
+        const isPrimary = index === 0;
+        return (
+          <Button
+            key={option.id}
+            type="button"
+            variant={isPrimary ? 'default' : 'secondary'}
+            size="sm"
+            className="min-h-10"
+            disabled={pending}
+            onClick={() => {
+              if (isPrimary && needsReview) {
+                onReview();
+                return;
+              }
+              onChoose(option.id);
+            }}
+          >
+            {isPrimary && needsReview ? 'Review' : option.label}
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * The pending decision block: title, description, and either option buttons or, for an optionless
- * question, a one-line free-text answer field.
+ * question, a one-line free-text answer field. When the decision would run an outward tool, the
+ * primary option reads "Review" and reveals what would go out before it reads "Approve".
  */
 export function JobDecision({
   decision,
   pending,
   mentionOrgId,
+  outwardInput,
   onChoose,
   onAnswer,
 }: JobDecisionProps): JSX.Element {
   const freeform = decision.kind === 'question' && decision.options.length === 0;
   const [draft, setDraft] = useState('');
+  const [reviewed, setReviewed] = useState(false);
 
   function submit(event: SyntheticEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -234,6 +225,12 @@ export function JobDecision({
       <h4 className="text-on-surface text-title-small">{decision.title}</h4>
       {decision.description ? (
         <p className="text-on-surface-variant text-body-medium mt-1">{decision.description}</p>
+      ) : null}
+      {outwardInput && reviewed ? (
+        <ProposalInputRows
+          input={outwardInput}
+          className={cn(surfaceToneColor('floating'), 'mt-3')}
+        />
       ) : null}
       {freeform ? (
         <form aria-label="Answer Athena" className="mt-3 flex items-end gap-2" onSubmit={submit}>
@@ -260,23 +257,15 @@ export function JobDecision({
           </Button>
         </form>
       ) : (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {decision.options.map((option, index) => (
-            <Button
-              key={option.id}
-              type="button"
-              variant={index === 0 ? 'default' : 'secondary'}
-              size="sm"
-              className="min-h-10"
-              disabled={pending}
-              onClick={() => {
-                onChoose(option.id);
-              }}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
+        <JobDecisionOptions
+          options={decision.options}
+          pending={pending}
+          needsReview={outwardInput !== null && !reviewed}
+          onReview={() => {
+            setReviewed(true);
+          }}
+          onChoose={onChoose}
+        />
       )}
     </div>
   );
@@ -285,10 +274,21 @@ export function JobDecision({
 /** Props for {@link JobReceipt}. */
 export interface JobReceiptProps {
   readonly result: NonNullable<PersonalAthenaSessionDetail['result']>;
+  /** The newest step's change set, when the finished work left one to undo. */
+  readonly changeSetId: string | null;
+  readonly undone: boolean;
+  readonly undoPending: boolean;
+  readonly onUndo: (changeSetId: string) => void;
 }
 
-/** The finished job's receipt: title, summary, and the receipt rows as a `dt`/`dd` list. */
-export function JobReceipt({ result }: JobReceiptProps): JSX.Element {
+/** The finished job's receipt: title, summary, the receipt rows as a `dt`/`dd` list, and Undo. */
+export function JobReceipt({
+  result,
+  changeSetId,
+  undone,
+  undoPending,
+  onUndo,
+}: JobReceiptProps): JSX.Element {
   return (
     <div className={cn(surfaceToneColor('card'), 'rounded-md p-3')}>
       <h4 className="text-on-surface text-title-small">{result.title}</h4>
@@ -305,6 +305,16 @@ export function JobReceipt({ result }: JobReceiptProps): JSX.Element {
             </div>
           ))}
         </dl>
+      ) : null}
+      {changeSetId ? (
+        <div className="mt-3">
+          <StepUndo
+            changeSetId={changeSetId}
+            undone={undone}
+            pending={undoPending}
+            onUndo={onUndo}
+          />
+        </div>
       ) : null}
     </div>
   );
@@ -389,54 +399,55 @@ export interface JobCardBodyProps {
   readonly expanded: boolean;
   readonly mentionOrgId: string | undefined;
   readonly pending: boolean;
+  /** Whether an undo request is in flight, disabling every Undo control while it settles. */
+  readonly undoPending: boolean;
   readonly onChoose: (decision: PersonalAthenaDecision, optionId: string) => void;
   readonly onAnswer: (decision: PersonalAthenaDecision, body: string) => void;
   readonly onSend: (body: string) => void;
+  /** Undo one change set; `onReverted` fires only once the request actually succeeds. */
+  readonly onUndo: (changeSetId: string, onReverted: () => void) => void;
 }
 
-/**
- * The card's body below the header: the live status line, its steps, a pending decision or
- * finished receipt, and — while the job is still open — a Reply control.
- *
- * @remarks
- * Split out of {@link AthenaJobCard} so that card's own function stays a thin composition of
- * hooks and this body; every branch that depends on the loaded detail (a decision, a result, the
- * step list) lives here instead.
- */
-export function JobCardBody({
-  job,
+/** Props for {@link JobCardDecisionAndReceipt}. */
+interface JobCardDecisionAndReceiptProps {
+  readonly detail: PersonalAthenaSessionDetail | undefined;
+  readonly activities: readonly AthenaActivityPresentation[];
+  readonly isFinished: boolean;
+  readonly pending: boolean;
+  readonly mentionOrgId: string | undefined;
+  readonly undoneChangeSetIds: ReadonlySet<string>;
+  readonly undoPending: boolean;
+  readonly onChoose: (decision: PersonalAthenaDecision, optionId: string) => void;
+  readonly onAnswer: (decision: PersonalAthenaDecision, body: string) => void;
+  readonly onUndo: (changeSetId: string) => void;
+}
+
+/** The card's pending decision or finished receipt, whichever the loaded detail carries. */
+function JobCardDecisionAndReceipt({
   detail,
+  activities,
   isFinished,
-  expanded,
-  mentionOrgId,
   pending,
+  mentionOrgId,
+  undoneChangeSetIds,
+  undoPending,
   onChoose,
   onAnswer,
-  onSend,
-}: JobCardBodyProps): JSX.Element {
-  const activities: readonly AthenaActivityPresentation[] = useMemo(() => {
-    const raw = detail?.activities ?? [];
-    return raw
-      .map(presentAthenaActivity)
-      .filter((entry): entry is AthenaActivityPresentation => entry !== null);
-  }, [detail?.activities]);
-
+  onUndo,
+}: JobCardDecisionAndReceiptProps): JSX.Element {
   const decision = detail?.decision ?? null;
   const result = detail?.result ?? null;
+  const receiptChangeSetId = isFinished ? newestChangeSetId(activities) : null;
+  const receiptUndone = receiptChangeSetId !== null && undoneChangeSetIds.has(receiptChangeSetId);
 
   return (
     <>
-      <p className="text-body-small text-on-surface-variant">
-        {jobStatusLine(detail ?? null, job)}
-      </p>
-
-      <JobSteps activities={activities} forceExpanded={expanded || isFinished} />
-
       {decision ? (
         <JobDecision
           decision={decision}
           pending={pending}
           mentionOrgId={mentionOrgId}
+          outwardInput={outwardDecisionInput(activities)}
           onChoose={(optionId) => {
             onChoose(decision, optionId);
           }}
@@ -446,7 +457,84 @@ export function JobCardBody({
         />
       ) : null}
 
-      {result ? <JobReceipt result={result} /> : null}
+      {result ? (
+        <JobReceipt
+          result={result}
+          changeSetId={receiptChangeSetId}
+          undone={receiptUndone}
+          undoPending={undoPending}
+          onUndo={onUndo}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The card's body below the header: the live status line, its steps, a pending decision or
+ * finished receipt, and — while the job is still open — a Reply control.
+ *
+ * @remarks
+ * Split out of {@link AthenaJobCard} so that card's own function stays a thin composition of
+ * hooks and this body; every branch that depends on the loaded detail (a decision, a result, the
+ * step list) lives in {@link JobCardDecisionAndReceipt} instead.
+ */
+export function JobCardBody({
+  job,
+  detail,
+  isFinished,
+  expanded,
+  mentionOrgId,
+  pending,
+  undoPending,
+  onChoose,
+  onAnswer,
+  onSend,
+  onUndo,
+}: JobCardBodyProps): JSX.Element {
+  const [undoneChangeSetIds, setUndoneChangeSetIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const activities: readonly AthenaActivityPresentation[] = useMemo(() => {
+    const raw = detail?.activities ?? [];
+    return raw
+      .map(presentAthenaActivity)
+      .filter((entry): entry is AthenaActivityPresentation => entry !== null);
+  }, [detail?.activities]);
+
+  function handleUndo(changeSetId: string): void {
+    onUndo(changeSetId, () => {
+      setUndoneChangeSetIds((current) => new Set(current).add(changeSetId));
+    });
+  }
+
+  return (
+    <>
+      <p className="text-body-small text-on-surface-variant">
+        {jobStatusLine(detail ?? null, job)}
+      </p>
+
+      <JobSteps
+        activities={activities}
+        forceExpanded={expanded || isFinished}
+        isFinished={isFinished}
+        undoneChangeSetIds={undoneChangeSetIds}
+        undoPending={undoPending}
+        onUndo={handleUndo}
+      />
+
+      <JobCardDecisionAndReceipt
+        detail={detail}
+        activities={activities}
+        isFinished={isFinished}
+        pending={pending}
+        mentionOrgId={mentionOrgId}
+        undoneChangeSetIds={undoneChangeSetIds}
+        undoPending={undoPending}
+        onChoose={onChoose}
+        onAnswer={onAnswer}
+        onUndo={handleUndo}
+      />
 
       {isFinished ? null : (
         <JobReply pending={pending} mentionOrgId={mentionOrgId} onSend={onSend} />

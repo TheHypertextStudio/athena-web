@@ -20,7 +20,8 @@ import { cn } from '@docket/ui/lib/utils';
 import { Button, Surface, surfaceToneColor } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
-import { describeProposal } from '@/lib/athena/describe-proposal';
+import { ProposalInputRows } from '@/components/athena/proposal-input-rows';
+import { describeProposal, isOutwardTool } from '@/lib/athena/describe-proposal';
 
 /** Props for {@link ProposalGroupCard}. */
 export interface ProposalGroupCardProps {
@@ -70,7 +71,10 @@ export function ProposalGroupCard({
   onEdit,
 }: ProposalGroupCardProps): JSX.Element {
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
+  const [reviewed, setReviewed] = useState(false);
   const count = group.items.length;
+  const hasOutward = group.items.some((item) => isOutwardTool(item.tool));
+  const needsReview = hasOutward && !reviewed;
   const selection = group.items.filter((item) => checked.has(item.activityId));
   const partialSelection = selection.length > 0 && selection.length < count;
 
@@ -103,6 +107,7 @@ export function ProposalGroupCard({
             pending={pending}
             showCheckbox={count > 1}
             checked={checked.has(item.activityId)}
+            reviewed={reviewed}
             onToggle={toggle}
             onEdit={onEdit}
           />
@@ -115,6 +120,10 @@ export function ProposalGroupCard({
             size="sm"
             disabled={pending}
             onClick={() => {
+              if (needsReview) {
+                setReviewed(true);
+                return;
+              }
               if (partialSelection) {
                 onDecide(
                   group.proposalGroupId,
@@ -126,7 +135,7 @@ export function ProposalGroupCard({
               onDecide(group.proposalGroupId, 'approve');
             }}
           >
-            {approveLabel(count, selection.length)}
+            {needsReview ? 'Review' : approveLabel(count, selection.length)}
           </Button>
           <Button
             variant="ghost-destructive"
@@ -152,24 +161,32 @@ interface ProposalRowProps {
   /** Whether to render the selection checkbox — only when the group has more than one item. */
   showCheckbox: boolean;
   checked: boolean;
+  /** Whether the group's outward items have been expanded for review before approving. */
+  reviewed: boolean;
   onToggle: (activityId: string) => void;
   onEdit: (activityId: string, input: Record<string, unknown>) => void;
 }
 
-/** One ghost row of the batch: translucent, optionally selectable, title-editable. */
-function ProposalRow({
+/** Props for {@link ProposalRowTitle}. */
+interface ProposalRowTitleProps {
+  item: ProposalItemOut;
+  canAct: boolean;
+  pending: boolean;
+  sentence: string;
+  onEdit: (activityId: string, input: Record<string, unknown>) => void;
+}
+
+/** The row's title: a static sentence, or — for a ghost — an inline-editable one. */
+function ProposalRowTitle({
   item,
   canAct,
   pending,
-  showCheckbox,
-  checked,
-  onToggle,
+  sentence,
   onEdit,
-}: ProposalRowProps): JSX.Element {
+}: ProposalRowTitleProps): JSX.Element {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(item.ghost?.title ?? '');
   const ghost = item.ghost;
-  const sentence = describeProposal(item);
 
   const commitEdit = (): void => {
     const trimmed = title.trim();
@@ -181,66 +198,97 @@ function ProposalRow({
     onEdit(item.activityId, { ...item.input, title: trimmed });
   };
 
+  if (ghost && editing) {
+    return (
+      <input
+        aria-label="Edit the proposed title"
+        value={title}
+        autoFocus
+        disabled={pending}
+        onChange={(event) => {
+          setTitle(event.target.value);
+        }}
+        onBlur={commitEdit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') commitEdit();
+          if (event.key === 'Escape') {
+            setTitle(ghost.title);
+            setEditing(false);
+          }
+        }}
+        className={cn(
+          surfaceToneColor('prominent'),
+          'text-body-medium focus-visible:ring-ring w-full min-w-0 flex-1 rounded px-2 py-0.5 outline-none focus-visible:ring-1',
+        )}
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      disabled={!canAct || !ghost || pending}
+      onClick={() => {
+        setEditing(true);
+      }}
+      className={cn(
+        'text-on-surface text-body-medium line-clamp-2 min-w-0 flex-1 text-left',
+        canAct && ghost ? 'hover:underline' : 'cursor-default',
+      )}
+      title={canAct && ghost ? 'Click to edit before approving' : undefined}
+    >
+      {sentence}
+    </button>
+  );
+}
+
+/** One ghost row of the batch: translucent, optionally selectable, title-editable. */
+function ProposalRow({
+  item,
+  canAct,
+  pending,
+  showCheckbox,
+  checked,
+  reviewed,
+  onToggle,
+  onEdit,
+}: ProposalRowProps): JSX.Element {
+  const sentence = describeProposal(item);
+  const outward = isOutwardTool(item.tool);
+
   return (
     <li
       style={{ viewTransitionName: `proposal-${item.activityId}` }}
       className={cn(
         // The ghost grammar: a tonal tint at reduced opacity, not a drawn outline —
         // unmistakably "not real yet", solidified in place on approval.
-        'bg-primary-container/25 flex items-center gap-2.5 rounded-lg px-3 py-2 opacity-80',
+        'bg-primary-container/25 flex flex-col gap-1.5 rounded-lg px-3 py-2 opacity-80',
       )}
     >
-      {showCheckbox && canAct ? (
-        <input
-          type="checkbox"
-          aria-label={`Select "${sentence}"`}
-          checked={checked}
-          disabled={pending}
-          onChange={() => {
-            onToggle(item.activityId);
-          }}
-          className="accent-primary h-4 w-4 shrink-0"
+      <div className="flex items-center gap-2.5">
+        {showCheckbox && canAct ? (
+          <input
+            type="checkbox"
+            aria-label={`Select "${sentence}"`}
+            checked={checked}
+            disabled={pending}
+            onChange={() => {
+              onToggle(item.activityId);
+            }}
+            className="accent-primary h-4 w-4 shrink-0"
+          />
+        ) : null}
+        <ProposalRowTitle
+          item={item}
+          canAct={canAct}
+          pending={pending}
+          sentence={sentence}
+          onEdit={onEdit}
         />
-      ) : null}
+      </div>
 
-      {ghost && editing ? (
-        <input
-          aria-label="Edit the proposed title"
-          value={title}
-          autoFocus
-          disabled={pending}
-          onChange={(event) => {
-            setTitle(event.target.value);
-          }}
-          onBlur={commitEdit}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') commitEdit();
-            if (event.key === 'Escape') {
-              setTitle(ghost.title);
-              setEditing(false);
-            }
-          }}
-          className={cn(
-            surfaceToneColor('prominent'),
-            'text-body-medium focus-visible:ring-ring w-full min-w-0 flex-1 rounded px-2 py-0.5 outline-none focus-visible:ring-1',
-          )}
-        />
-      ) : (
-        <button
-          type="button"
-          disabled={!canAct || !ghost || pending}
-          onClick={() => {
-            setEditing(true);
-          }}
-          className={cn(
-            'text-on-surface text-body-medium line-clamp-2 min-w-0 flex-1 text-left',
-            canAct && ghost ? 'hover:underline' : 'cursor-default',
-          )}
-          title={canAct && ghost ? 'Click to edit before approving' : undefined}
-        >
-          {sentence}
-        </button>
-      )}
+      {outward && reviewed ? (
+        <ProposalInputRows input={item.input} className={surfaceToneColor('card')} />
+      ) : null}
     </li>
   );
 }

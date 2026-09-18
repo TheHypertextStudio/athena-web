@@ -78,6 +78,7 @@ import {
   type SessionRow,
 } from './agent-session-helpers';
 import { toPersonalActivityOut } from './me-athena-activity';
+import meAthenaChanges from './me-athena-undo';
 import { runSession } from './agent-session-runner';
 import {
   resolveAthenaDisplay,
@@ -799,6 +800,7 @@ const meAthena = new Hono<AppEnv>()
       return ok(c, AthenaPulseOut, { needsYou: counts.needsYou, working: counts.working });
     },
   )
+  .route('/changes', meAthenaChanges)
   .get(
     '/chat',
     apiDoc({

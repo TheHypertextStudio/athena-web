@@ -42,6 +42,7 @@ function transportFor(detail: PersonalAthenaSessionDetail): PersonalAthenaTransp
     sendMessage: vi.fn(),
     decide: vi.fn().mockResolvedValue(okResponse(detail)),
     lifecycle: vi.fn(),
+    undoChange: vi.fn(),
   };
 }
 

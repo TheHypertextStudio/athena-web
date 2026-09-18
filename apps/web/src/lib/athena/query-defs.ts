@@ -1,4 +1,5 @@
 import { AthenaInvocationContext, type AthenaPulseOut } from '@docket/athena/agent-contract';
+import type { PhoneCallUndoOut as AthenaUndoOut } from '@docket/athena/voice';
 
 import { api } from '@/lib/api';
 import { apiQueryOptions, rpcErrorResponse, type RpcResponse, STALE } from '@/lib/query-core';
@@ -64,6 +65,7 @@ export interface PersonalAthenaTransport {
     sessionId: string,
     action: PersonalAthenaLifecycle,
   ) => Promise<RpcResponse<PersonalAthenaSessionDetail>>;
+  readonly undoChange: (changeSetId: string) => Promise<RpcResponse<AthenaUndoOut>>;
 }
 
 /** Adapt only successful JSON; retain an error body for the shared Problem reader. */
@@ -164,6 +166,8 @@ export const personalAthenaTransport: PersonalAthenaTransport = {
     if (!response.ok) return rpcErrorResponse(response);
     return detailRequest(sessionId);
   },
+  undoChange: (changeSetId) =>
+    api.v1.me.athena.changes[':changeSetId'].undo.$post({ param: { changeSetId } }),
 };
 
 /** Compact live-count definition for the closed ambient pulse. */

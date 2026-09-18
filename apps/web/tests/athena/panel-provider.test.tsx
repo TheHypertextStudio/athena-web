@@ -5,17 +5,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { type ReactNode, useEffect } from 'react';
 
-const { chatGet, personalPost, pulseGet } = vi.hoisted(() => ({
-  chatGet: vi.fn(),
-  personalPost: vi.fn(),
-  pulseGet: vi.fn(),
-}));
+const { chatGet, personalPost, pulseGet, athenaQueueGet, elicitationsGet, presencePost } =
+  vi.hoisted(() => ({
+    chatGet: vi.fn(),
+    personalPost: vi.fn(),
+    pulseGet: vi.fn(),
+    athenaQueueGet: vi.fn(),
+    elicitationsGet: vi.fn(),
+    presencePost: vi.fn(),
+  }));
 
 vi.mock('../../src/lib/api', () => ({
   api: {
     v1: {
       orgs: { ':orgId': { sessions: { chat: { $get: chatGet } } } },
-      me: { athena: { chat: { messages: { $post: personalPost } }, pulse: { $get: pulseGet } } },
+      me: {
+        athena: {
+          $get: athenaQueueGet,
+          chat: { messages: { $post: personalPost } },
+          pulse: { $get: pulseGet },
+        },
+        elicitations: { $get: elicitationsGet, presence: { $post: presencePost } },
+      },
     },
   },
 }));
@@ -52,6 +63,14 @@ beforeEach(() => {
   chatGet.mockReset().mockResolvedValue(okResponse(thread()));
   personalPost.mockReset().mockResolvedValue(okResponse(thread()));
   pulseGet.mockReset().mockResolvedValue(okResponse({ needsYou: 0, working: 0 }));
+  athenaQueueGet.mockReset().mockResolvedValue(
+    okResponse({
+      counts: { needsYou: 0, working: 0, finished: 0 },
+      currentChat: null,
+      sessions: { needsYou: [], working: [], finished: [] },
+    }),
+  );
+  elicitationsGet.mockReset().mockResolvedValue(okResponse({ items: [] }));
 });
 
 function transport(): PersonalAthenaTransport {

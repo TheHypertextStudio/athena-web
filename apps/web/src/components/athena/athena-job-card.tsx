@@ -145,12 +145,6 @@ export function AthenaJobCard({
         />
       </header>
 
-      {actions.feedback ? (
-        <p role="alert" aria-live="assertive" className="text-body-small text-error">
-          {actions.feedback}
-        </p>
-      ) : null}
-
       <JobCardBody
         job={job}
         detail={detail.data}

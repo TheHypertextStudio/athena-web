@@ -15,8 +15,6 @@
  * ({@link AthenaPanelProvider}), and (in principle) any future entry point —
  * so the conversation itself is defined once and each door only supplies its own chrome.
  */
-import { parseMcpAppPresentation } from '@docket/integrations/mcp-apps-contract';
-import { type SessionActivityOut } from '@docket/athena/agent-contract';
 import { EmptyState } from '@docket/ui/components';
 import { ArrowUp, Cable, Sparkles } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
@@ -29,27 +27,30 @@ import {
   DialogHeader,
   DialogTitle,
   Skeleton,
-  Surface,
   surfaceToneColor,
-  Text,
 } from '@docket/ui/primitives';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 
 import type { AgentSessionDetailOut } from '@docket/athena/agent-contract';
-import { PLAN_TOOL_NAMES } from '@docket/work/plan-draft-contract';
 
 import { ProposalGroupCard } from '@/components/agents/proposal-group-card';
 import { AthenaContextChip } from '@/components/athena/athena-context-chip';
+import { AthenaJobCard } from '@/components/athena/athena-job-card';
 import { ConversationSuggestions } from '@/components/athena/conversation-suggestions';
+import { ElicitationQueue } from '@/components/athena/elicitation-queue';
 import { PartialLoadBanner, presentFailure, QueryLoadFailure } from '@/components/feedback';
-import { McpAppPresentationCard } from '@/components/athena/mcp-app-presentation-card';
-import PlanStartCard, { parsePlanStart } from '@/components/plan-canvas/plan-start-card';
+import { ThreadEntries } from '@/components/athena/thread-entries';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 import { AddMcpConnectorForm } from '@/components/settings/mcp-connectors-section';
 import { fetchOrgChatThread, sendOrgChatMessage, useOrgChatThread } from '@/lib/athena/chat-defs';
-import type { PersonalAthenaContext } from '@/lib/athena/presentation';
+import { mergeThreadEntries, type ThreadEntry } from '@/lib/athena/job-presentation';
+import type {
+  PersonalAthenaContext,
+  PersonalAthenaSessionSummary,
+} from '@/lib/athena/presentation';
+import { personalAthenaTransport, type PersonalAthenaTransport } from '@/lib/athena/query-defs';
 import { queryKeys } from '@/lib/query';
 import { useSessionDetail } from '@/lib/use-session-detail';
 import { startViewTransition } from '@/lib/view-transition';
@@ -98,6 +99,15 @@ export interface AthenaConversationProps {
   onAttachContext?: (() => void) | undefined;
   /** Whether an empty thread offers prompts. Defaults to true. */
   suggestions?: boolean | undefined;
+  /** Delegated work running alongside this thread, merged into it by {@link mergeThreadEntries}. */
+  jobs?: readonly PersonalAthenaSessionSummary[] | undefined;
+  /** Transport a merged job's card drives its own detail read and actions through. */
+  transport?: PersonalAthenaTransport | undefined;
+  /**
+   * A job to keep visible above the composer regardless of the thread's own scroll position — for
+   * a host (the wide view's Work ledger) whose target card is not currently mounted in this thread.
+   */
+  pinnedJob?: PersonalAthenaSessionSummary | null | undefined;
 }
 
 /** The composer's draft, its form, and how a requested draft lands in it. */
@@ -348,6 +358,87 @@ function ConnectDialog({ orgId, open, onOpenChange }: ConnectDialogProps): JSX.E
   );
 }
 
+/** Props for {@link ConversationBody}. */
+interface ConversationBodyProps {
+  /** The thread's own read: pending placeholder, first-read failure, or a failed refresh. */
+  readonly query: UseQueryResult<AgentSessionDetailOut>;
+  /** The thread's activities and jobs, merged and ordered by {@link mergeThreadEntries}. */
+  readonly entries: readonly ThreadEntry[];
+  /** The thread itself, once loaded — carries the id and status {@link ChatProposals} needs. */
+  readonly thread: AgentSessionDetailOut | null;
+  readonly orgId: string;
+  readonly transport: PersonalAthenaTransport;
+  readonly sendWidgetMessage: (text: string) => Promise<boolean>;
+  readonly reloadWithTransition: () => Promise<void>;
+  readonly empty: ConversationEmptyState;
+  readonly suggestions: boolean;
+  readonly context: PersonalAthenaContext | null;
+  readonly onPickSuggestion: (prompt: string) => void;
+}
+
+/**
+ * The thread's history: a loading skeleton, the merged entries with any pending proposal group, or
+ * the empty state and its suggestions.
+ */
+function ConversationBody({
+  query,
+  entries,
+  thread,
+  orgId,
+  transport,
+  sendWidgetMessage,
+  reloadWithTransition,
+  empty,
+  suggestions,
+  context,
+  onPickSuggestion,
+}: ConversationBodyProps): JSX.Element {
+  if (thread === null && query.isPending) {
+    return (
+      <div className="flex flex-col gap-3" aria-hidden="true">
+        <Skeleton className="h-10 w-2/3 rounded-xl" />
+        <Skeleton className="ml-auto h-10 w-1/2 rounded-xl" />
+        <Skeleton className="h-10 w-3/5 rounded-xl" />
+      </div>
+    );
+  }
+  if (thread === null && query.isError) {
+    return <QueryLoadFailure title="Conversation" query={query} size="panel" />;
+  }
+  const refreshFailed = query.isError ? (
+    <PartialLoadBanner
+      title="Could not refresh the conversation"
+      onRetry={() => void query.refetch()}
+    />
+  ) : null;
+  if (entries.length > 0) {
+    return (
+      <>
+        {refreshFailed}
+        <ThreadEntries
+          entries={entries}
+          transport={transport}
+          onWidgetMessage={sendWidgetMessage}
+        />
+        {thread?.status === 'awaiting_approval' ? (
+          <ChatProposals orgId={orgId} sessionId={thread.id} onSettled={reloadWithTransition} />
+        ) : null}
+      </>
+    );
+  }
+  return (
+    <>
+      {refreshFailed}
+      <div className="flex flex-col gap-3">
+        <EmptyState icon={Sparkles} title={empty.title} body={empty.body} frame="none" />
+        {suggestions ? (
+          <ConversationSuggestions context={context} onPick={onPickSuggestion} />
+        ) : null}
+      </div>
+    </>
+  );
+}
+
 /** AthenaConversation renders the org's persistent Athena conversation. */
 export default function AthenaConversation({
   emptyState,
@@ -360,6 +451,9 @@ export default function AthenaConversation({
   onDetachContext,
   onAttachContext,
   suggestions = true,
+  jobs = [],
+  transport = personalAthenaTransport,
+  pinnedJob = null,
 }: AthenaConversationProps): JSX.Element {
   const mentionOrgId = useMentionOrgId(orgId);
   const [sending, setSending] = useState(false);
@@ -371,6 +465,7 @@ export default function AthenaConversation({
 
   const query = useOrgChatThread(orgId);
   const thread = query.data ?? null;
+  const entries = mergeThreadEntries(thread?.activities ?? [], jobs);
 
   // Called after a proposal group settles (via `ChatProposals`'s `onSettled`), so the group's
   // ghost rows — each carrying a stable `view-transition-name` — morph out in place instead of
@@ -378,7 +473,7 @@ export default function AthenaConversation({
   // transition, which is why this does not simply `refetch()`.
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
-  }, [thread?.activities.length]);
+  }, [entries.length]);
 
   const send = useCallback(async (): Promise<void> => {
     const text = draft.trim();
@@ -399,23 +494,23 @@ export default function AthenaConversation({
   return (
     <div className={cn('flex h-full w-full flex-col', className)}>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-4">
-        <ThreadBody
-          orgId={orgId}
+        {/* placeholder: the conversation's own history — how many turns exist, who said what, and
+            how long each message is. The composer below it is interactive from the first paint. */}
+        <ConversationBody
           query={query}
+          entries={entries}
+          thread={thread}
+          orgId={orgId}
+          transport={transport}
+          sendWidgetMessage={sendWidgetMessage}
+          reloadWithTransition={reloadWithTransition}
           empty={empty}
-          emptyExtra={
-            suggestions ? (
-              <ConversationSuggestions
-                context={context}
-                onPick={(prompt) => {
-                  setDraft(prompt);
-                  composerRef.current?.querySelector('textarea')?.focus({ preventScroll: true });
-                }}
-              />
-            ) : null
-          }
-          onWidgetMessage={sendWidgetMessage}
-          onProposalsSettled={reloadWithTransition}
+          suggestions={suggestions}
+          context={context}
+          onPickSuggestion={(prompt) => {
+            setDraft(prompt);
+            composerRef.current?.querySelector('textarea')?.focus({ preventScroll: true });
+          }}
         />
         {sending ? (
           <p className="text-on-surface-variant text-body-medium italic" aria-live="polite">
@@ -424,6 +519,19 @@ export default function AthenaConversation({
         ) : null}
         <div ref={endRef} />
       </div>
+
+      {pinnedJob ? (
+        <div className="pb-2">
+          <AthenaJobCard
+            job={pinnedJob}
+            transport={transport}
+            expanded
+            id={`athena-pinned-${pinnedJob.id}`}
+          />
+        </div>
+      ) : null}
+
+      <ElicitationQueue organizationId={orgId} className="pb-2" />
 
       <Composer
         composerRef={composerRef}
@@ -444,182 +552,6 @@ export default function AthenaConversation({
       />
 
       <ConnectDialog orgId={orgId} open={connectOpen} onOpenChange={setConnectOpen} />
-    </div>
-  );
-}
-
-/** Props for {@link ThreadBody}. */
-interface ThreadBodyProps {
-  readonly orgId: string;
-  readonly query: UseQueryResult<AgentSessionDetailOut>;
-  readonly empty: ConversationEmptyState;
-  /** Rendered under the empty state, such as prompts to start from. */
-  readonly emptyExtra: React.ReactNode;
-  /** Posts a widget-composed `ui/message` into this thread, as the user. */
-  readonly onWidgetMessage: (text: string) => Promise<boolean>;
-  /** Reloads the thread after a proposal group settles. */
-  readonly onProposalsSettled: () => Promise<void>;
-}
-
-/**
- * The thread region: placeholder rows while the first read is in flight, the read's failure when
- * it has nothing to show, and otherwise the turns with a banner above them when a later refresh
- * failed.
- */
-function ThreadBody({
-  orgId,
-  query,
-  empty,
-  emptyExtra,
-  onWidgetMessage,
-  onProposalsSettled,
-}: ThreadBodyProps): JSX.Element {
-  const thread = query.data ?? null;
-  if (thread === null && query.isPending) {
-    // placeholder: the conversation's own history — how many turns exist, who said what, and how
-    // long each message is. The composer below it is interactive from the first paint.
-    return (
-      <div className="flex flex-col gap-3" aria-hidden="true">
-        <Skeleton className="h-10 w-2/3 rounded-xl" />
-        <Skeleton className="ml-auto h-10 w-1/2 rounded-xl" />
-        <Skeleton className="h-10 w-3/5 rounded-xl" />
-      </div>
-    );
-  }
-  if (thread === null && query.isError) {
-    return <QueryLoadFailure title="Conversation" query={query} size="panel" />;
-  }
-  const refreshFailed = query.isError ? (
-    <PartialLoadBanner
-      title="Could not refresh the conversation"
-      onRetry={() => void query.refetch()}
-    />
-  ) : null;
-  if (thread === null || thread.activities.length === 0) {
-    return (
-      <>
-        {refreshFailed}
-        <div className="flex flex-col gap-3">
-          <EmptyState icon={Sparkles} title={empty.title} body={empty.body} frame="none" />
-          {emptyExtra}
-        </div>
-      </>
-    );
-  }
-  return (
-    <>
-      {refreshFailed}
-      {thread.activities.map((activity) => (
-        <ChatEntry key={activity.id} activity={activity} onWidgetMessage={onWidgetMessage} />
-      ))}
-      {thread.status === 'awaiting_approval' ? (
-        <ChatProposals orgId={orgId} sessionId={thread.id} onSettled={onProposalsSettled} />
-      ) : null}
-    </>
-  );
-}
-
-/** Props for {@link ChatEntry}. */
-interface ChatEntryProps {
-  activity: SessionActivityOut;
-  /** Posts a widget-composed `ui/message` into this thread, as the user. */
-  onWidgetMessage: (text: string) => Promise<boolean>;
-}
-
-/** Read one nested object off an untrusted activity body. */
-function bodyRecord(value: unknown): Readonly<Record<string, unknown>> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : null;
-}
-
-/**
- * The plan a `plan_start` action opened, when the action was one and succeeded.
- *
- * @remarks
- * Athena's offer to plan on the canvas is the tool result itself: a durable card that links to the
- * plan route, so opening it is the yes and a reload finds it where it was.
- */
-function startedPlanFrom(
-  action: Readonly<Record<string, unknown>> | null,
-  result: Readonly<Record<string, unknown>> | null,
-): ReturnType<typeof parsePlanStart> {
-  if (action?.['kind'] !== PLAN_TOOL_NAMES.start || result?.['isError'] === true) return null;
-  return parsePlanStart(result?.['content']);
-}
-
-/** One conversational beat: user bubble, Athena text, quiet work chip, or question. */
-function ChatEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element | null {
-  const text = typeof activity.body['text'] === 'string' ? activity.body['text'] : '';
-  const fromUser = activity.body['author'] === 'user';
-
-  if (activity.type === 'response' && fromUser) {
-    return (
-      <div className="bg-primary text-on-primary text-body-medium ml-auto max-w-[85%] rounded-2xl rounded-br-sm px-4 py-2.5 whitespace-pre-wrap">
-        {text}
-      </div>
-    );
-  }
-  if (activity.type === 'response' || activity.type === 'elicitation') {
-    return (
-      <Surface
-        tone="canvas"
-        shape="medium"
-        className="text-body-medium mr-auto max-w-[85%] rounded-bl-sm px-4 py-2.5 whitespace-pre-wrap"
-      >
-        {text}
-      </Surface>
-    );
-  }
-  if (activity.type === 'error') {
-    return (
-      <Text token="body-medium" tone="error" className="mr-auto">
-        {text || 'Athena hit an error.'}
-      </Text>
-    );
-  }
-  if (activity.type === 'action') {
-    return <ActionEntry activity={activity} onWidgetMessage={onWidgetMessage} />;
-  }
-  // Thoughts stay out of the conversation — the work-log session view carries them.
-  return null;
-}
-
-/** The quiet work chip for one tool call, with whatever durable card the call produced. */
-function ActionEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element {
-  const action = bodyRecord(activity.body['action']);
-  const summary = action && typeof action['summary'] === 'string' ? action['summary'] : 'worked';
-  // The chip stays the quiet record of what Athena did; when the tool captured an interactive
-  // MCP app card, it renders full-width beneath the chip — the same durable presentation the
-  // workbench shows, revalidated here because the body is an untrusted bag of JSON.
-  const result = action ? bodyRecord(action['result']) : null;
-  const presentation = parseMcpAppPresentation(result?.['presentation']);
-  const presentationUnavailable =
-    result?.['presentationUnavailable'] === true ||
-    (result?.['presentation'] !== undefined && !presentation);
-  const startedPlan = startedPlanFrom(action, result);
-  return (
-    <div className="flex w-full flex-col gap-2">
-      <span
-        className={cn(
-          surfaceToneColor('canvas'),
-          'border-outline-variant text-on-surface-variant mr-auto inline-flex max-w-[85%] items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs',
-        )}
-      >
-        <span className="truncate">{summary}</span>
-      </span>
-      {startedPlan ? <PlanStartCard plan={startedPlan} /> : null}
-      {presentation ? (
-        <McpAppPresentationCard
-          presentation={presentation}
-          activityId={activity.id}
-          onMessage={onWidgetMessage}
-        />
-      ) : presentationUnavailable ? (
-        <p className="text-on-surface-variant text-body-small" data-testid="mcp-app-view-failure">
-          Interactive view unavailable.
-        </p>
-      ) : null}
     </div>
   );
 }

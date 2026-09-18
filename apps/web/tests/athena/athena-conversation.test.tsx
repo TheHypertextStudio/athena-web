@@ -2,16 +2,18 @@ import '@testing-library/jest-dom/vitest';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { okResponse } from '../support/query';
 
 /** A ULID-shaped workspace id, valid against `OrganizationId`'s Crockford-base32 pattern. */
 const ORG_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
-const { chatGet, personalPost } = vi.hoisted(() => ({
+const { chatGet, personalPost, elicitationsGet, presencePost } = vi.hoisted(() => ({
   chatGet: vi.fn(),
   personalPost: vi.fn(),
+  elicitationsGet: vi.fn(),
+  presencePost: vi.fn(),
 }));
 
 vi.mock('../../src/lib/api', () => ({
@@ -26,7 +28,10 @@ vi.mock('../../src/lib/api', () => ({
           },
         },
       },
-      me: { athena: { chat: { messages: { $post: personalPost } } } },
+      me: {
+        athena: { chat: { messages: { $post: personalPost } } },
+        elicitations: { $get: elicitationsGet, presence: { $post: presencePost } },
+      },
     },
   },
 }));
@@ -34,6 +39,8 @@ vi.mock('../../src/lib/api', () => ({
 import AthenaConversation, {
   type AthenaConversationProps,
 } from '../../src/components/athena/athena-conversation';
+import type { PersonalAthenaSessionSummary } from '../../src/lib/athena/presentation';
+import type { PersonalAthenaTransport } from '../../src/lib/athena/query-defs';
 
 // jsdom has no scrollIntoView; the component pins the latest turn with it on every append.
 Element.prototype.scrollIntoView = vi.fn();
@@ -101,6 +108,37 @@ function renderConversation(props: Partial<AthenaConversationProps> = {}) {
     </QueryClientProvider>,
   );
 }
+
+/** A job summary that renders as a card among the thread entries. */
+function job(overrides: Partial<PersonalAthenaSessionSummary> = {}): PersonalAthenaSessionSummary {
+  return {
+    id: 'job_1',
+    objective: 'Draft the launch update',
+    status: 'running',
+    queueState: 'working',
+    createdAt: '2026-08-30T10:01:00.000Z',
+    updatedAt: '2026-08-30T10:01:00.000Z',
+    ...overrides,
+  };
+}
+
+/** A transport whose only wired call is the detail read `AthenaJobCard` makes for its own card. */
+function jobTransport(detail: PersonalAthenaSessionSummary): PersonalAthenaTransport {
+  return {
+    pulse: vi.fn(),
+    queue: vi.fn(),
+    detail: vi.fn().mockResolvedValue(okResponse({ ...detail, activities: [] })),
+    activity: vi.fn(),
+    create: vi.fn(),
+    sendMessage: vi.fn(),
+    decide: vi.fn(),
+    lifecycle: vi.fn(),
+  };
+}
+
+beforeEach(() => {
+  elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
+});
 
 afterEach(() => {
   cleanup();
@@ -263,5 +301,40 @@ describe('AthenaConversation page context', () => {
     fireEvent.click(first);
     expect(screen.getByRole('combobox', { name: 'Message Athena' })).toHaveValue(first.textContent);
     expect(personalPost).not.toHaveBeenCalled();
+  });
+});
+
+describe('AthenaConversation delegated work', () => {
+  it('renders a job as a card among the thread entries and skips the empty state', async () => {
+    chatGet.mockResolvedValue(okResponse(thread([])));
+    const theJob = job();
+    renderConversation({ jobs: [theJob], transport: jobTransport(theJob) });
+
+    expect(await screen.findByRole('article', { name: /Draft the launch update/ })).toBeVisible();
+  });
+
+  it('keeps a job card in time order alongside the thread activities', async () => {
+    chatGet.mockResolvedValue(
+      okResponse(
+        thread([
+          {
+            id: 'activity_user',
+            sessionId: 'chat_session',
+            organizationId: null,
+            type: 'response',
+            body: { text: 'Plan my day', author: 'user' },
+            createdAt: '2026-08-30T10:02:00.000Z',
+          },
+        ]),
+      ),
+    );
+    const theJob = job({ createdAt: '2026-08-30T10:00:00.000Z' });
+    renderConversation({ jobs: [theJob], transport: jobTransport(theJob) });
+
+    const message = await screen.findByText('Plan my day');
+    const article = await screen.findByRole('article', { name: /Draft the launch update/ });
+    expect(
+      article.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

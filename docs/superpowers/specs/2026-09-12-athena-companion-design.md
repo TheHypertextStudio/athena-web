@@ -219,7 +219,9 @@ session.
 `/athena` is the same thread at full width, in two columns from `@3xl`: the conversation browser
 (topics, search, date range) and the **Work ledger** on the left, the thread and composer on the
 right. Connecting a tool or app moves to the composer's attach menu and to Settings › Connections;
-it leaves the thread column.
+it leaves the thread column. In the delivered left column the connections panel sits under the
+Work ledger, beneath the conversation browser — the same left-hand rail the browser and ledger
+already share, rather than a fourth surface of its own.
 
 The Work ledger answers "what has Athena done for me?" without reinstating the queue as the front
 door. It lists every job with three filters: Running, Needs you, Done. Done sorts newest first and

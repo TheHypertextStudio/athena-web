@@ -141,18 +141,8 @@
   "apps/web/src/components/athena/athena-conversation-browser.tsx": {
     "raw-radius-utility": 1
   },
-  "apps/web/src/components/athena/athena-conversation.tsx": {
-    "ad-hoc-border": 2,
-    "raw-radius-utility": 3,
-    "raw-type-utility": 1
-  },
-  "apps/web/src/components/athena/athena-workbench.tsx": {
-    "ad-hoc-border": 18,
-    "raw-type-utility": 26
-  },
   "apps/web/src/components/athena/athena-workspace.tsx": {
-    "ad-hoc-border": 21,
-    "raw-type-utility": 30
+    "ad-hoc-border": 10
   },
   "apps/web/src/components/athena/elicitation-control.tsx": {
     "ad-hoc-border": 3

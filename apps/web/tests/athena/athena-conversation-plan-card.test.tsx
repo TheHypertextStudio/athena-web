@@ -6,7 +6,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { okResponse } from '../support/query';
 
-const { chatGet } = vi.hoisted(() => ({ chatGet: vi.fn() }));
+const { chatGet, elicitationsGet, presencePost } = vi.hoisted(() => ({
+  chatGet: vi.fn(),
+  elicitationsGet: vi
+    .fn()
+    .mockResolvedValue({ ok: true, status: 200, json: async () => ({ items: [] }) }),
+  presencePost: vi.fn(),
+}));
 
 vi.mock('../../src/lib/api', () => ({
   api: {
@@ -15,6 +21,9 @@ vi.mock('../../src/lib/api', () => ({
         ':orgId': {
           sessions: { chat: { $get: chatGet, messages: { $post: vi.fn() } } },
         },
+      },
+      me: {
+        elicitations: { $get: elicitationsGet, presence: { $post: presencePost } },
       },
     },
   },

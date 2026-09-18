@@ -98,7 +98,7 @@ describe('PageContextProvider', () => {
     });
   });
 
-  it('keeps the source when only its label changes', () => {
+  it('carries a label that arrives after the page mounts', () => {
     const onRender = vi.fn();
     function RecordingReadout(): JSX.Element {
       const context = usePageContext();
@@ -134,5 +134,42 @@ describe('PageContextProvider', () => {
         ([context]) => context !== null && Boolean((context as { source?: unknown }).source),
       ),
     ).toBe(true);
+  });
+
+  it('keeps a drawer active while the page under it changes its label', () => {
+    const view = render(
+      <PageContextProvider workspace={{ workspaceId: 'ws_1' }}>
+        <PageSource type="task" id="task_1" />
+        <PageSource type="calendar_item" id="cal_1" label="Venue walkthrough" />
+        <Readout />
+      </PageContextProvider>,
+    );
+    expect(readContext()).toEqual({
+      workspaceId: 'ws_1',
+      source: { type: 'calendar_item', id: 'cal_1', label: 'Venue walkthrough' },
+    });
+
+    view.rerender(
+      <PageContextProvider workspace={{ workspaceId: 'ws_1' }}>
+        <PageSource type="task" id="task_1" label="Confirm venue contract" />
+        <PageSource type="calendar_item" id="cal_1" label="Venue walkthrough" />
+        <Readout />
+      </PageContextProvider>,
+    );
+    expect(readContext()).toEqual({
+      workspaceId: 'ws_1',
+      source: { type: 'calendar_item', id: 'cal_1', label: 'Venue walkthrough' },
+    });
+
+    view.rerender(
+      <PageContextProvider workspace={{ workspaceId: 'ws_1' }}>
+        <PageSource type="task" id="task_1" label="Confirm venue contract" />
+        <Readout />
+      </PageContextProvider>,
+    );
+    expect(readContext()).toEqual({
+      workspaceId: 'ws_1',
+      source: { type: 'task', id: 'task_1', label: 'Confirm venue contract' },
+    });
   });
 });

@@ -133,8 +133,8 @@ person is looking at. Rejected.
 ### 4.2 Panel anatomy, top to bottom
 
 1. **Header.** The Athena name with the Sparkles glyph, a `Talk` control (voice is a mode of the
-   thread, same as Today), and an icon-only "Open wide" link to `/athena`. No Back button, no
-   counts, no lifecycle buttons.
+   thread, same as Today), and an icon-only "Open the Athena page" link to `/athena`. No Back
+   button, no counts, no lifecycle buttons.
 2. **Working strip.** Present only when at least one job is running or waiting. A collapsible
    list of rows: objective, one-line status ("Reading 14 tasks in Launch plan"), and a state dot.
    A row that needs the person shows the decision inline (approve / reject / answer) when it fits,
@@ -274,7 +274,7 @@ Objective: ⌘J opens a conversation.
 - Build `AthenaComposer` and `AthenaThread` (entry renderers extracted from
   `athena-conversation.tsx`, with the personal thread as the source).
 - Replace `AthenaRailPanel`'s body with header + thread + composer. Delete the queue view and
-  the launch composer. Replace "Open full" with the icon-only "Open wide".
+  the launch composer. Replace "Open full" with the icon-only "Open the Athena page" link.
 - Page-aware suggestions on an empty thread.
 - Move Athena to the first rail slot; derive `RailPanelStatus` from the thread.
 - Point Today's expanded session at the personal thread and the shared composer.

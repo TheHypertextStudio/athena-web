@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -14,7 +15,12 @@ import { PlanRailConversation } from '../../src/components/plan-canvas/plan-conv
 
 describe('PlanRailConversation', () => {
   it('carries the mark, a way to the full page, and the thread seeded with the launch draft', () => {
-    render(<PlanRailConversation orgId="org_1" />);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <PlanRailConversation orgId="org_1" />
+      </QueryClientProvider>,
+    );
     expect(screen.getByRole('link', { name: 'Open the Athena page' })).toHaveAttribute(
       'href',
       expect.stringContaining('org_1'),

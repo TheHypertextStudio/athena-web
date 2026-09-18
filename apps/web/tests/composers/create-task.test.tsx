@@ -17,7 +17,7 @@
  */
 import { OrganizationId, TeamId } from '@docket/identity-access/ids';
 import { type TeamOut } from '../../src/lib/contracts/team';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { type JSX, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -109,6 +109,7 @@ import { CreateTaskDialog, GlobalTaskComposer } from '../../src/components/tasks
 import { UserFacingError } from '../../src/lib/problem';
 import { queryKeys } from '../../src/lib/query';
 import { firstJson, jsonResponse, statusMessages } from '../support/http';
+import { seededQueryClient } from '../support/seeded-query-client';
 
 // Branded ids (ActorId / ProjectId / TeamId / LabelId) are ULIDs, so the composer's `*.parse(...)`
 // guards only accept the canonical 26-char Crockford-base32 shape. Use valid ULIDs throughout.
@@ -262,11 +263,8 @@ afterEach(() => {
 function renderComposer(overrides: Partial<Parameters<typeof CreateTaskDialog>[0]> = {}) {
   const onCreated = vi.fn();
   const onOpenChange = vi.fn();
-  // The composer reads its option rosters through the shared useApiQuery layer, so it must run
-  // under a QueryClientProvider (as it does in the app via providers.tsx). Retry-free for tests.
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
+  // The composer reads its option rosters through useApiQuery, so it needs a QueryClientProvider.
+  const client = seededQueryClient();
   render(
     <QueryClientProvider client={client}>
       <CreateTaskDialog
@@ -320,9 +318,7 @@ function renderGlobalTask({
   delayedOpening = false,
   destination = {},
 }: GlobalTaskHarnessProps = {}) {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
+  const client = seededQueryClient();
   const closeCreate = vi.fn();
   const onCreated = vi.fn();
   const requestedInitialWorkspaceId =
@@ -418,9 +414,7 @@ function renderGlobalTask({
 
 /** Render the real dialog while an initially-null shell workspace resolves to its opening org. */
 function renderDelayedOpeningTaskDefaults() {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
+  const client = seededQueryClient();
 
   function Harness(): JSX.Element {
     const [resolved, setResolved] = useState(false);

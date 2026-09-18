@@ -46,6 +46,9 @@ const {
 vi.mock('../../src/lib/api', () => ({
   api: {
     v1: {
+      // A composer opening reads the resume preference and the drafts list; neither has anything.
+      hub: { preferences: { $get: () => Promise.resolve(Response.json({})) } },
+      me: { drafts: { $get: () => Promise.resolve(Response.json({ items: [] })) } },
       orgs: {
         ':orgId': {
           programs: { $post: programPost },
@@ -81,6 +84,7 @@ import {
   GlobalProgramComposer,
 } from '../../src/components/programs/create-program';
 import { firstJson, jsonResponse, statusMessages } from '../support/http';
+import { seededQueryClient } from '../support/seeded-query-client';
 import { choosePickerOption } from '../support/pickers';
 
 const ORG_ID = '0RG00000000000000000000001';
@@ -145,7 +149,7 @@ afterEach(() => {
 function renderComposer() {
   const onCreated = vi.fn();
   const onOpenChange = vi.fn();
-  const client = new QueryClient({
+  const client = seededQueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   render(
@@ -170,7 +174,7 @@ function renderGlobalProgram({
   readonly request?: Record<string, unknown>;
   readonly destination?: ProgramDestinationOverrides;
 } = {}) {
-  const client = new QueryClient({
+  const client = seededQueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const closeCreate = vi.fn();

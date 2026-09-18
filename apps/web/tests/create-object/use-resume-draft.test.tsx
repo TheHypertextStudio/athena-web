@@ -1,11 +1,14 @@
 /**
  * Which draft a global composer reopens: the launcher's choice, the pointer a navigation left, or,
  * with the preference on, the newest draft of that kind in the destination workspace. The answer
- * is decided once per open, and the host waits for the drafts list only when a resume is possible.
+ * is decided once per open, the preference is waited for rather than read as off while it loads,
+ * and the host waits for the drafts list only when a resume is possible.
  */
 import type { ComposerDraftOut } from '@docket/work/composer-draft-contract';
 import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { deferred } from '../support/deferred';
 
 const { preferencesGet, draftsGet } = vi.hoisted(() => ({
   preferencesGet: vi.fn(),
@@ -54,15 +57,10 @@ function serve(resumeDrafts: boolean, items: readonly ComposerDraftOut[]): void 
   draftsGet.mockResolvedValue(jsonResponse(true, { items }));
 }
 
-/** Render the hook with the preference read already in the cache, as the app has by open time. */
-function renderResume(
-  kind: 'task' | 'project',
-  requestDraftId: string | null,
-  orgId: string | null,
-  ready = true,
-) {
+/** Render the hook against a cold cache, as the first composer open after a page load is. */
+function renderResume(requestDraftId: string | null = null) {
   const { wrapper } = makeQueryWrapper();
-  return renderHook(() => useResumeDraft(kind, requestDraftId, orgId, ready), { wrapper });
+  return renderHook(() => useResumeDraft('task', requestDraftId, ORG_ID, true), { wrapper });
 }
 
 beforeEach(() => {
@@ -74,22 +72,45 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('useResumeDraft', () => {
-  it('opens empty and never waits for the drafts list when the preference is off', async () => {
-    serve(false, [draft('draft_a', 'task')]);
-    const { result } = renderResume('task', null, ORG_ID);
+  it('opens empty without waiting for the drafts list when the preference is off', async () => {
+    const list = deferred<Response>();
+    preferencesGet.mockResolvedValue(jsonResponse(true, {}));
+    draftsGet.mockReturnValue(list.promise);
+    const { result } = renderResume();
 
-    expect(result.current).toEqual({ draftId: null, ready: true });
-    // Give both reads time to land; the answer must not change.
+    // Ready as soon as the preference says off, while the drafts list is still in flight.
+    await waitFor(() => {
+      expect(result.current).toEqual({ draftId: null, ready: true });
+    });
+    list.resolve(jsonResponse(true, { items: [draft('draft_a', 'task')] }));
     await waitFor(() => {
       expect(draftsGet).toHaveBeenCalled();
     });
     expect(result.current).toEqual({ draftId: null, ready: true });
   });
 
+  it('waits for a preference still loading instead of reading it as off', async () => {
+    const preference = deferred<Response>();
+    preferencesGet.mockReturnValue(preference.promise);
+    draftsGet.mockResolvedValue(jsonResponse(true, { items: [draft('draft_newest', 'task')] }));
+    const { result } = renderResume();
+
+    // Held: not ready, and no draft chosen, while the preference is unknown.
+    await waitFor(() => {
+      expect(preferencesGet).toHaveBeenCalled();
+    });
+    expect(result.current).toEqual({ draftId: null, ready: false });
+
+    preference.resolve(jsonResponse(true, { composer: { resumeDrafts: true } }));
+    await waitFor(() => {
+      expect(result.current).toEqual({ draftId: 'draft_newest', ready: true });
+    });
+  });
+
   it('honours the launcher’s draft over everything else, once the list has settled', async () => {
     serve(true, [draft('draft_new', 'task')]);
     writeInterruptedDraft('task', 'draft_pointer');
-    const { result } = renderResume('task', 'draft_requested', ORG_ID);
+    const { result } = renderResume('draft_requested');
 
     expect(result.current.draftId).toBe('draft_requested');
     await waitFor(() => {
@@ -98,15 +119,15 @@ describe('useResumeDraft', () => {
     expect(result.current.draftId).toBe('draft_requested');
   });
 
-  it('reopens the draft a navigation interrupted, and only once', async () => {
+  it('reopens the draft a navigation interrupted, and only once', () => {
     serve(false, []);
     writeInterruptedDraft('task', 'draft_pointer');
-    const first = renderResume('task', null, ORG_ID);
+    const first = renderResume();
 
     expect(first.result.current.draftId).toBe('draft_pointer');
     first.unmount();
 
-    const second = renderResume('task', null, ORG_ID);
+    const second = renderResume();
     expect(second.result.current.draftId).toBeNull();
   });
 
@@ -117,17 +138,8 @@ describe('useResumeDraft', () => {
       draft('draft_newest', 'task'),
       draft('draft_older', 'task'),
     ]);
-    // The preference resolves to off until it has loaded, so prime it as the shell already has.
-    const { wrapper } = makeQueryWrapper();
-    const warm = renderHook(() => useResumeDraft('task', null, ORG_ID, true), { wrapper });
-    await waitFor(() => {
-      expect(preferencesGet).toHaveBeenCalled();
-    });
-    warm.unmount();
+    const { result } = renderResume();
 
-    const { result } = renderHook(() => useResumeDraft('task', null, ORG_ID, true), { wrapper });
-
-    // Not ready while the list settles, so the composer never mounts blank and then jumps.
     await waitFor(() => {
       expect(result.current).toEqual({ draftId: 'draft_newest', ready: true });
     });
@@ -135,18 +147,21 @@ describe('useResumeDraft', () => {
 
   it('opens empty when the preference is on but there is nothing of this kind to resume', async () => {
     serve(true, [draft('draft_project', 'project')]);
-    const { wrapper } = makeQueryWrapper();
-    const warm = renderHook(() => useResumeDraft('task', null, ORG_ID, true), { wrapper });
-    await waitFor(() => {
-      expect(preferencesGet).toHaveBeenCalled();
-    });
-    warm.unmount();
-
-    const { result } = renderHook(() => useResumeDraft('task', null, ORG_ID, true), { wrapper });
+    const { result } = renderResume();
 
     await waitFor(() => {
       expect(result.current.ready).toBe(true);
     });
     expect(result.current.draftId).toBeNull();
+  });
+
+  it('treats a preference that failed to load as off', async () => {
+    preferencesGet.mockRejectedValue(new Error('offline'));
+    draftsGet.mockResolvedValue(jsonResponse(true, { items: [draft('draft_a', 'task')] }));
+    const { result } = renderResume();
+
+    await waitFor(() => {
+      expect(result.current).toEqual({ draftId: null, ready: true });
+    });
   });
 });

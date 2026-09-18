@@ -7,19 +7,23 @@
  * Three things can name a draft to reopen, in this order: the launcher (the Drafts page opens a
  * composer on a chosen draft), the pointer a navigation-interrupted composer left in this tab,
  * and the resume-drafts preference, which reopens the newest draft of that kind in the destination
- * workspace. The answer is frozen on mount: a draft the composer goes on to save must not become
- * "the newest draft" and be reopened over itself.
+ * workspace. The answer is decided once and held: a draft the composer goes on to save must not
+ * become "the newest draft" and be reopened over itself.
  *
- * When a resume is possible the host is not ready until the drafts list has settled, so the
- * composer mounts holding the draft rather than mounting empty and then jumping. When no resume
- * is possible the list is not waited for.
+ * The preference is waited for rather than read as "off" while it loads, so someone who turned
+ * resuming on gets their draft every time and not only when the preference happened to be cached.
+ * Once it is known, a resume waits for the drafts list too, so the composer mounts holding the
+ * draft rather than mounting empty and then jumping; with no resume the list is not waited for.
  */
 import type { ComposerDraftKind, ComposerDraftListOut } from '@docket/work/composer-draft-contract';
 import { useEffect, useState } from 'react';
 
-import { useComposerDrafts, useResumeDraftsPreference } from '@/lib/drafts/defs';
+import { useComposerDrafts, useResumeDraftsPreferenceState } from '@/lib/drafts/defs';
 
 import { readInterruptedDraft } from './interrupted-draft';
+
+/** How long a composer waits for the resume preference before opening as if it were off. */
+export const PREFERENCE_WAIT_MS = 1_500;
 
 /** What the host passes on to the composer. */
 export interface ResumeDraft {
@@ -54,14 +58,35 @@ export function useResumeDraft(
   orgId: string | null,
   ready: boolean,
 ): ResumeDraft {
-  const resumeDrafts = useResumeDraftsPreference();
+  const preference = useResumeDraftsPreferenceState();
   const drafts = useComposerDrafts();
-  // Both decided on mount. The pointer is read as it stands when the composer opens; so is the
-  // preference, which resolves to off until it has loaded.
+  // The launcher's choice and the interrupted pointer are read as they stand when the composer
+  // opens. The preference is decided the first time it is known, and then held: waiting for it
+  // beats reading "off" from a preference that simply had not arrived.
   const [explicit] = useState(() => requestDraftId ?? readInterruptedDraft(kind));
-  const [wantsNewest] = useState(() => explicit === null && resumeDrafts);
+  const [wantsNewest, setWantsNewest] = useState<boolean | undefined>(
+    explicit === null ? undefined : false,
+  );
   const settled = drafts.isSuccess || drafts.isError;
   const [newest, setNewest] = useState<string | null | undefined>(undefined);
+  const [gaveUp, setGaveUp] = useState(false);
+
+  // Creating something must never hang on a preference: a read that keeps failing is retried for
+  // longer than anyone will wait, so after a beat the composer opens as if resuming were off.
+  useEffect(() => {
+    if (wantsNewest !== undefined) return;
+    const timer = setTimeout(() => {
+      setGaveUp(true);
+    }, PREFERENCE_WAIT_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [wantsNewest]);
+
+  useEffect(() => {
+    if (wantsNewest !== undefined || !(preference.settled || gaveUp)) return;
+    setWantsNewest(preference.enabled);
+  }, [gaveUp, preference.enabled, preference.settled, wantsNewest]);
 
   useEffect(() => {
     if (!wantsNewest || newest !== undefined || !settled || orgId === null) return;
@@ -69,6 +94,7 @@ export function useResumeDraft(
   }, [drafts.data, kind, newest, orgId, settled, wantsNewest]);
 
   if (explicit !== null) return { draftId: explicit, ready: ready && settled };
+  if (wantsNewest === undefined) return { draftId: null, ready: false };
   if (wantsNewest) return { draftId: newest ?? null, ready: ready && newest !== undefined };
   return { draftId: null, ready };
 }

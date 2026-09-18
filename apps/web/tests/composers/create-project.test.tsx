@@ -17,7 +17,7 @@
 import { assertDefined } from '@docket/test-utils';
 import { OrganizationId, TeamId } from '@docket/identity-access/ids';
 import { type TeamOut } from '../../src/lib/contracts/team';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { type JSX, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -96,6 +96,7 @@ import {
 } from '../../src/components/projects/create-project';
 import { queryKeys } from '../../src/lib/query';
 import { firstJson, jsonResponse, statusMessages } from '../support/http';
+import { seededQueryClient } from '../support/seeded-query-client';
 
 // Valid ULID-shaped ids (no I/L/O/U) so the composer's `*.parse(...)` guards accept them.
 const ORG_ID = '0RG00000000000000000000001';
@@ -268,7 +269,7 @@ function renderComposer(onCreated = vi.fn()) {
   const onOpenChange = vi.fn();
   // The composer reads its option rosters through the shared useApiQuery layer, so it must run
   // under a QueryClientProvider (as it does in the app via providers.tsx). Retry-free for tests.
-  const client = new QueryClient({
+  const client = seededQueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   render(
@@ -317,7 +318,7 @@ function renderGlobalProject({
   readonly delayedOpening?: boolean;
   readonly destination?: ProjectDestinationOverrides;
 } = {}) {
-  const client = new QueryClient({
+  const client = seededQueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const closeCreate = vi.fn();
@@ -416,7 +417,7 @@ function renderGlobalProject({
 
 /** Resolve a provider-delayed opening workspace without changing the intended destination. */
 function renderDelayedOpeningProject() {
-  const client = new QueryClient({
+  const client = seededQueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
 

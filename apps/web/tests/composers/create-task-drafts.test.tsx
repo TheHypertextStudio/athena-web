@@ -7,7 +7,7 @@
  */
 import type { ComposerDraftOut, ComposerDraftPayload } from '@docket/work/composer-draft-contract';
 import { OrganizationId, TeamId } from '@docket/identity-access/ids';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -86,6 +86,7 @@ vi.mock('../../src/lib/api', () => ({
 
 import { CreateTaskDialog } from '../../src/components/tasks/create-task';
 import { firstJson, jsonResponse } from '../support/http';
+import { seededQueryClient } from '../support/seeded-query-client';
 
 const ORG_ID = '0RG00000000000000000000001';
 const TEAM_ID = 'TEAM0000000000000000000002';
@@ -188,7 +189,7 @@ afterEach(() => {
 /** Render the composer open in one workspace with one implicit team. */
 function renderComposer(overrides: Partial<Parameters<typeof CreateTaskDialog>[0]> = {}) {
   const onOpenChange = vi.fn();
-  const client = new QueryClient({
+  const client = seededQueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   render(

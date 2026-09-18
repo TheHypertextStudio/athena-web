@@ -1,5 +1,5 @@
 /** Behavior tests for legacy and shell-global Team creation. */
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { type JSX, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +18,9 @@ const { teamPost, creationState, createObjectState, routerPush } = vi.hoisted(()
 vi.mock('../../src/lib/api', () => ({
   api: {
     v1: {
+      // A composer opening reads the resume preference and the drafts list; neither has anything.
+      hub: { preferences: { $get: () => Promise.resolve(Response.json({})) } },
+      me: { drafts: { $get: () => Promise.resolve(Response.json({ items: [] })) } },
       orgs: {
         ':orgId': {
           teams: { $post: teamPost },
@@ -42,6 +45,7 @@ vi.mock('next/navigation', () => ({
 import { GlobalTeamComposer } from '../../src/components/teams/create-team';
 import { queryKeys } from '../../src/lib/query';
 import { firstJson, jsonResponse, statusMessages } from '../support/http';
+import { seededQueryClient } from '../support/seeded-query-client';
 
 const ORG_ID = '0RG00000000000000000000001';
 const TARGET_ORG_ID = '0RG00000000000000000000002';
@@ -87,7 +91,7 @@ function renderGlobalTeam({
 }: {
   readonly destination?: TeamDestinationOverrides;
 } = {}) {
-  const client = new QueryClient({
+  const client = seededQueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const closeCreate = vi.fn();

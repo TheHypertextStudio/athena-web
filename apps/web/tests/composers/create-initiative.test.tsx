@@ -1,5 +1,5 @@
 /** Behavior tests for legacy and shell-global Initiative creation. */
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { type JSX, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -35,6 +35,9 @@ const {
 vi.mock('../../src/lib/api', () => ({
   api: {
     v1: {
+      // A composer opening reads the resume preference and the drafts list; neither has anything.
+      hub: { preferences: { $get: () => Promise.resolve(Response.json({})) } },
+      me: { drafts: { $get: () => Promise.resolve(Response.json({ items: [] })) } },
       orgs: {
         ':orgId': {
           initiatives: { $post: initiativePost },
@@ -68,6 +71,7 @@ vi.mock('../../src/lib/work-target-invalidation', () => ({ invalidateWorkTargetQ
 
 import { GlobalInitiativeComposer } from '../../src/components/initiatives/create-initiative';
 import { firstJson, jsonResponse, statusMessages } from '../support/http';
+import { seededQueryClient } from '../support/seeded-query-client';
 
 const ORG_ID = '0RG00000000000000000000001';
 const OWNER_ID = 'ADA00000000000000000000002';
@@ -142,7 +146,7 @@ function renderGlobalInitiative({
   readonly request?: Record<string, unknown>;
   readonly destination?: InitiativeDestinationOverrides;
 } = {}) {
-  const client = new QueryClient({
+  const client = seededQueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const closeCreate = vi.fn();

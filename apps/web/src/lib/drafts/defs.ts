@@ -33,22 +33,46 @@ import { queryKeys, useApiListQuery, useLiveApiQuery } from '@/lib/query';
 /** How often the preference read refreshes while a subscribed surface is on screen. */
 const HUB_PREFERENCES_POLL_MS = 15_000;
 
+/** The resume-drafts preference, and whether it has been read yet. */
+export interface ResumeDraftsPreference {
+  /** `true` only when the preference is stored as `true`. */
+  readonly enabled: boolean;
+  /** Whether the read has finished, successfully or not; a failed read counts as off. */
+  readonly settled: boolean;
+}
+
 /**
- * Whether opening a create composer should reopen the newest pending draft of that kind.
+ * The resume-drafts preference together with whether it is known yet.
  *
- * @returns `true` only when the preference is stored as `true`; absent, loading, or failed reads
- * resolve to `false`, so the composer opens empty until the preference is known.
+ * @remarks
+ * A composer decides what to reopen once, as it opens. Reading "off" because the preference had
+ * not arrived would open a blank composer for someone who turned resuming on, and only sometimes,
+ * so callers that decide once wait for `settled`.
  */
-export function useResumeDraftsPreference(): boolean {
+export function useResumeDraftsPreferenceState(enabled = true): ResumeDraftsPreference {
   const preferencesQ = useLiveApiQuery(
     apiQueryOptions(
       queryKeys.hubPreferences(),
       () => api.v1.hub.preferences.$get(),
       'Could not load your preferences.',
+      { enabled },
     ),
     HUB_PREFERENCES_POLL_MS,
   );
-  return preferencesQ.data?.composer?.resumeDrafts === true;
+  return {
+    enabled: preferencesQ.data?.composer?.resumeDrafts === true,
+    settled: preferencesQ.isSuccess || preferencesQ.isError,
+  };
+}
+
+/**
+ * Whether opening a create composer should reopen the newest pending draft of that kind.
+ *
+ * @returns `true` only when the preference is stored as `true`; absent, loading, or failed reads
+ * resolve to `false`.
+ */
+export function useResumeDraftsPreference(): boolean {
+  return useResumeDraftsPreferenceState().enabled;
 }
 
 /**
@@ -70,8 +94,15 @@ export function useComposerDrafts(enabled = true): UseQueryResult<ComposerDraftL
   return useApiListQuery(draftsDef(enabled));
 }
 
-/** How many drafts the person can return to; zero until the list has loaded. */
+/**
+ * How many drafts the person can return to; zero until the list has loaded.
+ *
+ * @remarks
+ * Called by the app shell for the sidebar's Drafts entry. It also keeps the resume preference
+ * warm, so a composer opened later finds it cached and never waits on it.
+ */
 export function useDraftCount(enabled = true): number {
+  useResumeDraftsPreferenceState(enabled);
   return useComposerDrafts(enabled).data?.items.length ?? 0;
 }
 

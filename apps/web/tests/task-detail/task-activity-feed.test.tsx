@@ -4,8 +4,17 @@ import '@testing-library/jest-dom/vitest';
 import { ActorId } from '@docket/identity-access/ids';
 import { TaskId } from '@docket/work/ids';
 import { type TaskActivityOut } from '@docket/connections/activity-contract';
+import {
+  AthenaOverviewOut,
+  AthenaPulseOut,
+  AthenaSessionDetailOut,
+} from '@docket/athena/agent-contract';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { okResponse } from '../support/query';
 
 import type * as QueryModule from '../../src/lib/query';
 
@@ -59,10 +68,44 @@ vi.mock('../../src/lib/query', async (importOriginal) => {
   };
 });
 
+const athenaQueueGet = vi.hoisted(() => vi.fn());
+const athenaSessionGet = vi.hoisted(() => vi.fn());
+const athenaPulseGet = vi.hoisted(() => vi.fn());
+
+// The Athena block reads the default personal transport directly (`TaskActivityFeed` takes no
+// transport override), so the personal Athena queue/detail/pulse endpoints are mocked at the API
+// client boundary rather than swapped through a prop, the same technique
+// `athena-mcp-panel.test.tsx` uses.
+vi.mock('../../src/lib/api', () => ({
+  api: {
+    v1: {
+      me: {
+        athena: {
+          $get: athenaQueueGet,
+          pulse: { $get: athenaPulseGet },
+          sessions: { ':id': { $get: athenaSessionGet } },
+        },
+      },
+    },
+  },
+}));
+
 const { TaskActivityFeed } = await import('../../src/components/task-detail/task-activity-feed');
 
 const ORG_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAW';
 const TASK_ID = TaskId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV');
+const OTHER_TASK_ID = TaskId.parse('01ARZ3NDEKTSV4RRFFQ69G5FA0');
+const MATCHING_JOB_ID = '01J00000000000000000000001';
+const OTHER_JOB_ID = '01J00000000000000000000002';
+const MATCHING_OBJECTIVE = 'Draft the renewal follow-up email';
+const OTHER_OBJECTIVE = 'Update the roadmap timeline';
+
+const EMPTY_ATHENA_OVERVIEW = AthenaOverviewOut.parse({
+  counts: { needsYou: 0, working: 0, finished: 0 },
+  currentChat: null,
+  sessions: { needsYou: [], working: [], finished: [] },
+});
+const EMPTY_ATHENA_PULSE = AthenaPulseOut.parse({ needsYou: 0, working: 0 });
 
 function entry(overrides: Partial<TaskActivityOut> = {}): TaskActivityOut {
   return {
@@ -81,8 +124,14 @@ function entry(overrides: Partial<TaskActivityOut> = {}): TaskActivityOut {
   };
 }
 
+/** Render under a fresh, retry-free `QueryClient` — the Athena block drives a real live query. */
+function renderWithProviders(ui: ReactElement): ReturnType<typeof render> {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
+
 function renderFeed(): void {
-  render(<TaskActivityFeed orgId={ORG_ID} taskId={TASK_ID} />);
+  renderWithProviders(<TaskActivityFeed orgId={ORG_ID} taskId={TASK_ID} />);
 }
 
 beforeEach(() => {
@@ -94,6 +143,10 @@ beforeEach(() => {
   queryState.isFetchingNextPage = false;
   queryState.isFetchNextPageError = false;
   queryState.fetchNextPage.mockReset();
+
+  athenaQueueGet.mockReset().mockResolvedValue(okResponse(EMPTY_ATHENA_OVERVIEW));
+  athenaSessionGet.mockReset();
+  athenaPulseGet.mockReset().mockResolvedValue(okResponse(EMPTY_ATHENA_PULSE));
 });
 afterEach(cleanup);
 
@@ -151,11 +204,20 @@ describe('TaskActivityFeed', () => {
       };
     });
 
-    const { rerender } = render(<TaskActivityFeed orgId={ORG_ID} taskId={TASK_ID} />);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { rerender } = render(
+      <QueryClientProvider client={client}>
+        <TaskActivityFeed orgId={ORG_ID} taskId={TASK_ID} />
+      </QueryClientProvider>,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Load newer activity' }));
     expect(queryState.fetchNextPage).toHaveBeenCalledOnce();
 
-    rerender(<TaskActivityFeed orgId={ORG_ID} taskId={TASK_ID} />);
+    rerender(
+      <QueryClientProvider client={client}>
+        <TaskActivityFeed orgId={ORG_ID} taskId={TASK_ID} />
+      </QueryClientProvider>,
+    );
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
     expect(screen.getByText(/changed Priority from Low to High/)).toBeInTheDocument();
   });
@@ -172,5 +234,44 @@ describe('TaskActivityFeed', () => {
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getAllByRole('listitem').length).toBeGreaterThan(0);
     expect(screen.queryByText('upstream cursor failure')).not.toBeInTheDocument();
+  });
+
+  it("shows this task's delegated Athena work, and not another task's", async () => {
+    const matchingSummary = {
+      id: MATCHING_JOB_ID,
+      kind: 'job' as const,
+      status: 'completed' as const,
+      queueState: 'finished' as const,
+      objective: MATCHING_OBJECTIVE,
+      context: { source: { type: 'task' as const, id: TASK_ID, label: 'This task' } },
+      workspace: null,
+      startedAt: '2026-08-24T10:00:00.000Z',
+      endedAt: '2026-08-24T10:05:00.000Z',
+      createdAt: '2026-08-24T10:00:00.000Z',
+    };
+    const otherSummary = {
+      ...matchingSummary,
+      id: OTHER_JOB_ID,
+      objective: OTHER_OBJECTIVE,
+      context: { source: { type: 'task' as const, id: OTHER_TASK_ID, label: 'Another task' } },
+    };
+    athenaQueueGet.mockResolvedValue(
+      okResponse(
+        AthenaOverviewOut.parse({
+          counts: { needsYou: 0, working: 0, finished: 2 },
+          currentChat: null,
+          sessions: { needsYou: [], working: [], finished: [matchingSummary, otherSummary] },
+        }),
+      ),
+    );
+    athenaSessionGet.mockResolvedValue(
+      okResponse(AthenaSessionDetailOut.parse({ ...matchingSummary, activities: [] })),
+    );
+
+    renderFeed();
+
+    expect(await screen.findByRole('article', { name: MATCHING_OBJECTIVE })).toBeInTheDocument();
+    expect(screen.queryByRole('article', { name: OTHER_OBJECTIVE })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('article')).toHaveLength(1);
   });
 });

@@ -17,18 +17,59 @@ import {
 import type { JSX } from 'react';
 import { useMemo, useState } from 'react';
 
+import { AthenaJobCard } from '@/components/athena/athena-job-card';
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
 import { QueryLoadFailure } from '@/components/feedback';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { relativeTime } from '@/components/project-detail/format-time';
 import { api } from '@/lib/api';
-import { apiInfiniteQueryOptions, queryKeys, useInfiniteApiQuery } from '@/lib/query';
+import { jobsFromQueue } from '@/lib/athena/job-presentation';
+import type { PersonalAthenaSessionSummary } from '@/lib/athena/presentation';
+import { personalAthenaQueueDef, type PersonalAthenaQueuePayload } from '@/lib/athena/query-defs';
+import {
+  apiInfiniteQueryOptions,
+  queryKeys,
+  useInfiniteApiQuery,
+  useLiveApiQuery,
+} from '@/lib/query';
 
 import { activityActorName, activitySentence } from './format-activity';
 import { TaskSection } from './task-section';
 
 const ALL_CATEGORIES = 'all';
 type ActivityFilter = TaskActivityCategory | typeof ALL_CATEGORIES;
+
+/** How often the task page re-reads the personal queue for delegated work on this task. */
+const TASK_ATHENA_QUEUE_INTERVAL_MS = 10_000;
+
+/** This task's delegated Athena work, newest first. */
+function jobsForTask(
+  payload: PersonalAthenaQueuePayload,
+  taskId: string,
+): readonly PersonalAthenaSessionSummary[] {
+  const matching = jobsFromQueue(payload).filter(
+    (job) => job.context?.source?.type === 'task' && job.context.source.id === taskId,
+  );
+  return [...matching].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** The task's delegated Athena work, newest first; renders nothing when there is none. */
+function TaskAthenaWork({ taskId }: { readonly taskId: string }): JSX.Element | null {
+  const queue = useLiveApiQuery(personalAthenaQueueDef(), TASK_ATHENA_QUEUE_INTERVAL_MS);
+  const jobs = queue.data ? jobsForTask(queue.data, taskId) : [];
+  if (jobs.length === 0) return null;
+
+  return (
+    <section aria-label="Athena" className="flex flex-col gap-3">
+      <h2 className="text-label-small text-on-surface-variant">Athena</h2>
+      <div className="flex flex-col gap-3">
+        {jobs.map((job) => (
+          <AthenaJobCard key={job.id} job={job} />
+        ))}
+      </div>
+    </section>
+  );
+}
 
 const FILTER_LABEL: Record<ActivityFilter, string> = {
   all: 'All activity',
@@ -63,6 +104,40 @@ function entrySentence(entry: TaskActivityOut): string {
     return `${entry.subjectTaskTitle}: ${change}`;
   }
   return change;
+}
+
+/** Props for {@link ActivityFilterMenu}. */
+interface ActivityFilterMenuProps {
+  readonly filter: ActivityFilter;
+  readonly onFilterChange: (filter: ActivityFilter) => void;
+}
+
+/** The dropdown that narrows the Activity list to one category. */
+function ActivityFilterMenu({ filter, onFilterChange }: ActivityFilterMenuProps): JSX.Element {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-1.5" aria-label="Filter activity">
+          {FILTER_LABEL[filter]}
+          <ChevronDown className="size-4 opacity-60" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" width="sm">
+        <DropdownMenuRadioGroup
+          value={filter}
+          onValueChange={(value) => {
+            onFilterChange(value as ActivityFilter);
+          }}
+        >
+          {(Object.keys(FILTER_LABEL) as ActivityFilter[]).map((value) => (
+            <DropdownMenuRadioItem key={value} value={value}>
+              {FILTER_LABEL[value]}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 /** One chronological Activity row. */
@@ -141,104 +216,88 @@ export function TaskActivityFeed({
 
   // placeholder: this task's comments and activity, at the chosen filter.
   return (
-    <TaskSection
-      id="activity"
-      title="Activity"
-      gap={4}
-      headerEnd={
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5" aria-label="Filter activity">
-              {FILTER_LABEL[filter]}
-              <ChevronDown className="size-4 opacity-60" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" width="sm">
-            <DropdownMenuRadioGroup
-              value={filter}
-              onValueChange={(value) => {
-                setFilter(value as ActivityFilter);
+    <div className="flex flex-col gap-6">
+      <TaskAthenaWork taskId={taskId} />
+      <TaskSection
+        id="activity"
+        title="Activity"
+        gap={4}
+        headerEnd={<ActivityFilterMenu filter={filter} onFilterChange={setFilter} />}
+      >
+        {query.isPending ? (
+          <div className="flex flex-col gap-3" aria-hidden="true">
+            <Skeleton className="h-5 w-3/5 rounded" />
+            <Skeleton className="h-5 w-2/5 rounded" />
+          </div>
+        ) : query.isError && entries.length === 0 ? (
+          <QueryLoadFailure size="panel" title="Activity" query={query} />
+        ) : entries.length === 0 ? (
+          <p className="text-on-surface-variant text-body-medium">
+            Nothing has happened to this task yet.
+          </p>
+        ) : (
+          <ol className="flex flex-col gap-4">
+            {entries.map((entry) => (
+              <ActivityRow key={entry.id} entry={entry} />
+            ))}
+          </ol>
+        )}
+
+        {query.hasNextPage ? (
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label="Load newer activity"
+              disabled={query.isFetchingNextPage}
+              onClick={() => {
+                void query.fetchNextPage();
               }}
             >
-              {(Object.keys(FILTER_LABEL) as ActivityFilter[]).map((value) => (
-                <DropdownMenuRadioItem key={value} value={value}>
-                  {FILTER_LABEL[value]}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      }
-    >
-      {query.isPending ? (
-        <div className="flex flex-col gap-3" aria-hidden="true">
-          <Skeleton className="h-5 w-3/5 rounded" />
-          <Skeleton className="h-5 w-2/5 rounded" />
-        </div>
-      ) : query.isError && entries.length === 0 ? (
-        <QueryLoadFailure size="panel" title="Activity" query={query} />
-      ) : entries.length === 0 ? (
-        <p className="text-on-surface-variant text-body-medium">
-          Nothing has happened to this task yet.
-        </p>
-      ) : (
-        <ol className="flex flex-col gap-4">
-          {entries.map((entry) => (
-            <ActivityRow key={entry.id} entry={entry} />
-          ))}
-        </ol>
-      )}
+              {query.isFetchingNextPage ? 'Loading…' : 'Load newer'}
+            </Button>
+            {query.isFetchNextPageError ? (
+              <div className="mt-2">
+                <InlineBanner
+                  tone="critical"
+                  density="compact"
+                  title="Newer activity could not load"
+                >
+                  The activity above is still current.
+                </InlineBanner>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
-      {query.hasNextPage ? (
-        <div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-label="Load newer activity"
-            disabled={query.isFetchingNextPage}
-            onClick={() => {
-              void query.fetchNextPage();
+        {canComment && onComment ? (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void post();
             }}
           >
-            {query.isFetchingNextPage ? 'Loading…' : 'Load newer'}
-          </Button>
-          {query.isFetchNextPageError ? (
-            <div className="mt-2">
-              <InlineBanner tone="critical" density="compact" title="Newer activity could not load">
-                The activity above is still current.
-              </InlineBanner>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {canComment && onComment ? (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void post();
-          }}
-        >
-          <Surface tone="floating" pad="comfortable" className="flex flex-col gap-2">
-            <FreeformTextEditor
-              value={body}
-              onChange={setBody}
-              placeholder="Leave a comment…"
-              ariaLabel="Add a comment"
-              onSubmit={() => {
-                void post();
-              }}
-              className="rounded-md p-3"
-            />
-            <div className="flex items-center justify-end">
-              <Button type="submit" size="sm" disabled={posting || body.trim().length === 0}>
-                {posting ? 'Posting…' : 'Comment'}
-              </Button>
-            </div>
-          </Surface>
-        </form>
-      ) : null}
-    </TaskSection>
+            <Surface tone="floating" pad="comfortable" className="flex flex-col gap-2">
+              <FreeformTextEditor
+                value={body}
+                onChange={setBody}
+                placeholder="Leave a comment…"
+                ariaLabel="Add a comment"
+                onSubmit={() => {
+                  void post();
+                }}
+                className="rounded-md p-3"
+              />
+              <div className="flex items-center justify-end">
+                <Button type="submit" size="sm" disabled={posting || body.trim().length === 0}>
+                  {posting ? 'Posting…' : 'Comment'}
+                </Button>
+              </div>
+            </Surface>
+          </form>
+        ) : null}
+      </TaskSection>
+    </div>
   );
 }

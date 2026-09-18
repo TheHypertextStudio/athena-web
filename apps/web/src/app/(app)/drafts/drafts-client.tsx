@@ -62,6 +62,7 @@ function DraftItem({ draft, workspaceName, onOpen, onDelete }: DraftItemProps): 
   const label = draft.title ?? `Untitled ${noun.toLowerCase()}`;
   return (
     <ListRow
+      className="bg-surface-container rounded-corner-xs first:rounded-t-corner-lg last:rounded-b-corner-lg min-h-14 px-4"
       onActivate={() => {
         onOpen(draft);
       }}
@@ -121,9 +122,9 @@ function DraftList({ items }: { readonly items: readonly ComposerDraftOut[] }): 
 
   const newestFirst = [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return (
-    // Pulled 12px into the page gutter: a row keeps 12px of its own padding, so its text and the
-    // page title start on one line while the row's hover surface reaches past them.
-    <div role="grid" aria-label="Drafts" className="-mx-3 flex flex-col">
+    // A segmented list: every draft is its own tonal container, 2px apart, so each reads as a
+    // discrete item and the set reads as one group.
+    <div role="grid" aria-label="Drafts" className="flex flex-col gap-0.5">
       {newestFirst.map((draft) => (
         <DraftItem
           key={draft.id}

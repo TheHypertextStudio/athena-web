@@ -348,6 +348,9 @@ describe('personal Athena routes', () => {
   });
 
   it('returns only caller-owned work grouped by product state and the current chat', async () => {
+    // `oldChat` and `currentChat` are `kind: 'chat'` — the caller's own conversation, lazily
+    // created `pending` by `resolveCanonicalConversation` (the same status Working groups by).
+    // Neither may land in a lane or its count; only `currentChat` on the response surfaces them.
     const seed = await seedPeople();
     const oldChat = await seedSession(seed, seed.owner, 'completed', 'chat');
     const currentChat = await seedSession(seed, seed.owner, 'pending', 'chat');
@@ -365,14 +368,13 @@ describe('personal Athena routes', () => {
       sessions: Record<'needsYou' | 'working' | 'finished', { id: string }[]>;
     };
     expect(body.currentChat?.id).toBe(currentChat);
-    expect(body.counts).toEqual({ needsYou: 1, working: 2, finished: 2 });
+    expect(body.counts).toEqual({ needsYou: 1, working: 1, finished: 1 });
+    // Exact-equal (not `arrayContaining`) lane contents are themselves the proof that neither
+    // chat session leaked into a lane.
     expect(body.sessions.needsYou.map((row) => row.id)).toEqual([needsYou]);
-    expect(body.sessions.working.map((row) => row.id)).toEqual(
-      expect.arrayContaining([currentChat, working]),
-    );
-    expect(body.sessions.finished.map((row) => row.id)).toEqual(
-      expect.arrayContaining([oldChat, finished]),
-    );
+    expect(body.sessions.working.map((row) => row.id)).toEqual([working]);
+    expect(body.sessions.finished.map((row) => row.id)).toEqual([finished]);
+    expect(JSON.stringify(body)).not.toContain(oldChat);
     expect(JSON.stringify(body)).not.toContain(privateOther);
   });
 
@@ -535,7 +537,9 @@ describe('personal Athena routes', () => {
       currentChat: { id: string } | null;
       sessions: Record<'needsYou' | 'working' | 'finished', { id: string }[]>;
     };
-    expect(body.counts).toEqual({ needsYou: 1, working: 107, finished: 55 });
+    // `historicalChat` is `kind: 'chat'` and does not count toward Working — only the two `job`
+    // lanes (`working` plus the 105 contextual sessions) do.
+    expect(body.counts).toEqual({ needsYou: 1, working: 106, finished: 55 });
     expect(body.currentChat?.id).toBe(historicalChat);
     expect(body.sessions.needsYou.length + body.sessions.working.length).toBeLessThanOrEqual(100);
     expect(body.sessions.working.map((row) => row.id)).not.toContain(historicalChat);

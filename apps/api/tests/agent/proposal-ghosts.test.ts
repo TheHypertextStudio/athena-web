@@ -321,18 +321,20 @@ describe('proposalOrganizationId', () => {
     expect(proposalOrganizationId(row, 'org_fallback')).toBe('org_from_call');
   });
 
-  it('refuses a stored tool call whose input names no workspace', () => {
-    const row = fakeActivityRow({
-      organizationId: 'org_row',
-      body: {
-        action: {
-          kind: 'custom',
-          summary: 'Proposed capture',
-          toolCall: { connection: 'docket', tool: 'capture', input: {}, toolUseId: 'toolu_1' },
-        },
-      },
-    });
-    expect(() => proposalOrganizationId(row, 'org_fallback')).toThrow(ConflictError);
+  // This is the shape of the mock model's `update_task` proposal: `{ taskId, state }`, no
+  // `orgId`. Approval must resolve the session's own workspace rather than 409ing.
+  const call = { connection: 'docket', tool: 'capture', input: {}, toolUseId: 'toolu_1' } as const;
+  const noOrgIdRow = fakeActivityRow({
+    organizationId: 'org_row',
+    body: { action: { kind: 'custom', summary: 'Proposed capture', toolCall: call } },
+  });
+
+  it('falls back to the caller-supplied workspace when the stored tool call names none', () => {
+    expect(proposalOrganizationId(noOrgIdRow, 'org_fallback')).toBe('org_fallback');
+  });
+
+  it('still refuses to guess when the stored call and the fallback both name no workspace', () => {
+    expect(() => proposalOrganizationId(noOrgIdRow, '')).toThrow(ConflictError);
   });
 });
 

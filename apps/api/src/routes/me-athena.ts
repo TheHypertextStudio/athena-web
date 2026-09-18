@@ -307,7 +307,15 @@ async function pulseCounts(ownerUserId: string): Promise<
   const rows = await db
     .select({ status: agentSession.status, total: count() })
     .from(agentSession)
-    .where(and(eq(agentSession.executorKind, 'athena'), eq(agentSession.ownerUserId, ownerUserId)))
+    .where(
+      and(
+        eq(agentSession.executorKind, 'athena'),
+        eq(agentSession.ownerUserId, ownerUserId),
+        // The caller's own conversation (`kind: 'chat'`) is surfaced separately as `currentChat`,
+        // never as a piece of work — it must not inflate a queue count.
+        ne(agentSession.kind, 'chat'),
+      ),
+    )
     .groupBy(agentSession.status);
   const total = (statuses: readonly SessionRow['status'][]): number =>
     rows.filter((row) => statuses.includes(row.status)).reduce((sum, row) => sum + row.total, 0);
@@ -448,6 +456,9 @@ async function sessionLanePage(
       and(
         eq(agentSession.executorKind, 'athena'),
         eq(agentSession.ownerUserId, ownerUserId),
+        // The caller's own conversation (`kind: 'chat'`) is surfaced separately as `currentChat`,
+        // never as a piece of work — it must not land in Needs you, Working, or Finished.
+        ne(agentSession.kind, 'chat'),
         inArray(agentSession.status, [...statuses]),
         cursor
           ? or(

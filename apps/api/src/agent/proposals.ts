@@ -31,7 +31,17 @@ export function proposalInputOrganizationId(input: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-/** Return the current authoritative workspace of a stored proposal. */
+/**
+ * Return the current authoritative workspace of a stored proposal.
+ *
+ * @remarks
+ * The stored tool call's own `orgId` wins when present — an explicit target is never silently
+ * overridden by the caller's fallback. Most tool inputs (for example the mock model's
+ * `update_task`) name no workspace at all, so a missing `orgId` falls back to the caller-supplied
+ * workspace (the session's own `contextOrganizationId`) rather than treating "no `orgId`" as "no
+ * workspace whatsoever." Only when neither the input nor the fallback names one does approval
+ * refuse to guess.
+ */
 export function proposalOrganizationId(row: ActivityRow, fallbackOrganizationId: string): string {
   const call = row.body.action?.toolCall;
   if (!call) {
@@ -40,10 +50,9 @@ export function proposalOrganizationId(row: ActivityRow, fallbackOrganizationId:
     throw new ConflictError('Proposal does not declare a workspace target');
   }
   const organizationId = proposalInputOrganizationId(call.input);
-  if (!organizationId) {
-    throw new ConflictError('Proposal does not declare a workspace target');
-  }
-  return organizationId;
+  if (organizationId) return organizationId;
+  if (fallbackOrganizationId) return fallbackOrganizationId;
+  throw new ConflictError('Proposal does not declare a workspace target');
 }
 
 /** Every id in Docket is a 26-char Crockford-base32 ULID. */

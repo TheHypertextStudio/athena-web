@@ -1,11 +1,87 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-09-14
+> **Last Updated**: 2026-09-18
 
 ---
 
 ## Active Tasks
+
+### [DRAFTS-001] Composers keep autosaved drafts
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-09-18
+- **Priority**: P0
+- **Description**: The create composers (task, project, initiative, program, team) hold their draft in
+  React state and reset on every open, and the discard prompt's "Keep editing" appears to create the
+  entity because Enter still submits the form behind the prompt. Give composers a durable draft: a
+  `composer_draft` table with revision-guarded writes, debounced autosave once typed text exists, a
+  Linear-style close prompt (Save draft / Discard / Keep editing), a "Drafts (n)" chip in the composer,
+  a Drafts page reachable from the sidebar only while drafts exist, and a personal setting (off by
+  default) that reopens the newest draft when a composer opens.
+- **Plan**: `docs/superpowers/specs/2026-09-18-drafting-errors-canvas-task-detail-design.md` Part 1.
+- **Subtasks**:
+  - [ ] Discard prompt owns the keyboard (gate every submit path, focus the prompt)
+  - [ ] Contract, schema, migration, store, `/v1/me/drafts` routes, expiry sweep
+  - [ ] `composer.resumeDrafts` preference and settings row
+  - [ ] Autosave hook, codecs, chip, close prompt, provider resume logic
+  - [ ] Drafts page and conditional sidebar entry
+  - [ ] `docs/engineering/specs/drafts.md`
+- **Blockers**: None.
+
+### [ERRORS-001] One error-presentation system replaces inline plaintext errors
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-09-18
+- **Priority**: P0
+- **Description**: About 150 hand-rolled `<p role="alert" className="text-error">` renderings sit between
+  UI. Add the specified but missing toaster (`sonner` wrapped in `@docket/ui`), a critical `EmptyState`
+  tone, a compact `InlineBanner`, a `FieldError` primitive, an app-level `LoadFailure` built on the
+  classified `failurePresentation` layer, and a default failure toast in `useApiMutation`; migrate every
+  site by group and add an ESLint rule so raw error tokens cannot return.
+- **Plan**: spec above, Part 2.
+- **Subtasks**:
+  - [ ] Feedback primitives in `@docket/ui`
+  - [ ] App plumbing (`presentFailure`, `LoadFailure`, Toaster mount, `useApiMutation` default)
+  - [ ] Load failures, banners, mutation errors, field errors migrated
+  - [ ] ESLint rule, docs, e2e
+- **Blockers**: None.
+
+### [CANVAS-DEPS-001] Project dependencies get their own route on the floating canvas shell
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-09-18
+- **Priority**: P1
+- **Description**: Canvas chrome at `z-[2000]` paints over the dialog scrim; a dependency edit re-runs the
+  whole dagre layout so every node jumps; the dependencies lens sits under the roster's ~150px header
+  and the flow viewport is shrunk for the minimap. Introduce a z-index token scale and isolate `<main>`,
+  let the canvas fill its panel under overlaid chrome, add an optimistic edge plus incremental layout
+  plus rAF position animation, move the lens to `/orgs/[orgId]/projects/dependencies` under the
+  floating canvas bar, and morph the roster title into the bar with a scoped view transition.
+- **Plan**: spec above, Part 3.
+- **Subtasks**:
+  - [ ] z-index token scale and `isolate` on `<main>`
+  - [ ] Canvas fills its container
+  - [ ] Optimistic edge, incremental layout, animated positions
+  - [ ] Dependencies route and roster cleanup
+  - [ ] Shared-element transition through the app's navigation seam
+- **Blockers**: None.
+
+### [TASK-DETAIL-002] The task page composes the shared entity-detail masthead
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-09-18
+- **Priority**: P1
+- **Description**: `/orgs/[orgId]/tasks/[taskId]` is the only detail page that hand-rolls its masthead.
+  Put it on `EntityDetailLayout` (48px icon, headline title, metadata chips, tabs), order the overview
+  like an issue (description, subtasks, dependencies, activity with the composer last), add a graph
+  tab, and give the layout an opt-in aside slot for secondary properties on wide widths.
+- **Plan**: spec above, Part 4.
+- **Subtasks**:
+  - [ ] Masthead, metadata row, actions, tabs, states
+  - [ ] Overview order, graph tab, overflow menu, delete `TaskHeaderControls`
+  - [ ] `aside` slot on `EntityDetailLayout`
+- **Blockers**: None.
 
 ### [ATHENA-SSE-406-001] A browser can open an Athena activity stream
 

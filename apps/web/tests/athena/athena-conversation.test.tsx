@@ -1,10 +1,13 @@
 import '@testing-library/jest-dom/vitest';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { okResponse } from '../support/query';
+
+/** A ULID-shaped workspace id, valid against `OrganizationId`'s Crockford-base32 pattern. */
+const ORG_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
 const { chatGet, personalPost } = vi.hoisted(() => ({
   chatGet: vi.fn(),
@@ -28,7 +31,9 @@ vi.mock('../../src/lib/api', () => ({
   },
 }));
 
-import AthenaConversation from '../../src/components/athena/athena-conversation';
+import AthenaConversation, {
+  type AthenaConversationProps,
+} from '../../src/components/athena/athena-conversation';
 
 // jsdom has no scrollIntoView; the component pins the latest turn with it on every append.
 Element.prototype.scrollIntoView = vi.fn();
@@ -83,6 +88,16 @@ function mount() {
   return render(
     <QueryClientProvider client={client}>
       <AthenaConversation orgId="org_1" />
+    </QueryClientProvider>,
+  );
+}
+
+/** Render the conversation with a fixed ULID org id, overridable by the caller's props. */
+function renderConversation(props: Partial<AthenaConversationProps> = {}) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <AthenaConversation orgId={ORG_ID} {...props} />
     </QueryClientProvider>,
   );
 }
@@ -203,5 +218,50 @@ describe('AthenaConversation MCP app cards', () => {
       expect(personalPost).toHaveBeenCalledWith({ json: { body: 'Plan my day' } });
     });
     expect(await screen.findByText('Plan my day')).toBeVisible();
+  });
+});
+
+describe('AthenaConversation page context', () => {
+  it('shows the attached page above the composer and sends it with the message', async () => {
+    chatGet.mockResolvedValue(okResponse(thread([])));
+    personalPost.mockResolvedValue(okResponse(thread([])));
+    renderConversation({
+      context: {
+        workspaceId: ORG_ID,
+        source: { type: 'project', id: 'project_1', label: 'Fall fundraiser launch' },
+      },
+    });
+    const form = await screen.findByRole('form', { name: /Message Athena/ });
+    expect(within(form).getByRole('group', { name: /Fall fundraiser launch/ })).toBeVisible();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Message Athena' }), {
+      target: { value: 'What is at risk?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => {
+      expect(personalPost).toHaveBeenCalledWith({
+        json: {
+          body: 'What is at risk?',
+          context: { workspaceId: ORG_ID, source: { type: 'project', id: 'project_1' } },
+        },
+      });
+    });
+  });
+
+  it('fills the composer from a suggestion without sending', async () => {
+    chatGet.mockResolvedValue(okResponse(thread([])));
+    renderConversation({
+      context: {
+        workspaceId: ORG_ID,
+        source: { type: 'task', id: 'task_1', label: 'Confirm venue' },
+      },
+    });
+    const list = await screen.findByRole('list', { name: /Suggestions/ });
+    const [first] = within(list).getAllByRole('button');
+    if (!first) throw new Error('expected at least one suggestion button');
+    fireEvent.click(first);
+    expect(screen.getByRole('combobox', { name: 'Message Athena' })).toHaveValue(first.textContent);
+    expect(personalPost).not.toHaveBeenCalled();
   });
 });

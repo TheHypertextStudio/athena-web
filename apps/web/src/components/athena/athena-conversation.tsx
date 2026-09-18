@@ -41,12 +41,15 @@ import type { AgentSessionDetailOut } from '@docket/athena/agent-contract';
 import { PLAN_TOOL_NAMES } from '@docket/work/plan-draft-contract';
 
 import { ProposalGroupCard } from '@/components/agents/proposal-group-card';
+import { AthenaContextChip } from '@/components/athena/athena-context-chip';
+import { ConversationSuggestions } from '@/components/athena/conversation-suggestions';
 import { PartialLoadBanner, presentFailure, QueryLoadFailure } from '@/components/feedback';
 import { McpAppPresentationCard } from '@/components/athena/mcp-app-presentation-card';
 import PlanStartCard, { parsePlanStart } from '@/components/plan-canvas/plan-start-card';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 import { AddMcpConnectorForm } from '@/components/settings/mcp-connectors-section';
 import { fetchOrgChatThread, sendOrgChatMessage, useOrgChatThread } from '@/lib/athena/chat-defs';
+import type { PersonalAthenaContext } from '@/lib/athena/presentation';
 import { queryKeys } from '@/lib/query';
 import { useSessionDetail } from '@/lib/use-session-detail';
 import { startViewTransition } from '@/lib/view-transition';
@@ -86,6 +89,16 @@ export interface AthenaConversationProps {
    * the field, the way a door into this surface seeds it. `null` asks for nothing.
    */
   draftRequest?: { readonly text: string; readonly version: number } | null;
+  /** The page to attach to the next message and to draw suggestions from. */
+  context?: PersonalAthenaContext | null | undefined;
+  /** Whether the next message carries `context`. Defaults to attached. */
+  contextAttached?: boolean | undefined;
+  /** Drop the page for the next message. */
+  onDetachContext?: (() => void) | undefined;
+  /** Put the page back. */
+  onAttachContext?: (() => void) | undefined;
+  /** Whether an empty thread offers prompts. Defaults to true. */
+  suggestions?: boolean | undefined;
 }
 
 /** The composer's draft, its form, and how a requested draft lands in it. */
@@ -158,6 +171,184 @@ function useThreadWrites(orgId: string): ThreadWrites {
   return { commitThread, reloadWithTransition, sendWidgetMessage };
 }
 
+/** A no-op used when the host offers a page to attach but no attach/detach control. */
+const NOOP = (): void => {
+  // Intentionally inert: this door does not let the person detach or reattach the page.
+  void 0;
+};
+
+/** Props for {@link ComposerContext}. */
+interface ComposerContextProps {
+  /** The page attached to the next message; nothing renders when this is null. */
+  context: PersonalAthenaContext | null;
+  /** Whether the next message carries `context`. */
+  attached: boolean;
+  /** Drop the page for the next message. */
+  onDetach: () => void;
+  /** Put the page back. */
+  onAttach: () => void;
+}
+
+/** The composer's chip slot: the attached page, when there is one. */
+function ComposerContext({
+  context,
+  attached,
+  onDetach,
+  onAttach,
+}: ComposerContextProps): JSX.Element | null {
+  if (!context) return null;
+  return (
+    <div className="px-1 pt-1">
+      <AthenaContextChip
+        context={context}
+        attached={attached}
+        onDetach={onDetach}
+        onAttach={onAttach}
+      />
+    </div>
+  );
+}
+
+/** Props for {@link Composer}. */
+interface ComposerProps {
+  /** The form element, so a caller can find its textarea and focus it. */
+  composerRef: React.RefObject<HTMLFormElement | null>;
+  /** The page to show above the textarea, when there is one. */
+  context: PersonalAthenaContext | null;
+  /** Whether the next message carries `context`. */
+  contextAttached: boolean;
+  /** Drop the page for the next message; falls back to a no-op when the host has none. */
+  onDetachContext: (() => void) | undefined;
+  /** Put the page back; falls back to a no-op when the host has none. */
+  onAttachContext: (() => void) | undefined;
+  /** The composer's current text. */
+  draft: string;
+  /** Replace the composer's text. */
+  setDraft: (text: string) => void;
+  /** Whether a turn is in flight; disables the field and shows "Sending". */
+  sending: boolean;
+  /** The workspace `@` mentions search, or undefined to leave `@` a plain character. */
+  mentionOrgId: string | undefined;
+  /** Send the current draft. */
+  onSend: () => void;
+  /** Open the "Connect a tool or app" dialog. */
+  onConnect: () => void;
+}
+
+/** The message composer: the attached-page chip, the mention-aware textarea, and its controls. */
+function Composer({
+  composerRef,
+  context,
+  contextAttached,
+  onDetachContext,
+  onAttachContext,
+  draft,
+  setDraft,
+  sending,
+  mentionOrgId,
+  onSend,
+  onConnect,
+}: ComposerProps): JSX.Element {
+  return (
+    <form
+      ref={composerRef}
+      aria-label="Message Athena"
+      className={cn(
+        surfaceToneColor('prominent'),
+        'focus-within:ring-ring mt-2 flex flex-col gap-1 rounded-lg p-2 transition-shadow focus-within:ring-1',
+      )}
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSend();
+      }}
+    >
+      <ComposerContext
+        context={context}
+        attached={contextAttached}
+        onDetach={onDetachContext ?? NOOP}
+        onAttach={onAttachContext ?? NOOP}
+      />
+      <MentionTextarea
+        aria-label="Message Athena"
+        placeholder="Ask Athena anything…"
+        rows={3}
+        value={draft}
+        disabled={sending}
+        onChange={setDraft}
+        {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
+        insertMode="context"
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            onSend();
+          }
+        }}
+        className="placeholder:text-on-surface-variant text-body-medium w-full resize-none bg-transparent px-2 py-1.5 outline-none disabled:opacity-50"
+      />
+      <div className="flex items-center justify-between">
+        {/* There is no "New chat" control, and that is deliberate: a person has one Athena
+          conversation, and its topics are derived by {@link AthenaConversationBrowser} rather
+          than declared by hand. Starting a second thread was the only way to file a change of
+          subject, and it cost you every earlier one. */}
+        <Button
+          type="button"
+          variant="ghost"
+          iconOnly
+          aria-label="Connect a tool or app"
+          title="Connect a tool or app"
+          onClick={onConnect}
+        >
+          <Cable aria-hidden="true" className="size-4" />
+        </Button>
+        <Button
+          type="submit"
+          iconOnly
+          aria-label={sending ? 'Sending' : 'Send'}
+          title="Send"
+          disabled={sending || draft.trim().length === 0}
+        >
+          <ArrowUp aria-hidden="true" className="size-4" />
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** Props for {@link ConnectDialog}. */
+interface ConnectDialogProps {
+  /** The org the added connector belongs to. */
+  orgId: string;
+  /** Whether the dialog is open. */
+  open: boolean;
+  /** Called when the dialog should open or close. */
+  onOpenChange: (open: boolean) => void;
+}
+
+/** The "Connect a tool or app" dialog opened from the composer. */
+function ConnectDialog({ orgId, open, onOpenChange }: ConnectDialogProps): JSX.Element {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Connect a tool or app</DialogTitle>
+          <DialogDescription>
+            Add a remote MCP server so Athena can use its tools and show interactive apps in this
+            conversation too.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <AddMcpConnectorForm
+            orgId={orgId}
+            onConnected={() => {
+              onOpenChange(false);
+            }}
+          />
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /** AthenaConversation renders the org's persistent Athena conversation. */
 export default function AthenaConversation({
   emptyState,
@@ -165,6 +356,11 @@ export default function AthenaConversation({
   className,
   initialDraft,
   draftRequest = null,
+  context = null,
+  contextAttached = true,
+  onDetachContext,
+  onAttachContext,
+  suggestions = true,
 }: AthenaConversationProps): JSX.Element {
   const mentionOrgId = useMentionOrgId(orgId);
   const [sending, setSending] = useState(false);
@@ -191,14 +387,14 @@ export default function AthenaConversation({
     setSending(true);
     setDraft('');
     try {
-      commitThread(await sendOrgChatMessage(orgId, text));
+      commitThread(await sendOrgChatMessage(orgId, text, contextAttached ? context : null));
     } catch (caught) {
       setDraft(text);
       presentFailure(caught, 'Could not send your message.');
     } finally {
       setSending(false);
     }
-  }, [orgId, draft, sending, commitThread]);
+  }, [orgId, draft, sending, commitThread, context, contextAttached]);
 
   // A widget speaking as the user posts into THIS thread, exactly as if typed into the composer.
   return (
@@ -208,6 +404,17 @@ export default function AthenaConversation({
           orgId={orgId}
           query={query}
           empty={empty}
+          emptyExtra={
+            suggestions ? (
+              <ConversationSuggestions
+                context={context}
+                onPick={(prompt) => {
+                  setDraft(prompt);
+                  composerRef.current?.querySelector('textarea')?.focus({ preventScroll: true });
+                }}
+              />
+            ) : null
+          }
           onWidgetMessage={sendWidgetMessage}
           onProposalsSettled={reloadWithTransition}
         />
@@ -219,82 +426,25 @@ export default function AthenaConversation({
         <div ref={endRef} />
       </div>
 
-      <form
-        ref={composerRef}
-        className={cn(
-          surfaceToneColor('prominent'),
-          'focus-within:ring-ring mt-2 flex flex-col gap-1 rounded-lg p-2 transition-shadow focus-within:ring-1',
-        )}
-        onSubmit={(event) => {
-          event.preventDefault();
+      <Composer
+        composerRef={composerRef}
+        context={context}
+        contextAttached={contextAttached}
+        onDetachContext={onDetachContext}
+        onAttachContext={onAttachContext}
+        draft={draft}
+        setDraft={setDraft}
+        sending={sending}
+        mentionOrgId={mentionOrgId}
+        onSend={() => {
           void send();
         }}
-      >
-        <MentionTextarea
-          aria-label="Message Athena"
-          placeholder="Ask Athena anything…"
-          rows={3}
-          value={draft}
-          disabled={sending}
-          onChange={setDraft}
-          {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
-          insertMode="context"
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              void send();
-            }
-          }}
-          className="placeholder:text-on-surface-variant text-body-medium w-full resize-none bg-transparent px-2 py-1.5 outline-none disabled:opacity-50"
-        />
-        <div className="flex items-center justify-between">
-          {/* There is no "New chat" control, and that is deliberate: a person has one Athena
-            conversation, and its topics are derived by {@link AthenaConversationBrowser} rather
-            than declared by hand. Starting a second thread was the only way to file a change of
-            subject, and it cost you every earlier one. */}
-          <Button
-            type="button"
-            variant="ghost"
-            iconOnly
-            aria-label="Connect a tool or app"
-            title="Connect a tool or app"
-            onClick={() => {
-              setConnectOpen(true);
-            }}
-          >
-            <Cable aria-hidden="true" className="size-4" />
-          </Button>
-          <Button
-            type="submit"
-            iconOnly
-            aria-label={sending ? 'Sending' : 'Send'}
-            title="Send"
-            disabled={sending || draft.trim().length === 0}
-          >
-            <ArrowUp aria-hidden="true" className="size-4" />
-          </Button>
-        </div>
-      </form>
+        onConnect={() => {
+          setConnectOpen(true);
+        }}
+      />
 
-      <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Connect a tool or app</DialogTitle>
-            <DialogDescription>
-              Add a remote MCP server so Athena can use its tools and show interactive apps in this
-              conversation too.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogBody>
-            <AddMcpConnectorForm
-              orgId={orgId}
-              onConnected={() => {
-                setConnectOpen(false);
-              }}
-            />
-          </DialogBody>
-        </DialogContent>
-      </Dialog>
+      <ConnectDialog orgId={orgId} open={connectOpen} onOpenChange={setConnectOpen} />
     </div>
   );
 }
@@ -304,6 +454,8 @@ interface ThreadBodyProps {
   readonly orgId: string;
   readonly query: UseQueryResult<AgentSessionDetailOut>;
   readonly empty: ConversationEmptyState;
+  /** Rendered under the empty state, such as prompts to start from. */
+  readonly emptyExtra: React.ReactNode;
   /** Posts a widget-composed `ui/message` into this thread, as the user. */
   readonly onWidgetMessage: (text: string) => Promise<boolean>;
   /** Reloads the thread after a proposal group settles. */
@@ -319,6 +471,7 @@ function ThreadBody({
   orgId,
   query,
   empty,
+  emptyExtra,
   onWidgetMessage,
   onProposalsSettled,
 }: ThreadBodyProps): JSX.Element {
@@ -347,7 +500,10 @@ function ThreadBody({
     return (
       <>
         {refreshFailed}
-        <EmptyState icon={Sparkles} title={empty.title} body={empty.body} frame="none" />
+        <div className="flex flex-col gap-3">
+          <EmptyState icon={Sparkles} title={empty.title} body={empty.body} frame="none" />
+          {emptyExtra}
+        </div>
       </>
     );
   }

@@ -165,6 +165,13 @@ export const JOBS: readonly CronJob[] = [
     description:
       'Docket: expired-session sweep (deletes session rows past their expiresAt — Better Auth only prunes these lazily).',
   },
+  {
+    name: 'docket-expired-drafts-sweep',
+    path: '/internal/cron/expired-drafts-sweep',
+    schedule: '30 3 * * *',
+    description:
+      'Docket: expired composer-draft sweep (deletes saved composer drafts past their expiresAt; reads already leave them out).',
+  },
   // User schedules have a five-minute floor (AthenaTriggerCreate.scheduleMinutes min 5), so a
   // five-minute sweep keeps a run within one tick of its due time; the row claim and cooldown
   // make an overlapping tick harmless.

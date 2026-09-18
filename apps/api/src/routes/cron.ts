@@ -44,6 +44,7 @@ import { reapIdleSessions } from '../mcp/session-registry';
 import { runServiceProbes } from '../services/service-probes';
 import { sweepElicitations } from '../services/elicitation-service';
 import { sweepExpiredSessions } from './session-sweep';
+import { sweepExpiredComposerDrafts } from './composer-draft-sweep';
 import { sweepRecurrenceMaterialization } from '../lib/recurrence/sweep';
 import { createGoogleWorkLocationTransport } from '../services/work-location/google-transport';
 import { sweepWorkLocations } from '../services/work-location/sweep';
@@ -323,6 +324,13 @@ const cron = new Hono()
     // so without this `mcp_session` and its subscriptions grow for the life of the deployment.
     const mcpSessions = await reapIdleSessions(now);
     return c.json({ swept: true, ...result, mcpSessions });
+  })
+  // Expired-draft sweep: deletes every saved composer draft past its `expiresAt`. Reads already
+  // leave expired rows out, so this only reclaims storage. Plain stateless delete, safe to retry.
+  .post('/expired-drafts-sweep', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepExpiredComposerDrafts(new Date());
+    return c.json({ swept: true, ...result });
   });
 
 export default cron;

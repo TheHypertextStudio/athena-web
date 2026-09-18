@@ -378,6 +378,23 @@ resolves the user's current human Actor and normal resource permission.
 | `GET/POST /assignments/:id/triggers`                | — / `AthenaTriggerCreate`                             | `AthenaTriggerOut[]` / `AthenaTriggerOut`                  | owner only                             |
 | `PATCH/DELETE /assignments/:id/triggers/:triggerId` | `{ enabled }` / —                                     | `AthenaTriggerOut` / `{ ok:true }`                         | owner only                             |
 
+### 3.11B `me/drafts` (saved composer drafts)
+
+Mounted `/me/drafts`. Every row is scoped to the authenticated Better Auth user, not an org Actor.
+A draft is the unsent state of one of the five global create composers (`task`, `project`,
+`initiative`, `program`, `team`); `organizationId` names the workspace the composer would create
+into and is checked for membership at creation only. Saves are optimistic (`revision`), and a
+draft expires 183 days after its last save (`expiresAt`, renewed on every save; the
+`expired-drafts-sweep` cron deletes past rows). Contract: `@docket/work/composer-draft-contract`.
+
+| Method + Path | Input                                                                                                        | Output                                                                         | Auth                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ | ----------------------------------------- |
+| `GET /`       | `query: { kind?, organizationId? }`                                                                          | `ComposerDraftListOut{ items[] }`                                              | authenticated owner                       |
+| `POST /`      | `ComposerDraftCreate{ organizationId, kind, payload }` (`payload.kind` must equal `kind`; **422** otherwise) | `ComposerDraftOut` (**201**)                                                   | owner with membership (**404** otherwise) |
+| `GET /:id`    | `param`                                                                                                      | `ComposerDraftOut`                                                             | owner only (**404** otherwise)            |
+| `PATCH /:id`  | `ComposerDraftPatch{ revision, payload }`                                                                    | `ComposerDraftOut` (**412** on a stale `revision`, **422** on a kind mismatch) | owner only (**404** otherwise)            |
+| `DELETE /:id` | `param`                                                                                                      | **204**                                                                        | owner only (**404** otherwise)            |
+
 ### 3.12 `integrations`
 
 Mounted `/orgs/:orgId/integrations`. Migration vs Connector decided up front; MVP = import (migration) / read-only mirror (connector).

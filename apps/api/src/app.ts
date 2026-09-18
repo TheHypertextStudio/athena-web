@@ -53,6 +53,7 @@ import meCalendar from './routes/me-calendar';
 import meIdentities from './routes/me-identities';
 import { createMeNotificationsRoutes } from './routes/me-notifications';
 import mePasskeys from './routes/me-passkeys';
+import meDrafts from './routes/me-drafts';
 import mePlans from './routes/me-plans';
 import meRecovery from './routes/me-recovery';
 import meSessions from './routes/me-sessions';
@@ -248,6 +249,7 @@ const routes = app
   .route('/me/recovery-codes', meRecovery)
   .route('/me/sessions', meSessions)
   .route('/me/plans', mePlans)
+  .route('/me/drafts', meDrafts)
   .route('/me/athena', personalAthena)
   .route('/me/athena', lattice)
   // Athena's own inbox. Mounted at the same `/me/athena` prefix as the two routers above (Hono

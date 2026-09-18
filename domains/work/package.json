@@ -35,6 +35,7 @@
     "./template-contract": "./src/contracts/template.ts",
     "./plan-draft-contract": "./src/contracts/plan-draft.ts",
     "./plan-draft": "./src/plan-draft.ts",
+    "./composer-draft-contract": "./src/contracts/composer-draft.ts",
     "./subject-ref-contract": "./src/contracts/subject-ref.ts",
     "./slug-contract": "./src/contracts/slug.ts",
     "./publish-contract": "./src/contracts/publish.ts",

@@ -3,7 +3,7 @@
 /**
  * The chip above an Athena composer that shows which page is attached to the next message.
  *
- * Attached: "On: Fall fundraiser launch · Project" with a remove control. Detached: an assist
+ * Attached: "Fall fundraiser launch · Project" with a remove control. Detached: an assist
  * chip that reattaches the page. No context, nothing rendered.
  */
 import { Sparkles } from '@docket/ui/icons';
@@ -50,20 +50,20 @@ export function AthenaContextChip({
   if (!attached) {
     return (
       <Chip variant="assist" icon={<Sparkles aria-hidden="true" />} onClick={onAttach}>
-        Attach {label}
+        Include {label}
       </Chip>
     );
   }
   return (
-    <div role="group" aria-label={`On ${label}, ${kind}`} className="flex max-w-full min-w-0">
+    <div role="group" aria-label={`${label}, ${kind}`} className="flex max-w-full min-w-0">
       <Chip
         variant="input"
         icon={<Sparkles aria-hidden="true" />}
         onRemove={onDetach}
-        removeLabel={`Detach ${label}`}
+        removeLabel={`Remove ${label}`}
         className="max-w-full min-w-0 shrink"
       >
-        <span className="truncate">On: {label}</span>
+        <span className="truncate">{label}</span>
         <span className="text-on-surface-variant shrink-0"> · {kind}</span>
       </Chip>
     </div>

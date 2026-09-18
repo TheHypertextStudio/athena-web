@@ -151,9 +151,9 @@ person is looking at. Rejected.
    - a **question** (`ElicitationCard`, unchanged);
    - a **heads-up** posted by Athena (§4.5).
 4. **Composer.** One shared `AthenaComposer` primitive (§4.4). Above the textarea sits the
-   **context chip**: "On: Launch plan · Project", with an × to drop it for this message and a
-   click to re-attach the current page. Attach and Talk sit in the composer's trailing controls.
-   Enter sends; Shift+Enter breaks a line.
+   **context chip**: "Launch plan · Project" — the chip names the page and its kind — with an ×
+   to drop it for this message and a click to re-attach the current page. Attach and Talk sit in
+   the composer's trailing controls. Enter sends; Shift+Enter breaks a line.
 
 Empty thread: the composer plus three suggestions drawn from the current page (§4.5). The
 suggestions are buttons that fill the composer. There is no instructional paragraph.

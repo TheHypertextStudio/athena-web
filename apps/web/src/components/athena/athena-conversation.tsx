@@ -63,8 +63,7 @@ export interface ConversationEmptyState {
 
 /** The empty state a standalone door shows; a door with its own subject passes a shorter one. */
 const DEFAULT_EMPTY_STATE: ConversationEmptyState = {
-  title: 'This is your line to Athena',
-  body: 'Try "What should I focus on today?" or "Create a plan to make sure I get more sleep."',
+  title: 'Athena',
 };
 
 /** Props for {@link AthenaConversation}. */
@@ -270,7 +269,7 @@ function Composer({
       />
       <MentionTextarea
         aria-label="Message Athena"
-        placeholder="Ask Athena anything…"
+        placeholder="Message Athena"
         rows={3}
         value={draft}
         disabled={sending}

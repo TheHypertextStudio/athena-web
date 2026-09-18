@@ -52,7 +52,7 @@ describe('AthenaContextChip', () => {
     );
     const chip = screen.getByRole('group', { name: /Fall fundraiser launch/ });
     expect(chip).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: /Detach/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Remove/ }));
     expect(onDetach).toHaveBeenCalledTimes(1);
   });
 

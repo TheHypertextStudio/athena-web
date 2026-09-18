@@ -185,7 +185,7 @@ export function AthenaWorkbench({
             </div>
           ) : null}
           {view.activity.length === 0 ? (
-            <p className="text-on-surface-variant py-8 text-sm">Athena is preparing the work.</p>
+            <p className="text-on-surface-variant py-8 text-sm">No activity yet.</p>
           ) : (
             <ol className="divide-outline-variant divide-y">
               {view.activity.map((entry) => {

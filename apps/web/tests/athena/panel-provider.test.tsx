@@ -390,7 +390,7 @@ describe('AthenaPanelProvider', () => {
     const form = await screen.findByRole('form', { name: 'Start Athena work' });
     expect(within(form).getByRole('group', { name: /Fall fundraiser launch/ })).toBeVisible();
 
-    fireEvent.click(within(form).getByRole('button', { name: /Detach/ }));
+    fireEvent.click(within(form).getByRole('button', { name: /Remove/ }));
     expect(within(form).queryByRole('group', { name: /Fall fundraiser launch/ })).toBeNull();
 
     fireEvent.change(screen.getByLabelText('Athena objective'), {

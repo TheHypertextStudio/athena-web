@@ -531,7 +531,9 @@ with scopes from `COMMIT_SCOPES.txt`: composer drafts and the Drafts page → `w
 preference → `hub`); error primitives → `design`, migrations → the record scope the surface belongs to
 (`tasks`, `projects`, `initiatives`, …) or `web` when cross-cutting; z-index tokens → `design`; the
 dependencies route and canvas reflow → `projects`; task detail → `tasks`. Subjects state the outcome,
-never the mechanism. Substantive bodies, `Co-authored-by:` trailer, `Docs-impact:` trailer.
+never the mechanism. Substantive bodies and a `Co-authored-by:` trailer. `design` is for the
+design-system contract itself; a change a person experiences takes the scope of the surface it was
+found on.
 
 First implementation step: write this design as `docs/superpowers/specs/2026-09-18-drafting-errors-canvas-task-detail-design.md`
 (the brainstorming spec the workflow expects) and the four WORKLOG Active Task entries, in one

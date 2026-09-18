@@ -17,9 +17,6 @@ links and anchors, the wrong primary domain, or demo fixture copy. The docs poli
 when the product adds a vocabulary key, MCP tool, or OAuth scope without updating its public
 coverage.
 
-Every `feat` and `fix` commit must end with a `Docs-impact` trailer. Use `Updated - <page>` when the
-guide changed. Use `Not needed - <reason>` when the behavior does not affect public guidance.
-
 ## What lives here, and what does not
 
 This site is the **higher-level** reference. The endpoint-by-endpoint REST reference stays at

@@ -47,21 +47,16 @@ describe('commit message policy', () => {
     expect(validate(`chore(dx): Enforce repository commit policy\n\n${validBody}`).status).toBe(0);
   });
 
-  it.each(['feat', 'fix'])('requires the %s type to declare its documentation impact', (type) => {
-    const result = validate(`${type}(dx): Enforce repository commit policy\n\n${validBody}`);
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('Docs-impact trailer');
-  });
+  it.each(['feat', 'fix'])(
+    'accepts the %s type with a substantive body and no trailers',
+    (type) => {
+      expect(validate(`${type}(dx): Enforce repository commit policy\n\n${validBody}`).status).toBe(
+        0,
+      );
+    },
+  );
 
-  it.each(['feat', 'fix'])('accepts the %s type with updated documentation', (type) => {
-    expect(
-      validate(
-        `${type}(dx): Enforce repository commit policy\n\n${validBody}\nDocs-impact: Updated - apps/docs/guides/manage/workflow-configuration.mdx\n`,
-      ).status,
-    ).toBe(0);
-  });
-
-  it('accepts a documented reason when a fix needs no public docs change', () => {
+  it('still reads a Docs-impact line as a trailer rather than body text', () => {
     expect(
       validate(
         `fix(dx): Enforce repository commit policy\n\n${validBody}\nDocs-impact: Not needed - Internal commit validation only.\n`,

@@ -38,6 +38,10 @@ import { Maximize, Minimize } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type ReactNode, type RefObject, useId, useRef, useState } from 'react';
 
+import { ComposerClosePrompt } from './composer-close-prompt';
+import { handleContinueChord } from './continue-chord';
+import { useDiscardPrompt } from './use-discard-prompt';
+
 import {
   DocumentContentsRail,
   useDocumentContents,
@@ -220,7 +224,6 @@ export function ComposerShell({
 }: ComposerShellProps): JSX.Element {
   const formId = useId();
   // Whether the user is being asked to confirm discarding a non-empty draft.
-  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   // Expansion belongs to one opening. Radix resets it through `onOpenAutoFocus` on every reopen.
   const [expanded, setExpanded] = useState(false);
   const bodyColumnRef = useRef<HTMLDivElement>(null);
@@ -234,13 +237,20 @@ export function ComposerShell({
   const isDirty =
     !draftCommitted &&
     (title.trim().length > 0 || (summary ?? '').trim().length > 0 || body.trim().length > 0);
-  // The draft is locked while its own create is in flight, and that is the correct behavior for a
-  // one-draft composer: this request is *about* these values, so a field edited after submitting
-  // would show a change the created object does not have. What was missing was not the ability to
-  // keep typing — it was any indication of why the form had gone quiet, which `aria-busy` below
-  // now supplies. Letting the next draft start before this one settles needs the pending-insert
-  // lifecycle, not a relaxed `disabled`.
-  const editDisabled = creating || contentDisabled;
+  // The hook decides when the draft is locked. It is locked while its own create is in flight,
+  // and that is the correct behavior for a one-draft composer: this request is *about* these
+  // values, so a field edited after submitting would show a change the created object does not
+  // have. `aria-busy` below says why the form has gone quiet. It is locked again under the close
+  // prompt, so nothing behind the prompt can submit the form it has visually replaced.
+  const prompt = useDiscardPrompt({
+    creating,
+    contentDisabled,
+    canSubmit,
+    isDirty,
+    onOpenChange,
+    titleInputRef,
+  });
+  const { confirming: confirmingDiscard, editDisabled, submittable } = prompt;
   const hasLegacyIcon = icon !== undefined && icon !== null && icon !== false;
   const hasLegacyContext = context !== undefined && context !== null && context !== false;
   const legacyContextVisible = hasLegacyIcon || hasLegacyContext;
@@ -257,34 +267,18 @@ export function ComposerShell({
         mentionOrgId={mentionOrgId}
         contributions={bodyContributions}
         onSubmit={() => {
-          if (canSubmit && !creating) onSubmit();
+          if (submittable) onSubmit();
         }}
         className="bg-surface-container-low flex min-h-28 flex-1 flex-col overflow-y-auto overscroll-contain rounded-lg p-3 [&>div]:flex-1"
       />
     );
-
-  /** Gate every dismiss path (Esc, backdrop, X) so a dirty draft is never silently discarded. */
-  const requestClose = (): void => {
-    if (creating) return;
-    if (isDirty) {
-      setConfirmingDiscard(true);
-      return;
-    }
-    onOpenChange(false);
-  };
-
-  /** Discard the draft and close. */
-  const discard = (): void => {
-    setConfirmingDiscard(false);
-    onOpenChange(false);
-  };
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
         if (next) return;
-        requestClose();
+        prompt.requestClose();
       }}
     >
       <DialogContent
@@ -296,29 +290,9 @@ export function ComposerShell({
         onOpenAutoFocus={() => {
           setExpanded(false);
         }}
-        onEscapeKeyDown={(event) => {
-          const active = document.activeElement;
-          // Radix sees Escape at the document before the portaled table toolbar can return focus
-          // to its editor. Keep that first Escape inside the table editing interaction.
-          if (active instanceof HTMLElement && active.closest('[data-table-controls]') !== null) {
-            event.preventDefault();
-          }
-        }}
+        onEscapeKeyDown={prompt.onEscapeKeyDown}
         onKeyDownCapture={(event) => {
-          if (
-            !continuation ||
-            event.key !== 'Enter' ||
-            !event.shiftKey ||
-            (!event.metaKey && !event.ctrlKey) ||
-            event.repeat ||
-            creating ||
-            !canSubmit
-          ) {
-            return;
-          }
-          event.preventDefault();
-          event.stopPropagation();
-          continuation.onSubmit();
+          handleContinueChord(event, continuation, submittable);
         }}
       >
         {/* The dialog's accessible name — never shown; the title field is the only visible heading. */}
@@ -350,7 +324,7 @@ export function ComposerShell({
           id={formId}
           onSubmit={(event) => {
             event.preventDefault();
-            if (canSubmit && !creating) onSubmit();
+            if (submittable) onSubmit();
           }}
           className="contents"
         >
@@ -405,7 +379,7 @@ export function ComposerShell({
                   aria-label={titlePlaceholder}
                   placeholder={titlePlaceholder}
                   value={title}
-                  ref={titleInputRef}
+                  ref={prompt.titleRef}
                   disabled={editDisabled}
                   autoFocus
                   onChange={(event) => {
@@ -463,10 +437,8 @@ export function ComposerShell({
             ) : null}
             <ComposerActionRow
               confirmingDiscard={confirmingDiscard}
-              onKeepEditing={() => {
-                setConfirmingDiscard(false);
-              }}
-              onDiscard={discard}
+              onKeepEditing={prompt.keepEditing}
+              onDiscard={prompt.discard}
               continuation={continuation}
               editDisabled={editDisabled}
               formId={formId}
@@ -613,19 +585,7 @@ function ComposerActionRow({
   submitLabel,
 }: ComposerActionRowProps): JSX.Element {
   if (confirmingDiscard) {
-    return (
-      <div className="flex w-full flex-row items-center gap-2">
-        <span className="text-on-surface-variant text-body-medium mr-auto">
-          Discard this draft?
-        </span>
-        <Button type="button" variant="ghost" onClick={onKeepEditing}>
-          Keep editing
-        </Button>
-        <Button type="button" variant="destructive" onClick={onDiscard}>
-          Discard
-        </Button>
-      </div>
-    );
+    return <ComposerClosePrompt onKeepEditing={onKeepEditing} onDiscard={onDiscard} />;
   }
 
   return (

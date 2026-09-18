@@ -95,7 +95,7 @@ import {
   GlobalProjectComposer,
 } from '../../src/components/projects/create-project';
 import { queryKeys } from '../../src/lib/query';
-import { firstJson, jsonResponse } from '../support/http';
+import { firstJson, jsonResponse, statusMessages } from '../support/http';
 
 // Valid ULID-shaped ids (no I/L/O/U) so the composer's `*.parse(...)` guards accept them.
 const ORG_ID = '0RG00000000000000000000001';
@@ -961,9 +961,7 @@ describe('CreateProjectDialog — robust composer', () => {
     });
     expect(screen.getByRole('button', { name: /Lead — Grace Hopper/ })).toBeVisible();
     expect(firstJson(projectPost.mock.calls)).toMatchObject({ teamId: TEAM_ID, leadId: GRACE_ID });
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Project created. Ready to create another.',
-    );
+    expect(statusMessages()).toContain('Project created. Ready to create another.');
     await waitFor(() => {
       expect(screen.getByLabelText('Project name')).toHaveFocus();
     });

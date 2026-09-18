@@ -108,7 +108,7 @@ vi.mock('next/navigation', () => ({
 import { CreateTaskDialog, GlobalTaskComposer } from '../../src/components/tasks/create-task';
 import { UserFacingError } from '../../src/lib/problem';
 import { queryKeys } from '../../src/lib/query';
-import { firstJson, jsonResponse } from '../support/http';
+import { firstJson, jsonResponse, statusMessages } from '../support/http';
 
 // Branded ids (ActorId / ProjectId / TeamId / LabelId) are ULIDs, so the composer's `*.parse(...)`
 // guards only accept the canonical 26-char Crockford-base32 shape. Use valid ULIDs throughout.
@@ -1023,7 +1023,7 @@ describe('CreateTaskDialog — robust composer', () => {
       expect(screen.getByLabelText('Task title')).toHaveValue('');
       expect(screen.getByLabelText('Add a description').textContent).toBe('');
     });
-    expect(screen.getByRole('status')).toHaveTextContent('Task created. Ready to create another.');
+    expect(statusMessages()).toContain('Task created. Ready to create another.');
     expect(document.activeElement).toBe(screen.getByLabelText('Task title'));
 
     fireEvent.click(createMore);

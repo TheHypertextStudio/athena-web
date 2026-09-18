@@ -21,6 +21,7 @@ import {
 import { useActiveOrg } from '@/components/active-org';
 
 import { CreationContextProvider } from './creation-context';
+import { type SetActiveDraftId, useComposerInterruption } from './use-composer-interruption';
 
 export { type CompleteCreateObjectOptions, completeCreateObject } from './create-object-completion';
 
@@ -28,6 +29,8 @@ export { type CompleteCreateObjectOptions, completeCreateObject } from './create
 interface CreateObjectRequestBase {
   /** Destination chosen by the launcher; omitted to snapshot the shell workspace at open time. */
   readonly initialWorkspaceId?: string | null;
+  /** A saved draft the launcher asks the composer to reopen (the Drafts page names one). */
+  readonly draftId?: string | null;
 }
 
 /**
@@ -140,6 +143,14 @@ export interface CreateObjectValue {
   readonly openCreate: (request: CreateObjectRequest, returnFocusTo?: HTMLElement | null) => void;
   /** Close the active composer and clear its destination. */
   readonly closeCreate: () => void;
+  /**
+   * Report the draft the open composer is writing to, or null once there is none.
+   *
+   * @remarks
+   * When navigation closes the composer, this is the draft the provider points the next composer
+   * of the same kind at. See {@link useComposerInterruption}.
+   */
+  readonly setActiveDraftId: SetActiveDraftId;
 }
 
 interface CreateObjectStateValue extends CreateObjectValue {
@@ -229,9 +240,19 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
     if (targetWorkspaceId === null) setTargetWorkspaceId(shellWorkspaceId);
   }, [request, shellWorkspaceId, targetWorkspaceId]);
 
+  // Navigating away closes the composer; the draft it was writing is pointed at for next time.
+  const setActiveDraftId = useComposerInterruption(request, closeCreate);
+
   const value = useMemo<CreateObjectStateValue>(
-    () => ({ request, openCreate, closeCreate, targetWorkspaceId, setTargetWorkspaceId }),
-    [request, openCreate, closeCreate, targetWorkspaceId],
+    () => ({
+      request,
+      openCreate,
+      closeCreate,
+      setActiveDraftId,
+      targetWorkspaceId,
+      setTargetWorkspaceId,
+    }),
+    [request, openCreate, closeCreate, setActiveDraftId, targetWorkspaceId],
   );
 
   return <CreateObjectContext.Provider value={value}>{children}</CreateObjectContext.Provider>;

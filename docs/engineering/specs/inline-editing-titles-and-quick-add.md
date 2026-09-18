@@ -97,6 +97,8 @@ Rationale: on a detail page there is nothing for a click to conflict with, so si
 
 Quick-add is always an explicit "+ Add task" affordance (no gesture ambiguity), placed at the **end of each task group** (e.g. under each milestone in the project Tasks tab, under each board column) so context (milestoneId/cycleId) is implied by position.
 
+The same no-Save-button rule holds for what a person types into a create composer before the record exists: the composer autosaves it as a draft on the same debounce, and the "Save draft" answer on the close prompt is a disposition of a draft already saved, not a save button. See `drafts.md`.
+
 ## 5. Data-layer changes (client only)
 
 The server already accepts all of these; only the client patch types omit the field.

@@ -34,17 +34,16 @@ import { EntityPicker } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight, Layers } from '@docket/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
-import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
-import { ComposerTemplateControl } from '@/components/composer/template-menu';
-import type { EditorContribution } from '@/components/editor/editor-contribution';
 import { useComposerDraft } from '@/components/composer/use-composer-draft';
-import { templateMerge } from '@/components/templates/merge';
+import { useComposerTemplateContribution } from '@/components/composer/use-template-contribution';
 import { withComposerReset } from '@/components/composer/reset-on-open';
+import { useResumeDraft } from '@/components/create-object/use-resume-draft';
 import {
   completeCreateObject,
   runConfirmedCreateCallback,
@@ -71,6 +70,7 @@ import {
   type DraftMilestone,
   ProjectMilestonesField,
 } from '@/components/projects/project-milestones-field';
+import { useProjectDraftPersistence } from './use-project-draft-persistence';
 
 /** The lists this composer's pickers draw from. */
 const COMPOSER_INCLUDE = ['actors', 'programs', 'initiatives'] as const;
@@ -224,6 +224,10 @@ export interface CreateProjectDialogProps {
   onCreated: (project: ProjectOut) => void;
   /** A template to apply on open, from a `?template=` compose request. */
   defaultTemplateId?: string | null | undefined;
+  /** A saved draft to reopen on mount; it takes precedence over `defaultTemplateId`. */
+  resumeDraftId?: string | null | undefined;
+  /** Receives the id of the draft row being written, and null once there is none. */
+  onDraftIdChange?: ((draftId: string | null) => void) | undefined;
   /** Destination facts when mounted by the shell-global creation host. */
   globalCreation?: ProjectGlobalCreation | undefined;
 }
@@ -245,6 +249,8 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
   onOpenChange,
   onCreated,
   defaultTemplateId = null,
+  resumeDraftId,
+  onDraftIdChange,
   globalCreation,
 }: CreateProjectDialogProps): JSX.Element {
   const projectNounLower = projectNoun.toLowerCase();
@@ -284,50 +290,33 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
   });
 
   const teamId = draft.teamOverride ?? defaultTeamId;
-  const templateContribution = useMemo<EditorContribution>(
-    () => ({
-      id: 'composer-description-templates-project',
-      renderEmptyAction: () => (
-        <ComposerTemplateControl
-          orgId={orgId}
-          kind="project"
-          open={open && destinationReady}
-          autoApplyId={contextualRequestDefaultsApply ? defaultTemplateId : null}
-          currentActorId={globalCreation?.currentActorId}
-          teamId={globalCreation === undefined ? undefined : teamId}
-          inline
-          onManage={
-            globalCreation === undefined
-              ? undefined
-              : () => {
-                  onOpenChange(false);
-                }
-          }
-          onApply={(chosen) => {
-            updateDraft((current) =>
-              templateMerge(current, templatePatch(chosen.payload, 'project'), {
-                document: 'description',
-                labels: ['name', 'summary'],
-              }),
-            );
-          }}
-          disabled={creating || !destinationReady}
-        />
-      ),
-    }),
-    [
-      contextualRequestDefaultsApply,
-      creating,
-      defaultTemplateId,
-      destinationReady,
-      globalCreation,
-      onOpenChange,
-      open,
-      orgId,
-      teamId,
-      updateDraft,
-    ],
-  );
+  const persistence = useProjectDraftPersistence({
+    orgId,
+    open,
+    destinationReady,
+    draft,
+    updateDraft,
+    resumeDraftId,
+    onDraftIdChange,
+    options,
+    teams,
+  });
+  const templateContribution = useComposerTemplateContribution<ProjectDraft>({
+    kind: 'project',
+    orgId,
+    open,
+    destinationReady,
+    host: globalCreation,
+    contextualDefaultsApply: contextualRequestDefaultsApply,
+    defaultTemplateId,
+    resumeDraftId,
+    teamId,
+    creating,
+    onOpenChange,
+    updateDraft,
+    patch: (payload) => templatePatch(payload, 'project'),
+    rule: { document: 'description', labels: ['name', 'summary'] },
+  });
 
   // Keep portable copy, dates, and generic enum choices when the destination changes, but never
   // carry a Team, person, Program, or Initiative id into a workspace that cannot own that row.
@@ -436,7 +425,9 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
           setError(userErrorMessage(await readProblemError(res, fallback), fallback));
           return;
         }
-        finishCreate(await res.json(), continueCreating);
+        const created = await res.json();
+        await persistence.commit();
+        finishCreate(created, continueCreating);
       } catch (caught) {
         setError(
           userErrorMessage(caught, `Something went wrong creating the ${projectNounLower}.`),
@@ -446,7 +437,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
         setCreating(false);
       }
     },
-    [canSubmit, continuation, draft, finishCreate, teamId, orgId, projectNounLower],
+    [canSubmit, continuation, draft, finishCreate, persistence, teamId, orgId, projectNounLower],
   );
 
   return (
@@ -500,13 +491,15 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       summaryPlaceholder="One-sentence summary"
       summaryMaxLength={280}
       body={draft.description}
-      bodyResetKey={continuation.bodyResetGeneration}
+      bodyResetKey={`${String(continuation.bodyResetGeneration)}:${String(persistence.loadGeneration)}`}
       onBodyChange={(next) => {
         setField('description', next);
       }}
       bodyPlaceholder="Add a description"
       bodyContributions={[templateContribution]}
       mentionOrgId={orgId}
+      drafts={persistence.controls}
+      draftNoun={projectNounLower}
       trailingFields={
         <ProjectMilestonesField
           value={draft.milestones}
@@ -625,6 +618,8 @@ function GlobalProjectComposerBody({
     !creation.loading &&
     !creation.permissions.loading &&
     creation.loadError === null;
+  const { setActiveDraftId } = useCreateObject();
+  const resume = useResumeDraft('project', request.draftId, targetWorkspaceId, destinationReady);
 
   return (
     <CreateProjectDialog
@@ -635,6 +630,8 @@ function GlobalProjectComposerBody({
       teamsLoading={creation.loading || creation.permissions.loading}
       defaultProgramId={targetIsOriginalWorkspace ? request.defaultProgramId : null}
       defaultTemplateId={targetIsOriginalWorkspace ? request.defaultTemplateId : null}
+      resumeDraftId={resume.draftId}
+      onDraftIdChange={setActiveDraftId}
       open
       onOpenChange={(next) => {
         if (!next) closeCreate();
@@ -643,7 +640,7 @@ function GlobalProjectComposerBody({
       globalCreation={{
         targetWorkspaceId,
         initialWorkspaceId,
-        ready: destinationReady,
+        ready: resume.ready,
         loadError: creation.loadError,
         canContribute: creation.permissions.canContribute,
         currentActorId,

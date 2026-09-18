@@ -51,14 +51,14 @@ export interface ProjectMilestonesFieldProps {
   onChange: (next: readonly DraftMilestone[]) => void;
 }
 
+/** A row key unique within this composer's lifetime; a reopened draft mints fresh ones. */
+export function newDraftMilestoneKey(): string {
+  return `${String(Date.now())}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 /** Build a draft from a typed name, with a key unique within this composer's lifetime. */
 function draftFrom(name: string): DraftMilestone {
-  return {
-    key: `${String(Date.now())}-${Math.random().toString(36).slice(2, 9)}`,
-    name,
-    targetDate: null,
-    description: '',
-  };
+  return { key: newDraftMilestoneKey(), name, targetDate: null, description: '' };
 }
 
 /** The composer's milestone list: one editable row per draft, plus an add row. */

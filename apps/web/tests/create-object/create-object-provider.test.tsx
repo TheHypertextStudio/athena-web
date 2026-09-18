@@ -48,6 +48,11 @@ vi.mock('../../src/lib/auth-client', () => ({
   useSession: () => sessionState,
 }));
 
+// The provider reads the pathname to close a composer on navigation; these tests never move.
+vi.mock('../../src/lib/app-location', () => ({
+  useAppPathname: () => '/',
+}));
+
 import { ActiveOrgContext } from '../../src/components/active-org';
 import { runConfirmedCreateCallback } from '../../src/components/create-object/create-object-completion';
 import {
@@ -461,10 +466,7 @@ const REQUEST_CONTRACT = [
     sameWorkspaceCompletion: 'open',
     onCreated: (_created: ProgramOut): void => undefined,
   } satisfies CreateProgramRequest,
-  {
-    kind: 'team',
-    onCreated: (_created: TeamOut): void => undefined,
-  } satisfies CreateTeamRequest,
+  { kind: 'team', onCreated: (_created: TeamOut): void => undefined } satisfies CreateTeamRequest,
 ] as const;
 
 /** Expose the provider state through user-operable controls, including the workspace picker. */
@@ -746,9 +748,7 @@ describe('CreateObjectProvider', () => {
     document.body.tabIndex = -1;
     document.body.focus();
 
-    await waitFor(() => {
-      expect(launcher).toHaveFocus();
-    });
+    await waitFor(() => expect(launcher).toHaveFocus());
   });
 
   it('does not let a stale focus retry escape a newly opened composer', async () => {

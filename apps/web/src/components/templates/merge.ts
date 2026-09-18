@@ -6,7 +6,7 @@
  * explicit `undefined` value for a key that is present. Template patches are built by widening
  * scripts that produce exactly that shape, so {@link templateMerge} needs this instead.
  */
-type PartialWithUndefined<T> = { [K in keyof T]?: T[K] | undefined };
+export type PartialWithUndefined<T> = { [K in keyof T]?: T[K] | undefined };
 
 /** How an authored value absorbs a template's fields. */
 export interface TemplateMergeRule<T> {

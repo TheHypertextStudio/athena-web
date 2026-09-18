@@ -26,17 +26,16 @@ import { ActorPicker } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight } from '@docket/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
-import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
-import { ComposerTemplateControl } from '@/components/composer/template-menu';
-import type { EditorContribution } from '@/components/editor/editor-contribution';
 import { useComposerDraft } from '@/components/composer/use-composer-draft';
-import { templateMerge } from '@/components/templates/merge';
+import { useComposerTemplateContribution } from '@/components/composer/use-template-contribution';
 import { withComposerReset } from '@/components/composer/reset-on-open';
+import { useResumeDraft } from '@/components/create-object/use-resume-draft';
 import {
   completeCreateObject,
   runConfirmedCreateCallback,
@@ -57,6 +56,7 @@ import { seedProgramRecord } from '@/lib/entity-records';
 import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 import { ProgramComposerPickers } from './program-form-pickers';
+import { useProgramDraftPersistence } from './use-program-draft-persistence';
 
 /** The lists this composer's pickers draw from. */
 const COMPOSER_INCLUDE = ['actors'] as const;
@@ -104,6 +104,10 @@ export interface CreateProgramDialogProps {
   onCreated: (program: ProgramOut) => void;
   /** A template to apply on open, from a `?template=` compose request. */
   defaultTemplateId?: string | null | undefined;
+  /** A saved draft to reopen on mount; it takes precedence over `defaultTemplateId`. */
+  resumeDraftId?: string | null | undefined;
+  /** Receives the id of the draft row being written, and null once there is none. */
+  onDraftIdChange?: ((draftId: string | null) => void) | undefined;
   /** Destination facts when mounted by the shell-global creation host. */
   globalCreation?: ProgramGlobalCreation | undefined;
 }
@@ -121,6 +125,8 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
   onOpenChange,
   onCreated,
   defaultTemplateId = null,
+  resumeDraftId,
+  onDraftIdChange,
   globalCreation,
 }: CreateProgramDialogProps): JSX.Element {
   const programNounLower = programNoun.toLowerCase();
@@ -151,49 +157,32 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
     creating,
     successMessage: `${programNoun} created. Ready to create another.`,
   });
-  const templateContribution = useMemo<EditorContribution>(
-    () => ({
-      id: 'composer-description-templates-program',
-      renderEmptyAction: () => (
-        <ComposerTemplateControl
-          orgId={orgId}
-          kind="program"
-          open={open && destinationReady}
-          autoApplyId={contextualRequestDefaultsApply ? defaultTemplateId : null}
-          currentActorId={globalCreation?.currentActorId}
-          teamId={globalCreation === undefined ? undefined : null}
-          inline
-          onManage={
-            globalCreation === undefined
-              ? undefined
-              : () => {
-                  onOpenChange(false);
-                }
-          }
-          onApply={(chosen) => {
-            updateDraft((current) =>
-              templateMerge(current, templatePatch(chosen.payload, 'program'), {
-                document: 'description',
-                labels: ['name', 'summary'],
-              }),
-            );
-          }}
-          disabled={creating || !destinationReady}
-        />
-      ),
-    }),
-    [
-      contextualRequestDefaultsApply,
-      creating,
-      defaultTemplateId,
-      destinationReady,
-      globalCreation,
-      onOpenChange,
-      open,
-      orgId,
-      updateDraft,
-    ],
-  );
+  const persistence = useProgramDraftPersistence({
+    orgId,
+    open,
+    destinationReady,
+    draft,
+    updateDraft,
+    resumeDraftId,
+    onDraftIdChange,
+    options,
+  });
+  const templateContribution = useComposerTemplateContribution<ProgramDraft>({
+    kind: 'program',
+    orgId,
+    open,
+    destinationReady,
+    host: globalCreation,
+    contextualDefaultsApply: contextualRequestDefaultsApply,
+    defaultTemplateId,
+    resumeDraftId,
+    teamId: null,
+    creating,
+    onOpenChange,
+    updateDraft,
+    patch: (payload) => templatePatch(payload, 'program'),
+    rule: { document: 'description', labels: ['name', 'summary'] },
+  });
 
   // Keep copy and generic enum choices portable while dropping the prior workspace's person id.
   useEffect(() => {
@@ -238,6 +227,7 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
           return;
         }
         const created = await res.json();
+        await persistence.commit();
         if (globalCreation !== undefined) {
           globalCreation.onCreated(created, continueCreating);
         } else {
@@ -270,6 +260,7 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
       programNounLower,
       onOpenChange,
       onCreated,
+      persistence,
       updateDraft,
     ],
   );
@@ -323,7 +314,7 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
       summaryPlaceholder="One-sentence summary"
       summaryMaxLength={280}
       body={draft.description}
-      bodyResetKey={continuation.bodyResetGeneration}
+      bodyResetKey={`${String(continuation.bodyResetGeneration)}:${String(persistence.loadGeneration)}`}
       onBodyChange={(next) => {
         setField('description', next);
       }}
@@ -331,6 +322,8 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
       bodyContributions={[templateContribution]}
       mentionOrgId={orgId}
       error={error ?? globalCreation?.loadError ?? null}
+      drafts={persistence.controls}
+      draftNoun={programNounLower}
       statusMessage={continuation.statusMessage}
       creating={creating}
       canSubmit={canSubmit}
@@ -423,6 +416,8 @@ function GlobalProgramComposerBody({
     !creation.loading &&
     !creation.permissions.loading &&
     creation.loadError === null;
+  const { setActiveDraftId } = useCreateObject();
+  const resume = useResumeDraft('program', request.draftId, targetWorkspaceId, destinationReady);
 
   return (
     <CreateProgramDialog
@@ -434,10 +429,12 @@ function GlobalProgramComposerBody({
       }}
       onCreated={() => undefined}
       defaultTemplateId={targetIsOriginalWorkspace ? request.defaultTemplateId : null}
+      resumeDraftId={resume.draftId}
+      onDraftIdChange={setActiveDraftId}
       globalCreation={{
         targetWorkspaceId,
         initialWorkspaceId,
-        ready: destinationReady,
+        ready: resume.ready,
         loadError: creation.loadError,
         canManage: creation.permissions.canManage,
         currentActorId,

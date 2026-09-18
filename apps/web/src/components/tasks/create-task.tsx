@@ -46,11 +46,10 @@ import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
-import { ComposerTemplateControl } from '@/components/composer/template-menu';
-import type { EditorContribution } from '@/components/editor/editor-contribution';
 import { useComposerDraft } from '@/components/composer/use-composer-draft';
-import { templateMerge } from '@/components/templates/merge';
+import { useComposerTemplateContribution } from '@/components/composer/use-template-contribution';
 import { withComposerReset } from '@/components/composer/reset-on-open';
+import { useResumeDraft } from '@/components/create-object/use-resume-draft';
 import { completeCreateObject } from '@/components/create-object/create-object-completion';
 import {
   type CreateTaskRequest,
@@ -75,6 +74,7 @@ import {
 } from '@/components/recurrence/repeat-task-control';
 
 import { TaskComposerPickers } from './task-form-pickers';
+import { useTaskDraftPersistence } from './use-task-draft-persistence';
 
 /** The lists this composer's pickers draw from. */
 const COMPOSER_INCLUDE = ['actors', 'projects', 'cycles', 'labels', 'milestones'] as const;
@@ -162,6 +162,10 @@ export interface CreateTaskDialogProps {
   defaultAssigneeId?: string | null | undefined;
   /** A template to apply on open, from a `?template=` compose request. */
   defaultTemplateId?: string | null | undefined;
+  /** A saved draft to reopen on mount; it takes precedence over `defaultTemplateId`. */
+  resumeDraftId?: string | null | undefined;
+  /** Receives the id of the draft row being written, and null once there is none. */
+  onDraftIdChange?: ((draftId: string | null) => void) | undefined;
   /** Destination facts when this dialog is mounted by the global creation host. */
   globalCreation?: TaskGlobalCreation | undefined;
 }
@@ -183,8 +187,11 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   defaultProjectId = null,
   defaultAssigneeId = null,
   defaultTemplateId = null,
+  resumeDraftId,
+  onDraftIdChange,
   globalCreation,
 }: CreateTaskDialogProps): JSX.Element {
+  const taskNoun = useVocabulary('task');
   const projectNoun = useVocabulary('project');
   const cycleNoun = useVocabulary('cycle');
   const previousWorkspaceId = useRef(globalCreation?.targetWorkspaceId ?? null);
@@ -230,51 +237,38 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   });
 
   const teamId = draft.teamOverride ?? defaultTeamId;
-  const templateContribution = useMemo<EditorContribution>(
-    () => ({
-      id: 'composer-description-templates-task',
-      renderEmptyAction: () => (
-        <ComposerTemplateControl
-          orgId={orgId}
-          kind="task"
-          open={open && destinationReady}
-          autoApplyId={contextualRequestDefaultsApply ? defaultTemplateId : null}
-          currentActorId={globalCreation?.currentActorId}
-          teamId={globalCreation === undefined ? undefined : teamId}
-          inline
-          onManage={
-            globalCreation === undefined
-              ? undefined
-              : () => {
-                  onOpenChange(false);
-                }
-          }
-          onApply={(chosen) => {
-            updateDraft((current) =>
-              templateMerge(current, templatePatch(chosen.payload, 'task'), {
-                document: 'description',
-                labels: ['title'],
-              }),
-            );
-          }}
-          disabled={creating || completedTask !== null || !destinationReady}
-        />
-      ),
-    }),
-    [
-      completedTask,
-      contextualRequestDefaultsApply,
-      creating,
-      defaultTemplateId,
-      destinationReady,
-      globalCreation,
-      onOpenChange,
-      open,
-      orgId,
-      teamId,
-      updateDraft,
-    ],
-  );
+  const persistence = useTaskDraftPersistence({
+    orgId,
+    open,
+    destinationReady,
+    draft,
+    committed: completedTask !== null,
+    updateDraft,
+    resumeDraftId,
+    onDraftIdChange,
+    options,
+    teams,
+    defaultTeamId,
+    teamId,
+    workflowStates,
+  });
+  const templateContribution = useComposerTemplateContribution<TaskDraft>({
+    kind: 'task',
+    orgId,
+    open,
+    destinationReady,
+    host: globalCreation,
+    contextualDefaultsApply: contextualRequestDefaultsApply,
+    defaultTemplateId,
+    resumeDraftId,
+    teamId,
+    creating,
+    committed: completedTask !== null,
+    onOpenChange,
+    updateDraft,
+    patch: (payload) => templatePatch(payload, 'task'),
+    rule: { document: 'description', labels: ['title'] },
+  });
 
   // A destination change retains portable text and generic task values, but a reference to a
   // member, team, project, milestone, cycle, or label in the prior workspace is never valid in
@@ -439,6 +433,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         }
         const created = await res.json();
         createdTask = 'firstTask' in created ? created.firstTask : created;
+        await persistence.commit();
         const references: TaskCreationReferences = {
           projectId: draft.projectId,
           milestoneId: draft.milestoneId,
@@ -475,6 +470,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       onCreated,
       onOpenChange,
       orgId,
+      persistence,
       teamId,
       updateDraft,
     ],
@@ -529,7 +525,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       titleInputRef={continuation.titleInputRef}
       titlePlaceholder="Task title"
       body={draft.description}
-      bodyResetKey={continuation.bodyResetGeneration}
+      bodyResetKey={`${String(continuation.bodyResetGeneration)}:${String(persistence.loadGeneration)}`}
       onBodyChange={(next) => {
         setField('description', next);
       }}
@@ -537,6 +533,8 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       bodyContributions={[templateContribution]}
       mentionOrgId={orgId}
       error={error ?? globalCreation?.loadError ?? null}
+      drafts={persistence.controls}
+      draftNoun={taskNoun.toLowerCase()}
       statusMessage={continuation.statusMessage}
       draftCommitted={completedTask !== null}
       contentDisabled={completedTask !== null}
@@ -669,6 +667,8 @@ function GlobalTaskComposerDialog({
   // the composer before submitting.
   const targetIsOriginalWorkspace = targetWorkspaceId === initialWorkspaceId;
   const taskOrgId = targetWorkspaceId ?? initialWorkspaceId ?? '';
+  const { setActiveDraftId } = useCreateObject();
+  const resume = useResumeDraft('task', request.draftId, targetWorkspaceId, destinationReady);
 
   return (
     <VocabularyProvider skin={creation.vocabulary}>
@@ -685,10 +685,12 @@ function GlobalTaskComposerDialog({
         defaultProjectId={targetIsOriginalWorkspace ? request.defaultProjectId : null}
         defaultAssigneeId={targetIsOriginalWorkspace ? request.defaultAssigneeId : null}
         defaultTemplateId={targetIsOriginalWorkspace ? request.defaultTemplateId : null}
+        resumeDraftId={resume.draftId}
+        onDraftIdChange={setActiveDraftId}
         globalCreation={{
           targetWorkspaceId,
           initialWorkspaceId,
-          ready: destinationReady,
+          ready: resume.ready,
           loadError: creation.loadError,
           canContribute: creation.permissions.canContribute,
           currentActorId,

@@ -67,7 +67,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('../../src/lib/work-target-invalidation', () => ({ invalidateWorkTargetQueries }));
 
 import { GlobalInitiativeComposer } from '../../src/components/initiatives/create-initiative';
-import { firstJson, jsonResponse } from '../support/http';
+import { firstJson, jsonResponse, statusMessages } from '../support/http';
 
 const ORG_ID = '0RG00000000000000000000001';
 const OWNER_ID = 'ADA00000000000000000000002';
@@ -393,9 +393,7 @@ describe('GlobalInitiativeComposer', () => {
       expect(screen.getByLabelText('One-sentence summary')).toHaveValue('');
     });
     expect(screen.getByRole('button', { name: 'Priority — High priority' })).toBeVisible();
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Initiative created. Ready to create another.',
-    );
+    expect(statusMessages()).toContain('Initiative created. Ready to create another.');
     expect(routerPush).not.toHaveBeenCalled();
     expect(closeCreate).not.toHaveBeenCalled();
     expect(onCreated).toHaveBeenCalledOnce();

@@ -21,12 +21,16 @@
   default) that reopens the newest draft when a composer opens.
 - **Plan**: `docs/superpowers/specs/2026-09-18-drafting-errors-canvas-task-detail-design.md` Part 1.
 - **Subtasks**:
-  - [ ] Discard prompt owns the keyboard (gate every submit path, focus the prompt)
-  - [ ] Contract, schema, migration, store, `/v1/me/drafts` routes, expiry sweep
-  - [ ] `composer.resumeDrafts` preference and settings row
-  - [ ] Autosave hook, codecs, chip, close prompt, provider resume logic
-  - [ ] Drafts page and conditional sidebar entry
-  - [ ] `docs/engineering/specs/drafts.md`
+  - [x] Discard prompt owns the keyboard (gate every submit path, focus the prompt)
+  - [x] Contract, schema, migration, store, `/v1/me/drafts` routes, expiry sweep
+  - [x] `composer.resumeDrafts` preference and settings row
+  - [x] Autosave hook, chip, close prompt (`useComposerDraftPersistence`, `ComposerDraftsChip`)
+  - [x] Per-composer codecs, the five composers wired, provider navigate-away pointer and resume
+  - [x] Drafts page and conditional sidebar entry
+  - [x] `docs/engineering/specs/drafts.md`
+- **Notes**: The "Keep editing" report was three ungated submit paths behind the prompt, not the
+  button. Sonner-style state in `packages/ui` is module-level, so composer tests clear it in
+  `afterEach`. Hono's typed `$delete` names only its 204, so the delete reads a plain `Response`.
 - **Blockers**: None.
 
 ### [ERRORS-001] One error-presentation system replaces inline plaintext errors
@@ -41,10 +45,13 @@
   site by group and add an ESLint rule so raw error tokens cannot return.
 - **Plan**: spec above, Part 2.
 - **Subtasks**:
-  - [ ] Feedback primitives in `@docket/ui`
-  - [ ] App plumbing (`presentFailure`, `LoadFailure`, Toaster mount, `useApiMutation` default)
+  - [x] Feedback primitives in `@docket/ui` (`Toaster`, `notify`, `ToastCard`, critical `EmptyState`,
+        compact `InlineBanner`, `FieldError`)
+  - [x] App plumbing (`presentFailure`, `LoadFailure`, Toaster mount, `useApiMutation` default)
   - [ ] Load failures, banners, mutation errors, field errors migrated
-  - [ ] ESLint rule, docs, e2e
+  - [ ] ESLint rule switched on, `design-system.md` feedback section, e2e
+- **Notes**: Context7's quota was exhausted, so sonner 2.0.8's API was read from its shipped
+  `index.d.ts`. Sonner compares ids strictly, so notices mint their own string ids.
 - **Blockers**: None.
 
 ### [CANVAS-DEPS-001] Project dependencies get their own route on the floating canvas shell
@@ -60,8 +67,8 @@
   floating canvas bar, and morph the roster title into the bar with a scoped view transition.
 - **Plan**: spec above, Part 3.
 - **Subtasks**:
-  - [ ] z-index token scale and `isolate` on `<main>`
-  - [ ] Canvas fills its container
+  - [x] z-index token scale and `isolate` on `<main>` (`raw-z-index` design-token rule)
+  - [x] Canvas fills its container (bottom chrome becomes a bottom inset)
   - [ ] Optimistic edge, incremental layout, animated positions
   - [ ] Dependencies route and roster cleanup
   - [ ] Shared-element transition through the app's navigation seam

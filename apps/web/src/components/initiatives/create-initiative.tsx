@@ -36,17 +36,16 @@ import { ActorPicker } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight } from '@docket/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
-import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
-import { ComposerTemplateControl } from '@/components/composer/template-menu';
-import type { EditorContribution } from '@/components/editor/editor-contribution';
 import { useComposerDraft } from '@/components/composer/use-composer-draft';
-import { templateMerge } from '@/components/templates/merge';
+import { useComposerTemplateContribution } from '@/components/composer/use-template-contribution';
 import { withComposerReset } from '@/components/composer/reset-on-open';
+import { useResumeDraft } from '@/components/create-object/use-resume-draft';
 import {
   completeCreateObject,
   runConfirmedCreateCallback,
@@ -68,6 +67,7 @@ import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 import { InitiativeComposerPickers } from './initiative-form-pickers';
+import { useInitiativeDraftPersistence } from './use-initiative-draft-persistence';
 
 /** The lists this composer's pickers draw from. */
 const COMPOSER_INCLUDE = ['actors'] as const;
@@ -130,6 +130,10 @@ export interface CreateInitiativeDialogProps {
   onCreated: (initiative: InitiativeOut) => void;
   /** A template to apply on open, from a `?template=` compose request. */
   defaultTemplateId?: string | null | undefined;
+  /** A saved draft to reopen on mount; it takes precedence over `defaultTemplateId`. */
+  resumeDraftId?: string | null | undefined;
+  /** Receives the id of the draft row being written, and null once there is none. */
+  onDraftIdChange?: ((draftId: string | null) => void) | undefined;
   /** Destination facts when mounted by the shell-global creation host. */
   globalCreation?: InitiativeGlobalCreation | undefined;
 }
@@ -147,6 +151,8 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
   onOpenChange,
   onCreated,
   defaultTemplateId = null,
+  resumeDraftId,
+  onDraftIdChange,
   globalCreation,
 }: CreateInitiativeDialogProps): JSX.Element {
   const initiativeNounLower = initiativeNoun.toLowerCase();
@@ -171,49 +177,32 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
     creating,
     successMessage: `${initiativeNoun} created. Ready to create another.`,
   });
-  const templateContribution = useMemo<EditorContribution>(
-    () => ({
-      id: 'composer-description-templates-initiative',
-      renderEmptyAction: () => (
-        <ComposerTemplateControl
-          orgId={orgId}
-          kind="initiative"
-          open={open && destinationReady}
-          autoApplyId={contextualRequestDefaultsApply ? defaultTemplateId : null}
-          currentActorId={globalCreation?.currentActorId}
-          teamId={globalCreation === undefined ? undefined : null}
-          inline
-          onManage={
-            globalCreation === undefined
-              ? undefined
-              : () => {
-                  onOpenChange(false);
-                }
-          }
-          onApply={(chosen) => {
-            updateDraft((current) =>
-              templateMerge(current, templatePatch(chosen.payload, 'initiative'), {
-                document: 'description',
-                labels: ['name', 'summary'],
-              }),
-            );
-          }}
-          disabled={creating || !destinationReady}
-        />
-      ),
-    }),
-    [
-      contextualRequestDefaultsApply,
-      creating,
-      defaultTemplateId,
-      destinationReady,
-      globalCreation,
-      onOpenChange,
-      open,
-      orgId,
-      updateDraft,
-    ],
-  );
+  const persistence = useInitiativeDraftPersistence({
+    orgId,
+    open,
+    destinationReady,
+    draft,
+    updateDraft,
+    resumeDraftId,
+    onDraftIdChange,
+    options,
+  });
+  const templateContribution = useComposerTemplateContribution<InitiativeDraft>({
+    kind: 'initiative',
+    orgId,
+    open,
+    destinationReady,
+    host: globalCreation,
+    contextualDefaultsApply: contextualRequestDefaultsApply,
+    defaultTemplateId,
+    resumeDraftId,
+    teamId: null,
+    creating,
+    onOpenChange,
+    updateDraft,
+    patch: (payload) => templatePatch(payload, 'initiative'),
+    rule: { document: 'description', labels: ['name', 'summary'] },
+  });
 
   // Exact days are portable. Broad periods are not because their fiscal basis belongs to the
   // previous workspace, so a retarget clears those along with the prior workspace's person id.
@@ -277,6 +266,7 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
           return;
         }
         const created = await res.json();
+        await persistence.commit();
         if (globalCreation !== undefined) {
           globalCreation.onCreated(created, continueCreating);
         } else {
@@ -309,6 +299,7 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
       initiativeNounLower,
       onOpenChange,
       onCreated,
+      persistence,
       updateDraft,
     ],
   );
@@ -362,7 +353,7 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
       summaryPlaceholder="One-sentence summary"
       summaryMaxLength={280}
       body={draft.description}
-      bodyResetKey={continuation.bodyResetGeneration}
+      bodyResetKey={`${String(continuation.bodyResetGeneration)}:${String(persistence.loadGeneration)}`}
       onBodyChange={(next) => {
         setField('description', next);
       }}
@@ -370,6 +361,8 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
       bodyContributions={[templateContribution]}
       mentionOrgId={orgId}
       error={error ?? planningCalendar.error ?? globalCreation?.loadError ?? null}
+      drafts={persistence.controls}
+      draftNoun={initiativeNounLower}
       statusMessage={continuation.statusMessage}
       creating={creating}
       canSubmit={canSubmit}
@@ -472,6 +465,8 @@ function GlobalInitiativeComposerBody({
     !creation.loading &&
     !creation.permissions.loading &&
     creation.loadError === null;
+  const { setActiveDraftId } = useCreateObject();
+  const resume = useResumeDraft('initiative', request.draftId, targetWorkspaceId, destinationReady);
 
   return (
     <CreateInitiativeDialog
@@ -483,10 +478,12 @@ function GlobalInitiativeComposerBody({
       }}
       onCreated={() => undefined}
       defaultTemplateId={targetIsOriginalWorkspace ? request.defaultTemplateId : null}
+      resumeDraftId={resume.draftId}
+      onDraftIdChange={setActiveDraftId}
       globalCreation={{
         targetWorkspaceId,
         initialWorkspaceId,
-        ready: destinationReady,
+        ready: resume.ready,
         loadError: creation.loadError,
         canContribute: creation.permissions.canContribute,
         currentActorId,

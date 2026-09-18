@@ -15,19 +15,20 @@
  * The dialog is *controlled* by the host page so its header "New team" button and empty-state CTA
  * open the *same* dialog. Teams have no detail route, so on success the parent simply prepends the
  * new row via {@link CreateTeamDialogProps.onCreated}; this component closes the dialog itself.
+ *
+ * Every field lives in one {@link useComposerDraft} value, which is what lets a saved draft be
+ * poured back in as one patch.
  */
 import type { TeamOut } from '../../lib/contracts/team';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
-import { Check } from '@docket/ui/icons';
-import { cn } from '@docket/ui/lib/utils';
-import { Input } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import { type JSX, useCallback, useId, useState } from 'react';
+import { type JSX, useCallback, useState } from 'react';
 
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
+import { useComposerDraft } from '@/components/composer/use-composer-draft';
 import { withComposerReset } from '@/components/composer/reset-on-open';
 import {
   completeCreateObject,
@@ -38,21 +39,49 @@ import {
   useCreateObject,
 } from '@/components/create-object/create-object-provider';
 import { useCreationContext } from '@/components/create-object/creation-context';
+import { useResumeDraft } from '@/components/create-object/use-resume-draft';
 import { WorkspacePicker } from '@/components/create-object/workspace-picker';
 import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { queryKeys } from '@/lib/query';
 
-/** The longest auto-suggested key length (matches typical Linear-style team prefixes). */
-const MAX_SUGGESTED_KEY = 5;
+import { TeamComposerFields } from './team-composer-fields';
+import { teamNamePatch } from './team-draft-codec';
+import { useTeamDraftPersistence } from './use-team-draft-persistence';
 
-/** Derive a tidy key suggestion from a team name: uppercase alphanumerics, capped in length. */
-function suggestKey(name: string): string {
-  return name
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '')
-    .slice(0, MAX_SUGGESTED_KEY);
+/** Every field the team composer holds, as one value. */
+export interface TeamDraft {
+  name: string;
+  /** The short identifier prefix, uppercase. */
+  key: string;
+  /** Whether the person edited the key directly, after which the name stops deriving it. */
+  keyDirty: boolean;
+  summary: string;
+  description: string;
+  triageEnabled: boolean;
+  agentGuidance: string;
 }
+
+/** The draft a freshly-opened composer starts from. */
+const EMPTY_TEAM_DRAFT: TeamDraft = {
+  name: '',
+  key: '',
+  keyDirty: false,
+  summary: '',
+  description: '',
+  triageEnabled: true,
+  agentGuidance: '',
+};
+
+/** The text a "Create more" continuation clears; the Triage choice carries over. */
+const CONTINUATION_RESET: Partial<TeamDraft> = {
+  name: '',
+  key: '',
+  keyDirty: false,
+  summary: '',
+  description: '',
+  agentGuidance: '',
+};
 
 /** Destination facts supplied by the shell-global Team host. */
 export interface TeamGlobalCreation {
@@ -78,6 +107,10 @@ export interface CreateTeamDialogProps {
   onCreated: (team: TeamOut) => void;
   /** Destination vocabulary label; omitted by legacy mounts to preserve their current API. */
   teamNoun?: string | undefined;
+  /** A saved draft to reopen on mount. */
+  resumeDraftId?: string | null | undefined;
+  /** Receives the id of the draft row being written, and null once there is none. */
+  onDraftIdChange?: ((draftId: string | null) => void) | undefined;
   /** Destination facts when mounted by the shell-global creation host. */
   globalCreation?: TeamGlobalCreation | undefined;
 }
@@ -94,40 +127,41 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
   onOpenChange,
   onCreated,
   teamNoun = 'Team',
+  resumeDraftId,
+  onDraftIdChange,
   globalCreation,
 }: CreateTeamDialogProps): JSX.Element {
-  const keyFieldId = useId();
-  const guidanceFieldId = useId();
   const teamNounLower = teamNoun.toLowerCase();
   const destinationReady = globalCreation?.ready ?? true;
 
-  const [name, setName] = useState('');
-  const [key, setKey] = useState('');
-  // Once the user edits the key directly we stop deriving it from the name.
-  const [keyDirty, setKeyDirty] = useState(false);
-  const [summary, setSummary] = useState('');
-  const [description, setDescription] = useState('');
-  const [triageEnabled, setTriageEnabled] = useState(true);
-  const [agentGuidance, setAgentGuidance] = useState('');
+  const { draft, setField, updateDraft } = useComposerDraft<TeamDraft>(EMPTY_TEAM_DRAFT);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const continuation = useComposerContinuation({
     creating,
     successMessage: `${teamNoun} created. Ready to create another.`,
   });
+  const persistence = useTeamDraftPersistence({
+    orgId,
+    open,
+    destinationReady,
+    draft,
+    updateDraft,
+    resumeDraftId,
+    onDraftIdChange,
+  });
 
   /** Update the name, keeping the key in sync until the user takes the key over. */
   const onNameChange = useCallback(
     (next: string): void => {
-      setName(next);
-      if (!keyDirty) setKey(suggestKey(next));
+      updateDraft((current) => teamNamePatch(current, next));
     },
-    [keyDirty],
+    [updateDraft],
   );
 
   const canSubmit =
-    name.trim().length > 0 &&
-    key.trim().length > 0 &&
+    draft.name.trim().length > 0 &&
+    draft.key.trim().length > 0 &&
     destinationReady &&
     (globalCreation?.canManage ?? true);
 
@@ -138,15 +172,15 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
       setCreating(true);
       setError(null);
       try {
-        const trimmedDescription = description.trim();
-        const trimmedGuidance = agentGuidance.trim();
+        const trimmedDescription = draft.description.trim();
+        const trimmedGuidance = draft.agentGuidance.trim();
         const res = await api.v1.orgs[':orgId'].teams.$post({
           param: { orgId },
           json: {
-            name: name.trim(),
-            key: key.trim().toUpperCase(),
-            triageEnabled,
-            ...(summary.trim().length > 0 ? { summary: summary.trim() } : {}),
+            name: draft.name.trim(),
+            key: draft.key.trim().toUpperCase(),
+            triageEnabled: draft.triageEnabled,
+            ...(draft.summary.trim().length > 0 ? { summary: draft.summary.trim() } : {}),
             ...(trimmedDescription.length > 0 ? { description: trimmedDescription } : {}),
             ...(trimmedGuidance.length > 0 ? { agentGuidance: trimmedGuidance } : {}),
           },
@@ -161,6 +195,7 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
           return;
         }
         const created = await res.json();
+        await persistence.commit();
         if (globalCreation !== undefined) {
           globalCreation.onCreated(created, continueCreating);
         } else {
@@ -170,12 +205,7 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
         }
         if (continueCreating) {
           continuation.completeContinuation(() => {
-            setName('');
-            setKey('');
-            setKeyDirty(false);
-            setSummary('');
-            setDescription('');
-            setAgentGuidance('');
+            updateDraft(() => CONTINUATION_RESET);
           });
           return;
         }
@@ -189,18 +219,15 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
     },
     [
       canSubmit,
-      name,
-      key,
-      triageEnabled,
-      summary,
-      description,
-      agentGuidance,
+      draft,
       orgId,
       onOpenChange,
       onCreated,
       globalCreation,
+      persistence,
       teamNounLower,
       continuation,
+      updateDraft,
     ],
   );
 
@@ -224,84 +251,39 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
           void submit(true);
         },
       }}
-      title={name}
+      title={draft.name}
       onTitleChange={onNameChange}
       titleInputRef={continuation.titleInputRef}
       titlePlaceholder={`${teamNoun} name`}
-      summary={summary}
-      onSummaryChange={setSummary}
+      summary={draft.summary}
+      onSummaryChange={(next) => {
+        setField('summary', next);
+      }}
       summaryPlaceholder="One-sentence summary"
       summaryMaxLength={280}
-      body={description}
-      bodyResetKey={continuation.bodyResetGeneration}
-      onBodyChange={setDescription}
+      body={draft.description}
+      bodyResetKey={`${String(continuation.bodyResetGeneration)}:${String(persistence.loadGeneration)}`}
+      onBodyChange={(next) => {
+        setField('description', next);
+      }}
       bodyPlaceholder={`What does this ${teamNounLower} own? (optional)`}
       mentionOrgId={orgId}
       error={error ?? globalCreation?.loadError ?? null}
+      drafts={persistence.controls}
+      draftNoun={teamNounLower}
       statusMessage={continuation.statusMessage}
       creating={creating}
       canSubmit={canSubmit}
       onSubmit={() => void submit(continuation.createMore)}
       submitLabel={`Create ${teamNounLower}`}
     >
-      <div className="flex flex-1 flex-wrap items-end gap-x-4 gap-y-3">
-        <label htmlFor={keyFieldId} className="flex flex-col gap-1.5">
-          <span className="text-on-surface-variant text-xs font-medium">Key</span>
-          <Input
-            id={keyFieldId}
-            aria-label={`${teamNoun} key`}
-            placeholder="ENG"
-            value={key}
-            maxLength={10}
-            disabled={creating}
-            className="h-8 w-28 uppercase"
-            onChange={(event) => {
-              setKeyDirty(true);
-              setKey(event.target.value.toUpperCase());
-            }}
-          />
-        </label>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={triageEnabled}
-          aria-label="Triage queue"
-          disabled={creating}
-          onClick={() => {
-            setTriageEnabled((current) => !current);
-          }}
-          className="text-body-medium flex h-8 items-center gap-2 disabled:opacity-50"
-        >
-          <span
-            aria-hidden="true"
-            className={cn(
-              'flex size-4 items-center justify-center rounded border',
-              triageEnabled
-                ? 'border-primary bg-primary text-on-primary'
-                : 'border-outline-variant',
-            )}
-          >
-            {triageEnabled ? <Check className="size-4" /> : null}
-          </span>
-          <span className="text-on-surface">Triage queue</span>
-        </button>
-        <label htmlFor={guidanceFieldId} className="flex min-w-48 flex-1 flex-col gap-1.5">
-          <span className="text-on-surface-variant text-xs font-medium">
-            Agent guidance (optional)
-          </span>
-          <Input
-            id={guidanceFieldId}
-            aria-label="Agent guidance"
-            placeholder="How agents should work in this team…"
-            value={agentGuidance}
-            disabled={creating}
-            className="h-8"
-            onChange={(event) => {
-              setAgentGuidance(event.target.value);
-            }}
-          />
-        </label>
-      </div>
+      <TeamComposerFields
+        draft={draft}
+        teamNoun={teamNoun}
+        disabled={creating}
+        setField={setField}
+        updateDraft={updateDraft}
+      />
     </ComposerShell>
   );
 });
@@ -360,6 +342,8 @@ function GlobalTeamComposerBody({
     !creation.loading &&
     !creation.permissions.loading &&
     creation.loadError === null;
+  const { setActiveDraftId } = useCreateObject();
+  const resume = useResumeDraft('team', request.draftId, targetWorkspaceId, destinationReady);
 
   return (
     <CreateTeamDialog
@@ -370,8 +354,10 @@ function GlobalTeamComposerBody({
         if (!next) closeCreate();
       }}
       onCreated={() => undefined}
+      resumeDraftId={resume.draftId}
+      onDraftIdChange={setActiveDraftId}
       globalCreation={{
-        ready: destinationReady,
+        ready: resume.ready,
         loadError: creation.loadError,
         canManage: creation.permissions.canManage,
         onCreated: (team, continueCreating) => {

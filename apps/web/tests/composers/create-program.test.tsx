@@ -80,7 +80,7 @@ import {
   CreateProgramDialog,
   GlobalProgramComposer,
 } from '../../src/components/programs/create-program';
-import { firstJson, jsonResponse } from '../support/http';
+import { firstJson, jsonResponse, statusMessages } from '../support/http';
 import { choosePickerOption } from '../support/pickers';
 
 const ORG_ID = '0RG00000000000000000000001';
@@ -449,9 +449,7 @@ describe('CreateProgramDialog — visibility picker', () => {
       expect(screen.getByLabelText('One-sentence summary')).toHaveValue('');
     });
     expect(screen.getByRole('button', { name: 'Visibility — Private' })).toBeVisible();
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Program created. Ready to create another.',
-    );
+    expect(statusMessages()).toContain('Program created. Ready to create another.');
     expect(onCreated).toHaveBeenCalledOnce();
     expect(onOpenChange).not.toHaveBeenCalled();
   });

@@ -35,3 +35,6 @@ export function firstJson(calls: MockCalls): Record<string, unknown> {
 
   return json as Record<string, unknown>;
 }
+
+/** The text of every polite live region on screen; see {@link statusMessages}. */
+export { statusMessages } from './status';

@@ -41,7 +41,7 @@ vi.mock('next/navigation', () => ({
 
 import { GlobalTeamComposer } from '../../src/components/teams/create-team';
 import { queryKeys } from '../../src/lib/query';
-import { firstJson, jsonResponse } from '../support/http';
+import { firstJson, jsonResponse, statusMessages } from '../support/http';
 
 const ORG_ID = '0RG00000000000000000000001';
 const TARGET_ORG_ID = '0RG00000000000000000000002';
@@ -260,7 +260,7 @@ describe('GlobalTeamComposer', () => {
       'aria-checked',
       'false',
     );
-    expect(screen.getByRole('status')).toHaveTextContent('Team created. Ready to create another.');
+    expect(statusMessages()).toContain('Team created. Ready to create another.');
     expect(routerPush).not.toHaveBeenCalled();
     expect(closeCreate).not.toHaveBeenCalled();
     expect(onCreated).toHaveBeenCalledOnce();

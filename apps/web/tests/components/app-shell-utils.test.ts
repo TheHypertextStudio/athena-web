@@ -65,6 +65,7 @@ describe('workspace navigation', () => {
   it('highlights Time as a cross-workspace Home destination', () => {
     expect(homeKeyFromPath('/time')).toBe('time');
     expect(homeKeyFromPath('/time/review')).toBe('time');
+    expect(homeKeyFromPath('/drafts')).toBe('drafts');
   });
 
   it('keeps personal Athena and Agents out of workspace-owned navigation', () => {

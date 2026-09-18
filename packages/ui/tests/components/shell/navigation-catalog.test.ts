@@ -42,6 +42,32 @@ describe('navigation catalog', () => {
     });
   });
 
+  it('leaves out the home destinations the host hides', () => {
+    const vocabulary = {
+      initiatives: 'Initiatives',
+      programs: 'Programs',
+      projects: 'Projects',
+      cycles: 'Cycles',
+      teams: 'Teams',
+    };
+    const shown = resolveNavigationCatalog({
+      activeOrgId: 'ORG00000000000000000000001',
+      personalWorkspace: false,
+      vocabulary,
+    });
+    const hidden = resolveNavigationCatalog({
+      activeOrgId: 'ORG00000000000000000000001',
+      personalWorkspace: false,
+      vocabulary,
+      hiddenHomeKeys: ['drafts'],
+    });
+
+    expect(shown.map(({ id }) => id)).toContain('home:drafts');
+    expect(hidden.map(({ id }) => id)).not.toContain('home:drafts');
+    // Hiding a home key never reaches into the workspace group.
+    expect(hidden.map(({ id }) => id)).toContain('workspace:projects');
+  });
+
   it('selects rail destinations in the product order rather than sidebar order', () => {
     const catalog = resolveNavigationCatalog({
       activeOrgId: 'ORG00000000000000000000001',

@@ -33,11 +33,21 @@ export interface Workspace {
  * The cross-org **Home** destinations, always available regardless of the active context.
  *
  * @remarks
- * `today`, `tasks`, `calendar`, `time`, `inbox`, `athena`, `stream`, and `portfolio` map 1:1 to
- * their cross-org routes. `search` is not a route but the command-palette opener.
+ * `today`, `tasks`, `calendar`, `time`, `inbox`, `drafts`, `athena`, `stream`, and `portfolio`
+ * map 1:1 to their cross-org routes. `search` is not a route but the command-palette opener.
+ * `drafts` is listed only while the person has a draft to return to.
  */
 export type HomeNavKey =
-  'today' | 'tasks' | 'calendar' | 'time' | 'inbox' | 'athena' | 'stream' | 'portfolio' | 'search';
+  | 'today'
+  | 'tasks'
+  | 'calendar'
+  | 'time'
+  | 'inbox'
+  | 'drafts'
+  | 'athena'
+  | 'stream'
+  | 'portfolio'
+  | 'search';
 
 /**
  * The org-scoped **Workspace** destinations, in mvp-plan §7 order.

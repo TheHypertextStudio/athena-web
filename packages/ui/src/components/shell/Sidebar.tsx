@@ -9,14 +9,13 @@
 import * as React from 'react';
 
 import { TooltipProvider } from '../../primitives';
-import { useVocabulary } from '../../hooks/useVocabulary';
 import { useContextState } from './ContextProvider';
 import { useShellDrawer } from './ShellDrawerContext';
 import { useShellSidebar } from './ShellSidebarContext';
 import { ExpandedSidebar } from './ExpandedSidebar';
 import { NavigationRail } from './NavigationRail';
-import { resolveNavigationCatalog } from './navigation-catalog';
 import type { OpenTab } from './tab-types';
+import { useNavigationCatalog } from './use-navigation-catalog';
 import type { HomeNavKey, Workspace, WorkspaceNavKey } from './workspaces';
 
 /** Props supplied by the application shell to every navigation presentation. */
@@ -25,6 +24,11 @@ export interface SidebarProps {
   readonly activeHomeKey?: HomeNavKey | undefined;
   readonly activeWorkspaceKey?: WorkspaceNavKey | undefined;
   readonly unreadCount?: number | undefined;
+  /**
+   * How many composer drafts the person can return to. The Drafts destination is listed only
+   * while this is above zero, and carries the count as its badge.
+   */
+  readonly draftCount?: number | undefined;
   readonly recentDocuments?: readonly OpenTab[] | undefined;
   readonly activeDocumentKey?: string | undefined;
   /** Render a document's product-owned identity in the collapsed rail. */
@@ -46,6 +50,7 @@ export function Sidebar({
   activeHomeKey,
   activeWorkspaceKey,
   unreadCount,
+  draftCount = 0,
   recentDocuments = [],
   activeDocumentKey,
   renderRecentDocumentIcon,
@@ -63,32 +68,13 @@ export function Sidebar({
   const dismissDrawer = useShellDrawer();
   const { collapsed: shellCollapsed, onToggle } = useShellSidebar();
   const collapsed = shellCollapsed && dismissDrawer === null;
-  const initiatives = useVocabulary('initiative', { plural: true });
-  const programs = useVocabulary('program', { plural: true });
-  const projects = useVocabulary('project', { plural: true });
-  const cycles = useVocabulary('cycle', { plural: true });
-  const teams = useVocabulary('team', { plural: true });
-  const catalog = React.useMemo(
-    () =>
-      resolveNavigationCatalog({
-        activeHomeKey,
-        activeWorkspaceKey,
-        activeOrgId,
-        personalWorkspace,
-        vocabulary: { initiatives, programs, projects, cycles, teams },
-      }),
-    [
-      activeHomeKey,
-      activeOrgId,
-      activeWorkspaceKey,
-      cycles,
-      initiatives,
-      personalWorkspace,
-      programs,
-      projects,
-      teams,
-    ],
-  );
+  const catalog = useNavigationCatalog({
+    activeHomeKey,
+    activeWorkspaceKey,
+    activeOrgId,
+    personalWorkspace,
+    draftCount,
+  });
 
   return (
     <TooltipProvider>
@@ -116,6 +102,7 @@ export function Sidebar({
           workspaces={workspaces}
           catalog={catalog}
           unreadCount={unreadCount}
+          draftCount={draftCount}
           hrefForHome={hrefForHome}
           hrefForWorkspace={hrefForWorkspace}
           renderLink={renderLink}

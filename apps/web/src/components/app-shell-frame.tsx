@@ -91,6 +91,7 @@ import {
   useTimerStatus,
 } from '@/components/time-tracking';
 import { api } from '@/lib/api';
+import { useDraftCount } from '@/lib/drafts/defs';
 import { authClient } from '@/lib/auth-client';
 import { userErrorMessage } from '@/lib/problem';
 import { purgeAllNavigationSnapshots } from '@/lib/navigation-snapshot-runtime';
@@ -722,6 +723,9 @@ function AppShellInner({
     60_000,
   );
   const unreadCount = unreadCountQ.data?.unread ?? 0;
+  // The Drafts entry exists only while there is a draft to return to; the composers keep the
+  // same list current as they save, so the sidebar never has to poll for it.
+  const draftCount = useDraftCount(!identityUnknown);
 
   useEffect(() => {
     // The first client pass must restore before it writes. Writing the default value here used to
@@ -799,6 +803,7 @@ function AppShellInner({
       activeHomeKey={homeKey}
       activeWorkspaceKey={workspaceKey}
       unreadCount={unreadCount}
+      draftCount={draftCount}
       recentDocuments={recentDocuments}
       activeDocumentKey={activeKey}
       renderRecentDocumentIcon={(document) => <RecentDocumentIdentity document={document} />}

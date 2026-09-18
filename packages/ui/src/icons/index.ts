@@ -56,6 +56,8 @@ export { default as CornerDownLeft } from '@mui/icons-material/SubdirectoryArrow
 export { default as CreditCard } from '@mui/icons-material/CreditCardOutlined';
 export { default as Download } from '@mui/icons-material/FileDownloadOutlined';
 export { default as Edit } from '@mui/icons-material/EditOutlined';
+/** A page with a pen on it: something written but not yet finished, such as a draft. */
+export { default as NotePen } from '@mui/icons-material/EditNoteOutlined';
 export { default as Ellipsis } from '@mui/icons-material/MoreHoriz';
 export { default as ExpandMoreRounded } from '@mui/icons-material/ExpandMoreRounded';
 export { default as Filter } from '@mui/icons-material/FilterList';

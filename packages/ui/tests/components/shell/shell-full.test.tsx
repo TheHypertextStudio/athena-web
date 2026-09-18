@@ -28,7 +28,7 @@ import { Sidebar } from '../../../src/components/shell/Sidebar';
 import { SidebarNavItem } from '../../../src/components/shell/SidebarNavItem';
 import { TabBar, type OpenTab } from '../../../src/components/shell/TabBar';
 import { WorkspaceSwitcher } from '../../../src/components/shell/WorkspaceSwitcher';
-import type { Workspace } from '../../../src/components/shell/workspaces';
+import type { HomeNavKey, Workspace } from '../../../src/components/shell/workspaces';
 import { assertDefined } from '@docket/test-utils';
 
 const ACME: Workspace = { id: 'ORG00000000000000000000001', name: 'Acme Co' };
@@ -61,9 +61,7 @@ function renderLink(href: string, content: React.ReactNode, className?: string):
 /** The full set of href builders a {@link Sidebar} needs. */
 function sidebarHrefs() {
   return {
-    hrefForHome: (
-      key: 'today' | 'tasks' | 'calendar' | 'time' | 'inbox' | 'athena' | 'stream' | 'portfolio',
-    ) => `/${key}`,
+    hrefForHome: (key: Exclude<HomeNavKey, 'search'>) => `/${key}`,
     hrefForWorkspace: (orgId: string, key: string) => `/orgs/${orgId}/${key}`,
     renderLink,
     onCreateWorkspace: () => undefined,

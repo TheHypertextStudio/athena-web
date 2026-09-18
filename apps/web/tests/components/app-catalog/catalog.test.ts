@@ -62,6 +62,7 @@ describe('capability catalog integrity', () => {
       'home:calendar',
       'home:time',
       'home:inbox',
+      'home:drafts',
       'home:athena',
       'home:stream',
       'home:portfolio',

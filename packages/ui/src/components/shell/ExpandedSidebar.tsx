@@ -9,7 +9,7 @@ import { useShellDrawer } from './ShellDrawerContext';
 import { SidebarNavItem } from './SidebarNavItem';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import type { HomeNavKey, Workspace, WorkspaceNavKey } from './workspaces';
-import type { ResolvedNavigationDestination } from './navigation-catalog';
+import type { NavigationDestinationId, ResolvedNavigationDestination } from './navigation-catalog';
 import {
   NAVIGATION_WORKSPACE_TRANSITION_NAME,
   navigationDestinationTransitionName,
@@ -20,6 +20,7 @@ export interface ExpandedSidebarProps {
   readonly workspaces: readonly Workspace[];
   readonly catalog: readonly ResolvedNavigationDestination[];
   readonly unreadCount?: number | undefined;
+  readonly draftCount?: number | undefined;
   readonly hrefForHome: (key: Exclude<HomeNavKey, 'search'>) => string;
   readonly hrefForWorkspace: (orgId: string, key: WorkspaceNavKey) => string;
   readonly renderLink: (href: string, children: React.ReactNode) => React.ReactNode;
@@ -80,11 +81,29 @@ function WorkspaceEmpty(): React.JSX.Element {
   );
 }
 
+/** A count a destination carries, with the noun its accessible name reads it as. */
+interface DestinationBadge {
+  readonly badge?: number | undefined;
+  readonly badgeLabel?: string | undefined;
+}
+
+/** The badge a home destination shows: Inbox counts unread items, Drafts counts drafts. */
+function destinationBadge(
+  id: NavigationDestinationId,
+  unreadCount: number | undefined,
+  draftCount: number | undefined,
+): DestinationBadge {
+  if (id === 'home:inbox') return { badge: unreadCount, badgeLabel: 'unread' };
+  if (id === 'home:drafts') return { badge: draftCount, badgeLabel: 'drafts' };
+  return {};
+}
+
 /** The browse-oriented sidebar shown on desktop and inside the mobile drawer. */
 export function ExpandedSidebar({
   workspaces,
   catalog,
   unreadCount,
+  draftCount,
   hrefForHome,
   hrefForWorkspace,
   renderLink,
@@ -178,8 +197,7 @@ export function ExpandedSidebar({
                   label={destination.label}
                   icon={destination.icon}
                   active={destination.active}
-                  badge={destination.id === 'home:inbox' ? unreadCount : undefined}
-                  badgeLabel="unread"
+                  {...destinationBadge(destination.id, unreadCount, draftCount)}
                   asChild
                 >
                   {renderLink(href, <RowBody icon={destination.icon} label={destination.label} />)}

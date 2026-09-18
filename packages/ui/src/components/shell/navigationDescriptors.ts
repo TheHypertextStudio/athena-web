@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   Library,
   ListChecks,
+  NotePen,
   RefreshCw,
   Settings,
   Sparkles,
@@ -86,6 +87,14 @@ export const HOME_NAVIGATION_DESCRIPTORS: readonly HomeNavigationDescriptor[] = 
     aliases: ['notifications', 'approvals'],
     icon: Inbox,
     href: '/inbox',
+  },
+  {
+    key: 'drafts',
+    label: 'Drafts',
+    description: 'Pick up something you started creating and set aside.',
+    aliases: ['unsaved', 'pending', 'saved drafts'],
+    icon: NotePen,
+    href: '/drafts',
   },
   {
     key: 'athena',

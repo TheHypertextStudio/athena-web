@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   Library,
   ListChecks,
+  NotePen,
   RefreshCw,
   Search,
   Settings,
@@ -42,6 +43,11 @@ export interface ResolveNavigationCatalogOptions {
   readonly activeOrgId: string | null;
   readonly personalWorkspace: boolean;
   readonly vocabulary: NavigationVocabulary;
+  /**
+   * Home destinations to leave out of this catalog. A destination that exists only while the
+   * person has something to return to (`drafts`) is hidden by the host when that is not so.
+   */
+  readonly hiddenHomeKeys?: readonly HomeNavKey[] | undefined;
 }
 
 /** One display-ready destination for the expanded sidebar, rail, or More menu. */
@@ -127,6 +133,15 @@ const DEFINITIONS: readonly NavigationDefinition[] = [
     rail: true,
     icon: Inbox,
     label: label('Inbox'),
+  },
+  {
+    id: 'home:drafts',
+    key: 'drafts',
+    group: 'home',
+    moreGroup: 'workspace',
+    rail: false,
+    icon: NotePen,
+    label: label('Drafts'),
   },
   {
     id: 'home:athena',
@@ -298,8 +313,11 @@ const DEFINITIONS: readonly NavigationDefinition[] = [
 export function resolveNavigationCatalog(
   options: ResolveNavigationCatalogOptions,
 ): readonly ResolvedNavigationDestination[] {
+  const hidden = new Set<HomeNavKey | WorkspaceNavKey>(options.hiddenHomeKeys ?? []);
   return DEFINITIONS.filter(
-    (definition) => !(options.personalWorkspace && definition.sharedWorkspaceOnly),
+    (definition) =>
+      !(options.personalWorkspace && definition.sharedWorkspaceOnly) &&
+      !(definition.group === 'home' && hidden.has(definition.key)),
   ).map((definition) => ({
     id: definition.id,
     key: definition.key,

@@ -103,7 +103,7 @@ describe('jobStatusLine', () => {
     });
 
     expect(jobStatusLine(detail, summary)).toBe(
-      'Sunsama · Protected focus time · Added 2 blocks to Thursday',
+      'Protected focus time · Sunsama · Added 2 blocks to Thursday',
     );
   });
 
@@ -122,7 +122,7 @@ describe('jobStatusLine', () => {
       ],
     });
 
-    expect(jobStatusLine(detail, summary)).toBe('Sunsama · Protected focus time');
+    expect(jobStatusLine(detail, summary)).toBe('Protected focus time');
   });
 
   it('picks the newest activity by timestamp, not array position', () => {

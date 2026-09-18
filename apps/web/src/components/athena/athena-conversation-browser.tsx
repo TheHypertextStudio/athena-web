@@ -225,11 +225,7 @@ export function AthenaConversationBrowser({
             <Text as="p" token="body-small" tone="muted" role="status">
               Topics are temporarily unavailable. The conversation itself is unaffected.
             </Text>
-          ) : segments.data.items.length === 0 ? (
-            <Text as="p" token="body-small" tone="muted">
-              Topics appear here on their own once you have talked for a while.
-            </Text>
-          ) : (
+          ) : segments.data.items.length === 0 ? null : (
             <ul className="flex flex-col gap-1">
               {segments.data.items.map((segment) => (
                 <li key={segment.id}>

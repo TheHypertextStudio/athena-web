@@ -527,6 +527,8 @@ function SidebarRecoveryNudge({
  * Athena leads the rail, ahead of Agenda and Focus: it is the companion, not one integration among
  * several. A fresh window opens on Athena when its status carries the `attention` tone — a proposal
  * or question is waiting — and opens on the Agenda otherwise, so a quiet day still lands on the plan.
+ * The shell only reads this default once per mount: if the tone clears (e.g. the viewer approves
+ * the waiting change) while the rail is already open, the open panel does not move under them.
  *
  * @param identityUnknown - Whether the viewer is still unidentified; swaps panels for a placeholder.
  * @param timerStatus - The live tracker, which lends the Focus icon its status dot.

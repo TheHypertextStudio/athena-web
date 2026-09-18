@@ -11,7 +11,7 @@
  * two lanes keep the queue's own order. Clicking a row asks the caller to jump the thread to that
  * job's card.
  */
-import { Tabs, type TabsItem } from '@docket/ui/primitives';
+import { ControlGroup, Tabs, type TabsItem } from '@docket/ui/primitives';
 import { type JSX, useMemo } from 'react';
 
 import { jobStatusLine } from '@/lib/athena/job-presentation';
@@ -96,14 +96,25 @@ export function AthenaWorkLedger({
 
   return (
     <div className="flex flex-col gap-3">
-      <Tabs
-        value={filter}
-        onValueChange={(next) => {
-          onFilterChange(next as AthenaWorkLedgerFilter);
-        }}
-        items={items}
-        label="Filter Athena's work"
-      />
+      {/*
+       * The wide rail's left column runs as narrow as 280px, too tight for three MD3-default
+       * (`xl`) tabs with trailing counts. `sm` shrinks the padding, gap, and label type token
+       * enough to fit "Running · Needs you · Done" at that width; the `overflow-x-auto` wrapper
+       * is the fallback for narrower windows still — the tab row scrolls inside itself rather
+       * than clipping a label or pushing the page wider.
+       */}
+      <div className="overflow-x-auto">
+        <ControlGroup controlSize="sm">
+          <Tabs
+            value={filter}
+            onValueChange={(next) => {
+              onFilterChange(next as AthenaWorkLedgerFilter);
+            }}
+            items={items}
+            label="Filter Athena's work"
+          />
+        </ControlGroup>
+      </div>
       <ul className="flex flex-col gap-1">
         {visible.map((job) => (
           <li key={job.id}>

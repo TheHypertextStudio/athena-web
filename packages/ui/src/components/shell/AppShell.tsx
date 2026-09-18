@@ -263,6 +263,27 @@ function readSidebarCollapsed(): boolean {
   return window.innerWidth < SHELL_SIDEBAR_EXPAND_MIN_PX;
 }
 
+/**
+ * Capture a host-supplied default panel id once, the first time it is non-null, and return that
+ * captured value on every subsequent render.
+ *
+ * @remarks
+ * `aside?.defaultPanelId` can change on every render — Athena's default flips between itself and
+ * Agenda as its status tone changes — but it must only ever pick the *initial* panel for a mount
+ * with no persisted `activeId`. Recomputing it live would move a rail out from under a viewer who
+ * already has it open (e.g. approving a waiting change clears the attention tone mid-session).
+ * Captured via a ref rather than `useState`'s initializer: the caller's value may not exist yet on
+ * the render that mounts this component.
+ */
+function useCapturedDefaultPanelId(aside: AppShellAside | undefined): string | null {
+  const ref = React.useRef<string | null>(null);
+  const defaultPanelId = aside?.defaultPanelId;
+  if (ref.current === null && defaultPanelId != null) {
+    ref.current = defaultPanelId;
+  }
+  return ref.current;
+}
+
 /** A host request for the shell to select and expand one of its existing rail panels. */
 export interface AppShellRailRequest {
   /** The stable id of a panel declared in {@link AppShellProps.aside}. */
@@ -453,9 +474,13 @@ export function AppShell({
     setRail(readRailState());
   }, []);
 
+  // See {@link useCapturedDefaultPanelId} for why the default is captured once per mount rather
+  // than read live on every render.
+  const capturedDefaultPanelId = useCapturedDefaultPanelId(aside);
+
   const activePanel =
     panels.find((panel) => panel.id === rail.activeId) ??
-    panels.find((panel) => panel.id === aside?.defaultPanelId) ??
+    panels.find((panel) => panel.id === capturedDefaultPanelId) ??
     panels[0] ??
     null;
   const activePanelIdResolved = activePanel?.id ?? '';

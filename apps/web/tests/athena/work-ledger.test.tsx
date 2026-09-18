@@ -90,6 +90,32 @@ describe('AthenaWorkLedger', () => {
     expect(oldestIndex).toBe(1);
   });
 
+  it('fits its three filter tabs inside a 280px wide-view column without overflowing it', () => {
+    // jsdom performs no layout, so this cannot assert pixel widths. It asserts the structural
+    // mechanism instead: the tablist is shrunk to the compact control step (so three labels with
+    // counts have a chance of fitting a 280px rail column) and sits inside its own
+    // `overflow-x-auto` wrapper (so, failing that, the row scrolls instead of clipping a label or
+    // widening the page) — and that every tab, including "Done", still renders.
+    const jobs = [
+      job({ id: 'running_1', status: 'running', queueState: 'working' }),
+      job({ id: 'needs_1', status: 'awaiting_approval', queueState: 'needs_you' }),
+      job({ id: 'done_1', status: 'completed', queueState: 'finished' }),
+    ];
+    const { container } = render(
+      <div style={{ width: 280 }}>
+        <AthenaWorkLedger jobs={jobs} filter="running" onFilterChange={vi.fn()} onOpen={vi.fn()} />
+      </div>,
+    );
+
+    expect(screen.getByRole('tab', { name: /running/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /needs you/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /done/i })).toBeInTheDocument();
+
+    const tablist = screen.getByRole('tablist', { name: "Filter Athena's work" });
+    expect(container.querySelector('.overflow-x-auto')).toContainElement(tablist);
+    expect(tablist.closest('[data-control-size]')).toHaveAttribute('data-control-size', 'sm');
+  });
+
   it('calls onOpen with the job id when a row is clicked', () => {
     const onOpen = vi.fn();
     render(

@@ -97,6 +97,52 @@ function describeTaskFieldChanges(input: Readonly<Record<string, unknown>>): rea
   );
 }
 
+/** The pieces of a work-log tool activity {@link describeToolActivity} needs. */
+export interface ToolActivityLike {
+  /** The humanised action Athena reported, e.g. `"update task"`. */
+  readonly action: string;
+  /** The raw tool call, when the activity carried one through. */
+  readonly technical?:
+    | {
+        readonly toolName?: string | undefined;
+        readonly input?: unknown;
+      }
+    | undefined;
+}
+
+/**
+ * Describe one work-log tool activity in plain language, for the same row `describeProposal`
+ * feeds the batch-review card.
+ *
+ * @remarks
+ * Reuses {@link UPDATE_TASK_DESCRIBERS} — the same field-to-words mapping `describeProposal` reads
+ * — whenever the activity carried its raw tool call through (`technical.toolName` +
+ * `technical.input`), so a row and its originating proposal describe the same change the same way
+ * (`update_task` + `{ state: 'in_progress' }` → `"Set state to In Progress"`). Every other
+ * activity — no raw call, or a tool this module does not recognize — falls back to the reported
+ * action, capitalised (`"update task"` → `"Update task"`), which is still a sentence and not the
+ * tool's machine name.
+ *
+ * @param activity - The work-log activity to describe.
+ * @returns a one-line plain-English sentence.
+ */
+export function describeToolActivity(activity: ToolActivityLike): string {
+  const toolName = activity.technical?.toolName;
+  const input = activity.technical?.input;
+  if (toolName !== undefined && typeof input === 'object' && input !== null) {
+    const record = input as Readonly<Record<string, unknown>>;
+    if (toolName === 'create_task') {
+      const title = asString(record['title']);
+      if (title !== undefined) return `Create "${title}"`;
+    }
+    if (toolName === 'update_task') {
+      const changes = describeTaskFieldChanges(record);
+      if (changes.length > 0) return changes.join(' · ');
+    }
+  }
+  return capitalizeFirst(activity.action);
+}
+
 /**
  * Describe one pending proposal in plain language, for the batch-review card.
  *

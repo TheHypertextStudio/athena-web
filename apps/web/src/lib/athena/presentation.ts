@@ -7,6 +7,11 @@
  */
 import type { McpAppPresentation } from '@docket/integrations/mcp-apps-contract';
 
+import { describeToolActivity } from './describe-proposal';
+
+/** The Docket-native service name, which never prefixes its own work-log rows. */
+const DOCKET_SERVICE_NAME = 'Docket';
+
 /** A Docket object Athena was opened from. */
 export interface PersonalAthenaSource {
   readonly type: 'task' | 'project' | 'initiative' | 'program' | 'calendar_item' | 'stream_event';
@@ -173,29 +178,53 @@ export function groupAthenaQueue(sessions: readonly PersonalAthenaSessionSummary
   }));
 }
 
+/**
+ * The row's detail for a tool activity: the outcome, prefixed with the service name when that
+ * service is worth naming.
+ *
+ * @remarks
+ * "Docket · Set state to In Progress" tells a person nothing "Set state to In Progress" doesn't;
+ * "Gmail · Sent 3 emails" does. With no outcome there is nothing to prefix, so the service alone
+ * never stands in as a detail.
+ */
+function toolActivityDetail(
+  activity: Extract<PersonalAthenaActivity, { type: 'tool' }>,
+): string | undefined {
+  if (!activity.outcome) return undefined;
+  return activity.service === DOCKET_SERVICE_NAME
+    ? activity.outcome
+    : `${activity.service} · ${activity.outcome}`;
+}
+
+/** Convert one API tool activity to plain-language work-log presentation. */
+function presentAthenaToolActivity(
+  activity: Extract<PersonalAthenaActivity, { type: 'tool' }>,
+): AthenaActivityPresentation {
+  const detail = toolActivityDetail(activity);
+  return {
+    id: activity.id,
+    kind: 'tool',
+    title: describeToolActivity(activity),
+    ...(detail ? { detail } : {}),
+    createdAt: activity.createdAt,
+    ...(activity.presentation ? { presentation: activity.presentation } : {}),
+    ...(activity.presentationUnavailable ? { presentationUnavailable: true } : {}),
+    ...(activity.technical ? { technical: activity.technical } : {}),
+  };
+}
+
 /** Convert one API activity to plain-language work-log presentation, discarding raw reasoning. */
 export function presentAthenaActivity(
   activity: PersonalAthenaActivity,
 ): AthenaActivityPresentation | null {
   if (activity.type === 'reasoning') return null;
-  if (activity.type === 'tool') {
-    return {
-      id: activity.id,
-      kind: 'tool',
-      title: `${activity.service} · ${activity.action}`,
-      ...(activity.outcome ? { detail: activity.outcome } : {}),
-      createdAt: activity.createdAt,
-      ...(activity.presentation ? { presentation: activity.presentation } : {}),
-      ...(activity.presentationUnavailable ? { presentationUnavailable: true } : {}),
-      ...(activity.technical ? { technical: activity.technical } : {}),
-    };
-  }
+  if (activity.type === 'tool') return presentAthenaToolActivity(activity);
   return {
     id: activity.id,
     kind: activity.type,
     title:
       activity.type === 'message' && activity.author === 'user'
-        ? 'You steered the work'
+        ? 'You asked'
         : activity.type === 'question'
           ? 'Athena asked'
           : activity.type === 'error'

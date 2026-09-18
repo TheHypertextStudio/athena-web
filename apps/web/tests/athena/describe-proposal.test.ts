@@ -2,7 +2,11 @@ import type { ProposalItemOut } from '@docket/athena/agent-contract';
 import type { AgentSessionId, SessionActivityId } from '@docket/athena/ids';
 import { describe, expect, it } from 'vitest';
 
-import { capitalizeFirst, describeProposal } from '../../src/lib/athena/describe-proposal';
+import {
+  capitalizeFirst,
+  describeProposal,
+  describeToolActivity,
+} from '../../src/lib/athena/describe-proposal';
 
 function proposal(overrides: Partial<ProposalItemOut> = {}): ProposalItemOut {
   return {
@@ -128,6 +132,48 @@ describe('describeProposal', () => {
     });
 
     expect(describeProposal(item)).toBe('Organized 3 tasks into a plan');
+  });
+});
+
+describe('describeToolActivity', () => {
+  it('describes a recognized update_task call the same way describeProposal does', () => {
+    const activity = {
+      action: 'update task',
+      technical: { toolName: 'update_task', input: { state: 'in_progress' } },
+    };
+
+    expect(describeToolActivity(activity)).toBe('Set state to In Progress');
+  });
+
+  it('names the created task for a recognized create_task call', () => {
+    const activity = {
+      action: 'create task',
+      technical: { toolName: 'create_task', input: { title: 'Book the venue' } },
+    };
+
+    expect(describeToolActivity(activity)).toBe('Create "Book the venue"');
+  });
+
+  it('falls back to the capitalized action when the tool call carries no recognized field', () => {
+    const activity = {
+      action: 'update task',
+      technical: { toolName: 'update_task', input: { taskId: '01HZ0000000000000000LN0001' } },
+    };
+
+    expect(describeToolActivity(activity)).toBe('Update task');
+  });
+
+  it('falls back to the capitalized action for a tool this module does not recognize', () => {
+    const activity = {
+      action: 'sent 3 emails',
+      technical: { toolName: 'gmail_send', input: { to: 'a@example.com' } },
+    };
+
+    expect(describeToolActivity(activity)).toBe('Sent 3 emails');
+  });
+
+  it('falls back to the capitalized action when there is no raw tool call at all', () => {
+    expect(describeToolActivity({ action: 'protected focus time' })).toBe('Protected focus time');
   });
 });
 

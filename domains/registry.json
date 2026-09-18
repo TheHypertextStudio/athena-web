@@ -222,6 +222,7 @@
         "./attachment-contract",
         "./plan-draft-contract",
         "./plan-draft",
+        "./composer-draft-contract",
         "./document-image-contract",
         "./update-contract",
         "./saved-view-contract",

@@ -232,7 +232,8 @@ describe('Initiative visual contract', () => {
 
   it('does not style semantic labels as uppercase overlines', () => {
     const appSource = join(root, 'apps/web/src');
-    const allowed = new Set(['apps/web/src/components/teams/create-team.tsx']);
+    // The team key field, which shows the key in capitals as it is typed; it is a value, not a label.
+    const allowed = new Set(['apps/web/src/components/teams/team-composer-fields.tsx']);
     const violations = productionTsxFiles(appSource)
       .filter((path) => !allowed.has(relative(root, path)))
       .flatMap((path) =>

@@ -17,6 +17,13 @@ vi.mock('@/lib/query', () => ({
   }),
 }));
 
+// The notice stack registers its own Alt+T "focus notices" keydown listener. These tests count the
+// app's document-level handlers, so the stack is stubbed rather than counted as a second router.
+vi.mock('@docket/ui/components', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  Toaster: () => null,
+}));
+
 vi.mock('@/components/tasks/use-task-hierarchy-mutation', () => ({
   useTaskHierarchyMutation: () => ({ reparent: vi.fn() }),
 }));

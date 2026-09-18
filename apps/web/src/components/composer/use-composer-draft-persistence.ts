@@ -150,9 +150,10 @@ function useDraftRow(kind: ComposerDraftKind, orgId: string | null, cache: Draft
 
   const save = useCallback(
     (next: AutosaveValue): void => {
+      // Disposal is decided when a write is queued, never when it runs: `onKeep` flushes the
+      // pending text and disposes in the same tick, and the write it just queued must still land.
       if (disposedRef.current || orgId === null || 'noRow' in next) return;
       chainRef.current = chainRef.current.then(async () => {
-        if (disposedRef.current) return;
         setSaving('saving');
         try {
           const row = rowRef.current;

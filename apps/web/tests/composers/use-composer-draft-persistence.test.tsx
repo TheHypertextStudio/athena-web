@@ -211,6 +211,33 @@ describe('useComposerDraftPersistence', () => {
     expect(draftDelete).not.toHaveBeenCalled();
   });
 
+  it('saves the pending text when Save draft answers before the quiet period ends', async () => {
+    const { result } = renderPersistence({ draft: { title: 'Grant report', description: '' } });
+
+    // Save draft is pressed straight after typing: the debounce has not fired yet.
+    await act(async () => {
+      await result.current.controls.onKeep();
+    });
+
+    expect(draftPost).toHaveBeenCalledOnce();
+    expect(draftPost.mock.calls[0]?.[0]).toMatchObject({
+      json: { organizationId: ORG_ID, kind: 'task', payload: { title: 'Grant report' } },
+    });
+    expect(draftDelete).not.toHaveBeenCalled();
+  });
+
+  it('leaves no row behind when Discard answers before the quiet period ends', async () => {
+    const { result } = renderPersistence({ draft: { title: 'Grant report', description: '' } });
+
+    await act(async () => {
+      await result.current.controls.onDiscard();
+    });
+
+    // Nothing is queued once the person has discarded, so nothing is created to be deleted.
+    expect(draftPost).not.toHaveBeenCalled();
+    expect(draftDelete).not.toHaveBeenCalled();
+  });
+
   it('deletes the row on commit and starts a new one for the next dirty draft', async () => {
     const { rerender, result } = renderPersistence({ draft: { title: 'Grant', description: '' } });
     await act(async () => {

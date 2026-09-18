@@ -118,7 +118,7 @@ export default function CanvasFloatingColumn({
         onEscape();
       }}
       className={cn(
-        'absolute top-2 bottom-2 z-[2000] flex min-h-0 flex-col outline-none',
+        'absolute top-2 bottom-2 z-(--z-canvas-chrome) flex min-h-0 flex-col outline-none',
         'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-right-2 motion-safe:duration-(--dur-base)',
         className,
       )}

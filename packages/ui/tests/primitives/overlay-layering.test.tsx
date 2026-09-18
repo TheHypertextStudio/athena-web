@@ -14,8 +14,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '../../src/primitives/po
 
 /**
  * Regression guard for the "picker renders behind the modal" bug: a transient overlay (popover,
- * dropdown menu, …) opened from inside a `Dialog` must stack ABOVE the dialog's `z-[110]` modal
- * layer, not behind its scrim. Transient overlays live at `z-[120]`.
+ * dropdown menu, …) opened from inside a `Dialog` must stack ABOVE the dialog's `--z-dialog` modal
+ * layer, not behind its scrim. Transient overlays live on `--z-popover`. Both come from the
+ * layering scale in `globals.css`; a literal `z-[n]` anywhere is a design-token policy violation.
  */
 describe('overlay layering above modals', () => {
   it('renders a popover opened inside a dialog above the dialog layer', async () => {
@@ -31,10 +32,10 @@ describe('overlay layering above modals', () => {
       </Dialog>,
     );
 
-    expect(screen.getByRole('dialog', { name: 'New project' })).toHaveClass('z-[110]');
+    expect(screen.getByRole('dialog', { name: 'New project' })).toHaveClass('z-(--z-dialog)');
     // The popover panel is a portalled sibling; it must sit above the modal layer.
     const panel = await screen.findByText('Pick one');
-    expect(panel).toHaveClass('z-[120]');
+    expect(panel).toHaveClass('z-(--z-popover)');
   });
 
   it('renders a dropdown menu opened inside a dialog above the dialog layer', async () => {
@@ -53,6 +54,6 @@ describe('overlay layering above modals', () => {
     );
 
     const menu = await screen.findByRole('menu');
-    expect(menu).toHaveClass('z-[120]');
+    expect(menu).toHaveClass('z-(--z-popover)');
   });
 });

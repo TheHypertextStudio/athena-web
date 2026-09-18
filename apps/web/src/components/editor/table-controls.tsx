@@ -176,7 +176,7 @@ export function TableControls({ editor, controlsRef }: TableControlsProps): JSX.
       aria-keyshortcuts="Alt+F10"
       data-table-controls=""
       contentEditable={false}
-      className="border-outline-variant bg-surface-container-high shadow-level2 z-[120] flex max-w-[calc(100vw-2rem)] flex-nowrap items-center gap-0.5 rounded-xl border p-1"
+      className="border-outline-variant bg-surface-container-high shadow-level2 z-(--z-popover) flex max-w-[calc(100vw-2rem)] flex-nowrap items-center gap-0.5 rounded-xl border p-1"
     >
       <div
         onKeyDownCapture={(event) => {

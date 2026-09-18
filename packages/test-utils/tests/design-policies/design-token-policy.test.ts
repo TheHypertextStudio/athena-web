@@ -105,12 +105,17 @@ describe('design token policy', () => {
       // The focus-indicator role painted by something that is not focus.
       const borrowedRing = 'ring-[3px] ring-ring ring-inset';
       const borrowedOutline = 'hover:outline-ring';
+      // A stacking value picked by hand instead of taken from the layering scale.
+      const stacked = 'absolute z-[2000] !z-[50]';
 
       // Legal: token colours, token type, an explicit no-shadow, a token reference in brackets,
       // a movement (not a resize) on hover, and a static size that no interaction changes.
       const legal =
         'text-on-surface-variant text-body-medium text-label-small shadow-none ' +
         'text-[var(--radix-x)] hover:translate-y-0.5 hover:bg-surface-container-high size-4.5 h-8';
+      // Legal stacking: the layering scale by token, the same token in bracket form, and
+      // Tailwind's stock ordinals for layers inside one positioned surface.
+      const legalStacking = 'z-(--z-dialog) !z-(--z-canvas-chrome) z-[var(--z-popover)] z-10';
 
       // Legal rings: the focus role behind a focus variant, the aria-activedescendant modality
       // variant, and a ring in some other role, which is free to mean whatever the component needs.
@@ -260,6 +265,8 @@ describe('design token policy', () => {
       'rounded-[3px]',
       'ring-ring',
       'outline-ring',
+      'z-[2000]',
+      'z-[50]',
     ]) {
       expect(values, `expected the scanner to flag ${expected}`).toContain(expected);
     }

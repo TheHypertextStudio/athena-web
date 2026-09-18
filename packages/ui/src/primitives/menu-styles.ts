@@ -167,7 +167,7 @@ export const DEFAULT_MENU_SECTIONS: MenuSections = 'divider';
  * step, and the spec's colour list for menus has no outline role in it.
  */
 const menuContentBase =
-  'z-[120] flex flex-col rounded-corner-lg ' +
+  'z-(--z-popover) flex flex-col rounded-corner-lg ' +
   'has-data-[state=open]:rounded-corner-sm transition-[border-radius] ' +
   'data-[state=open]:animate-in data-[state=closed]:animate-out ' +
   'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 ' +

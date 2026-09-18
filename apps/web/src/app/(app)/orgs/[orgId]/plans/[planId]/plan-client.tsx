@@ -79,7 +79,7 @@ function PlanRouteState({
 }): JSX.Element {
   return (
     <Surface tone="page" shape="none" className="relative flex h-full min-h-0 w-full flex-col">
-      <div className="absolute top-2 left-2 z-[2000]">
+      <div className="absolute top-2 left-2 z-(--z-canvas-chrome)">
         <AppBar presentation="floating" aria-label="Plan" title="Plan" navigation={navigation} />
       </div>
       {children}

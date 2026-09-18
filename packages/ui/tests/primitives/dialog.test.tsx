@@ -261,8 +261,8 @@ describe('Dialog family', () => {
     // The overlay is a portalled sibling carrying the dimmed-scrim token classes.
     const overlay = baseElement.querySelector('[data-overlay-scrim]');
     expect(overlay).not.toBeNull();
-    expect(overlay).toHaveClass('bg-scrim/40', 'z-[110]');
-    expect(screen.getByRole('dialog')).toHaveClass('z-[110]');
+    expect(overlay).toHaveClass('bg-scrim/40', 'z-(--z-dialog)');
+    expect(screen.getByRole('dialog')).toHaveClass('z-(--z-dialog)');
   });
 
   it('reserves the shared two-control gutter when a dialog adds header chrome', async () => {
@@ -483,15 +483,15 @@ describe('Dialog family', () => {
     const onConfirm = vi.fn();
     const { baseElement } = render(<SheetConfirmation onConfirm={onConfirm} />);
     const sheet = await screen.findByRole('dialog', { name: 'Calendar item' });
-    expect(sheet).toHaveClass('z-[100]');
+    expect(sheet).toHaveClass('z-(--z-sheet)');
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete item' }));
 
     const confirmation = await screen.findByRole('dialog', { name: 'Delete calendar item?' });
     const overlays = baseElement.querySelectorAll('[data-overlay-scrim]');
     const confirmationOverlay = overlays.item(overlays.length - 1);
-    expect(confirmationOverlay).toHaveClass('z-[110]');
-    expect(confirmation).toHaveClass('z-[110]');
+    expect(confirmationOverlay).toHaveClass('z-(--z-dialog)');
+    expect(confirmation).toHaveClass('z-(--z-dialog)');
 
     fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
     expect(onConfirm).toHaveBeenCalledOnce();

@@ -110,8 +110,8 @@ describe('Sheet family', () => {
     const sheet = await screen.findByRole('dialog');
     const overlay = baseElement.querySelector('[data-overlay-scrim]');
     expect(overlay).not.toBeNull();
-    expect(overlay).toHaveClass('z-[100]');
-    expect(sheet).toHaveClass('z-[100]');
+    expect(overlay).toHaveClass('z-(--z-sheet)');
+    expect(sheet).toHaveClass('z-(--z-sheet)');
   });
 
   it('closes on Escape and returns focus to the opener', async () => {

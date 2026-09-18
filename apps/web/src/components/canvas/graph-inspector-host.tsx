@@ -344,7 +344,7 @@ function DockedColumn({
 /**
  * The covering pane on a narrow host. A plain element rather than `Surface`, which forwards no
  * ref — and the pane needs one to take focus when it covers the canvas. Its z-index sits above
- * `CanvasOverlayPanel`'s `!z-[2000]`, the layer the canvas keeps its own chrome on: a pane that
+ * `CanvasOverlayPanel`'s `--z-canvas-chrome`, the layer the canvas keeps its own chrome on: a pane that
  * covers the canvas has to cover the minimap, the zoom controls, and the viewport toolbar too.
  */
 function CoveringPane({
@@ -364,7 +364,7 @@ function CoveringPane({
       onKeyDown={onKeyDown}
       className={cn(
         surfaceToneColor('card'),
-        'animate-in fade-in-0 @container absolute inset-0 z-[2100] flex min-h-0 flex-col duration-(--dur-base) outline-none',
+        'animate-in fade-in-0 @container absolute inset-0 z-(--z-canvas-cover) flex min-h-0 flex-col duration-(--dur-base) outline-none',
       )}
     >
       {children}

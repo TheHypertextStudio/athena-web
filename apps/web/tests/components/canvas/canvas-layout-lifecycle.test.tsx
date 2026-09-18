@@ -284,7 +284,7 @@ describe('Canvas measured layout lifecycle', () => {
 
     const chrome = screen.getByTestId('canvas-bottom-chrome');
     expect(chrome).toContainElement(screen.getByTestId('command-feedback'));
-    expect(chrome).toHaveClass('!z-[2000]');
+    expect(chrome).toHaveClass('!z-(--z-canvas-chrome)');
     expect(screen.getByTestId('canvas-bottom-notice')).toHaveTextContent('Dependency added');
   });
 

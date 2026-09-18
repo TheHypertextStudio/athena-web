@@ -71,9 +71,9 @@ PopoverAnchor.displayName = PopoverPrimitive.Anchor.displayName;
  * Every searchable picker in the product is a menu wearing a popover, so the surface comes from
  * one string and this overrides only what is popover-specific.
  *
- * Layering: transient overlays (this, dropdown/context menus, tooltips, hover cards) sit at
- * `z-[120]` — above the modal layer (sheets `z-[100]`, dialogs `z-[110]`) — so a picker opened
- * from inside a dialog renders over it instead of behind the scrim.
+ * Layering: transient overlays (this, dropdown/context menus, tooltips, hover cards) sit on
+ * `--z-popover`, above the modal band (`--z-sheet`, `--z-dialog`), so a picker opened from inside
+ * a dialog renders over it instead of behind the scrim. The scale is in `globals.css`.
  */
 const PANEL_WIDTH: Readonly<Record<PanelWidth, string>> = {
   sm: 'w-48',
@@ -139,7 +139,7 @@ export function PopoverContent({
         collisionPadding={collisionPadding}
         className={cn(
           surfaceClass,
-          'pointer-events-auto z-[120] min-h-0 origin-[var(--radix-popover-content-transform-origin)] outline-none',
+          'pointer-events-auto z-(--z-popover) min-h-0 origin-[var(--radix-popover-content-transform-origin)] outline-none',
           PANEL_MAX_HEIGHT[maxHeight],
           // A menu surface always scrolls itself; a panel delegates to `PopoverBody` and falls
           // back to scrolling only when no body claims the job.

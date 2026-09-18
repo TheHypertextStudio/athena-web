@@ -646,7 +646,10 @@ export function AppShell({
               // border plus a drop shadow on the outermost frame drew a second box around content
               // that already had one.
               surfaceToneColor('page'),
-              'lg:rounded-corner-lg @container min-h-0 flex-1 outline-none',
+              // `isolate` keeps every in-page layer (canvas chrome, a covering inspector pane)
+              // inside the panel's own stacking context, so nothing a page draws can climb above
+              // the overlays that portal to `<body>`.
+              'lg:rounded-corner-lg @container isolate min-h-0 flex-1 outline-none',
               // The default: `<main>` is the shell's one scroll container, with a stable gutter so
               // content does not shift when it grows past the viewport.
               pageScrollOwner === 'shell' &&
@@ -664,7 +667,7 @@ export function AppShell({
           <div
             ref={setOverlayHost}
             data-shell-overlay-host=""
-            className="pointer-events-none absolute inset-0 z-[109] overflow-hidden"
+            className="pointer-events-none absolute inset-0 z-(--z-shell-overlay) overflow-hidden"
           />
         </div>
 

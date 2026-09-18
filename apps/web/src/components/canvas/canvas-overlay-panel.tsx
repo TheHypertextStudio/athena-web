@@ -13,5 +13,6 @@ export default function CanvasOverlayPanel({
   className,
   ...props
 }: CanvasOverlayPanelProps): React.JSX.Element {
-  return <Panel {...props} className={cn('!z-[2000]', className)} />;
+  // `!` because XYFlow's own `.react-flow__panel` rule sets a z-index this must beat.
+  return <Panel {...props} className={cn('!z-(--z-canvas-chrome)', className)} />;
 }

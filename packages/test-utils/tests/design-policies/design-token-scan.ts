@@ -53,7 +53,8 @@ export type DesignTokenRule =
   | 'legacy-color-role'
   | 'hardcoded-color'
   | 'ad-hoc-border'
-  | 'unscoped-focus-ring';
+  | 'unscoped-focus-ring'
+  | 'raw-z-index';
 
 /** Every rule the scanner implements, for exhaustive reporting and ledger validation. */
 export const DESIGN_TOKEN_RULES: readonly DesignTokenRule[] = [
@@ -66,6 +67,7 @@ export const DESIGN_TOKEN_RULES: readonly DesignTokenRule[] = [
   'hardcoded-color',
   'ad-hoc-border',
   'unscoped-focus-ring',
+  'raw-z-index',
 ];
 
 /**
@@ -423,6 +425,15 @@ const RULE_PATTERNS: readonly {
       String.raw`(?<![\w-])(?<!(?:(?:group-|peer-)?(?:${FOCUS_RING_VARIANTS})):)(?:ring|outline)-ring(?![\w-])`,
       'g',
     ),
+  },
+  {
+    rule: 'raw-z-index',
+    // An arbitrary stacking value: `z-[2000]`, `!z-[50]`. The layering scale in `globals.css`
+    // (`--z-canvas-chrome` … `--z-toast`) is the only source of a z-index that has to agree with
+    // another surface's, and the day a canvas panel picked `2000` to clear XYFlow's nodes it also
+    // cleared the dialog scrim at `110`. A token reference (`z-(--z-dialog)`, `z-[var(--z-x)]`)
+    // is legal, as is Tailwind's stock scale (`z-10`) for ordinals inside one positioned surface.
+    pattern: new RegExp(String.raw`(?<![\w-])z-\[(?!var\(|--)[^\]]*\]`, 'g'),
   },
 ];
 

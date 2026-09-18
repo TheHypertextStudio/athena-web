@@ -892,6 +892,28 @@ dense rows where an outer ring would collide with the neighbour above.
 Every control step pads at least 8px horizontally, so no control can render text or an icon flush
 against its own edge at any size. A test asserts this over the whole scale.
 
+### Layering
+
+Every z-index that has to agree with another surface's comes from one scale in `globals.css`,
+referenced as `z-(--z-dialog)` and so on. A literal `z-[n]` is a `raw-z-index` policy violation.
+
+| Token               | Value | Layer                                                                    |
+| ------------------- | ----- | ------------------------------------------------------------------------ |
+| `--z-canvas-chrome` | 20    | Floating bars and columns, XYFlow panel chrome, the canvas expand button |
+| `--z-canvas-cover`  | 30    | An inspector pane covering a narrow canvas                               |
+| `--z-sheet`         | 100   | Sheet scrim and panel                                                    |
+| `--z-shell-overlay` | 109   | The shell's overlay host                                                 |
+| `--z-dialog`        | 110   | Dialog scrim and panel                                                   |
+| `--z-popover`       | 120   | Popover, tooltip, hover card, menu, editor bubble menu                   |
+| `--z-toast`         | 130   | Fixed notices and the toaster                                            |
+
+Two bands. The **in-page band** (`--z-canvas-chrome`, `--z-canvas-cover`) lives inside the shell's
+`<main>`, which carries `isolate`, so a value there orders layers within the page and can never
+reach the overlays that portal to `<body>`. The **overlay band** (sheet through toast) orders the
+portaled surfaces against each other: a picker opened inside a dialog sits above it, a toast above
+everything. Tailwind's stock ordinals (`z-10`, `z-20`) remain legal for layers that exist only
+inside one positioned surface, such as a sticky header over its own scroll body.
+
 ---
 
 ## 9. Enforcement

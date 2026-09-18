@@ -540,7 +540,7 @@ function CanvasInner({
             aria-label="Expand graph"
             className={cn(
               surfaceToneColor('floating'),
-              'text-on-surface-variant hover:text-on-surface absolute top-2 right-2 z-[2000] inline-flex size-9 items-center justify-center rounded-full transition-colors hover:bg-(--canvas-control-hover)',
+              'text-on-surface-variant hover:text-on-surface absolute top-2 right-2 z-(--z-canvas-chrome) inline-flex size-9 items-center justify-center rounded-full transition-colors hover:bg-(--canvas-control-hover)',
             )}
             style={
               {

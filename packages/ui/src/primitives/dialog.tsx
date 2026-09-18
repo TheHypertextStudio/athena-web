@@ -97,7 +97,7 @@ export const DialogClose = DialogPrimitive.Close;
  * @remarks
  * A semi-opaque scrim that fades in/out with the dialog. Rendered automatically by
  * {@link DialogContent}; exported for callers that compose their own portal layout. Dialogs use
- * the `z-[110]` modal layer so confirmations opened from a `z-[100]` {@link Sheet} remain
+ * the `--z-dialog` modal layer so confirmations opened from a `--z-sheet` {@link Sheet} remain
  * visible and interactive.
  */
 export function DialogOverlay({
@@ -108,7 +108,7 @@ export function DialogOverlay({
     <DialogPrimitive.Overlay
       data-overlay-scrim=""
       className={cn(
-        'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 bg-scrim/40 fixed inset-0 z-[110] duration-(--dur-slow) ease-(--ease-out)',
+        'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 bg-scrim/40 fixed inset-0 z-(--z-dialog) duration-(--dur-slow) ease-(--ease-out)',
         className,
       )}
       {...props}
@@ -124,8 +124,8 @@ export function DialogOverlay({
  * centered in the viewport. The panel is labelled by its {@link DialogTitle} (Radix requires a
  * `DialogTitle` descendant for accessibility). A built-in close button (top-right, MUI `X`
  * glyph) is included unless `showClose` is `false`. The panel caps at `max-h-[85vh]` and
- * scrolls its body when content overflows. The panel shares the overlay's `z-[110]` modal layer,
- * above sheets at `z-[100]`.
+ * scrolls its body when content overflows. The panel shares the overlay's `--z-dialog` modal
+ * layer, above sheets on `--z-sheet`.
  *
  * Focus management: on open, Radix's `FocusScope` moves focus to the first focusable descendant
  * (so the primary field lands focused without a React `autoFocus` attribute — a DOM `autoFocus`
@@ -268,7 +268,7 @@ export function DialogContent({
         className={cn(
           // Position, width, height, and the viewport gutter all come from the presentation; this
           // string is only the panel's surface, elevation, motion, and clipping.
-          'bg-surface-container-high text-on-surface data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-[0.98] data-[state=open]:zoom-in-[0.98] shadow-level3 z-[110] flex min-h-0 flex-col gap-0 overflow-hidden overscroll-contain rounded-xl p-0 duration-(--dur-slow) ease-(--ease-out) outline-none',
+          'bg-surface-container-high text-on-surface data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-[0.98] data-[state=open]:zoom-in-[0.98] shadow-level3 z-(--z-dialog) flex min-h-0 flex-col gap-0 overflow-hidden overscroll-contain rounded-xl p-0 duration-(--dur-slow) ease-(--ease-out) outline-none',
           OVERLAY_SCROLL_FALLBACK,
           hostedDialogInteractivityClass(hosted),
           presentationClass,

@@ -126,7 +126,7 @@ export default function CanvasFloatingBar({
   return (
     <div
       ref={ref}
-      className="pointer-events-none absolute top-2 left-2 z-[2000]"
+      className="pointer-events-none absolute top-2 left-2 z-(--z-canvas-chrome)"
       style={{ right: CANVAS_OVERLAY_GUTTER + insetRight }}
     >
       <AppBar

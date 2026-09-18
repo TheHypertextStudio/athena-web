@@ -81,7 +81,7 @@ export function SheetOverlay({
     <DialogPrimitive.Overlay
       data-overlay-scrim=""
       className={cn(
-        'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 bg-scrim/40 fixed inset-0 z-[100] duration-(--dur-slow) ease-(--ease-out)',
+        'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 bg-scrim/40 fixed inset-0 z-(--z-sheet) duration-(--dur-slow) ease-(--ease-out)',
         className,
       )}
       {...props}
@@ -166,7 +166,7 @@ export function SheetContent({
       <SheetOverlay />
       <DialogPrimitive.Content
         className={cn(
-          'bg-surface-container-high text-on-surface data-[state=open]:animate-in data-[state=closed]:animate-out shadow-level1 fixed z-[100] flex min-h-0 flex-col gap-0 overflow-hidden overscroll-contain p-0 ease-(--ease-out) outline-none data-[state=closed]:duration-(--dur-base) data-[state=open]:duration-(--dur-slow)',
+          'bg-surface-container-high text-on-surface data-[state=open]:animate-in data-[state=closed]:animate-out shadow-level1 fixed z-(--z-sheet) flex min-h-0 flex-col gap-0 overflow-hidden overscroll-contain p-0 ease-(--ease-out) outline-none data-[state=closed]:duration-(--dur-base) data-[state=open]:duration-(--dur-slow)',
           OVERLAY_SCROLL_FALLBACK,
           focusRing,
           sheetPresentationClass(presentation, side, size),

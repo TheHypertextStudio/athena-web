@@ -156,7 +156,7 @@
     "raw-radius-utility": 1
   },
   "apps/web/src/components/athena/athena-conversation.tsx": {
-    "ad-hoc-border": 4,
+    "ad-hoc-border": 2,
     "raw-radius-utility": 3,
     "raw-type-utility": 1
   },
@@ -252,7 +252,7 @@
   },
   "apps/web/src/components/composer/composer-shell.tsx": {
     "ad-hoc-border": 2,
-    "raw-type-utility": 5
+    "raw-type-utility": 1
   },
   "apps/web/src/components/composer/template-menu.tsx": {
     "ad-hoc-border": 2
@@ -426,7 +426,7 @@
     "ad-hoc-border": 3
   },
   "apps/web/src/components/project-detail/overview-summary.tsx": {
-    "ad-hoc-border": 6
+    "ad-hoc-border": 2
   },
   "apps/web/src/components/project-detail/project-dependencies.tsx": {
     "raw-radius-utility": 1
@@ -457,30 +457,38 @@
   },
   "apps/web/src/components/scheduling/scheduling-all-day-item.tsx": {
     "ad-hoc-border": 5,
-    "raw-radius-utility": 9
+    "raw-radius-utility": 9,
+    "raw-z-index": 1
   },
   "apps/web/src/components/scheduling/scheduling-all-day-lane.tsx": {
     "raw-radius-utility": 2
   },
+  "apps/web/src/components/scheduling/scheduling-canvas-header.tsx": {
+    "raw-z-index": 2
+  },
   "apps/web/src/components/scheduling/scheduling-canvas.tsx": {
-    "ad-hoc-border": 2
+    "ad-hoc-border": 2,
+    "raw-z-index": 2
   },
   "apps/web/src/components/scheduling/scheduling-item-body.tsx": {
     "raw-radius-utility": 2
   },
   "apps/web/src/components/scheduling/scheduling-item-card.tsx": {
     "ad-hoc-border": 5,
-    "raw-radius-utility": 8
+    "raw-radius-utility": 8,
+    "raw-z-index": 1
   },
   "apps/web/src/components/scheduling/scheduling-region-preview.tsx": {
     "ad-hoc-border": 7,
     "raw-radius-utility": 1
   },
   "apps/web/src/components/scheduling/scheduling-relation-slot-lane.tsx": {
-    "ad-hoc-border": 3
+    "ad-hoc-border": 3,
+    "raw-z-index": 1
   },
   "apps/web/src/components/scheduling/scheduling-time-grid.tsx": {
-    "ad-hoc-border": 5
+    "ad-hoc-border": 5,
+    "raw-z-index": 1
   },
   "apps/web/src/components/search/search-client.tsx": {
     "ad-hoc-border": 8,
@@ -579,9 +587,22 @@
   "apps/web/src/components/time-tracking/time-session-list.tsx": {
     "ad-hoc-border": 2
   },
+  "apps/web/src/components/timeline/timeline-axis.tsx": {
+    "raw-z-index": 1
+  },
   "apps/web/src/components/timeline/timeline-bar.tsx": {
     "ad-hoc-border": 2,
-    "raw-radius-utility": 2
+    "raw-radius-utility": 2,
+    "raw-z-index": 4
+  },
+  "apps/web/src/components/timeline/timeline-canvas.tsx": {
+    "raw-z-index": 1
+  },
+  "apps/web/src/components/timeline/timeline-drag-layer.tsx": {
+    "raw-z-index": 1
+  },
+  "apps/web/src/components/timeline/timeline-edges.tsx": {
+    "raw-z-index": 1
   },
   "apps/web/src/components/timeline/timeline-tint.ts": {
     "ad-hoc-border": 4
@@ -612,11 +633,11 @@
     "ad-hoc-border": 2,
     "raw-radius-utility": 1
   },
-  "apps/web/src/components/views/quick-add-row.tsx": {
-    "ad-hoc-border": 6
-  },
   "apps/web/src/components/views/page-layout.tsx": {
     "raw-type-utility": 1
+  },
+  "apps/web/src/components/views/quick-add-row.tsx": {
+    "ad-hoc-border": 6
   },
   "apps/web/src/components/views/view-list.tsx": {
     "ad-hoc-border": 3

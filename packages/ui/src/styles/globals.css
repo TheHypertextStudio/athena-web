@@ -239,6 +239,20 @@
   --dur-slow: 240ms;
 
   /*
+   * Layering scale (design-system.md §"Layering"). Referenced via `z-(--z-dialog)` etc.; a
+   * literal `z-[n]` is a policy violation. The in-page band (canvas chrome, a covering pane) is
+   * contained by `isolate` on the shell's `<main>`, so it can never reach the portaled overlay
+   * band above it no matter what value it carries.
+   */
+  --z-canvas-chrome: 20;
+  --z-canvas-cover: 30;
+  --z-sheet: 100;
+  --z-shell-overlay: 109;
+  --z-dialog: 110;
+  --z-popover: 120;
+  --z-toast: 130;
+
+  /*
    * Control-height scale (design-system.md §"Control heights"). Five steps, 4px apart, and the
    * single answer to "how tall is this thing". `--control-h-md` (32px) is MD3's chip container
    * height and the product default; everything else steps from it.

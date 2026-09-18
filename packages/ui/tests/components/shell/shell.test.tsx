@@ -56,6 +56,9 @@ describe('AppShell + Sidebar', () => {
     expect(screen.getByRole('button', { name: /Workspace: Acme Co/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Retainers' })).toBeInTheDocument();
     expect(screen.getByText('Main content')).toBeInTheDocument();
+    // `<main>` is its own stacking context, so an in-page layer (canvas chrome on
+    // `--z-canvas-chrome`) can never climb above a dialog scrim portaled to `<body>`.
+    expect(screen.getByRole('main')).toHaveClass('isolate');
   });
 });
 

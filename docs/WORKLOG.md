@@ -272,7 +272,7 @@ event-stream `Accept` with `406`, and errors on a stream route stay `application
   - [x] Write the design and phased plan
   - [ ] Confirm the four product decisions in §8
   - [x] Phase 0: context spine (page context provider, navigation-stable panel, personal thread hook)
-  - [ ] Phase 1: companion thread replaces the queue in the rail
+  - [x] Phase 1: companion thread replaces the queue in the rail
   - [ ] Phase 2: job cards, Working strip, wide view
   - [ ] Phase 3: heads-up entries and live suggestions
   - [ ] Phase 4: retire dead code, update docs, full design audit
@@ -283,6 +283,7 @@ event-stream `Accept` with `406`, and errors on a stream route stay `application
 - **Phase 0 landed (2026-09-13)**: page context provider, navigation-stable panel, context chip
   in the rail composer, personal thread hook, browser journey. Validation: root typecheck, lint,
   format:check, test, and `e2e/athena/companion-context.spec.ts` all green.
+- **Phase 1 landed (2026-09-18)**: the rail's Athena panel is the conversation on every work page, with the page chip ("Fall fundraiser launch · Project") and page-aware suggestions; sends carry the page through the personal message route; Athena is first in the rail and the rail opens there when something needs the person. The job list left the rail and stays on /athena until Phase 2. ⌘J on a page with a source opens the conversation with that page attached (decision recorded). Validation: root typecheck, lint, format:check, test, and both Athena browser journeys green.
 
 ---
 

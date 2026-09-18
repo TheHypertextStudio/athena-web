@@ -3,15 +3,7 @@
 import { MenuActionRow } from '@docket/ui/components';
 import { NotePen, Trash2 } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import {
-  Button,
-  Popover,
-  PopoverBody,
-  PopoverContent,
-  PopoverHeader,
-  PopoverTrigger,
-  Text,
-} from '@docket/ui/primitives';
+import { Button, Popover, PopoverContent, PopoverTrigger, Text } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
 import { relativeTime } from '@/components/settings/format-time';
@@ -115,32 +107,24 @@ export function ComposerDraftsChip({
             </Button>
           </PopoverTrigger>
           {/* Above the trigger: the chip sits on the composer's bottom edge, so the list opens
-              over the form rather than past the dialog. Wide enough for a title and its time. */}
-          <PopoverContent presentation="panel" width="wide" side="top" align="start">
-            <PopoverHeader>
-              {/* A row carries 16px of its own padding inside the body's inset, so the heading
-                  takes the same 16px to start on the line its titles start on. */}
-              <Text as="p" token="title-small" className="px-4">
-                Drafts
-              </Text>
-            </PopoverHeader>
-            <PopoverBody>
-              <div role="list" className="flex flex-col gap-0.5" aria-label="Saved drafts">
-                {drafts.items.map((draft) => (
-                  <DraftRow
-                    key={draft.id}
-                    draft={draft}
-                    noun={noun}
-                    current={draft.id === drafts.currentId}
-                    onLoad={(draftId) => {
-                      setOpen(false);
-                      drafts.onLoad(draftId);
-                    }}
-                    onDelete={drafts.onDelete}
-                  />
-                ))}
-              </div>
-            </PopoverBody>
+              over the form rather than past the dialog. The chip already names the list, so the
+              menu surface holds only the rows. */}
+          <PopoverContent width="xl" side="top" align="start">
+            <div role="list" className="flex flex-col gap-0.5" aria-label="Saved drafts">
+              {drafts.items.map((draft) => (
+                <DraftRow
+                  key={draft.id}
+                  draft={draft}
+                  noun={noun}
+                  current={draft.id === drafts.currentId}
+                  onLoad={(draftId) => {
+                    setOpen(false);
+                    drafts.onLoad(draftId);
+                  }}
+                  onDelete={drafts.onDelete}
+                />
+              ))}
+            </div>
           </PopoverContent>
         </Popover>
       ) : null}

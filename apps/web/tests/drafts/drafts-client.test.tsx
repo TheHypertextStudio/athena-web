@@ -74,7 +74,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('the Drafts page', () => {
-  it('groups drafts by what they become and opens one in its composer', async () => {
+  it('lists every draft newest first and opens one in its composer', async () => {
     draftsGet.mockResolvedValue(
       jsonResponse(true, {
         items: [
@@ -90,11 +90,10 @@ describe('the Drafts page', () => {
     );
     renderPage();
 
-    const projects = await screen.findByRole('grid', { name: 'Projects' });
-    const tasks = screen.getByRole('grid', { name: 'Tasks' });
-    expect(within(projects).getByRole('row', { name: /Spring gala/ })).toBeInTheDocument();
-    expect(within(projects).getByRole('row', { name: /Bravo workspace/ })).toBeInTheDocument();
-    const taskRow = within(tasks).getByRole('row', { name: /Call the caterer/ });
+    const list = await screen.findByRole('grid', { name: 'Drafts' });
+    expect(within(list).getAllByRole('row')).toHaveLength(2);
+    expect(within(list).getByRole('row', { name: /Bravo workspace/ })).toBeInTheDocument();
+    const taskRow = within(list).getByRole('row', { name: /Call the caterer/ });
 
     fireEvent.click(taskRow);
     expect(openCreate).toHaveBeenCalledWith({

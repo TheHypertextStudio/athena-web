@@ -90,9 +90,10 @@ Settings → Profile → Creating.
 ## Surfaces
 
 - **Chip.** Once a draft of this kind exists in this workspace, the action row shows "Drafts (n)".
-  Choosing one replaces the composer's content; each row has a trailing delete.
-- **Drafts page.** `/drafts` lists every draft across workspaces, grouped by kind in the workspace's
-  vocabulary, newest first. Activating a row calls `openCreate` with the draft's workspace and id.
+  Choosing one replaces the composer's content; each row has a trailing delete. The list is the
+  standard menu surface holding only rows, since the chip already names it.
+- **Drafts page.** `/drafts` is one flat list of every draft across workspaces, newest first, each row
+  led by its kind's glyph. Activating a row calls `openCreate` with the draft's workspace and id.
 - **Sidebar.** `home:drafts` is resolved into the catalog only while `draftCount > 0`, and carries the
   count as its badge. The page, the badge, and every chip read one list query (`queryKeys.drafts()`),
   which the composers keep current as they save, so the three cannot disagree.

@@ -274,6 +274,7 @@ event-stream `Accept` with `406`, and errors on a stream route stay `application
   - [x] Phase 0: context spine (page context provider, navigation-stable panel, personal thread hook)
   - [x] Phase 1: companion thread replaces the queue in the rail
   - [ ] Phase 2: job cards, Working strip, wide view
+    - [x] Phase 2a: job cards, Working strip, Work ledger, one composer on Today
   - [ ] Phase 3: heads-up entries and live suggestions
   - [ ] Phase 4: retire dead code, update docs, full design audit
 - **Blockers**: Product decisions in §8 of the design.
@@ -284,6 +285,7 @@ event-stream `Accept` with `406`, and errors on a stream route stay `application
   in the rail composer, personal thread hook, browser journey. Validation: root typecheck, lint,
   format:check, test, and `e2e/athena/companion-context.spec.ts` all green.
 - **Phase 1 landed (2026-09-18)**: the rail's Athena panel is the conversation on every work page, with the page chip ("Fall fundraiser launch · Project") and page-aware suggestions; sends carry the page through the personal message route; Athena is first in the rail and the rail opens there when something needs the person. The job list left the rail and stays on /athena until Phase 2. ⌘J on a page with a source opens the conversation with that page attached (decision recorded). Validation: root typecheck, lint, format:check, test, and both Athena browser journeys green.
+- **Phase 2a landed (2026-09-18)**: delegated work is a card in the thread with its state, steps, decision, receipt, Reply, and a More menu; the rail pins running and waiting work in a Working strip; the wide view is the same thread beside a Work ledger (Running / Needs you / Done) and the connections panel; the person's own conversation stays out of the work list; Today's prompt captures only while the conversation is open. The queue and workbench are retired. Known local-dev defect: approving a mock-scripted proposal 409s because the dev turn fixture lacks an orgId (task chip filed). Ghost rows, Review/Undo, and the card on the task page follow in Phase 2b.
 
 ---
 

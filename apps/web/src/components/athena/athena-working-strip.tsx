@@ -125,7 +125,7 @@ function AttentionRow({ job, transport, onOpen }: AttentionRowProps): JSX.Elemen
               key={option.id}
               type="button"
               size="sm"
-              variant={index === 0 ? 'default' : 'outline'}
+              variant={index === 0 ? 'default' : 'secondary'}
               disabled={actions.pending}
               onClick={() => {
                 actions.decide({ id: decision.id, option: option.id, kind: decision.kind });

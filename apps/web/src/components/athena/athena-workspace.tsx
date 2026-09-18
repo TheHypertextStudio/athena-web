@@ -125,12 +125,12 @@ export function AthenaWorkspace({
           tone="card"
           shape="none"
           aria-label="Athena work"
-          className="border-outline-variant flex max-h-[40vh] shrink-0 flex-col overflow-y-auto border-b @3xl:max-h-none @3xl:border-r @3xl:border-b-0"
+          className="flex max-h-[40vh] shrink-0 flex-col gap-3 overflow-y-auto @3xl:max-h-none"
         >
-          <div className="border-outline-variant border-b p-3">
+          <div className="p-3">
             <AthenaConversationBrowser className="max-h-72" />
           </div>
-          <div className="border-outline-variant border-b p-3">
+          <div className="p-3">
             {queue.isPending ? (
               <div className="flex flex-col gap-2" aria-hidden="true">
                 <Skeleton className="h-8 w-full" />
@@ -149,17 +149,22 @@ export function AthenaWorkspace({
               />
             )}
           </div>
-          <div className="border-outline-variant">
+          <div>
             <AthenaMcpPanel />
           </div>
         </Surface>
 
         <main className="flex min-h-[32rem] min-w-0 shrink-0 flex-col @3xl:min-h-0">
-          <header className="border-outline-variant flex min-h-12 shrink-0 items-center gap-2 border-b px-4 py-2 @2xl:px-6">
+          <Surface
+            as="header"
+            tone="card"
+            shape="none"
+            className="flex min-h-12 shrink-0 items-center gap-2 px-4 py-2 @2xl:px-6"
+          >
             <Sparkles aria-hidden="true" className="text-primary size-4" />
             <span className="text-on-surface text-label-large min-w-0 flex-1 truncate">Athena</span>
             <VoiceLaunch workspaceId={activeWorkspaceId} />
-          </header>
+          </Surface>
           {activeWorkspaceId ? (
             <AthenaConversation
               orgId={activeWorkspaceId}

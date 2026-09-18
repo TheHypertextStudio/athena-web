@@ -164,7 +164,6 @@ export default function DayPlan({
           icon={ListChecks}
           tone="accent"
           title={unplanned ? 'No plan for today yet' : 'No tasks left on today’s plan'}
-          body="Athena drafts a plan from today's deadlines and the time left. Nothing changes until you approve it."
           {...(onPlan ? { cta: { label: 'Plan today with Athena', onClick: onPlan } } : {})}
           action={
             <Button asChild variant="ghost" controlSize="sm">

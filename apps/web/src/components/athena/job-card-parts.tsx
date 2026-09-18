@@ -137,7 +137,7 @@ export function JobSteps({ activities, forceExpanded }: JobStepsProps): JSX.Elem
   const visible = collapsed ? activities.slice(-COLLAPSED_STEP_COUNT) : activities;
 
   return (
-    <ol aria-label="What Athena did" className="divide-outline-variant divide-y">
+    <ol aria-label="What Athena did">
       {collapsed ? (
         <li className="pb-2">
           <Button
@@ -265,7 +265,7 @@ export function JobDecision({
             <Button
               key={option.id}
               type="button"
-              variant={index === 0 ? 'default' : 'outline'}
+              variant={index === 0 ? 'default' : 'secondary'}
               size="sm"
               className="min-h-10"
               disabled={pending}
@@ -294,7 +294,7 @@ export function JobReceipt({ result }: JobReceiptProps): JSX.Element {
       <h4 className="text-on-surface text-title-small">{result.title}</h4>
       <p className="text-on-surface-variant text-body-medium mt-1">{result.summary}</p>
       {result.receipt && result.receipt.length > 0 ? (
-        <dl className="divide-outline-variant mt-3 divide-y">
+        <dl className="mt-3">
           {result.receipt.map((item) => (
             <div
               key={`${item.label}-${item.value}`}

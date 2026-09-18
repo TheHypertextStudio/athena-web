@@ -17,7 +17,7 @@
  */
 import type { ProposalGroupOut, ProposalItemOut } from '@docket/athena/agent-contract';
 import { cn } from '@docket/ui/lib/utils';
-import { Button, Surface } from '@docket/ui/primitives';
+import { Button, Surface, surfaceToneColor } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
 import { describeProposal } from '@/lib/athena/describe-proposal';
@@ -90,7 +90,7 @@ export function ProposalGroupCard({
       shape="small"
       pad="roomy"
       aria-label={`Proposed changes: ${String(count)}`}
-      className="border-primary/40 bg-primary/5 rounded-xl border"
+      className="bg-primary/5 rounded-xl"
     >
       <h3 className="text-on-surface text-label-large">{headline(count)}</h3>
 
@@ -185,10 +185,9 @@ function ProposalRow({
     <li
       style={{ viewTransitionName: `proposal-${item.activityId}` }}
       className={cn(
-        // The ghost grammar: a real-row silhouette at reduced opacity with a dashed
-        // accent — unmistakably "not real yet", solidified in place on approval.
-        'border-primary/30 flex items-center gap-2.5 rounded-lg border border-dashed px-3 py-2',
-        'bg-surface/60 opacity-80',
+        // The ghost grammar: a tonal tint at reduced opacity, not a drawn outline —
+        // unmistakably "not real yet", solidified in place on approval.
+        'bg-primary-container/25 flex items-center gap-2.5 rounded-lg px-3 py-2 opacity-80',
       )}
     >
       {showCheckbox && canAct ? (
@@ -221,7 +220,10 @@ function ProposalRow({
               setEditing(false);
             }
           }}
-          className="border-outline-variant bg-surface text-body-medium focus-visible:ring-ring w-full min-w-0 flex-1 rounded border px-2 py-0.5 outline-none focus-visible:ring-1"
+          className={cn(
+            surfaceToneColor('prominent'),
+            'text-body-medium focus-visible:ring-ring w-full min-w-0 flex-1 rounded px-2 py-0.5 outline-none focus-visible:ring-1',
+          )}
         />
       ) : (
         <button

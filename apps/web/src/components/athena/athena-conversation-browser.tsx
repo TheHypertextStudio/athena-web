@@ -195,7 +195,6 @@ export function AthenaConversationBrowser({
               <DatePicker
                 ariaLabel="From"
                 placeholder="Any day"
-                triggerVariant="outline"
                 value={fromDay === '' ? null : fromDay}
                 onChange={(next) => {
                   setFromDay(next ?? '');
@@ -206,7 +205,6 @@ export function AthenaConversationBrowser({
               <DatePicker
                 ariaLabel="To"
                 placeholder="Any day"
-                triggerVariant="outline"
                 value={toDay === '' ? null : toDay}
                 onChange={(next) => {
                   setToDay(next ?? '');

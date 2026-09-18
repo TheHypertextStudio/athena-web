@@ -220,7 +220,7 @@ export function ElicitationCard({
             <span>Athena needs a decision</span>
           </Chip>
           {pending ? (
-            <Chip variant="assist" tone="outlined" icon={<AlarmClock aria-hidden="true" />} asChild>
+            <Chip variant="assist" tone="tonal" icon={<AlarmClock aria-hidden="true" />} asChild>
               <span>{describeDeadline(elicitation.expiresAt, now)}</span>
             </Chip>
           ) : (

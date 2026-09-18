@@ -21,15 +21,17 @@ in the place you approved it.
 
 1. **Real components, ghost treatment.** A ghost renders with the same component family as
    the real entity (task row silhouette, same type scale) at reduced opacity (`~60–80%`),
-   with a **dashed `primary`-tinted border** and a small uppercase **`proposed` badge**.
+   with a **`primary-container`-tinted fill** (e.g. `bg-primary-container/25`) and a small
+   uppercase **`proposed` badge**. No border: the design system bans drawn lines for
+   hierarchy (design-system §8), so "not real yet" reads from the tint and the opacity alone.
    Never a skeleton, never a grayed disabled state — a ghost is interactive.
 2. **Editable until blessed.** Click a ghost's title to edit it in place. Edits PATCH the
    stored tool input; **approval executes exactly what is shown**. After a decision the
    ghost is immutable (the API 409s).
 3. **Solidify in place.** Every ghost carries a stable `view-transition-name`
    (`proposal-<activityId>`). Approval must morph the ghost into the real row where it
-   stands — opacity up, dashed border → solid, badge fades. No view swaps, nothing
-   teleports (the shared-element rule).
+   stands — opacity up, tint fades to the real row's surface, badge fades. No view swaps,
+   nothing teleports (the shared-element rule).
 4. **Batches review as one unit.** Ghosts group by `proposalGroupId` (one assistant turn's
    related creations). The group surface always offers **Approve all N / Approve selected /
    Reject all** — approving forty imported tasks is one gesture, not forty.

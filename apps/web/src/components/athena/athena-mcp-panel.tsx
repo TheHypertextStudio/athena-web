@@ -189,7 +189,7 @@ function ConnectForm({ onConnected }: { readonly onConnected: () => void }): JSX
           required
         />
       </Field>
-      <Field label="Name" description="What this server is called in Athena.">
+      <Field label="Name">
         <Input
           value={name}
           onChange={(event) => {
@@ -393,8 +393,7 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
         </Text>
       ) : items.length === 0 ? (
         <Text token="body-small" tone="muted">
-          Nothing connected yet. Connect an MCP server so Athena can use its tools and show its
-          interactive apps here.
+          Nothing connected yet.
         </Text>
       ) : (
         <ul className="flex flex-col gap-1">
@@ -487,7 +486,7 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
             <DialogTitle>Connect a tool or app</DialogTitle>
             <DialogDescription>
               Add a remote MCP server so Athena can use its tools and show its interactive apps
-              directly in this conversation. You stay right here.
+              directly in this conversation.
             </DialogDescription>
           </DialogHeader>
           <DialogBody>

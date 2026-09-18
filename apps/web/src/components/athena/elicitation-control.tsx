@@ -267,7 +267,7 @@ function ConfirmControl({ control, value, onChange, disabled }: Narrowed<'confir
     <ControlGroup controlSize="lg" wrap>
       <Button
         type="button"
-        variant={value === true ? 'default' : 'outline'}
+        variant={value === true ? 'default' : 'ghost'}
         disabled={disabled}
         aria-pressed={value === true}
         onClick={() => {
@@ -278,7 +278,7 @@ function ConfirmControl({ control, value, onChange, disabled }: Narrowed<'confir
       </Button>
       <Button
         type="button"
-        variant={value === false ? 'secondary' : 'outline'}
+        variant={value === false ? 'secondary' : 'ghost'}
         disabled={disabled}
         aria-pressed={value === false}
         onClick={() => {
@@ -307,7 +307,7 @@ function SelectControl({ control, value, onChange, disabled }: Narrowed<'select'
           <Chip
             key={option.value}
             variant="filter"
-            tone="outlined"
+            tone="tonal"
             icon={isSelected ? <Check aria-hidden="true" /> : <Plus aria-hidden="true" />}
             selected={isSelected}
             disabled={disabled}
@@ -467,8 +467,8 @@ function FileControl({
           if (dropped) void upload(dropped);
         }}
         className={cn(
-          'border-outline-variant flex flex-col items-center gap-2 rounded-xl border border-dashed px-4 py-6 text-center',
-          dragging && surfaceToneColor('floating'),
+          surfaceToneColor(dragging ? 'floating' : 'well'),
+          'flex flex-col items-center gap-2 rounded-xl px-4 py-6 text-center',
         )}
       >
         <Paperclip aria-hidden="true" className="text-on-surface-variant size-5" />
@@ -489,7 +489,7 @@ function FileControl({
         />
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           controlSize="lg"
           disabled={disabled === true || uploading !== null}
           onClick={() => inputRef.current?.click()}
@@ -646,7 +646,7 @@ function ListControl({
       <div>
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           controlSize="lg"
           disabled={disabled}
           onClick={() => {
@@ -681,7 +681,7 @@ function VariantControl({
           <Chip
             key={variant.value}
             variant="filter"
-            tone="outlined"
+            tone="tonal"
             icon={
               variant.value === tag ? <Check aria-hidden="true" /> : <Plus aria-hidden="true" />
             }

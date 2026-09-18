@@ -7,7 +7,7 @@ import { type EntityMention } from '../../lib/contracts/mention';
 import { formatBytes } from '@docket/ui';
 import { Calendar, FileText, Link as LinkIcon, Mail, Plus, Trash2 } from '@docket/ui/icons';
 import { EmptyState } from '@docket/ui/components';
-import { Button, Text } from '@docket/ui/primitives';
+import { Button, Input, Text } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useMemo, useState } from 'react';
 
@@ -183,7 +183,7 @@ export function ResourcesTab({
           <Button
             type="button"
             size="sm"
-            variant="outline"
+            variant="secondary"
             className="min-h-10 gap-1.5"
             onClick={() => {
               setAdding((value) => !value);
@@ -206,8 +206,9 @@ export function ResourcesTab({
             setAdding(false);
           }}
         >
-          <input
-            className="border-outline bg-surface text-body-small h-10 rounded-md border px-3"
+          <Input
+            variant="filled"
+            controlSize="xl"
             aria-label="Resource title"
             placeholder="Resource title"
             value={title}
@@ -215,8 +216,9 @@ export function ResourcesTab({
               setTitle(event.target.value);
             }}
           />
-          <input
-            className="border-outline bg-surface text-body-small h-10 rounded-md border px-3"
+          <Input
+            variant="filled"
+            controlSize="xl"
             aria-label="Resource URL"
             placeholder="https://"
             type="url"
@@ -311,12 +313,7 @@ export function ResourcesTab({
         // `frame="none"`: the panel frame draws a hairline, and §8 keeps a border to the three
         // things that earn one. The section's heading and its "Add resource" button already bound
         // this region, so the atom supplies the treatment without a line around it.
-        <EmptyState
-          icon={LinkIcon}
-          title="No linked resources yet"
-          body="Attach a file, a link, or a document so the work and the material it depends on sit together."
-          frame="none"
-        />
+        <EmptyState icon={LinkIcon} title="No linked resources yet" frame="none" />
       )}
       {canEdit && onUpload ? (
         <label className="text-primary text-body-small hover:bg-surface-container-high flex min-h-10 w-fit cursor-pointer items-center rounded-md px-3">

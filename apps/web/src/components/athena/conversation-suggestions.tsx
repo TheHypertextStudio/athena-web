@@ -32,7 +32,7 @@ export function ConversationSuggestions({
         <li key={prompt}>
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             className="h-10 w-full justify-start"
             onClick={() => {
               onPick(prompt);

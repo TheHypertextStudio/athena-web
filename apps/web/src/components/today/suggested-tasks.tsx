@@ -48,7 +48,7 @@ export default function SuggestedTasks({
           : 'The plan is complete. These tasks fit the time left.'}
       </p>
       {visible.length > 0 ? (
-        <ul className="bg-surface-container-low divide-outline-variant mt-1 divide-y rounded-xl px-4">
+        <ul className="bg-surface-container-low mt-1 rounded-xl px-4">
           {visible.map((suggestion) => (
             <li key={suggestion.id} className="py-4 first:pt-2 last:pb-0">
               <div className="flex flex-col gap-3 @xl:flex-row @xl:items-center">
@@ -81,7 +81,7 @@ export default function SuggestedTasks({
                   </Button>
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     disabled={busy}
                     onClick={() => {
                       onAdd(suggestion);

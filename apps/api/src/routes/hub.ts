@@ -140,6 +140,7 @@ export function mergeHubPreferences(
     ...(patch.proactive ? { proactive: { ...current.proactive, ...patch.proactive } } : {}),
     ...(patch.calendar ? { calendar: { ...current.calendar, ...patch.calendar } } : {}),
     ...(patch.athena ? { athena: { ...current.athena, ...patch.athena } } : {}),
+    ...(patch.composer ? { composer: { ...current.composer, ...patch.composer } } : {}),
   };
 }
 /** Resolve Hub activity's public raw-ID cursor to its internal `(createdAt, id)` keyset position. */

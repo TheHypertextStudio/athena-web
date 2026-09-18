@@ -7,6 +7,7 @@ import type {
 import type { JSX } from 'react';
 import { useEffect, useState } from 'react';
 import { useSession } from '@/lib/auth-client';
+import { ComposerPreferencesSection } from '@/components/settings/composer-preferences-section';
 import { SettingsImagePicker } from '@/components/settings/settings-image-picker';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
@@ -68,47 +69,47 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
     save.mutate({ image: next.startsWith('data:image/') ? next : null });
   }
 
+  if (!session) return <SettingsSectionPage sectionKey="profile" loading={isPending} />;
   return (
     <SettingsSectionPage sectionKey="profile" loading={isPending}>
-      {session ? (
-        <SettingsGroup
-          capability={SETTINGS_NODES.profileIdentity}
-          action={<SettingRowStatus pending={save.isPending} saved={save.isSuccess} />}
-        >
-          <Field label="Name" {...(nameError === null ? {} : { error: nameError })}>
-            <Input
-              value={name}
-              maxLength={120}
-              aria-invalid={nameError ? true : undefined}
-              onChange={(event) => {
-                setName(event.target.value);
-                setNameError(null);
-              }}
-            />
-          </Field>
-          <SettingsImagePicker
-            label="Profile photo"
-            value={image}
-            fallback={(name.trim()[0] ?? session.user.email[0] ?? '?').toUpperCase()}
-            onChange={(value) => {
-              setImage(value);
-              commitImage(value);
+      <SettingsGroup
+        capability={SETTINGS_NODES.profileIdentity}
+        action={<SettingRowStatus pending={save.isPending} saved={save.isSuccess} />}
+      >
+        <Field label="Name" {...(nameError === null ? {} : { error: nameError })}>
+          <Input
+            value={name}
+            maxLength={120}
+            aria-invalid={nameError ? true : undefined}
+            onChange={(event) => {
+              setName(event.target.value);
+              setNameError(null);
             }}
           />
-          {save.error ? (
-            <p className="text-error text-body-medium" role="alert">
-              {userErrorMessage(save.error, 'Could not save your profile.')}
-            </p>
-          ) : null}
-          <div className="pt-4">
-            <p className="text-on-surface-variant text-body-small">Email</p>
-            <p className="text-on-surface text-label-large">{session.user.email}</p>
-            <p className="text-on-surface-variant text-body-small mt-1">
-              Change your sign-in email from Security, where the confirmation step is protected.
-            </p>
-          </div>
-        </SettingsGroup>
-      ) : null}
+        </Field>
+        <SettingsImagePicker
+          label="Profile photo"
+          value={image}
+          fallback={(name.trim()[0] ?? session.user.email[0] ?? '?').toUpperCase()}
+          onChange={(value) => {
+            setImage(value);
+            commitImage(value);
+          }}
+        />
+        {save.error ? (
+          <p className="text-error text-body-medium" role="alert">
+            {userErrorMessage(save.error, 'Could not save your profile.')}
+          </p>
+        ) : null}
+        <div className="pt-4">
+          <p className="text-on-surface-variant text-body-small">Email</p>
+          <p className="text-on-surface text-label-large">{session.user.email}</p>
+          <p className="text-on-surface-variant text-body-small mt-1">
+            Change your sign-in email from Security, where the confirmation step is protected.
+          </p>
+        </div>
+      </SettingsGroup>
+      <ComposerPreferencesSection />
     </SettingsSectionPage>
   );
 }

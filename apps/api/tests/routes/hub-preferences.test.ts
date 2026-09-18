@@ -86,6 +86,56 @@ describe('Hub preferences', () => {
     });
   });
 
+  it('deep-merges the composer group both ways without erasing siblings', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'HubComposerPreferences');
+    await schema.db
+      .update(schema.hub)
+      .set({
+        preferences: {
+          theme: 'dark',
+          digest: { enabled: true, channels: ['email'] },
+          proactive: { enabled: false },
+        },
+      })
+      .where(eq(schema.hub.userId, userId));
+    const app = appWithSession(hubRouter, fakeSession(userId));
+
+    const enabledResponse = await app.request('/preferences', {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ composer: { resumeDrafts: true } }),
+    });
+    expect(enabledResponse.status).toBe(200);
+    expect(await body<HubPreferences>(enabledResponse)).toMatchObject({
+      theme: 'dark',
+      digest: { enabled: true, channels: ['email'] },
+      proactive: { enabled: false },
+      composer: { resumeDrafts: true },
+    });
+
+    const digestResponse = await app.request('/preferences', {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ digest: { sendAtLocalTime: '18:30' } }),
+    });
+    expect(digestResponse.status).toBe(200);
+    expect(await body<HubPreferences>(digestResponse)).toMatchObject({
+      digest: { enabled: true, channels: ['email'], sendAtLocalTime: '18:30' },
+      composer: { resumeDrafts: true },
+    });
+
+    const disabledResponse = await app.request('/preferences', {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ composer: { resumeDrafts: false } }),
+    });
+    expect(disabledResponse.status).toBe(200);
+    const disabled = await body<HubPreferences>(disabledResponse);
+    expect(disabled.composer?.resumeDrafts).toBe(false);
+    expect(disabled.digest).toMatchObject({ enabled: true, sendAtLocalTime: '18:30' });
+  });
+
   it('keeps preferences readable and writable when one stored view override went stale', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'HubStaleViewState');

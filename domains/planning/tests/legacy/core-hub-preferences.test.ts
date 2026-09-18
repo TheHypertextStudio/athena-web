@@ -61,6 +61,18 @@ describe('HubPreferences', () => {
     ).toEqual({ pixelsPerHour: 73.125, minLaneWidth: 241.75, defaultLayerId: null });
   });
 
+  it('parses the composer group and treats an absent resumeDrafts as off', () => {
+    expect(HubPreferences.parse({ composer: { resumeDrafts: true } }).composer).toEqual({
+      resumeDrafts: true,
+    });
+    expect(HubPreferences.parse({ composer: {} }).composer?.resumeDrafts).toBeUndefined();
+    expect(HubPreferences.parse({}).composer).toBeUndefined();
+  });
+
+  it('rejects a non-boolean resumeDrafts', () => {
+    expect(HubPreferences.safeParse({ composer: { resumeDrafts: 'yes' } }).success).toBe(false);
+  });
+
   it('rejects an invalid density', () => {
     expect(HubPreferences.safeParse({ density: 'cozy' }).success).toBe(false);
   });

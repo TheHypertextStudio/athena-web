@@ -22,6 +22,9 @@ editor
 # internal package/module structure, exports, or naming (that work is either scoped to the
 # domain/package it changes, or left unscoped if it's cross-cutting).
 dx
+# drafts: what a person sets aside in a create composer and returns to — the composer's Drafts
+# chip, the close prompt's Save draft answer, the Drafts page, and the resume preference.
+drafts
 hub
 # The record scopes — `cycles`, `initiatives`, `programs`, `projects`, `tasks` — are one set, and a
 # record is named for what a person opens rather than for the component that draws it. A change to

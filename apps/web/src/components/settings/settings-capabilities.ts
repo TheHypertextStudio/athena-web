@@ -69,6 +69,13 @@ export const SETTINGS_NODES = {
     'Email address',
     'Change the email address used to sign in and receive account messages.',
   ),
+  profileCreating: personalNode(
+    'profile-creating',
+    'profile',
+    'Creating',
+    'Choose how a create composer behaves when you open it.',
+    ['drafts', 'composer', 'resume drafts'],
+  ),
   athenaWorkingPreferences: personalNode(
     'athena-working-preferences',
     'athena',

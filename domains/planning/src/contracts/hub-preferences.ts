@@ -127,6 +127,17 @@ export const HubPreferences = z
       .describe(
         'Proactive-agent settings — whether incoming mentions/assignments auto-draft a plan.',
       ),
+    composer: z
+      .object({
+        resumeDrafts: z
+          .boolean()
+          .optional()
+          .describe(
+            'When true, opening a create composer reopens the newest pending draft of that kind in that workspace.',
+          ),
+      })
+      .optional()
+      .describe('Create-composer settings — how a composer behaves when it opens.'),
   })
   .describe(
     "A user's personal Hub preferences (cross-org UI + daily-plan/digest/proactive settings).",

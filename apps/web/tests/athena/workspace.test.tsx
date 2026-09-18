@@ -166,15 +166,30 @@ describe('AthenaWorkspace', () => {
     });
   });
 
-  it('pins a ledger row above the composer when its card has not mounted yet', async () => {
-    // The thread never resolves, so no `athena-job-*` card is ever mounted for the ledger's click
-    // handler to find — exactly the race the pin fallback exists for.
-    chatGet.mockImplementation(() => new Promise(() => undefined));
+  it('asks the thread to scroll to a ledger row instead of pinning a duplicate card', async () => {
+    chatGet.mockResolvedValue(okResponse(chatThread()));
+    elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
+    const scrollTargets: Element[] = [];
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrollTargets.push(this);
+    };
+    renderWorkspace();
+
+    await screen.findByRole('article', { name: /Prepare the launch review/ });
+    fireEvent.click(screen.getByRole('button', { name: /Prepare the launch review/ }));
+
+    await waitFor(() => {
+      expect(scrollTargets.at(-1)?.id).toBe('athena-job-working_1');
+    });
+    expect(screen.getAllByRole('article', { name: /Prepare the launch review/ })).toHaveLength(1);
+  });
+
+  it('does not run a second presence heartbeat for the wide view', async () => {
+    chatGet.mockResolvedValue(okResponse(chatThread()));
     elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
     renderWorkspace();
 
-    fireEvent.click(await screen.findByRole('button', { name: /Prepare the launch review/ }));
-
-    expect(await screen.findByRole('article', { name: /Prepare the launch review/ })).toBeVisible();
+    await screen.findByRole('article', { name: /Prepare the launch review/ });
+    expect(elicitationsGet).not.toHaveBeenCalled();
   });
 });

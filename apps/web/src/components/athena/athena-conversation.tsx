@@ -37,7 +37,6 @@ import type { AgentSessionDetailOut } from '@docket/athena/agent-contract';
 
 import { ProposalGroupCard } from '@/components/agents/proposal-group-card';
 import { AthenaContextChip } from '@/components/athena/athena-context-chip';
-import { AthenaJobCard } from '@/components/athena/athena-job-card';
 import { ConversationSuggestions } from '@/components/athena/conversation-suggestions';
 import { ElicitationQueue } from '@/components/athena/elicitation-queue';
 import { PartialLoadBanner, presentFailure, QueryLoadFailure } from '@/components/feedback';
@@ -104,10 +103,22 @@ export interface AthenaConversationProps {
   /** Transport a merged job's card drives its own detail read and actions through. */
   transport?: PersonalAthenaTransport | undefined;
   /**
-   * A job to keep visible above the composer regardless of the thread's own scroll position — for
-   * a host (the wide view's Work ledger) whose target card is not currently mounted in this thread.
+   * Whether pending questions and the presence heartbeat live in this instance; exactly one
+   * mounted conversation should own them.
    */
-  pinnedJob?: PersonalAthenaSessionSummary | null | undefined;
+  questions?: boolean | undefined;
+  /**
+   * A job id the host wants this thread scrolled to, e.g. from a click on a ledger row elsewhere
+   * on the page. Every merged job is already rendered in {@link ThreadEntries}, so this only ever
+   * asks for a scroll — never a second copy of the card.
+   */
+  scrollToJobId?: string | null | undefined;
+  /**
+   * Reports that `scrollToJobId` was found and scrolled to, so the host can clear its request.
+   * Not called when the id's card has not mounted yet — the request stays pending until the next
+   * time `entries` changes gives it another chance.
+   */
+  onScrolledToJob?: ((jobId: string) => void) | undefined;
 }
 
 /** The composer's draft, its form, and how a requested draft lands in it. */
@@ -453,7 +464,9 @@ export default function AthenaConversation({
   suggestions = true,
   jobs = [],
   transport = personalAthenaTransport,
-  pinnedJob = null,
+  questions = true,
+  scrollToJobId = null,
+  onScrolledToJob,
 }: AthenaConversationProps): JSX.Element {
   const mentionOrgId = useMentionOrgId(orgId);
   const [sending, setSending] = useState(false);
@@ -474,6 +487,20 @@ export default function AthenaConversation({
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
   }, [entries.length]);
+
+  // Honour a host's request to jump to one job's card. Every job is already rendered by
+  // `ThreadEntries` — the request is a scroll, never a second copy — so this only needs to find
+  // the element `AthenaJobCard` mounted under `athena-job-<id>`. The card may not exist yet on the
+  // render this fires for (the thread is still loading, or the id names a job outside this
+  // window's merged entries); when that happens the request is left pending and this effect gets
+  // another chance the next time `entries` changes.
+  useEffect(() => {
+    if (!scrollToJobId) return;
+    const card = document.getElementById(`athena-job-${scrollToJobId}`);
+    if (!card) return;
+    card.scrollIntoView({ block: 'center' });
+    onScrolledToJob?.(scrollToJobId);
+  }, [scrollToJobId, entries, onScrolledToJob]);
 
   const send = useCallback(async (): Promise<void> => {
     const text = draft.trim();
@@ -520,18 +547,7 @@ export default function AthenaConversation({
         <div ref={endRef} />
       </div>
 
-      {pinnedJob ? (
-        <div className="pb-2">
-          <AthenaJobCard
-            job={pinnedJob}
-            transport={transport}
-            expanded
-            id={`athena-pinned-${pinnedJob.id}`}
-          />
-        </div>
-      ) : null}
-
-      <ElicitationQueue organizationId={orgId} className="pb-2" />
+      {questions ? <ElicitationQueue organizationId={orgId} className="pb-2" /> : null}
 
       <Composer
         composerRef={composerRef}

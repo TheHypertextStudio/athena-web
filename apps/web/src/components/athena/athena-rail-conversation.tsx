@@ -20,6 +20,7 @@ import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 import { AthenaWorkingStrip } from '@/components/athena/athena-working-strip';
 import { VoiceLaunch } from '@/components/athena/voice-launch';
 import Link from '@/components/docket-link';
+import { jobsFromQueue } from '@/lib/athena/job-presentation';
 import type { PersonalAthenaSessionSummary } from '@/lib/athena/presentation';
 import {
   athenaHref,
@@ -59,13 +60,7 @@ export function AthenaRailConversation({
   const athena = useAthenaPanel();
   const draftRequest = athena.launchDraft;
   const queue = useLiveApiQuery(personalAthenaQueueDef(transport, true), QUEUE_LIVE_INTERVAL_MS);
-  const jobs: readonly PersonalAthenaSessionSummary[] = queue.data
-    ? [
-        ...queue.data.sessions.needsYou,
-        ...queue.data.sessions.working,
-        ...queue.data.sessions.finished,
-      ]
-    : [];
+  const jobs: readonly PersonalAthenaSessionSummary[] = queue.data ? jobsFromQueue(queue.data) : [];
 
   return (
     <div className="flex h-full min-h-0 flex-col">

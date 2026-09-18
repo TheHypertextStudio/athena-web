@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  jobsFromQueue,
   jobStateLabel,
   jobStatusLine,
   jobTone,
@@ -12,6 +13,7 @@ import type {
   PersonalAthenaSessionSummary,
   PersonalAthenaStatus,
 } from '../../src/lib/athena/presentation';
+import type { PersonalAthenaQueuePayload } from '../../src/lib/athena/query-defs';
 import type { SessionActivityOut } from '@docket/athena/agent-contract';
 import type { AgentSessionId, SessionActivityId } from '@docket/athena/ids';
 
@@ -214,6 +216,55 @@ describe('mergeThreadEntries', () => {
 
   it('returns an empty list for no activities and no jobs', () => {
     expect(mergeThreadEntries([], [])).toEqual([]);
+  });
+});
+
+describe('jobsFromQueue', () => {
+  function queueWith(
+    overrides: Partial<PersonalAthenaQueuePayload> = {},
+  ): PersonalAthenaQueuePayload {
+    return {
+      counts: { needsYou: 0, working: 0, finished: 0 },
+      currentChat: null,
+      sessions: { needsYou: [], working: [], finished: [] },
+      ...overrides,
+    };
+  }
+
+  it('flattens all three lanes into one list', () => {
+    const needsYou: PersonalAthenaSessionSummary = { ...summary, id: 'needs_1' };
+    const working: PersonalAthenaSessionSummary = { ...summary, id: 'working_1' };
+    const finished: PersonalAthenaSessionSummary = { ...summary, id: 'finished_1' };
+
+    const jobs = jobsFromQueue(
+      queueWith({ sessions: { needsYou: [needsYou], working: [working], finished: [finished] } }),
+    );
+
+    expect(jobs.map((job) => job.id)).toEqual(['needs_1', 'working_1', 'finished_1']);
+  });
+
+  it('drops the session named by currentChat, wherever it appears', () => {
+    const chatSession: PersonalAthenaSessionSummary = { ...summary, id: 'chat_1' };
+    const otherJob: PersonalAthenaSessionSummary = { ...summary, id: 'working_1' };
+
+    const jobs = jobsFromQueue(
+      queueWith({
+        currentChat: chatSession,
+        sessions: { needsYou: [], working: [chatSession, otherJob], finished: [] },
+      }),
+    );
+
+    expect(jobs.map((job) => job.id)).toEqual(['working_1']);
+  });
+
+  it('keeps every job when there is no current chat session', () => {
+    const working: PersonalAthenaSessionSummary = { ...summary, id: 'working_1' };
+
+    const jobs = jobsFromQueue(
+      queueWith({ sessions: { needsYou: [], working: [working], finished: [] } }),
+    );
+
+    expect(jobs.map((job) => job.id)).toEqual(['working_1']);
   });
 });
 

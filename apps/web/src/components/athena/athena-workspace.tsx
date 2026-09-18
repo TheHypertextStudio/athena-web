@@ -9,9 +9,9 @@
  * the conversation browser, the Work ledger, and the connections panel on the left; the thread and
  * its composer on the right. A job is a card inside that thread, not a separate selection — the
  * ledger's job is answering "what has Athena done for me?", not re-deriving the queue as a second
- * front door. Clicking a ledger row scrolls the thread to that job's card; when the card has not
- * mounted yet (the thread is still loading, or the row names a job outside this window), the row's
- * job is pinned above the composer instead.
+ * front door. Clicking a ledger row asks the thread to scroll to that job's card; every queued job
+ * is already merged into the thread by `mergeThreadEntries`, so the request is a scroll, never a
+ * second copy of the card rendered above the composer.
  */
 import { Sparkles } from '@docket/ui/icons';
 import { Skeleton, Surface } from '@docket/ui/primitives';
@@ -26,6 +26,7 @@ import {
 } from '@/components/athena/athena-work-ledger';
 import { usePageContext } from '@/components/athena/page-context';
 import { VoiceLaunch } from '@/components/athena/voice-launch';
+import { jobsFromQueue } from '@/lib/athena/job-presentation';
 import type {
   PersonalAthenaContext,
   PersonalAthenaSessionSummary,
@@ -33,7 +34,6 @@ import type {
 import {
   personalAthenaQueueDef,
   personalAthenaTransport,
-  type PersonalAthenaQueuePayload,
   type PersonalAthenaTransport,
 } from '@/lib/athena/query-defs';
 import { useLiveApiQuery } from '@/lib/query';
@@ -54,38 +54,12 @@ export interface AthenaWorkspaceProps {
   readonly transport?: PersonalAthenaTransport | undefined;
 }
 
-/** Every job in the queue's three lanes, flattened into one list. */
-function flattenQueue(
-  queue: PersonalAthenaQueuePayload | undefined,
-): readonly PersonalAthenaSessionSummary[] {
-  if (!queue) return [];
-  return [...queue.sessions.needsYou, ...queue.sessions.working, ...queue.sessions.finished];
-}
-
 /** Scroll one job's card into view if it is currently mounted; report whether it was found. */
 function scrollToMountedCard(jobId: string): boolean {
   const card = document.getElementById(`athena-job-${jobId}`);
   if (!card) return false;
   card.scrollIntoView({ block: 'center' });
   return true;
-}
-
-/**
- * Watch for a job's card to mount and scroll to it the moment it does — for the one-time
- * `initialSessionId` landing, where the thread beneath it may still be loading.
- */
-function useScrollToInitialSession(initialSessionId: string | null | undefined): void {
-  useEffect(() => {
-    if (!initialSessionId) return;
-    if (scrollToMountedCard(initialSessionId)) return;
-    const observer = new MutationObserver(() => {
-      if (scrollToMountedCard(initialSessionId)) observer.disconnect();
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => {
-      observer.disconnect();
-    };
-  }, [initialSessionId]);
 }
 
 /** Whether a job belongs to the scoped workspace, honouring either place a workspace id is kept. */
@@ -106,31 +80,36 @@ export function AthenaWorkspace({
   const activeWorkspaceId = workspaceFilter ?? pageContext?.workspaceId ?? null;
   const queue = useLiveApiQuery(personalAthenaQueueDef(transport), 5_000);
   const [ledgerFilter, setLedgerFilter] = useState<AthenaWorkLedgerFilter>('running');
-  const [pinnedJobId, setPinnedJobId] = useState<string | null>(null);
+  // Seeded once from `initialSessionId` on mount; after that this only ever moves through the
+  // ledger's own open/scrolled cycle below.
+  const [pendingScrollId, setPendingScrollId] = useState<string | null>(
+    () => initialSessionId ?? null,
+  );
   const [contextAttached, setContextAttached] = useState(true);
 
   useEffect(() => {
     setContextAttached(true);
   }, [invocationContext]);
 
-  useScrollToInitialSession(initialSessionId);
-
   const jobs = useMemo(() => {
-    const all = flattenQueue(queue.data);
+    const all = queue.data ? jobsFromQueue(queue.data) : [];
     return activeWorkspaceId ? all.filter((job) => inWorkspace(job, activeWorkspaceId)) : all;
   }, [queue.data, activeWorkspaceId]);
 
-  const pinnedJob = useMemo(
-    () => (pinnedJobId ? (jobs.find((job) => job.id === pinnedJobId) ?? null) : null),
-    [jobs, pinnedJobId],
-  );
-
+  // Try an immediate scroll first — the row's card is usually already mounted — and only ask the
+  // thread to keep watching for it when it is not. `AthenaConversation`'s own effect handles the
+  // watch: it retries as the thread's entries render, which covers a still-loading thread or a
+  // job outside today's window.
   const handleLedgerOpen = useCallback((jobId: string): void => {
     if (scrollToMountedCard(jobId)) {
-      setPinnedJobId(null);
+      setPendingScrollId(null);
       return;
     }
-    setPinnedJobId(jobId);
+    setPendingScrollId(jobId);
+  }, []);
+
+  const handleScrolledToJob = useCallback((jobId: string): void => {
+    setPendingScrollId((current) => (current === jobId ? null : current));
   }, []);
 
   return (
@@ -195,7 +174,9 @@ export function AthenaWorkspace({
               onAttachContext={() => {
                 setContextAttached(true);
               }}
-              {...(pinnedJob ? { pinnedJob } : {})}
+              questions={false}
+              scrollToJobId={pendingScrollId}
+              onScrolledToJob={handleScrolledToJob}
             />
           ) : (
             <p role="status" className="text-on-surface-variant text-body-medium p-6">

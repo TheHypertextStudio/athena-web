@@ -10,6 +10,7 @@
  */
 import type { SessionActivityOut } from '@docket/athena/agent-contract';
 
+import type { PersonalAthenaQueuePayload } from './query-defs';
 import {
   presentAthenaActivity,
   type PersonalAthenaSessionDetail,
@@ -92,6 +93,27 @@ export function jobStatusLine(
   if (detail?.result) return detail.result.summary;
 
   return jobStateLabel(summary.status);
+}
+
+/**
+ * Every job in the queue's three lanes, flattened into one list.
+ *
+ * @remarks
+ * Drops the session named by `payload.currentChat`: that session is the person's own conversation,
+ * identified by the queue payload rather than by any lane it happens to also appear in, and it is
+ * not a piece of delegated work — showing it in the Working strip or the thread as a job duplicates
+ * the conversation the person is already having.
+ */
+export function jobsFromQueue(
+  payload: PersonalAthenaQueuePayload,
+): readonly PersonalAthenaSessionSummary[] {
+  const currentChatId = payload.currentChat?.id ?? null;
+  const all = [
+    ...payload.sessions.needsYou,
+    ...payload.sessions.working,
+    ...payload.sessions.finished,
+  ];
+  return currentChatId ? all.filter((job) => job.id !== currentChatId) : all;
 }
 
 /** A job rendered as a thread entry, ordered by when it started. */

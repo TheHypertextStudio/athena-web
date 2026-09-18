@@ -139,4 +139,46 @@ describe('AthenaRailConversation', () => {
     expect(await screen.findByRole('button', { name: /Working ·/ })).toBeVisible();
     expect(screen.getByRole('article', { name: /Draft the launch update/ })).toBeVisible();
   });
+
+  it('shows no strip when the working lane holds only the person’s own conversation', async () => {
+    chatGet.mockResolvedValue(okResponse(thread()));
+    pulseGet.mockResolvedValue(okResponse({ needsYou: 0, working: 1 }));
+    const chatSession: PersonalAthenaSessionSummary = {
+      id: 'chat_1',
+      objective: 'Chat',
+      status: 'running',
+      queueState: 'working',
+      createdAt: '2026-09-18T09:00:00.000Z',
+      updatedAt: '2026-09-18T09:00:00.000Z',
+    };
+    const transport: PersonalAthenaTransport = {
+      pulse: vi.fn(),
+      queue: vi.fn().mockResolvedValue(
+        okResponse({
+          counts: { needsYou: 0, working: 1, finished: 0 },
+          currentChat: chatSession,
+          sessions: { needsYou: [], working: [chatSession], finished: [] },
+        }),
+      ),
+      detail: vi.fn(),
+      activity: vi.fn(),
+      create: vi.fn(),
+      sendMessage: vi.fn(),
+      decide: vi.fn(),
+      lifecycle: vi.fn(),
+    };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <PageContextProvider workspace={{ workspaceId: ORG_ID }}>
+          <AthenaPanelProvider railVisible onRevealRail={vi.fn()}>
+            <AthenaRailConversation orgId={ORG_ID} transport={transport} />
+          </AthenaPanelProvider>
+        </PageContextProvider>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole('form', { name: /Message Athena/ });
+    expect(screen.queryByRole('button', { name: /Working ·/ })).not.toBeInTheDocument();
+  });
 });

@@ -147,7 +147,9 @@ person is looking at. Rejected.
    - a quiet work chip ("Searched tasks · 12 results") with an optional MCP app card below it;
    - a **job card**: objective, live status line, progress of steps, the decision block when one
      is pending, and a receipt when finished. This is the current workbench reduced to a card;
-   - a **proposal group** (`ProposalGroupCard`, unchanged);
+   - a **proposal group** (`ProposalGroupCard`): one line per change, in plain words ("Set state
+     to In Progress") rather than the raw tool name, with a single `Approve` / `Reject` pair and
+     a checkbox only when the group holds more than one change;
    - a **question** (`ElicitationCard`, unchanged);
    - a **heads-up** posted by Athena (§4.5).
 4. **Composer.** One shared `AthenaComposer` primitive (§4.4). Above the textarea sits the

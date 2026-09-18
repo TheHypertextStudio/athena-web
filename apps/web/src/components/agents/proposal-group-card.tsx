@@ -6,16 +6,21 @@
  *
  * @remarks
  * A group is everything the agent proposed in ONE turn ("create these 3 tasks"), so it
- * reviews as a unit: a checkbox per member, inline title editing for ghosts (the edit
- * PATCHes the stored tool input — approval executes exactly what is shown), and
- * `Approve all` / `Approve selected` / `Reject all`. Each ghost row carries a stable
- * `view-transition-name` keyed by its activity id, so when approval materializes the
- * real task the browser can morph ghost → row instead of swapping views.
+ * reviews as a unit: a checkbox per member when there is more than one, inline title editing for
+ * ghosts (the edit PATCHes the stored tool input — approval executes exactly what is shown), and
+ * one `Approve` / `Reject` action pair. Each ghost row carries a stable `view-transition-name`
+ * keyed by its activity id, so when approval materializes the real task the browser can morph
+ * ghost → row instead of swapping views.
+ *
+ * Every row reads as a plain sentence from {@link describeProposal} — never the raw tool
+ * identifier a `ProposalItemOut` carries in `.tool`.
  */
 import type { ProposalGroupOut, ProposalItemOut } from '@docket/athena/agent-contract';
 import { cn } from '@docket/ui/lib/utils';
-import { Button } from '@docket/ui/primitives';
+import { Button, Surface } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
+
+import { describeProposal } from '@/lib/athena/describe-proposal';
 
 /** Props for {@link ProposalGroupCard}. */
 export interface ProposalGroupCardProps {
@@ -35,6 +40,25 @@ export interface ProposalGroupCardProps {
   onEdit: (activityId: string, input: Record<string, unknown>) => void;
 }
 
+/** The header line: "1 change proposed" or "N changes proposed". */
+function headline(count: number): string {
+  return count === 1 ? '1 change proposed' : `${String(count)} changes proposed`;
+}
+
+/**
+ * The `Approve` button's label.
+ *
+ * @remarks
+ * A partial selection (some but not all rows checked) always reads as approving that selection;
+ * anything else — nothing checked, or everything checked — reads as approving the whole group.
+ */
+function approveLabel(count: number, selectedCount: number): string {
+  if (selectedCount > 0 && selectedCount < count) {
+    return `Approve selected (${String(selectedCount)})`;
+  }
+  return count === 1 ? 'Approve' : `Approve ${String(count)}`;
+}
+
 /**
  * The batch-review card for one proposal group.
  */
@@ -48,6 +72,7 @@ export function ProposalGroupCard({
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const count = group.items.length;
   const selection = group.items.filter((item) => checked.has(item.activityId));
+  const partialSelection = selection.length > 0 && selection.length < count;
 
   const toggle = (activityId: string): void => {
     setChecked((current) => {
@@ -59,18 +84,15 @@ export function ProposalGroupCard({
   };
 
   return (
-    <section
-      aria-label={`Proposed batch of ${String(count)} changes`}
-      className="border-primary/40 bg-primary/5 rounded-xl border p-4"
+    <Surface
+      as="section"
+      tone="card"
+      shape="small"
+      pad="roomy"
+      aria-label={`Proposed changes: ${String(count)}`}
+      className="border-primary/40 bg-primary/5 rounded-xl border"
     >
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-on-surface text-title-small">
-          Athena proposes {count} {count === 1 ? 'change' : 'changes'}
-        </h3>
-        <span className="text-on-surface-variant text-xs">
-          Nothing is applied until you approve
-        </span>
-      </div>
+      <h3 className="text-on-surface text-label-large">{headline(count)}</h3>
 
       <ul className="mt-3 flex flex-col gap-1.5">
         {group.items.map((item) => (
@@ -79,6 +101,7 @@ export function ProposalGroupCard({
             item={item}
             canAct={canAct}
             pending={pending}
+            showCheckbox={count > 1}
             checked={checked.has(item.activityId)}
             onToggle={toggle}
             onEdit={onEdit}
@@ -87,29 +110,23 @@ export function ProposalGroupCard({
       </ul>
 
       {canAct ? (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div className="mt-4 flex items-center gap-2">
           <Button
             size="sm"
             disabled={pending}
             onClick={() => {
+              if (partialSelection) {
+                onDecide(
+                  group.proposalGroupId,
+                  'approve',
+                  selection.map((item) => item.activityId),
+                );
+                return;
+              }
               onDecide(group.proposalGroupId, 'approve');
             }}
           >
-            {pending ? 'Working…' : `Approve all ${String(count)}`}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={pending || selection.length === 0}
-            onClick={() => {
-              onDecide(
-                group.proposalGroupId,
-                'approve',
-                selection.map((item) => item.activityId),
-              );
-            }}
-          >
-            Approve selected{selection.length > 0 ? ` (${String(selection.length)})` : ''}
+            {approveLabel(count, selection.length)}
           </Button>
           <Button
             variant="ghost-destructive"
@@ -119,11 +136,11 @@ export function ProposalGroupCard({
               onDecide(group.proposalGroupId, 'reject');
             }}
           >
-            Reject all
+            Reject
           </Button>
         </div>
       ) : null}
-    </section>
+    </Surface>
   );
 }
 
@@ -132,16 +149,19 @@ interface ProposalRowProps {
   item: ProposalItemOut;
   canAct: boolean;
   pending: boolean;
+  /** Whether to render the selection checkbox — only when the group has more than one item. */
+  showCheckbox: boolean;
   checked: boolean;
   onToggle: (activityId: string) => void;
   onEdit: (activityId: string, input: Record<string, unknown>) => void;
 }
 
-/** One ghost row of the batch: translucent, checkbox-selectable, title-editable. */
+/** One ghost row of the batch: translucent, optionally selectable, title-editable. */
 function ProposalRow({
   item,
   canAct,
   pending,
+  showCheckbox,
   checked,
   onToggle,
   onEdit,
@@ -149,6 +169,7 @@ function ProposalRow({
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(item.ghost?.title ?? '');
   const ghost = item.ghost;
+  const sentence = describeProposal(item);
 
   const commitEdit = (): void => {
     const trimmed = title.trim();
@@ -170,10 +191,10 @@ function ProposalRow({
         'bg-surface/60 opacity-80',
       )}
     >
-      {canAct ? (
+      {showCheckbox && canAct ? (
         <input
           type="checkbox"
-          aria-label={`Select "${ghost?.title ?? item.summary}"`}
+          aria-label={`Select "${sentence}"`}
           checked={checked}
           disabled={pending}
           onChange={() => {
@@ -183,51 +204,41 @@ function ProposalRow({
         />
       ) : null}
 
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        {ghost && editing ? (
-          <input
-            aria-label="Edit the proposed title"
-            value={title}
-            autoFocus
-            disabled={pending}
-            onChange={(event) => {
-              setTitle(event.target.value);
-            }}
-            onBlur={commitEdit}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') commitEdit();
-              if (event.key === 'Escape') {
-                setTitle(ghost.title);
-                setEditing(false);
-              }
-            }}
-            className="border-outline-variant bg-surface text-body-medium focus-visible:ring-ring w-full rounded border px-2 py-0.5 outline-none focus-visible:ring-1"
-          />
-        ) : (
-          <button
-            type="button"
-            disabled={!canAct || !ghost || pending}
-            onClick={() => {
-              setEditing(true);
-            }}
-            className={cn(
-              'text-on-surface text-body-medium min-w-0 truncate text-left',
-              canAct && ghost ? 'hover:underline' : 'cursor-default',
-            )}
-            title={canAct && ghost ? 'Click to edit before approving' : undefined}
-          >
-            {ghost?.title ?? item.summary}
-          </button>
-        )}
-        <span className="border-primary/40 text-primary shrink-0 rounded-full border px-1.5 py-px text-[10px] font-medium">
-          proposed
-        </span>
-      </div>
-
-      {ghost?.dueDate ? (
-        <span className="text-on-surface-variant shrink-0 text-xs">{ghost.dueDate}</span>
-      ) : null}
-      <code className="text-on-surface-variant/70 shrink-0 text-[10px]">{item.tool}</code>
+      {ghost && editing ? (
+        <input
+          aria-label="Edit the proposed title"
+          value={title}
+          autoFocus
+          disabled={pending}
+          onChange={(event) => {
+            setTitle(event.target.value);
+          }}
+          onBlur={commitEdit}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') commitEdit();
+            if (event.key === 'Escape') {
+              setTitle(ghost.title);
+              setEditing(false);
+            }
+          }}
+          className="border-outline-variant bg-surface text-body-medium focus-visible:ring-ring w-full min-w-0 flex-1 rounded border px-2 py-0.5 outline-none focus-visible:ring-1"
+        />
+      ) : (
+        <button
+          type="button"
+          disabled={!canAct || !ghost || pending}
+          onClick={() => {
+            setEditing(true);
+          }}
+          className={cn(
+            'text-on-surface text-body-medium line-clamp-2 min-w-0 flex-1 text-left',
+            canAct && ghost ? 'hover:underline' : 'cursor-default',
+          )}
+          title={canAct && ghost ? 'Click to edit before approving' : undefined}
+        >
+          {sentence}
+        </button>
+      )}
     </li>
   );
 }

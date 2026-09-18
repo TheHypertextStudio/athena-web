@@ -109,8 +109,7 @@
   },
   "apps/web/src/components/agents/proposal-group-card.tsx": {
     "ad-hoc-border": 9,
-    "raw-radius-utility": 1,
-    "raw-type-utility": 5
+    "raw-radius-utility": 1
   },
   "apps/web/src/components/agents/session-filter.tsx": {
     "raw-type-utility": 1

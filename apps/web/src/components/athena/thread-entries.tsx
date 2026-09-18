@@ -22,6 +22,7 @@ import { PLAN_TOOL_NAMES } from '@docket/work/plan-draft-contract';
 
 import { McpAppPresentationCard } from '@/components/athena/mcp-app-presentation-card';
 import PlanStartCard, { parsePlanStart } from '@/components/plan-canvas/plan-start-card';
+import { capitalizeFirst } from '@/lib/athena/describe-proposal';
 import type { ThreadEntry } from '@/lib/athena/job-presentation';
 import { personalAthenaTransport, type PersonalAthenaTransport } from '@/lib/athena/query-defs';
 
@@ -133,41 +134,109 @@ function ChatEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element |
   return null;
 }
 
-/** The quiet work chip for one tool call, with whatever durable card the call produced. */
-function ActionEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element {
-  const action = bodyRecord(activity.body['action']);
+/** What one `action` activity has to show: its chip text and whatever durable card it produced. */
+interface ActionPresentation {
+  /** The chip text, capitalized and ready to render — meaningless when `isProposal`. */
+  readonly summary: string;
+  /** Whether this action is a gated proposal, whose record is the `ProposalGroupCard` above. */
+  readonly isProposal: boolean;
+  /** The interactive MCP app card this tool call captured, when it captured one. */
+  readonly presentation: ReturnType<typeof parseMcpAppPresentation>;
+  /** Whether the tool captured a presentation the card failed to parse. */
+  readonly presentationUnavailable: boolean;
+  /** The plan a `plan_start` action opened, when this action was one and it succeeded. */
+  readonly startedPlan: ReturnType<typeof parsePlanStart>;
+}
+
+/** Derive everything one `action` activity's entry needs from its untrusted JSON body. */
+function deriveActionPresentation(
+  action: Readonly<Record<string, unknown>> | null,
+): ActionPresentation {
   const summary = action && typeof action['summary'] === 'string' ? action['summary'] : 'worked';
   // The chip stays the quiet record of what Athena did; when the tool captured an interactive
   // MCP app card, it renders full-width beneath the chip — the same durable presentation the
   // job card shows, revalidated here because the body is an untrusted bag of JSON.
   const result = action ? bodyRecord(action['result']) : null;
   const presentation = parseMcpAppPresentation(result?.['presentation']);
-  const presentationUnavailable =
-    result?.['presentationUnavailable'] === true ||
-    (result?.['presentation'] !== undefined && !presentation);
-  const startedPlan = startedPlanFrom(action, result);
+  return {
+    summary: capitalizeFirst(summary),
+    isProposal: action?.['mode'] === 'proposal',
+    presentation,
+    presentationUnavailable:
+      result?.['presentationUnavailable'] === true ||
+      (result?.['presentation'] !== undefined && !presentation),
+    startedPlan: startedPlanFrom(action, result),
+  };
+}
+
+/** The quiet chip naming what Athena did. */
+function WorkChip({ summary }: { readonly summary: string }): JSX.Element {
   return (
-    <div className="flex w-full flex-col gap-2">
-      <span
-        className={cn(
-          surfaceToneColor('canvas'),
-          'text-on-surface-variant text-label-small mr-auto inline-flex max-w-[85%] items-center gap-1.5 rounded-full px-2.5 py-0.5',
-        )}
-      >
-        <span className="truncate">{summary}</span>
-      </span>
-      {startedPlan ? <PlanStartCard plan={startedPlan} /> : null}
-      {presentation ? (
+    <span
+      className={cn(
+        surfaceToneColor('canvas'),
+        'text-on-surface-variant text-label-small mr-auto inline-flex max-w-[85%] items-center gap-1.5 rounded-full px-2.5 py-0.5',
+      )}
+    >
+      <span className="truncate">{summary}</span>
+    </span>
+  );
+}
+
+/** Props for {@link ActionCards}. */
+interface ActionCardsProps {
+  readonly presentation: ActionPresentation;
+  readonly activityId: string;
+  readonly onWidgetMessage: ChatEntryProps['onWidgetMessage'];
+}
+
+/** The durable cards a tool call produced: a started plan, and/or an MCP app presentation. */
+function ActionCards({ presentation, activityId, onWidgetMessage }: ActionCardsProps): JSX.Element {
+  return (
+    <>
+      {presentation.startedPlan ? <PlanStartCard plan={presentation.startedPlan} /> : null}
+      {presentation.presentation ? (
         <McpAppPresentationCard
-          presentation={presentation}
-          activityId={activity.id}
+          presentation={presentation.presentation}
+          activityId={activityId}
           onMessage={onWidgetMessage}
         />
-      ) : presentationUnavailable ? (
+      ) : null}
+      {!presentation.presentation && presentation.presentationUnavailable ? (
         <p className="text-on-surface-variant text-body-small" data-testid="mcp-app-view-failure">
           Interactive view unavailable.
         </p>
       ) : null}
+    </>
+  );
+}
+
+/**
+ * The quiet work chip for one tool call, with whatever durable card the call produced.
+ *
+ * @remarks
+ * A `proposal`-mode action already has its record: the `ProposalGroupCard` rendered above the
+ * thread. Repeating it here as a chip was the raw tool name shown twice for the same change, so
+ * a proposal action renders only whatever durable card the call produced (a plan-start card, an
+ * MCP app presentation) and no chip at all.
+ */
+function ActionEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element | null {
+  const action = bodyRecord(activity.body['action']);
+  const presentation = deriveActionPresentation(action);
+  const { isProposal, startedPlan, presentationUnavailable } = presentation;
+
+  if (isProposal && !startedPlan && !presentation.presentation && !presentationUnavailable) {
+    return null;
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-2">
+      {isProposal ? null : <WorkChip summary={presentation.summary} />}
+      <ActionCards
+        presentation={presentation}
+        activityId={activity.id}
+        onWidgetMessage={onWidgetMessage}
+      />
     </div>
   );
 }

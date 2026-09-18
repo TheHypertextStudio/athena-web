@@ -72,12 +72,24 @@ test.describe('composer drafts visuals', () => {
         await dialog.getByRole('button', { name: 'Save draft' }).click();
         await expect(dialog).toBeHidden();
 
+        // A second draft with a long title, so the list shows truncation and column alignment.
+        await expect(async () => {
+          await newTask.click();
+          await expect(dialog.getByPlaceholder('Task title')).toBeVisible({ timeout: 5_000 });
+        }).toPass({ timeout: TIMEOUTS.pageReady });
+        await dialog
+          .getByPlaceholder('Task title')
+          .fill('Reconcile the second-quarter vendor invoices against the purchase orders');
+        await page.keyboard.press('Escape');
+        await dialog.getByRole('button', { name: 'Save draft' }).click();
+        await expect(dialog).toBeHidden();
+
         // The chip's list inside a fresh composer.
         await expect(async () => {
           await newTask.click();
           await expect(dialog.getByPlaceholder('Task title')).toBeVisible({ timeout: 5_000 });
         }).toPass({ timeout: TIMEOUTS.pageReady });
-        await dialog.getByRole('button', { name: /^Drafts, 1/ }).click();
+        await dialog.getByRole('button', { name: /^Drafts, 2/ }).click();
         await expect(page.getByRole('list', { name: 'Saved drafts' })).toBeVisible();
         await capture(page, `${viewport.name}-${scheme}-2-chip-list.png`);
         // Escape peels one layer at a time (the row's tooltip, the list, then the empty and so

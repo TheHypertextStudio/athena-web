@@ -67,7 +67,10 @@ function DraftGroup({
   const noun = useVocabulary(kind);
   const plural = useVocabulary(kind, { plural: true });
   return (
-    <section aria-label={plural} className="flex flex-col gap-1">
+    // Pulled 12px into the page gutter: a row keeps 12px of its own padding, so its text, the
+    // group label, and the page title all start on one line while the row's hover surface reaches
+    // past them.
+    <section aria-label={plural} className="-mx-3 flex flex-col gap-1">
       <Text as="h2" token="label-large" tone="muted" className="px-3">
         {plural}
       </Text>
@@ -85,12 +88,13 @@ function DraftGroup({
                 <NotePen aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
                 <span className="truncate">{label}</span>
               </ListCell>
-              <ListCell className="shrink-0">
-                <Text as="span" token="label-small" tone="muted">
+              {/* Fixed columns, so the workspace and time of every row line up. */}
+              <ListCell className="hidden w-36 shrink-0 @2xl:flex">
+                <Text as="span" token="label-small" tone="muted" truncate>
                   {workspaceName(draft.organizationId)}
                 </Text>
               </ListCell>
-              <ListCell className="shrink-0">
+              <ListCell className="w-20 shrink-0 justify-end">
                 <Text as="span" token="label-small" tone="muted">
                   {relativeTime(draft.updatedAt)}
                 </Text>

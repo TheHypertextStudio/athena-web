@@ -22,6 +22,12 @@ export interface MenuActionRowProps {
   readonly actionIcon: React.ReactNode;
   readonly onPrimarySelect?: () => void;
   readonly onAction: () => void;
+  /**
+   * Whether hovering or focusing the primary control shows its label in a tooltip. Default `true`,
+   * which suits a row whose label truncates, such as a tab. A list wide enough to show its labels
+   * turns it off, since a tooltip repeating the text beside it is a third floating surface.
+   */
+  readonly tooltip?: boolean;
 }
 
 /** Return a direct element from a transparent fragment when one is available for tooltip semantics. */
@@ -47,6 +53,7 @@ export function MenuActionRow({
   actionIcon,
   onPrimarySelect,
   onAction,
+  tooltip = true,
 }: MenuActionRowProps): React.JSX.Element {
   const [titleTooltipOpen, setTitleTooltipOpen] = React.useState(false);
   const [actionTooltipOpen, setActionTooltipOpen] = React.useState(false);
@@ -71,11 +78,9 @@ export function MenuActionRow({
   const tooltipTrigger = unwrapTooltipTrigger(primary);
   const titleTrigger =
     React.isValidElement(tooltipTrigger) && tooltipTrigger.type !== React.Fragment ? (
-      <TooltipTrigger asChild>{tooltipTrigger}</TooltipTrigger>
+      tooltipTrigger
     ) : (
-      <TooltipTrigger asChild>
-        <span data-menu-action-title-trigger="">{primary}</span>
-      </TooltipTrigger>
+      <span data-menu-action-title-trigger="">{primary}</span>
     );
 
   return (
@@ -90,7 +95,7 @@ export function MenuActionRow({
       )}
     >
       <Tooltip
-        open={titleTooltipOpen && !actionInteracting}
+        open={tooltip && titleTooltipOpen && !actionInteracting}
         onOpenChange={(nextOpen) => {
           setTitleTooltipOpen(nextOpen && !actionInteracting);
           if (nextOpen) setActionTooltipOpen(false);
@@ -109,9 +114,9 @@ export function MenuActionRow({
             onPrimarySelect?.();
           }}
         >
-          {titleTrigger}
+          <TooltipTrigger asChild>{titleTrigger}</TooltipTrigger>
         </span>
-        {actionInteracting ? null : <TooltipContent>{label}</TooltipContent>}
+        {actionInteracting || !tooltip ? null : <TooltipContent>{label}</TooltipContent>}
       </Tooltip>
       <Tooltip
         open={actionTooltipOpen}

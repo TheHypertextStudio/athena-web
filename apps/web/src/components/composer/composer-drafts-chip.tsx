@@ -55,6 +55,8 @@ function DraftRow({ draft, noun, current, onLoad, onDelete }: DraftRowProps): JS
     <MenuActionRow
       label={label}
       selected={current}
+      // The list is wide enough to show its titles, so a tooltip would only repeat them.
+      tooltip={false}
       renderPrimary={(children, className) => (
         <button
           type="button"
@@ -64,7 +66,8 @@ function DraftRow({ draft, noun, current, onLoad, onDelete }: DraftRowProps): JS
           }}
         >
           {children}
-          <Text as="span" token="label-small" tone="muted" className="shrink-0 pr-2">
+          {/* A fixed column, so the times of several drafts line up. */}
+          <Text as="span" token="label-small" tone="muted" className="w-16 shrink-0 text-right">
             {relativeTime(draft.updatedAt)}
           </Text>
         </button>
@@ -115,7 +118,9 @@ export function ComposerDraftsChip({
               over the form rather than past the dialog. Wide enough for a title and its time. */}
           <PopoverContent presentation="panel" width="wide" side="top" align="start">
             <PopoverHeader>
-              <Text as="p" token="title-small">
+              {/* A row carries 16px of its own padding inside the body's inset, so the heading
+                  takes the same 16px to start on the line its titles start on. */}
+              <Text as="p" token="title-small" className="px-4">
                 Drafts
               </Text>
             </PopoverHeader>

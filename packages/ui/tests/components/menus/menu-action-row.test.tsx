@@ -247,6 +247,25 @@ describe('MenuActionRow', () => {
     }
   });
 
+  it('shows no title tooltip when the list is wide enough to show its labels', async () => {
+    vi.useFakeTimers();
+    try {
+      renderRow({ tooltip: false });
+
+      const primary = screen.getByRole('button', { name: 'Quarterly planning notes' });
+      fireEvent.focus(primary);
+      fireEvent.pointerEnter(primary);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(800);
+      });
+
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      expect(primary).not.toHaveAttribute('aria-describedby');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('opens the full-title tooltip safely when the primary renderer returns a fragment', async () => {
     vi.useFakeTimers();
     try {

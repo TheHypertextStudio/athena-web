@@ -181,6 +181,14 @@ describe('AppShellFrame session loading', () => {
     expect(screen.queryByRole('complementary', { name: 'Focus' })).not.toBeInTheDocument();
   });
 
+  it('puts Athena first in the rail', async () => {
+    renderFrame(SERVER_SESSION);
+
+    const bar = await screen.findByRole('navigation', { name: 'Panels' });
+    const buttons = within(bar).getAllByRole('button');
+    expect(buttons[0]).toHaveAccessibleName(/Athena/);
+  });
+
   it('paints the page and every statically-known nav label the moment the server names the viewer', () => {
     renderFrame(SERVER_SESSION);
 

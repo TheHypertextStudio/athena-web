@@ -524,8 +524,13 @@ function SidebarRecoveryNudge({
  * `identityUnknown` alone. The workspace list is irrelevant to all of them — gating them on it
  * would have held an empty rail open for an org fetch no panel consumes.
  *
+ * Athena leads the rail, ahead of Agenda and Focus: it is the companion, not one integration among
+ * several. A fresh window opens on Athena when its status carries the `attention` tone — a proposal
+ * or question is waiting — and opens on the Agenda otherwise, so a quiet day still lands on the plan.
+ *
  * @param identityUnknown - Whether the viewer is still unidentified; swaps panels for a placeholder.
  * @param timerStatus - The live tracker, which lends the Focus icon its status dot.
+ * @param athena - The Athena rail panel, including the status that decides the default panel.
  * @returns The rail panel set and the panel shown until the viewer picks another.
  */
 function railAsideFor(
@@ -547,7 +552,10 @@ function railAsideFor(
     icon: <Calendar aria-hidden="true" />,
     node: identityUnknown ? <AppShellAgendaSkeleton /> : <Agenda />,
   };
-  return { panels: [agenda, focus, athena], defaultPanelId: 'agenda' };
+  return {
+    panels: [athena, agenda, focus],
+    defaultPanelId: athena.status?.tone === 'attention' ? 'athena' : 'agenda',
+  };
 }
 
 interface AppShellInnerProps {

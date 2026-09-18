@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AthenaJobCard } from '../../src/components/athena/athena-job-card';
@@ -117,6 +117,86 @@ describe('AthenaJobCard', () => {
     await waitFor(() => {
       expect(api.decide).toHaveBeenCalledWith('session_1', 'proposal_1', 'approve');
     });
+  });
+
+  it('follows the loaded detail past the summary once a decision moves the job along', async () => {
+    // Regression for the badge, the overflow menu's gating, and the poll cadence all reading only
+    // `job.status` (fixed at `awaiting_approval` for the life of this card) instead of the loaded
+    // detail's own status once a decision has carried the job on to `running`.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const decision: PersonalAthenaDecision = {
+        kind: 'approval',
+        id: 'proposal_1',
+        title: 'Move the launch review',
+        options: [
+          { id: 'approve', label: 'Approve' },
+          { id: 'reject', label: 'Keep current time' },
+        ],
+      };
+      const pendingDetail = detailWith({
+        status: 'awaiting_approval',
+        queueState: 'needs_you',
+        decision,
+      });
+      const runningDetail = detailWith({
+        status: 'running',
+        queueState: 'working',
+        decision: null,
+      });
+
+      // The transport is stateful, like the real API: every `detail` call after the decision
+      // reflects the server's new status, whether that call comes from the mutation's own
+      // `invalidateKeys` reconciliation (which prefix-matches this session's key) or the
+      // re-armed poll — neither should ever hand the card a stale `awaiting_approval` again.
+      let current = pendingDetail;
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const api: PersonalAthenaTransport = {
+        pulse: vi.fn(),
+        queue: vi.fn(),
+        detail: vi.fn().mockImplementation(() => Promise.resolve(okResponse(current))),
+        activity: vi.fn(),
+        create: vi.fn(),
+        sendMessage: vi.fn(),
+        decide: vi.fn().mockImplementation(() => {
+          current = runningDetail;
+          return Promise.resolve(okResponse(runningDetail));
+        }),
+        lifecycle: vi.fn(),
+      };
+
+      render(
+        <QueryClientProvider client={client}>
+          <AthenaJobCard
+            job={job({ status: 'awaiting_approval', queueState: 'needs_you' })}
+            transport={api}
+          />
+        </QueryClientProvider>,
+      );
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+
+      await waitFor(() => {
+        expect(api.decide).toHaveBeenCalledWith('session_1', 'proposal_1', 'approve');
+      });
+
+      // The badge follows the loaded detail's status, not the summary's fixed `awaiting_approval`.
+      expect(await screen.findByText(/Working/, { selector: 'span' })).toBeVisible();
+      const callsAfterDecision = vi.mocked(api.detail).mock.calls.length;
+
+      // The live status now reads `running` (tone `active`), so the poll interval re-arms at 3s
+      // — advancing fake time by more than that proves the card is polling again, not stuck at
+      // `false` the way it was while the interval was still keyed off the stale summary status.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_500);
+      });
+
+      await waitFor(() => {
+        expect(vi.mocked(api.detail).mock.calls.length).toBeGreaterThan(callsAfterDecision);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('shows an optionless question as a free-text answer field', async () => {

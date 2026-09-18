@@ -17,7 +17,12 @@ import { Badge, type BadgeVariant } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
-import { athenaQueueState, type PersonalAthenaSessionSummary } from '@/lib/athena/presentation';
+import {
+  athenaQueueState,
+  type AthenaQueueState,
+  type PersonalAthenaSessionSummary,
+  type PersonalAthenaStatus,
+} from '@/lib/athena/presentation';
 import { jobStateLabel, jobTone, type JobTone } from '@/lib/athena/job-presentation';
 import {
   personalAthenaDetailDef,
@@ -63,13 +68,19 @@ interface JobLifecyclePermissions {
   readonly canCancel: boolean;
 }
 
-/** Derive what a job's overflow menu may offer from its lifecycle status. */
-function lifecyclePermissions(job: PersonalAthenaSessionSummary): JobLifecyclePermissions {
-  const queueState = job.queueState ?? athenaQueueState(job.status);
+/**
+ * Derive what a job's overflow menu may offer from its current lifecycle status — the caller's
+ * "current" is the live status, not necessarily the summary's, since the loaded detail can have
+ * moved on (e.g. a decision that just carried the job from `awaiting_approval` to `running`).
+ */
+function lifecyclePermissions(
+  status: PersonalAthenaStatus,
+  queueState: AthenaQueueState,
+): JobLifecyclePermissions {
   return {
-    isFinished: TERMINAL_STATUSES.has(job.status),
-    canPause: job.status === 'running',
-    canResume: job.status === 'awaiting_input',
+    isFinished: TERMINAL_STATUSES.has(status),
+    canPause: status === 'running',
+    canResume: status === 'awaiting_input',
     canCancel: queueState !== 'finished',
   };
 }
@@ -86,10 +97,10 @@ export function AthenaJobCard({
   id,
 }: AthenaJobCardProps): JSX.Element {
   const queryClient = useQueryClient();
-  const tone = jobTone(job.status);
   const detail = useApiQuery({
     ...personalAthenaDetailDef(job.id, transport, true),
-    refetchInterval: tone === 'active' ? 3_000 : false,
+    refetchInterval: (query) =>
+      jobTone(query.state.data?.status ?? job.status) === 'active' ? 3_000 : false,
   });
   const actions = useAthenaActions({
     selectedId: job.id,
@@ -102,7 +113,16 @@ export function AthenaJobCard({
 
   const articleId = id ?? `athena-job-${job.id}`;
   const titleId = `${articleId}-title`;
-  const permissions = lifecyclePermissions(job);
+
+  // The detail query can outpace the summary the host handed us — e.g. right after a decision
+  // carries the job from `awaiting_approval` to `running` — so the badge, the menu, and the poll
+  // cadence all follow the loaded detail's status once it exists, falling back to the summary
+  // only until that first load resolves.
+  const liveStatus: PersonalAthenaStatus = detail.data?.status ?? job.status;
+  const liveQueueState: AthenaQueueState =
+    detail.data?.queueState ?? job.queueState ?? athenaQueueState(liveStatus);
+  const tone = jobTone(liveStatus);
+  const permissions = lifecyclePermissions(liveStatus, liveQueueState);
 
   function handleLifecycle(action: JobLifecycleAction): void {
     actions.lifecycle(action);
@@ -112,7 +132,7 @@ export function AthenaJobCard({
     <article id={articleId} aria-labelledby={titleId} className="flex flex-col gap-3">
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Badge variant={BADGE_VARIANT_BY_TONE[tone]}>{jobStateLabel(job.status)}</Badge>
+          <Badge variant={BADGE_VARIANT_BY_TONE[tone]}>{jobStateLabel(liveStatus)}</Badge>
           <h3 id={titleId} className="text-on-surface text-title-medium min-w-0 break-words">
             {job.objective}
           </h3>

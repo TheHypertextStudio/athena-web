@@ -266,6 +266,9 @@ export const queryKeys = {
   workLocationAssertions: () => ['me', 'work-location', 'assertions'] as const,
   workLocationSync: () => ['me', 'work-location', 'sync-state'] as const,
   hubPreferences: () => ['me', 'hub-preferences'] as const,
+  /** Every composer draft the person can return to, across workspaces. */
+  drafts: () => ['me', 'drafts'] as const,
+  draft: (draftId: string) => ['me', 'drafts', draftId] as const,
   athena: () => ['me', 'athena'] as const,
   /** The person's one Athena conversation. */
   athenaChat: () => ['me', 'athena', 'chat'] as const,

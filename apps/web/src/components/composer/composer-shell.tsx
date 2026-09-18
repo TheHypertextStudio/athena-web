@@ -38,8 +38,10 @@ import { Maximize, Minimize } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type ReactNode, type RefObject, useId, useRef, useState } from 'react';
 
-import { ComposerClosePrompt } from './composer-close-prompt';
+import { ComposerClosePrompt, type ComposerClosePromptProps } from './composer-close-prompt';
+import { ComposerDraftsChip } from './composer-drafts-chip';
 import { handleContinueChord } from './continue-chord';
+import type { ComposerDraftControls } from './use-composer-draft-persistence';
 import { useDiscardPrompt } from './use-discard-prompt';
 
 import {
@@ -164,6 +166,14 @@ export interface ComposerShellProps {
   children: ReactNode;
   /** A server/validation error to surface under the pickers, if any. */
   error?: string | null | undefined;
+  /**
+   * The saved-draft controls from `useComposerDraftPersistence`. When supplied, the action row
+   * gains a Drafts chip and the close prompt offers Save draft; when omitted the composer keeps
+   * nothing and the prompt asks only whether to discard.
+   */
+  drafts?: ComposerDraftControls | undefined;
+  /** The noun an untitled draft is called by, vocabulary-skinned ("task"). */
+  draftNoun?: string | undefined;
   /** Application-owned success copy announced without adding visible chrome to the composer. */
   statusMessage?: string | null | undefined;
   /** Whether the object was committed and the remaining error belongs to post-create work. */
@@ -214,6 +224,8 @@ export function ComposerShell({
   mentionOrgId,
   children,
   error,
+  drafts,
+  draftNoun = 'draft',
   statusMessage,
   draftCommitted = false,
   contentDisabled = false,
@@ -439,6 +451,8 @@ export function ComposerShell({
               confirmingDiscard={confirmingDiscard}
               onKeepEditing={prompt.keepEditing}
               onDiscard={prompt.discard}
+              drafts={drafts}
+              draftNoun={draftNoun}
               continuation={continuation}
               editDisabled={editDisabled}
               formId={formId}
@@ -551,8 +565,12 @@ interface ComposerActionRowProps {
   confirmingDiscard: boolean;
   /** Cancel the discard confirmation and return to editing. */
   onKeepEditing: () => void;
-  /** Confirm discarding the draft. */
+  /** Close the composer once the prompt has been answered. */
   onDiscard: () => void;
+  /** Saved-draft controls, when the composer keeps drafts. */
+  drafts?: ComposerDraftControls | undefined;
+  /** The noun an untitled draft is called by. */
+  draftNoun: string;
   /** Shared create-and-continue state, when this composer offers it. */
   continuation?: ComposerContinuation | undefined;
   /** Whether draft content controls are disabled. */
@@ -577,6 +595,8 @@ function ComposerActionRow({
   confirmingDiscard,
   onKeepEditing,
   onDiscard,
+  drafts,
+  draftNoun,
   continuation,
   editDisabled,
   formId,
@@ -585,11 +605,19 @@ function ComposerActionRow({
   submitLabel,
 }: ComposerActionRowProps): JSX.Element {
   if (confirmingDiscard) {
-    return <ComposerClosePrompt onKeepEditing={onKeepEditing} onDiscard={onDiscard} />;
+    return (
+      <ComposerClosePrompt
+        onKeepEditing={onKeepEditing}
+        {...closePromptAnswers(drafts, onDiscard)}
+      />
+    );
   }
 
   return (
     <div className="flex w-full flex-row items-center gap-2">
+      {drafts ? (
+        <ComposerDraftsChip drafts={drafts} noun={draftNoun} disabled={editDisabled} />
+      ) : null}
       {continuation ? (
         <button
           type="button"
@@ -629,6 +657,22 @@ function ComposerActionRow({
       </Button>
     </div>
   );
+}
+
+/** The close prompt's Discard and Save draft answers, each settling the draft before closing. */
+function closePromptAnswers(
+  drafts: ComposerDraftControls | undefined,
+  close: () => void,
+): Pick<ComposerClosePromptProps, 'onDiscard' | 'onSave'> {
+  if (!drafts) return { onDiscard: close };
+  return {
+    onDiscard: () => {
+      void drafts.onDiscard().then(close);
+    },
+    onSave: () => {
+      void drafts.onKeep().then(close);
+    },
+  };
 }
 
 /** Props for {@link PropertyStrip}. */

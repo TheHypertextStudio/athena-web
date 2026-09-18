@@ -9,7 +9,7 @@
  */
 import { OpenInNew, Sparkles } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
-import { type JSX, useEffect, useState } from 'react';
+import type { JSX } from 'react';
 
 import AthenaConversation, {
   type ConversationEmptyState,
@@ -18,22 +18,6 @@ import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 import { VoiceLaunch } from '@/components/athena/voice-launch';
 import Link from '@/components/docket-link';
 import { athenaHref } from '@/lib/athena/query-defs';
-
-/** A draft handed to the composer; each new version replaces the text and focuses the field. */
-interface DraftRequest {
-  readonly text: string;
-  readonly version: number;
-}
-
-/** The launch draft as a composer request: each non-empty draft is a new version. */
-function useLaunchDraftRequest(launchDraft: string | null): DraftRequest | null {
-  const [request, setRequest] = useState<DraftRequest | null>(null);
-  useEffect(() => {
-    if (launchDraft === null || launchDraft === '') return;
-    setRequest((current) => ({ text: launchDraft, version: (current?.version ?? 0) + 1 }));
-  }, [launchDraft]);
-  return request;
-}
 
 /** Props for {@link AthenaRailConversation}. */
 export interface AthenaRailConversationProps {
@@ -52,7 +36,7 @@ export function AthenaRailConversation({
   suggestions = true,
 }: AthenaRailConversationProps): JSX.Element {
   const athena = useAthenaPanel();
-  const draftRequest = useLaunchDraftRequest(athena.launchDraft);
+  const draftRequest = athena.launchDraft;
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex min-h-12 shrink-0 items-center gap-2 py-1 pr-1 pl-3">

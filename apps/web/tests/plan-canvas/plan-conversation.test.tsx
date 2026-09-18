@@ -8,7 +8,7 @@ vi.mock('../../src/components/athena/athena-conversation', () => ({
   ),
 }));
 vi.mock('../../src/components/athena/athena-panel-provider', () => ({
-  useAthenaPanel: () => ({ launchDraft: 'Help me plan "Q3". ' }),
+  useAthenaPanel: () => ({ launchDraft: { text: 'Help me plan "Q3". ', version: 1 } }),
 }));
 
 import { PlanRailConversation } from '../../src/components/plan-canvas/plan-conversation';

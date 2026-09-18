@@ -144,6 +144,7 @@ function pageTree(source: ReactNode): ReactNode {
       <PageContextProvider workspace={{ workspaceId: ORG_ID }}>
         {source}
         <AthenaPanelProvider transport={transport()} railVisible onRevealRail={vi.fn()}>
+          <AthenaLaunchers />
           <AthenaRailPanel />
         </AthenaPanelProvider>
       </PageContextProvider>
@@ -184,9 +185,9 @@ describe('AthenaPanelProvider with route rail content', () => {
     const onRevealRail = vi.fn();
     renderWithRailContent(onRevealRail);
     expect(
-      within(screen.getByRole('region', { name: 'Athena' })).getByTestId('rail-content'),
+      within(screen.getByRole('region', { name: /Athena/ })).getByTestId('rail-content'),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Open contextual Athena' }));
+    fireEvent.click(screen.getByRole('button', { name: /Open contextual Athena/ }));
     expect(onRevealRail).toHaveBeenCalledTimes(1);
   });
 });
@@ -209,8 +210,8 @@ describe('AthenaPanelProvider', () => {
     await waitFor(() => {
       expect(onRevealRail).toHaveBeenCalledTimes(1);
     });
-    expect(screen.queryByRole('dialog', { name: 'Athena' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open Athena' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /Athena/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open Athena/ })).not.toBeInTheDocument();
   });
 
   it('keeps the shortcut out of editable controls', () => {
@@ -229,7 +230,7 @@ describe('AthenaPanelProvider', () => {
     const onOpenFullAthena = vi.fn();
     renderPanel({ onRevealRail: undefined, onOpenFullAthena });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open contextual Athena' }));
+    fireEvent.click(screen.getByRole('button', { name: /Open contextual Athena/ }));
 
     expect(onOpenFullAthena).toHaveBeenCalledWith(
       {
@@ -248,13 +249,13 @@ describe('AthenaPanelProvider', () => {
 
   it('seeds the composer from an open with an opening line', async () => {
     renderPanel();
-    fireEvent.click(screen.getByRole('button', { name: 'Open contextual Athena' }));
+    fireEvent.click(screen.getByRole('button', { name: /Open contextual Athena/ }));
     await waitFor(() => {
-      expect(screen.getByRole('combobox', { name: 'Message Athena' })).toHaveValue('');
+      expect(screen.getByRole('combobox', { name: /Message Athena/ })).toHaveValue('');
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Open with a line' }));
+    fireEvent.click(screen.getByRole('button', { name: /Open with a line/ }));
     await waitFor(() => {
-      expect(screen.getByRole('combobox', { name: 'Message Athena' })).toHaveValue(
+      expect(screen.getByRole('combobox', { name: /Message Athena/ })).toHaveValue(
         'Help me with this',
       );
     });
@@ -264,13 +265,55 @@ describe('AthenaPanelProvider', () => {
     const view = renderPanelWithPage(
       <PageSource type="task" id="task_1" label="Confirm venue contract" />,
     );
-    fireEvent.change(await screen.findByRole('combobox', { name: 'Message Athena' }), {
+    fireEvent.change(await screen.findByRole('combobox', { name: /Message Athena/ }), {
       target: { value: 'Half a thought' },
     });
     view.rerender(
       pageTree(<PageSource type="project" id="project_1" label="Fall fundraiser launch" />),
     );
-    expect(screen.getByRole('combobox', { name: 'Message Athena' })).toHaveValue('Half a thought');
+    expect(screen.getByRole('combobox', { name: /Message Athena/ })).toHaveValue('Half a thought');
     expect(screen.getByRole('group', { name: /Fall fundraiser launch/ })).toBeVisible();
+  });
+
+  it('follows the page again after a contextual open', async () => {
+    const view = renderPanelWithPage(
+      <PageSource type="task" id="task_1" label="Confirm venue contract" />,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole('group', { name: /Confirm venue contract/ })).toBeVisible();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Open contextual Athena/ }));
+    await waitFor(() => {
+      expect(screen.getByRole('group', { name: /Athena launch/ })).toBeVisible();
+    });
+
+    view.rerender(
+      pageTree(<PageSource type="project" id="project_2" label="Winter grant cycle" />),
+    );
+    await waitFor(() => {
+      expect(screen.getByRole('group', { name: /Winter grant cycle/ })).toBeVisible();
+    });
+  });
+
+  it('seeds the composer each time an opening line is handed over', async () => {
+    renderPanel();
+
+    fireEvent.click(screen.getByRole('button', { name: /Open with a line/ }));
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /Message Athena/ })).toHaveValue(
+        'Help me with this',
+      );
+    });
+
+    fireEvent.change(screen.getByRole('combobox', { name: /Message Athena/ }), {
+      target: { value: '' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Open with a line/ }));
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /Message Athena/ })).toHaveValue(
+        'Help me with this',
+      );
+    });
   });
 });

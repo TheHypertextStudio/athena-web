@@ -40,10 +40,20 @@ export function isAthenaShortcut(event: KeyboardEvent): boolean {
   );
 }
 
+/**
+ * A one-shot request to seed the composer with an opening line. Each `openAthena` call that
+ * carries a non-empty draft produces a new version, which the composer treats as a fresh request
+ * to apply even if the text repeats a previous one.
+ */
+export interface AthenaLaunchDraft {
+  readonly text: string;
+  readonly version: number;
+}
+
 /** State and controls shared by contextual Athena entry points and its utility-rail panel. */
 export interface AthenaPanelValue {
   readonly context: PersonalAthenaContext | null;
-  readonly launchDraft: string | null;
+  readonly launchDraft: AthenaLaunchDraft | null;
   readonly railStatus: RailPanelStatus | null;
   /** Whether the next piece of work carries the current context. */
   readonly contextAttached: boolean;
@@ -132,16 +142,16 @@ export function AthenaPanelProvider({
 }: AthenaPanelProviderProps): JSX.Element {
   const pageContext = usePageContext();
   const [context, setContext] = useState<PersonalAthenaContext | null>(pageContext);
-  const [launchDraft, setLaunchDraft] = useState<string | null>(null);
+  const [launchDraft, setLaunchDraft] = useState<AthenaLaunchDraft | null>(null);
   const [contextAttached, setContextAttached] = useState(true);
   const pulse = useLiveApiQuery(personalAthenaPulseDef(transport), 5_000);
 
-  // The page moves under the panel; the panel keeps what the person was doing. Only an idle
-  // panel (no draft) follows the page.
+  // The page moves under the panel; the panel's context always follows it. An explicit context
+  // passed to `openAthena` applies immediately (the `setContext` call below) and lasts only until
+  // the page context next changes, at which point this effect takes back over.
   useEffect(() => {
-    if (launchDraft !== null) return;
     setContext(pageContext);
-  }, [launchDraft, pageContext]);
+  }, [pageContext]);
 
   const reveal = useAthenaReveal(onRevealRail, onOpenFullAthena);
   const { railContent, provideRailContent } = useRailContent();
@@ -153,7 +163,13 @@ export function AthenaPanelProvider({
       const resolvedContext = effective === undefined ? pageContext : effective;
       setContext(resolvedContext);
       setContextAttached(true);
-      setLaunchDraft(startsNewWork ? (draft?.trim() ?? '') : null);
+      const trimmedDraft = draft?.trim();
+      if (trimmedDraft) {
+        setLaunchDraft((previous) => ({
+          text: trimmedDraft,
+          version: (previous?.version ?? 0) + 1,
+        }));
+      }
       reveal(resolvedContext, startsNewWork ? draft : undefined);
     },
     [pageContext, reveal],

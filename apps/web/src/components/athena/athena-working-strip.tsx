@@ -17,8 +17,8 @@ import { Button, Collapsible, CollapsibleContent, CollapsibleTrigger } from '@do
 import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, type ReactNode } from 'react';
 
-import { jobStatusLine, jobTone } from '@/lib/athena/job-presentation';
-import type { PersonalAthenaSessionSummary } from '@/lib/athena/presentation';
+import { jobStatusLine } from '@/lib/athena/job-presentation';
+import { athenaQueueState, type PersonalAthenaSessionSummary } from '@/lib/athena/presentation';
 import {
   personalAthenaDetailDef,
   personalAthenaTransport,
@@ -38,7 +38,7 @@ export interface AthenaWorkingStripProps {
 }
 
 /** The two tones a strip row ever renders in — a finished job never appears here. */
-type WorkingRowTone = Extract<ReturnType<typeof jobTone>, 'active' | 'attention'>;
+type WorkingRowTone = 'active' | 'attention';
 
 /** The tone dot's fill, drawn from the tonal surface system rather than a raw palette class. */
 const DOT_CLASS_BY_TONE: Readonly<Record<WorkingRowTone, string>> = {
@@ -140,14 +140,16 @@ function AttentionRow({ job, transport, onOpen }: AttentionRowProps): JSX.Elemen
   );
 }
 
-/** A row whose job is simply running: the queue summary already has everything it shows. */
-function ActiveRow({
-  job,
-  onOpen,
-}: {
+/** Props for {@link ActiveRow}. */
+interface ActiveRowProps {
   readonly job: PersonalAthenaSessionSummary;
   readonly onOpen: (jobId: string) => void;
-}): JSX.Element {
+}
+
+/**
+ * A row whose job is simply running: the queue summary already has everything it shows.
+ */
+function ActiveRow({ job, onOpen }: ActiveRowProps): JSX.Element {
   return (
     <WorkingStripRowShell
       job={job}
@@ -168,10 +170,14 @@ export function AthenaWorkingStrip({
   onOpen,
 }: AthenaWorkingStripProps): JSX.Element | null {
   const open = jobs
-    .map((job) => ({ job, tone: jobTone(job.status) }))
+    .map((job) => {
+      const lane = job.queueState ?? athenaQueueState(job.status);
+      const tone = lane === 'needs_you' ? 'attention' : lane === 'working' ? 'active' : null;
+      return { job, tone };
+    })
     .filter(
       (entry): entry is { job: PersonalAthenaSessionSummary; tone: WorkingRowTone } =>
-        entry.tone === 'active' || entry.tone === 'attention',
+        entry.tone !== null,
     );
 
   if (open.length === 0) return null;

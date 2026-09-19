@@ -40,6 +40,9 @@ function transcriptAfterStart(): TurnMessage[] {
       people: [
         { actorId: 'ana', name: 'Ana', teamIds: [PRODUCT] },
         { actorId: 'bo', name: 'Bo', teamIds: [ENGINEERING] },
+        { actorId: 'cy', name: 'Cy', teamIds: [PRODUCT] },
+        { actorId: 'di', name: 'Di', teamIds: [ENGINEERING] },
+        { actorId: 'ed', name: 'Ed', teamIds: [ENGINEERING] },
       ],
       teams: [
         { id: PRODUCT, name: 'Product' },
@@ -102,16 +105,32 @@ describe('journaling planning script', () => {
     }
   });
 
-  it('assigns feature tasks to product and subtasks to engineering', () => {
+  it('assigns feature tasks within product and subtasks within engineering', () => {
+    const product = new Set(['ana', 'cy']);
+    const engineering = new Set(['bo', 'di', 'ed']);
     for (const node of draftedNodes(transcriptAfterStart())) {
       const role = JOURNALING_PLAN_ROLES.get(node['ref'] as string);
       if (role === undefined) continue;
-      expect(node['fields']).toMatchObject(
-        role === 'product'
-          ? { teamId: PRODUCT, assigneeId: 'ana' }
-          : { teamId: ENGINEERING, assigneeId: 'bo' },
-      );
+      const fields = node['fields'] as { teamId: string; assigneeId: string };
+      const team = role === 'product' ? product : engineering;
+      expect(fields.teamId).toBe(role === 'product' ? PRODUCT : ENGINEERING);
+      expect(team.has(fields.assigneeId)).toBe(true);
     }
+  });
+
+  it('deals each team its work round-robin in script order', () => {
+    const assignees = (role: 'product' | 'engineering'): string[] =>
+      draftedNodes(transcriptAfterStart())
+        .filter((node) => JOURNALING_PLAN_ROLES.get(node['ref'] as string) === role)
+        .map((node) => (node['fields'] as { assigneeId: string }).assigneeId);
+
+    const product = assignees('product');
+    const engineering = assignees('engineering');
+    expect(product).toEqual(product.map((_, index) => ['ana', 'cy'][index % 2]));
+    expect(engineering).toEqual(engineering.map((_, index) => ['bo', 'di', 'ed'][index % 3]));
+    // Every member of each team receives work, which is the point of the spread.
+    expect(new Set(product)).toEqual(new Set(['ana', 'cy']));
+    expect(new Set(engineering)).toEqual(new Set(['bo', 'di', 'ed']));
   });
 
   it('leaves work unassigned when the roster has no teams', () => {

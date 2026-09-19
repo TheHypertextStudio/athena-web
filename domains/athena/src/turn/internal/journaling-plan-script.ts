@@ -9,9 +9,10 @@
  * The script is stored unbound. Its tool inputs carry sentinel ids, because a constant written
  * months before any workspace existed cannot name one, and {@link bindJournalingPlanTurns} swaps
  * them for the ids the earlier calls actually returned before the turn is replayed. The same pass
- * fills `assigneeId` and `teamId` from the roster `plan_start` returned: a feature task goes to
- * someone on the product team, its engineering subtasks to someone on the engineering team. When
- * the roster names nobody who fits, both stay null — a wrong assignee is worse than none.
+ * fills `assigneeId` and `teamId` from the roster `plan_start` returned: feature tasks go to the
+ * product team and engineering subtasks to the engineering team, dealt round-robin across each
+ * team's members in script order so the demo spreads the work. When the roster names nobody who
+ * fits, both stay null — a wrong assignee is worse than none.
  */
 import type { TurnMessage } from '../../turn-protocol';
 import type { ScriptedTurn } from '../turn';
@@ -303,10 +304,33 @@ function teamFor(context: ScriptContext, role: ScriptRole): string | null {
   return named?.id ?? context.teams[0]?.id ?? null;
 }
 
-/** Someone on that team, or nobody. */
-function assigneeFor(context: ScriptContext, teamId: string | null): string | null {
+/**
+ * Each node's position among the nodes of its role, in script order.
+ *
+ * @remarks
+ * The binder runs once per replayed turn with a fresh context, so the round-robin slot has to be a
+ * property of the node rather than a counter carried between calls.
+ */
+const JOURNALING_PLAN_SLOTS: ReadonlyMap<string, number> = slotsByRole();
+
+/** Number every ref within its role, starting from zero. */
+function slotsByRole(): ReadonlyMap<string, number> {
+  const next = new Map<ScriptRole, number>();
+  const slots = new Map<string, number>();
+  for (const [ref, role] of JOURNALING_PLAN_ROLES) {
+    const slot = next.get(role) ?? 0;
+    slots.set(ref, slot);
+    next.set(role, slot + 1);
+  }
+  return slots;
+}
+
+/** The team member whose turn it is for that slot, or nobody when the team is empty. */
+function assigneeFor(context: ScriptContext, teamId: string | null, slot: number): string | null {
   if (teamId === null) return null;
-  return context.people.find((person) => person.teamIds.includes(teamId))?.actorId ?? null;
+  const members = context.people.filter((person) => person.teamIds.includes(teamId));
+  if (members.length === 0) return null;
+  return members[slot % members.length]?.actorId ?? null;
 }
 
 /** One op with the sentinel assignment fields replaced by real ids, when the node takes them. */
@@ -314,7 +338,8 @@ function boundOp(op: Record<string, unknown>, context: ScriptContext): Record<st
   const node = op['node'];
   if (op['op'] !== 'upsert_node' || node === null || typeof node !== 'object') return op;
   const ref: unknown = Reflect.get(node, 'ref');
-  const role = typeof ref === 'string' ? JOURNALING_PLAN_ROLES.get(ref) : undefined;
+  if (typeof ref !== 'string') return op;
+  const role = JOURNALING_PLAN_ROLES.get(ref);
   if (role === undefined) return op;
   const teamId = teamFor(context, role);
   const fields: unknown = Reflect.get(node, 'fields');
@@ -324,7 +349,7 @@ function boundOp(op: Record<string, unknown>, context: ScriptContext): Record<st
       ...(node as Record<string, unknown>),
       fields: {
         ...(fields as Record<string, unknown>),
-        assigneeId: assigneeFor(context, teamId),
+        assigneeId: assigneeFor(context, teamId, JOURNALING_PLAN_SLOTS.get(ref) ?? 0),
         teamId,
       },
     },

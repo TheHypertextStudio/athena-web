@@ -519,3 +519,33 @@ and detail are at 2; the a11y and no-placeholder gates are red. Nothing here shi
 the ghost grammar underneath are sound, and the zero-border discipline inside the Athena components
 is genuinely done — what fails is every decision about weight, separation, repetition, and honesty
 laid on top of them.
+
+---
+
+## Resolution — 2026-09-19
+
+Every section of "What to build instead" and every finding is addressed on
+`claude/cool-bartik-fca3e2-74296i`, except where noted.
+
+| Item                                                                  | Commit                                                          |
+| --------------------------------------------------------------------- | --------------------------------------------------------------- |
+| §1 one entry anatomy, findings 3 and 4                                | `2806be683`, `ab5d7cb9c`                                        |
+| §2 panel: two fixed regions, in-thread questions, errors and heads-up | `2806be683`, `ab5d7cb9c`                                        |
+| §3 360px default, 480px cap, tonal rail                               | `2f40965d5`                                                     |
+| §4 workspace-scoped queue, two-column `/athena`, ledger               | `833ae1c35`, `d3939034e`                                        |
+| §5 task page `Delegated work`                                         | `578cdfa00`                                                     |
+| Finding 9, one composer on Today                                      | `c9306db1a`                                                     |
+| Finding 11, borders                                                   | `e73225391`, `1db4dda57`, `55a4e062a`, `bbf9a950e`, `e50317968` |
+| Finding 12, assignees and the doubled task list                       | `79de1cc6c`                                                     |
+| Task titles beside the panel                                          | `807e50321`                                                     |
+| Undo on a finished job's change                                       | `3a95e120e`                                                     |
+
+Left as they are:
+
+- The sidebar keeps Tasks and Stream in both Home (every workspace) and Workspace (this one).
+  That split is deliberate and held by `sidebar-tasks-destination.test.tsx`; hiding the Workspace
+  pair in a personal workspace is a product decision.
+- Dashed tentative calendar items, the quick-add field, chart data lines, and Badge/Chip outline
+  variants keep their strokes because each marks a state or a field.
+- Delegated work sits directly above Activity. Activity pages from the server oldest first, so
+  live entries folded into it would land out of order.

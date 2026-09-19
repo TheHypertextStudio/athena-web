@@ -73,6 +73,31 @@ function explicitGrantFromRow(row: typeof grant.$inferSelect): ExplicitGrant {
   };
 }
 
+/** Build resource chain for a task with its project and program ancestors. */
+function buildTaskChain(
+  target: ResourceRef,
+  row: { teamId: string; projectId: string | null; programId: string | null } | undefined,
+): ResourceRef[] {
+  const chain: ResourceRef[] = [target];
+  if (!row) return chain;
+  chain.push({ kind: 'team', id: row.teamId, orgId: target.orgId });
+  if (row.projectId) chain.push({ kind: 'project', id: row.projectId, orgId: target.orgId });
+  if (row.programId) chain.push({ kind: 'program', id: row.programId, orgId: target.orgId });
+  return chain;
+}
+
+/** Build resource chain for a project with its team and program ancestors. */
+function buildProjectChain(
+  target: ResourceRef,
+  row: { teamId: string | null; programId: string | null } | undefined,
+): ResourceRef[] {
+  const chain: ResourceRef[] = [target];
+  if (!row) return chain;
+  if (row.teamId) chain.push({ kind: 'team', id: row.teamId, orgId: target.orgId });
+  if (row.programId) chain.push({ kind: 'program', id: row.programId, orgId: target.orgId });
+  return chain;
+}
+
 /**
  * Builds the containment chain for `target`: the target itself, its FK ancestors, and the
  * organization root.
@@ -243,19 +268,10 @@ export async function loadExplicitAuthorizationFactsBatch(
   const chains = targets.map((target): ResourceRef[] => {
     const root: ResourceRef = { kind: 'organization', id: target.orgId, orgId: target.orgId };
     if (target.kind === 'organization') return [root];
-    const chain: ResourceRef[] = [target];
-    if (target.kind === 'task') {
-      const row = tasksById.get(target.id);
-      if (row) {
-        chain.push({ kind: 'team', id: row.teamId, orgId: target.orgId });
-        if (row.projectId) chain.push({ kind: 'project', id: row.projectId, orgId: target.orgId });
-        if (row.programId) chain.push({ kind: 'program', id: row.programId, orgId: target.orgId });
-      }
-    } else if (target.kind === 'project') {
-      const row = projectsById.get(target.id);
-      if (row?.teamId) chain.push({ kind: 'team', id: row.teamId, orgId: target.orgId });
-      if (row?.programId) chain.push({ kind: 'program', id: row.programId, orgId: target.orgId });
-    }
+    const chain =
+      target.kind === 'task'
+        ? buildTaskChain(target, tasksById.get(target.id))
+        : buildProjectChain(target, projectsById.get(target.id));
     chain.push(root);
     return chain;
   });

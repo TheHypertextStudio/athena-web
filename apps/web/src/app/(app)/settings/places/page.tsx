@@ -339,6 +339,7 @@ function PlacesDialogs(props: {
 }): JSX.Element {
   const resolvedLabel = WorkScheduleUnmatchedPlacePayload.safeParse(props.resolvingChange?.payload)
     .data?.label;
+  const pending = props.resolvePending;
   return (
     <>
       <PlaceEditorDialog
@@ -380,21 +381,18 @@ function PlacesDialogs(props: {
             </label>
           </DialogBody>
           <DialogFooter>
-            <Button variant="ghost" disabled={props.resolvePending} onClick={props.onIgnoreName}>
+            <Button variant="ghost" disabled={pending} onClick={props.onIgnoreName}>
               Ignore name
             </Button>
-            <Button variant="secondary" disabled={props.resolvePending} onClick={props.onCreateName}>
+            <Button variant="secondary" disabled={pending} onClick={props.onCreateName}>
               Create new place
             </Button>
             <DialogClose asChild>
-              <Button variant="ghost" disabled={props.resolvePending}>
+              <Button variant="ghost" disabled={pending}>
                 Cancel
               </Button>
             </DialogClose>
-            <Button
-              disabled={!props.resolutionPlaceId || props.resolvePending}
-              onClick={props.onResolveName}
-            >
+            <Button disabled={!props.resolutionPlaceId || pending} onClick={props.onResolveName}>
               Resolve
             </Button>
           </DialogFooter>

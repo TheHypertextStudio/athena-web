@@ -21,7 +21,6 @@
     "ad-hoc-border": 2
   },
   "apps/web/src/app/(app)/orgs/[orgId]/sessions/[sessionId]/page.tsx": {
-    "ad-hoc-border": 2,
     "raw-radius-utility": 1,
     "raw-type-utility": 3
   },

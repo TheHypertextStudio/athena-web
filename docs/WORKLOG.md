@@ -216,6 +216,7 @@ chunk, and back or forward all swap instantly.
   20 px one, and Playwright's `animations: 'disabled'` fast-forwards the collapsing header to its
   compact end, so evidence shots of detail pages must not use it.
 - **Blockers**: None.
+
 ### [DESIGN-BORDERS-001] Remove the borders the companion audit found, and its smaller defects
 
 - **Status**: REVIEW

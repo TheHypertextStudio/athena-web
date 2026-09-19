@@ -39,6 +39,26 @@ export function defaultItemPermissionsForKind(kind: CalendarItemKind): CalendarI
   return { canEditCore: false, canDelete: false, readOnlyReason: 'kind' };
 }
 
+/** Resolve provider event permissions checking write scope, layer access, and stored snapshot. */
+function resolveProviderEventPermission(
+  connection: CalendarConnectionRow | null,
+  layer: CalendarLayerRow | null,
+  item: CalendarItemRow,
+): CalendarItemPermission {
+  const hasWriteScope = connection !== null && connection.scopeState?.calendarWrite === true;
+  if (!hasWriteScope) {
+    return { canEditCore: false, canDelete: false, readOnlyReason: 'provider_scope' };
+  }
+  const layerEditable = layer?.editableCore === true;
+  if (!layerEditable) {
+    return { canEditCore: false, canDelete: false, readOnlyReason: 'layer_access_role' };
+  }
+  if (item.permissions !== null) {
+    return item.permissions;
+  }
+  return { canEditCore: true, canDelete: true, readOnlyReason: null };
+}
+
 /**
  * Resolve a calendar item's normalized edit/delete permissions for the viewer.
  *
@@ -83,16 +103,5 @@ export function resolveItemPermissions(input: {
     return defaultItemPermissionsForKind(kind);
   }
 
-  const hasWriteScope = connection !== null && connection.scopeState?.calendarWrite === true;
-  const layerEditable = layer?.editableCore === true;
-  if (!hasWriteScope) {
-    return { canEditCore: false, canDelete: false, readOnlyReason: 'provider_scope' };
-  }
-  if (!layerEditable) {
-    return { canEditCore: false, canDelete: false, readOnlyReason: 'layer_access_role' };
-  }
-  if (item.permissions !== null) {
-    return item.permissions;
-  }
-  return { canEditCore: true, canDelete: true, readOnlyReason: null };
+  return resolveProviderEventPermission(connection, layer, item);
 }

@@ -21,7 +21,8 @@
  * by the caller over the surface. In that row the title keeps its full text down to a floor wide
  * enough for a short name, then truncates; `controls` and `actions` never shrink. The `fill`
  * slot is the one flexible region, for a group that scrolls inside its own box when the row runs
- * short. The bar is a container, so a slot can
+ * short. The floor itself narrows on a bar under 28rem, where a phone-width row has to fit a way
+ * back, a view switch, and an action beside the name. The bar is a container, so a slot can
  * collapse its own labels against the bar's width rather than the window's.
  *
  * ## The navigation slot is an icon, not a sentence
@@ -123,7 +124,9 @@ export function AppBar({
       >
         {navigation}
         {typeof title === 'string' ? (
-          <h1 className="text-on-surface text-title-medium min-w-40 shrink truncate">{title}</h1>
+          <h1 className="text-on-surface text-title-medium min-w-24 shrink truncate @md:min-w-40">
+            {title}
+          </h1>
         ) : (
           title
         )}

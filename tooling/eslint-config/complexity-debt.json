@@ -4001,8 +4001,8 @@
       "excess": 3
     },
     "max-lines-per-function": {
-      "max": 302,
-      "excess": 222
+      "max": 243,
+      "excess": 163
     }
   },
   "apps/web/src/components/canvas/project-node.tsx": {
@@ -6121,34 +6121,34 @@
   },
   "apps/web/src/components/work-views/work-view-page.tsx": {
     "max-lines-per-function": {
-      "max": 729,
-      "excess": 649
+      "max": 556,
+      "excess": 476
     },
     "complexity": {
-      "max": 67,
-      "excess": 55
+      "max": 47,
+      "excess": 35
     },
     "sonarjs/cognitive-complexity": {
-      "max": 38,
-      "excess": 23
+      "max": 28,
+      "excess": 13
     },
     "max-lines": {
-      "max": 1109,
-      "excess": 609
+      "max": 837,
+      "excess": 337
     }
   },
   "apps/web/src/components/work-views/work-view-toolbar.tsx": {
     "complexity": {
       "max": 21,
-      "excess": 16
+      "excess": 13
     },
     "max-lines-per-function": {
-      "max": 180,
-      "excess": 100
+      "max": 173,
+      "excess": 93
     },
     "sonarjs/cognitive-complexity": {
-      "max": 20,
-      "excess": 6
+      "max": 16,
+      "excess": 1
     }
   },
   "apps/web/src/lib/actions/registry.ts": {
@@ -6547,8 +6547,8 @@
   },
   "apps/web/tests/work-views/work-view-toolbar.test.tsx": {
     "max-lines": {
-      "max": 949,
-      "excess": 449
+      "max": 930,
+      "excess": 430
     }
   },
   "domains/athena/src/agent-session-translation.ts": {

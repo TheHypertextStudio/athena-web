@@ -170,6 +170,7 @@ tail below names exactly which files still owe one.
 | `apps/web/src/components/calendar/calendar-item-drawer.tsx:139` | `CalendarItemDrawerContent` | skeleton | **unannotated** |
 | `apps/web/src/components/calendar/item-drawer/event-arc.tsx:52` | `EventArc` | skeleton | **unannotated** |
 | `apps/web/src/components/calendar/item-drawer/event-arc.tsx:53` | `EventArc` | skeleton | **unannotated** |
+| `apps/web/src/components/canvas/project-graph-route.tsx:108` | `ProjectGraphRoute` | skeleton | the dependency graph — which projects block which, and in what order. |
 | `apps/web/src/components/canvas/task-graph-panel.tsx:605` | `TaskGraphPanel` | skeleton | the graph itself — which tasks and dependencies exist, and therefore the shape of the layout. There is no meaningful partial rendering of a node-link diagram, so the canvas area is covered while its toolbar and controls stay live. |
 | `apps/web/src/components/command-palette/command-palette.tsx:356` | `CommandPalette` | skeleton | the search results for what has been typed — how many match and what |
 | `apps/web/src/components/command-palette/command-palette.tsx:357` | `CommandPalette` | skeleton | the search results for what has been typed — how many match and what |
@@ -294,7 +295,6 @@ tail below names exactly which files still owe one.
 | `apps/web/src/components/views/entity-detail-skeleton.tsx:106` | `EntityDetailSkeleton` | status-loader | one property whose value is part of the record being read. |
 | `apps/web/src/components/views/entity-detail-skeleton.tsx:151` | `EntityDetailSkeleton` | skeleton | one property whose value is part of the record being read. |
 | `apps/web/src/components/views/entity-detail-skeleton.tsx:180` | `EntityDetailBodySkeleton` | status-loader | the active tab's panel, still being assembled from the composite read. |
-| `apps/web/src/components/work-views/project-dependency-lens.tsx:74` | `ProjectDependencyLens` | skeleton | the dependency graph — which projects block which, and in what order. |
 | `apps/web/src/components/work-views/work-view-page.tsx:207` | `CardsSkeleton` | status-loader | the roster rows — how many there are, and each one's mark, name, and the two |
 | `apps/web/src/components/work-views/work-view-page.tsx:218` | `CardsSkeleton` | skeleton | the roster rows — how many there are, and each one's mark, name, and the two |
 | `apps/web/src/components/work-views/work-view-page.tsx:220` | `CardsSkeleton` | skeleton | the roster rows — how many there are, and each one's mark, name, and the two |

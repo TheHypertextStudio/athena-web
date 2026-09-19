@@ -12,7 +12,11 @@ const workTabsPath = join(root, 'apps/web/src/components/work-views/work-view-ta
 const workListPath = join(root, 'apps/web/src/components/work-views/work-list.tsx');
 const workListColumnsPath = join(root, 'apps/web/src/components/work-views/work-list-columns.tsx');
 const timelinePath = join(root, 'apps/web/src/components/work-views/project-timeline-adapter.tsx');
-const dependencyPath = join(root, 'apps/web/src/components/work-views/project-dependency-lens.tsx');
+const dependencyRoutePath = join(root, 'apps/web/src/components/canvas/project-graph-route.tsx');
+const dependencyClientPath = join(
+  root,
+  'apps/web/src/app/(app)/orgs/[orgId]/projects/dependencies/dependencies-client.tsx',
+);
 const detailPath = join(
   root,
   'apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx',
@@ -28,7 +32,7 @@ function source(path: string): string {
 }
 
 describe('Projects experience contract', () => {
-  it('keeps list, dependencies, and timeline as equal lenses over shared view state', () => {
+  it('keeps list and timeline lenses over shared view state, with dependencies on its own page', () => {
     const overview = source(overviewPath);
     const workPage = source(workPagePath);
     // The list-page arrangement + canonical title token live once in the shared layout; the page
@@ -41,9 +45,11 @@ describe('Projects experience contract', () => {
     const workTabs = source(workTabsPath);
     expect(workTabs).toContain('role="tablist"');
     expect(workTabs).toContain('onToggleFavorite');
-    // The dependencies lens now renders the shared React Flow canvas (lazy-loaded) instead of the
-    // old hand-rolled SVG DependencyLens.
-    expect(source(dependencyPath)).toContain('<ProjectGraphPanel');
+    // Dependencies is its own route rendering the shared React Flow canvas (lazy-loaded); the
+    // roster carries no dependency mode of its own.
+    expect(source(dependencyClientPath)).toContain('<ProjectGraphRoute');
+    expect(source(dependencyRoutePath)).toContain('<ProjectGraphPanel');
+    expect(workPage).not.toContain('dependencyMode');
     // The timeline lens renders the shared, entity-generic timeline engine rather than a
     // Projects-only implementation, so its axis, zoom, markers, and drag behavior are the same
     // code the Hub portfolio runs.

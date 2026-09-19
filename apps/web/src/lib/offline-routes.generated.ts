@@ -124,6 +124,11 @@ export const OFFLINE_ROUTES = [
       (await import('@/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client')).default,
   },
   {
+    pattern: '/orgs/[orgId]/projects/dependencies',
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/projects/dependencies/dependencies-client')).default,
+  },
+  {
     pattern: '/orgs/[orgId]/projects',
     load: async () => (await import('@/app/(app)/orgs/[orgId]/projects/projects-client')).default,
   },

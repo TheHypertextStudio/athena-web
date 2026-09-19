@@ -280,27 +280,6 @@ describe('WorkViewToolbar', () => {
     expect(within(menu).getByRole('menuitem', { name: 'Release work' })).toBeVisible();
   });
 
-  it('keeps the view switcher and More menu when a canvas hides query controls', () => {
-    render(
-      <WorkViewToolbar
-        target="task"
-        definition={taskDefinition}
-        onDefinitionChange={vi.fn()}
-        onSaveView={vi.fn()}
-        onSetDefault={vi.fn()}
-        onReset={vi.fn()}
-        leading={<div role="tablist" aria-label="Tasks views" />}
-        showQueryControls={false}
-      />,
-    );
-
-    const toolbar = screen.getByRole('toolbar', { name: 'Task view controls' });
-    expect(within(toolbar).getByRole('tablist', { name: 'Tasks views' })).toBeVisible();
-    expect(within(toolbar).getByRole('button', { name: 'More view controls' })).toBeVisible();
-    expect(within(toolbar).queryByRole('button', { name: 'Filter' })).not.toBeInTheDocument();
-    expect(within(toolbar).queryByRole('button', { name: 'Display' })).not.toBeInTheDocument();
-  });
-
   it('keeps the roster toolbar to query and view controls', () => {
     renderToolbar();
 

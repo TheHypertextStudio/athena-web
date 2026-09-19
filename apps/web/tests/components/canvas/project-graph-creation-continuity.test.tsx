@@ -2,13 +2,14 @@ import '@testing-library/jest-dom/vitest';
 
 import type { ProjectOverviewItem } from '../../../src/lib/contracts/project';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { ObjectCommandReceipt } from '../../../src/lib/contracts/object-command';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-const { bridgeState, canvasState, commandState, fitView } = vi.hoisted(() => ({
+const { bridgeState, canvasState, commandState, createState, fitView } = vi.hoisted(() => ({
   bridgeState: { props: null as null | Record<string, unknown> },
+  createState: { request: null as null | Record<string, unknown> },
   canvasState: {
     onInit: null as null | ((instance: Record<string, unknown>) => void),
     props: null as null | Record<string, unknown>,
@@ -51,10 +52,17 @@ vi.mock('../../../src/lib/app-location', () => ({
 }));
 
 vi.mock('../../../src/components/create-object/create-object-provider', () => ({
-  useCreateObject: () => ({ openCreate: vi.fn(), closeCreate: vi.fn(), request: null }),
+  useCreateObject: () => ({
+    openCreate: (request: Record<string, unknown>) => {
+      createState.request = request;
+    },
+    closeCreate: vi.fn(),
+    request: null,
+  }),
 }));
 
 vi.mock('../../../src/components/canvas/canvas-command-context', () => ({
+  useCanvasCommandContext: () => null,
   CanvasCommandProvider: (props: { children: ReactNode }) => {
     commandState.providerProps = props;
     return <>{props.children}</>;
@@ -85,7 +93,11 @@ vi.mock('../../../src/components/canvas/canvas-selection-bridge', () => ({
     return null;
   },
 }));
-vi.mock('../../../src/components/canvas/bulk-actions-bar', () => ({ default: () => null }));
+vi.mock('../../../src/components/canvas/bulk-actions-bar', () => ({
+  default: () => null,
+  BulkPropertiesDialogHost: () => null,
+  BulkSelectionActions: () => null,
+}));
 vi.mock('../../../src/components/canvas/canvas-command-notice', () => ({ default: () => null }));
 
 vi.mock('../../../src/components/canvas/canvas', () => ({
@@ -169,24 +181,21 @@ function project(id: string, name: string): ProjectOverviewItem {
   } as unknown as ProjectOverviewItem;
 }
 
+const CHROME = { title: 'Projects' };
+
 describe('Project graph creation continuity', () => {
-  it('selects, frames, focuses, and peeks a requested Project after refresh', () => {
+  it('selects, frames, focuses, and peeks a Project created from the canvas', () => {
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0);
       return 1;
     });
-    const onRequestedSelectionResolved = vi.fn();
+    createState.request = null;
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
     const renderPanel = (rows: readonly ProjectOverviewItem[]) => (
       <QueryClientProvider client={client}>
-        <ProjectGraphPanel
-          rows={rows}
-          orgId="org_1"
-          requestedSelectionId={CREATED_ID}
-          onRequestedSelectionResolved={onRequestedSelectionResolved}
-        />
+        <ProjectGraphPanel rows={rows} orgId="org_1" chrome={CHROME} />
       </QueryClientProvider>
     );
     const rendered = render(renderPanel([project(EXISTING_ID, 'Existing Project')]));
@@ -194,8 +203,19 @@ describe('Project graph creation continuity', () => {
       canvasState.onInit?.({ fitView });
     });
 
+    fireEvent.click(screen.getByRole('button', { name: 'New project' }));
+    expect(createState.request).toMatchObject({
+      kind: 'project',
+      initialWorkspaceId: 'org_1',
+      sameWorkspaceCompletion: 'stay',
+    });
+    act(() => {
+      (createState.request as { onCreated: (created: { id: string }) => void }).onCreated({
+        id: CREATED_ID,
+      });
+    });
+
     expect(screen.queryByRole('complementary', { name: 'Project details' })).toBeNull();
-    expect(onRequestedSelectionResolved).not.toHaveBeenCalled();
 
     rendered.rerender(
       renderPanel([
@@ -216,36 +236,23 @@ describe('Project graph creation continuity', () => {
     expect(screen.getByRole('complementary', { name: 'Project details' })).toHaveTextContent(
       'Created Project',
     );
-    expect(onRequestedSelectionResolved).toHaveBeenCalledWith(CREATED_ID);
     expect(fitView).toHaveBeenCalledWith(
       expect.objectContaining({ nodes: [{ id: CREATED_ID }], maxZoom: 1 }),
     );
     expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: CREATED_ID }));
   });
 
-  it('reports a requested Project that a settled refresh still excludes', () => {
-    const onRequestedSelectionMissing = vi.fn();
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-    });
-    const renderPanel = (requestedSelectionSettled: boolean) => (
+  it('offers creation from the empty canvas', () => {
+    const client = new QueryClient();
+    const rendered = render(
       <QueryClientProvider client={client}>
-        <ProjectGraphPanel
-          rows={[project(EXISTING_ID, 'Existing Project')]}
-          orgId="org_1"
-          requestedSelectionId={CREATED_ID}
-          requestedSelectionSettled={requestedSelectionSettled}
-          onRequestedSelectionMissing={onRequestedSelectionMissing}
-        />
-      </QueryClientProvider>
+        <ProjectGraphPanel rows={[]} orgId="org_1" chrome={CHROME} />
+      </QueryClientProvider>,
     );
-    const rendered = render(renderPanel(false));
 
-    expect(onRequestedSelectionMissing).not.toHaveBeenCalled();
-
-    rendered.rerender(renderPanel(true));
-
-    expect(onRequestedSelectionMissing).toHaveBeenCalledWith(CREATED_ID);
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
+    expect(createState.request).toMatchObject({ kind: 'project' });
+    rendered.unmount();
   });
 
   it('uses contribute for dependency commands and manage for Project trash', () => {
@@ -258,6 +265,7 @@ describe('Project graph creation continuity', () => {
         <ProjectGraphPanel
           rows={[project(EXISTING_ID, 'Existing Project'), project(CREATED_ID, 'Created Project')]}
           orgId="org_1"
+          chrome={CHROME}
         />
       </QueryClientProvider>,
     );
@@ -293,7 +301,7 @@ describe('Project graph creation continuity', () => {
       client.setQueryData(OVERVIEW_KEY, { items });
       render(
         <QueryClientProvider client={client}>
-          <ProjectGraphPanel rows={items} orgId="org_1" />
+          <ProjectGraphPanel rows={items} orgId="org_1" chrome={CHROME} />
         </QueryClientProvider>,
       );
       const canvas = canvasState.props as {
@@ -429,7 +437,7 @@ describe('Project graph creation continuity', () => {
       const client = new QueryClient();
       render(
         <QueryClientProvider client={client}>
-          <ProjectGraphPanel rows={rows()} orgId="org_1" />
+          <ProjectGraphPanel rows={rows()} orgId="org_1" chrome={CHROME} />
         </QueryClientProvider>,
       );
       const canvas = canvasState.props as {

@@ -2,14 +2,8 @@
 
 import { useCallback } from 'react';
 
-import { projectOverviewDef } from '@/lib/fetch-project-overview';
-import { useApiQuery } from '@/lib/query';
-
 /** Inputs describing what a work-view surface has loaded and how to reload each part. */
 export interface WorkViewSurfaceRecoveryOptions {
-  readonly organizationId: string;
-  /** True while the Project dependency lens, rather than the roster, owns the content area. */
-  readonly dependencyLensActive: boolean;
   /** The roster's initial read failure, from the work-view controller. */
   readonly initialError: unknown;
   /** Whether the roster has a response to show, cached or fresh. */
@@ -48,34 +42,15 @@ export interface WorkViewSurfaceRecovery {
 export function useWorkViewSurfaceRecovery(
   options: WorkViewSurfaceRecoveryOptions,
 ): WorkViewSurfaceRecovery {
-  const {
-    organizationId,
-    dependencyLensActive,
-    initialError,
-    hasResponse,
-    retryControllerReads,
-    savedViewsFailed,
-    refetchSavedViews,
-  } = options;
+  const { initialError, hasResponse, retryControllerReads, savedViewsFailed, refetchSavedViews } =
+    options;
 
-  // The same cache entry `ProjectDependencyLens` reads, subscribed here only while that lens is
-  // mounted. Sharing the key costs no extra request and lets the host tell whether the content is
-  // in a failure state.
-  const overview = useApiQuery({
-    ...projectOverviewDef(organizationId),
-    enabled: dependencyLensActive,
-  });
-  const overviewFailed = overview.isError && overview.data === undefined;
-  const contentFailed = dependencyLensActive
-    ? overviewFailed
-    : Boolean(initialError) && !hasResponse;
-  const refetchOverview = overview.refetch;
+  const contentFailed = Boolean(initialError) && !hasResponse;
 
   const retrySurface = useCallback((): void => {
     retryControllerReads();
     if (savedViewsFailed) refetchSavedViews();
-    if (overviewFailed) void refetchOverview();
-  }, [overviewFailed, refetchOverview, refetchSavedViews, retryControllerReads, savedViewsFailed]);
+  }, [refetchSavedViews, retryControllerReads, savedViewsFailed]);
 
   return { contentFailed, retrySurface };
 }

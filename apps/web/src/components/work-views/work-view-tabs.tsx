@@ -1,16 +1,19 @@
 'use client';
 
 /**
- * The view-tab row: built-in tabs, saved views, and the Project dependency lens.
+ * The view-tab row: built-in tabs, saved views, and the way to the Project dependencies page.
  *
  * @remarks
  * Lifted out of `work-view-page.tsx` so the page function describes its layout rather than also
  * rendering one of its controls, and so the saved-views failure affordance sits next to the tabs it
- * degrades alongside.
+ * degrades alongside. The dependencies entry is a link to its own page, so it is never the selected
+ * tab of this row.
  */
 import { Heart } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
+
+import DocketLink from '@/components/docket-link';
 
 import { SavedViewsRetry } from './work-view-failures';
 
@@ -27,13 +30,12 @@ export interface WorkViewTabsProps {
   readonly savedViews: readonly WorkViewTabEntry[];
   readonly favoriteViewIds: ReadonlySet<string>;
   readonly selectedViewId: string | null;
-  readonly dependencyMode: boolean;
-  /** Only Projects have a dependency lens. */
-  readonly showDependencies: boolean;
+  /** Where the Dependencies entry goes; null for a target with no dependencies page. */
+  readonly dependenciesHref: string | null;
   readonly savedViewsError: unknown;
   /** Suppresses the saved-views affordance while the content itself has failed. */
   readonly contentFailed: boolean;
-  readonly onSelect: (viewId: string | null, dependencies: boolean) => void;
+  readonly onSelect: (viewId: string | null) => void;
   readonly onToggleFavorite: (viewId: string) => void;
   readonly onRetrySavedViews: () => void;
 }
@@ -90,8 +92,7 @@ export function WorkViewTabs({
   savedViews,
   favoriteViewIds,
   selectedViewId,
-  dependencyMode,
-  showDependencies,
+  dependenciesHref,
   savedViewsError,
   contentFailed,
   onSelect,
@@ -99,7 +100,7 @@ export function WorkViewTabs({
   onRetrySavedViews,
 }: WorkViewTabsProps): JSX.Element {
   const lower = title.toLowerCase();
-  const allSelected = !dependencyMode && selectedViewId === null;
+  const allSelected = selectedViewId === null;
   return (
     <div
       role="tablist"
@@ -114,7 +115,7 @@ export function WorkViewTabs({
         variant={allSelected ? 'secondary' : 'ghost'}
         aria-selected={allSelected}
         onClick={() => {
-          onSelect(null, false);
+          onSelect(null);
         }}
       >
         <span aria-hidden className="sm:hidden">
@@ -129,29 +130,27 @@ export function WorkViewTabs({
           key={view.id}
           view={view}
           favorite={favoriteViewIds.has(view.id)}
-          selected={!dependencyMode && selectedViewId === view.id}
+          selected={selectedViewId === view.id}
           onSelect={() => {
-            onSelect(view.id, false);
+            onSelect(view.id);
           }}
           onToggleFavorite={() => {
             onToggleFavorite(view.id);
           }}
         />
       ))}
-      {showDependencies ? (
+      {dependenciesHref === null ? null : (
         <Button
+          asChild
           role="tab"
           controlSize="sm"
           className="shrink-0 rounded-full"
-          variant={dependencyMode ? 'secondary' : 'ghost'}
-          aria-selected={dependencyMode}
-          onClick={() => {
-            onSelect(null, true);
-          }}
+          variant="ghost"
+          aria-selected={false}
         >
-          Dependencies
+          <DocketLink href={dependenciesHref}>Dependencies</DocketLink>
         </Button>
-      ) : null}
+      )}
       <SavedViewsRetry
         error={savedViewsError}
         contentFailed={contentFailed}

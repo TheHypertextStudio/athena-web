@@ -153,7 +153,6 @@ describe('Initiative visual contract', () => {
   it('keeps Initiative controls in the shared non-wrapping toolbar', () => {
     const workPage = source(workPagePath);
     expect(workPage).toContain('<WorkViewToolbar');
-    expect(workPage).toContain('showQueryControls={!dependencyMode}');
     expect(workPage).not.toContain('data-testid="initiative-attention-controls"');
     expect(workPage).not.toContain('gap-3 border-y px-1 py-4');
   });

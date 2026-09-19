@@ -9,13 +9,12 @@
  * canvas frames below the measured bar, the created-but-hidden notices sit beneath it, and the
  * bulk selection keeps only its Properties dialog since the bar carries the actions.
  */
-import { useCallback, useState } from 'react';
-
 import BulkActionsBar, { BulkPropertiesDialogHost, BulkSelectionActions } from './bulk-actions-bar';
 import { useCanvasCommandContext } from './canvas-command-context';
 import CanvasCreatedHiddenNotice from './canvas-created-hidden-notice';
 import CanvasFloatingBar from './canvas-floating-bar';
-import { CANVAS_OVERLAY_GUTTER, type CanvasOverlayInsets } from './canvas-viewport-insets';
+import { useCanvasFloatingChrome } from './canvas-floating-chrome';
+import type { CanvasOverlayInsets } from './canvas-viewport-insets';
 import { type GraphCounts, GraphCountsLabel } from './graph-view-bar';
 
 /** The chrome a floating host names: the title and the way back. */
@@ -48,16 +47,15 @@ export function useTaskGraphChrome(
   renderChrome: ((bar: React.ReactNode) => React.ReactNode) | undefined,
   floatingChrome: TaskGraphFloatingChrome | undefined,
 ): TaskGraphChrome {
-  const [barHeight, setBarHeight] = useState(0);
-  const onHeightChange = useCallback((height: number) => {
-    setBarHeight(height);
-  }, []);
-  const compact = floatingChrome !== undefined;
+  const { chromed, compact, insets, noticeClass, onHeightChange } = useCanvasFloatingChrome(
+    floatingChrome !== undefined,
+    renderChrome !== undefined,
+  );
   return {
-    chromed: renderChrome !== undefined || compact,
+    chromed,
     compact,
-    insets: compact ? { top: barHeight + CANVAS_OVERLAY_GUTTER } : undefined,
-    noticeClass: compact ? '!top-12' : undefined,
+    insets,
+    noticeClass,
     slot: { chrome: floatingChrome, onHeightChange },
   };
 }

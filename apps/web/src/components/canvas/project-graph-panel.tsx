@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * `components/canvas/project-graph-panel` — the Projects "Dependencies" lens.
+ * `components/canvas/project-graph-panel` — the Project dependencies canvas.
  *
  * @remarks
  * An interactive host for the shared {@link "./canvas"#default | Canvas}: it projects the portfolio
@@ -11,13 +11,14 @@
  * handle to another creates a `blocking → blocked` dependency and selecting an edge + Delete removes
  * it — the server stays the cycle/duplicate authority and a surfaced notice explains a rejection.
  * The cards themselves never navigate on click (too easy to mis-fire while panning or wiring an
- * edge); each card carries its own explicit "open" affordance instead. React Flow is heavy, so the
- * Projects list lazy-loads this module only when the Dependencies lens is opened.
+ * edge); each card carries its own explicit "open" affordance instead. React Flow is heavy, so
+ * {@link "./project-graph-route"#ProjectGraphRoute | the route} lazy-loads this module.
  *
- * Three things this lens now shares with the rest of Projects rather than inventing for itself:
+ * Three things this canvas shares with the rest of Projects rather than inventing for itself:
  *
- * - **The page's own frame.** It fills the content panel exactly as the list lens does, instead of
- *   being a 560px-tall widget parked inside it with a strip of dead page underneath.
+ * - **The page's own frame.** It fills its page edge to edge under one floating bar that carries
+ *   the title, the way back, the List and Dependencies switch, the counts, and the selection's
+ *   actions; the inspector floats over the right edge and the canvas frames around both.
  * - **A meaning for selection.** Clicking a card opens {@link ProjectPeek} with the project's real
  *   properties and both directions of its dependencies. A selection that only draws a ring is the
  *   canvas telling you that you clicked.
@@ -26,16 +27,20 @@
  *   enlarging.
  */
 import { type ProjectOverviewItem } from '../../lib/contracts/project';
+import { EmptyState } from '@docket/ui/components';
+import { FolderKanban } from '@docket/ui/icons';
 import { type Edge, type Node, type ReactFlowInstance } from '@xyflow/react';
 import { useQueryClient } from '@tanstack/react-query';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import Canvas from '@/components/canvas/canvas';
-import BulkActionsBar from '@/components/canvas/bulk-actions-bar';
+import { BulkPropertiesDialogHost } from '@/components/canvas/bulk-actions-bar';
 import CanvasCommandNotice from '@/components/canvas/canvas-command-notice';
 import { CanvasCommandProviderWithHistory } from '@/components/canvas/canvas-command-context';
+import { useCanvasFloatingChrome } from '@/components/canvas/canvas-floating-chrome';
 import CanvasSelectionBridge from '@/components/canvas/canvas-selection-bridge';
 import CanvasSelectionFrame from '@/components/canvas/canvas-selection-frame';
+import { ProjectGraphBar, type ProjectGraphChrome } from '@/components/canvas/project-graph-bar';
 import { useProjectGraphLayout } from '@/components/canvas/project-graph-layout';
 import ProjectNode, { type ProjectNodeData } from '@/components/canvas/project-node';
 import ProjectPeek from '@/components/canvas/project-peek';
@@ -62,6 +67,11 @@ import { GraphInspectorHost } from '@/components/canvas/graph-inspector-host';
 const NODE_TYPES = { project: ProjectNode };
 const PROJECT_SELECTION_NODE_TYPES = ['project'] as const;
 
+/** The minimap draws every project in the one quiet tone, so the graph's shape is what reads. */
+function minimapNodeColor(): string {
+  return 'var(--color-outline-variant)';
+}
+
 /** Weighted completion (0–100) from a row's task counts. */
 function progressPercent(item: ProjectOverviewItem): number {
   return item.taskCount === 0 ? 0 : Math.round((item.completedTaskCount / item.taskCount) * 100);
@@ -73,36 +83,22 @@ export interface ProjectGraphPanelProps {
   rows: readonly ProjectOverviewItem[];
   /** The owning org id, used to build project navigation hrefs and scope dependency writes. */
   orgId: string;
-  /** A newly created Project to select once the refreshed overview includes it. */
-  requestedSelectionId?: string | null | undefined;
-  /** Clear the host's pending selection after the Project row becomes selectable. */
-  onRequestedSelectionResolved?: ((id: string) => void) | undefined;
-  /** Whether a post-create overview refresh has settled for the requested selection. */
-  requestedSelectionSettled?: boolean | undefined;
-  /** Preserve the created id in host-owned missing-row state when refresh excludes it. */
-  onRequestedSelectionMissing?: ((id: string) => void) | undefined;
-  /** Ask the retained work-view host to open Project creation. */
-  onCreateProject?: ((returnFocusTo?: HTMLElement | null) => void) | undefined;
+  /** What the floating bar carries: the title, the way back, and the lens switch. */
+  chrome: ProjectGraphChrome;
 }
 
 /**
- * The Projects Dependencies lens: an editable dependency canvas over the portfolio rows.
+ * The Project dependencies canvas: an editable dependency graph over the portfolio rows, under one
+ * floating bar.
  *
  * @param props - See {@link ProjectGraphPanelProps}.
  */
-export function ProjectGraphPanel({
-  rows,
-  orgId,
-  requestedSelectionId = null,
-  onRequestedSelectionResolved,
-  requestedSelectionSettled = false,
-  onRequestedSelectionMissing,
-  onCreateProject,
-}: ProjectGraphPanelProps): JSX.Element {
+export function ProjectGraphPanel({ rows, orgId, chrome }: ProjectGraphPanelProps): JSX.Element {
   const queryClient = useQueryClient();
   const pathname = useAppPathname();
   const { openCreate } = useCreateObject();
   const { containerRef, aspectRatio, ready: aspectReady } = useCanvasAspectRatio();
+  const floating = useCanvasFloatingChrome(true);
   const overviewKey = useMemo(() => [...queryKeys.projects(orgId), 'overview'] as const, [orgId]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createdSelectionId, setCreatedSelectionId] = useState<string | null>(null);
@@ -110,22 +106,6 @@ export function ProjectGraphPanel({
   const [layoutEpoch, setLayoutEpoch] = useState(0);
   const selectionSurfaceId = `project-graph:${orgId}`;
   const commandScopeKey = `project:${pathname}:all`;
-
-  useEffect(() => {
-    if (requestedSelectionId === null) return;
-    if (rows.some((project) => project.id === requestedSelectionId)) {
-      setSelectedId(requestedSelectionId);
-      setCreatedSelectionId(requestedSelectionId);
-      return;
-    }
-    if (requestedSelectionSettled) onRequestedSelectionMissing?.(requestedSelectionId);
-  }, [
-    onRequestedSelectionMissing,
-    onRequestedSelectionResolved,
-    requestedSelectionId,
-    requestedSelectionSettled,
-    rows,
-  ]);
 
   // The edit gate mirrors the task graph: only a `contribute`-capable viewer gets connectable
   // handles. Both lists are almost always already cached from the surrounding portfolio surfaces.
@@ -231,10 +211,6 @@ export function ProjectGraphPanel({
   );
   const createProject = useCallback(
     (returnFocusTo?: HTMLElement | null) => {
-      if (onCreateProject !== undefined) {
-        onCreateProject(returnFocusTo);
-        return;
-      }
       openCreate(
         {
           kind: 'project',
@@ -249,7 +225,7 @@ export function ProjectGraphPanel({
         returnFocusTo,
       );
     },
-    [onCreateProject, openCreate, orgId, overviewKey, queryClient],
+    [openCreate, orgId, overviewKey, queryClient],
   );
 
   const applyCreatedSelection = useCallback(
@@ -263,9 +239,8 @@ export function ProjectGraphPanel({
       });
       focusCanvasNode(selectionSurfaceId, node.id);
       setCreatedSelectionId(null);
-      if (node.id === requestedSelectionId) onRequestedSelectionResolved?.(node.id);
     },
-    [flowInstance, onRequestedSelectionResolved, requestedSelectionId, selectionSurfaceId],
+    [flowInstance, selectionSurfaceId],
   );
 
   return (
@@ -294,6 +269,8 @@ export function ProjectGraphPanel({
           <GraphInspectorHost
             hostRef={containerRef}
             className="size-full min-h-0 flex-1"
+            presentation="floating"
+            onOcclusionChange={floating.onInspectorOcclusion}
             aside={
               selected ? (
                 <ProjectPeek
@@ -313,6 +290,13 @@ export function ProjectGraphPanel({
               setSelectedId(null);
             }}
           >
+            <ProjectGraphBar
+              chrome={chrome}
+              counts={{ projects: rows.length, dependencies: edges.length }}
+              onCreate={canEditDependencies ? createProject : undefined}
+              insetRight={floating.inspectorRight}
+              onHeightChange={floating.onHeightChange}
+            />
             <Canvas
               nodes={positioned}
               edges={edges}
@@ -322,6 +306,8 @@ export function ProjectGraphPanel({
               disableLayout
               layoutReady={aspectReady}
               minimap
+              nodeColor={minimapNodeColor}
+              overlayInsets={floating.insets}
               highlightChains={false}
               onSelectNode={setSelectedId}
               onConnectEdge={addDependency}
@@ -342,12 +328,23 @@ export function ProjectGraphPanel({
                 }
                 onRequestedSelectionApplied={applyCreatedSelection}
               />
-              <BulkActionsBar />
+              <BulkPropertiesDialogHost />
               {rows.length === 0 ? (
                 <CanvasOverlayPanel position="top-center" className="!top-1/2 !-translate-y-1/2">
-                  <p className="text-on-surface-variant text-body-medium rounded-lg px-5 py-3 text-center">
-                    No matching Projects. Right-click the canvas to create one.
-                  </p>
+                  <EmptyState
+                    icon={FolderKanban}
+                    title="No projects yet"
+                    {...(canEditDependencies
+                      ? {
+                          cta: {
+                            label: 'Create project',
+                            onClick: () => {
+                              createProject();
+                            },
+                          },
+                        }
+                      : {})}
+                  />
                 </CanvasOverlayPanel>
               ) : null}
             </Canvas>

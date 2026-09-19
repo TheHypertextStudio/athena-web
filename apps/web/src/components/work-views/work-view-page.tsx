@@ -10,16 +10,15 @@ import {
   TaskViewDefinition,
   ViewInstanceKey,
 } from '@docket/work/work-view-contract';
-import { OrganizationId, TeamId } from '@docket/identity-access/ids';
+import { TeamId } from '@docket/identity-access/ids';
 import { pageOf } from '../../lib/contracts/pagination';
-import { ProjectId } from '@docket/work/ids';
 import {
   SavedWorkViewOut,
   type SavedWorkViewOut as SavedWorkViewOutValue,
   type ViewScope,
 } from '@docket/work/saved-view-contract';
 import { EmptyState } from '@docket/ui/components';
-import { FolderKanban, Layers, ListChecks, Plus, Target, X } from '@docket/ui/icons';
+import { Layers, ListChecks, Plus, Target } from '@docket/ui/icons';
 import {
   Button,
   Dialog,
@@ -36,19 +35,11 @@ import {
 } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import type { ViewTarget } from '@docket/work/view-contract';
-import {
-  Fragment,
-  type JSX,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { Fragment, type JSX, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { useActiveOrg } from '@/components/active-org';
+import DocketLink from '@/components/docket-link';
 import { LoadFailure } from '@/components/feedback';
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
@@ -56,7 +47,6 @@ import { ListPageLayout } from '@/components/views/page-layout';
 import { SelectionProvider, useSelection } from '@/components/selection';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
-import { navigateAuthenticated } from '@/lib/app-location';
 import { openEntity } from '@/lib/local-first-navigation';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, type RpcResponse, useApiQuery } from '@/lib/query';
@@ -64,7 +54,7 @@ import { objectHref } from '@/lib/actions/object';
 
 import { CARD_GRID_CLASS, CARD_INSET, CARD_MIN_HEIGHT } from './card-styles';
 import { InitiativeTimeline } from './initiative-timeline';
-import { ProjectDependencyLens } from './project-dependency-lens';
+import { PROJECT_LENS_COPY, projectDependenciesHref } from './project-lens-frame';
 import { ProjectTimelineAdapter } from './project-timeline-adapter';
 import type { WorkViewGroupSummary, WorkViewRowFor } from './renderer-types';
 import { useWorkView } from './use-work-view';
@@ -142,20 +132,13 @@ const FALLBACKS = {
 
 const PAGE_COPY = {
   task: { title: 'Tasks', singular: 'task', icon: ListChecks },
-  project: { title: 'Projects', singular: 'project', icon: FolderKanban },
+  project: PROJECT_LENS_COPY,
   program: { title: 'Programs', singular: 'program', icon: Layers },
   initiative: { title: 'Initiatives', singular: 'initiative', icon: Target },
 } as const;
 
 const SavedWorkViewPage = pageOf(SavedWorkViewOut);
 const EMPTY_WORK_VIEW_GROUPS: readonly WorkViewGroupSummary[] = [];
-
-interface CreatedProjectSelection {
-  readonly organizationId: string;
-  readonly id: string;
-  readonly state: 'pending' | 'missing';
-  readonly attempt: number;
-}
 
 async function savedViewsResponse(
   organizationId: string,
@@ -339,17 +322,6 @@ function WorkViewSelectionFrame({ children }: { readonly children: ReactNode }):
   );
 }
 
-/** Hide dependency-lens creation by omitting its callback for route viewers. */
-function projectDependencyCreateHandler(
-  canContribute: boolean,
-  create: (path?: readonly string[], returnFocusTo?: HTMLElement | null) => void,
-): ((returnFocusTo?: HTMLElement | null) => void) | undefined {
-  if (!canContribute) return undefined;
-  return (returnFocusTo) => {
-    create([], returnFocusTo);
-  };
-}
-
 /** Render one organization roster from the shared server query and target contract. */
 export function WorkViewPage<TTarget extends ViewTarget>({
   organizationId,
@@ -362,17 +334,13 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   const [viewName, setViewName] = useState('');
   const [viewScope, setViewScope] = useState<ViewScope>('personal');
   const [viewTeamId, setViewTeamId] = useState('');
-  const [dependencyMode, setDependencyMode] = useState(false);
-  const [createdProjectSelection, setCreatedProjectSelection] =
-    useState<CreatedProjectSelection | null>(null);
   const [selectedViewId, setSelectedViewId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [findOpen, setFindOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const activeOrganizationIdRef = useRef(organizationId);
-  activeOrganizationIdRef.current = organizationId;
   const copy = PAGE_COPY[target];
+  const dependenciesHref = target === 'project' ? projectDependenciesHref(organizationId) : null;
   const savedViewsQuery = useApiQuery(
     apiQueryOptions(
       queryKeys.savedViews(organizationId),
@@ -395,12 +363,9 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     search,
     savedView: selectedSavedView as Extract<SavedWorkViewOutValue, { target: TTarget }> | null,
   });
-  const dependencyLensActive = target === 'project' && dependencyMode;
   const orderMutation = useWorkViewOrder();
   const projectTimeline = useProjectTimelineMutations();
   const { contentFailed, retrySurface } = useWorkViewSurfaceRecovery({
-    organizationId,
-    dependencyLensActive,
     initialError: controller.initialError,
     hasResponse: controller.response !== undefined,
     retryControllerReads: controller.retrySurface,
@@ -414,7 +379,6 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   const requestedLayout = controller.definition.presentation.layout;
   const layout = supportsWorkViewRenderer(target, requestedLayout) ? requestedLayout : 'list';
   const visibleRows = useMemo(() => {
-    if (dependencyMode) return [];
     if (layout === 'list') {
       return visibleWorkListRows(
         {
@@ -442,7 +406,6 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     controller.definition,
     controller.groupPages,
     controller.hiddenBoardColumns,
-    dependencyMode,
     groups,
     layout,
     rows,
@@ -461,8 +424,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     id: `work-view:${target}`,
     rootRef,
     inputRef: searchInputRef,
-    enabled:
-      layout === 'list' && !dependencyMode && !controller.loading && !controller.initialError,
+    enabled: layout === 'list' && !controller.loading && !controller.initialError,
     onOpen: () => {
       setFindOpen(true);
     },
@@ -470,35 +432,6 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   const openRow = (row: WorkViewRowFor<TTarget>): void => {
     openEntity(entityNavigationSnapshotFromWorkViewRow(row));
   };
-  useEffect(() => {
-    setCreatedProjectSelection((selection) =>
-      selection?.organizationId === organizationId ? selection : null,
-    );
-  }, [organizationId]);
-  const resolveCreatedProjectSelection = useCallback(
-    (projectId: string): void => {
-      if (activeOrganizationIdRef.current !== organizationId) return;
-      setCreatedProjectSelection((selection) =>
-        selection?.organizationId === organizationId && selection.id === projectId
-          ? null
-          : selection,
-      );
-    },
-    [organizationId],
-  );
-  const markCreatedProjectMissing = useCallback(
-    (projectId: string): void => {
-      if (activeOrganizationIdRef.current !== organizationId) return;
-      setCreatedProjectSelection((selection) =>
-        selection?.organizationId === organizationId && selection.id === projectId
-          ? { ...selection, state: 'missing' }
-          : selection,
-      );
-    },
-    [organizationId],
-  );
-  const activeCreatedProjectSelection =
-    createdProjectSelection?.organizationId === organizationId ? createdProjectSelection : null;
   const create = (path: readonly string[] = [], returnFocusTo?: HTMLElement | null): void => {
     if (!canContribute) return;
     const applyColumn = (itemId: string): void => {
@@ -529,19 +462,10 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       case 'project':
         openCreate(
           {
-            initialWorkspaceId: organizationId,
-            sameWorkspaceCompletion: dependencyMode ? 'stay' : 'open',
+            ...base,
             kind: 'project',
             onCreated: (item) => {
               applyColumn(item.id);
-              if (dependencyMode && activeOrganizationIdRef.current === organizationId) {
-                setCreatedProjectSelection({
-                  organizationId,
-                  id: item.id,
-                  state: 'pending',
-                  attempt: 0,
-                });
-              }
             },
           },
           returnFocusTo,
@@ -569,20 +493,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   };
 
   let content: JSX.Element;
-  if (dependencyLensActive) {
-    content = (
-      <ProjectDependencyLens
-        organizationId={organizationId}
-        title={copy.title}
-        onRetry={retrySurface}
-        requestedSelectionId={activeCreatedProjectSelection?.id ?? null}
-        requestedSelectionAttempt={activeCreatedProjectSelection?.attempt ?? 0}
-        onRequestedSelectionResolved={resolveCreatedProjectSelection}
-        onRequestedSelectionMissing={markCreatedProjectMissing}
-        onCreateProject={projectDependencyCreateHandler(canContribute, create)}
-      />
-    );
-  } else if (controller.loading) {
+  if (controller.loading) {
     content =
       layout === 'cards' ? (
         <CardsSkeleton label={copy.title.toLowerCase()} target={target} />
@@ -717,14 +628,10 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       savedViews={savedViews}
       favoriteViewIds={controller.favoriteViewIds}
       selectedViewId={selectedViewId}
-      dependencyMode={dependencyMode}
-      showDependencies={target === 'project'}
+      dependenciesHref={dependenciesHref}
       savedViewsError={savedViewsQuery.error}
       contentFailed={contentFailed}
-      onSelect={(viewId, dependencies) => {
-        setDependencyMode(dependencies);
-        setSelectedViewId(viewId);
-      }}
+      onSelect={setSelectedViewId}
       onToggleFavorite={controller.toggleFavoriteView}
       onRetrySavedViews={() => void savedViewsQuery.refetch()}
     />
@@ -734,9 +641,8 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     <>
       <DropdownMenuLabel>Views</DropdownMenuLabel>
       <DropdownMenuItem
-        selected={!dependencyMode && selectedViewId === null}
+        selected={selectedViewId === null}
         onSelect={() => {
-          setDependencyMode(false);
           setSelectedViewId(null);
         }}
       >
@@ -747,9 +653,8 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         return (
           <Fragment key={view.id}>
             <DropdownMenuItem
-              selected={!dependencyMode && selectedViewId === view.id}
+              selected={selectedViewId === view.id}
               onSelect={() => {
-                setDependencyMode(false);
                 setSelectedViewId(view.id);
               }}
             >
@@ -766,17 +671,11 @@ export function WorkViewPage<TTarget extends ViewTarget>({
           </Fragment>
         );
       })}
-      {target === 'project' ? (
-        <DropdownMenuItem
-          selected={dependencyMode}
-          onSelect={() => {
-            setDependencyMode(true);
-            setSelectedViewId(null);
-          }}
-        >
-          Dependencies
+      {dependenciesHref === null ? null : (
+        <DropdownMenuItem asChild>
+          <DocketLink href={dependenciesHref}>Dependencies</DocketLink>
         </DropdownMenuItem>
-      ) : null}
+      )}
     </>
   );
 
@@ -785,7 +684,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       <ListPageLayout
         title={copy.title}
         fill
-        bodyPresentation={dependencyMode || layout === 'timeline' ? 'full-bleed' : 'inset'}
+        bodyPresentation={layout === 'timeline' ? 'full-bleed' : 'inset'}
         actions={
           canContribute ? (
             <Button
@@ -800,7 +699,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         }
         toolbar={
           <div className="flex min-w-0 flex-col gap-2">
-            {!dependencyMode && findOpen ? (
+            {findOpen ? (
               <InPageSearchField
                 inputRef={searchInputRef}
                 value={search}
@@ -823,7 +722,6 @@ export function WorkViewPage<TTarget extends ViewTarget>({
               onDefinitionChange={controller.setDefinition}
               leading={viewTabs}
               overflowItems={viewOverflowItems}
-              showQueryControls={!dependencyMode}
               onSaveView={() => {
                 setSaveOpen(true);
               }}
@@ -879,59 +777,6 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                 defaultError={controller.defaultError}
                 onRetryDefault={controller.setAsDefault}
               />
-              {target === 'project' &&
-              dependencyMode &&
-              activeCreatedProjectSelection?.state === 'missing' ? (
-                <div className="bg-secondary-container text-on-secondary-container text-body-medium flex shrink-0 items-center gap-2 rounded-lg px-3 py-2">
-                  <span role="status" className="min-w-0 flex-1">
-                    Created, but hidden by current filters
-                  </span>
-                  <Button
-                    variant="ghost"
-                    controlSize="sm"
-                    onClick={() => {
-                      controller.setDefinition({ ...controller.definition, filter: null });
-                      setSearch('');
-                      setCreatedProjectSelection((selection) =>
-                        selection?.organizationId === organizationId &&
-                        selection.id === activeCreatedProjectSelection.id
-                          ? {
-                              ...selection,
-                              state: 'pending',
-                              attempt: selection.attempt + 1,
-                            }
-                          : selection,
-                      );
-                    }}
-                  >
-                    Clear filters
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    controlSize="sm"
-                    onClick={() => {
-                      setCreatedProjectSelection(null);
-                      navigateAuthenticated('/orgs/[orgId]/projects/[projectId]', {
-                        orgId: OrganizationId.parse(organizationId),
-                        projectId: ProjectId.parse(activeCreatedProjectSelection.id),
-                      });
-                    }}
-                  >
-                    Open project
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    iconOnly
-                    controlSize="sm"
-                    aria-label="Dismiss created Project notice"
-                    onClick={() => {
-                      setCreatedProjectSelection(null);
-                    }}
-                  >
-                    <X aria-hidden />
-                  </Button>
-                </div>
-              ) : null}
               {content}
             </div>
           </WorkViewSelectionFrame>

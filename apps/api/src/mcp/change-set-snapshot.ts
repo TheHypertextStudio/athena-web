@@ -20,7 +20,7 @@ import {
   type RelationKind,
   type Tx,
   type UndoOutcome,
-} from './change-set';
+} from './change-set-tables';
 
 /** One persisted change-set entry, as the reverse replay reads it. */
 export type ChangeSetEntryRow = typeof changeSetEntry.$inferSelect;

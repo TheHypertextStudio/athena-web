@@ -43,7 +43,7 @@ import {
   type RelationKind,
   type Tx,
   type UndoOutcome,
-} from './change-set';
+} from './change-set-tables';
 
 /** What an atomic reversal hands its caller inside the transaction, before it commits. */
 export interface RevertedChangeSet {

@@ -33,6 +33,7 @@ import {
 } from '@/components/entity-display/work-status';
 import {
   type FieldCatalog,
+  type FieldDescriptor,
   type FieldOption,
   findField,
   labelForValue,
@@ -194,6 +195,110 @@ function emDash(): ReactNode {
  * @param deps - The page-supplied task-scope roll-up + nouns.
  * @returns the ordered table columns over {@link ProjectOut}.
  */
+function createGlyphColumn(
+  statusOf: (project: ProjectOut) => WorkStatusDisplay,
+): Column<ProjectOut> {
+  return {
+    key: 'glyph',
+    header: '',
+    width: '1.25rem',
+    priority: 'always',
+    render: (project) => {
+      const { name, category } = statusOf(project);
+      return createElement(WorkStatusIcon, { name, category });
+    },
+  };
+}
+
+function createNameColumn(): Column<ProjectOut> {
+  return {
+    key: 'name',
+    header: 'Title',
+    flex: true,
+    render: (project) =>
+      createElement('span', { className: 'text-on-surface truncate font-medium' }, project.name),
+  };
+}
+
+function createStatusColumn(
+  statusLabel: string,
+  statusOf: (project: ProjectOut) => WorkStatusDisplay,
+): Column<ProjectOut> {
+  return {
+    key: 'status',
+    header: statusLabel,
+    width: '7rem',
+    priority: 1,
+    render: (project) => {
+      const { name, category } = statusOf(project);
+      return createElement(WorkStatusBadge, { name, category });
+    },
+  };
+}
+
+function createLeadColumn(
+  lead: FieldDescriptor<ProjectOut> | undefined,
+  leadLabel: string,
+): Column<ProjectOut> {
+  return {
+    key: 'leadId',
+    header: leadLabel,
+    minWidth: '8rem',
+    priority: 2,
+    render: (project) => {
+      if (!lead || !project.leadId) return emDash();
+      const name = labelForValue(lead, project.leadId);
+      return createElement(
+        'span',
+        { className: 'flex min-w-0 items-center gap-1.5' },
+        createElement(ActorAvatar, { kind: 'human', name, size: 18 }),
+        createElement('span', { className: 'text-on-surface truncate' }, name),
+      );
+    },
+  };
+}
+
+function createTargetDateColumn(targetDateLabel: string): Column<ProjectOut> {
+  return {
+    key: 'targetDate',
+    header: targetDateLabel,
+    align: 'end',
+    width: '9.5rem',
+    priority: 3,
+    render: (project) => {
+      const formatted = formatProjectTarget(project);
+      return formatted
+        ? createElement(
+            'span',
+            { className: 'text-on-surface-variant flex items-center gap-1.5 tabular-nums' },
+            createElement(Calendar, { 'aria-hidden': true, className: 'size-3.5' }),
+            formatted,
+          )
+        : emDash();
+    },
+  };
+}
+
+function createScopeColumn(deps: ProjectColumnDeps): Column<ProjectOut> {
+  return {
+    key: 'scope',
+    header: 'Scope',
+    align: 'end',
+    width: '6.5rem',
+    priority: 3,
+    render: (project) => {
+      const count = deps.taskCountFor(project);
+      const word = count === 1 ? deps.taskNoun : deps.taskNounPlural;
+      return createElement(
+        'span',
+        { className: 'text-on-surface-variant flex items-center gap-1.5 tabular-nums' },
+        createElement(ListChecks, { 'aria-hidden': true, className: 'size-3.5' }),
+        `${String(count)} ${word}`,
+      );
+    },
+  };
+}
+
 export function projectColumns(
   catalog: FieldCatalog<ProjectOut>,
   deps: ProjectColumnDeps,
@@ -206,89 +311,11 @@ export function projectColumns(
     unknownStatus(project.status);
 
   return [
-    // Leading lifecycle glyph — the shared, always-kept leading column.
-    {
-      key: 'glyph',
-      header: '',
-      width: '1.25rem',
-      priority: 'always',
-      render: (project) => {
-        const { name, category } = statusOf(project);
-        return createElement(WorkStatusIcon, { name, category });
-      },
-    },
-    // TITLE — the one flexing, truncating column (never hidden).
-    {
-      key: 'name',
-      header: 'Title',
-      flex: true,
-      render: (project) =>
-        createElement('span', { className: 'text-on-surface truncate font-medium' }, project.name),
-    },
-    // STATUS badge — header + value labels come straight from the catalog field.
-    {
-      key: 'status',
-      header: status?.label ?? 'Status',
-      width: '7rem',
-      priority: 1,
-      render: (project) => {
-        const { name, category } = statusOf(project);
-        return createElement(WorkStatusBadge, { name, category });
-      },
-    },
-    // LEAD/OWNER avatar — relation field; resolveLabel turns the id into a display name.
-    {
-      key: 'leadId',
-      header: lead?.label ?? 'Lead',
-      minWidth: '8rem',
-      priority: 2,
-      render: (project) => {
-        if (!lead || !project.leadId) return emDash();
-        const name = labelForValue(lead, project.leadId);
-        return createElement(
-          'span',
-          { className: 'flex min-w-0 items-center gap-1.5' },
-          createElement(ActorAvatar, { kind: 'human', name, size: 18 }),
-          createElement('span', { className: 'text-on-surface truncate' }, name),
-        );
-      },
-    },
-    // TARGET DATE — end-aligned, tabular.
-    {
-      key: 'targetDate',
-      header: targetDate?.label ?? 'Target date',
-      align: 'end',
-      width: '9.5rem',
-      priority: 3,
-      render: (project) => {
-        const formatted = formatProjectTarget(project);
-        return formatted
-          ? createElement(
-              'span',
-              { className: 'text-on-surface-variant flex items-center gap-1.5 tabular-nums' },
-              createElement(Calendar, { 'aria-hidden': true, className: 'size-3.5' }),
-              formatted,
-            )
-          : emDash();
-      },
-    },
-    // SCOPE — the project's task count (end-aligned, tabular).
-    {
-      key: 'scope',
-      header: 'Scope',
-      align: 'end',
-      width: '6.5rem',
-      priority: 3,
-      render: (project) => {
-        const count = deps.taskCountFor(project);
-        const word = count === 1 ? deps.taskNoun : deps.taskNounPlural;
-        return createElement(
-          'span',
-          { className: 'text-on-surface-variant flex items-center gap-1.5 tabular-nums' },
-          createElement(ListChecks, { 'aria-hidden': true, className: 'size-3.5' }),
-          `${String(count)} ${word}`,
-        );
-      },
-    },
+    createGlyphColumn(statusOf),
+    createNameColumn(),
+    createStatusColumn(status?.label ?? 'Status', statusOf),
+    createLeadColumn(lead, lead?.label ?? 'Lead'),
+    createTargetDateColumn(targetDate?.label ?? 'Target date'),
+    createScopeColumn(deps),
   ];
 }

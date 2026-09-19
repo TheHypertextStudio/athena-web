@@ -7,15 +7,13 @@ import { enqueueSearchUpsert } from '../search/write-through';
 import { type IntegrationRow, toTaskOut } from './integration-provider';
 import { landingStatus } from '../lib/work-status';
 
-/** Options controlling how imported items are materialized. */
+/** Options for materializing imported items. */
 export interface ImportItemsOptions {
-  /**
-   * The actor to assign each newly-mirrored linked task to, or `null` to leave it unassigned.
-   *
-   * @remarks
-   * Onboarding passes the importing owner so the mirrored work lands under My Work's "Assigned
-   * to me"; the general/sync path passes `null`, keeping org-wide mirrored work in Triage.
-   */
+  readonly orgId: string;
+  readonly actorId: string;
+  readonly integrationId: string;
+  readonly teamId: string;
+  readonly items: readonly ImportedItem[];
   readonly assigneeId: string | null;
 }
 
@@ -51,44 +49,23 @@ export async function resolveImportTeam(orgId: string, row: IntegrationRow): Pro
   return firstTeam[0].id;
 }
 
-/**
- * Materialize imported items as linked tasks, skipping any already imported.
- *
- * @remarks
- * Each {@link ImportedItem} becomes a `linked` task (provenance `source='linked'`,
- * `sourceIntegrationId`, `externalId`/`externalUrl`, `sourceSyncMode='mirror'`).
- * Idempotency: an item whose `(sourceIntegrationId, externalId)` already exists is skipped,
- * so re-importing is safe.
- *
- * @param orgId - The active organization id.
- * @param actorId - The actor performing the import (recorded as `createdBy`).
- * @param integrationId - The source integration id.
- * @param teamId - The team the linked tasks attach to.
- * @param items - The imported items to materialize.
- * @param options - Materialization options.
- * @returns serialized newly created tasks (existing ones are omitted).
- */
+/** Materialize imported items as linked tasks, skipping any already imported. */
 export async function importItems(
-  orgId: string,
-  actorId: string,
-  integrationId: string,
-  teamId: string,
-  items: readonly ImportedItem[],
-  options: ImportItemsOptions,
+  opts: ImportItemsOptions,
 ): Promise<ReturnType<typeof toTaskOut>[]> {
-  const landing = await landingStatus(orgId, 'task', teamId);
+  const landing = await landingStatus(opts.orgId, 'task', opts.teamId);
   const state = landing.key;
   const created: ReturnType<typeof toTaskOut>[] = [];
-  for (const item of items) {
+  for (const item of opts.items) {
     const externalId = item.provenance.externalId;
     const existing = await db
       .select({ id: task.id })
       .from(task)
       .where(
         and(
-          eq(task.organizationId, orgId),
+          eq(task.organizationId, opts.orgId),
           eq(task.source, 'linked'),
-          eq(task.sourceIntegrationId, integrationId),
+          eq(task.sourceIntegrationId, opts.integrationId),
           eq(task.externalId, externalId),
         ),
       )
@@ -97,25 +74,25 @@ export async function importItems(
     const inserted = await db
       .insert(task)
       .values({
-        organizationId: orgId,
+        organizationId: opts.orgId,
         title: item.title,
         description: item.body ?? null,
-        teamId,
+        teamId: opts.teamId,
         statusId: landing.id,
         state,
-        ...(options.assigneeId !== null ? { assigneeId: options.assigneeId } : {}),
+        ...(opts.assigneeId !== null ? { assigneeId: opts.assigneeId } : {}),
         source: 'linked',
-        sourceIntegrationId: integrationId,
+        sourceIntegrationId: opts.integrationId,
         externalId,
         externalUrl: item.provenance.externalUrl ?? null,
         sourceSyncMode: 'mirror',
-        createdBy: actorId,
+        createdBy: opts.actorId,
       })
       .returning();
     const taskRow = inserted[0];
     /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
     if (!taskRow) throw new Error('linked task insert returned no row');
-    await enqueueSearchUpsert(orgId, 'task', taskRow.id);
+    await enqueueSearchUpsert(opts.orgId, 'task', taskRow.id);
     created.push(toTaskOut(taskRow));
   }
   return created;

@@ -17,59 +17,19 @@ import {
 import type { JSX } from 'react';
 import { useMemo, useState } from 'react';
 
-import { AthenaJobCard } from '@/components/athena/athena-job-card';
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
 import { QueryLoadFailure } from '@/components/feedback';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { relativeTime } from '@/components/project-detail/format-time';
 import { api } from '@/lib/api';
-import { jobsFromQueue } from '@/lib/athena/job-presentation';
-import type { PersonalAthenaSessionSummary } from '@/lib/athena/presentation';
-import { personalAthenaQueueDef, type PersonalAthenaQueuePayload } from '@/lib/athena/query-defs';
-import {
-  apiInfiniteQueryOptions,
-  queryKeys,
-  useInfiniteApiQuery,
-  useLiveApiQuery,
-} from '@/lib/query';
+import { apiInfiniteQueryOptions, queryKeys, useInfiniteApiQuery } from '@/lib/query';
 
 import { activityActorName, activitySentence } from './format-activity';
+import { TaskDelegatedWork } from './task-delegated-work';
 import { TaskSection } from './task-section';
 
 const ALL_CATEGORIES = 'all';
 type ActivityFilter = TaskActivityCategory | typeof ALL_CATEGORIES;
-
-/** How often the task page re-reads the personal queue for delegated work on this task. */
-const TASK_ATHENA_QUEUE_INTERVAL_MS = 10_000;
-
-/** This task's delegated Athena work, newest first. */
-function jobsForTask(
-  payload: PersonalAthenaQueuePayload,
-  taskId: string,
-): readonly PersonalAthenaSessionSummary[] {
-  const matching = jobsFromQueue(payload).filter(
-    (job) => job.context?.source?.type === 'task' && job.context.source.id === taskId,
-  );
-  return [...matching].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
-
-/** The task's delegated Athena work, newest first; renders nothing when there is none. */
-function TaskAthenaWork({ taskId }: { readonly taskId: string }): JSX.Element | null {
-  const queue = useLiveApiQuery(personalAthenaQueueDef(), TASK_ATHENA_QUEUE_INTERVAL_MS);
-  const jobs = queue.data ? jobsForTask(queue.data, taskId) : [];
-  if (jobs.length === 0) return null;
-
-  return (
-    <section aria-label="Athena" className="flex flex-col gap-3">
-      <h2 className="text-label-small text-on-surface-variant">Athena</h2>
-      <div className="flex flex-col gap-3">
-        {jobs.map((job) => (
-          <AthenaJobCard key={job.id} job={job} />
-        ))}
-      </div>
-    </section>
-  );
-}
 
 const FILTER_LABEL: Record<ActivityFilter, string> = {
   all: 'All activity',
@@ -217,7 +177,7 @@ export function TaskActivityFeed({
   // placeholder: this task's comments and activity, at the chosen filter.
   return (
     <div className="flex flex-col gap-6">
-      <TaskAthenaWork taskId={taskId} />
+      <TaskDelegatedWork orgId={orgId} taskId={taskId} />
       <TaskSection
         id="activity"
         title="Activity"

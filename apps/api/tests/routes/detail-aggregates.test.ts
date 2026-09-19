@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 
 import type * as DbModule from '@docket/db';
@@ -33,6 +33,12 @@ import {
   seedTask,
   seedTaskAccessOrg,
 } from '../support/routes-harness';
+import {
+  capabilityMatrix,
+  mockEmptyDatabaseQueries,
+  mockPostgresNumericAsStringQuery,
+  observeDatabaseQueries,
+} from './detail-aggregates-test-helpers';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -96,22 +102,6 @@ const projectRow: ProjectRow = {
   externalUpdatedAt: null,
 };
 
-/** Count database round trips for one aggregate request without counting its fixture setup. */
-function observeDatabaseQueries(): { readonly count: () => number; readonly restore: () => void } {
-  const client = Reflect.get(db, '$client') as {
-    query: (...args: unknown[]) => Promise<unknown>;
-  };
-  const original = client.query.bind(client);
-  const query = vi.fn(original);
-  client.query = query;
-  return {
-    count: () => query.mock.calls.length,
-    restore: () => {
-      client.query = original;
-    },
-  };
-}
-
 /** Attach a persisted user identity to actors used by canonical resource-access fixtures. */
 async function authenticatedSessionFor(actorIds: readonly string[]) {
   const [viewer] = await db
@@ -140,12 +130,7 @@ beforeAll(async () => {
 
 describe('detail aggregate routes', () => {
   it('returns zero work when both bounded aggregate queries have no row', async () => {
-    const client = Reflect.get(db, '$client') as {
-      query: (...args: unknown[]) => Promise<unknown>;
-    };
-    const query = client.query;
-    client.query = vi.fn().mockResolvedValue({ rows: [] });
-
+    const mock = mockEmptyDatabaseQueries(db);
     try {
       await expect(associatedWorkSummary('organization-row', 'initiative-row')).resolves.toEqual({
         projects: 0,
@@ -156,7 +141,7 @@ describe('detail aggregate routes', () => {
         unknown: 0,
       });
     } finally {
-      client.query = query;
+      mock.restore();
     }
   });
 
@@ -219,36 +204,16 @@ describe('detail aggregate routes', () => {
   });
 
   it('projects the control bundle from the viewer capability lattice', () => {
-    expect(detailCapabilities([])).toEqual({
-      comment: false,
-      contribute: false,
-      assign: false,
-      manage: false,
-    });
-    expect(detailCapabilities(['manage'])).toEqual({
-      comment: true,
-      contribute: true,
-      assign: true,
-      manage: true,
-    });
-    expect(detailCapabilities(['assign'])).toEqual({
-      comment: true,
-      contribute: true,
-      assign: true,
-      manage: false,
-    });
-    expect(detailCapabilities(['contribute'])).toEqual({
-      comment: true,
-      contribute: true,
-      assign: false,
-      manage: false,
-    });
-    expect(detailCapabilities(['comment'])).toEqual({
-      comment: true,
-      contribute: false,
-      assign: false,
-      manage: false,
-    });
+    const cases: [string[], keyof typeof capabilityMatrix][] = [
+      [[], 'view'],
+      [['manage'], 'manage'],
+      [['assign'], 'assign'],
+      [['contribute'], 'contribute'],
+      [['comment'], 'comment'],
+    ];
+    for (const [caps, expectedLevel] of cases) {
+      expect(detailCapabilities(caps)).toEqual(capabilityMatrix[expectedLevel]);
+    }
   });
 
   it.each([
@@ -447,25 +412,7 @@ describe('detail aggregate routes', () => {
       body: JSON.stringify({ name: 'Postgres aggregate project', teamId }),
     });
     const project = (await created.json()) as { id: string };
-    const client = Reflect.get(db, '$client') as {
-      query: (
-        query: string,
-        params?: unknown[],
-        options?: unknown,
-      ) => Promise<{ rows?: Record<string, unknown>[] }>;
-    };
-    const original = client.query.bind(client);
-    client.query = async (...args) => {
-      const result = await original(...args);
-      if (args[0].includes('count(*) filter')) {
-        for (const row of result.rows ?? []) {
-          for (const [key, value] of Object.entries(row)) {
-            if (typeof value === 'number') row[key] = String(value);
-          }
-        }
-      }
-      return result;
-    };
+    const mock = mockPostgresNumericAsStringQuery(db, (q) => q.includes('count(*) filter'));
 
     try {
       const response = await writer.request(`/${project.id}/aggregate-detail`);
@@ -482,7 +429,7 @@ describe('detail aggregate routes', () => {
         },
       });
     } finally {
-      client.query = original;
+      mock.restore();
     }
   });
 
@@ -879,25 +826,7 @@ describe('detail aggregate routes', () => {
       body: JSON.stringify({ name: 'Postgres aggregate Initiative' }),
     });
     const initiative = (await created.json()) as { id: string };
-    const client = Reflect.get(db, '$client') as {
-      query: (
-        query: string,
-        params?: unknown[],
-        options?: unknown,
-      ) => Promise<{ rows?: Record<string, unknown>[] }>;
-    };
-    const original = client.query.bind(client);
-    client.query = async (...args) => {
-      const result = await original(...args);
-      if (args[0].includes('count(*) filter')) {
-        for (const row of result.rows ?? []) {
-          for (const [key, value] of Object.entries(row)) {
-            if (typeof value === 'number') row[key] = String(value);
-          }
-        }
-      }
-      return result;
-    };
+    const mock = mockPostgresNumericAsStringQuery(db, (q) => q.includes('count(*) filter'));
 
     try {
       const response = await writer.request(`/${initiative.id}/aggregate-detail`);
@@ -911,7 +840,7 @@ describe('detail aggregate routes', () => {
         },
       });
     } finally {
-      client.query = original;
+      mock.restore();
     }
   });
 
@@ -1729,12 +1658,10 @@ describe('detail aggregate routes', () => {
     ] as const;
 
     for (const [target, app, path] of cases) {
-      const observed = observeDatabaseQueries();
+      const observed = observeDatabaseQueries(db);
       try {
         expect((await app.request(path)).status).toBe(200);
         expect(observed.count(), `${target} must issue database reads`).toBeGreaterThan(0);
-        // Initiative uses complete graph authorization plus two compact empty-work aggregates.
-        // Eight reads is the explicit bound for that canonical path.
         const maximumReads = target === 'Initiative' ? 8 : 4;
         expect(
           observed.count(),

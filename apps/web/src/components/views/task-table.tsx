@@ -191,13 +191,14 @@ export function buildTaskColumns({
           <span className="text-on-surface truncate">{task.title}</span>
         ),
     },
-    // Labels — the workspace's own vocabulary. Sheds first (priority 3) because it is the most
-    // optional fact on a row: useful when you have labels, absent for a workspace that has none.
+    // Labels — the workspace's own vocabulary. Sheds first (priority 5, below a 768px table)
+    // because it is the most optional fact on a row, and a table beside the Athena panel needs
+    // that width for titles.
     {
       key: 'labels',
       header: headerFor(catalog, 'labels', 'Labels'),
       minWidth: '7rem',
-      priority: 3,
+      priority: 5,
       render: (task) =>
         task.labels.length > 0 ? (
           <LabelChipRow labels={task.labels} />
@@ -239,13 +240,14 @@ export function buildTaskColumns({
         return <span className="text-on-surface-variant tabular-nums">{due ?? '—'}</span>;
       },
     },
-    // Estimate — `estimateMinutes` formatted as "1h 30m"; end-aligned, tabular.
+    // Estimate — `estimateMinutes` formatted as "1h 30m"; end-aligned, tabular. Sheds after
+    // Labels (priority 4, below a 672px table).
     {
       key: 'estimate',
       header: 'Estimate',
       align: 'end',
       width: '4.5rem',
-      priority: 3,
+      priority: 4,
       render: (task) => {
         const estimate = formatEstimate(task.estimateMinutes);
         return <span className="text-on-surface-variant tabular-nums">{estimate ?? '—'}</span>;

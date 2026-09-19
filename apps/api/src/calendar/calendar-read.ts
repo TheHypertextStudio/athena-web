@@ -99,12 +99,12 @@ async function hydrateLinkedTasks(
 
   for (const row of linkRows) {
     const canViewInOrg = viewFilterByOrg.get(row.link.organizationId);
-    if (canViewInOrg === undefined) continue;
+    if (!canViewInOrg) continue;
     if (!canViewInOrg(row.task)) continue;
 
     const teamRow = teamById.get(row.task.teamId);
     const stateEntry = teamRow?.workflowStates.find((s) => s.key === row.task.state);
-    const done =
+    const isCompleted =
       stateEntry !== undefined &&
       (stateEntry.type === 'completed' || stateEntry.type === 'canceled');
 
@@ -116,7 +116,7 @@ async function hydrateLinkedTasks(
       note: row.link.note,
       title: row.task.title,
       state: row.task.state,
-      done,
+      done: isCompleted,
     };
 
     const existing = result.get(row.link.calendarItemId);

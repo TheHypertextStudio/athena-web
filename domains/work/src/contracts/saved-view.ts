@@ -466,17 +466,26 @@ function legacyTaskPredicate(filter: ViewFilter): unknown {
   };
 }
 
+function extractOperandValue(operand: {
+  readonly kind: string;
+  readonly actorId?: unknown;
+  readonly value?: unknown;
+}): unknown {
+  if (operand.kind === 'actor') return operand.actorId;
+  if (operand.kind === 'absolute') return operand.value;
+  throw new TypeError(`The ${operand.kind} operand has no equivalent legacy value.`);
+}
+
 function projectedLegacyOperand(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(projectedLegacyOperand);
   if (value !== null && typeof value === 'object' && 'kind' in value) {
-    const operand = value as {
-      readonly kind: string;
-      readonly actorId?: unknown;
-      readonly value?: unknown;
-    };
-    if (operand.kind === 'actor') return operand.actorId;
-    if (operand.kind === 'absolute') return operand.value;
-    throw new TypeError(`The ${operand.kind} operand has no equivalent legacy value.`);
+    return extractOperandValue(
+      value as {
+        readonly kind: string;
+        readonly actorId?: unknown;
+        readonly value?: unknown;
+      },
+    );
   }
   return value;
 }
@@ -516,6 +525,16 @@ function projectedLegacyPredicate(predicate: {
   return ViewFilter.parse({ field, op, value: projectedLegacyOperand(predicate.operand) });
 }
 
+function extractFilterPredicates(filter: unknown): unknown[] {
+  if (filter === null) return [];
+  const f = filter as { kind: string; children?: unknown[] };
+  if (f.kind === 'predicate') return [f];
+  if (f.kind === 'all' && Array.isArray(f.children) && f.children.every((c: unknown) => (c as { kind: string }).kind === 'predicate')) {
+    return f.children;
+  }
+  throw new TypeError('Nested, negated, or disjunctive filters have no legacy projection.');
+}
+
 /**
  * Project a compatible v2 Task definition into the one-window legacy response fields.
  *
@@ -527,19 +546,7 @@ export function projectTaskViewDefinitionToLegacy(
   input: TaskViewDefinition,
 ): Pick<SavedViewOut, 'filters' | 'grouping' | 'sort'> {
   const definition = TaskViewDefinition.parse(input);
-  const filter = definition.filter;
-  const predicates =
-    filter === null
-      ? []
-      : filter.kind === 'predicate'
-        ? [filter]
-        : filter.kind === 'all' && filter.children.every((child) => child.kind === 'predicate')
-          ? filter.children
-          : (() => {
-              throw new TypeError(
-                'Nested, negated, or disjunctive filters have no legacy projection.',
-              );
-            })();
+  const predicates = extractFilterPredicates(definition.filter);
   return {
     filters: predicates.map(projectedLegacyPredicate),
     grouping: definition.arrangement.groupBy

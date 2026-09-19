@@ -17,7 +17,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@docket/ui/primitives';
-import { type JSX } from 'react';
+import { type JSX, useEffect, useState } from 'react';
 
 import { McpAppPresentationCard } from '@/components/athena/mcp-app-presentation-card';
 import type { AthenaActivityPresentation } from '@/lib/athena/presentation';
@@ -166,6 +166,13 @@ function JobStepRow({
  * what is happening now, so nothing here duplicates it. Collapsed by default so a long-running or
  * many-stepped job never grows the thread on its own; `forceExpanded` opens it from the start for a
  * caller that wants every step visible immediately (the finished-job and wide-view cases).
+ *
+ * @remarks
+ * The disclosure is a controlled `Collapsible`, not an uncontrolled one seeded with `defaultOpen`:
+ * a job card mounts once while its work is still running (`forceExpanded` false) and stays
+ * mounted after the job finishes (`forceExpanded` true), so `defaultOpen` — read only at mount —
+ * would leave a job that finished while its card was open still collapsed. The effect below opens
+ * the disclosure the moment `forceExpanded` turns true, and never forces it closed again.
  */
 export function JobSteps({
   activities,
@@ -175,10 +182,15 @@ export function JobSteps({
   undoPending,
   onUndo,
 }: JobStepsProps): JSX.Element | null {
+  const [open, setOpen] = useState(forceExpanded);
+  useEffect(() => {
+    if (forceExpanded) setOpen(true);
+  }, [forceExpanded]);
+
   if (activities.length === 0) return null;
 
   return (
-    <Collapsible defaultOpen={forceExpanded}>
+    <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger className="group text-on-surface-variant text-label-medium hover:text-on-surface flex w-fit items-center gap-1">
         <span>{`${String(activities.length)} steps`}</span>
         <ChevronDown

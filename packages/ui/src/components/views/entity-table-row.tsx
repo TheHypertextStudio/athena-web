@@ -72,14 +72,34 @@ export interface EntityTableRowProps<T> {
   linkColumnKey?: string | undefined;
 }
 
-/** Build the shared DOM semantics used by every row element branch. */
-function rowSemanticAttributes(
-  id: string | undefined,
-  ariaRowIndex: number | undefined,
-  entryKey: string | undefined,
-  rowHeight: number,
-  rowAria: EntityTableRowAria | undefined,
-): {
+/** Grouped inputs for {@link rowSemantics}, kept under the file's max-params ceiling. */
+interface RowSemanticInputs {
+  readonly id: string | undefined;
+  readonly ariaRowIndex: number | undefined;
+  readonly entryKey: string | undefined;
+  readonly rowHeight: number;
+  readonly rowAria: EntityTableRowAria | undefined;
+  readonly interaction: EntityTableRowInteraction | undefined;
+}
+
+/**
+ * Semantic row attributes, including the merged `style`.
+ *
+ * @remarks
+ * `style` folds in `interaction.rowProps.style` rather than leaving the caller to spread both
+ * objects itself: `{...interaction?.rowProps, ...semantics}` would let this function's own
+ * `--row-h` custom property fully replace `interaction.rowProps.style` — an object spread
+ * overwrites a key wholesale, it does not merge — silently dropping a caller-supplied style such
+ * as a ghost row's `viewTransitionName`.
+ */
+function rowSemantics({
+  id,
+  ariaRowIndex,
+  entryKey,
+  rowHeight,
+  rowAria,
+  interaction,
+}: RowSemanticInputs): {
   readonly id: string | undefined;
   readonly role: 'row';
   readonly 'aria-rowindex': number | undefined;
@@ -101,7 +121,10 @@ function rowSemanticAttributes(
     'aria-expanded': rowAria?.expanded,
     'data-entry-key': entryKey,
     'data-row-height': rowHeight,
-    style: { '--row-h': `${String(rowHeight)}px` } as React.CSSProperties,
+    style: {
+      ...interaction?.rowProps.style,
+      '--row-h': `${String(rowHeight)}px`,
+    } as React.CSSProperties,
   };
 }
 
@@ -333,7 +356,7 @@ export function EntityTableRow<T>({
   );
 
   const ariaCurrent: 'true' | undefined = active ? 'true' : undefined;
-  const semantics = rowSemanticAttributes(id, ariaRowIndex, entryKey, rowHeight, rowAria);
+  const semantics = rowSemantics({ id, ariaRowIndex, entryKey, rowHeight, rowAria, interaction });
   const stateDataAttributes = rowStateDataAttributes(active, selected);
 
   if (linkColumnKey !== undefined) {

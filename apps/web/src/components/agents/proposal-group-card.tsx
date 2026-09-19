@@ -21,11 +21,7 @@ import { Button, surfaceToneColor } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';
 
 import { ProposalInputRows } from '@/components/athena/proposal-input-rows';
-import {
-  EMPTY_HIGHLIGHTED_IDS,
-  taskIdsFromInput,
-  useSetHighlightedIds,
-} from '@/components/athena/proposal-highlight';
+import { taskIdsFromInput, useHighlightHandlers } from '@/components/athena/proposal-highlight';
 import { describeProposal, isOutwardTool } from '@/lib/athena/describe-proposal';
 
 /** Props for {@link ProposalGroupCard}. */
@@ -175,6 +171,9 @@ interface ProposalRowTitleProps {
   pending: boolean;
   sentence: string;
   onEdit: (activityId: string, input: Record<string, unknown>) => void;
+  /** Mirrors the row's pointer-hover highlight for keyboard focus of this control. */
+  onFocusRow: () => void;
+  onBlurRow: () => void;
 }
 
 /** The row's title: a static sentence, or — for a ghost — an inline-editable one. */
@@ -184,6 +183,8 @@ function ProposalRowTitle({
   pending,
   sentence,
   onEdit,
+  onFocusRow,
+  onBlurRow,
 }: ProposalRowTitleProps): JSX.Element {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(item.ghost?.title ?? '');
@@ -209,7 +210,11 @@ function ProposalRowTitle({
         onChange={(event) => {
           setTitle(event.target.value);
         }}
-        onBlur={commitEdit}
+        onFocus={onFocusRow}
+        onBlur={() => {
+          commitEdit();
+          onBlurRow();
+        }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') commitEdit();
           if (event.key === 'Escape') {
@@ -231,6 +236,8 @@ function ProposalRowTitle({
       onClick={() => {
         setEditing(true);
       }}
+      onFocus={onFocusRow}
+      onBlur={onBlurRow}
       className={cn(
         'text-on-surface text-body-medium line-clamp-2 min-w-0 flex-1 text-left',
         canAct && ghost ? 'hover:underline' : 'cursor-default',
@@ -255,8 +262,8 @@ function ProposalRow({
 }: ProposalRowProps): JSX.Element {
   const sentence = describeProposal(item);
   const outward = isOutwardTool(item.tool);
-  const setHighlighted = useSetHighlightedIds();
   const targetIds = useMemo(() => taskIdsFromInput(item.input), [item.input]);
+  const highlight = useHighlightHandlers(targetIds);
 
   return (
     <li
@@ -266,12 +273,8 @@ function ProposalRow({
         // unmistakably "not real yet", solidified in place on approval.
         'bg-primary-container/25 flex flex-col gap-1.5 rounded-lg px-3 py-2 opacity-80',
       )}
-      onPointerEnter={() => {
-        if (targetIds.size > 0) setHighlighted(targetIds);
-      }}
-      onPointerLeave={() => {
-        if (targetIds.size > 0) setHighlighted(EMPTY_HIGHLIGHTED_IDS);
-      }}
+      onPointerEnter={highlight.onPointerEnter}
+      onPointerLeave={highlight.onPointerLeave}
     >
       <div className="flex items-center gap-2.5">
         {showCheckbox && canAct ? (
@@ -283,6 +286,8 @@ function ProposalRow({
             onChange={() => {
               onToggle(item.activityId);
             }}
+            onFocus={highlight.onFocus}
+            onBlur={highlight.onBlur}
             className="accent-primary h-4 w-4 shrink-0"
           />
         ) : null}
@@ -292,6 +297,8 @@ function ProposalRow({
           pending={pending}
           sentence={sentence}
           onEdit={onEdit}
+          onFocusRow={highlight.onFocus}
+          onBlurRow={highlight.onBlur}
         />
       </div>
 

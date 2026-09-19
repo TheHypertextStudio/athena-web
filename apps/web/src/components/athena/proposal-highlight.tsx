@@ -48,6 +48,37 @@ export function useSetHighlightedIds(): (ids: ReadonlySet<string>) => void {
   return useContext(SetHighlightedIdsContext);
 }
 
+/** Pointer-hover and keyboard-focus handlers, kept in lockstep, for one proposal's target ids. */
+export interface HighlightHandlers {
+  readonly onPointerEnter: () => void;
+  readonly onPointerLeave: () => void;
+  /** Mirrors `onPointerEnter` for Tab-focusing a control inside the row, not only a mouse hover. */
+  readonly onFocus: () => void;
+  readonly onBlur: () => void;
+}
+
+/**
+ * Build the highlight/unhighlight pair for one proposal's target ids, exposed as both pointer and
+ * focus handlers so a row highlights identically whether it was hovered or reached by keyboard.
+ *
+ * @param targetIds - The task ids this proposal would change; a set of size 0 never highlights.
+ */
+export function useHighlightHandlers(targetIds: ReadonlySet<string>): HighlightHandlers {
+  const setHighlighted = useSetHighlightedIds();
+  const highlight = (): void => {
+    if (targetIds.size > 0) setHighlighted(targetIds);
+  };
+  const unhighlight = (): void => {
+    if (targetIds.size > 0) setHighlighted(EMPTY_HIGHLIGHTED_IDS);
+  };
+  return {
+    onPointerEnter: highlight,
+    onPointerLeave: unhighlight,
+    onFocus: highlight,
+    onBlur: unhighlight,
+  };
+}
+
 /**
  * The task id(s) a proposal's raw tool input targets — `taskId` for a single-task proposal,
  * `taskIds` for a batch one.

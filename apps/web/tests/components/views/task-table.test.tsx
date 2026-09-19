@@ -522,4 +522,58 @@ describe('TaskTable', () => {
       anchor: expect.anything(),
     });
   });
+
+  it('renders a pending proposal as a ghost row with its sentence and a stable morph target', () => {
+    const first = task({ id: TASK_1, title: 'First' });
+    const second = task({ id: TASK_2, title: 'Second' });
+    render(
+      withQueryClient(
+        <TaskTable
+          label="Tasks"
+          columns={columns}
+          tasks={[first, second]}
+          taskHref={(item) => `/orgs/${ORG_ID}/tasks/${item.id}`}
+          proposedByTaskId={new Map([[TASK_1, 'Move to Done']])}
+        />,
+      ),
+    );
+
+    const row = (id: string): HTMLElement => {
+      const element = document.querySelector<HTMLElement>(`[role="row"][data-object-id="${id}"]`);
+      if (!element) throw new Error(`Expected task row ${id}`);
+      return element;
+    };
+
+    expect(screen.getByText('Move to Done')).toBeInTheDocument();
+    expect(row(TASK_1).style.viewTransitionName).toBe(`proposal-task-${TASK_1}`);
+    expect(row(TASK_1)).toHaveClass('bg-primary-container/25', 'opacity-80');
+    // A task with no pending proposal never gets the ghost treatment.
+    expect(row(TASK_2).style.viewTransitionName).toBe('');
+    expect(row(TASK_2)).not.toHaveClass('bg-primary-container/25');
+  });
+
+  it('tints a highlighted row with the tonal highlight class', () => {
+    const first = task({ id: TASK_1, title: 'First' });
+    const second = task({ id: TASK_2, title: 'Second' });
+    render(
+      withQueryClient(
+        <TaskTable
+          label="Tasks"
+          columns={columns}
+          tasks={[first, second]}
+          taskHref={(item) => `/orgs/${ORG_ID}/tasks/${item.id}`}
+          highlightedIds={new Set([TASK_2])}
+        />,
+      ),
+    );
+
+    const row = (id: string): HTMLElement => {
+      const element = document.querySelector<HTMLElement>(`[role="row"][data-object-id="${id}"]`);
+      if (!element) throw new Error(`Expected task row ${id}`);
+      return element;
+    };
+
+    expect(row(TASK_2)).toHaveClass('bg-surface-container-high');
+    expect(row(TASK_1)).not.toHaveClass('bg-surface-container-high');
+  });
 });

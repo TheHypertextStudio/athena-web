@@ -25,11 +25,7 @@ import { type JSX, type SyntheticEvent, useMemo, useState } from 'react';
 
 import { JobSteps, newestChangeSetId, StepUndo } from '@/components/athena/job-card-steps';
 import { ProposalInputRows } from '@/components/athena/proposal-input-rows';
-import {
-  EMPTY_HIGHLIGHTED_IDS,
-  taskIdsFromInput,
-  useSetHighlightedIds,
-} from '@/components/athena/proposal-highlight';
+import { taskIdsFromInput, useHighlightHandlers } from '@/components/athena/proposal-highlight';
 import MentionTextarea from '@/components/mentions/mention-textarea';
 import { isOutwardTool } from '@/lib/athena/describe-proposal';
 import {
@@ -176,6 +172,9 @@ interface JobDecisionOptionsProps {
   readonly needsReview: boolean;
   readonly onReview: () => void;
   readonly onChoose: (optionId: string) => void;
+  /** Mirrors the decision block's pointer-hover highlight for keyboard focus of an option. */
+  readonly onFocusRow: () => void;
+  readonly onBlurRow: () => void;
 }
 
 /** The decision's option buttons; the primary one reads "Review" until `needsReview` clears. */
@@ -185,6 +184,8 @@ function JobDecisionOptions({
   needsReview,
   onReview,
   onChoose,
+  onFocusRow,
+  onBlurRow,
 }: JobDecisionOptionsProps): JSX.Element {
   return (
     <div className="flex flex-wrap gap-2">
@@ -205,6 +206,8 @@ function JobDecisionOptions({
               }
               onChoose(option.id);
             }}
+            onFocus={onFocusRow}
+            onBlur={onBlurRow}
           >
             {isPrimary && needsReview ? 'Review' : option.label}
           </Button>
@@ -232,7 +235,7 @@ export function JobDecision({
   const freeform = decision.kind === 'question' && decision.options.length === 0;
   const [draft, setDraft] = useState('');
   const [reviewed, setReviewed] = useState(false);
-  const setHighlighted = useSetHighlightedIds();
+  const highlight = useHighlightHandlers(targetIds);
 
   function submit(event: SyntheticEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -245,12 +248,8 @@ export function JobDecision({
   return (
     <div
       className="flex flex-col gap-2"
-      onPointerEnter={() => {
-        if (targetIds.size > 0) setHighlighted(targetIds);
-      }}
-      onPointerLeave={() => {
-        if (targetIds.size > 0) setHighlighted(EMPTY_HIGHLIGHTED_IDS);
-      }}
+      onPointerEnter={highlight.onPointerEnter}
+      onPointerLeave={highlight.onPointerLeave}
     >
       <h4 className="text-on-surface text-title-small">{title}</h4>
       {decision.description ? (
@@ -272,6 +271,8 @@ export function JobDecision({
               {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
               insertMode="context"
               className={MENTION_FIELD_CLASS}
+              onFocus={highlight.onFocus}
+              onBlur={highlight.onBlur}
             />
           </label>
           <Button
@@ -279,6 +280,8 @@ export function JobDecision({
             size="sm"
             className="min-h-10"
             disabled={pending || draft.trim().length === 0}
+            onFocus={highlight.onFocus}
+            onBlur={highlight.onBlur}
           >
             Send
           </Button>
@@ -292,6 +295,8 @@ export function JobDecision({
             setReviewed(true);
           }}
           onChoose={onChoose}
+          onFocusRow={highlight.onFocus}
+          onBlurRow={highlight.onBlur}
         />
       )}
     </div>

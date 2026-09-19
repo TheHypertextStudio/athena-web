@@ -18,6 +18,7 @@ import { useApiQuery, useLiveApiQuery } from '@/lib/query';
 
 import { orgSessionProposalsDef, useOrgChatThread } from './chat-defs';
 import { describeProposal } from './describe-proposal';
+import type { PersonalAthenaSessionSummary } from './presentation';
 import {
   personalAthenaProposalsDef,
   personalAthenaQueueDef,
@@ -36,6 +37,11 @@ function targetTaskId(item: ProposalItemOut): string | null {
   if (!TASK_ROW_TOOLS.has(item.tool)) return null;
   const taskId = item.input['taskId'];
   return typeof taskId === 'string' ? taskId : null;
+}
+
+/** Whether a `needs_you` job belongs to the workspace whose project page is asking for ghost rows. */
+function jobBelongsToWorkspace(job: PersonalAthenaSessionSummary, orgId: string): boolean {
+  return job.workspace?.id === orgId || job.context?.workspaceId === orgId;
 }
 
 /** Fold every task-targeting item of the given groups into the accumulating sentence map. */
@@ -58,12 +64,17 @@ function collectTaskProposals(
  * @remarks
  * Reads two sources: the workspace's persistent chat thread, while it sits `awaiting_approval`
  * (through {@link orgSessionProposalsDef} rather than the heavier `useSessionDetail`, which this
- * hook has no other use for), and every job in the `needs_you` lane of the personal queue (through
- * the personal proposals route, one read per job via {@link useQueries}). Only `update_task` and
+ * hook has no other use for), and every job in the `needs_you` lane of the personal queue that
+ * belongs to this workspace (through the personal proposals route, one read per job via
+ * {@link useQueries}). The queue itself is still read for every job system-wide — it shares
+ * `queryKeys.athena()` with the rail's own read, so TanStack Query dedupes the two callers onto one
+ * request — but only the jobs whose `workspace.id` or `context.workspaceId` matches `orgId` fan out
+ * a `proposals` request; a `needs_you` job in another workspace never does. Only `update_task` and
  * `delete_task` proposals — the ones that target one existing task by id — produce a row; a
  * `create_task` ghost has no existing row to attach to.
  *
- * @param orgId - The active workspace, whose persistent chat thread is read for its own proposals.
+ * @param orgId - The active workspace, whose persistent chat thread is read for its own proposals,
+ * and whose jobs alone fan out a proposals read.
  * @param transport - Override for the personal Athena queue/proposal reads (tests only).
  * @returns task id -> {@link describeProposal} sentence, for the tasks a `TaskTable` should ghost.
  */
@@ -79,8 +90,11 @@ export function useProposedTaskChanges(
 
   const queue = useLiveApiQuery(personalAthenaQueueDef(transport), QUEUE_POLL_MS);
   const needsYouIds = useMemo(
-    () => (queue.data?.sessions.needsYou ?? []).map((job) => job.id),
-    [queue.data],
+    () =>
+      (queue.data?.sessions.needsYou ?? [])
+        .filter((job) => jobBelongsToWorkspace(job, orgId))
+        .map((job) => job.id),
+    [queue.data, orgId],
   );
   const jobProposals = useQueries({
     queries: needsYouIds.map((sessionId) => personalAthenaProposalsDef(sessionId, transport)),

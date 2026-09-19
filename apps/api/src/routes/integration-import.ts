@@ -79,7 +79,6 @@ export async function importItems(
 ): Promise<ReturnType<typeof toTaskOut>[]> {
   const landing = await landingStatus(orgId, 'task', teamId);
   const state = landing.key;
-
   const created: ReturnType<typeof toTaskOut>[] = [];
   for (const item of items) {
     const externalId = item.provenance.externalId;

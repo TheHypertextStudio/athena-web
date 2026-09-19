@@ -133,7 +133,6 @@ export function asSyncConflictRecord(metadata: unknown): SyncConflictRecord | nu
   if (typeof record['integrationId'] !== 'string') return null;
   return record as unknown as SyncConflictRecord;
 }
-
 /**
  * Read the recorded conflicts for one integration, newest first.
  *

@@ -356,7 +356,6 @@ export function registerResources(server: McpRegistrar, ctx: McpContext): void {
   registerApps(server);
   registerStaticResources(server, ctx);
   registerActiveWorkResource(server, ctx);
-
   server.registerResource(
     'entity',
     new ResourceTemplate('docket://{org}/{type}/{id}', {

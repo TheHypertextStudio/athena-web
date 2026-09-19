@@ -78,5 +78,4 @@ const streamSse = new Hono<AppEnv>().get('/sse', (c) => {
     }),
   );
 });
-
 export default streamSse;

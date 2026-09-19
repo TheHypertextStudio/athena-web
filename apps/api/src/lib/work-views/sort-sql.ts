@@ -169,7 +169,6 @@ export function validateSortTuple<TKey extends string>(
   if (schemas.length !== tuple.length) throw new TypeError('Cursor tuple arity does not match.');
   schemas.forEach((schema, index) => schema.parse(tuple[index]));
 }
-
 function requiredCondition(condition: SQL | undefined): SQL {
   if (!condition) throw new TypeError('A SQL ordering condition unexpectedly compiled empty.');
   return condition;

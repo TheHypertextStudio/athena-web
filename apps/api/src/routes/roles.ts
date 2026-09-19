@@ -292,7 +292,6 @@ This is a hard delete of the \`role\` row and its role-subject grants. The role 
               eq(grant.subjectId, id),
             ),
           );
-
         const deleted = await tx
           .delete(role)
           .where(and(eq(role.id, id), eq(role.organizationId, orgId)))

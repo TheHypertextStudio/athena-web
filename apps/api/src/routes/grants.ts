@@ -185,7 +185,6 @@ Semantics that flow into the resolver: \`cascades\` (default true) makes the gra
       capability: 'manage',
       response: GrantOut,
       description: `Delete a capability grant by id, revoking the access it conferred. Requires the \`manage\` capability. The delete is scoped to \`(grantId, orgId, effect = 'allow')\` — only an \`allow\` grant in THIS org can be removed here, mirroring the allow-only write path and enforcing tenant isolation. A grant id that is unknown, in another org, or a (non-writable) \`deny\` grant returns **404**.
-
 Removing a cascading org-root role grant strips that role's org-wide baseline, and removing a subtree grant re-exposes the inherited capability from higher in the chain (per the resolver's cascade-with-override walk). Returns the deleted \`GrantOut\` as a tombstone. To lower rather than revoke access, \`POST /\` a narrower capability set on the same subject+resource instead.`,
     }),
     zParam(grantIdParam),

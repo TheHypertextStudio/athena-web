@@ -142,7 +142,6 @@ export const attachmentSearchProjector = preloadedProjector<
   }),
   sourceTable: 'attachment',
 }));
-
 /** Search projectors registered for content-family documents. */
 export const contentSearchProjectors = [
   commentSearchProjector,

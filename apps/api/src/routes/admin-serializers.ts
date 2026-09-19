@@ -174,7 +174,6 @@ export async function audit(
     .insert(operatorAuditEvent)
     .values({ staffUserId, type, subjectType, subjectId, metadata });
 }
-
 /** Load an org by id or throw {@link NotFoundError}. */
 export async function loadOrg(id: string): Promise<OrgRow> {
   const rows = await db.select().from(organization).where(eq(organization.id, id)).limit(1);

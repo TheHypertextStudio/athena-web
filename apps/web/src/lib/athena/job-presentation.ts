@@ -10,10 +10,12 @@
  */
 import type { SessionActivityOut } from '@docket/athena/agent-contract';
 
+import { describeToolActivity } from './describe-proposal';
 import type { PersonalAthenaQueuePayload } from './query-defs';
 import {
   athenaQueueState,
   presentAthenaActivity,
+  type PersonalAthenaActivity,
   type PersonalAthenaSessionDetail,
   type PersonalAthenaSessionSummary,
   type PersonalAthenaStatus,
@@ -47,6 +49,43 @@ export function jobTone(status: PersonalAthenaStatus): JobTone {
 /** The short, plain-language label for a job's current status. */
 export function jobStateLabel(status: PersonalAthenaStatus): string {
   return JOB_STATE_LABEL_BY_TONE[jobTone(status)];
+}
+
+/** The detail's newest `tool`-type activity, or `null` when it has taken none yet. */
+function newestToolActivity(
+  activities: readonly PersonalAthenaActivity[],
+): Extract<PersonalAthenaActivity, { type: 'tool' }> | null {
+  for (let index = activities.length - 1; index >= 0; index -= 1) {
+    const activity = activities[index];
+    if (activity?.type === 'tool') return activity;
+  }
+  return null;
+}
+
+/**
+ * The sentence that names a pending decision, shared by the status line and the decision block's
+ * own heading.
+ *
+ * @remarks
+ * The API's `decision.title` is a generic label ("update task"), which is why a job's status line
+ * and its decision block used to repeat the same generic phrase. The newest `tool` activity, when
+ * it carried its raw call through (`technical.toolName` + `technical.input`), describes the same
+ * change through {@link describeToolActivity} — the same helper the batch-review card uses — which
+ * reads "Set state to In Progress" instead. Falls back to `decision.title` when the newest tool
+ * step carries no raw call, or when the detail has no pending decision at all.
+ *
+ * @param detail - The loaded session detail.
+ * @returns the plain-language sentence for the detail's pending decision.
+ */
+export function decisionSentence(detail: PersonalAthenaSessionDetail): string {
+  const toolActivity = newestToolActivity(detail.activities);
+  if (
+    toolActivity?.technical?.toolName !== undefined &&
+    toolActivity.technical.input !== undefined
+  ) {
+    return describeToolActivity(toolActivity);
+  }
+  return detail.decision?.title ?? '';
 }
 
 /** The longest an activity's detail can be before it is dropped from the status line. */
@@ -86,7 +125,7 @@ export function jobStatusLine(
   detail: PersonalAthenaSessionDetail | null,
   summary: PersonalAthenaSessionSummary,
 ): string {
-  if (detail?.decision) return detail.decision.title;
+  if (detail?.decision) return decisionSentence(detail);
 
   const activityLine = detail ? newestActivityLine(detail) : null;
   if (activityLine !== null) return activityLine;

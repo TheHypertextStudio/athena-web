@@ -130,18 +130,22 @@ export function AthenaJobCard({
 
   return (
     <article id={articleId} aria-labelledby={titleId} className="flex flex-col gap-3">
-      <header className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Badge variant={BADGE_VARIANT_BY_TONE[tone]}>{jobStateLabel(liveStatus)}</Badge>
-          <h3 id={titleId} className="text-on-surface text-title-medium min-w-0 break-words">
-            {job.objective}
-          </h3>
-        </div>
+      <header className="flex items-start gap-2">
+        <Badge variant={BADGE_VARIANT_BY_TONE[tone]} className="shrink-0">
+          {jobStateLabel(liveStatus)}
+        </Badge>
+        <h3
+          id={titleId}
+          className="text-on-surface text-title-medium line-clamp-2 min-w-0 flex-1 break-words"
+        >
+          {job.objective}
+        </h3>
         <JobLifecycleMenu
           canPause={permissions.canPause}
           canResume={permissions.canResume}
           canCancel={permissions.canCancel}
           onLifecycle={handleLifecycle}
+          className="ml-auto shrink-0"
         />
       </header>
 

@@ -39,7 +39,7 @@ import {
   type PersonalAthenaSessionDetail,
   type PersonalAthenaSessionSummary,
 } from '@/lib/athena/presentation';
-import { jobStatusLine } from '@/lib/athena/job-presentation';
+import { decisionSentence, jobStatusLine } from '@/lib/athena/job-presentation';
 
 /**
  * Shared field chrome for the one-line answer/reply controls below.
@@ -61,6 +61,8 @@ export interface JobLifecycleMenuProps {
   readonly canResume: boolean;
   readonly canCancel: boolean;
   readonly onLifecycle: (action: JobLifecycleAction) => void;
+  /** Extra classes for the trigger button, e.g. to keep it out of the heading row's flex flow. */
+  readonly className?: string | undefined;
 }
 
 /**
@@ -72,13 +74,14 @@ export function JobLifecycleMenu({
   canResume,
   canCancel,
   onLifecycle,
+  className,
 }: JobLifecycleMenuProps): JSX.Element | null {
   if (!canPause && !canResume && !canCancel) return null;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" iconOnly aria-label="More">
+        <Button type="button" variant="ghost" iconOnly aria-label="More" className={className}>
           <MoreHorizontal aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
@@ -153,6 +156,8 @@ export function outwardDecisionInput(
 /** Props for {@link JobDecision}. */
 export interface JobDecisionProps {
   readonly decision: PersonalAthenaDecision;
+  /** The plain-language sentence for this decision's heading — see {@link decisionSentence}. */
+  readonly title: string;
   readonly pending: boolean;
   readonly mentionOrgId: string | undefined;
   /** The proposed outward call's raw input, when the decision would send something out. */
@@ -216,6 +221,7 @@ function JobDecisionOptions({
  */
 export function JobDecision({
   decision,
+  title,
   pending,
   mentionOrgId,
   outwardInput,
@@ -246,7 +252,7 @@ export function JobDecision({
         if (targetIds.size > 0) setHighlighted(EMPTY_HIGHLIGHTED_IDS);
       }}
     >
-      <h4 className="text-on-surface text-title-small">{decision.title}</h4>
+      <h4 className="text-on-surface text-title-small">{title}</h4>
       {decision.description ? (
         <p className="text-on-surface-variant text-body-medium">{decision.description}</p>
       ) : null}
@@ -456,9 +462,10 @@ function JobCardDecisionAndReceipt({
 
   return (
     <>
-      {decision ? (
+      {decision && detail ? (
         <JobDecision
           decision={decision}
+          title={decisionSentence(detail)}
           pending={pending}
           mentionOrgId={mentionOrgId}
           outwardInput={outwardDecisionInput(activities)}

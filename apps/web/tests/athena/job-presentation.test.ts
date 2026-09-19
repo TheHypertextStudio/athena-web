@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  decisionSentence,
   jobsFromQueue,
   jobStateLabel,
   jobStatusLine,
@@ -170,6 +171,89 @@ describe('jobStatusLine', () => {
 
   it('falls back to the state label when the detail has not loaded yet', () => {
     expect(jobStatusLine(null, { ...summary, status: 'completed' })).toBe('Done');
+  });
+
+  it('names the pending decision from the newest tool activity instead of repeating the API title', () => {
+    const detail = detailWith({
+      decision: {
+        kind: 'approval',
+        id: 'proposal_1',
+        title: 'update task',
+        options: [{ id: 'approve', label: 'Approve' }],
+      },
+      activities: [
+        {
+          id: 'tool_1',
+          type: 'tool',
+          createdAt: '2026-07-15T16:01:00.000Z',
+          service: 'Docket',
+          action: 'update task',
+          technical: { toolName: 'update_task', input: { state: 'in_progress' } },
+        },
+      ],
+    });
+
+    expect(jobStatusLine(detail, summary)).toBe('Set state to In Progress');
+  });
+});
+
+describe('decisionSentence', () => {
+  it('describes the newest tool activity when it carried its raw call through', () => {
+    const detail = detailWith({
+      decision: {
+        kind: 'approval',
+        id: 'proposal_1',
+        title: 'update task',
+        options: [{ id: 'approve', label: 'Approve' }],
+      },
+      activities: [
+        {
+          id: 'tool_1',
+          type: 'tool',
+          createdAt: '2026-07-15T16:01:00.000Z',
+          service: 'Docket',
+          action: 'update task',
+          technical: { toolName: 'update_task', input: { state: 'in_progress' } },
+        },
+      ],
+    });
+
+    expect(decisionSentence(detail)).toBe('Set state to In Progress');
+  });
+
+  it('falls back to the decision title when the newest activity carries no raw tool call', () => {
+    const detail = detailWith({
+      decision: {
+        kind: 'approval',
+        id: 'proposal_1',
+        title: 'Approve moving the launch review',
+        options: [{ id: 'approve', label: 'Approve' }],
+      },
+      activities: [
+        {
+          id: 'activity_1',
+          type: 'progress',
+          createdAt: '2026-07-15T16:01:00.000Z',
+          text: 'Checked the calendar',
+        },
+      ],
+    });
+
+    expect(decisionSentence(detail)).toBe('Approve moving the launch review');
+  });
+
+  it('falls back to the decision title when there is no tool activity at all', () => {
+    const detail = detailWith({
+      decision: {
+        kind: 'approval',
+        id: 'proposal_1',
+        title: 'Approve moving the launch review',
+        options: [{ id: 'approve', label: 'Approve' }],
+      },
+      activities: [],
+    });
+
+    expect(decisionSentence(detail)).toBe('Approve moving the launch review');
   });
 });
 

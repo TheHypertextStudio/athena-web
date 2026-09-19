@@ -399,4 +399,43 @@ describe('AthenaJobCard', () => {
       expect(api.decide).toHaveBeenCalledWith('session_1', 'proposal_1', 'approve');
     });
   });
+
+  it('names the pending decision from the tool call, not the API title, in both the status line and the decision block', async () => {
+    const decision: PersonalAthenaDecision = {
+      kind: 'approval',
+      id: 'proposal_1',
+      title: 'update task',
+      options: [{ id: 'approve', label: 'Approve' }],
+    };
+    renderCard(
+      job({ status: 'awaiting_approval', queueState: 'needs_you' }),
+      detailWith({
+        status: 'awaiting_approval',
+        queueState: 'needs_you',
+        decision,
+        activities: [
+          {
+            id: 'tool_1',
+            type: 'tool',
+            createdAt: '2026-07-15T16:02:00.000Z',
+            service: 'Docket',
+            action: 'update task',
+            technical: { toolName: 'update_task', input: { state: 'in_progress' } },
+          },
+        ],
+      }),
+    );
+
+    expect(await screen.findAllByText('Set state to In Progress')).toHaveLength(2);
+    expect(screen.queryByText('update task')).not.toBeInTheDocument();
+  });
+
+  it('puts the More menu button beside the heading, in the same row, at any width', async () => {
+    renderCard(job({ status: 'running' }), detailWith({ status: 'running' }));
+
+    const heading = await screen.findByRole('heading', { name: job().objective });
+    const menuButton = await screen.findByRole('button', { name: 'More' });
+
+    expect(heading.parentElement).toBe(menuButton.parentElement);
+  });
 });

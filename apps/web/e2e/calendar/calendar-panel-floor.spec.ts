@@ -182,7 +182,6 @@ for (const viewport of VIEWPORTS) {
             syncAlert ? 'sync alert' : 'no alert'
           }`;
           const { share, visibleCount } = await measureShare(page);
-
           expect(visibleCount, `${label}: exactly one calendar on screen`).toBe(1);
           expect(
             share,

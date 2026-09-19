@@ -352,7 +352,6 @@ function describeMenuSubject(objects: readonly ObjectRef[]): string {
   const noun = sameKind ? descriptor.pluralNoun.toLowerCase() : 'items';
   return `${objects.length} ${noun} selected`;
 }
-
 /** Render the resolved actions, separating each section from the last. */
 function renderSections(actions: readonly ResolvedAction[], onClose: () => void): ReactNode {
   const rows: ReactNode[] = [];

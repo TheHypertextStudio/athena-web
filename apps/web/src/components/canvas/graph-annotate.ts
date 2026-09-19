@@ -114,6 +114,5 @@ export function annotateGraph(graph: AnnotateInput): GraphAnnotations {
     const blocker = categoryById.get(e.source);
     edgeTone.set(e.id, blocker !== undefined && isEnded(blocker) ? 'done' : 'open');
   }
-
   return { nodeFlags, edgeTone };
 }

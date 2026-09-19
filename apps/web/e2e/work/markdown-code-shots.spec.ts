@@ -215,7 +215,6 @@ test.describe('Markdown code visual evidence', () => {
     expect(commentLayout.codeScrollWidth).toBeGreaterThan(commentLayout.codeClientWidth);
     expect(commentLayout.textboxCount).toBe(0);
     expect(commentLayout.languageSelectCount).toBe(0);
-
     writeFileSync(
       resolve(SHOT_ROOT, 'measurements.json'),
       `${JSON.stringify({ themes, layout, commentThemes, commentLayout }, null, 2)}\n`,

@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../src/components/entity-display/use-work-status', () => ({
@@ -33,6 +33,7 @@ const props = {
     density: 'compact',
   },
 } as unknown as NodeProps;
+const editableProps = { ...props, isConnectable: true } as NodeProps;
 
 describe('ProjectNode selection semantics', () => {
   it('registers the node root as one roving tree item', () => {
@@ -58,5 +59,94 @@ describe('ProjectNode selection semantics', () => {
     const node = screen.getByRole('treeitem');
     expect(node).toHaveAttribute('aria-selected', 'false');
     expect(node).toHaveAttribute('tabindex', '0');
+  });
+
+  it('gives editable handles a named 32px target around a 12px marker', () => {
+    const { container } = render(
+      <SelectionProvider
+        items={[
+          {
+            kind: 'project',
+            id: 'project-a',
+            title: 'Project Alpha',
+            organizationId: 'org-1',
+          },
+        ]}
+        organizationId="org-1"
+        actionScope="all"
+      >
+        <ReactFlowProvider>
+          <ProjectNode {...editableProps} />
+        </ReactFlowProvider>
+      </SelectionProvider>,
+    );
+
+    const handles = screen.getAllByRole('button', { name: /Project Alpha/ });
+    expect(handles.map((handle) => handle.getAttribute('aria-label'))).toEqual([
+      'Connect into Project Alpha',
+      'Connect from Project Alpha',
+    ]);
+    for (const handle of handles) {
+      expect(handle).toHaveClass('!size-8', '!border-none', '!bg-transparent');
+      expect(handle).toHaveAttribute('tabindex', '0');
+      expect(handle.querySelector('[data-canvas-handle-marker]')).toHaveClass('size-3');
+    }
+    expect(container.querySelectorAll('.react-flow__handle')).toHaveLength(2);
+  });
+
+  it('routes Enter and Space through the same click connection path', () => {
+    render(
+      <SelectionProvider
+        items={[
+          {
+            kind: 'project',
+            id: 'project-a',
+            title: 'Project Alpha',
+            organizationId: 'org-1',
+          },
+        ]}
+        organizationId="org-1"
+        actionScope="all"
+      >
+        <ReactFlowProvider>
+          <ProjectNode {...editableProps} />
+        </ReactFlowProvider>
+      </SelectionProvider>,
+    );
+    const source = screen.getByRole('button', { name: 'Connect from Project Alpha' });
+    const click = vi.fn();
+    source.addEventListener('click', click);
+
+    fireEvent.keyDown(source, { key: 'Enter' });
+    fireEvent.keyDown(source, { key: ' ' });
+
+    expect(click).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps read-only handles out of the tab order and accessibility tree', () => {
+    const { container } = render(
+      <SelectionProvider
+        items={[
+          {
+            kind: 'project',
+            id: 'project-a',
+            title: 'Project Alpha',
+            organizationId: 'org-1',
+          },
+        ]}
+        organizationId="org-1"
+        actionScope="all"
+      >
+        <ReactFlowProvider>
+          <ProjectNode {...props} />
+        </ReactFlowProvider>
+      </SelectionProvider>,
+    );
+
+    expect(screen.queryByRole('button', { name: /Connect/ })).not.toBeInTheDocument();
+    for (const handle of container.querySelectorAll('.react-flow__handle')) {
+      expect(handle).toHaveAttribute('aria-hidden', 'true');
+      expect(handle).toHaveAttribute('tabindex', '-1');
+    }
   });
 });

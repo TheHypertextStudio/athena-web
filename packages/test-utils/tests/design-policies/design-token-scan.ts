@@ -127,6 +127,7 @@ export const RULE_ROOTS: Partial<Record<DesignTokenRule, readonly string[]>> = {
  * pending a migration. Adding a file means arguing it into one of those four cases.
  */
 export const BORDER_EARNED_FILES: readonly string[] = [
+  'apps/web/src/components/canvas/canvas-connection-handle.tsx',
   'packages/ui/src/components/shell/AppShell.tsx',
   'packages/ui/src/primitives/badge.tsx',
   'packages/ui/src/primitives/chip.tsx',

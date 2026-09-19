@@ -479,6 +479,7 @@ function CanvasInner({
             onNodeMouseLeave={highlight.onNodeMouseLeave}
             nodesConnectable={interactive}
             edgesReconnectable={interactive}
+            connectOnClick
             isValidConnection={interactions.isValidConnection}
             onConnect={interactions.onConnect}
             onReconnect={interactions.onReconnect}
@@ -512,10 +513,7 @@ function CanvasInner({
               {...dotGridProps(dotGrid)}
               className={surfaceToneColor('page')}
             />
-            {/*
-            Canvas navigation stays tonal and stroke-free. The minimap disappears on mobile,
-            where its reduced graph is unreadable and takes space from direct commands.
-          */}
+            {/* The minimap stays tonal and disappears where mobile makes it unreadable. */}
             {children}
           </ReactFlow>
         </div>

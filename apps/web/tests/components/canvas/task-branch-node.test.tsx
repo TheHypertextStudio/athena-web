@@ -39,6 +39,7 @@ const props = {
     hierarchyChildYs: [96, 164],
   },
 } as unknown as NodeProps;
+const editableProps = { ...props, isConnectable: true } as NodeProps;
 
 describe('TaskBranchNode', () => {
   it('keeps the compound bounds transparent and exposes only the task header as its drag handle', () => {
@@ -70,5 +71,37 @@ describe('TaskBranchNode', () => {
       'false',
     );
     expect(screen.getByRole('treeitem', { name: /Parent task/ })).toHaveAttribute('tabindex', '0');
+  });
+
+  it('gives editable handles a named 32px target around a 12px marker', () => {
+    render(
+      <SelectionProvider
+        items={[
+          {
+            kind: 'task',
+            id: 'task-parent',
+            title: 'Parent task',
+            organizationId: 'org-1',
+          } satisfies ObjectRef,
+        ]}
+        organizationId="org-1"
+        actionScope="all"
+      >
+        <ReactFlowProvider>
+          <TaskBranchNode {...editableProps} />
+        </ReactFlowProvider>
+      </SelectionProvider>,
+    );
+
+    const handles = screen.getAllByRole('button', { name: /Parent task/ });
+    expect(handles.map((handle) => handle.getAttribute('aria-label'))).toEqual([
+      'Connect into Parent task',
+      'Connect from Parent task',
+    ]);
+    for (const handle of handles) {
+      expect(handle).toHaveClass('!size-8', '!border-none', '!bg-transparent');
+      expect(handle).toHaveAttribute('tabindex', '0');
+      expect(handle.querySelector('[data-canvas-handle-marker]')).toHaveClass('size-3');
+    }
   });
 });

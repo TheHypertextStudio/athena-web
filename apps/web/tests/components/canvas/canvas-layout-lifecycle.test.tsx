@@ -335,6 +335,7 @@ describe('Canvas measured layout lifecycle', () => {
     expect(flowState.reactFlowProps['panOnDrag']).toBe(true);
     expect(flowState.reactFlowProps['selectionOnDrag']).toBe(false);
     expect(flowState.reactFlowProps['nodesFocusable']).toBe(false);
+    expect(flowState.reactFlowProps['connectOnClick']).toBe(true);
 
     act(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' }));

@@ -31,7 +31,7 @@ import type { ProjectStatus } from '../../lib/contracts/project';
 import { ArrowRight } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { CRITICAL_PAINT, surfaceToneColor } from '@docket/ui/primitives';
-import { Handle, type NodeProps, Position } from '@xyflow/react';
+import { type NodeProps } from '@xyflow/react';
 import Link from '@/components/docket-link';
 import { memo } from 'react';
 
@@ -42,6 +42,7 @@ import { WorkStatusBadge, WorkStatusIcon } from '@/components/entity-display/wor
 import { formatCalendarDate } from '@/lib/format-date';
 import { useSelectableRow } from '@/components/selection';
 
+import { CanvasConnectionHandles } from './canvas-connection-handle';
 import { projectNodeTransitionName } from './transition-name';
 import { useCanvasRelationDropTarget } from './use-canvas-relation-drop-target';
 import { useLod } from './use-lod';
@@ -84,16 +85,13 @@ export interface ProjectNodeData extends Record<string, unknown> {
   isRoot?: boolean;
 }
 
-/** A connection handle as a small tonal dot; `!border-0` cancels react-flow's outlined circle. */
-const HANDLE_CLASS = '!bg-on-surface-variant/40 !size-2 !border-0';
-
 /** Read the typed {@link ProjectNodeData} off an xyflow node (one place for the `data` cast). */
 export function projectData(node: { data: unknown }): ProjectNodeData {
   return node.data as ProjectNodeData;
 }
 
 /** A single project card on the canvas. */
-function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element {
+function ProjectNodeComponent({ id, data, selected, isConnectable }: NodeProps): React.JSX.Element {
   const {
     name,
     orgId,
@@ -171,7 +169,7 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
             )}
           />
         ) : null}
-        <Handle type="target" position={Position.Left} className={HANDLE_CLASS} />
+        <CanvasConnectionHandles isConnectable={isConnectable} label={name} />
 
         {/* Explicit navigation affordance: the card itself never navigates (too easy to mis-click
           while panning or connecting), so a deliberate corner button reveals on hover/focus. */}
@@ -244,7 +242,6 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
           </>
         ) : null}
 
-        <Handle type="source" position={Position.Right} className={HANDLE_CLASS} />
         {relation.effectLabel ? (
           <span
             className={cn(

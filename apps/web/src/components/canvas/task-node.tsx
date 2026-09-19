@@ -15,7 +15,7 @@ import type { Priority } from '@docket/work/task-contract';
 import { type ActorKind, ActorAvatar, StatusIcon } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
 import { CRITICAL_PAINT, surfaceToneColor } from '@docket/ui/primitives';
-import { Handle, type NodeProps, NodeToolbar, Position } from '@xyflow/react';
+import { type NodeProps, NodeToolbar, Position } from '@xyflow/react';
 import { memo } from 'react';
 
 import { formatCalendarDate } from '@/lib/format-date';
@@ -24,6 +24,7 @@ import { isEnded } from '@/lib/work-category';
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { useSelectableRow } from '@/components/selection';
 
+import { CanvasConnectionHandles } from './canvas-connection-handle';
 import { useCanvasActions } from './canvas-actions-context';
 import { taskNodeTransitionName } from './transition-name';
 import { useCanvasRelationDropTarget } from './use-canvas-relation-drop-target';
@@ -31,12 +32,6 @@ import { useLod } from './use-lod';
 
 /** The ring and wash a node shows while a drop onto it is refused. */
 const REJECTED_DROP_CLASS = `${CRITICAL_PAINT.rejectedDrop} ring-2 ring-inset`;
-
-/**
- * A react-flow connection handle drawn as a small tonal dot rather than the library's outlined
- * circle. The handle stays in the DOM because edges anchor to it and a drag starts from it.
- */
-const GRAPH_HANDLE_CLASS = '!bg-on-surface-variant/40 !size-2 !border-0';
 
 /** Whether an ISO `dueDate` is in the past relative to now (start of today). */
 function isOverdue(dueDate: string | null): boolean {
@@ -122,7 +117,7 @@ export function taskData(node: { data: unknown }): TaskNodeData {
 }
 
 /** A single task card on the canvas. */
-function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element {
+function TaskNodeComponent({ id, data, selected, isConnectable }: NodeProps): React.JSX.Element {
   const {
     title,
     state,
@@ -228,7 +223,7 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
           </NodeToolbar>
         ) : null}
 
-        <Handle type="target" position={Position.Left} className={GRAPH_HANDLE_CLASS} />
+        <CanvasConnectionHandles isConnectable={isConnectable} label={title} />
 
         <StatusIcon type={stateType} label={statusName} className="mt-0.5 shrink-0" />
 
@@ -265,7 +260,6 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
           />
         ) : null}
 
-        <Handle type="source" position={Position.Right} className={GRAPH_HANDLE_CLASS} />
         {relation.effectLabel ? (
           <span
             className={cn(

@@ -40,8 +40,20 @@ export {
 export {
   InlineBanner,
   type InlineBannerAction,
+  type InlineBannerDensity,
   type InlineBannerProps,
   type InlineBannerTone,
+  ToastCard,
+  type ToastCardProps,
+  Toaster,
+  type ToasterProps,
+  dismissAllNotices,
+  dismissNotice,
+  notify,
+  notifyFailure,
+  type ToastAction,
+  type ToastNotice,
+  type ToastTone,
 } from './feedback';
 export {
   LabelChip,

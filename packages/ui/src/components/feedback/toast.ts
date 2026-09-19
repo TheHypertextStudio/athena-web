@@ -80,3 +80,8 @@ export function notifyFailure(notice: Omit<ToastNotice, 'tone'>): string {
 export function dismissNotice(id: string): void {
   sonner.dismiss(id);
 }
+
+/** Remove every notice, as on sign-out. */
+export function dismissAllNotices(): void {
+  sonner.dismiss();
+}

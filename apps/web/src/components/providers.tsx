@@ -1,6 +1,7 @@
 'use client';
 
 import { ContextProvider } from '@docket/ui/components/context-provider';
+import { Toaster } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks/vocabulary';
 import { TooltipProvider } from '@docket/ui/primitives/tooltip';
 import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
@@ -80,6 +81,8 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
             <QueryClientProvider client={queryClient}>
               <UnauthorizedWatcher handlerRef={handleCacheError} />
               <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
+              {/* Notices mount at the root so sign-in and onboarding can report a failure too. */}
+              <Toaster />
             </QueryClientProvider>
           </AuthenticationInterlockProvider>
         </TooltipProvider>

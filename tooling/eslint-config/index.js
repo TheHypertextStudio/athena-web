@@ -340,6 +340,27 @@ export const semanticSurfaceConfig = [
   },
 ];
 
+/**
+ * Keep failure presentation inside the feedback primitives.
+ *
+ * The primitives that paint error state on purpose are exempt: `@docket/ui`'s primitives and
+ * feedback components, `EmptyState` (its critical tone), and the app's `components/feedback`.
+ * Everything else routes a failure through them; see `docs/engineering/specs/error-presentation.md`.
+ */
+export const errorPresentationConfig = [
+  {
+    files: [...UI_OWNERSHIP_SURFACES, 'apps/web/src/lib/**/*.{ts,tsx}'],
+    ignores: [
+      'packages/ui/src/primitives/**/*',
+      'packages/ui/src/components/feedback/**/*',
+      'packages/ui/src/components/atoms/EmptyState.tsx',
+      'apps/web/src/components/feedback/**/*',
+    ],
+    plugins: { 'docket-ui': uiOwnershipPlugin },
+    rules: { 'docket-ui/no-raw-error-text': 'error' },
+  },
+];
+
 /** Turn on the semantic-surface rule for a migrated directory without grandfathering old callers. */
 export function semanticSurfaceCohortConfig(files) {
   return [

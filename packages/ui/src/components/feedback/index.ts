@@ -13,6 +13,7 @@ export {
 export { ToastCard, type ToastCardProps } from './ToastCard';
 export { Toaster, type ToasterProps } from './Toaster';
 export {
+  dismissAllNotices,
   dismissNotice,
   notify,
   notifyFailure,

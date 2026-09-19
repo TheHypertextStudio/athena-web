@@ -1,6 +1,7 @@
 import noBespokeOverlay from './rules/no-bespoke-overlay.js';
 import noAppOwnedColumnheader from './rules/no-app-owned-columnheader.js';
 import noOverlayStyleOverride from './rules/no-overlay-style-override.js';
+import noRawErrorText from './rules/no-raw-error-text.js';
 import noRawSurfaceRole from './rules/no-raw-surface-role.js';
 import noServerQueryImport from './rules/no-server-query-import.js';
 
@@ -10,6 +11,7 @@ export default {
     'no-app-owned-columnheader': noAppOwnedColumnheader,
     'no-bespoke-overlay': noBespokeOverlay,
     'no-overlay-style-override': noOverlayStyleOverride,
+    'no-raw-error-text': noRawErrorText,
     'no-raw-surface-role': noRawSurfaceRole,
     'no-server-query-import': noServerQueryImport,
   },

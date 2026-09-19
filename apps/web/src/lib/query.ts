@@ -31,7 +31,8 @@
  * optimistic recipe, prefetch/prime, SSR hydration, and pitfalls).
  * @see {@link api} for the underlying typed Hono RPC client.
  */
-import { useCallback } from 'react';
+import { notify } from '@docket/ui/components';
+import { useCallback, useEffect, useRef } from 'react';
 
 import {
   type DefaultError,
@@ -51,6 +52,7 @@ import {
 } from '@tanstack/react-query';
 
 import { useOptionalAuthenticationRecovery } from '@/components/authentication-interlock';
+import { presentFailure } from '@/components/feedback/failure-toast';
 import { queuedOfflineWrite } from '@/components/pwa/offline-write';
 import { type ApiInfiniteDef, OfflineError } from './query-core';
 
@@ -241,7 +243,29 @@ export interface ApiMutationOptions<TData, TVariables, TContext> extends Omit<
    * server-derived state.
    */
   awaitInvalidation?: boolean;
+  /**
+   * How a rejected write reaches the person.
+   *
+   * @remarks
+   * `toast` (the default) presents the classified failure once as a notice, after the caller's
+   * `onError` so an optimistic rollback runs first, with "Try again" when retrying could succeed.
+   * `silent` is for a caller that owns presentation: a validation failure attributable to one
+   * control, or a flow that shows its own state.
+   */
+  failure?: 'toast' | 'silent';
+  /** Application-owned copy naming the operation, used when the failure carries no code. */
+  failureTitle?: string;
 }
+
+/** What a failed write says when it carries nothing more specific and the caller named nothing. */
+const DEFAULT_FAILURE_TITLE = "That change didn't save.";
+
+/** What a write the offline queue has taken says, once per session of queued writes. */
+const QUEUED_OFFLINE_NOTICE = {
+  title: 'Saved on this device',
+  detail: "Docket will sync it as soon as you're back online.",
+  dedupeKey: 'offline-queued',
+} as const;
 
 /**
  * Write hook: a typed Hono RPC mutation with optimistic update, rollback, and invalidation.
@@ -263,7 +287,7 @@ export interface ApiMutationOptions<TData, TVariables, TContext> extends Omit<
  * failure — the change exists, on the device, and will be sent — so the caller's `onError` and the
  * invalidation are both skipped, leaving the optimistic cache exactly as the person left it. The
  * mutation still settles in an error state carrying the queue's own copy ("Saved on this device…"),
- * so a surface that renders `error.message` says something true rather than claiming the save
+ * so a surface that reads it through `userErrorMessage` says something true rather than claiming the save
  * failed. See `components/pwa/offline-write.ts`.
  *
  * All
@@ -291,9 +315,13 @@ export function useApiMutation<TData, TVariables, TContext = unknown>(
     mutationFn,
     onError,
     onSettled,
+    failure = 'toast',
+    failureTitle = DEFAULT_FAILURE_TITLE,
     ...rest
   } = options;
-  return useMutation<TData, DefaultError, TVariables, TContext>({
+  // "Try again" on the notice re-issues the same variables through this very mutation.
+  const retryRef = useRef<((variables: TVariables) => void) | null>(null);
+  const mutation = useMutation<TData, DefaultError, TVariables, TContext>({
     ...rest,
     mutationFn: async (variables) => {
       try {
@@ -310,8 +338,17 @@ export function useApiMutation<TData, TVariables, TContext = unknown>(
       // A queued write is not a failure. Running the caller's `onError` here would roll the
       // optimistic cache back — undoing on screen the very change the queue has promised to
       // deliver, which is the one outcome worse than not queueing at all.
-      if (queuedOfflineWrite(error)) return;
+      if (queuedOfflineWrite(error)) {
+        notify(QUEUED_OFFLINE_NOTICE);
+        return;
+      }
       onError?.(error, variables, onMutateResult, context);
+      if (failure === 'silent') return;
+      presentFailure(error, failureTitle, {
+        retry: () => {
+          retryRef.current?.(variables);
+        },
+      });
     },
     onSettled: async (data, error, variables, onMutateResult, context) => {
       if (queuedOfflineWrite(error)) return;
@@ -328,6 +365,10 @@ export function useApiMutation<TData, TVariables, TContext = unknown>(
       if (awaitInvalidation) await reconciled;
     },
   });
+  useEffect(() => {
+    retryRef.current = mutation.mutate;
+  });
+  return mutation;
 }
 
 /**

@@ -56,8 +56,12 @@ Quick-win files to process:
 
 - [x] Analyzed all 1,489 debt entries
 - [x] Categorized by violation type and excess
-- [x] Identified quick-win files (176 total in Phase 1)
-- [ ] Begin batch processing
+- [x] Identified quick-win files (224 total in Phase 1)
+- [x] Batch processing started (2026-09-19)
+  - 1 file committed: apps/api/src/routes/stream-sse.ts (max-depth)
+  - Agent processing 5-10 additional excess-1 files
+- [ ] All Phase 1 (1-10 excess) files complete
+- [ ] Verify complexity ledger reaches target
 
 ---
 

@@ -30,8 +30,6 @@ import {
   Text,
 } from '@docket/ui/primitives';
 
-import { UserFacingError } from '@/lib/problem';
-
 /**
  * The MCP Apps host surface: a third-party widget rendered inside the Athena conversation.
  *
@@ -726,19 +724,4 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
       </Dialog>
     </>
   );
-}
-
-/**
- * Turn a failed widget tool call into copy Docket owns.
- *
- * @remarks
- * The connected server's error text is not shown. It is someone else's prose, it may be a raw
- * stack trace, and in the worst case it is attacker-authored — none of which belongs in a
- * transcript the user reads as Athena's.
- *
- * @param serverName - The visible name of the server that refused.
- * @returns the error to surface.
- */
-export function widgetCallFailure(serverName: string): UserFacingError {
-  return new UserFacingError(`${serverName} did not accept that action.`);
 }

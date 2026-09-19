@@ -4,7 +4,7 @@ Every user-facing surface in the launch, one row each: a route for every `page.t
 
 This inventory is the first half of **GEN-10** in `docs/engineering/launch-compliance.json`. It makes "which surfaces exist" a fact rather than a guess. **It does not close GEN-10.** That requirement closes only when every row below carries at least one Craft Rubric scorecard whose five hard gates pass and whose lowest dimension score is at or above the ship bar of 3 (`docs/design/craft-rubric.md`). Scoring the surfaces is design-review work; this file exists to keep the count honest while that work happens.
 
-**Coverage**: 59 of 116 surfaces have at least one scorecard under `docs/design/audits/`; the remaining 57 have none, and driving that number to zero is the open GEN-10 work.
+**Coverage**: 59 of 120 surfaces have at least one scorecard under `docs/design/audits/`; the remaining 61 have none, and driving that number to zero is the open GEN-10 work.
 
 Coverage counts existence, not verdicts — a surface whose only scorecard says `needs-work` is covered but is not shipped. `packages/test-utils/tests/design-policies/scorecard-schema.test.ts` separately forbids a `ship` verdict on any scorecard with a failing gate or a dimension below the bar, which is how the "zero scorecards recording a known-degraded state" half of GEN-10 stays enforced.
 
@@ -108,9 +108,13 @@ GEN-10's acceptance criteria also name the published-brief templates. No publish
 | ------------------------------ | --- | ------------------------------------------------------------------- | --------------------------------------------------------- |
 | `calendar-shared-item-details` | —   | `apps/web/src/app/(app)/calendar/calendar-shared-item-details.tsx`  | —                                                         |
 | `athena-conversation`          | —   | `apps/web/src/components/athena/athena-conversation.tsx`            | —                                                         |
+| `athena-job-card`              | —   | `apps/web/src/components/athena/athena-job-card.tsx`                | —                                                         |
 | `athena-mcp-panel`             | —   | `apps/web/src/components/athena/athena-mcp-panel.tsx`               | —                                                         |
 | `athena-panel-provider`        | —   | `apps/web/src/components/athena/athena-panel-provider.tsx`          | —                                                         |
+| `athena-rail-conversation`     | —   | `apps/web/src/components/athena/athena-rail-conversation.tsx`       | —                                                         |
+| `athena-work-ledger`           | —   | `apps/web/src/components/athena/athena-work-ledger.tsx`             | —                                                         |
 | `mail-attach-dialog`           | —   | `apps/web/src/components/athena/mail-attach-dialog.tsx`             | —                                                         |
+| `proposal-highlight`           | —   | `apps/web/src/components/athena/proposal-highlight.tsx`             | —                                                         |
 | `voice-mode`                   | —   | `apps/web/src/components/athena/voice-mode.tsx`                     | —                                                         |
 | `authentication-interlock`     | —   | `apps/web/src/components/authentication-interlock.tsx`              | —                                                         |
 | `calendar-item-drawer`         | —   | `apps/web/src/components/calendar/calendar-item-drawer.tsx`         | —                                                         |

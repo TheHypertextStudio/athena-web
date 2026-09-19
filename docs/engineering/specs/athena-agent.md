@@ -1,7 +1,7 @@
 # Athena Agent — Engineering Spec
 
-> **Status**: User-owned execution shipped; personal API and ambient experience migration active
-> **Last Updated**: 2026-07-15
+> **Status**: Shipped through Phase 3 first slice
+> **Last Updated**: 2026-09-18
 > **Companions**: `mcp-surface.md` (the tool catalog + auth MUSTs), `activity-feed.md` (the
 > event substrate Athena consumes downstream), `permissions.md` §8 (agent authorization),
 > `docs/core/mvp-plan.md` §4/§8.6 (the product vision)
@@ -32,6 +32,12 @@ task delegation all drive the same session substrate: an `agent_session` (`kind:
 for the user's long-lived conversational thread, `kind: 'job'` for episodic delegated work), its
 `session_activity` stream (what the UI renders), and its
 `agent_session_transcript` (what the model resumes from).
+
+The primary door onto that substrate is the Athena rail: one persistent conversation in a
+resizable panel beside whatever page the person is on. Delegated work renders as a flat entry in
+that same thread rather than a separate view, a pending change previews on the open page as a
+ghost row until it is decided, an applied in-Docket change carries Undo on its receipt, and a
+single heads-up line above the thread speaks first when something needs the person.
 
 **Two front doors, one service layer — literally.** Athena's loop connects an MCP SDK
 client over `InMemoryTransport` to the **same `buildServer(ctx)`** that serves `/mcp`
@@ -324,9 +330,9 @@ dock on personal and workspace routes. Today, tasks, projects, initiatives, Stre
 Inbox pass optional workspace and source context through the same invocation contract; context
 focuses work but never changes ownership or authority.
 
-`/athena` is the canonical full surface. It groups personal work into Needs you, Working, and
-Finished, keeps the objective and current decision ahead of chronology, and reuses the same
-workbench as the dock and `?session=` deep links. Tool activity is rendered as a structured
+`/athena` is the canonical full surface. It renders the same personal conversation as the rail,
+beside a Work ledger (Running, Needs you, Done) that lists everything delegated and jumps each row
+to its entry in the thread. Tool activity is rendered as a structured
 `Service · Action` row with an outcome. Provider/tool identifiers and payloads remain inside an
 explicit Technical details disclosure, and model reasoning is removed by the pure presentation
 adapter before React receives the work log. Empty queues can start work directly. Legacy workspace

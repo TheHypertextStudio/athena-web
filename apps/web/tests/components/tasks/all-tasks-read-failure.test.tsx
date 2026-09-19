@@ -43,10 +43,6 @@ vi.mock('../../../src/lib/auth-client', () => ({
   useSession,
 }));
 
-vi.mock('../../../src/components/athena/athena-context-action', () => ({
-  AthenaContextAction: () => null,
-}));
-
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), prefetch: vi.fn() }),
 }));

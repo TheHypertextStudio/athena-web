@@ -252,7 +252,7 @@ event-stream `Accept` with `406`, and errors on a stream route stay `application
 
 ### [ATHENA-COMPANION-001] Athena becomes a page-aware companion thread
 
-- **Status**: IN_PROGRESS
+- **Status**: REVIEW
 - **Started**: 2026-09-12
 - **Priority**: P0
 - **Description**: The utility-rail Athena panel is a job queue with a ticket view: lanes, lifecycle
@@ -273,19 +273,52 @@ event-stream `Accept` with `406`, and errors on a stream route stay `application
   - [ ] Confirm the four product decisions in §8
   - [x] Phase 0: context spine (page context provider, navigation-stable panel, personal thread hook)
   - [x] Phase 1: companion thread replaces the queue in the rail
-  - [ ] Phase 2: job cards, Working strip, wide view
+  - [x] Phase 2: job cards, Working strip, wide view
     - [x] Phase 2a: job cards, Working strip, Work ledger, one composer on Today
-  - [ ] Phase 3: heads-up entries and live suggestions
-  - [ ] Phase 4: retire dead code, update docs, full design audit
+    - [x] Phase 2b: ghost rows on the open page, Undo on the receipt, Review for outward actions,
+          the job card on the source task's detail page
+  - [x] Phase 3: heads-up entries and live suggestions
+  - [x] Phase 4: retire dead code, update docs, full design audit
 - **Blockers**: Product decisions in §8 of the design.
 - **Notes**: The engine is unchanged. The personal canonical conversation, the personal session SSE
   tail, the presenter, `ProposalGroupCard`, `ElicitationCard`, and the MCP app cards are all
   reused. What goes is the frame: queue → ticket → log.
+  - What remains deferred: server-side heads-up thresholds and the Settings › Athena on/off switch
+    (Phase 3 shipped the client-derived version only — one heads-up at a time, computed from jobs
+    already on the page, dismissal remembered per browser); a live journey test for ghost rows,
+    which needs the local turn fixture to target a real task before it can drive an approval
+    end to end; the external mockup artboards linked from the design's header still show borders
+    and copy the shipped surfaces dropped in `59197e518`.
 - **Phase 0 landed (2026-09-13)**: page context provider, navigation-stable panel, context chip
   in the rail composer, personal thread hook, browser journey. Validation: root typecheck, lint,
   format:check, test, and `e2e/athena/companion-context.spec.ts` all green.
 - **Phase 1 landed (2026-09-18)**: the rail's Athena panel is the conversation on every work page, with the page chip ("Fall fundraiser launch · Project") and page-aware suggestions; sends carry the page through the personal message route; Athena is first in the rail and the rail opens there when something needs the person. The job list left the rail and stays on /athena until Phase 2. ⌘J on a page with a source opens the conversation with that page attached (decision recorded). Validation: root typecheck, lint, format:check, test, and both Athena browser journeys green.
 - **Phase 2a landed (2026-09-18)**: delegated work is a card in the thread with its state, steps, decision, receipt, Reply, and a More menu; the rail pins running and waiting work in a Working strip; the wide view is the same thread beside a Work ledger (Running / Needs you / Done) and the connections panel; the person's own conversation stays out of the work list; Today's prompt captures only while the conversation is open. The queue and workbench are retired. Known local-dev defect: approving a mock-scripted proposal 409s because the dev turn fixture lacks an orgId (task chip filed). Ghost rows, Review/Undo, and the card on the task page follow in Phase 2b.
+- **Phase 2b landed (2026-09-18)**: pending proposals render as ghost rows on the open page through
+  the existing ghost grammar, gated to the active workspace so a `needs_you` job's proposals never
+  fan out across every workspace the person belongs to; a finished job's receipt carries Undo per
+  in-Docket change set; an outward action (send, post, pay) gets Review instead of a bare
+  approve, opening the real content before anything leaves; the source task's detail page shows
+  the job card for work delegated from it; hovering a proposal row highlights its target rows on
+  the page, with keyboard-focus parity. Validation: root typecheck, lint, format:check, and test
+  green, including new coverage for the workspace gate, the controlled steps disclosure, and the
+  highlight-handlers hook.
+- **Phase 3 landed (2026-09-18)**: Athena speaks first with one client-derived heads-up at the top
+  of the thread — a job waiting past a fixed threshold or a job that failed, oldest wins, at most
+  one shown at a time, dismissal remembered per browser. Computed entirely from jobs already on
+  the page; no new API surface. Per-user thresholds and the Settings › Athena switch are
+  deliberately deferred to a later slice. Validation: root typecheck, lint, format:check, and test
+  green.
+- **Phase 4 landed (2026-09-18)**: removed the dead personal-thread hook (`thread-defs.ts`) and the
+  orphaned `AthenaContextMenuItem` overflow-menu action, neither of which any product surface
+  imported; trimmed `presentation.ts` to the exports the rail, job card, and work ledger actually
+  use (`groupAthenaQueue`, `presentAthenaSession`, and `AthenaSessionPresentation` were exercised
+  only by their own tests); removed an unused `widgetCallFailure` helper from `mcp-app-view.tsx`.
+  Updated `docs/design/surface-inventory.md` (added the four surviving companion components; the
+  workbench row was already gone), `docs/core/mvp-plan.md` §4/§8.6, and
+  `docs/engineering/specs/athena-agent.md`'s system-shape section to describe the shipped
+  companion rather than the retired queue/workbench. Full design-review audit is out of scope for
+  this pass — see the deferred item above about the mockup artboards.
 
 ---
 

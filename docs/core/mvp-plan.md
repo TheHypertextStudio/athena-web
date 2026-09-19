@@ -153,6 +153,8 @@ So the first‑class thing isn't the agent — it's the **Session**: one episode
                           (live activity + approval checkpoint)
 ```
 
+For Athena specifically, this lives in one place: a single conversation in a resizable rail beside whatever page you're on. Delegated work shows up as an entry in that same thread rather than a separate screen, a pending change previews on the page itself as a ghost row until you act on it, and an in‑Docket change you already approved carries its own Undo. Athena speaks first with a short heads‑up when something needs you, instead of waiting for you to go looking.
+
 - **The human checkpoint (approval gate).** Docket owns whether an agent's actions apply directly or need your sign‑off — independent of how capable the agent is. There are **two separate dials**: _what an agent may touch_ (it starts **read‑only** and asks for more access when it needs it) and _whether its actions need sign‑off_ (**suggest** = proposes only · **apply‑after‑approval** · **apply‑directly**). Pending approvals show up _in the session_ and also mirror to your cross‑org **Inbox/Today**, so you can sign off from wherever you are. By default the **approver is whoever assigned or delegated the task**, configurable per organization or team.
 - **Accountability.** Every agent action is attributed to the agent _and_ records who set it in motion ("Athena, on behalf of you").
 - **Domain‑neutral by design.** An agent might draft and queue a batch of donor thank‑you notes, update next quarter's budget across line items, or reschedule a week of meetings. The session and approval experience is the same regardless of the kind of work — it is never code‑specific.
@@ -350,28 +352,25 @@ These two detail screens sit at the most granular level, where planning meets th
 > MCP connections, the paid-plan gate, and the firehose-onboarding prompt are all live —
 > see `docs/engineering/specs/athena-agent.md`.
 
-This is where you go to watch the work happen. When you hand a job to an agent, what you really want isn't a folder of robot profiles to manage — it's a window into what is being done on your behalf right now, with the power to step in. So the Agents area isn't a roster of AI helpers; it's a living feed of sessions, where a session is one episode of an agent doing one job: drafting a batch of donor thank-you notes, reconciling next quarter's budget, rescheduling a week of meetings. You can filter the feed by what needs you most — what's running, what's paused waiting for your yes-or-no, what finished, what hit a snag. Open any session and you get a plain-English narration of the agent's thinking alongside a running list of exactly what it has changed, so there are no surprises buried in the result. The screen is split this way on purpose: the left side is the story (what it's doing and why, the questions it's asking), and the right side is the receipt (what's actually changed, who set it in motion, and the buttons to pause, take over, or cancel). Crucially, the agent can't quietly send those fourteen notes or move that money — it proposes, and the proposal waits for your tap. That same pending approval also surfaces in your cross-org Inbox and Today, so you're never forced to camp out on this screen to keep things moving. The point is calm visibility: the work is transparent, you stay in control, and the brand of the agent doing it barely matters.
+This is where you go to watch the work happen. When you hand a job to an agent, what you really want isn't a folder of robot profiles to manage — it's a window into what is being done on your behalf right now, with the power to step in. So Athena isn't a roster of AI helpers or a ticket queue; it's one ongoing conversation, open in a resizable rail beside whatever page you're on. Delegated work — drafting a batch of donor thank-you notes, reconciling next quarter's budget, rescheduling a week of meetings — shows up as an entry in that same thread: what it's doing and deciding as it happens, its steps, and, once something changes, a receipt with Undo. A pending change on the page you're already viewing previews there directly as a ghost row until you act on it. Crucially, the agent can't quietly send those fourteen notes or move that money — it proposes, right there in the thread, and the proposal waits for your tap. Athena speaks first when something needs you, with one line above the conversation rather than a badge you have to notice; that same pending approval also mirrors to your cross-org Inbox and Today, so you're never forced to camp out on this rail to keep things moving. The point is calm visibility: the work is transparent, you stay in control, and the brand of the agent doing it barely matters.
 
-The "Agents" area is essentially a **live, filterable feed of Sessions** (running / awaiting‑approval / done / errored), each opening the Session view:
+Opening Athena full (`/athena`) keeps the same conversation and adds a **Work ledger** beside it — Running, Needs you, Done, across everything you've delegated — where each row jumps to its entry in the thread:
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│ ← Task: Send donor thank-you notes               Ⓝ Hope Fund               │
-│ 🤖 Athena · on behalf of you · running 1m                                   │
-├───────────────────────────────────────────┬──────────────────────────────┤
-│ ACTIVITY                                   │ CHANGES THIS SESSION          │
-│ 💭 Pulling the 14 donors from last week…   │ • drafted 14 notes            │
-│ 💬 "Drafts ready. Tone: warm, brief."      │ • (awaiting approval to send) │
-│ ⚠ PROPOSED  Send 14 thank-you notes        │ ────────────────────────────  │
-│   [ Approve & send ▸ ]   [ Review each ]   │ ACCOUNTABILITY                │
-│ ❓ "Include the year-end event invite?"     │ Athena · on behalf of you     │
-│   ┌ reply ───────────────────────────────┐ │ [ Pause ] [ Take over ]       │
-│   │ Yes, add it to the top 5 donors.     │ │ [ Cancel session ]            │
-│   └─────────────────────────────[ Send ]─┘ │                               │
-└───────────────────────────────────────────┴──────────────────────────────┘
+┌───────────────────────────────┬──────────────────────────────────────────┐
+│ WORK LEDGER                    │ ATHENA                                    │
+│ Running · Needs you · Done     │ 🤖 on behalf of you                        │
+│                                 │                                            │
+│ • Send donor thank-you notes ▸ │ 💭 Pulling the 14 donors from last week…  │
+│ • Reschedule the offsite       │ 💬 "Drafts ready. Tone: warm, brief."      │
+│                                 │ ⚠ Send 14 thank-you notes                 │
+│                                 │   [ Approve & send ▸ ]  [ Review each ]   │
+│                                 │ ❓ "Include the year-end event invite?"    │
+│                                 │   [ reply ────────────────────][ Send ]─┘ │
+└───────────────────────────────┴──────────────────────────────────────────┘
 ```
 
-- **Approval flow:** pending actions appear in the session **and** mirror to your Inbox/Today.
+- **Approval flow:** pending actions appear inline in the thread **and** mirror to your Inbox/Today.
 - Provider (Athena/Claude/Codex) is a minor chip. **Setup lives in Settings** (connect a provider; Athena built‑in). Permissions start **read‑only, grant‑on‑request**.
 
 ### 8.7 Settings (user-owned, with workspace administration)

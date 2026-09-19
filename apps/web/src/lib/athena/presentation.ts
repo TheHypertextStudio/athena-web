@@ -3,7 +3,7 @@
  *
  * @remarks
  * These intentionally sit between the personal API and React. The personal API lane can replace
- * the structural transport types without changing the queue, dock, or workbench components.
+ * the structural transport types without changing the rail, job card, or work-ledger components.
  */
 import type { McpAppPresentation } from '@docket/integrations/mcp-apps-contract';
 
@@ -123,59 +123,11 @@ export interface AthenaActivityPresentation {
   };
 }
 
-/** A complete workbench view model. */
-export interface AthenaSessionPresentation {
-  readonly id: string;
-  readonly objective: string;
-  readonly stateLabel: string;
-  readonly workspaceLabel: string | null;
-  readonly contextLabel: string | null;
-  readonly decision: PersonalAthenaDecision | null;
-  readonly activity: readonly AthenaActivityPresentation[];
-  readonly result: PersonalAthenaSessionDetail['result'];
-  readonly canPause: boolean;
-  readonly canResume: boolean;
-  readonly canCancel: boolean;
-  readonly commandLabel: string;
-}
-
-const LANE_LABELS: Readonly<Record<AthenaQueueState, string>> = {
-  needs_you: 'Needs you',
-  working: 'Working',
-  finished: 'Finished',
-};
-
-const STATUS_LABELS: Readonly<Record<PersonalAthenaStatus, string>> = {
-  pending: 'Queued',
-  running: 'In progress',
-  awaiting_input: 'Waiting for your answer',
-  awaiting_approval: 'Waiting for your approval',
-  completed: 'Finished',
-  failed: 'Stopped with an issue',
-  canceled: 'Cancelled',
-};
-
 /** Map a lifecycle state to its queue lane. */
 export function athenaQueueState(status: PersonalAthenaStatus): AthenaQueueState {
   if (status === 'awaiting_input' || status === 'awaiting_approval') return 'needs_you';
   if (status === 'completed' || status === 'failed' || status === 'canceled') return 'finished';
   return 'working';
-}
-
-/** Group personal work in the fixed product order used by the dock and full workspace. */
-export function groupAthenaQueue(sessions: readonly PersonalAthenaSessionSummary[]): readonly {
-  readonly key: AthenaQueueState;
-  readonly label: string;
-  readonly items: readonly PersonalAthenaSessionSummary[];
-}[] {
-  const order: readonly AthenaQueueState[] = ['needs_you', 'working', 'finished'];
-  return order.map((key) => ({
-    key,
-    label: LANE_LABELS[key],
-    items: sessions.filter(
-      (session) => (session.queueState ?? athenaQueueState(session.status)) === key,
-    ),
-  }));
 }
 
 /**
@@ -232,34 +184,5 @@ export function presentAthenaActivity(
             : 'Progress',
     detail: activity.text,
     createdAt: activity.createdAt,
-  };
-}
-
-/** Build the dense workbench presentation for one personal Athena session. */
-export function presentAthenaSession(
-  session: PersonalAthenaSessionDetail,
-): AthenaSessionPresentation {
-  const source = session.context?.source;
-  const state = session.queueState ?? athenaQueueState(session.status);
-  return {
-    id: session.id,
-    objective: session.objective,
-    stateLabel: STATUS_LABELS[session.status],
-    workspaceLabel: session.workspace?.name ?? session.context?.workspaceName ?? null,
-    contextLabel: source?.label ?? null,
-    decision: session.decision ?? null,
-    activity: session.activities
-      .map(presentAthenaActivity)
-      .filter((entry): entry is AthenaActivityPresentation => entry !== null),
-    result: session.result ?? null,
-    canPause: session.status === 'running',
-    canResume: session.status === 'awaiting_input',
-    canCancel: state !== 'finished',
-    commandLabel:
-      state === 'finished'
-        ? 'Continue from this result'
-        : state === 'needs_you'
-          ? 'Add context or answer'
-          : 'Steer this work',
   };
 }

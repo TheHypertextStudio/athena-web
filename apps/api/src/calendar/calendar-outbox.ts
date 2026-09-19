@@ -224,6 +224,116 @@ async function persistRetryableOrReauth(
 }
 
 /**
+ * Resolve provider credentials for a calendar item and connection.
+ * Returns credentials or an error outcome to persist.
+ */
+async function resolveCalendarCredentials(
+  db: Database,
+  write: CalendarItemWriteRow,
+  item: CalendarItemRow,
+  connection: typeof calendarConnection.$inferSelect,
+  syncModule: CalendarProviderSyncModule,
+  now: Date,
+): Promise<
+  | { status: 'resolved'; credentials: CalendarProviderCredentials }
+  | { status: 'outcome'; outcome: 'retried' | 'failed' }
+> {
+  try {
+    const discovered = await syncModule.discoverConnections({ db, userId: item.userId });
+    const match = discovered.find((d) => d.externalAccountId === connection.externalAccountId);
+    if (match === undefined) {
+      throw new CalendarReauthRequiredError('Linked account no longer found');
+    }
+    const credentials = await syncModule.resolveCredentials(match);
+    return { status: 'resolved', credentials };
+  } catch (err) {
+    if (err instanceof CalendarReauthRequiredError) {
+      const outcome = await persistRetryableOrReauth(
+        db,
+        write,
+        item,
+        err.message,
+        now,
+        connection.id,
+      );
+      return { status: 'outcome', outcome };
+    }
+    const message = err instanceof Error ? err.message : 'Failed to resolve provider credentials';
+    const outcome = await persistRetryableOrReauth(db, write, item, message, now, null);
+    return { status: 'outcome', outcome };
+  }
+}
+
+/**
+ * Dispatch the calendar operation (delete, create, or update) to the provider adapter.
+ * Returns a normalized result or an error outcome to persist.
+ */
+async function dispatchCalendarOperation(
+  db: Database,
+  write: CalendarItemWriteRow,
+  item: CalendarItemRow,
+  provider: CalendarProvider,
+  syncModule: CalendarProviderSyncModule,
+  credentials: CalendarProviderCredentials,
+): Promise<
+  { status: 'result'; result: NormalizedWriteResult } | { status: 'outcome'; outcome: 'failed' }
+> {
+  /* v8 ignore next -- @preserve defensive: provider_event items always carry both external ids */
+  if (item.externalCalendarId === null || item.externalEventId === null) {
+    await persistPermanentFailure(
+      db,
+      write,
+      item,
+      'Calendar item is missing its provider identifiers',
+    );
+    return { status: 'outcome', outcome: 'failed' };
+  }
+
+  let result: NormalizedWriteResult;
+  if (write.operation === 'delete') {
+    result = normalizeDeleteResult(
+      await syncModule.adapter.deleteItem({
+        credentials,
+        externalLayerId: item.externalCalendarId,
+        externalEventId: item.externalEventId,
+        baseEtag: write.baseExternalEtag,
+      }),
+    );
+  } else if (write.operation === 'create') {
+    const createItem = syncModule.adapter.createItem;
+    if (typeof createItem !== 'function') {
+      await persistPermanentFailure(
+        db,
+        write,
+        item,
+        `Provider '${provider}' does not support event creation`,
+      );
+      return { status: 'outcome', outcome: 'failed' };
+    }
+    result = normalizePushResult(
+      await createItem({
+        credentials,
+        externalLayerId: item.externalCalendarId,
+        externalEventId: item.externalEventId,
+        patch: write.patch,
+      }),
+    );
+  } else {
+    result = normalizePushResult(
+      await syncModule.adapter.pushItem({
+        credentials,
+        externalLayerId: item.externalCalendarId,
+        externalEventId: item.externalEventId,
+        patch: write.patch,
+        baseEtag: write.baseExternalEtag,
+      }),
+    );
+  }
+
+  return { status: 'result', result };
+}
+
+/**
  * Attempt one outbox write in the foreground: claim it, resolve credentials, dispatch to
  * the provider adapter, and persist exactly one of the five outcomes.
  *
@@ -286,81 +396,20 @@ export async function attemptCalendarItemWrite(
     return 'failed';
   }
 
-  let credentials: CalendarProviderCredentials;
-  try {
-    const discovered = await syncModule.discoverConnections({ db, userId: item.userId });
-    const match = discovered.find((d) => d.externalAccountId === connection.externalAccountId);
-    if (match === undefined) {
-      throw new CalendarReauthRequiredError('Linked account no longer found');
-    }
-    credentials = await syncModule.resolveCredentials(match);
-  } catch (err) {
-    if (err instanceof CalendarReauthRequiredError) {
-      const outcome = await persistRetryableOrReauth(
-        db,
-        write,
-        item,
-        err.message,
-        now,
-        connection.id,
-      );
-      return outcome;
-    }
-    const message = err instanceof Error ? err.message : 'Failed to resolve provider credentials';
-    return await persistRetryableOrReauth(db, write, item, message, now, null);
-  }
+  const credResult = await resolveCalendarCredentials(db, write, item, connection, syncModule, now);
+  if (credResult.status === 'outcome') return credResult.outcome;
+  const { credentials } = credResult;
 
-  /* v8 ignore next -- @preserve defensive: provider_event items always carry both external ids */
-  if (item.externalCalendarId === null || item.externalEventId === null) {
-    await persistPermanentFailure(
-      db,
-      write,
-      item,
-      'Calendar item is missing its provider identifiers',
-    );
-    return 'failed';
-  }
-
-  let result: NormalizedWriteResult;
-  if (write.operation === 'delete') {
-    result = normalizeDeleteResult(
-      await syncModule.adapter.deleteItem({
-        credentials,
-        externalLayerId: item.externalCalendarId,
-        externalEventId: item.externalEventId,
-        baseEtag: write.baseExternalEtag,
-      }),
-    );
-  } else if (write.operation === 'create') {
-    const createItem = syncModule.adapter.createItem;
-    if (typeof createItem !== 'function') {
-      await persistPermanentFailure(
-        db,
-        write,
-        item,
-        `Provider '${provider}' does not support event creation`,
-      );
-      return 'failed';
-    }
-    result = normalizePushResult(
-      await createItem({
-        credentials,
-        externalLayerId: item.externalCalendarId,
-        externalEventId: item.externalEventId,
-        patch: write.patch,
-      }),
-    );
-  } else {
-    result = normalizePushResult(
-      await syncModule.adapter.pushItem({
-        credentials,
-        externalLayerId: item.externalCalendarId,
-        externalEventId: item.externalEventId,
-        patch: write.patch,
-        baseEtag: write.baseExternalEtag,
-      }),
-    );
-  }
+  const opResult = await dispatchCalendarOperation(
+    db,
+    write,
+    item,
+    provider,
+    syncModule,
+    credentials,
+  );
+  if (opResult.status === 'outcome') return opResult.outcome;
+  const { result } = opResult;
 
   switch (result.outcome) {
     case 'applied':

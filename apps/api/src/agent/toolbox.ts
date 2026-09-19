@@ -283,6 +283,109 @@ function firstPartyHints(tool: ListedFirstPartyTool): ToolAnnotationHints | unde
 }
 
 /**
+ * Load and optionally refresh MCP OAuth credential for a connection.
+ * Returns the bearer token or the raw credential string.
+ *
+ * @param executor - The executor kind to determine which credential table to query.
+ * @param row - The connection row containing id and userId.
+ * @param credRows - The loaded credential rows from the database.
+ * @returns The bearer token or raw credential, or undefined if no credential.
+ */
+async function loadMcpCredential(
+  executor: ToolboxExecutor,
+  row: { readonly id: string; readonly url: string; readonly alias: string; readonly name: string },
+  credRows: readonly { readonly ciphertext: string }[],
+): Promise<string | undefined> {
+  const storedCredential = credRows[0] ? unsealCredential(credRows[0].ciphertext) : undefined;
+  const oauthCredential = storedCredential ? parseMcpOAuthCredential(storedCredential) : null;
+  let bearerToken =
+    oauthCredential?.kind === 'mcp_oauth'
+      ? oauthCredential.tokens.access_token
+      : oauthCredential
+        ? undefined
+        : storedCredential;
+
+  if (oauthCredential?.kind === 'mcp_oauth' && mcpOAuthTokenNeedsRefresh(oauthCredential)) {
+    const refreshed = await refreshMcpOAuthCredential(oauthCredential);
+    if (executor.kind === 'registered_agent') {
+      await db
+        .update(integrationCredential)
+        .set({ ciphertext: sealCredential(JSON.stringify(refreshed)) })
+        .where(eq(integrationCredential.integrationId, row.id));
+    } else {
+      await db
+        .update(personalMcpCredential)
+        .set({ ciphertext: sealCredential(JSON.stringify(refreshed)) })
+        .where(
+          and(
+            eq(personalMcpCredential.connectionId, row.id),
+            eq(personalMcpCredential.ownerUserId, executor.ownerUserId),
+          ),
+        );
+    }
+    bearerToken = refreshed.tokens.access_token;
+  }
+
+  return bearerToken;
+}
+
+/**
+ * Setup one remote MCP session and add its tools to the catalog.
+ * On failure, marks the connection as errored and returns early.
+ */
+interface RemoteSessionSetupContext {
+  executor: ToolboxExecutor;
+  row: { readonly id: string; readonly url: string; readonly alias: string; readonly name: string };
+  bearerToken: string | undefined;
+  remoteSessions: Map<
+    string,
+    { readonly id: string; readonly name: string; readonly session: RemoteMcpSession }
+  >;
+  annotations: Map<string, ToolAnnotationHints>;
+  defs: TurnToolDef[];
+}
+
+async function setupRemoteSession(ctx: RemoteSessionSetupContext): Promise<void> {
+  try {
+    const session = await getContainer().mcpConnector.open({
+      url: ctx.row.url,
+      ...(ctx.bearerToken ? { bearerToken: ctx.bearerToken } : {}),
+    });
+    const tools = await session.listTools();
+    ctx.remoteSessions.set(ctx.row.alias, { id: ctx.row.id, name: ctx.row.name, session });
+    for (const tool of tools) {
+      if (!isRemoteToolVisibleTo(tool, 'model')) continue;
+      const namespaced = `${ctx.row.alias}__${tool.name}`;
+      if (tool.annotations) ctx.annotations.set(namespaced, tool.annotations);
+      ctx.defs.push({
+        name: namespaced,
+        description: `[${ctx.row.alias}] ${tool.description}`,
+        inputSchema: tool.inputSchema,
+      });
+    }
+  } catch (cause) {
+    const patch = {
+      status: 'error' as const,
+      lastError: cause instanceof Error ? cause.message : 'Connection failed',
+      lastErrorAt: new Date(),
+    };
+    if (ctx.executor.kind === 'registered_agent') {
+      await db.update(integration).set(patch).where(eq(integration.id, ctx.row.id));
+    } else {
+      await db
+        .update(personalMcpConnection)
+        .set(patch)
+        .where(
+          and(
+            eq(personalMcpConnection.id, ctx.row.id),
+            eq(personalMcpConnection.ownerUserId, ctx.executor.ownerUserId),
+          ),
+        );
+    }
+  }
+}
+
+/**
  * Open the toolbox for one executor: the catalog tools it may call, with first-party hints
  * attached, and the session id the plan tools bind a plan to.
  *
@@ -383,71 +486,15 @@ export async function openToolbox(
               ),
             )
             .limit(1);
-    try {
-      const storedCredential = credRows[0] ? unsealCredential(credRows[0].ciphertext) : undefined;
-      const oauthCredential = storedCredential ? parseMcpOAuthCredential(storedCredential) : null;
-      let bearerToken =
-        oauthCredential?.kind === 'mcp_oauth'
-          ? oauthCredential.tokens.access_token
-          : oauthCredential
-            ? undefined
-            : storedCredential;
-      if (oauthCredential?.kind === 'mcp_oauth' && mcpOAuthTokenNeedsRefresh(oauthCredential)) {
-        const refreshed = await refreshMcpOAuthCredential(oauthCredential);
-        if (executor.kind === 'registered_agent') {
-          await db
-            .update(integrationCredential)
-            .set({ ciphertext: sealCredential(JSON.stringify(refreshed)) })
-            .where(eq(integrationCredential.integrationId, row.id));
-        } else {
-          await db
-            .update(personalMcpCredential)
-            .set({ ciphertext: sealCredential(JSON.stringify(refreshed)) })
-            .where(
-              and(
-                eq(personalMcpCredential.connectionId, row.id),
-                eq(personalMcpCredential.ownerUserId, executor.ownerUserId),
-              ),
-            );
-        }
-        bearerToken = refreshed.tokens.access_token;
-      }
-      const session = await getContainer().mcpConnector.open({
-        url: row.url,
-        ...(bearerToken ? { bearerToken } : {}),
-      });
-      const tools = await session.listTools();
-      remoteSessions.set(row.alias, { id: row.id, name: row.name, session });
-      for (const tool of tools) {
-        if (!isRemoteToolVisibleTo(tool, 'model')) continue;
-        const namespaced = `${row.alias}__${tool.name}`;
-        if (tool.annotations) annotationsByName.set(namespaced, tool.annotations);
-        defs.push({
-          name: namespaced,
-          description: `[${row.alias}] ${tool.description}`,
-          inputSchema: tool.inputSchema,
-        });
-      }
-    } catch (cause) {
-      const patch = {
-        status: 'error' as const,
-        lastError: cause instanceof Error ? cause.message : 'Connection failed',
-        lastErrorAt: new Date(),
-      };
-      if (executor.kind === 'registered_agent') {
-        await db.update(integration).set(patch).where(eq(integration.id, row.id));
-      } else {
-        await db
-          .update(personalMcpConnection)
-          .set(patch)
-          .where(
-            and(
-              eq(personalMcpConnection.id, row.id),
-              eq(personalMcpConnection.ownerUserId, executor.ownerUserId),
-            ),
-          );
-      }
-    }
+    const bearerToken = await loadMcpCredential(executor, row, credRows);
+    await setupRemoteSession({
+      executor,
+      row,
+      bearerToken,
+      remoteSessions,
+      annotations: annotationsByName,
+      defs,
+    });
   }
 
   defs.push(ASK_USER_DEF);

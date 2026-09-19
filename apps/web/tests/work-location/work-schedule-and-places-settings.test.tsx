@@ -271,6 +271,8 @@ describe('WorkScheduleSettingsPage', () => {
   });
 
   it('starts a new version without shifting the cycle anchor', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-05T12:00:00.000Z'));
     renderPage(<WorkScheduleSettingsPage />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit default schedule' }));

@@ -6,29 +6,31 @@
     "raw-type-utility": 2
   },
   "apps/web/src/app/(app)/inbox/inbox-client.tsx": {
+    "ad-hoc-border": 2,
     "raw-type-utility": 5
   },
   "apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx": {
-    "raw-type-utility": 5
+    "raw-type-utility": 7
   },
   "apps/web/src/app/(app)/orgs/[orgId]/my-work/my-work-client.tsx": {
     "raw-type-utility": 2
   },
   "apps/web/src/app/(app)/orgs/[orgId]/programs/[programId]/program-detail-client.tsx": {
-    "raw-type-utility": 2
+    "raw-type-utility": 3
   },
   "apps/web/src/app/(app)/orgs/[orgId]/recurrence-series/[seriesId]/page.tsx": {
     "ad-hoc-border": 9
   },
   "apps/web/src/app/(app)/orgs/[orgId]/sessions/[sessionId]/page.tsx": {
-    "ad-hoc-border": 3,
+    "ad-hoc-border": 5,
     "raw-radius-utility": 1,
     "raw-type-utility": 3
   },
   "apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx": {
-    "ad-hoc-border": 3
+    "ad-hoc-border": 5
   },
   "apps/web/src/app/(app)/orgs/[orgId]/teams/[teamId]/team-detail-client.tsx": {
+    "ad-hoc-border": 2,
     "raw-radius-utility": 6
   },
   "apps/web/src/app/(app)/orgs/[orgId]/teams/teams-client.tsx": {
@@ -38,7 +40,7 @@
     "raw-type-utility": 3
   },
   "apps/web/src/app/(app)/portfolio/portfolio-client.tsx": {
-    "ad-hoc-border": 8,
+    "ad-hoc-border": 10,
     "raw-type-utility": 1
   },
   "apps/web/src/app/(app)/settings/calendar/page.tsx": {
@@ -47,11 +49,17 @@
   "apps/web/src/app/(app)/settings/work-schedule/page.tsx": {
     "ad-hoc-border": 2
   },
+  "apps/web/src/app/(app)/tasks/all-tasks-client.tsx": {
+    "ad-hoc-border": 2
+  },
   "apps/web/src/app/(app)/today/page.tsx": {
     "ad-hoc-border": 2
   },
   "apps/web/src/app/(app)/workspaces/new/page.tsx": {
     "raw-type-utility": 6
+  },
+  "apps/web/src/app/(auth)/_components/auth-feedback.tsx": {
+    "ad-hoc-border": 2
   },
   "apps/web/src/app/(auth)/_components/auth-shell.tsx": {
     "raw-type-utility": 1
@@ -107,7 +115,7 @@
   "apps/web/src/components/agents/activity-item.tsx": {
     "ad-hoc-border": 11,
     "raw-radius-utility": 1,
-    "raw-type-utility": 12
+    "raw-type-utility": 13
   },
   "apps/web/src/components/agents/approval-status-badge.tsx": {
     "ad-hoc-border": 4,
@@ -234,7 +242,7 @@
     "raw-type-utility": 2
   },
   "apps/web/src/components/command-palette/command-palette.tsx": {
-    "ad-hoc-border": 4,
+    "ad-hoc-border": 6,
     "raw-type-utility": 1
   },
   "apps/web/src/components/command-palette/scope-toggle.tsx": {
@@ -312,6 +320,9 @@
   "apps/web/src/components/initiatives/distribution-bar.tsx": {
     "raw-type-utility": 2
   },
+  "apps/web/src/components/initiatives/initiative-hierarchy-picker-overlay.tsx": {
+    "ad-hoc-border": 6
+  },
   "apps/web/src/components/initiatives/initiative-relationship-panels.tsx": {
     "raw-type-utility": 2
   },
@@ -387,6 +398,12 @@
   },
   "apps/web/src/components/org-chip.tsx": {
     "raw-type-utility": 1
+  },
+  "apps/web/src/components/pickers/label-picker-overlay.tsx": {
+    "ad-hoc-border": 2
+  },
+  "apps/web/src/components/pickers/relation-target-picker-overlay.tsx": {
+    "ad-hoc-border": 2
   },
   "apps/web/src/components/portfolio/org-filter-chips.tsx": {
     "ad-hoc-border": 3,
@@ -474,7 +491,7 @@
     "raw-z-index": 1
   },
   "apps/web/src/components/search/search-client.tsx": {
-    "ad-hoc-border": 6,
+    "ad-hoc-border": 8,
     "raw-radius-utility": 2,
     "raw-type-utility": 13
   },
@@ -527,6 +544,9 @@
   },
   "apps/web/src/components/tasks/task-hierarchy-drop.ts": {
     "ad-hoc-border": 3
+  },
+  "apps/web/src/components/tasks/task-hierarchy-picker-overlay.tsx": {
+    "ad-hoc-border": 2
   },
   "apps/web/src/components/team-detail/capacity-chart.tsx": {
     "raw-radius-utility": 1

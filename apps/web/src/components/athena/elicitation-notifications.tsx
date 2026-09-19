@@ -149,31 +149,11 @@ export function EnableNotificationsPrompt({
   if (dismissed || !relevant) return null;
 
   return (
-    <aside
-      data-notification-prompt
-      className={cn(
-        'bg-secondary-container text-on-secondary-container flex flex-col gap-3 rounded-xl px-4 py-3',
-        className,
-      )}
-    >
-      <div className="flex items-start gap-2">
-        <Bell aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-        <div className="flex flex-col gap-1">
-          <Text token="title-small">Let me reach you when work stops</Text>
-          <Text token="body-medium">
-            Turn on notifications and I can put a time-sensitive question in front of you with its
-            answers as buttons — you can decide without coming back here to find it.
-          </Text>
-        </div>
-      </div>
-      {failure ? (
-        <Text token="body-small" tone="error" role="alert">
-          {failure}
-        </Text>
-      ) : null}
-      <ControlGroup controlSize="lg" wrap>
+    <aside data-notification-prompt className={cn('flex flex-col gap-1', className)}>
+      <ControlGroup controlSize="sm" wrap>
         <Button
           type="button"
+          variant="ghost"
           disabled={register.isPending}
           onClick={() => {
             void enable();
@@ -194,6 +174,11 @@ export function EnableNotificationsPrompt({
           Not now
         </Button>
       </ControlGroup>
+      {failure ? (
+        <Text token="body-small" tone="error" role="alert">
+          {failure}
+        </Text>
+      ) : null}
     </aside>
   );
 }

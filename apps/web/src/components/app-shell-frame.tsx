@@ -2,7 +2,6 @@
 
 import {
   AppShell,
-  type AppShellAside,
   ContextProvider,
   type HomeNavKey,
   IdentityGlyph,
@@ -21,15 +20,7 @@ import {
   type EntityDisplaySubjectType,
 } from '@docket/work/entity-display-contract';
 import { VocabularyProvider } from '@docket/ui/hooks';
-import {
-  Calendar,
-  GanttChart,
-  RefreshCw,
-  Search,
-  Sparkles,
-  TaskAlt,
-  Timer,
-} from '@docket/ui/icons';
+import { GanttChart, RefreshCw, Search, Sparkles, TaskAlt } from '@docket/ui/icons';
 import { Stack } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
@@ -57,7 +48,6 @@ import { GlobalProgramComposer } from '@/components/programs/create-program';
 import { GlobalProjectComposer } from '@/components/projects/create-project';
 import { GlobalTaskComposer } from '@/components/tasks/create-task';
 import { GlobalTeamComposer } from '@/components/teams/create-team';
-import Agenda from '@/components/agenda/agenda';
 import {
   AthenaPanelProvider,
   AthenaRailPanel,
@@ -84,14 +74,10 @@ import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
 import { ResolvedAccountProvider } from '@/components/resolved-account';
 import { SessionSnapshotPersistence } from '@/components/session-snapshot-persistence';
 import { SettingsShell } from '@/components/settings/settings-shell';
+import { athenaRailUnavailable, railAsideFor } from '@/components/shell-rail-aside';
 import { UpdateCard, useServiceWorkerUpdate } from '@/components/service-worker-provider';
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
-import {
-  FocusPanel,
-  focusRailStatus,
-  type TimerStatus,
-  useTimerStatus,
-} from '@/components/time-tracking';
+import { type TimerStatus, useTimerStatus } from '@/components/time-tracking';
 import { api } from '@/lib/api';
 import { useDraftCount } from '@/lib/drafts/defs';
 import { authClient } from '@/lib/auth-client';
@@ -470,55 +456,6 @@ function SidebarRecoveryNudge({
   const { collapsed } = useShellSidebar();
   if (collapsed) return null;
   return <RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />;
-}
-
-/**
- * The curated, Docket-native rail panels for a non-calendar surface. Internal-only by design — the
- * Tasks day-plan and the Agenda — never an integration add-on gallery.
- *
- * @remarks
- * The calendar does not use this rail. Its own timeline is the primary planning surface, and a
- * docked companion steals enough width to hide a normal seven-day week. Calendar creation keeps an
- * explicit Event/Timebox choice, while task management stays one navigation action away.
- *
- * Every panel here is a per-person read, so they are swapped for a placeholder on
- * `identityUnknown` alone. The workspace list is irrelevant to all of them — gating them on it
- * would have held an empty rail open for an org fetch no panel consumes.
- *
- * Athena leads the rail, ahead of Agenda and Focus: it is the companion, not one integration among
- * several. A fresh window opens on Athena when its status carries the `attention` tone — a proposal
- * or question is waiting — and opens on the Agenda otherwise, so a quiet day still lands on the plan.
- * The shell only reads this default once per mount: if the tone clears (e.g. the viewer approves
- * the waiting change) while the rail is already open, the open panel does not move under them.
- *
- * @param identityUnknown - Whether the viewer is still unidentified; swaps panels for a placeholder.
- * @param timerStatus - The live tracker, which lends the Focus icon its status dot.
- * @param athena - The Athena rail panel, including the status that decides the default panel.
- * @returns The rail panel set and the panel shown until the viewer picks another.
- */
-function railAsideFor(
-  identityUnknown: boolean,
-  timerStatus: TimerStatus,
-  athena: RailPanel,
-): AppShellAside {
-  const status = identityUnknown ? null : focusRailStatus(timerStatus);
-  const focus: RailPanel = {
-    id: 'focus',
-    label: 'Focus',
-    icon: <Timer aria-hidden="true" />,
-    node: identityUnknown ? <AppShellAgendaSkeleton /> : <FocusPanel />,
-    ...(status ? { status } : {}),
-  };
-  const agenda: RailPanel = {
-    id: 'agenda',
-    label: 'Agenda',
-    icon: <Calendar aria-hidden="true" />,
-    node: identityUnknown ? <AppShellAgendaSkeleton /> : <Agenda />,
-  };
-  return {
-    panels: [athena, agenda, focus],
-    defaultPanelId: athena.status?.tone === 'attention' ? 'athena' : 'agenda',
-  };
 }
 
 interface AppShellInnerProps {
@@ -902,6 +839,9 @@ function AthenaShell({
   ...props
 }: AthenaShellProps): JSX.Element {
   const router = useRouter();
+  // `/athena` is the conversation itself, so "open Athena" there lands on the page, not the rail.
+  const pathname = useAppPathname();
+  const noAthenaRail = athenaRailUnavailable(pathname, settingsSurface, calendarSurface);
   const [railRequest, setRailRequest] = useState<{
     readonly panelId: string;
     readonly version: number;
@@ -923,7 +863,7 @@ function AthenaShell({
         <AthenaPanelProvider
           railVisible={athenaRailVisible}
           onRevealRail={
-            calendarSurface || settingsSurface
+            noAthenaRail
               ? undefined
               : () => {
                   revealRailPanel('athena');
@@ -977,6 +917,7 @@ function AthenaShellChrome({
   children,
 }: AthenaShellChromeProps): JSX.Element {
   const athena = useAthenaPanel();
+  const pathname = useAppPathname();
   const athenaRail: RailPanel = {
     id: 'athena',
     label: 'Athena',
@@ -1003,7 +944,7 @@ function AthenaShellChrome({
       aside={
         settingsSurface || calendarSurface
           ? undefined
-          : railAsideFor(identityUnknown, timerStatus, athenaRail)
+          : railAsideFor(identityUnknown, timerStatus, athenaRail, pathname)
       }
       railRequest={railRequest}
       onRailStateChange={({ activePanelId, visible }) => {

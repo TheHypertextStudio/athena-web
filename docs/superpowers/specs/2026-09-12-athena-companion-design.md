@@ -130,13 +130,22 @@ person is looking at. Rejected.
   "Athena", so the panel portals its header controls (the context chip, Talk, and the link to the
   wide view) into that title row's slot (`useRailSheetBarSlot`) and paints no header row of its
   own.
-- The rail's inline size is a **person-chosen pixel width**, not a share of the viewport: 420px
+- The rail's inline size is a **person-chosen pixel width**, not a share of the viewport: 360px
   until the viewer drags or keyboard-resizes the handle on its inner edge (the edge facing
-  `<main>`), 360px minimum, half the window's inline size maximum. The handle is a 6px hit area
-  with a `role="separator"` and a 2px tonal fill (`bg-outline-variant` on hover/focus/drag, never a
-  border); dragging it, or pressing Left/Right (16px steps) or Home/End while it has focus, sets
-  the width and persists it under `docket.rail.width` across sessions. `<main>` stays `flex-1`,
-  so both the rail and the content remain visible at every width the handle allows.
+  `<main>`), 360px minimum, 480px maximum. A companion sits beside the work: at 1024px a wider
+  default made the panel nearly as wide as `<main>`, and a person who wants the conversation large
+  opens `/athena`. A width stored before the 480px ceiling is clamped into range when it is read.
+  The handle is a 6px hit area with a `role="separator"` and a 2px tonal fill
+  (`bg-outline-variant` on hover/focus/drag, never a border); dragging it, or pressing Left/Right
+  (16px steps) or Home/End while it has focus, sets the width and persists it under
+  `docket.rail.width` across sessions. `<main>` stays `flex-1` and keeps at least 33% of an
+  untouched 1024px window.
+- The rail is one tonal step off `<main>`: `surface-container-low` in both themes (the `card`
+  surface role). In light that sits between `<main>` and the canvas gutter; in dark it sits below
+  both, since dark `surface-container` is the canvas itself. Panels paint no background of their
+  own over it.
+- `/athena` offers no Athena rail panel: the page is the conversation at full width, so the rail
+  keeps Agenda and Focus only, and "open Athena" there lands on the page.
 
 ### 4.2 Panel anatomy, top to bottom
 
@@ -164,16 +173,26 @@ with the thread, which is the one place work actually shows.
      stopped); a one-line title with its relative time and an overflow menu that is always present
      and disabled when it has nothing to offer (Reply, Pause, Resume, Cancel); one state line —
      "Waiting on you", the running narration, "Finished 4m ago · 2 changes" / "· nothing changed",
-     or "Stopped · Could not …"; then, waiting, the decision's plain sentence and its `Approve` /
+     or a concrete stopped line — the step that failed ("Stopped · Could not …"), the step that
+     never ran ("Canceled · Did not …"), or how far it got ("Stopped after 2 changes", "Stopped
+     before its first step"); then, waiting, the decision's plain sentence and its `Approve` /
      `Reject` row (or `Review` then `Approve` for a change that would leave Docket); finished, one
-     receipt line per change that landed and Undo, or "Nothing changed." with what did not happen;
+     receipt line per change that landed and Undo, or — when nothing landed — only the cause
+     ("Could not set state to In Progress"), since the state line already says nothing changed;
      then the steps behind a pluralised "1 step" / "3 steps" disclosure. "Details" inside a step
-     shows the call as labelled rows. No badge, no box;
+     shows the call as labelled rows. No badge, no box, and no padding of its own above or below:
+     the 32px gap is the whole space between two entries;
    - a **proposal group** (`ProposalGroupCard`): a flat entry — a heading line ("N changes
      proposed"), one row per change in plain words ("Set state to In Progress") rather than the raw
      tool name, and a single `Approve` / `Reject` row with a checkbox only when the group holds
      more than one change. Ghost rows keep their translucent tint; nothing else in the entry does;
-   - a **question** (`ElicitationCard`), at the time it was asked;
+   - a **question** (`ElicitationCard`), at the time it was asked, in the work entry's anatomy:
+     the dot, the action it authorizes as the title line, a state line ("Waiting on you · 3 hr
+     left" / "You answered" / "On hold …") ending in a link to the task it unblocks, then the
+     question and its controls — or, once settled, the question and the recorded answer. No card;
+   - a **plan** opened on the canvas, also a flat entry: the plan's title as the title line with
+     `Open canvas` trailing it, and a state line read live from the plan ("12 drafts · 3
+     confirmed", "Confirmed"). No chip above it naming the same call;
    - a **heads-up** posted by Athena (§4.5), at the bottom of the thread.
 
    Body text is `text-body-medium` (14/20); labels are `text-label-medium` (12/16) or
@@ -183,8 +202,9 @@ with the thread, which is the one place work actually shows.
 
 3. **Composer (fixed, 96px at rest).** One shared composer (§4.4), pinned at the bottom: a
    two-row field that grows to six rows and then scrolls, over one 32px row of trailing controls
-   (attach, then send). A door with no header of its own carries the context chip and Talk in the
-   composer instead. Enter sends; Shift+Enter breaks a line.
+   (attach, then send). From 560px of composer width (a `@container` query) those controls sit
+   inline after the text instead. A door with no header of its own carries the context chip and
+   Talk in the composer instead. Enter sends; Shift+Enter breaks a line.
 
 Empty thread: the composer plus three suggestions drawn from the current page (§4.5), as
 left-aligned 40px text buttons directly above it. They fill the composer. No icon, no name, no
@@ -212,7 +232,8 @@ wide `/athena` view, and Today's expanded session. It owns: the context chip, me
 attachments, the Talk control, the send button, and the streaming "Athena is working" state.
 Today's resting prompt keeps its Task / Athena segmented control. In Athena position it sends into
 the personal thread and expands in place as it does now, using this composer inside the expanded
-session.
+session. While the panel is open, the prompt yields: it becomes one single-line "Add a task" field
+with no toggle, attach control, or send button, so the screen holds one composer.
 
 ### 4.5 Initiative
 
@@ -249,23 +270,31 @@ session.
   `body` first) have been expanded for reading.
 - A running entry accepts a Reply from its overflow menu, beside Pause, Resume, and Cancel: the
   message steers that work, and Athena acknowledges it in the step list.
-- The task the job was delegated from shows the same card in its own detail page's activity, so
-  "sessions live on the task" holds without a second component.
+- The task the job was delegated from shows the same entry on its own detail page, under a
+  `Delegated work` heading at the rank of Subtasks and Resources, capped at 640px, directly above
+  Activity. It stays a section of its own rather than joining Activity's feed: Activity is a
+  server-paginated, filterable history read oldest-first, and a live entry would land out of order
+  whenever a page of it was unloaded. While the panel is open its thread already holds this work,
+  so the task page shows each piece as one line instead — the objective, its state, and `Open`,
+  which scrolls to and focuses the panel's copy. One live copy per document.
 
 ### 4.7 The wide view
 
-`/athena` is the same thread at full width, in two columns from `@3xl`: the conversation browser
-(topics, search, date range) and the **Work ledger** on the left, the thread and composer on the
-right. Connecting a tool or app moves to the composer's attach menu and to Settings › Connections;
-it leaves the thread column. In the delivered left column the connections panel sits under the
-Work ledger, beneath the conversation browser — the same left-hand rail the browser and ledger
-already share, rather than a fourth surface of its own.
+`/athena` is the conversation at full width, in two columns from the `xl` **viewport** breakpoint
+(not a container query, so the view is wide whether or not a rail panel is open beside it): the
+conversation browser (topics, search, date range) and then the **Work ledger** on the left, and
+the thread under a 44px header — the context chip and Talk, the same header the panel has — on
+the right. The shell offers no Athena rail panel on this route (§4.1), so the screen holds one
+header, one Talk, and one composer. Connecting a tool or app lives in the composer's attach menu
+and Settings › Connections; there is no connections band.
 
 The Work ledger answers "what has Athena done for me?" without reinstating the queue as the front
-door. It lists every job with three filters: Running, Needs you, Done. Done sorts newest first and
-each row shows the objective, the receipt's one-line summary, and the date. Clicking any row jumps
-to that job's card in the thread. The panel never shows this list; in the panel, past work is
-reached by scrolling the thread, and the wide view is where a person goes to look back.
+door. It lists the workspace's work behind three filters — Running, Needs you, Done — with no
+counts; a filter with nothing in it is hidden, and the ledger falls back to the first filter that
+has work, waiting work first. Done sorts newest first. Each row is the thread's own work entry, so
+a ledger row and a thread entry are the same object, and on this page the ledger is the only place
+a job renders: the thread here carries the conversation (messages, questions, plans) and merges no
+jobs. A link to `/athena?session=<id>` opens the ledger on that job's filter and scrolls to it.
 
 ### 4.8 Where ongoing and past work are visible
 

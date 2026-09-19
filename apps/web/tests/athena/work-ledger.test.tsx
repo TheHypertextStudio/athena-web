@@ -1,10 +1,19 @@
 import '@testing-library/jest-dom/vitest';
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { AthenaWorkLedger } from '../../src/components/athena/athena-work-ledger';
+import { okResponse } from '../support/query';
+
+import {
+  AthenaWorkLedger,
+  ledgerFilterOf,
+  resolveLedgerFilter,
+} from '../../src/components/athena/athena-work-ledger';
 import type { PersonalAthenaSessionSummary } from '../../src/lib/athena/presentation';
+import type { PersonalAthenaTransport } from '../../src/lib/athena/query-defs';
 
 function job(overrides: Partial<PersonalAthenaSessionSummary> = {}): PersonalAthenaSessionSummary {
   return {
@@ -18,29 +27,74 @@ function job(overrides: Partial<PersonalAthenaSessionSummary> = {}): PersonalAth
   };
 }
 
+/** A transport whose detail read echoes the summary with no steps. */
+function transport(jobs: readonly PersonalAthenaSessionSummary[]): PersonalAthenaTransport {
+  return {
+    pulse: vi.fn(),
+    queue: vi.fn(),
+    detail: vi.fn((id: string) =>
+      Promise.resolve(
+        okResponse({ ...(jobs.find((entry) => entry.id === id) ?? job({ id })), activities: [] }),
+      ),
+    ),
+    activity: vi.fn(),
+    create: vi.fn(),
+    sendMessage: vi.fn(),
+    decide: vi.fn(),
+    lifecycle: vi.fn(),
+    undoChange: vi.fn(),
+    proposals: vi.fn(),
+  };
+}
+
+function renderWithClient(node: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}>{node}</QueryClientProvider>);
+}
+
 afterEach(() => {
   cleanup();
 });
 
 describe('AthenaWorkLedger', () => {
-  it('shows one filter tab per lane with the matching count, and rows for the active filter', () => {
+  it('shows one tab per lane that has work, with no counts, and entries for the active one', () => {
     const jobs = [
       job({ id: 'running_1', status: 'running', queueState: 'working' }),
-      job({ id: 'needs_1', status: 'awaiting_approval', queueState: 'needs_you' }),
       job({ id: 'done_1', status: 'completed', queueState: 'finished' }),
     ];
-    render(
-      <AthenaWorkLedger jobs={jobs} filter="running" onFilterChange={vi.fn()} onOpen={vi.fn()} />,
+    renderWithClient(
+      <AthenaWorkLedger
+        jobs={jobs}
+        filter="running"
+        onFilterChange={vi.fn()}
+        transport={transport(jobs)}
+      />,
     );
 
-    const runningTab = screen.getByRole('tab', { name: /running/i });
-    const needsYouTab = screen.getByRole('tab', { name: /needs you/i });
-    const doneTab = screen.getByRole('tab', { name: /done/i });
-    expect(within(runningTab).getByText('1')).toBeInTheDocument();
-    expect(within(needsYouTab).getByText('1')).toBeInTheDocument();
-    expect(within(doneTab).getByText('1')).toBeInTheDocument();
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs).toHaveLength(2);
+    expect(screen.queryByRole('tab', { name: /needs you/i })).toBeNull();
+    for (const tab of tabs) expect(tab.textContent).not.toMatch(/\d/);
 
-    expect(screen.getAllByRole('button', { name: /Protect two hours/ })).toHaveLength(1);
+    const entries = screen.getAllByRole('article');
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toHaveAttribute('data-athena-job', 'running_1');
+  });
+
+  it('renders each row as the same flat work entry the thread uses', () => {
+    const jobs = [job({ id: 'running_1' })];
+    renderWithClient(
+      <AthenaWorkLedger
+        jobs={jobs}
+        filter="running"
+        onFilterChange={vi.fn()}
+        transport={transport(jobs)}
+      />,
+    );
+
+    const entry = screen.getByRole('article', { name: /Protect two hours/ });
+    expect(entry.querySelector('[data-slot="athena-job-dot"]')).not.toBeNull();
+    expect(entry.querySelector('[data-slot="athena-job-state"]')).not.toBeNull();
   });
 
   it('reports the picked filter without owning it', () => {
@@ -49,12 +103,12 @@ describe('AthenaWorkLedger', () => {
       job({ id: 'running_1', status: 'running', queueState: 'working' }),
       job({ id: 'needs_1', status: 'awaiting_approval', queueState: 'needs_you' }),
     ];
-    render(
+    renderWithClient(
       <AthenaWorkLedger
         jobs={jobs}
         filter="running"
         onFilterChange={onFilterChange}
-        onOpen={vi.fn()}
+        transport={transport(jobs)}
       />,
     );
 
@@ -78,57 +132,57 @@ describe('AthenaWorkLedger', () => {
         updatedAt: '2026-07-10T12:00:00.000Z',
       }),
     ];
-    render(
-      <AthenaWorkLedger jobs={jobs} filter="done" onFilterChange={vi.fn()} onOpen={vi.fn()} />,
-    );
-
-    const rows = screen.getAllByRole('button', { name: /Protect two hours/ });
-    expect(rows).toHaveLength(2);
-    const newestIndex = rows.findIndex((row) => within(row).queryByText('Jul 10') !== null);
-    const oldestIndex = rows.findIndex((row) => within(row).queryByText('Jul 1') !== null);
-    expect(newestIndex).toBe(0);
-    expect(oldestIndex).toBe(1);
-  });
-
-  it('fits its three filter tabs inside a 280px wide-view column without overflowing it', () => {
-    // jsdom performs no layout, so this cannot assert pixel widths. It asserts the structural
-    // mechanism instead: the tablist is shrunk to the compact control step (so three labels with
-    // counts have a chance of fitting a 280px rail column) and sits inside its own
-    // `overflow-x-auto` wrapper (so, failing that, the row scrolls instead of clipping a label or
-    // widening the page) — and that every tab, including "Done", still renders.
-    const jobs = [
-      job({ id: 'running_1', status: 'running', queueState: 'working' }),
-      job({ id: 'needs_1', status: 'awaiting_approval', queueState: 'needs_you' }),
-      job({ id: 'done_1', status: 'completed', queueState: 'finished' }),
-    ];
-    const { container } = render(
-      <div style={{ width: 280 }}>
-        <AthenaWorkLedger jobs={jobs} filter="running" onFilterChange={vi.fn()} onOpen={vi.fn()} />
-      </div>,
-    );
-
-    expect(screen.getByRole('tab', { name: /running/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /needs you/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /done/i })).toBeInTheDocument();
-
-    const tablist = screen.getByRole('tablist', { name: "Filter Athena's work" });
-    expect(container.querySelector('.overflow-x-auto')).toContainElement(tablist);
-    expect(tablist.closest('[data-control-size]')).toHaveAttribute('data-control-size', 'sm');
-  });
-
-  it('calls onOpen with the job id when a row is clicked', () => {
-    const onOpen = vi.fn();
-    render(
+    renderWithClient(
       <AthenaWorkLedger
-        jobs={[job({ id: 'session_42', status: 'running', queueState: 'working' })]}
-        filter="running"
+        jobs={jobs}
+        filter="done"
         onFilterChange={vi.fn()}
-        onOpen={onOpen}
+        transport={transport(jobs)}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Protect two hours/ }));
+    const ids = screen
+      .getAllByRole('article')
+      .map((entry) => entry.getAttribute('data-athena-job'));
+    expect(ids).toEqual(['done_new', 'done_old']);
+  });
 
-    expect(onOpen).toHaveBeenCalledWith('session_42');
+  it('falls back to the first lane with work when the chosen one is empty', () => {
+    const jobs = [job({ id: 'needs_1', status: 'awaiting_approval', queueState: 'needs_you' })];
+    renderWithClient(
+      <AthenaWorkLedger
+        jobs={jobs}
+        filter="running"
+        onFilterChange={vi.fn()}
+        transport={transport(jobs)}
+      />,
+    );
+
+    const tablist = screen.getByRole('tablist');
+    expect(within(tablist).getByRole('tab', { selected: true })).toHaveTextContent(/needs you/i);
+    expect(screen.getByRole('article')).toHaveAttribute('data-athena-job', 'needs_1');
+  });
+
+  it('renders nothing when there is no work at all', () => {
+    const { container } = renderWithClient(
+      <AthenaWorkLedger jobs={[]} filter="running" onFilterChange={vi.fn()} />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('ledger filters', () => {
+  it('maps a job to its lane, preferring the queue-reported one', () => {
+    const { queueState: _lane, ...withoutLane } = job({ status: 'completed' });
+    expect(ledgerFilterOf(withoutLane)).toBe('done');
+    expect(ledgerFilterOf(job({ status: 'running', queueState: 'needs_you' }))).toBe('needs_you');
+  });
+
+  it('keeps an occupied choice and returns null with no work', () => {
+    const jobs = [job({ id: 'done_1', status: 'completed', queueState: 'finished' })];
+    expect(resolveLedgerFilter(jobs, 'done')).toBe('done');
+    expect(resolveLedgerFilter(jobs, 'running')).toBe('done');
+    expect(resolveLedgerFilter([], 'running')).toBeNull();
   });
 });

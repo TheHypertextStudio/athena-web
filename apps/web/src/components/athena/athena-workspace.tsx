@@ -1,28 +1,31 @@
 'use client';
 
 /**
- * `athena-workspace` — the wide `/athena` view: the same thread at full width, beside where past
- * and pending work are browsed.
+ * `athena-workspace` — the wide `/athena` view: history on the left, the conversation on the right.
  *
  * @remarks
- * Two columns from `@3xl` (§4.7 of `docs/superpowers/specs/2026-09-12-athena-companion-design.md`):
- * the conversation browser, the Work ledger, and the connections panel on the left; the thread and
- * its composer on the right. A job is a card inside that thread, not a separate selection — the
- * ledger's job is answering "what has Athena done for me?", not re-deriving the queue as a second
- * front door. Clicking a ledger row asks the thread to scroll to that job's card; every queued job
- * is already merged into the thread by `mergeThreadEntries`, so the request is a scroll, never a
- * second copy of the card rendered above the composer.
+ * Two columns from the `xl` viewport breakpoint (§4.7 of
+ * `docs/superpowers/specs/2026-09-12-athena-companion-design.md`), not a container query, so the
+ * view is wide whether or not a rail panel is open beside it. The left column holds the
+ * conversation browser and then the Work ledger; the right column holds the thread under a 44px
+ * header with the page chip and Talk — the same header the rail panel has, and the only one on the
+ * screen, because the shell drops Athena's rail panel on this route.
+ *
+ * Every piece of delegated work lives in the ledger, and only there: the thread on this page carries
+ * the conversation (messages, questions, plans) and merges no jobs, so no job has two live copies in
+ * the document. There is no connections band — the composer's attach control and Settings ›
+ * Connections own connecting an app.
  */
-import { Sparkles } from '@docket/ui/icons';
 import { Skeleton, Surface } from '@docket/ui/primitives';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import AthenaConversation from '@/components/athena/athena-conversation';
+import { AthenaContextChip } from '@/components/athena/athena-context-chip';
 import { AthenaConversationBrowser } from '@/components/athena/athena-conversation-browser';
-import { AthenaMcpPanel } from '@/components/athena/athena-mcp-panel';
 import {
   AthenaWorkLedger,
   type AthenaWorkLedgerFilter,
+  ledgerFilterOf,
 } from '@/components/athena/athena-work-ledger';
 import { usePageContext } from '@/components/athena/page-context';
 import { VoiceLaunch } from '@/components/athena/voice-launch';
@@ -40,9 +43,9 @@ import { useLiveApiQuery } from '@/lib/query';
 
 /** Props for {@link AthenaWorkspace}. */
 export interface AthenaWorkspaceProps {
-  /** A job to scroll the thread to once its card has mounted. */
+  /** A job to open the ledger on and scroll to once its entry has mounted. */
   readonly initialSessionId?: string | null | undefined;
-  /** Scope the queue and the thread to one workspace instead of every workspace at once. */
+  /** Scope the ledger and the thread to one workspace instead of the page's own. */
   readonly workspaceFilter?: string | null | undefined;
   /** The page context an entry point opened this view with; attached to the next message. */
   readonly invocationContext?: PersonalAthenaContext | null | undefined;
@@ -54,26 +57,176 @@ export interface AthenaWorkspaceProps {
   readonly transport?: PersonalAthenaTransport | undefined;
 }
 
+/** How often the ledger re-reads the workspace's queue. */
+const QUEUE_LIVE_INTERVAL_MS = 5_000;
+
+/** The thread on this page merges no jobs: they live in the ledger. */
+const NO_JOBS: readonly PersonalAthenaSessionSummary[] = [];
+
 /**
- * Scroll one job's entry in this view's own thread into view; report whether it was found.
+ * Scroll one job's ledger entry into view; report whether it was mounted.
  *
  * @remarks
- * Queries inside `[data-athena-workspace]`, never the whole document: the docked rail can show the
- * same job, and that copy must not be the one that moves.
+ * Queries inside `[data-athena-workspace]`, never the whole document, so another copy of the same
+ * job elsewhere on the page is never the one that moves.
  */
-function scrollToMountedCard(jobId: string): boolean {
-  const card = document.querySelector(`[data-athena-workspace] [data-athena-job="${jobId}"]`);
-  if (!card) return false;
-  card.scrollIntoView({ block: 'center' });
-  return true;
+function scrollToLedgerEntry(jobId: string): boolean {
+  const entry = document.querySelector(`[data-athena-workspace] [data-athena-job="${jobId}"]`);
+  entry?.scrollIntoView({ block: 'center' });
+  return entry !== null;
 }
 
-/** Whether a job belongs to the scoped workspace, honouring either place a workspace id is kept. */
-function inWorkspace(job: PersonalAthenaSessionSummary, workspaceFilter: string): boolean {
-  return job.workspace?.id === workspaceFilter || job.context?.workspaceId === workspaceFilter;
+/** The ledger's chosen filter, and the job a link asked the page to open on. */
+interface LedgerFocus {
+  readonly filter: AthenaWorkLedgerFilter;
+  readonly setFilter: (filter: AthenaWorkLedgerFilter) => void;
 }
 
-/** The wide Athena view: the browser, the Work ledger, and connections beside the thread. */
+/**
+ * Hold the ledger's filter, and honour a link's `session` once: switch to that job's filter and
+ * scroll to its entry as soon as it renders.
+ */
+function useLedgerFocus(
+  initialSessionId: string | null,
+  jobs: readonly PersonalAthenaSessionSummary[],
+): LedgerFocus {
+  // Waiting work first; the ledger falls back to the next filter with work when this one is empty.
+  const [filter, setFilter] = useState<AthenaWorkLedgerFilter>('needs_you');
+  const [pendingId, setPendingId] = useState<string | null>(initialSessionId);
+  const target = pendingId ? jobs.find((job) => job.id === pendingId) : undefined;
+  if (target && ledgerFilterOf(target) !== filter) setFilter(ledgerFilterOf(target));
+  useEffect(() => {
+    if (target && scrollToLedgerEntry(target.id)) setPendingId(null);
+  }, [target, filter]);
+  return { filter, setFilter };
+}
+
+/** Where the queue read stands, for the ledger's loading and failure lines. */
+interface QueueReadState {
+  readonly isPending: boolean;
+  readonly isError: boolean;
+}
+
+/** Props for {@link WorkColumn}. */
+interface WorkColumnProps {
+  readonly queue: QueueReadState;
+  readonly jobs: readonly PersonalAthenaSessionSummary[];
+  readonly focus: LedgerFocus;
+  readonly transport: PersonalAthenaTransport;
+}
+
+/** The left column: the conversation browser, then the Work ledger. */
+function WorkColumn({ queue, jobs, focus, transport }: WorkColumnProps): JSX.Element {
+  return (
+    <Surface
+      as="nav"
+      tone="card"
+      shape="none"
+      aria-label="Athena work"
+      className="flex shrink-0 flex-col gap-8 p-4 xl:min-h-0 xl:overflow-y-auto"
+    >
+      <AthenaConversationBrowser className="max-h-72" />
+      <WorkLedgerRead queue={queue} jobs={jobs} focus={focus} transport={transport} />
+    </Surface>
+  );
+}
+
+/** The ledger once the queue has loaded; a skeleton before, and one line if the read fails. */
+function WorkLedgerRead({ queue, jobs, focus, transport }: WorkColumnProps): JSX.Element | null {
+  if (queue.isPending) {
+    return (
+      <div className="flex flex-col gap-2" aria-hidden="true">
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-12 w-full" />
+      </div>
+    );
+  }
+  if (queue.isError) {
+    return (
+      <p role="status" className="text-on-surface-variant text-body-small">
+        Work is temporarily unavailable. We&apos;ll keep checking.
+      </p>
+    );
+  }
+  return (
+    <AthenaWorkLedger
+      jobs={jobs}
+      filter={focus.filter}
+      onFilterChange={focus.setFilter}
+      transport={transport}
+    />
+  );
+}
+
+/** Props for {@link ThreadColumn}. */
+interface ThreadColumnProps {
+  readonly workspaceId: string | null;
+  /** The context a link opened this view with, else the page's own workspace. */
+  readonly invocationContext: PersonalAthenaContext | null;
+  readonly transport: PersonalAthenaTransport;
+}
+
+/** The right column: the 44px header with the page chip and Talk, then the thread. */
+function ThreadColumn({
+  workspaceId,
+  invocationContext,
+  transport,
+}: ThreadColumnProps): JSX.Element {
+  const [contextAttached, setContextAttached] = useState(true);
+  useEffect(() => {
+    setContextAttached(true);
+  }, [invocationContext]);
+
+  if (!workspaceId) {
+    return (
+      <section aria-label="Conversation" className="flex min-w-0 flex-col">
+        <p role="status" className="text-on-surface-variant text-body-medium p-6">
+          Open a workspace to talk to Athena.
+        </p>
+      </section>
+    );
+  }
+  return (
+    <section aria-label="Conversation" className="flex min-h-[32rem] min-w-0 flex-col xl:min-h-0">
+      <div
+        data-slot="athena-workspace-header"
+        className="flex h-11 shrink-0 items-center gap-1 px-4 xl:px-6"
+      >
+        <div className="flex min-w-0 flex-1 items-center">
+          {invocationContext ? (
+            <AthenaContextChip
+              context={invocationContext}
+              attached={contextAttached}
+              onDetach={() => {
+                setContextAttached(false);
+              }}
+              onAttach={() => {
+                setContextAttached(true);
+              }}
+            />
+          ) : null}
+        </div>
+        <VoiceLaunch workspaceId={workspaceId} iconOnly />
+      </div>
+      <AthenaConversation
+        orgId={workspaceId}
+        className="min-h-0 flex-1 px-4 pb-4 xl:px-6"
+        jobs={NO_JOBS}
+        transport={transport}
+        context={invocationContext}
+        contextAttached={contextAttached}
+        onDetachContext={() => {
+          setContextAttached(false);
+        }}
+        onAttachContext={() => {
+          setContextAttached(true);
+        }}
+      />
+    </section>
+  );
+}
+
+/** The wide Athena view: the browser and the Work ledger beside the conversation. */
 export function AthenaWorkspace({
   initialSessionId = null,
   workspaceFilter = null,
@@ -83,40 +236,13 @@ export function AthenaWorkspace({
   transport = personalAthenaTransport,
 }: AthenaWorkspaceProps): JSX.Element {
   const pageContext = usePageContext();
-  const activeWorkspaceId = workspaceFilter ?? pageContext?.workspaceId ?? null;
-  const queue = useLiveApiQuery(personalAthenaQueueDef(transport), 5_000);
-  const [ledgerFilter, setLedgerFilter] = useState<AthenaWorkLedgerFilter>('running');
-  // Seeded once from `initialSessionId` on mount; after that this only ever moves through the
-  // ledger's own open/scrolled cycle below.
-  const [pendingScrollId, setPendingScrollId] = useState<string | null>(
-    () => initialSessionId ?? null,
+  const workspaceId = workspaceFilter ?? pageContext?.workspaceId ?? null;
+  const queue = useLiveApiQuery(
+    personalAthenaQueueDef(transport, true, workspaceId ?? undefined),
+    QUEUE_LIVE_INTERVAL_MS,
   );
-  const [contextAttached, setContextAttached] = useState(true);
-
-  useEffect(() => {
-    setContextAttached(true);
-  }, [invocationContext]);
-
-  const jobs = useMemo(() => {
-    const all = queue.data ? jobsFromQueue(queue.data) : [];
-    return activeWorkspaceId ? all.filter((job) => inWorkspace(job, activeWorkspaceId)) : all;
-  }, [queue.data, activeWorkspaceId]);
-
-  // Try an immediate scroll first — the row's card is usually already mounted — and only ask the
-  // thread to keep watching for it when it is not. `AthenaConversation`'s own effect handles the
-  // watch: it retries as the thread's entries render, which covers a still-loading thread or a
-  // job outside today's window.
-  const handleLedgerOpen = useCallback((jobId: string): void => {
-    if (scrollToMountedCard(jobId)) {
-      setPendingScrollId(null);
-      return;
-    }
-    setPendingScrollId(jobId);
-  }, []);
-
-  const handleScrolledToJob = useCallback((jobId: string): void => {
-    setPendingScrollId((current) => (current === jobId ? null : current));
-  }, []);
+  const jobs = useMemo(() => (queue.data ? jobsFromQueue(queue.data) : NO_JOBS), [queue.data]);
+  const focus = useLedgerFocus(initialSessionId, jobs);
 
   return (
     <Surface
@@ -125,77 +251,13 @@ export function AthenaWorkspace({
       data-athena-workspace
       className="flex h-full min-h-0 w-full flex-col"
     >
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto @3xl:grid @3xl:grid-cols-[19rem_minmax(0,1fr)] @3xl:overflow-hidden">
-        <Surface
-          as="nav"
-          tone="card"
-          shape="none"
-          aria-label="Athena work"
-          className="flex max-h-[40vh] shrink-0 flex-col gap-3 overflow-y-auto @3xl:max-h-none"
-        >
-          <div className="p-3">
-            <AthenaConversationBrowser className="max-h-72" />
-          </div>
-          <div className="p-3">
-            {queue.isPending ? (
-              <div className="flex flex-col gap-2" aria-hidden="true">
-                <Skeleton className="h-8 w-full" />
-                <Skeleton className="h-16 w-full" />
-              </div>
-            ) : queue.isError ? (
-              <p role="status" className="text-on-surface-variant text-body-small">
-                Athena work is temporarily unavailable. We&apos;ll keep checking.
-              </p>
-            ) : (
-              <AthenaWorkLedger
-                jobs={jobs}
-                filter={ledgerFilter}
-                onFilterChange={setLedgerFilter}
-                onOpen={handleLedgerOpen}
-              />
-            )}
-          </div>
-          <div>
-            <AthenaMcpPanel />
-          </div>
-        </Surface>
-
-        <main className="flex min-h-[32rem] min-w-0 shrink-0 flex-col @3xl:min-h-0">
-          <Surface
-            as="header"
-            tone="card"
-            shape="none"
-            className="flex min-h-12 shrink-0 items-center gap-2 px-4 py-2 @2xl:px-6"
-          >
-            <Sparkles aria-hidden="true" className="text-primary size-4" />
-            <span className="text-on-surface text-label-large min-w-0 flex-1 truncate">Athena</span>
-            <VoiceLaunch workspaceId={activeWorkspaceId} />
-          </Surface>
-          {activeWorkspaceId ? (
-            <AthenaConversation
-              orgId={activeWorkspaceId}
-              className="min-h-0 flex-1 px-4 pb-4 @2xl:px-6"
-              jobs={jobs}
-              transport={transport}
-              context={invocationContext}
-              composerChip
-              contextAttached={contextAttached}
-              onDetachContext={() => {
-                setContextAttached(false);
-              }}
-              onAttachContext={() => {
-                setContextAttached(true);
-              }}
-              questions={false}
-              scrollToJobId={pendingScrollId}
-              onScrolledToJob={handleScrolledToJob}
-            />
-          ) : (
-            <p role="status" className="text-on-surface-variant text-body-medium p-6">
-              Open a workspace to talk to Athena.
-            </p>
-          )}
-        </main>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto xl:grid xl:grid-cols-[minmax(18rem,26rem)_minmax(24rem,1fr)] xl:overflow-hidden">
+        <WorkColumn queue={queue} jobs={jobs} focus={focus} transport={transport} />
+        <ThreadColumn
+          workspaceId={workspaceId}
+          invocationContext={invocationContext ?? pageContext}
+          transport={transport}
+        />
       </div>
     </Surface>
   );

@@ -192,18 +192,17 @@ test('delegated work is decided in the thread, and the ledger finds it after', a
   await expect(railJobCard.locator('[data-slot="athena-job-receipt"]')).toBeVisible();
   await expect(railJobCard.getByRole('button', { name: 'More' })).toBeDisabled();
 
-  // The wide view reads the same queue: the job now lives in the Done lane.
+  // The wide view reads the same queue: the job now lives in the Done lane, as the same entry.
   await page.goto(`/athena?workspace=${orgId}`);
   const ledger = page.getByRole('navigation', { name: 'Athena work' });
   await ledger.getByRole('tab', { name: /Done/ }).click();
 
-  const doneRow = ledger.getByRole('button', { name: objective });
-  await expect(doneRow).toBeVisible();
-  await doneRow.click();
+  const doneEntry = ledger.getByRole('article', { name: objective });
+  await expect(doneEntry).toBeVisible();
+  await expect(doneEntry).toHaveAttribute('data-state', 'done');
 
-  // Clicking the row scrolls the thread's own card into view rather than opening a second one.
-  // Scoped to the page's main landmark: the docked utility rail also renders its own copy of the
-  // same job card from the same queue, and at this width it is present beside `<main>` too.
-  const wideJobCard = page.getByRole('main').getByRole('article', { name: objective });
-  await expect(wideJobCard).toBeVisible();
+  // One live copy per document: the page's thread merges no jobs, and the rail offers no Athena
+  // panel on this route, so the ledger's entry is the only one.
+  await expect(page.getByRole('article', { name: objective })).toHaveCount(1);
+  await expect(page.getByRole('form', { name: 'Message Athena' })).toHaveCount(1);
 });

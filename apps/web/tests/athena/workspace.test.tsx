@@ -117,28 +117,30 @@ afterEach(() => {
 });
 
 describe('AthenaWorkspace', () => {
-  it('shows the Work ledger filters with counts drawn from the queue payload', async () => {
+  it('shows only the ledger filters that have work, with no counts', async () => {
     chatGet.mockResolvedValue(okResponse(chatThread()));
     elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
     renderWorkspace();
 
-    const runningTab = await screen.findByRole('tab', { name: /running/i });
-    const needsYouTab = screen.getByRole('tab', { name: /needs you/i });
-    const doneTab = screen.getByRole('tab', { name: /done/i });
-    expect(within(runningTab).getByText('1')).toBeInTheDocument();
-    expect(within(needsYouTab).getByText('1')).toBeInTheDocument();
-    expect(within(doneTab).getByText('1')).toBeInTheDocument();
+    await screen.findByRole('tab', { name: /running/i });
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs).toHaveLength(3);
+    for (const tab of tabs) expect(tab.textContent).not.toMatch(/\d/);
   });
 
-  it('renders a queued job as a card in the thread', async () => {
+  it('keeps each piece of work in the ledger only, never also in the thread', async () => {
     chatGet.mockResolvedValue(okResponse(chatThread()));
     elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
     renderWorkspace();
 
-    expect(await screen.findByRole('article', { name: /Prepare the launch review/ })).toBeVisible();
+    // The ledger opens on waiting work first.
+    const entry = await screen.findByRole('article', { name: /Approve the recap email/ });
+    expect(entry.closest('[data-slot="athena-work-ledger"]')).not.toBeNull();
+    expect(screen.getAllByRole('article', { name: /Approve the recap email/ })).toHaveLength(1);
+    expect(document.querySelector('[data-slot="athena-thread"] [data-athena-job]')).toBeNull();
   });
 
-  it('shows the composer with the workspace context chip', async () => {
+  it('holds the page chip and Talk in one header above the thread, not in the composer', async () => {
     chatGet.mockResolvedValue(okResponse(chatThread()));
     elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
     renderWorkspace({
@@ -149,49 +151,51 @@ describe('AthenaWorkspace', () => {
     });
 
     const form = await screen.findByRole('form', { name: /Message Athena/ });
-    expect(within(form).getByRole('group', { name: /Fall fundraiser launch/ })).toBeVisible();
+    const header = document.querySelector<HTMLElement>('[data-slot="athena-workspace-header"]');
+    if (!header) throw new Error('the thread column has a header');
+    expect(within(header).getByRole('group', { name: /Fall fundraiser launch/ })).toBeVisible();
+    expect(within(form).queryByRole('group', { name: /Fall fundraiser launch/ })).toBeNull();
   });
 
-  it('scrolls a ledger row to its card once the card has mounted in the thread', async () => {
-    chatGet.mockResolvedValue(okResponse(chatThread()));
-    elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
-    const scroll = vi.fn();
-    Element.prototype.scrollIntoView = scroll;
-    renderWorkspace();
-
-    await screen.findByRole('article', { name: /Prepare the launch review/ });
-    const before = scroll.mock.calls.length;
-    fireEvent.click(screen.getByRole('button', { name: /Prepare the launch review/ }));
-
-    await waitFor(() => {
-      expect(scroll.mock.calls.length).toBeGreaterThan(before);
-    });
-  });
-
-  it('asks the thread to scroll to a ledger row instead of pinning a duplicate card', async () => {
+  it('opens on a linked job: switches to its filter and scrolls to its entry', async () => {
     chatGet.mockResolvedValue(okResponse(chatThread()));
     elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
     const scrollTargets: Element[] = [];
     Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
       scrollTargets.push(this);
     };
-    renderWorkspace();
+    renderWorkspace({ initialSessionId: 'needs_1' });
 
-    await screen.findByRole('article', { name: /Prepare the launch review/ });
-    fireEvent.click(screen.getByRole('button', { name: /Prepare the launch review/ }));
-
+    await screen.findByRole('article', { name: /Approve the recap email/ });
+    expect(screen.getByRole('tab', { selected: true })).toHaveTextContent(/needs you/i);
     await waitFor(() => {
-      expect(scrollTargets.at(-1)?.getAttribute('data-athena-job')).toBe('working_1');
+      expect(
+        scrollTargets.some((target) => target.getAttribute('data-athena-job') === 'needs_1'),
+      ).toBe(true);
     });
-    expect(screen.getAllByRole('article', { name: /Prepare the launch review/ })).toHaveLength(1);
   });
 
-  it('does not run a second presence heartbeat for the wide view', async () => {
+  it('switches the ledger when another filter is picked', async () => {
     chatGet.mockResolvedValue(okResponse(chatThread()));
     elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
     renderWorkspace();
 
-    await screen.findByRole('article', { name: /Prepare the launch review/ });
-    expect(elicitationsGet).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('tab', { name: /done/i }));
+
+    expect(
+      await screen.findByRole('article', { name: /Send the weekly recap/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('article', { name: /Approve the recap email/ })).toBeNull();
+  });
+
+  it('owns the page’s questions, since no rail conversation sits beside it', async () => {
+    chatGet.mockResolvedValue(okResponse(chatThread()));
+    elicitationsGet.mockResolvedValue(okResponse({ items: [] }));
+    renderWorkspace();
+
+    await screen.findByRole('form', { name: /Message Athena/ });
+    await waitFor(() => {
+      expect(elicitationsGet).toHaveBeenCalled();
+    });
   });
 });

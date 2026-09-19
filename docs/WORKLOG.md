@@ -405,6 +405,21 @@ event-stream `Accept` with `406`, and errors on a stream route stay `application
   slabs, "· Workspace", and "Athena is working…". Screenshots:
   `apps/web/.data/design-review/2026-09-19-rebuild/`. Learnings: dev PGlite stamps `createdAt` in
   local time as UTC, so title-line times read hours off in local screenshots only.
+- **Audit rebuild, the rest (2026-09-19)**: §3–§5 and finding 9 of the audit. The rail defaults to
+  360px, drags to 480px at most (older stored widths clamp in), and sits on `surface-container-low`
+  in both themes; `<main>` keeps 33% of an untouched 1024px window. The composer puts its controls
+  inline from 560px. `/athena` is two columns from the `xl` viewport breakpoint (browser, then a
+  ledger of flat work entries with no counts and no empty filters; the thread under one chip-and-Talk
+  header), with no connections band and no Athena rail panel on that route, so each job has one
+  live copy. The task page shows `Delegated work` above Activity (kept separate because Activity is
+  paginated oldest-first) and shrinks it to one line per job, with `Open` into the panel, while the
+  panel is open; the dependency map loads as the page scrolls near it; the comment form is a tonal
+  fill. Today's prompt yields to a one-line "Add a task" field while the panel is open. In the
+  thread: a failed finish says "nothing changed" once, a stopped entry names what did not happen,
+  questions and plans are flat entries, entries carry no padding of their own, and the thread
+  stays at its end as entries finish laying out. Screenshots:
+  `apps/web/.data/design-review/2026-09-19-rest/`. Left for the project-page lane: the Tasks
+  table still truncates titles beside the 360px rail, from its fixed column set.
 
 ---
 

@@ -151,6 +151,10 @@ describe('useAthenaActions', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'This change is no longer here to undo.',
     );
+    dismissAllNotices();
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
 
     vi.mocked(api.undoChange).mockResolvedValueOnce(problemResponse('conflict', 409, 'conflict'));
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));

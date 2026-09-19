@@ -18,6 +18,7 @@ import {
   CollapsibleTrigger,
   focusRing,
   surfaceToneColor,
+  Text,
 } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
@@ -190,14 +191,14 @@ function JobStepRow({
   return (
     <li className="flex flex-col gap-1">
       {heading === null ? null : (
-        <p
-          className={cn(
-            'text-body-small break-words',
-            entry.failed ? 'text-error' : 'text-on-surface',
-          )}
+        <Text
+          as="p"
+          token="body-small"
+          tone={entry.failed ? 'error' : 'default'}
+          className="break-words"
         >
           {heading}
-        </p>
+        </Text>
       )}
       {showsDetailLine(entry) ? (
         <p className="text-on-surface-variant text-body-small break-words whitespace-pre-wrap">

@@ -3,11 +3,12 @@
  *
  * @remarks
  * Only the header and the composer may live outside the thread's scroller, so everything else —
- * the empty suggestions, a failed send, a question, the jump to waiting work — must be found
- * inside it, in the thread's own order.
+ * the empty suggestions, a question, the jump to waiting work — must be found inside it, in the
+ * thread's own order. A failed send is the exception: it is reported once, as a notice.
  */
 import '@testing-library/jest-dom/vitest';
 
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -138,18 +139,21 @@ describe('AthenaConversation thread structure', () => {
     expect(scroller.querySelector('svg')).toBeNull();
   });
 
-  it('puts a failed send inside the thread, never the exception text', async () => {
+  it('reports a failed send once as a notice, outside the thread and without the exception text', async () => {
     chatGet.mockResolvedValue(okResponse(thread([])));
     personalPost.mockRejectedValue(new Error('network down'));
+    render(<Toaster />);
     renderConversation();
 
-    fireEvent.change(await screen.findByRole('combobox', { name: 'Message Athena' }), {
-      target: { value: 'Plan my day' },
-    });
+    const composer = await screen.findByRole('combobox', { name: 'Message Athena' });
+    fireEvent.change(composer, { target: { value: 'Plan my day' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    const alert = await inThread('[role="alert"]');
-    expect(alert).not.toHaveTextContent('network down');
+    const notice = await screen.findByRole('alert');
+    expect(notice).not.toHaveTextContent('network down');
+    expect(notice.closest('[data-slot="athena-thread"]')).toBeNull();
+    expect(composer).toHaveValue('Plan my day');
+    dismissAllNotices();
   });
 
   it('renders a question as a thread entry at the time it was asked', async () => {

@@ -38,6 +38,17 @@ interface EventRow {
   archivedAt?: Date | null;
 }
 
+/** Map entity kinds to search document kinds. */
+const ENTITY_KIND_MAP: Record<string, SearchDocumentKind> = {
+  work_item: 'task',
+  project: 'project',
+  program: 'program',
+  initiative: 'initiative',
+  cycle: 'cycle',
+  calendar_event: 'calendar_event',
+  organization: 'organization',
+};
+
 /**
  * The search kind an event's subject scopes to, or null when it has no Docket subject.
  *
@@ -50,25 +61,8 @@ function searchKindForEntity(
   entityKind: string | null | undefined,
   docketEntityId: string | null | undefined,
 ): SearchDocumentKind | null {
-  if (!docketEntityId) return null;
-  switch (entityKind) {
-    case 'work_item':
-      return 'task';
-    case 'project':
-      return 'project';
-    case 'program':
-      return 'program';
-    case 'initiative':
-      return 'initiative';
-    case 'cycle':
-      return 'cycle';
-    case 'calendar_event':
-      return 'calendar_event';
-    case 'organization':
-      return 'organization';
-    default:
-      return null;
-  }
+  if (!docketEntityId || !entityKind) return null;
+  return ENTITY_KIND_MAP[entityKind] ?? null;
 }
 
 /** Projector that turns a canonical event-log row into searchable activity. */

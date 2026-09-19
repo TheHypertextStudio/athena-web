@@ -121,6 +121,43 @@ async function loadAlreadySuggested(
   };
 }
 
+/** Build the email metadata for a suggestion row. */
+function buildEmailMeta(thread: CandidateThread) {
+  return {
+    subject: thread.subject,
+    sender: thread.sender,
+    snippet: thread.snippet,
+    ...(thread.receivedAt !== undefined ? { receivedAt: thread.receivedAt } : {}),
+    ...(thread.rfc822MessageId !== undefined ? { rfc822MessageId: thread.rfc822MessageId } : {}),
+    externalUrl: thread.externalUrl,
+  };
+}
+
+/** Emit the created event after inserting a suggestion. */
+async function emitSuggestionCreated(
+  input: PersistSuggestionsInput,
+  rowId: string,
+  thread: CandidateThread,
+  draft: Awaited<ReturnType<PersistSuggestionsInput['synthesizer']['synthesize']>>,
+  verdict: ReturnType<typeof classifyTaskWorthiness>,
+) {
+  await emitEvent({
+    organizationId: input.organizationId,
+    kind: 'created',
+    actorId: input.actorId,
+    title: draft.title,
+    subject: { type: 'email_suggestion', id: rowId, title: draft.title },
+    detail: {
+      schema: 'docket.email_suggestion',
+      category: verdict.category ?? null,
+      confidence: verdict.score,
+      subject: thread.subject,
+      sender: thread.sender,
+      snippet: thread.snippet,
+    },
+  });
+}
+
 /**
  * Draft and persist one suggestion, emitting its `created` observation.
  *
@@ -152,44 +189,16 @@ async function persistOneSuggestion(
       dueDate: draft.dueDate !== undefined ? new Date(`${draft.dueDate}T00:00:00.000Z`) : null,
       confidence: verdict.score,
       rfc822MessageId: thread.rfc822MessageId ?? null,
-      emailMeta: {
-        subject: thread.subject,
-        sender: thread.sender,
-        snippet: thread.snippet,
-        ...(thread.receivedAt !== undefined ? { receivedAt: thread.receivedAt } : {}),
-        ...(thread.rfc822MessageId !== undefined
-          ? { rfc822MessageId: thread.rfc822MessageId }
-          : {}),
-        externalUrl: thread.externalUrl,
-      },
+      emailMeta: buildEmailMeta(thread),
     })
     .onConflictDoNothing({
       target: [emailSuggestion.organizationId, emailSuggestion.externalThreadId],
     })
     .returning({ id: emailSuggestion.id });
   const row = inserted[0];
-  if (!row) return undefined; // raced with another writer — already suggested
+  if (!row) return undefined;
 
-  await emitEvent({
-    organizationId: input.organizationId,
-    kind: 'created',
-    actorId: input.actorId,
-    title: draft.title,
-    subject: { type: 'email_suggestion', id: row.id, title: draft.title },
-    // The funnel verdict rides along so pipeline rules can match on it
-    // (e.g. dismiss-promotions matches `detail.category === 'promotions'`), and so does the
-    // email's own subject/sender/snippet — a routing rule ("anything about an LVBT
-    // opportunity belongs in the LVBT workspace") is a condition on the mail, not on the
-    // classifier, and the predicate interpreter can only read what the event carries.
-    detail: {
-      schema: 'docket.email_suggestion',
-      category: verdict.category ?? null,
-      confidence: verdict.score,
-      subject: thread.subject,
-      sender: thread.sender,
-      snippet: thread.snippet,
-    },
-  });
+  await emitSuggestionCreated(input, row.id, thread, draft, verdict);
   return row.id;
 }
 

@@ -43,6 +43,41 @@ export interface BrowseInput {
   toTime: number | null;
 }
 
+function computeChunkSize(limit: number): number {
+  return Math.min((limit + 1) * 4, 400);
+}
+
+function computeNextCursor(
+  page: readonly ScoredRow[],
+  deduped: readonly ScoredRow[],
+  exhausted: boolean,
+  cursor: string | undefined,
+): string | undefined {
+  const last = page[page.length - 1];
+  const hasMore = deduped.length > page.length;
+  if (hasMore && last) return encodeListCursor(last.row.updatedAt, last.row.id);
+  if (!hasMore && !exhausted) return cursor;
+  return undefined;
+}
+
+async function processBrowseRound(
+  rows: readonly SearchDocumentRow[],
+  input: BrowseInput,
+  seen: Set<string>,
+  collected: ScoredRow[],
+): Promise<void> {
+  const visible = await filterVisibleRows(rows, {
+    ownerUserId: input.ownerUserId,
+    accessByOrg: input.accessByOrg,
+  });
+  for (const row of visible.rows) {
+    if (seen.has(row.id)) continue;
+    if (!filterRow(row, input.params, input.fromTime, input.toTime)) continue;
+    seen.add(row.id);
+    collected.push(browseRow(row));
+  }
+}
+
 /**
  * Browse the corpus with no query: the same permission-filtered rows, newest first.
  *
@@ -62,19 +97,10 @@ export async function browseDocuments(input: BrowseInput): Promise<SearchOut> {
   const seen = new Set<string>();
   let cursor = input.params.cursor;
   let exhausted = false;
-  // Recomputed at the end of every round that adds rows, and read again as next round's break
-  // check — so a round that finds nothing new never re-collapses the same `collected` twice.
   let deduped: readonly ScoredRow[] = [];
-
-  // Over-fetch against the page size: both the visibility filter and the facet filters below run
-  // in application code, so the database cannot know how many of these rows survive.
-  const chunkSize = Math.min((input.limit + 1) * 4, 400);
+  const chunkSize = computeChunkSize(input.limit);
 
   for (let round = 0; round < BROWSE_REFILL_ROUNDS && !exhausted; round += 1) {
-    // Checked post-collapse, not against `collected.length` directly: activity-row duplicates
-    // pass `seen`/`filterRow` freely (each has its own row id) and can inflate the raw count while
-    // collapsing away to far fewer distinct rows, which would otherwise stop refilling before a
-    // full page's worth of distinct results has actually been gathered.
     if (deduped.length > input.limit) break;
     const rows = await loadBrowseRows({
       ownerUserId: input.ownerUserId,
@@ -91,45 +117,18 @@ export async function browseDocuments(input: BrowseInput): Promise<SearchOut> {
     if (!lastFetched) break;
     cursor = encodeListCursor(lastFetched.updatedAt, lastFetched.id);
 
-    const visible = await filterVisibleRows(rows, {
-      ownerUserId: input.ownerUserId,
-      accessByOrg: input.accessByOrg,
-    });
-    for (const row of visible.rows) {
-      if (seen.has(row.id)) continue;
-      if (!filterRow(row, input.params, input.fromTime, input.toTime)) continue;
-      seen.add(row.id);
-      collected.push(browseRow(row));
-    }
+    await processBrowseRound(rows, input, seen, collected);
     deduped = collapseActivityRows(collected);
   }
 
   const page = deduped.slice(0, input.limit);
-  const last = page[page.length - 1];
-  const hasMore = deduped.length > input.limit;
-  // When the bounded visibility refill stops before the database is exhausted, continue after the
-  // final raw row scanned. Every row before that cursor was either collected or rejected, so this
-  // advances without dropping an unseen candidate. If we already collected an extra visible row,
-  // continue after the last row returned instead so that extra row leads the next page — though
-  // `collapseActivityRows` has no memory across calls, so an activity row correctly collapsed on
-  // this page (because its subject's own row was also in `collected`, ahead of the cursor) can
-  // reappear at the top of the next page once that subject's row is no longer in the scan window.
-  const nextCursor = hasMore
-    ? last
-      ? encodeListCursor(last.row.updatedAt, last.row.id)
-      : undefined
-    : !exhausted
-      ? cursor
-      : undefined;
+  const nextCursor = computeNextCursor(page, deduped, exhausted, cursor);
   const usedIn = await usedInForPage(page, input.caller);
   const items = await withSearchDisplays(
     page.map((row) => toSearchResult(row, usedIn.get(row.row.id) ?? [])),
   );
   return {
     query: '',
-    // These facets summarize the returned page, not the corpus. The Library's filter options come
-    // from its field catalog, which reads members, teams, and labels directly, so no surface
-    // depends on them being complete.
     facets: buildFacetSummaries(page),
     items,
     ...(nextCursor ? { nextCursor } : {}),

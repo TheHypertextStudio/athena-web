@@ -27,19 +27,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DropdownMenuItem,
-  DropdownMenuLabel,
   Input,
   Select,
   Skeleton,
 } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import type { ViewTarget } from '@docket/work/view-contract';
-import { Fragment, type JSX, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type JSX, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { useActiveOrg } from '@/components/active-org';
-import DocketLink from '@/components/docket-link';
 import { LoadFailure } from '@/components/feedback';
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
@@ -48,13 +45,19 @@ import { SelectionProvider, useSelection } from '@/components/selection';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
 import { openEntity } from '@/lib/local-first-navigation';
+import { transitionNameStyle } from '@/lib/view-transition';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, type RpcResponse, useApiQuery } from '@/lib/query';
 import { objectHref } from '@/lib/actions/object';
 
 import { CARD_GRID_CLASS, CARD_INSET, CARD_MIN_HEIGHT } from './card-styles';
 import { InitiativeTimeline } from './initiative-timeline';
-import { PROJECT_LENS_COPY, projectDependenciesHref } from './project-lens-frame';
+import {
+  PROJECT_LENS_COPY,
+  PROJECT_LENS_TRANSITION,
+  projectDependenciesHref,
+  useWarmProjectLens,
+} from './project-lens-frame';
 import { ProjectTimelineAdapter } from './project-timeline-adapter';
 import type { WorkViewGroupSummary, WorkViewRowFor } from './renderer-types';
 import { useWorkView } from './use-work-view';
@@ -67,7 +70,7 @@ import { WorkCards } from './work-cards';
 import { WorkList } from './work-list';
 import { visibleWorkListRows } from './work-list-groups';
 import { SaveViewFailure, WorkViewOperationFailures } from './work-view-failures';
-import { WorkViewTabs } from './work-view-tabs';
+import { WorkViewOverflowItems, WorkViewTabs } from './work-view-tabs';
 import {
   isRouteOwnedDirectWorkViewRow,
   workViewRowInteractionPolicy,
@@ -341,6 +344,9 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const copy = PAGE_COPY[target];
   const dependenciesHref = target === 'project' ? projectDependenciesHref(organizationId) : null;
+  const transitions: Partial<typeof PROJECT_LENS_TRANSITION> =
+    target === 'project' ? PROJECT_LENS_TRANSITION : {};
+  useWarmProjectLens(organizationId, 'dependencies', target === 'project');
   const savedViewsQuery = useApiQuery(
     apiQueryOptions(
       queryKeys.savedViews(organizationId),
@@ -629,6 +635,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       favoriteViewIds={controller.favoriteViewIds}
       selectedViewId={selectedViewId}
       dependenciesHref={dependenciesHref}
+      transitionName={transitions.lens}
       savedViewsError={savedViewsQuery.error}
       contentFailed={contentFailed}
       onSelect={setSelectedViewId}
@@ -638,57 +645,28 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   );
 
   const viewOverflowItems = (
-    <>
-      <DropdownMenuLabel>Views</DropdownMenuLabel>
-      <DropdownMenuItem
-        selected={selectedViewId === null}
-        onSelect={() => {
-          setSelectedViewId(null);
-        }}
-      >
-        All {copy.title.toLowerCase()}
-      </DropdownMenuItem>
-      {savedViews.map((view) => {
-        const favorite = controller.favoriteViewIds.has(view.id);
-        return (
-          <Fragment key={view.id}>
-            <DropdownMenuItem
-              selected={selectedViewId === view.id}
-              onSelect={() => {
-                setSelectedViewId(view.id);
-              }}
-            >
-              {view.name}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              inset
-              onSelect={() => {
-                controller.toggleFavoriteView(view.id);
-              }}
-            >
-              {favorite ? `Remove ${view.name} from favorites` : `Add ${view.name} to favorites`}
-            </DropdownMenuItem>
-          </Fragment>
-        );
-      })}
-      {dependenciesHref === null ? null : (
-        <DropdownMenuItem asChild>
-          <DocketLink href={dependenciesHref}>Dependencies</DocketLink>
-        </DropdownMenuItem>
-      )}
-    </>
+    <WorkViewOverflowItems
+      title={copy.title}
+      savedViews={savedViews}
+      favoriteViewIds={controller.favoriteViewIds}
+      selectedViewId={selectedViewId}
+      dependenciesHref={dependenciesHref}
+      onSelect={setSelectedViewId}
+      onToggleFavorite={controller.toggleFavoriteView}
+    />
   );
 
   return (
     <div ref={rootRef} className="contents">
       <ListPageLayout
-        title={copy.title}
+        title={<span style={transitionNameStyle(transitions.title)}>{copy.title}</span>}
         fill
         bodyPresentation={layout === 'timeline' ? 'full-bleed' : 'inset'}
         actions={
           canContribute ? (
             <Button
               className="min-h-10 gap-1.5"
+              style={transitionNameStyle(transitions.create)}
               onClick={() => {
                 create();
               }}

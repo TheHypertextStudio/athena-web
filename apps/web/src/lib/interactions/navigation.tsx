@@ -15,10 +15,24 @@ import {
 
 import { useOptionalInteractionReceipts, type PaintedAcknowledgement } from './receipt-context';
 
+/**
+ * How a navigation animates: `shared-element` morphs the elements the two pages both name, and
+ * leaves the rest of the page alone. Omitted, the destination swaps in at once.
+ */
+export type NavigationTransition = 'shared-element';
+
 /** Options supported by a responsive in-app navigation request. */
 export interface ResponsiveNavigationOptions {
   /** Preserve the current scroll position when Next commits the destination. */
   readonly scroll?: boolean;
+  /**
+   * Morph the elements both pages name into place instead of swapping the page.
+   *
+   * @remarks
+   * Only the local history transport animates. A destination whose module has not loaded, a
+   * browser without View Transitions, and a viewer who prefers reduced motion all swap instantly.
+   */
+  readonly transition?: NavigationTransition;
 }
 
 /** The navigation contract shared by links and imperative owners. */

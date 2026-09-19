@@ -4227,8 +4227,8 @@
       "excess": 1
     },
     "max-lines-per-function": {
-      "max": 104,
-      "excess": 24
+      "max": 102,
+      "excess": 22
     }
   },
   "apps/web/src/components/editor/code-language-loader.ts": {
@@ -6109,8 +6109,8 @@
   },
   "apps/web/src/components/work-views/work-view-page.tsx": {
     "max-lines-per-function": {
-      "max": 556,
-      "excess": 476
+      "max": 531,
+      "excess": 451
     },
     "complexity": {
       "max": 47,
@@ -6121,8 +6121,8 @@
       "excess": 13
     },
     "max-lines": {
-      "max": 837,
-      "excess": 337
+      "max": 815,
+      "excess": 315
     }
   },
   "apps/web/src/components/work-views/work-view-toolbar.tsx": {

@@ -10,10 +10,11 @@
  * tab of this row.
  */
 import { Heart } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
-import type { JSX } from 'react';
+import { Button, DropdownMenuItem, DropdownMenuLabel } from '@docket/ui/primitives';
+import { Fragment, type JSX } from 'react';
 
 import DocketLink from '@/components/docket-link';
+import { transitionNameStyle } from '@/lib/view-transition';
 
 import { SavedViewsRetry } from './work-view-failures';
 
@@ -32,6 +33,8 @@ export interface WorkViewTabsProps {
   readonly selectedViewId: string | null;
   /** Where the Dependencies entry goes; null for a target with no dependencies page. */
   readonly dependenciesHref: string | null;
+  /** A `view-transition-name` for the row, so the dependencies page's lens switch morphs from it. */
+  readonly transitionName?: string | undefined;
   readonly savedViewsError: unknown;
   /** Suppresses the saved-views affordance while the content itself has failed. */
   readonly contentFailed: boolean;
@@ -93,6 +96,7 @@ export function WorkViewTabs({
   favoriteViewIds,
   selectedViewId,
   dependenciesHref,
+  transitionName,
   savedViewsError,
   contentFailed,
   onSelect,
@@ -105,6 +109,7 @@ export function WorkViewTabs({
     <div
       role="tablist"
       aria-label={`${title} views`}
+      style={transitionNameStyle(transitionName)}
       className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden"
     >
       <Button
@@ -148,7 +153,9 @@ export function WorkViewTabs({
           variant="ghost"
           aria-selected={false}
         >
-          <DocketLink href={dependenciesHref}>Dependencies</DocketLink>
+          <DocketLink href={dependenciesHref} transition="shared-element">
+            Dependencies
+          </DocketLink>
         </Button>
       )}
       <SavedViewsRetry
@@ -157,5 +164,79 @@ export function WorkViewTabs({
         onRetry={onRetrySavedViews}
       />
     </div>
+  );
+}
+
+/** Props for {@link WorkViewOverflowItems}. */
+export interface WorkViewOverflowItemsProps {
+  /** Plural surface name, e.g. `Projects`. */
+  readonly title: string;
+  readonly savedViews: readonly WorkViewTabEntry[];
+  readonly favoriteViewIds: ReadonlySet<string>;
+  readonly selectedViewId: string | null;
+  /** Where the Dependencies entry goes; null for a target with no dependencies page. */
+  readonly dependenciesHref: string | null;
+  readonly onSelect: (viewId: string | null) => void;
+  readonly onToggleFavorite: (viewId: string) => void;
+}
+
+/**
+ * The same views as the tab row, as menu items, for the More menu that keeps them reachable when
+ * the row clips.
+ *
+ * @param props - The views to list, which is selected, and where Dependencies leads.
+ * @returns the menu's Views group.
+ */
+export function WorkViewOverflowItems({
+  title,
+  savedViews,
+  favoriteViewIds,
+  selectedViewId,
+  dependenciesHref,
+  onSelect,
+  onToggleFavorite,
+}: WorkViewOverflowItemsProps): JSX.Element {
+  return (
+    <>
+      <DropdownMenuLabel>Views</DropdownMenuLabel>
+      <DropdownMenuItem
+        selected={selectedViewId === null}
+        onSelect={() => {
+          onSelect(null);
+        }}
+      >
+        All {title.toLowerCase()}
+      </DropdownMenuItem>
+      {savedViews.map((view) => {
+        const favorite = favoriteViewIds.has(view.id);
+        return (
+          <Fragment key={view.id}>
+            <DropdownMenuItem
+              selected={selectedViewId === view.id}
+              onSelect={() => {
+                onSelect(view.id);
+              }}
+            >
+              {view.name}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              inset
+              onSelect={() => {
+                onToggleFavorite(view.id);
+              }}
+            >
+              {favorite ? `Remove ${view.name} from favorites` : `Add ${view.name} to favorites`}
+            </DropdownMenuItem>
+          </Fragment>
+        );
+      })}
+      {dependenciesHref === null ? null : (
+        <DropdownMenuItem asChild>
+          <DocketLink href={dependenciesHref} transition="shared-element">
+            Dependencies
+          </DocketLink>
+        </DropdownMenuItem>
+      )}
+    </>
   );
 }

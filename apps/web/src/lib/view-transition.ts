@@ -20,7 +20,18 @@
  * before it finished, settles its promises by rejecting; those rejections are observed here so a
  * quick pair of updates never surfaces as an unhandled error.
  */
+import type { CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
+
+/**
+ * The inline style that gives an element a stable `view-transition-name`.
+ *
+ * @param name - The name, or `undefined` for an element that takes no part in the transition.
+ * @returns the style to spread onto the element, or `undefined` when there is no name.
+ */
+export function transitionNameStyle(name: string | undefined): CSSProperties | undefined {
+  return name === undefined ? undefined : { viewTransitionName: name };
+}
 
 /** How much of the document a View Transition captures. */
 export interface ViewTransitionOptions {

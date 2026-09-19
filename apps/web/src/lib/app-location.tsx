@@ -14,6 +14,7 @@ import {
 
 import {
   buildAuthenticatedHref,
+  loadedAuthenticatedRoute,
   parseAuthenticatedRoute,
   type AuthenticatedRoute,
   type AuthenticatedRouteParams,
@@ -21,10 +22,12 @@ import {
 import type { AuthenticatedRoutePattern } from './offline-routes.generated';
 import { ROUTE_PATTERNS } from './offline-routes.generated';
 import {
+  type NavigationTransition,
   ResponsiveNavigationProvider,
   type ResponsiveNavigationOptions,
 } from './interactions/navigation';
 import { matchRoutes } from './route-match';
+import { startViewTransition } from './view-transition';
 
 /**
  * The one place the app learns which URL it is on.
@@ -173,19 +176,47 @@ export function navigateWithoutRouter(href: string): void {
   navigateHistory(href, false, true);
 }
 
-function navigateHistory(href: string, replace: boolean, scroll: boolean): void {
-  const previousEntry = ensureHistoryEntry();
-  const previousPosition = shellScrollPosition();
-  rememberShellScroll(previousEntry, previousPosition);
-  const nextEntry = nextHistoryEntry();
-  const nextPosition = scroll ? { left: 0, top: 0 } : previousPosition;
-  const state = { [HISTORY_ENTRY_KEY]: nextEntry };
-  if (replace) window.history.replaceState(state, '', href);
-  else window.history.pushState(state, '', href);
-  activeHistoryEntry = nextEntry;
-  rememberShellScroll(nextEntry, nextPosition);
-  syncLocation();
-  restoreShellScroll(nextPosition);
+/**
+ * Whether a shared-element transition can capture this navigation's destination.
+ *
+ * @remarks
+ * The browser records the new state in a single commit, so the destination has to mount in that
+ * commit. A route whose module has not loaded yet renders a loading frame first, and morphing into
+ * that frame would animate toward the wrong picture; the navigation swaps instantly instead.
+ */
+function canShareElements(href: string): boolean {
+  const queryAt = href.indexOf('?');
+  return loadedAuthenticatedRoute(queryAt === -1 ? href : href.slice(0, queryAt)) !== undefined;
+}
+
+function navigateHistory(
+  href: string,
+  replace: boolean,
+  scroll: boolean,
+  transition?: NavigationTransition,
+): void {
+  const commit = (): void => {
+    const previousEntry = ensureHistoryEntry();
+    const previousPosition = shellScrollPosition();
+    rememberShellScroll(previousEntry, previousPosition);
+    const nextEntry = nextHistoryEntry();
+    const nextPosition = scroll ? { left: 0, top: 0 } : previousPosition;
+    const state = { [HISTORY_ENTRY_KEY]: nextEntry };
+    if (replace) window.history.replaceState(state, '', href);
+    else window.history.pushState(state, '', href);
+    activeHistoryEntry = nextEntry;
+    rememberShellScroll(nextEntry, nextPosition);
+    syncLocation();
+    restoreShellScroll(nextPosition);
+  };
+  if (transition === 'shared-element' && canShareElements(href)) {
+    // The named scope animates only elements that carry a `view-transition-name`; the rest of the
+    // page keeps rendering and taking input. `flushSync` inside makes the subscribers commit in the
+    // browser's callback, so the destination is the "new" state it captures.
+    startViewTransition(commit, { scope: 'named' });
+    return;
+  }
+  commit();
 }
 
 /** Options for one validated browser-history navigation. */
@@ -194,6 +225,8 @@ export interface AuthenticatedNavigationOptions {
   readonly replace?: boolean;
   /** Scroll the destination to the top. Defaults to true. */
   readonly scroll?: boolean;
+  /** Morph the elements both pages name into place instead of swapping the page. */
+  readonly transition?: NavigationTransition;
 }
 
 /**
@@ -212,6 +245,7 @@ export function navigateAuthenticated<TPattern extends AuthenticatedRoutePattern
     buildAuthenticatedHref(pattern, params),
     options.replace === true,
     options.scroll !== false,
+    options.transition,
   );
 }
 
@@ -296,7 +330,7 @@ export function AppLocationProvider({
       const queryAt = href.indexOf('?');
       const pathname = queryAt === -1 ? href : href.slice(0, queryAt);
       if (parseAuthenticatedRoute(pathname).kind !== 'matched') return false;
-      navigateHistory(href, replace, options?.scroll !== false);
+      navigateHistory(href, replace, options?.scroll !== false, options?.transition);
       return true;
     },
     [],

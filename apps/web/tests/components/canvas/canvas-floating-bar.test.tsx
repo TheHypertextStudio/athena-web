@@ -37,6 +37,23 @@ describe('CanvasFloatingBar', () => {
     expect(group).toContainElement(screen.getByRole('button', { name: 'Confirm project' }));
   });
 
+  it('names its title for a shared-element transition, and only while the title shows', () => {
+    const { rerender } = render(
+      <CanvasFloatingBar title="Projects" ariaLabel="Projects" titleTransitionName="lens-title" />,
+    );
+    expect(screen.getByRole('heading', { level: 1 }).style.viewTransitionName).toBe('lens-title');
+
+    rerender(
+      <CanvasFloatingBar
+        title="Projects"
+        ariaLabel="Projects"
+        titleTransitionName="lens-title"
+        selection={<button type="button">Open</button>}
+      />,
+    );
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+  });
+
   it('keeps clear of floating columns and reports its height', () => {
     const onHeightChange = vi.fn();
     render(

@@ -68,22 +68,72 @@
 
 ### [CANVAS-DEPS-001] Project dependencies get their own route on the floating canvas shell
 
-- **Status**: IN_PROGRESS
-- **Started**: 2026-09-18
+- **Completed**: 2026-09-18
 - **Priority**: P1
-- **Description**: Canvas chrome at `z-[2000]` paints over the dialog scrim; a dependency edit re-runs the
-  whole dagre layout so every node jumps; the dependencies lens sits under the roster's ~150px header
-  and the flow viewport is shrunk for the minimap. Introduce a z-index token scale and isolate `<main>`,
-  let the canvas fill its panel under overlaid chrome, add an optimistic edge plus incremental layout
-  plus rAF position animation, move the lens to `/orgs/[orgId]/projects/dependencies` under the
-  floating canvas bar, and morph the roster title into the bar with a scoped view transition.
-- **Plan**: spec above, Part 3.
+- **Summary**: Canvas chrome at `z-[2000]` painted over the dialog scrim; a dependency edit re-ran the
+  whole dagre layout so every node jumped; the dependencies lens sat under the roster's ~150px header
+  and the flow viewport was shrunk for the minimap. The z-index tokens, the edge-to-edge canvas, and
+  the in-place reflow landed earlier. This last stretch gives Dependencies its own page at
+  `/orgs/[orgId]/projects/dependencies` under one floating bar, and moves the roster's title, New
+  project button, and view tabs into that bar with a scoped shared-element transition.
 - **Subtasks**:
   - [x] z-index token scale and `isolate` on `<main>` (`raw-z-index` design-token rule)
   - [x] Canvas fills its container (bottom chrome becomes a bottom inset)
-  - [ ] Optimistic edge, incremental layout, animated positions
-  - [ ] Dependencies route and roster cleanup
-  - [ ] Shared-element transition through the app's navigation seam
+  - [x] Optimistic edge, incremental layout, animated positions
+  - [x] Dependencies route and roster cleanup
+  - [x] Shared-element transition through the app's navigation seam
+
+#### Change
+
+The route is `dependencies/page.tsx` plus `dependencies-client.tsx`, both thin, over
+`canvas/project-graph-route.tsx`, which owns the overview query and renders the floating bar in every
+state: over a placeholder while loading, over the recovery state when nothing loaded, and over the
+canvas otherwise. A failed refresh keeps the graph on screen. `canvas/canvas-floating-chrome.ts` is the
+measurement hook the Task graph used inline (bar height, plus the right edge a floating inspector
+covers), now shared. `ProjectGraphBar` carries the title, the way back, the List and Dependencies
+switch, the counts, the selection's actions, and New project; the panel puts the inspector in
+`presentation="floating"` and frames around both.
+
+The roster loses `dependencyMode` and every branch on it, the created-Project selection plumbing, and
+`showQueryControls`. `WorkViewTabs` links to the page, and `WorkViewOverflowItems` (extracted from the
+page function) does the same from the More menu. `project-lens-frame.tsx` holds what both pages share:
+the vocabulary title, the two hrefs, the lens switch, the transition names, and `useWarmProjectLens`.
+Static segments beat `[projectId]` in the route matcher, and the sidebar keys on the first path
+segment, so Projects stays active.
+
+The transition runs through the app's own navigation seam. `navigateHistory` wraps its history commit in
+`startViewTransition(..., { scope: 'named' })` when a link passes `transition="shared-element"`, and
+only when the destination's module is already loaded (`loadedAuthenticatedRoute`). The outlet derives
+that module synchronously, so a warmed route mounts in the commit the browser captures. `DocketLink`
+threads the option, warms `projectOverviewDef` on intent, and both pages load the other's module on
+mount. Under the named scope the shell's sidebar names step aside in CSS so the icon-rail collapse the
+canvas page asks for settles at once instead of stretching the labels. Reduced motion, no API, a cold
+chunk, and back or forward all swap instantly.
+
+- **Files changed**: `apps/web/src/app/(app)/orgs/[orgId]/projects/dependencies/{page,dependencies-client}.tsx`,
+  `components/canvas/{project-graph-route,project-graph-bar,canvas-floating-chrome,project-graph-panel,task-graph-chrome,canvas-floating-bar}.tsx`,
+  `components/work-views/{project-lens-frame,work-view-page,work-view-tabs,work-view-toolbar,use-work-view-surface-recovery}.ts(x)`
+  (`project-dependency-lens.tsx` deleted), `components/{docket-link,pwa/offline-route-outlet}.tsx`,
+  `lib/{app-location,authenticated-route,view-transition,offline-routes.generated}.ts(x)`,
+  `lib/interactions/navigation.tsx`, `packages/ui` (`AppBar` title name and narrow floor,
+  `globals.css` named-scope rule), the tests beside each, `docs/design/surface-inventory.md`,
+  `docs/engineering/placeholder-inventory.md`, and the complexity ledger (five entries lowered).
+- **Validation**: root `typecheck` is green. The `apps/web` suite passes (551 of 552 files; the one
+  failure is a task-detail test owned by the parallel Task page work), and so does all of
+  `packages/ui`. ESLint is clean on every touched file, and
+  `complexity:check` and the design-token policy are green. On the dev stack with a 36-project,
+  30-dependency fixture, screenshots at 1440x900 and 390x844 in light and dark show the page
+  end state, the created-project selection with the floating inspector, and a mid-transition frame
+  with the title, tabs, and New project button morphing. One `startViewTransition` call runs per
+  navigation, in the named scope.
+- **Learnings**: `next/dynamic` hides a module from a warmed route: it suspends on first mount even
+  when its chunk is loaded, so the bar would appear a commit after the title it has to morph from.
+  Importing the panel statically puts React Flow in the route's own chunk. A named-scope transition
+  captures every element that carries a name, and the shell names its sidebar items, so a page that
+  changes the sidebar's presentation has to opt those out. `AppBar`'s 160px title floor made the
+  phone-width bar overflow, so the floor now narrows on a bar under 28rem. `ObjectSurface` still
+  navigates a Project card on a plain click, which keeps the peek reachable only after New project
+  or keyboard selection; that predates this work and is left for a separate change.
 - **Blockers**: None.
 
 ### [TASK-DETAIL-002] The task page composes the shared entity-detail masthead

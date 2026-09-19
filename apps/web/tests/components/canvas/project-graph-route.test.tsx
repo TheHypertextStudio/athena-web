@@ -9,18 +9,21 @@ import { ApiRequestError } from '../../../src/lib/query-core';
 
 const ORG_ID = '01K3CQWKHQ3GXESM7K1YS55P9A';
 
-const { graphState, queryState, refetch, requestCompact } = vi.hoisted(() => ({
-  graphState: { props: null as null | Record<string, unknown>, rendered: 0 },
-  queryState: {
-    data: undefined as undefined | { items: readonly unknown[] },
-    isPending: false,
-    isError: false,
-    isFetching: false,
-    error: undefined as Error | undefined,
-  },
-  refetch: vi.fn(() => Promise.resolve({ data: { items: [] } })),
-  requestCompact: vi.fn(() => () => undefined),
-}));
+const { graphState, prefetchAuthenticatedRoute, queryState, refetch, requestCompact } = vi.hoisted(
+  () => ({
+    prefetchAuthenticatedRoute: vi.fn(() => Promise.resolve(true)),
+    graphState: { props: null as null | Record<string, unknown>, rendered: 0 },
+    queryState: {
+      data: undefined as undefined | { items: readonly unknown[] },
+      isPending: false,
+      isError: false,
+      isFetching: false,
+      error: undefined as Error | undefined,
+    },
+    refetch: vi.fn(() => Promise.resolve({ data: { items: [] } })),
+    requestCompact: vi.fn(() => () => undefined),
+  }),
+);
 
 vi.mock('../../../src/components/canvas/project-graph-panel', () => ({
   ProjectGraphPanel: (props: Record<string, unknown>) => {
@@ -49,6 +52,11 @@ vi.mock('../../../src/components/docket-link', () => ({
   ),
 }));
 
+vi.mock('../../../src/lib/authenticated-route', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  prefetchAuthenticatedRoute,
+}));
+
 vi.mock('../../../src/lib/fetch-project-overview', () => ({
   projectOverviewDef: (organizationId: string) => ({ queryKey: ['projects', organizationId] }),
 }));
@@ -74,6 +82,7 @@ beforeEach(() => {
   queryState.error = undefined;
   refetch.mockClear();
   requestCompact.mockClear();
+  prefetchAuthenticatedRoute.mockClear();
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
 });
 
@@ -145,6 +154,39 @@ describe('ProjectGraphRoute', () => {
       'aria-selected',
       'true',
     );
+  });
+
+  it('morphs back into the roster from the way back and names the shared elements', () => {
+    queryState.data = { items: [] };
+
+    renderRoute();
+
+    expect(screen.getByRole('link', { name: /back to projects/i })).toHaveAttribute(
+      'transition',
+      'shared-element',
+    );
+    expect(graphState.props).toMatchObject({
+      chrome: {
+        titleTransitionName: expect.any(String),
+        createTransitionName: expect.any(String),
+      },
+    });
+  });
+
+  it('names the bar title while the overview loads', () => {
+    queryState.isPending = true;
+
+    renderRoute();
+
+    expect(screen.getByRole('heading', { level: 1 }).style.viewTransitionName).toBeTruthy();
+  });
+
+  it('loads the roster module while the page is open', () => {
+    queryState.data = { items: [] };
+
+    renderRoute();
+
+    expect(prefetchAuthenticatedRoute).toHaveBeenCalledWith(`/orgs/${ORG_ID}/projects`);
   });
 
   it('drops the sidebar to its icon rail on a window narrower than the wide breakpoint', () => {

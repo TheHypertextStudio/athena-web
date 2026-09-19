@@ -13,6 +13,8 @@ import { Plus } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
 
+import { transitionNameStyle } from '@/lib/view-transition';
+
 import { BulkSelectionActions } from './bulk-actions-bar';
 import { useCanvasCommandContext } from './canvas-command-context';
 import CanvasFloatingBar from './canvas-floating-bar';
@@ -21,6 +23,10 @@ import CanvasFloatingBar from './canvas-floating-bar';
 export interface ProjectGraphChrome {
   /** The vocabulary title the bar carries. */
   readonly title: string;
+  /** A `view-transition-name` on the title, so the page that names the same text morphs into it. */
+  readonly titleTransitionName?: string | undefined;
+  /** A `view-transition-name` on New project, so the page's own button morphs into it. */
+  readonly createTransitionName?: string | undefined;
   /** The way back: an icon button before the title. */
   readonly navigation?: ReactNode;
   /** The List and Dependencies switch beside the title. */
@@ -76,6 +82,7 @@ export function ProjectGraphBar({
   return (
     <CanvasFloatingBar
       title={chrome.title}
+      titleTransitionName={chrome.titleTransitionName}
       ariaLabel="Project dependencies"
       navigation={chrome.navigation}
       controls={chrome.lensSwitch}
@@ -88,6 +95,7 @@ export function ProjectGraphBar({
             size="sm"
             variant="secondary"
             aria-label="New project"
+            style={transitionNameStyle(chrome.createTransitionName)}
             onClick={(event) => {
               onCreate(event.currentTarget);
             }}

@@ -41,10 +41,13 @@ vi.mock('@/lib/offline-routes.generated', () => ({
 }));
 
 const OfflineRouteOutlet = (await import('@/components/pwa/offline-route-outlet')).default;
+const { clearLoadedAuthenticatedRoutes, prefetchAuthenticatedRoute } =
+  await import('@/lib/authenticated-route');
 
 beforeEach(() => {
   pathname = '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/projects/01ARZ3NDEKTSV4RRFFQ69G5FAW';
   navigationSnapshot = null;
+  clearLoadedAuthenticatedRoutes();
 });
 
 describe('OfflineRouteOutlet', () => {
@@ -59,6 +62,37 @@ describe('OfflineRouteOutlet', () => {
 
     await waitFor(() => expect(screen.getByText('Task route')).toBeInTheDocument());
     expect(screen.queryByText('Project route')).not.toBeInTheDocument();
+  });
+
+  it('renders a warmed route in the same commit that navigates to it', async () => {
+    pathname = '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/tasks/01ARZ3NDEKTSV4RRFFQ69G5FAX';
+    await prefetchAuthenticatedRoute(pathname);
+
+    render(<OfflineRouteOutlet />);
+
+    // Read synchronously after render: no effect, timer, or state update has had a chance to run.
+    expect(screen.getByText('Task route')).toBeInTheDocument();
+  });
+
+  it('still renders nothing for a cold route until its module arrives', async () => {
+    pathname = '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/tasks/01ARZ3NDEKTSV4RRFFQ69G5FAX';
+
+    render(<OfflineRouteOutlet />);
+
+    expect(screen.queryByText('Task route')).not.toBeInTheDocument();
+    expect(await screen.findByText('Task route')).toBeInTheDocument();
+  });
+
+  it('does not render a warmed route under a different route pattern', async () => {
+    await prefetchAuthenticatedRoute(
+      '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/tasks/01ARZ3NDEKTSV4RRFFQ69G5FAX',
+    );
+    pathname = '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/projects/01ARZ3NDEKTSV4RRFFQ69G5FAW';
+
+    render(<OfflineRouteOutlet />);
+
+    expect(screen.queryByText('Task route')).not.toBeInTheDocument();
+    expect(await screen.findByText('Project route')).toBeInTheDocument();
   });
 
   it('renders not-found without loading a module for invalid branded parameters', async () => {

@@ -68,6 +68,8 @@ function useReportedHeight(
 /** Props for {@link CanvasFloatingBar}. */
 export interface CanvasFloatingBarProps {
   readonly title: string;
+  /** A `view-transition-name` on the title, for a page that morphs into this bar. */
+  readonly titleTransitionName?: string | undefined;
   /** The landmark name, e.g. "Plan" or "Task graph". */
   readonly ariaLabel: string;
   /** The way back: an icon button before the title. */
@@ -94,6 +96,7 @@ export interface CanvasFloatingBarProps {
 /** The floating chrome row over a canvas. Render it as a sibling before the canvas. */
 export default function CanvasFloatingBar({
   title,
+  titleTransitionName,
   ariaLabel,
   navigation,
   controls,
@@ -133,6 +136,7 @@ export default function CanvasFloatingBar({
         presentation="floating"
         aria-label={ariaLabel}
         title={selection === null ? title : <span className="sr-only">{title}</span>}
+        titleTransitionName={titleTransitionName}
         navigation={
           selection !== null && onClearSelection ? (
             <Button

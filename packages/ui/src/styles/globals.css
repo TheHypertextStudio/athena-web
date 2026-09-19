@@ -876,6 +876,17 @@
       animation-duration: var(--dur-slow);
       animation-timing-function: var(--ease-emphasized-decel);
     }
+
+    /*
+     * The shell names its sidebar items so its own collapse can morph them. A page that asks the
+     * sidebar for its icon rail while a named transition runs would otherwise stretch every label
+     * from the wide sidebar into the narrow rail, so under this scope those names step aside and
+     * the rail settles at once while the page's own elements morph.
+     */
+    :root[data-view-transition-scope='named'] [style*='view-transition-name:navigation-'],
+    :root[data-view-transition-scope='named'] [style*='view-transition-name: navigation-'] {
+      view-transition-name: none !important;
+    }
   }
 
   /*

@@ -10,7 +10,11 @@ import {
   type ContainerNavigationSnapshot,
 } from '@/components/views/entity-snapshot-metadata';
 import { useAppLocation } from '@/lib/app-location';
-import { parseAuthenticatedRoute } from '@/lib/authenticated-route';
+import {
+  loadAuthenticatedRouteComponent,
+  loadedAuthenticatedRoute,
+  parseAuthenticatedRoute,
+} from '@/lib/authenticated-route';
 import { peekNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
 import { OFFLINE_ROUTES } from '@/lib/offline-routes.generated';
 import { useOnlineStatus } from '@/lib/use-online-status';
@@ -57,6 +61,10 @@ export default function OfflineRouteOutlet(): JSX.Element | null {
   const online = useOnlineStatus();
   const [state, setState] = useState<OutletState>({ pathname, status: 'loading' });
   const snapshot = navigationSnapshotForPathname(pathname);
+  // A route whose module has already loaded mounts in this very commit. Waiting a commit for state
+  // to say "ready" would put a loading frame between the click and the page, and a shared-element
+  // transition captures its destination in exactly one commit.
+  const Warmed = loadedAuthenticatedRoute(pathname);
 
   useEffect(() => {
     const match = parseAuthenticatedRoute(pathname);
@@ -65,10 +73,11 @@ export default function OfflineRouteOutlet(): JSX.Element | null {
         ? OFFLINE_ROUTES.find((route) => route.pattern === match.route.pattern)
         : undefined;
 
-    if (!entry) {
+    if (!entry || match.kind !== 'matched') {
       setState({ pathname, status: 'unavailable', reason: 'not-found' });
       return undefined;
     }
+    if (loadedAuthenticatedRoute(pathname) !== undefined) return undefined;
 
     // The pathname can change under us — offline navigation swaps the route without unmounting the
     // shell — so a load that resolves after the person has moved on must not be rendered.
@@ -78,10 +87,9 @@ export default function OfflineRouteOutlet(): JSX.Element | null {
     // turn in development and on cold devices. The snapshot above must get one browser paint before
     // that work begins, or importing a deferred editor defeats local-first navigation.
     const loadTimer = window.setTimeout(() => {
-      entry
-        .load()
+      loadAuthenticatedRouteComponent(match.route.pattern)
         .then((Component) => {
-          if (current) {
+          if (current && Component !== null) {
             setState({ pathname, status: 'ready', Component });
           }
         })
@@ -100,6 +108,7 @@ export default function OfflineRouteOutlet(): JSX.Element | null {
     };
   }, [pathname]);
 
+  if (Warmed !== undefined) return <Warmed key={pathname} />;
   if (state.pathname !== pathname || state.status === 'loading') {
     return snapshot === null ? null : <NavigationSnapshotLoading snapshot={snapshot} />;
   }

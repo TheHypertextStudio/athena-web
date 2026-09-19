@@ -95,6 +95,12 @@ export interface AppBarProps {
    * Ignored by the `band` presentation, whose controls row already spans the band.
    */
   fill?: React.ReactNode;
+  /**
+   * A `view-transition-name` for the heading, so a page that names the same text can morph into
+   * this bar during a shared-element navigation. Applies only when `title` is a string; a node
+   * carries its own styling.
+   */
+  titleTransitionName?: string | undefined;
 }
 
 /**
@@ -112,7 +118,10 @@ export function AppBar({
   presentation = 'band',
   'aria-label': ariaLabel,
   fill,
+  titleTransitionName,
 }: AppBarProps): React.JSX.Element {
+  const titleStyle =
+    titleTransitionName === undefined ? undefined : { viewTransitionName: titleTransitionName };
   if (presentation === 'floating') {
     return (
       <Surface
@@ -124,7 +133,10 @@ export function AppBar({
       >
         {navigation}
         {typeof title === 'string' ? (
-          <h1 className="text-on-surface text-title-medium min-w-24 shrink truncate @md:min-w-40">
+          <h1
+            style={titleStyle}
+            className="text-on-surface text-title-medium min-w-24 shrink truncate @md:min-w-40"
+          >
             {title}
           </h1>
         ) : (
@@ -142,7 +154,9 @@ export function AppBar({
   }
   const heading =
     typeof title === 'string' ? (
-      <h1 className="text-on-surface text-title-medium min-w-0 truncate">{title}</h1>
+      <h1 style={titleStyle} className="text-on-surface text-title-medium min-w-0 truncate">
+        {title}
+      </h1>
     ) : (
       title
     );

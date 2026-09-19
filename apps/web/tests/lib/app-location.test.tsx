@@ -3,16 +3,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrganizationId } from '@docket/identity-access/ids';
 import { TaskId } from '@docket/work/ids';
 
-const { nextPush, nextReplace, scrollTo } = vi.hoisted(() => ({
+import type * as AuthenticatedRouteModule from '@/lib/authenticated-route';
+
+const { nextPush, nextReplace, routeWarmth, scrollTo, startViewTransition } = vi.hoisted(() => ({
   nextPush: vi.fn(),
   nextReplace: vi.fn(),
+  routeWarmth: { warm: false },
   scrollTo: vi.fn(),
+  startViewTransition: vi.fn((update: () => void) => {
+    update();
+  }),
 }));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/today',
   useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({ push: nextPush, replace: nextReplace }),
+}));
+
+vi.mock('@/lib/view-transition', () => ({ startViewTransition }));
+
+vi.mock('@/lib/authenticated-route', async (importOriginal) => ({
+  ...(await importOriginal<typeof AuthenticatedRouteModule>()),
+  loadedAuthenticatedRoute: () => (routeWarmth.warm ? () => null : undefined),
 }));
 
 const { AppLocationProvider, navigateAuthenticated, useAppLocation, useTypedRoute } =
@@ -43,6 +56,8 @@ beforeEach(() => {
   nextPush.mockReset();
   nextReplace.mockReset();
   scrollTo.mockReset();
+  startViewTransition.mockClear();
+  routeWarmth.warm = false;
 });
 
 afterEach(() => {
@@ -66,6 +81,86 @@ describe('authenticated app location', () => {
 
     expect(screen.getByText(`/orgs/${ORG_ID}/tasks/${TASK_ID}`)).toBeInTheDocument();
     expect(nextPush).not.toHaveBeenCalled();
+  });
+
+  it('wraps a shared-element navigation to a warmed route in one named view transition', () => {
+    routeWarmth.warm = true;
+    render(
+      <AppLocationProvider serverPath="/today">
+        <LocationProbe />
+      </AppLocationProvider>,
+    );
+
+    act(() => {
+      navigateAuthenticated(
+        '/orgs/[orgId]/tasks/[taskId]',
+        { orgId: ORG_ID, taskId: TASK_ID },
+        { transition: 'shared-element' },
+      );
+    });
+
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+    expect(startViewTransition).toHaveBeenCalledWith(expect.any(Function), { scope: 'named' });
+    expect(screen.getByText(`/orgs/${ORG_ID}/tasks/${TASK_ID}`)).toBeInTheDocument();
+  });
+
+  it('commits history inside the transition callback, not before it', () => {
+    routeWarmth.warm = true;
+    startViewTransition.mockImplementationOnce(() => undefined);
+
+    navigateAuthenticated(
+      '/orgs/[orgId]/tasks/[taskId]',
+      { orgId: ORG_ID, taskId: TASK_ID },
+      { transition: 'shared-element' },
+    );
+
+    expect(window.location.pathname).toBe('/today');
+    const update = startViewTransition.mock.calls[0]?.[0];
+    update?.();
+    expect(window.location.pathname).toBe(`/orgs/${ORG_ID}/tasks/${TASK_ID}`);
+  });
+
+  it('swaps instantly when the destination module is cold', () => {
+    routeWarmth.warm = false;
+
+    navigateAuthenticated(
+      '/orgs/[orgId]/tasks/[taskId]',
+      { orgId: ORG_ID, taskId: TASK_ID },
+      { transition: 'shared-element' },
+    );
+
+    expect(startViewTransition).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe(`/orgs/${ORG_ID}/tasks/${TASK_ID}`);
+  });
+
+  it('does not animate a navigation that did not ask for a transition', () => {
+    routeWarmth.warm = true;
+
+    navigateAuthenticated('/orgs/[orgId]/tasks/[taskId]', { orgId: ORG_ID, taskId: TASK_ID });
+
+    expect(startViewTransition).not.toHaveBeenCalled();
+  });
+
+  it('does not animate back and forward navigation', async () => {
+    routeWarmth.warm = true;
+    render(
+      <AppLocationProvider serverPath="/today">
+        <LocationProbe />
+      </AppLocationProvider>,
+    );
+    act(() => {
+      navigateAuthenticated('/orgs/[orgId]/tasks/[taskId]', { orgId: ORG_ID, taskId: TASK_ID });
+    });
+    startViewTransition.mockClear();
+
+    act(() => {
+      window.history.back();
+    });
+    await waitFor(() => {
+      expect(screen.getByText('/today')).toBeInTheDocument();
+    });
+
+    expect(startViewTransition).not.toHaveBeenCalled();
   });
 
   it('returns only the parameters validated for the mounted route pattern', () => {

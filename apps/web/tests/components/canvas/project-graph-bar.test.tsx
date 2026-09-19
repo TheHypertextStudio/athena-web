@@ -67,6 +67,27 @@ describe('ProjectGraphBar', () => {
     expect(onCreate).toHaveBeenCalledWith(button);
   });
 
+  it('names its title and New project for the roster to morph into', () => {
+    render(
+      <ProjectGraphBar
+        chrome={{
+          ...chrome,
+          titleTransitionName: 'lens-title',
+          createTransitionName: 'lens-create',
+        }}
+        counts={{ projects: 0, dependencies: 0 }}
+        onCreate={vi.fn()}
+        insetRight={0}
+        onHeightChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { level: 1 }).style.viewTransitionName).toBe('lens-title');
+    expect(screen.getByRole('button', { name: 'New project' }).style.viewTransitionName).toBe(
+      'lens-create',
+    );
+  });
+
   it('carries no New project action for a viewer who cannot contribute', () => {
     render(
       <ProjectGraphBar

@@ -22,7 +22,13 @@ import {
   projectDetailAggregateDef,
   taskDetailAggregateDef,
 } from '@/lib/detail-aggregate';
-import { useOptionalResponsiveRouter } from '@/lib/interactions/navigation';
+import { projectOverviewDef } from '@/lib/fetch-project-overview';
+import {
+  type NavigationTransition,
+  type ResponsiveNavigationOptions,
+  type ResponsiveRouter,
+  useOptionalResponsiveRouter,
+} from '@/lib/interactions/navigation';
 import { useOfflineAvailability } from '@/lib/offline-availability';
 import { useOnlineStatus } from '@/lib/use-online-status';
 
@@ -50,8 +56,18 @@ import { useOnlineStatus } from '@/lib/use-online-status';
  * browser's business and is left alone, exactly as `next/link` leaves it alone.
  */
 
-/** Props for {@link DocketLink}: `next/link`'s, unchanged. */
-export type DocketLinkProps = ComponentProps<typeof Link>;
+/**
+ * Props for {@link DocketLink}: `next/link`'s, plus how the navigation animates.
+ *
+ * @remarks
+ * `transition="shared-element"` morphs the elements the two pages both name (through their
+ * `view-transition-name`) while the rest of the page keeps rendering. It applies to a plain click
+ * that the app's own navigation handles; a modified click, a back or forward step, a browser
+ * without View Transitions, and a viewer who prefers reduced motion all navigate without it.
+ */
+export type DocketLinkProps = ComponentProps<typeof Link> & {
+  readonly transition?: NavigationTransition;
+};
 
 const MODULE_PREFETCH_DELAY_MS = 75;
 
@@ -70,6 +86,7 @@ export default function DocketLink({
   onMouseEnter,
   onMouseLeave,
   prefetch,
+  transition,
   ...props
 }: DocketLinkProps): JSX.Element {
   const serverReachable = useServerReachable();
@@ -100,7 +117,7 @@ export default function DocketLink({
     prefetchTimer.current = window.setTimeout(() => {
       prefetchTimer.current = null;
       void prefetchAuthenticatedRoute(href);
-      prefetchDetailAggregate(href, prefetchApi);
+      prefetchRouteData(href, prefetchApi);
     }, MODULE_PREFETCH_DELAY_MS);
   }, [href, localRoute, prefetchApi]);
 
@@ -120,11 +137,8 @@ export default function DocketLink({
     cancelIntent();
     if (routerReachable) {
       if (responsiveRouter === null) return;
-      const options = props.scroll === undefined ? undefined : { scroll: props.scroll };
-      const handled = props.replace
-        ? responsiveRouter.replace(href, options)
-        : responsiveRouter.push(href, options);
-      if (handled) event.preventDefault();
+      const options = navigationOptions(props.scroll, transition);
+      if (requestNavigation(responsiveRouter, href, props.replace, options)) event.preventDefault();
       return;
     }
     event.preventDefault();
@@ -179,8 +193,30 @@ export default function DocketLink({
   );
 }
 
-/** Warm the same aggregate query the destination detail route reads. */
-function prefetchDetailAggregate(href: string, prefetch: PrefetchApi): void {
+/** Publish a push or replace request; true when the app's own navigation took it. */
+function requestNavigation(
+  router: ResponsiveRouter,
+  href: string,
+  replace: boolean | undefined,
+  options: ResponsiveNavigationOptions | undefined,
+): boolean {
+  return replace ? router.replace(href, options) : router.push(href, options);
+}
+
+/** The navigation options a link's own props ask for, or `undefined` when it asks for none. */
+function navigationOptions(
+  scroll: boolean | undefined,
+  transition: NavigationTransition | undefined,
+): ResponsiveNavigationOptions | undefined {
+  if (scroll === undefined && transition === undefined) return undefined;
+  return {
+    ...(scroll === undefined ? {} : { scroll }),
+    ...(transition === undefined ? {} : { transition }),
+  };
+}
+
+/** Warm the query the destination route reads on mount. */
+function prefetchRouteData(href: string, prefetch: PrefetchApi): void {
   const queryAt = href.indexOf('?');
   const pathname = queryAt === -1 ? href : href.slice(0, queryAt);
   const match = parseAuthenticatedRoute(pathname);
@@ -193,6 +229,9 @@ function prefetchDetailAggregate(href: string, prefetch: PrefetchApi): void {
       return;
     case '/orgs/[orgId]/projects/[projectId]':
       prefetch(projectDetailAggregateDef(params.orgId, params.projectId));
+      return;
+    case '/orgs/[orgId]/projects/dependencies':
+      prefetch(projectOverviewDef(params.orgId));
       return;
     case '/orgs/[orgId]/programs/[programId]':
       prefetch(programDetailAggregateDef(params.orgId, params.programId));

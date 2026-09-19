@@ -6,39 +6,47 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as WorkBoardModule from '../../src/components/work-views/work-board';
 
-const { boardState, controller, createState, orderState } = vi.hoisted(() => ({
-  boardState: {
-    drop: null as null | {
-      readonly item: {
-        readonly id: string;
-        readonly organizationId: string;
-        readonly isContext: boolean;
-      };
-      readonly sourcePath: readonly string[];
-      readonly destinationPath: readonly string[];
-      readonly beforeId: string | null;
-      readonly afterId: string | null;
-    },
-  },
-  controller: {
-    definition: {
-      version: 2,
-      target: 'project',
-      filter: { field: 'status', operator: 'eq', value: 'active' },
-      arrangement: { groupBy: null as string | null, subGroupBy: null, orderBy: [] },
-      presentation: {
-        layout: 'list',
-        properties: ['status'],
-        density: 'compact',
-        showEmptyGroups: false,
+const { boardState, controller, createState, orderState, prefetchAuthenticatedRoute } = vi.hoisted(
+  () => ({
+    prefetchAuthenticatedRoute: vi.fn(() => Promise.resolve(true)),
+    boardState: {
+      drop: null as null | {
+        readonly item: {
+          readonly id: string;
+          readonly organizationId: string;
+          readonly isContext: boolean;
+        };
+        readonly sourcePath: readonly string[];
+        readonly destinationPath: readonly string[];
+        readonly beforeId: string | null;
+        readonly afterId: string | null;
       },
     },
-    setDefinition: vi.fn(),
-  },
-  createState: {
-    request: null as null | Record<string, unknown>,
-  },
-  orderState: { mutate: vi.fn() },
+    controller: {
+      definition: {
+        version: 2,
+        target: 'project',
+        filter: { field: 'status', operator: 'eq', value: 'active' },
+        arrangement: { groupBy: null as string | null, subGroupBy: null, orderBy: [] },
+        presentation: {
+          layout: 'list',
+          properties: ['status'],
+          density: 'compact',
+          showEmptyGroups: false,
+        },
+      },
+      setDefinition: vi.fn(),
+    },
+    createState: {
+      request: null as null | Record<string, unknown>,
+    },
+    orderState: { mutate: vi.fn() },
+  }),
+);
+
+vi.mock('../../src/lib/authenticated-route', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  prefetchAuthenticatedRoute,
 }));
 
 vi.mock('../../src/components/docket-link', () => ({
@@ -180,6 +188,7 @@ vi.mock('../../src/lib/query', () => ({
   useApiQuery: () => ({ data: { items: [] }, isError: false }),
 }));
 
+import { PROJECT_LENS_TRANSITION } from '../../src/components/work-views/project-lens-frame';
 import { WorkViewPage } from '../../src/components/work-views/work-view-page';
 
 const ALPHA_ID = '01K3CQWKHQ3GXESM7K1YS55P9A';
@@ -261,5 +270,47 @@ describe('WorkViewPage creation continuity', () => {
     render(<WorkViewPage organizationId={ALPHA_ID} target="task" />);
 
     expect(screen.queryByRole('tab', { name: 'Dependencies' })).toBeNull();
+  });
+
+  it('morphs into the dependencies page from the tab row', () => {
+    render(<WorkViewPage organizationId={ALPHA_ID} target="project" />);
+
+    expect(screen.getByRole('tab', { name: 'Dependencies' })).toHaveAttribute(
+      'transition',
+      'shared-element',
+    );
+  });
+
+  it('names the tab row and New project for the dependencies page to morph from', () => {
+    render(<WorkViewPage organizationId={ALPHA_ID} target="project" />);
+
+    expect(screen.getByRole('tablist', { name: 'Projects views' }).style.viewTransitionName).toBe(
+      PROJECT_LENS_TRANSITION.lens,
+    );
+    expect(screen.getByRole('button', { name: 'New project' }).style.viewTransitionName).toBe(
+      PROJECT_LENS_TRANSITION.create,
+    );
+  });
+
+  it('leaves other rosters unnamed', () => {
+    render(<WorkViewPage organizationId={ALPHA_ID} target="task" />);
+
+    expect(screen.getByRole('button', { name: 'New task' }).style.viewTransitionName).toBeFalsy();
+  });
+
+  it('loads the dependencies page while the Projects roster is open', () => {
+    prefetchAuthenticatedRoute.mockClear();
+    render(<WorkViewPage organizationId={ALPHA_ID} target="project" />);
+
+    expect(prefetchAuthenticatedRoute).toHaveBeenCalledWith(
+      `/orgs/${ALPHA_ID}/projects/dependencies`,
+    );
+  });
+
+  it('loads no second page for a roster without one', () => {
+    prefetchAuthenticatedRoute.mockClear();
+    render(<WorkViewPage organizationId={ALPHA_ID} target="task" />);
+
+    expect(prefetchAuthenticatedRoute).not.toHaveBeenCalled();
   });
 });

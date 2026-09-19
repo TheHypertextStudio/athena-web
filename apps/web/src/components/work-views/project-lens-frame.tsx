@@ -15,10 +15,11 @@
 import { OrganizationId } from '@docket/identity-access/ids';
 import { FolderKanban } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
-import type { JSX } from 'react';
+import { type JSX, useEffect } from 'react';
 
 import DocketLink from '@/components/docket-link';
-import { buildAuthenticatedHref } from '@/lib/authenticated-route';
+import { buildAuthenticatedHref, prefetchAuthenticatedRoute } from '@/lib/authenticated-route';
+import { transitionNameStyle } from '@/lib/view-transition';
 
 /** The vocabulary the Projects pages use for the record they list. */
 export const PROJECT_LENS_COPY = {
@@ -26,6 +27,44 @@ export const PROJECT_LENS_COPY = {
   singular: 'project',
   icon: FolderKanban,
 } as const;
+
+/**
+ * The `view-transition-name` each page gives the element the other page also names, so moving
+ * between the roster and the dependencies canvas morphs them into place: the roster's title into
+ * the bar's title, its New project button into the bar's, and its view tabs into the lens switch.
+ */
+export const PROJECT_LENS_TRANSITION = {
+  title: 'project-lens-title',
+  create: 'project-lens-create',
+  lens: 'project-lens-tabs',
+} as const;
+
+/** The other Projects page: where each page's own lens switch leads. */
+export type ProjectLensDestination = 'roster' | 'dependencies';
+
+/**
+ * Load the other page's module while this one is open, so the switch mounts it in one commit.
+ *
+ * @remarks
+ * A shared-element transition captures its destination in a single commit, which only a loaded
+ * module can supply. A failed load is ignored: the navigation then swaps instantly instead.
+ *
+ * @param orgId - The workspace both pages belong to.
+ * @param destination - The page to warm.
+ * @param enabled - Whether this page has a lens switch at all.
+ */
+export function useWarmProjectLens(
+  orgId: string,
+  destination: ProjectLensDestination,
+  enabled = true,
+): void {
+  useEffect(() => {
+    if (!enabled) return;
+    const href =
+      destination === 'roster' ? projectRosterHref(orgId) : projectDependenciesHref(orgId);
+    void prefetchAuthenticatedRoute(href).catch(() => undefined);
+  }, [destination, enabled, orgId]);
+}
 
 /** The roster's href for a workspace. */
 export function projectRosterHref(orgId: string): string {
@@ -57,6 +96,7 @@ export function ProjectLensSwitch({ orgId }: ProjectLensSwitchProps): JSX.Elemen
     <div
       role="tablist"
       aria-label={`${PROJECT_LENS_COPY.title} views`}
+      style={transitionNameStyle(PROJECT_LENS_TRANSITION.lens)}
       className="bg-surface-container flex shrink-0 items-center gap-0.5 rounded-lg p-0.5"
     >
       <Button
@@ -67,7 +107,9 @@ export function ProjectLensSwitch({ orgId }: ProjectLensSwitchProps): JSX.Elemen
         className="shrink-0"
         aria-selected={false}
       >
-        <DocketLink href={projectRosterHref(orgId)}>List</DocketLink>
+        <DocketLink href={projectRosterHref(orgId)} transition="shared-element">
+          List
+        </DocketLink>
       </Button>
       <Button
         role="tab"

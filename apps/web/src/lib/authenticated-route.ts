@@ -22,6 +22,8 @@ import {
   type RecurrenceSeriesId as RecurrenceSeriesIdValue,
   type TaskId as TaskIdValue,
 } from '@docket/work/ids';
+import type { ComponentType } from 'react';
+
 import { type EntityNavigationSnapshot } from './contracts/entity-navigation';
 
 import {
@@ -117,7 +119,18 @@ const paramSchemas: Readonly<Record<string, RuntimeParamSchema>> = {
   seriesId: RecurrenceSeriesId,
   sessionId: AgentSessionId,
 };
-const modulePrefetches = new Map<AuthenticatedRoutePattern, Promise<unknown>>();
+/** The in-flight or settled load of each route's client component, so a route loads once. */
+const modulePrefetches = new Map<AuthenticatedRoutePattern, Promise<ComponentType>>();
+/**
+ * The client component of every route that has finished loading.
+ *
+ * @remarks
+ * A promise cannot be read synchronously, so a load that resolved earlier still costs the outlet a
+ * commit of "loading" before it can render the route. This map is what lets a warmed route mount in
+ * the very commit that navigates to it, which is what a shared-element transition needs: the
+ * browser captures the destination in that one commit.
+ */
+const loadedRouteComponents = new Map<AuthenticatedRoutePattern, ComponentType>();
 
 function paramSchema(name: string): RuntimeParamSchema {
   return paramSchemas[name] ?? fallbackParam;
@@ -240,6 +253,52 @@ export function buildEntityHref(snapshot: EntityNavigationSnapshot): string {
   }
 }
 
+/** The path part of an href that may carry a query string. */
+function pathnameOf(href: string): string {
+  const queryAt = href.indexOf('?');
+  return queryAt === -1 ? href : href.slice(0, queryAt);
+}
+
+/**
+ * Load one route's client component once, and remember it for a synchronous read afterwards.
+ *
+ * @param pattern - A generated authenticated route pattern.
+ * @returns The component, or `null` when the generated table has no client component for it.
+ * @throws When the route's chunk cannot be loaded; the failed load is forgotten so a retry is real.
+ */
+export async function loadAuthenticatedRouteComponent(
+  pattern: AuthenticatedRoutePattern,
+): Promise<ComponentType | null> {
+  const entry = OFFLINE_ROUTES.find((candidate) => candidate.pattern === pattern);
+  if (entry === undefined) return null;
+  const existing = modulePrefetches.get(pattern);
+  if (existing !== undefined) return existing;
+  const load = entry.load().then(
+    (Component) => {
+      loadedRouteComponents.set(pattern, Component);
+      return Component;
+    },
+    (error: unknown) => {
+      modulePrefetches.delete(pattern);
+      throw error;
+    },
+  );
+  modulePrefetches.set(pattern, load);
+  return load;
+}
+
+/**
+ * The client component of a route whose module has already loaded, read without waiting.
+ *
+ * @param pathname - Same-origin pathname without a query string.
+ * @returns The component, or `undefined` when the pathname is not a route or its module is cold.
+ */
+export function loadedAuthenticatedRoute(pathname: string): ComponentType | undefined {
+  const match = parseAuthenticatedRoute(pathname);
+  if (match.kind !== 'matched') return undefined;
+  return loadedRouteComponents.get(match.route.pattern);
+}
+
 /**
  * Load only the client module for one authenticated href after explicit pointer or keyboard intent.
  *
@@ -247,23 +306,14 @@ export function buildEntityHref(snapshot: EntityNavigationSnapshot): string {
  * @returns Whether the href names a generated authenticated client route.
  */
 export async function prefetchAuthenticatedRoute(href: string): Promise<boolean> {
-  const queryAt = href.indexOf('?');
-  const pathname = queryAt === -1 ? href : href.slice(0, queryAt);
-  const match = parseAuthenticatedRoute(pathname);
+  const match = parseAuthenticatedRoute(pathnameOf(href));
   if (match.kind !== 'matched') return false;
-  const pattern = match.route.pattern;
-  const entry = OFFLINE_ROUTES.find((candidate) => candidate.pattern === pattern);
-  if (entry === undefined) return false;
-  const existing = modulePrefetches.get(pattern);
-  if (existing !== undefined) {
-    await existing;
-    return true;
-  }
-  const load = entry.load().catch((error: unknown) => {
-    modulePrefetches.delete(pattern);
-    throw error;
-  });
-  modulePrefetches.set(pattern, load);
-  await load;
-  return true;
+  const Component = await loadAuthenticatedRouteComponent(match.route.pattern);
+  return Component !== null;
+}
+
+/** Forget every loaded route component. Tests use this to start each case cold. */
+export function clearLoadedAuthenticatedRoutes(): void {
+  modulePrefetches.clear();
+  loadedRouteComponents.clear();
 }

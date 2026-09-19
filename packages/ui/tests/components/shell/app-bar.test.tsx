@@ -58,4 +58,25 @@ describe('AppBar', () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
+
+  it('names the heading for a shared-element transition in either presentation', () => {
+    const { rerender } = render(<AppBar title="Projects" titleTransitionName="lens-title" />);
+    expect(screen.getByRole('heading', { level: 1 }).style.viewTransitionName).toBe('lens-title');
+
+    rerender(
+      <AppBar
+        presentation="floating"
+        aria-label="Projects"
+        title="Projects"
+        titleTransitionName="lens-title"
+      />,
+    );
+    expect(screen.getByRole('heading', { level: 1 }).style.viewTransitionName).toBe('lens-title');
+  });
+
+  it('leaves the heading unnamed when no transition name is given', () => {
+    render(<AppBar title="Projects" />);
+
+    expect(screen.getByRole('heading', { level: 1 }).style.viewTransitionName).toBeFalsy();
+  });
 });

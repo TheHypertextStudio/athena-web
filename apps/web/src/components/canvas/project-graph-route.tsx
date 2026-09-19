@@ -31,8 +31,10 @@ import DocketLink from '@/components/docket-link';
 import { LoadFailure } from '@/components/feedback';
 import {
   PROJECT_LENS_COPY,
+  PROJECT_LENS_TRANSITION,
   ProjectLensSwitch,
   projectRosterHref,
+  useWarmProjectLens,
 } from '@/components/work-views/project-lens-frame';
 import { projectOverviewDef } from '@/lib/fetch-project-overview';
 import { useApiQuery } from '@/lib/query';
@@ -53,7 +55,7 @@ function BackToProjects({ orgId }: { readonly orgId: string }): JSX.Element {
     <Tooltip>
       <TooltipTrigger asChild>
         <Button variant="ghost" size="sm" iconOnly asChild aria-label={label}>
-          <DocketLink href={projectRosterHref(orgId)}>
+          <DocketLink href={projectRosterHref(orgId)} transition="shared-element">
             <ChevronLeft aria-hidden="true" />
           </DocketLink>
         </Button>
@@ -75,6 +77,7 @@ function ProjectGraphState({
     <Surface tone="page" shape="none" className="relative flex h-full min-h-0 w-full flex-col">
       <CanvasFloatingBar
         title={PROJECT_LENS_COPY.title}
+        titleTransitionName={PROJECT_LENS_TRANSITION.title}
         ariaLabel="Project dependencies"
         navigation={<BackToProjects orgId={orgId} />}
         controls={<ProjectLensSwitch orgId={orgId} />}
@@ -94,6 +97,7 @@ export interface ProjectGraphRouteProps {
 export function ProjectGraphRoute({ orgId }: ProjectGraphRouteProps): JSX.Element {
   useOwnPageScroll();
   useCompactSidebar();
+  useWarmProjectLens(orgId, 'roster');
   const query = useApiQuery(projectOverviewDef(orgId));
   const rows = query.data?.items;
   // placeholder: the dependency graph — which projects block which, and in what order.
@@ -125,6 +129,8 @@ export function ProjectGraphRoute({ orgId }: ProjectGraphRouteProps): JSX.Elemen
         orgId={orgId}
         chrome={{
           title: PROJECT_LENS_COPY.title,
+          titleTransitionName: PROJECT_LENS_TRANSITION.title,
+          createTransitionName: PROJECT_LENS_TRANSITION.create,
           navigation: <BackToProjects orgId={orgId} />,
           lensSwitch: <ProjectLensSwitch orgId={orgId} />,
         }}

@@ -5,11 +5,19 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { navigateWithoutRouter, prefetchAuthenticatedRoute, serverReachable } = vi.hoisted(() => ({
-  navigateWithoutRouter: vi.fn(),
-  prefetchAuthenticatedRoute: vi.fn().mockResolvedValue(true),
-  serverReachable: { value: true },
-}));
+const { navigateWithoutRouter, prefetchAuthenticatedRoute, responsiveRouter, serverReachable } =
+  vi.hoisted(() => ({
+    navigateWithoutRouter: vi.fn(),
+    prefetchAuthenticatedRoute: vi.fn().mockResolvedValue(true),
+    responsiveRouter: {
+      current: null as null | {
+        readonly requestedHref: string | null;
+        readonly push: ReturnType<typeof vi.fn>;
+        readonly replace: ReturnType<typeof vi.fn>;
+      },
+    },
+    serverReachable: { value: true },
+  }));
 
 vi.mock('next/link', () => ({
   default: ({
@@ -29,17 +37,31 @@ vi.mock('../../src/components/reachability', () => ({
 }));
 
 vi.mock('../../src/lib/app-location', () => ({ navigateWithoutRouter }));
+vi.mock('../../src/lib/interactions/navigation', () => ({
+  useOptionalResponsiveRouter: () => responsiveRouter.current,
+}));
 vi.mock('../../src/lib/authenticated-route', () => ({
-  parseAuthenticatedRoute: (pathname: string) => ({
-    kind: 'matched',
-    route:
-      pathname === '/orgs/org-1/tasks/task-1'
-        ? {
-            params: { orgId: 'org-1', taskId: 'task-1' },
-            pattern: '/orgs/[orgId]/tasks/[taskId]',
-          }
-        : { params: {}, pattern: '/tasks' },
-  }),
+  parseAuthenticatedRoute: (pathname: string) => {
+    if (pathname === '/orgs/org-1/projects/dependencies') {
+      return {
+        kind: 'matched',
+        route: {
+          params: { orgId: 'org-1' },
+          pattern: '/orgs/[orgId]/projects/dependencies',
+        },
+      };
+    }
+    return {
+      kind: 'matched',
+      route:
+        pathname === '/orgs/org-1/tasks/task-1'
+          ? {
+              params: { orgId: 'org-1', taskId: 'task-1' },
+              pattern: '/orgs/[orgId]/tasks/[taskId]',
+            }
+          : { params: {}, pattern: '/tasks' },
+    };
+  },
   prefetchAuthenticatedRoute,
 }));
 vi.mock('../../src/lib/offline-availability', () => ({
@@ -52,6 +74,8 @@ beforeEach(() => {
   navigateWithoutRouter.mockReset();
   prefetchAuthenticatedRoute.mockClear();
   serverReachable.value = true;
+  responsiveRouter.current = null;
+  vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(true);
 });
 
 afterEach(() => {
@@ -116,5 +140,84 @@ describe('DocketLink', () => {
       '/v1/orgs/org-1/tasks/task-1/aggregate-detail',
       expect.objectContaining({ credentials: 'include' }),
     );
+  });
+
+  it('warms the Project overview after sustained intent on the dependencies page', async () => {
+    vi.useFakeTimers();
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { headers: { 'content-type': 'application/json' } }));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <DocketLink href="/orgs/org-1/projects/dependencies">Dependencies</DocketLink>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole('link', { name: 'Dependencies' }));
+    await vi.advanceTimersByTimeAsync(75);
+    await Promise.resolve();
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/v1/orgs/org-1/projects/overview',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
+  it('hands the shared-element transition to the app navigation and keeps it off the anchor', () => {
+    responsiveRouter.current = {
+      requestedHref: null,
+      push: vi.fn().mockReturnValue(true),
+      replace: vi.fn().mockReturnValue(true),
+    };
+    render(
+      <DocketLink href="/orgs/org-1/projects/dependencies" transition="shared-element">
+        Dependencies
+      </DocketLink>,
+    );
+    const link = screen.getByRole('link', { name: 'Dependencies' });
+
+    fireEvent.click(link);
+
+    expect(responsiveRouter.current.push).toHaveBeenCalledWith(
+      '/orgs/org-1/projects/dependencies',
+      {
+        transition: 'shared-element',
+      },
+    );
+    expect(link).not.toHaveAttribute('transition');
+  });
+
+  it('keeps the transition when the link also names its scroll behaviour', () => {
+    responsiveRouter.current = {
+      requestedHref: null,
+      push: vi.fn().mockReturnValue(true),
+      replace: vi.fn().mockReturnValue(true),
+    };
+    render(
+      <DocketLink href="/tasks" scroll={false} transition="shared-element">
+        Tasks
+      </DocketLink>,
+    );
+
+    fireEvent.click(screen.getByRole('link', { name: 'Tasks' }));
+
+    expect(responsiveRouter.current.push).toHaveBeenCalledWith('/tasks', {
+      scroll: false,
+      transition: 'shared-element',
+    });
+  });
+
+  it('requests no options for an ordinary link', () => {
+    responsiveRouter.current = {
+      requestedHref: null,
+      push: vi.fn().mockReturnValue(true),
+      replace: vi.fn().mockReturnValue(true),
+    };
+    render(<DocketLink href="/tasks">Tasks</DocketLink>);
+
+    fireEvent.click(screen.getByRole('link', { name: 'Tasks' }));
+
+    expect(responsiveRouter.current.push).toHaveBeenCalledWith('/tasks', undefined);
   });
 });

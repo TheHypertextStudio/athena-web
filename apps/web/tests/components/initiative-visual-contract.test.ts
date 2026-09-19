@@ -168,7 +168,10 @@ describe('Initiative visual contract', () => {
     expect(toolbar).toContain('w-full flex-nowrap overflow-hidden');
     expect(toolbar).toContain('aria-label="More view controls"');
     expect(workPage).toMatch(
-      /const viewOverflowItems[\s\S]*?controller\.toggleFavoriteView\(view\.id\)/,
+      /const viewOverflowItems[\s\S]*?<WorkViewOverflowItems[\s\S]*?onToggleFavorite=\{controller\.toggleFavoriteView\}/,
+    );
+    expect(source(workTabsPath)).toMatch(
+      /export function WorkViewOverflowItems[\s\S]*?onToggleFavorite\(view\.id\)/,
     );
   });
 

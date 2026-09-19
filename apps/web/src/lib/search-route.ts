@@ -30,12 +30,29 @@ export function hrefForSearchRoute(route: SearchRoute): string | null {
   }
 }
 
+// Mapping for standard entity paths to reduce complexity
+const STANDARD_ENTITY_PATHS: Record<string, string> = {
+  agent_session: 'sessions',
+  task: 'tasks',
+  project: 'projects',
+  program: 'programs',
+  initiative: 'initiatives',
+  cycle: 'cycles',
+};
+
 function hrefForEntity(
   organizationId: string,
   kind: SearchDocumentKind,
   entityId: string,
   serverHref: string,
 ): string {
+  // Standard org entity paths using mapping
+  if (kind in STANDARD_ENTITY_PATHS) {
+    const pathSegment = STANDARD_ENTITY_PATHS[kind as keyof typeof STANDARD_ENTITY_PATHS];
+    return `/orgs/${organizationId}/${pathSegment}/${entityId}`;
+  }
+
+  // Special cases requiring custom logic
   switch (kind) {
     case 'organization':
       return `/orgs/${organizationId}/my-work`;
@@ -45,29 +62,12 @@ function hrefForEntity(
       return withQuery(`/orgs/${organizationId}/settings/members`, 'actorId', entityId);
     case 'agent':
       return withQuery('/athena', 'workspace', organizationId);
-    case 'agent_session':
-      return `/orgs/${organizationId}/sessions/${entityId}`;
-    case 'task':
-      return `/orgs/${organizationId}/tasks/${entityId}`;
-    case 'project':
-      return `/orgs/${organizationId}/projects/${entityId}`;
-    case 'program':
-      return `/orgs/${organizationId}/programs/${entityId}`;
-    case 'initiative':
-      return `/orgs/${organizationId}/initiatives/${entityId}`;
-    case 'cycle':
-      return `/orgs/${organizationId}/cycles/${entityId}`;
-    // The org's task list, pre-filtered in the view toolbar's own `filter=field:op:value` codec.
-    // This previously pointed at `my-work?labelId=`, a param no page read — so a label hit in
-    // search opened an unfiltered list. Mirrors `entityHref` in the API, which builds the same URL.
     case 'label':
       return labelFilterHref(organizationId, entityId);
     case 'saved_view':
       return withQuery(`/orgs/${organizationId}/views`, 'viewId', entityId);
     case 'calendar_event':
       return `/search?kind=calendar_event&id=${encodeURIComponent(entityId)}`;
-    // The Library row rather than the provider URL, so following a palette hit keeps the reader
-    // inside Docket; the row itself carries the "Open source" action for leaving.
     case 'external_resource':
       return withQuery(`/orgs/${organizationId}/library`, 'resourceId', entityId);
     case 'milestone':

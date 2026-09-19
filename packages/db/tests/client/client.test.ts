@@ -18,6 +18,7 @@ type CloseMock = ReturnType<typeof vi.fn>;
 interface PgliteClientDouble {
   readonly dataDir: string;
   readonly close: CloseMock;
+  readonly exec: CloseMock;
   readonly listen: CloseMock;
 }
 
@@ -61,6 +62,7 @@ function resetDriverMocks(): void {
     const client = {
       close: vi.fn(async () => undefined),
       dataDir,
+      exec: vi.fn(async () => undefined),
       listen: vi.fn(async () => vi.fn(async () => undefined)),
     };
     clientMocks.pgliteClients.push(client);
@@ -104,6 +106,15 @@ describe('db client driver selection', () => {
     expect(clientMocks.drizzlePglite).toHaveBeenCalledWith(
       clientMocks.pgliteClients[0],
       expect.objectContaining({ schema: expect.any(Object) }),
+    );
+  });
+
+  it('pins a pglite session to UTC so server-stamped times read back correctly', async () => {
+    vi.stubEnv('DATABASE_URL', 'pglite://memory');
+    const { db } = await import('../../src/client');
+    touch(db, 'select');
+    expect(assertDefined(clientMocks.pgliteClients[0]).exec).toHaveBeenCalledWith(
+      "SET TIME ZONE 'UTC'",
     );
   });
 

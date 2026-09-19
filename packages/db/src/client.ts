@@ -100,7 +100,13 @@ export function openPglite(url: string): PGlite {
   if (dataDir !== 'memory://') {
     mkdirSync(dirname(dataDir), { recursive: true });
   }
-  return new PGlite(dataDir);
+  const client = new PGlite(dataDir);
+  // Timestamp columns are `timestamp without time zone` defaulting to `now()`, and drizzle reads
+  // them back as UTC. Postgres in production runs in UTC; PGlite follows the host's zone, so pin it
+  // or every server-stamped time lands off by the host's offset. PGlite runs queries in order, so
+  // this lands before anything else on the connection.
+  void client.exec("SET TIME ZONE 'UTC'");
+  return client;
 }
 
 /** Construct the driver-appropriate drizzle client from `DATABASE_URL`. */

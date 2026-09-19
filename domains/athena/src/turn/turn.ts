@@ -6,6 +6,7 @@
  * transcript message and event stream.
  */
 import type { TurnContentBlock, TurnMessage } from '../turn-protocol';
+import { bindJournalingPlanTurns } from './internal/journaling-plan-script';
 
 export type { TurnContentBlock, TurnMessage };
 
@@ -207,29 +208,70 @@ export const SUNSAMA_IMPORT_TURNS: readonly ScriptedTurn[] = [
   },
 ];
 
+/**
+ * The planning script, unbound.
+ *
+ * @remarks
+ * Its ids are sentinels until `bindJournalingPlanTurns` resolves them against the conversation's
+ * own tool results, which is what {@link MockAgentTurnRuntime} replays. Exported for tests that
+ * check the script's shape against the plan tools' schemas.
+ */
+export { JOURNALING_PLAN_TURNS } from './internal/journaling-plan-script';
+
 /** Construction options for {@link MockAgentTurnRuntime}. */
 export interface MockAgentTurnRuntimeOptions {
   /** Optional override for the script to replay. */
   readonly script?: readonly ScriptedTurn[];
 }
 
+/** The phrase that picks the journaling planning script over the default one. */
+const PLANNING_TRIGGER = /\bplan\b.*\bjournaling\b/i;
+
+/** The first thing the person said, before any tool result came back. */
+function firstUserText(messages: readonly TurnMessage[]): string {
+  for (const message of messages) {
+    if (message.role !== 'user') continue;
+    for (const block of message.content) {
+      if (block.type === 'text') return block.text;
+    }
+  }
+  return '';
+}
+
 /** Deterministic runtime that replays one scripted turn per call. */
 export class MockAgentTurnRuntime implements AgentTurnRuntime {
-  private readonly script: readonly ScriptedTurn[];
+  private readonly injected: readonly ScriptedTurn[] | undefined;
 
   /** Create the runtime with its default or injected script. */
   constructor(options: MockAgentTurnRuntimeOptions = {}) {
-    this.script = options.script ?? SCRIPTED_TURNS;
+    this.injected = options.script;
+  }
+
+  /**
+   * The script this conversation replays.
+   *
+   * @remarks
+   * An injected script always wins, so every test that hands one in keeps its exact turns. With no
+   * injection, a conversation asking to plan a journaling launch runs the journaling planning
+   * script and everything else runs the default one.
+   */
+  private scriptFor(input: TurnInput): readonly ScriptedTurn[] {
+    if (this.injected) return this.injected;
+    if (PLANNING_TRIGGER.test(firstUserText(input.messages))) {
+      return bindJournalingPlanTurns(input.messages);
+    }
+    return SCRIPTED_TURNS;
   }
 
   /** Replay the turn matching the number of persisted assistant messages. */
   async *streamTurn(input: TurnInput): AsyncIterable<TurnEvent> {
+    const script = this.scriptFor(input);
     const turnIndex = input.messages.filter((message) => message.role === 'assistant').length;
-    const turn = this.script[turnIndex];
+    const turn = script[turnIndex];
     if (!turn) {
       throw new Error(
         `MockAgentTurnRuntime: conversation has ${turnIndex} assistant turns but the script ` +
-          `has only ${this.script.length}; the hosting loop ran past the end of the script.`,
+          `has only ${script.length}; the hosting loop ran past the end of the script.`,
       );
     }
 

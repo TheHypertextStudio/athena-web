@@ -25,6 +25,7 @@
  *   DOM measurement the layout model exists to avoid.
  */
 import { cn } from '@docket/ui';
+import { CRITICAL_PAINT } from '@docket/ui/primitives';
 import { type JSX, type RefObject, useEffect, useState } from 'react';
 
 import type { Violation } from './cascade';
@@ -178,7 +179,7 @@ export default function TimelineEdges({
           <path
             key={key}
             d={d}
-            className={cn('fill-none', violated ? 'stroke-error/70' : 'stroke-outline')}
+            className={cn('fill-none', violated ? CRITICAL_PAINT.stroke : 'stroke-outline')}
             strokeWidth={violated ? 1.75 : 1.25}
             strokeLinecap="round"
           />

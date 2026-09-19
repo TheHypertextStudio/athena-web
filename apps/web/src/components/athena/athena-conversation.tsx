@@ -31,21 +31,22 @@ import {
   Skeleton,
   Surface,
   surfaceToneColor,
+  Text,
 } from '@docket/ui/primitives';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 
 import type { AgentSessionDetailOut } from '@docket/athena/agent-contract';
 import { PLAN_TOOL_NAMES } from '@docket/work/plan-draft-contract';
 
 import { ProposalGroupCard } from '@/components/agents/proposal-group-card';
+import { PartialLoadBanner, presentFailure, QueryLoadFailure } from '@/components/feedback';
 import { McpAppPresentationCard } from '@/components/athena/mcp-app-presentation-card';
 import PlanStartCard, { parsePlanStart } from '@/components/plan-canvas/plan-start-card';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 import { AddMcpConnectorForm } from '@/components/settings/mcp-connectors-section';
 import { fetchOrgChatThread, sendOrgChatMessage, useOrgChatThread } from '@/lib/athena/chat-defs';
-import { userErrorMessage } from '@/lib/problem';
 import { queryKeys } from '@/lib/query';
 import { useSessionDetail } from '@/lib/use-session-detail';
 import { startViewTransition } from '@/lib/view-transition';
@@ -122,7 +123,7 @@ interface ThreadWrites {
 }
 
 /** The writes every part of the conversation reaches for. */
-function useThreadWrites(orgId: string, onError: (message: string) => void): ThreadWrites {
+function useThreadWrites(orgId: string): ThreadWrites {
   const queryClient = useQueryClient();
   const commitThread = useCallback(
     (data: AgentSessionDetailOut): void => {
@@ -138,9 +139,9 @@ function useThreadWrites(orgId: string, onError: (message: string) => void): Thr
         commitThread(data);
       });
     } catch (caught) {
-      onError(userErrorMessage(caught, 'Something went wrong opening the conversation.'));
+      presentFailure(caught, 'Could not refresh the conversation.');
     }
-  }, [orgId, commitThread, onError]);
+  }, [orgId, commitThread]);
 
   const sendWidgetMessage = useCallback(
     async (text: string): Promise<boolean> => {
@@ -167,22 +168,14 @@ export default function AthenaConversation({
 }: AthenaConversationProps): JSX.Element {
   const mentionOrgId = useMentionOrgId(orgId);
   const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
   const { draft, setDraft, composerRef } = useComposerDraft(initialDraft, draftRequest);
   const empty = emptyState ?? DEFAULT_EMPTY_STATE;
   const [connectOpen, setConnectOpen] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
-  const { commitThread, reloadWithTransition, sendWidgetMessage } = useThreadWrites(
-    orgId,
-    setSendError,
-  );
+  const { commitThread, reloadWithTransition, sendWidgetMessage } = useThreadWrites(orgId);
 
   const query = useOrgChatThread(orgId);
   const thread = query.data ?? null;
-  const loading = query.isPending;
-  const error =
-    sendError ??
-    (query.isError ? userErrorMessage(query.error, 'Could not open the conversation.') : null);
 
   // Called after a proposal group settles (via `ChatProposals`'s `onSettled`), so the group's
   // ghost rows — each carrying a stable `view-transition-name` — morph out in place instead of
@@ -195,14 +188,13 @@ export default function AthenaConversation({
   const send = useCallback(async (): Promise<void> => {
     const text = draft.trim();
     if (text.length === 0 || sending) return;
-    setSendError(null);
     setSending(true);
     setDraft('');
     try {
       commitThread(await sendOrgChatMessage(orgId, text));
     } catch (caught) {
       setDraft(text);
-      setSendError(userErrorMessage(caught, 'Something went wrong reaching Athena.'));
+      presentFailure(caught, 'Could not send your message.');
     } finally {
       setSending(false);
     }
@@ -212,30 +204,13 @@ export default function AthenaConversation({
   return (
     <div className={cn('flex h-full w-full flex-col', className)}>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-4">
-        {/* placeholder: the conversation's own history — how many turns exist, who said what, and
-            how long each message is. The composer below it is interactive from the first paint. */}
-        {loading ? (
-          <div className="flex flex-col gap-3" aria-hidden="true">
-            <Skeleton className="h-10 w-2/3 rounded-xl" />
-            <Skeleton className="ml-auto h-10 w-1/2 rounded-xl" />
-            <Skeleton className="h-10 w-3/5 rounded-xl" />
-          </div>
-        ) : thread && thread.activities.length > 0 ? (
-          <>
-            {thread.activities.map((activity) => (
-              <ChatEntry
-                key={activity.id}
-                activity={activity}
-                onWidgetMessage={sendWidgetMessage}
-              />
-            ))}
-            {thread.status === 'awaiting_approval' ? (
-              <ChatProposals orgId={orgId} sessionId={thread.id} onSettled={reloadWithTransition} />
-            ) : null}
-          </>
-        ) : (
-          <EmptyState icon={Sparkles} title={empty.title} body={empty.body} frame="none" />
-        )}
+        <ThreadBody
+          orgId={orgId}
+          query={query}
+          empty={empty}
+          onWidgetMessage={sendWidgetMessage}
+          onProposalsSettled={reloadWithTransition}
+        />
         {sending ? (
           <p className="text-on-surface-variant text-body-medium italic" aria-live="polite">
             Athena is working…
@@ -243,12 +218,6 @@ export default function AthenaConversation({
         ) : null}
         <div ref={endRef} />
       </div>
-
-      {error ? (
-        <p role="alert" className="text-error text-body-medium pb-2">
-          {error}
-        </p>
-      ) : null}
 
       <form
         ref={composerRef}
@@ -330,6 +299,71 @@ export default function AthenaConversation({
   );
 }
 
+/** Props for {@link ThreadBody}. */
+interface ThreadBodyProps {
+  readonly orgId: string;
+  readonly query: UseQueryResult<AgentSessionDetailOut>;
+  readonly empty: ConversationEmptyState;
+  /** Posts a widget-composed `ui/message` into this thread, as the user. */
+  readonly onWidgetMessage: (text: string) => Promise<boolean>;
+  /** Reloads the thread after a proposal group settles. */
+  readonly onProposalsSettled: () => Promise<void>;
+}
+
+/**
+ * The thread region: placeholder rows while the first read is in flight, the read's failure when
+ * it has nothing to show, and otherwise the turns with a banner above them when a later refresh
+ * failed.
+ */
+function ThreadBody({
+  orgId,
+  query,
+  empty,
+  onWidgetMessage,
+  onProposalsSettled,
+}: ThreadBodyProps): JSX.Element {
+  const thread = query.data ?? null;
+  if (thread === null && query.isPending) {
+    // placeholder: the conversation's own history — how many turns exist, who said what, and how
+    // long each message is. The composer below it is interactive from the first paint.
+    return (
+      <div className="flex flex-col gap-3" aria-hidden="true">
+        <Skeleton className="h-10 w-2/3 rounded-xl" />
+        <Skeleton className="ml-auto h-10 w-1/2 rounded-xl" />
+        <Skeleton className="h-10 w-3/5 rounded-xl" />
+      </div>
+    );
+  }
+  if (thread === null && query.isError) {
+    return <QueryLoadFailure title="Conversation" query={query} size="panel" />;
+  }
+  const refreshFailed = query.isError ? (
+    <PartialLoadBanner
+      title="Could not refresh the conversation"
+      onRetry={() => void query.refetch()}
+    />
+  ) : null;
+  if (thread === null || thread.activities.length === 0) {
+    return (
+      <>
+        {refreshFailed}
+        <EmptyState icon={Sparkles} title={empty.title} body={empty.body} frame="none" />
+      </>
+    );
+  }
+  return (
+    <>
+      {refreshFailed}
+      {thread.activities.map((activity) => (
+        <ChatEntry key={activity.id} activity={activity} onWidgetMessage={onWidgetMessage} />
+      ))}
+      {thread.status === 'awaiting_approval' ? (
+        <ChatProposals orgId={orgId} sessionId={thread.id} onSettled={onProposalsSettled} />
+      ) : null}
+    </>
+  );
+}
+
 /** Props for {@link ChatEntry}. */
 interface ChatEntryProps {
   activity: SessionActivityOut;
@@ -384,9 +418,9 @@ function ChatEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element |
   }
   if (activity.type === 'error') {
     return (
-      <p role="alert" className="text-error text-body-medium mr-auto">
+      <Text token="body-medium" tone="error" className="mr-auto">
         {text || 'Athena hit an error.'}
-      </p>
+      </Text>
     );
   }
   if (activity.type === 'action') {

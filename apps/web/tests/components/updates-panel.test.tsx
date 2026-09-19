@@ -15,6 +15,7 @@ import {
   UpdatesPanel,
   type UpdatesPanelProps,
 } from '../../src/components/entity-detail/updates-panel';
+import { UserFacingError } from '../../src/lib/problem';
 import { installProseMirrorLayoutShims } from '../editor/prosemirror-jsdom';
 
 installProseMirrorLayoutShims();
@@ -29,10 +30,8 @@ function renderPanel(onPost: UpdatesPanelProps['onPost']): void {
     <UpdatesPanel
       updates={[]}
       loading={false}
-      error={null}
       resolveActor={() => ({ name: 'Grace Hopper', kind: 'human' })}
       posting={false}
-      postError={null}
       onPost={onPost}
       showHealthComposer={false}
     />,
@@ -50,6 +49,30 @@ function submitDraft(): void {
   if (!form) throw new Error('the update composer is not inside a form');
   fireEvent.submit(form);
 }
+
+describe('UpdatesPanel history', () => {
+  it('replaces the history with a load failure that re-issues the read', () => {
+    const refetch = vi.fn();
+    render(
+      <UpdatesPanel
+        updates={[]}
+        loading={false}
+        loadFailure={{
+          error: new UserFacingError('Could not load updates.', { status: 503 }),
+          isFetching: false,
+          refetch,
+        }}
+        resolveActor={() => ({ name: 'Grace Hopper', kind: 'human' })}
+        posting={false}
+        onPost={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('UpdatesPanel composer', () => {
   it('clears the draft once the post succeeds', async () => {

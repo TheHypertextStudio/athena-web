@@ -5,6 +5,7 @@ import {
   type EntityDisplayColorKey,
   type EntityDisplayOut,
 } from '@docket/work/entity-display-contract';
+import { InlineBanner } from '@docket/ui/components';
 import { Check, ChevronDown, SearchRounded } from '@docket/ui/icons';
 import { loadEntityEmojiCatalog, type EntityEmojiCatalog } from '@docket/ui/icons/emoji-catalog';
 import {
@@ -776,21 +777,15 @@ function PickerCatalogContent({
   if (activeTab === 'emoji' && !emojiCatalog) {
     if (emojiLoadFailed) {
       return (
-        <div
-          role="alert"
-          className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 py-8 text-center"
-        >
-          <p className="text-body-medium text-on-surface-variant">Emoji could not load</p>
-          <button
-            type="button"
-            className={cn(
-              'text-primary hover:bg-surface-container-highest text-label-large h-10 rounded-md px-3',
-              focusRing,
-            )}
-            onClick={onRetryEmoji}
+        <div className="min-h-0 flex-1 py-2">
+          <InlineBanner
+            tone="critical"
+            density="compact"
+            title="Emoji could not load"
+            action={{ label: 'Retry emoji', onSelect: onRetryEmoji }}
           >
-            Retry emoji
-          </button>
+            Check your connection and try again.
+          </InlineBanner>
         </div>
       );
     }

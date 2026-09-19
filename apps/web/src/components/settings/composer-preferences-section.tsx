@@ -14,10 +14,9 @@ import { Switch } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
 
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { SettingRow } from './setting-row';
 import { SettingRowStatus } from './setting-row-status';
 import { SETTINGS_NODES } from './settings-capabilities';
@@ -53,13 +52,7 @@ export function ComposerPreferencesSection(): JSX.Element {
     <SettingsGroup
       capability={SETTINGS_NODES.profileCreating}
       body="rows"
-      action={
-        <SettingRowStatus
-          pending={save.isPending}
-          saved={save.isSuccess}
-          {...(save.isError ? { error: userErrorMessage(save.error, SAVE_FALLBACK) } : {})}
-        />
-      }
+      action={<SettingRowStatus pending={save.isPending} saved={save.isSuccess} />}
     >
       {preferencesQ.isError ? (
         <QueryLoadFailure size="panel" title="Creating preferences" query={preferencesQ} />

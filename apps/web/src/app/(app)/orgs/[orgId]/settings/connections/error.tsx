@@ -6,12 +6,15 @@
  * @remarks
  * A render/data failure in this subtree must not blank the whole settings shell or leave the
  * user staring at nothing. The segment retries itself automatically; recovery does not become
- * another task the user has to perform.
+ * another task the user has to perform. The error object is logged and never rendered, so the
+ * copy stays owned by Docket.
  */
+import { EmptyState } from '@docket/ui/components';
+import { CircleAlert } from '@docket/ui/icons';
 import type { JSX } from 'react';
 import { useEffect } from 'react';
 
-import { userErrorMessage } from '@/lib/problem';
+import { RegionFrame } from '@/components/feedback';
 
 /** The Integrations section error boundary. */
 export default function IntegrationsSettingsError({
@@ -32,19 +35,14 @@ export default function IntegrationsSettingsError({
   }, [reset]);
 
   return (
-    <div
-      role="alert"
-      className="bg-surface-container-low flex flex-col items-start gap-1 rounded-xl p-4"
-    >
-      <div className="flex flex-col gap-1">
-        <p className="text-on-surface text-label-large">Couldn’t load your connections</p>
-        <p className="text-on-surface-variant text-body-small">
-          {userErrorMessage(error, 'Something went wrong while loading this section.')}
-        </p>
-        <p className="text-on-surface-variant text-body-small">
-          We&apos;re reloading it automatically.
-        </p>
-      </div>
-    </div>
+    <RegionFrame size="panel">
+      <EmptyState
+        frame="none"
+        tone="critical"
+        icon={CircleAlert}
+        title="Couldn’t load your connections"
+        body="Reloading this section automatically."
+      />
+    </RegionFrame>
   );
 }

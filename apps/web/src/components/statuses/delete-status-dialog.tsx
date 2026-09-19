@@ -26,8 +26,6 @@ import {
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useState } from 'react';
 
-import { userErrorMessage } from '@/lib/problem';
-
 import type { StatusLike } from './status-registry';
 
 /** Props for {@link DeleteStatusDialog}. */
@@ -38,8 +36,6 @@ export interface DeleteStatusDialogProps {
   candidates: readonly StatusLike[];
   /** Whether a delete is in flight. */
   pending: boolean;
-  /** The failure from the last attempt, if any. */
-  error: unknown;
   /** Delete, moving the work to `remapTo`. */
   onConfirm: (remapTo: string) => void;
   /** Close without deleting. */
@@ -56,7 +52,6 @@ export function DeleteStatusDialog({
   status,
   candidates,
   pending,
-  error,
   onConfirm,
   onClose,
 }: DeleteStatusDialogProps): JSX.Element {
@@ -110,12 +105,6 @@ export function DeleteStatusDialog({
               </label>
             ))}
           </fieldset>
-
-          {error === null || error === undefined ? null : (
-            <p role="alert" className="text-error text-body-small">
-              {userErrorMessage(error, 'That status could not be deleted.')}
-            </p>
-          )}
         </DialogBody>
 
         <DialogFooter>

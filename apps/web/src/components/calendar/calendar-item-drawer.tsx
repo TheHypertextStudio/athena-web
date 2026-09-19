@@ -16,7 +16,7 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX, useEffect, useState } from 'react';
 
-import { LoadFailure } from '@/components/feedback';
+import { QueryLoadFailure } from '@/components/feedback';
 import { useApiListQuery, useApiQuery } from '@/lib/query';
 import { workLocationPlacesDef } from '@/components/work-location/work-location-data';
 
@@ -149,14 +149,7 @@ function CalendarItemDrawerContent({
         <DialogDescription className="sr-only">
           Calendar item details could not load.
         </DialogDescription>
-        <LoadFailure
-          title="Calendar item"
-          error={itemQuery.error}
-          onRetry={() => {
-            void itemQuery.refetch();
-          }}
-          retrying={itemQuery.isFetching}
-        />
+        <QueryLoadFailure title="Calendar item" query={itemQuery} />
       </div>
     );
   }

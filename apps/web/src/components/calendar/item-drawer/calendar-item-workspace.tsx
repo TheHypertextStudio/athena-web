@@ -184,7 +184,7 @@ function EventOverflowMenu({ item, onClose }: EventOverflowMenuProps): JSX.Eleme
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" width="md">
           <DropdownMenuItem
-            className="text-error"
+            destructive
             onSelect={() => {
               setConfirming(true);
             }}

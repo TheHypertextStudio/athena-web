@@ -66,7 +66,6 @@ export interface AthenaPanelValue {
   readonly queue: UseQueryResult<PersonalAthenaQueuePayload>;
   readonly detailPending: boolean;
   readonly detailError: boolean;
-  readonly feedback: string | null;
   readonly pending: boolean;
   readonly createPending: boolean;
   readonly railStatus: RailPanelStatus | null;
@@ -255,7 +254,6 @@ export function AthenaPanelProvider({
       queue,
       detailPending: detail.isPending,
       detailError: detail.isError,
-      feedback: actions.feedback,
       pending: actions.pending,
       createPending: actions.createPending,
       railStatus,
@@ -393,15 +391,6 @@ function AthenaRailQueue(): JSX.Element {
           </Link>
         </Button>
       </Surface>
-
-      {athena.feedback ? (
-        <p
-          role="alert"
-          className="bg-error-container text-on-error-container text-body-medium border-outline-variant border-b px-3 py-2"
-        >
-          {athena.feedback}
-        </p>
-      ) : null}
 
       {athena.launchDraft !== null ? (
         <AthenaRailComposer />

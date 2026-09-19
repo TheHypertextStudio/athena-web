@@ -34,6 +34,7 @@ import {
   DialogTitle,
   type DialogPresentation,
 } from '@docket/ui/primitives';
+import { InlineBanner } from '@docket/ui/components';
 import { Maximize, Minimize } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type ReactNode, type RefObject, useId, useRef, useState } from 'react';
@@ -188,6 +189,11 @@ export interface ComposerShellProps {
   onSubmit: () => void;
   /** The Create button label (e.g. "Create project"). */
   submitLabel: string;
+}
+
+/** The banner heading for a composer error: the create itself, or the work that follows it. */
+function errorTitle(draftCommitted: boolean): string {
+  return draftCommitted ? 'A step after creating did not finish' : 'Could not create this';
 }
 
 /**
@@ -443,9 +449,9 @@ export function ComposerShell({
               <PropertyStrip ariaLabel={propertyAriaLabel}>{children}</PropertyStrip>
             ) : null}
             {!confirmingDiscard && error ? (
-              <p role="alert" className="text-error text-body-medium">
+              <InlineBanner tone="critical" density="compact" title={errorTitle(draftCommitted)}>
                 {error}
-              </p>
+              </InlineBanner>
             ) : null}
             <ComposerActionRow
               confirmingDiscard={confirmingDiscard}

@@ -19,7 +19,6 @@
 import type { MilestoneCreate, MilestoneOut } from '@docket/work/milestone-contract';
 
 import { api } from './api';
-import { userErrorMessage } from './problem';
 import { milestoneWriteKeys } from './project-milestones-def';
 import { unwrap, useApiMutation } from './query';
 
@@ -38,7 +37,6 @@ export interface ProjectMilestonesMutations {
    * create is still going, so a create must not be what greys out every row's remove button.
    */
   removing: boolean;
-  mutationError: string | null;
 }
 
 /**
@@ -50,7 +48,7 @@ export interface ProjectMilestonesMutations {
  *
  * @param orgId - The active org.
  * @param projectId - The project the milestone will be scoped to.
- * @returns the create/delete actions, the delete's pending state, and its failure copy.
+ * @returns the create/delete actions and the delete's pending state.
  */
 export function useProjectMilestones(orgId: string, projectId: string): ProjectMilestonesMutations {
   const invalidateKeys = milestoneWriteKeys(orgId, projectId);
@@ -88,8 +86,5 @@ export function useProjectMilestones(orgId: string, projectId: string): ProjectM
       removeMutation.mutate(id);
     },
     removing: removeMutation.isPending,
-    mutationError: removeMutation.error
-      ? userErrorMessage(removeMutation.error, 'Could not remove the milestone.')
-      : null,
   };
 }

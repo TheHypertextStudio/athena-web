@@ -79,6 +79,12 @@ export interface TimerState extends TimerStatus {
   readonly record: TimeRecordOut | null;
   /** Tracked milliseconds in the current session, ticking while running. */
   readonly elapsedMs: number;
+  /** The failure the tracker read settled on, for a surface that presents it as a load failure. */
+  readonly failure: unknown;
+  /** Re-read the tracker. */
+  readonly reload: () => void;
+  /** Whether a re-read is in flight. */
+  readonly reloading: boolean;
 }
 
 /** The work a timer start should attach to, when the caller already knows it. */
@@ -223,6 +229,11 @@ export function useTimerState(): TimerState {
     ...status,
     record,
     elapsedMs: trackedMs(record, running ? now : Date.now()),
+    failure: query.error,
+    reload: () => {
+      void query.refetch();
+    },
+    reloading: query.isFetching,
   };
 }
 

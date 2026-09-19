@@ -22,6 +22,7 @@ import {
   CARD_GRID_CLASS,
   CARD_INSET,
   CARD_MIN_HEIGHT,
+  REJECTED_DROP_CLASS,
 } from './card-styles';
 import type { WorkViewDefinitionFor } from './view-state';
 import { workViewDisplayFieldCatalog } from './view-state';
@@ -80,7 +81,7 @@ function WorkObjectCard<TTarget extends ViewTarget>({
           // The accept/reject treatment the List lens draws on a row, so a drop target reads the
           // same whichever lens you are in.
           drop.dropState === 'accept' && 'ring-primary bg-primary/8 z-10 ring-2 ring-inset',
-          drop.dropState === 'reject' && 'ring-error/60 bg-error/5 z-10 ring-1 ring-inset',
+          drop.dropState === 'reject' && `${REJECTED_DROP_CLASS} z-10 ring-inset`,
         )}
       >
         {children}

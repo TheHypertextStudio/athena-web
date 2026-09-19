@@ -34,14 +34,13 @@ import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { useCreateLabel } from '@/components/labels/queries';
-import { ConfirmDestructiveDialog } from '@docket/ui/components';
+import { ConfirmDestructiveDialog, InlineBanner } from '@docket/ui/components';
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
-import { PartialLoadBanner } from '@/components/entity-detail/partial-load-banner';
+import { PartialLoadBanner, QueryLoadFailure } from '@/components/feedback';
 import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
 import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
-import { QueryLoadFailure } from '@/components/query-load-failure';
 import { LatestUpdateSummary } from '@/components/entity-detail/latest-update-summary';
 import {
   AgentActivityFeed,
@@ -56,6 +55,8 @@ import {
   type ProjectRestoreRefreshState,
   useProjectRestoreController,
 } from '@/components/project-detail/project-restore-controller';
+import { DetailUnavailable } from '@/components/entity-detail/detail-unavailable';
+import { HeaderLoadFailureBanner } from '@/components/entity-detail/header-load-failure';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { memberActorOptions } from '@/components/pickers/options';
@@ -87,7 +88,6 @@ import {
   seedNavigationSnapshot,
 } from '@/lib/navigation-snapshot-runtime';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { orgMembersDef } from '@/lib/use-org-membership';
 import { useProjectMutations } from '@/lib/use-project-mutations';
@@ -175,6 +175,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const queryClient = useQueryClient();
   const accountId = useResolvedAccountId();
   const projectNoun = useVocabulary('project');
+  const projectPlural = useVocabulary('project', { plural: true });
   const refreshTitle = `Could not refresh this ${projectNoun.toLowerCase()}`;
   const workTitle = `${projectNoun} work could not load`;
   const taskNoun = useVocabulary('task').toLowerCase();
@@ -479,8 +480,6 @@ export default function ProjectDetailPage(): JSX.Element {
           : restoreController.failure === 'queued-read'
             ? `This ${projectNoun.toLowerCase()} restore is saved on this device and will sync when you're back online. Retry refresh after it syncs; Undo cannot be sent again.`
             : null;
-  const restoreMutationError =
-    restoreController.refreshState === 'idle' ? restoreController.restoreMutation.error : null;
 
   if (trashedReceipt !== null) {
     return (
@@ -494,14 +493,10 @@ export default function ProjectDetailPage(): JSX.Element {
                 : `This ${projectNoun.toLowerCase()} is hidden from active views and can be restored.`}
             </p>
           </div>
-          {(restoreFailure ?? restoreMutationError) ? (
-            <p role="alert" className="text-error text-body-medium">
-              {restoreFailure ??
-                userErrorMessage(
-                  restoreMutationError,
-                  `Could not restore this ${projectNoun.toLowerCase()}.`,
-                )}
-            </p>
+          {restoreFailure ? (
+            <InlineBanner tone="critical" title={`${projectNoun} restore did not finish`}>
+              {restoreFailure}
+            </InlineBanner>
           ) : null}
           <div className="flex flex-wrap gap-2">
             <ProjectRestorePrimaryAction
@@ -531,11 +526,12 @@ export default function ProjectDetailPage(): JSX.Element {
 
   if (terminalState !== null) {
     return (
-      <p role="alert" className="text-on-surface-variant mx-auto max-w-7xl p-6">
-        {terminalState === 'forbidden'
-          ? `You no longer have access to this ${projectNoun.toLowerCase()}.`
-          : `This ${projectNoun.toLowerCase()} no longer exists.`}
-      </p>
+      <DetailUnavailable
+        noun={projectNoun.toLowerCase()}
+        forbidden={terminalState === 'forbidden'}
+        backHref={`/orgs/${orgId}/projects`}
+        backLabel={`Back to ${projectPlural.toLowerCase()}`}
+      />
     );
   }
   if (aggregateState === 'loading') {
@@ -695,11 +691,15 @@ export default function ProjectDetailPage(): JSX.Element {
               }}
             />
           </EntityMetadataRow>
-          {mutations.propsError || (ownerPickerOpen && membersQ.isError) ? (
-            <p role="alert" className="text-error text-body-medium">
-              {mutations.propsError ?? 'Could not load members.'}
-            </p>
-          ) : null}
+          <HeaderLoadFailureBanner
+            failures={[
+              {
+                failed: ownerPickerOpen && membersQ.isError,
+                title: 'Could not load members',
+                onRetry: () => void membersQ.refetch(),
+              },
+            ]}
+          />
         </div>
       }
       actions={
@@ -735,7 +735,6 @@ export default function ProjectDetailPage(): JSX.Element {
                   <DropdownMenuItem
                     destructive
                     onSelect={() => {
-                      moveProjectToTrash.reset();
                       setConfirmDeleteOpen(true);
                     }}
                   >
@@ -862,7 +861,7 @@ export default function ProjectDetailPage(): JSX.Element {
           <UpdatesPanel
             updates={updatesQ.data?.items ?? []}
             loading={updatesQ.isPending}
-            error={updatesQ.isError ? 'Could not load updates.' : null}
+            loadFailure={updatesQ.isError ? updatesQ : null}
             resolveActor={(actorId) => ({
               name:
                 aggregate?.references.lead?.actorId === actorId
@@ -871,7 +870,6 @@ export default function ProjectDetailPage(): JSX.Element {
               kind: 'human' as const,
             })}
             posting={postUpdate.isPending}
-            postError={postUpdate.error ? 'Could not post the update.' : null}
             onPost={async (body) => {
               await postUpdate.mutateAsync({ body });
             }}
@@ -886,15 +884,7 @@ export default function ProjectDetailPage(): JSX.Element {
             loading={resourcesQ.isPending}
             canEdit={canEdit}
             pending={addResource.isPending || removeResource.isPending}
-            error={
-              resourcesQ.isError
-                ? 'Could not load resources.'
-                : addResource.error
-                  ? 'Could not add the resource.'
-                  : removeResource.error
-                    ? 'Could not remove the resource.'
-                    : null
-            }
+            error={resourcesQ.isError ? 'Could not load resources.' : null}
             onAdd={addResource.mutate}
             onRemove={removeResource.mutate}
             subject={{ type: 'project', id: projectId, organizationId: orgId }}
@@ -907,10 +897,7 @@ export default function ProjectDetailPage(): JSX.Element {
       ) : null}
       <ConfirmDestructiveDialog
         open={confirmDeleteOpen}
-        onOpenChange={(next) => {
-          if (!next) moveProjectToTrash.reset();
-          setConfirmDeleteOpen(next);
-        }}
+        onOpenChange={setConfirmDeleteOpen}
         title={`Move this ${projectNoun.toLowerCase()} to trash?`}
         description={
           projectTaskCount > 0
@@ -919,14 +906,6 @@ export default function ProjectDetailPage(): JSX.Element {
         }
         confirmLabel="Move to trash"
         pending={moveProjectToTrash.isPending}
-        error={
-          moveProjectToTrash.error
-            ? userErrorMessage(
-                moveProjectToTrash.error,
-                `Could not move this ${projectNoun.toLowerCase()} to trash.`,
-              )
-            : null
-        }
         onConfirm={() => {
           moveProjectToTrash.mutate({
             commandId: crypto.randomUUID(),

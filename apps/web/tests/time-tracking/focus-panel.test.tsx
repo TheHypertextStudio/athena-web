@@ -14,7 +14,7 @@ import '@testing-library/jest-dom/vitest';
 import type { TimeRecordOut } from '../../src/lib/contracts/time';
 import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { assertDefined } from '@docket/test-utils';
 
@@ -388,11 +388,11 @@ describe('FocusPanel', () => {
     expect(screen.queryByText('Nothing tracking')).toBeNull();
   });
 
-  it('shows an application-owned timer read error without exposing Start', async () => {
+  it('presents a failed timer read as a region failure without exposing Start', async () => {
     activeGet.mockRejectedValue(new Error('provider detail that must stay hidden'));
     renderPanel();
 
-    expect(await screen.findByText('Could not load your timer.')).toBeInTheDocument();
+    expect(within(await screen.findByRole('alert')).getByRole('button')).toBeEnabled();
     expect(screen.queryByText(/provider detail/)).toBeNull();
     expect(screen.queryByTestId('timer-start')).toBeNull();
   });

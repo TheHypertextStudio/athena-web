@@ -27,7 +27,7 @@ import { Copy, Edit, Ellipsis, LayoutTemplate, Plus, Trash2 } from '@docket/ui/i
 import { type JSX, useState } from 'react';
 
 import { EmptyState as SharedEmptyState } from '@docket/ui/components';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { SettingRow } from '@/components/settings/setting-row';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { ConfirmDestructiveDialog } from '@docket/ui/components';

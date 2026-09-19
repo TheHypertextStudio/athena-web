@@ -1,7 +1,5 @@
 'use client';
 
-import { useState } from 'react';
-
 import {
   type PersonalAthenaLifecycle,
   type PersonalAthenaTransport,
@@ -16,26 +14,22 @@ interface AthenaActionsOptions {
   readonly onCreated?: (next: PersonalAthenaSessionDetail) => void;
 }
 
-/** Shared personal-Athena mutations and application-owned live feedback. */
+/**
+ * Shared personal-Athena mutations.
+ *
+ * @remarks
+ * Each mutation reports its own failure as a notice, named by the operation it performs.
+ */
 export function useAthenaActions({
   selectedId,
   transport,
   onSelected,
   onCreated = onSelected,
 }: AthenaActionsOptions) {
-  const [feedback, setFeedback] = useState<string | null>(null);
-  const common = (message: string, success: (next: PersonalAthenaSessionDetail) => void) => ({
+  const common = (failureTitle: string, success: (next: PersonalAthenaSessionDetail) => void) => ({
     invalidateKeys: [queryKeys.athena()],
-    onMutate: () => {
-      setFeedback(null);
-    },
-    onError: () => {
-      setFeedback(message);
-    },
-    onSuccess: (next: PersonalAthenaSessionDetail) => {
-      setFeedback(null);
-      success(next);
-    },
+    failureTitle,
+    onSuccess: success,
   });
   const sendMessage = useApiMutation<PersonalAthenaSessionDetail, string>({
     mutationFn: (body) =>
@@ -82,7 +76,6 @@ export function useAthenaActions({
   });
 
   return {
-    feedback,
     pending: sendMessage.isPending || lifecycle.isPending || decide.isPending || create.isPending,
     sendMessage: sendMessage.mutate,
     lifecycle: lifecycle.mutate,

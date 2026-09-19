@@ -12,6 +12,7 @@
 import { notifyFailure } from '@docket/ui/components';
 
 import { failureAction, failurePresentation } from '@/lib/failure-presentation';
+import { readProblemError } from '@/lib/problem';
 
 /** What a caller can add to a failure notice. */
 export interface PresentFailureOptions {
@@ -47,4 +48,25 @@ export function presentFailure(
     action,
     dedupeKey: `failure:${failure.code ?? failure.status ?? 'unknown'}`,
   });
+}
+
+/**
+ * Show a response the API rejected as a notice.
+ *
+ * @remarks
+ * For a write issued through a bare `fetch`-style client call rather than `useApiMutation`. The
+ * status and the problem code are read from the response; its body text is never shown.
+ *
+ * @param response - The non-`ok` response.
+ * @param fallbackTitle - Application-owned copy naming the operation, used only when the response
+ *   carries neither a code nor a usable status.
+ * @param options - See {@link PresentFailureOptions}.
+ * @returns the notice's id.
+ */
+export async function presentRejectedResponse(
+  response: Response,
+  fallbackTitle: string,
+  options: PresentFailureOptions = {},
+): Promise<string> {
+  return presentFailure(await readProblemError(response, fallbackTitle), fallbackTitle, options);
 }

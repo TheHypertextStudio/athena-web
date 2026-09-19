@@ -33,7 +33,7 @@ import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { STALE, apiQueryOptions, queryKeys, useApiListQuery, useLiveApiQuery } from '@/lib/query';
 
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';
 import { InviteForm } from './invite-form';

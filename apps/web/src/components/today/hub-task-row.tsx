@@ -126,7 +126,7 @@ export default function HubTaskRow({
         meta={
           <>
             {plan?.blocked ? (
-              <RowMeta className="text-error">
+              <RowMeta tone="error">
                 <CircleStop aria-hidden="true" className="size-3.5" /> Blocked
               </RowMeta>
             ) : null}
@@ -146,7 +146,7 @@ export default function HubTaskRow({
               </RowMeta>
             ) : null}
             {due ? (
-              <RowMeta tabular className={overdue ? 'text-error min-w-12' : 'min-w-12'}>
+              <RowMeta tabular tone={overdue ? 'error' : 'default'} className="min-w-12">
                 {due}
               </RowMeta>
             ) : null}

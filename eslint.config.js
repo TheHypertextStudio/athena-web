@@ -4,6 +4,7 @@ import {
   complexityConfig,
   complexityDebtConfig,
   dataLayerConfig,
+  errorPresentationConfig,
   menuStyleBoundaryConfig,
   overlayPrimitiveConfig,
   rosterOwnershipConfig,
@@ -31,6 +32,7 @@ export default [
   ...rosterOwnershipConfig,
   ...menuStyleBoundaryConfig,
   ...serverComponentBoundaryConfig,
+  ...errorPresentationConfig,
   ...semanticSurfaceCohortConfig([
     'apps/admin/src/**/*.{ts,tsx}',
     'apps/web/src/components/athena/**/*.{ts,tsx}',

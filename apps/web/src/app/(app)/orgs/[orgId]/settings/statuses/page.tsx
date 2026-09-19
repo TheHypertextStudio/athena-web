@@ -26,7 +26,7 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { Skeleton } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { useActiveOrg } from '@/components/active-org';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { DeleteStatusDialog } from '@/components/statuses/delete-status-dialog';
@@ -320,7 +320,6 @@ export default function StatusesSettingsPage(): JSX.Element {
             sections.find((section) => section.entityType === editing.entityType)?.one ?? 'work'
           }
           pending={createStatus.isPending || updateStatus.isPending}
-          error={null}
           onSave={(input) => {
             if (editing.status === null) {
               createStatus.mutate(
@@ -369,7 +368,6 @@ export default function StatusesSettingsPage(): JSX.Element {
             (status) => status.id !== deleting.status.id,
           )}
           pending={deleteStatus.isPending}
-          error={null}
           onConfirm={(remapTo) => {
             deleteStatus.mutate(
               { statusId: deleting.status.id, remapTo, entityType: deleting.entityType },

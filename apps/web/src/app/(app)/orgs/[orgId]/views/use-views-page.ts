@@ -30,7 +30,6 @@ import {
   useApiMutation,
   useApiListQuery,
 } from '@/lib/query';
-import { userErrorMessage } from '@/lib/problem';
 
 /** The active working query the toolbar edits, the runner renders, and the composer saves. */
 interface WorkingQuery {
@@ -56,7 +55,6 @@ export interface ViewsPageData {
   querySummary: string;
   canScopeToTeam: boolean;
   saving: boolean;
-  saveError: string | null;
   save: (payload: SavedViewCreate) => void;
   resetSave: () => void;
   openView: (view: SavedViewOut) => void;
@@ -246,6 +244,7 @@ export function useViewsPage(orgId: string): ViewsPageData {
       setQuery((current) => ({ ...current, sourceViewId: created.id }));
     },
     invalidateKeys: [savedViewsKey],
+    failureTitle: 'Could not save the view.',
   });
 
   const openView = useCallback(
@@ -284,9 +283,6 @@ export function useViewsPage(orgId: string): ViewsPageData {
     querySummary,
     canScopeToTeam,
     saving: saveMutation.isPending,
-    saveError: saveMutation.isError
-      ? userErrorMessage(saveMutation.error, 'Could not load or save views.')
-      : null,
     save: (payload) => {
       saveMutation.mutate(payload);
     },

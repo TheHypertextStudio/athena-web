@@ -27,7 +27,7 @@
 import type { NotionMirrorDatabaseOut } from '@docket/connections/notion/mirror-contract';
 import { ArrowRight, CheckCircle2, CircleAlert, LayoutTemplate, OpenInNew } from '@docket/ui/icons';
 import { EmptyState } from '@docket/ui/components';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import { Badge, Button, Skeleton, Text } from '@docket/ui/primitives';
 import NextLink from '@/components/docket-link';
 import type { JSX } from 'react';
 
@@ -68,6 +68,35 @@ import {
   useNotionMirrorSync,
   useNotionPeople,
 } from './use-notion-mirror-controller';
+
+/** Props for {@link ConnectionStatusChip}. */
+interface ConnectionStatusChipProps {
+  /** The server has demoted the connection to an error state. */
+  readonly broken: boolean;
+  /** The connection's status label. */
+  readonly label: string;
+}
+
+/**
+ * The connection's status as a chip: a destructive badge when the server has marked the
+ * connection broken, and a tertiary chip while it is healthy.
+ */
+function ConnectionStatusChip({ broken, label }: ConnectionStatusChipProps): JSX.Element {
+  if (broken) {
+    return (
+      <Badge variant="destructive" className="gap-1.5 px-2.5 py-1">
+        <CircleAlert aria-hidden="true" className="size-3.5" />
+        {label}
+      </Badge>
+    );
+  }
+  return (
+    <span className="bg-tertiary-container text-on-tertiary-container text-body-small inline-flex items-center gap-1.5 rounded-full px-2.5 py-1">
+      <CheckCircle2 aria-hidden="true" className="size-3.5" />
+      {label}
+    </span>
+  );
+}
 
 /** Props for {@link NotionMirrorPanel}. */
 export interface NotionMirrorPanelProps {
@@ -238,20 +267,10 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
           connection the server had already demoted to `error` still rendered as "Connected" —
           the surface telling somebody their sync was fine while it was broken. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span
-          className={
-            connectionBroken
-              ? 'bg-error-container text-on-error-container text-body-small inline-flex items-center gap-1.5 rounded-full px-2.5 py-1'
-              : 'bg-tertiary-container text-on-tertiary-container text-body-small inline-flex items-center gap-1.5 rounded-full px-2.5 py-1'
-          }
-        >
-          {connectionBroken ? (
-            <CircleAlert aria-hidden="true" className="size-3.5" />
-          ) : (
-            <CheckCircle2 aria-hidden="true" className="size-3.5" />
-          )}
-          {integrationStatusLabel(model.integration)}
-        </span>
+        <ConnectionStatusChip
+          broken={connectionBroken}
+          label={integrationStatusLabel(model.integration)}
+        />
         <span className="text-on-surface-variant text-body-small">
           {model.integration.connection.externalWorkspaceName ??
             model.integration.connection.account ??
@@ -294,7 +313,9 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
       {needsPeople ? (
         <SettingsGroup>
           <p className="text-on-surface text-body-medium flex items-center gap-2">
-            <CircleAlert aria-hidden="true" className="text-error size-4" />
+            <Text token="body-medium" tone="error" className="flex shrink-0">
+              <CircleAlert aria-hidden="true" className="size-4" />
+            </Text>
             {people.unmatched.length === 1
               ? '1 person in Notion isn’t matched to anyone in Docket'
               : `${String(people.unmatched.length)} people in Notion aren’t matched to anyone in Docket`}

@@ -202,9 +202,16 @@ export function useAddDomainMutation(orgId: string) {
   });
 }
 
-/** Re-check a domain's DNS ownership record. */
+/**
+ * Re-check a domain's DNS ownership record.
+ *
+ * @remarks
+ * The domain row presents a failed check itself, beside the badge the check is about, so the
+ * mutation stays quiet.
+ */
 export function useVerifyDomainMutation(orgId: string) {
   return useApiMutation<WorkspaceDomainVerifyOut, string>({
+    failure: 'silent',
     mutationFn: (id) =>
       unwrap(
         () =>

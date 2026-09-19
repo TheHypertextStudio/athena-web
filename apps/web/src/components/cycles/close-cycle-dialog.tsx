@@ -52,8 +52,6 @@ export interface CloseCycleDialogProps {
   targets: readonly CarryoverTarget[];
   /** Whether the close request is in flight. */
   closing: boolean;
-  /** A close error to surface, if any. */
-  closeError: string | null;
   /** Change a task's chosen action. */
   onActionChange: (taskId: string, action: CycleCarryoverAction) => void;
   /** Change a task's chosen destination cycle. */
@@ -95,7 +93,6 @@ export function CloseCycleDialog({
   items,
   targets,
   closing,
-  closeError,
   onActionChange,
   onTargetChange,
   onConfirm,
@@ -143,12 +140,6 @@ export function CloseCycleDialog({
                 />
               ))}
             </div>
-          ) : null}
-
-          {closeError ? (
-            <p role="alert" className="text-error text-body-medium">
-              {closeError}
-            </p>
           ) : null}
         </DialogBody>
 

@@ -6,6 +6,7 @@ import { useCallback, useState } from 'react';
 
 import type { ScheduleChange } from '@/components/timeline/cascade';
 import type { TimelineSpan } from '@/components/timeline/timeline-catalog';
+import { presentFailure } from '@/components/feedback';
 import { api } from '@/lib/api';
 import { unwrap, useApiMutation } from '@/lib/query';
 import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
@@ -25,11 +26,15 @@ export interface ProjectTimelineScheduleChange extends ScheduleChange {
   readonly organizationId: string;
 }
 
-/** Project timeline write callbacks and their shared pending and error state. */
+/**
+ * Project timeline write callbacks and their shared pending state.
+ *
+ * @remarks
+ * A rejected write is presented as a notice by the hook itself, so callers render no error state.
+ */
 export interface ProjectTimelineMutations {
   readonly applyingCascade: boolean;
   readonly pending: boolean;
-  readonly error: unknown;
   readonly reschedule: (project: ProjectTimelineSubject, span: TimelineSpan) => void;
   readonly applyCascade: (changes: readonly ProjectTimelineScheduleChange[]) => void;
 }
@@ -38,7 +43,6 @@ export interface ProjectTimelineMutations {
 export function useProjectTimelineMutations(): ProjectTimelineMutations {
   const queryClient = useQueryClient();
   const [applyingCascade, setApplyingCascade] = useState(false);
-  const [cascadeError, setCascadeError] = useState<unknown>(null);
   const rescheduleMutation = useApiMutation<
     ProjectOut,
     { readonly project: ProjectTimelineSubject; readonly span: TimelineSpan }
@@ -69,7 +73,6 @@ export function useProjectTimelineMutations(): ProjectTimelineMutations {
     (changes: readonly ProjectTimelineScheduleChange[]): void => {
       if (changes.length === 0 || applyingCascade) return;
       setApplyingCascade(true);
-      setCascadeError(null);
       void Promise.allSettled(
         changes.map((change) =>
           unwrap(
@@ -90,7 +93,7 @@ export function useProjectTimelineMutations(): ProjectTimelineMutations {
         .then((results) => {
           const firstFailure = results.find((result) => result.status === 'rejected');
           if (firstFailure?.status === 'rejected') {
-            setCascadeError(firstFailure.reason);
+            presentFailure(firstFailure.reason, 'Could not reschedule a dependent project.');
           }
         })
         .finally(() => {
@@ -111,7 +114,6 @@ export function useProjectTimelineMutations(): ProjectTimelineMutations {
   return {
     applyingCascade,
     pending: rescheduleMutation.isPending,
-    error: rescheduleMutation.error ?? cascadeError,
     reschedule: (project: ProjectTimelineSubject, span: TimelineSpan): void => {
       rescheduleMutation.mutate({ project, span });
     },

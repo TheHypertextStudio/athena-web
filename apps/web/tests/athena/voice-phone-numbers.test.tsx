@@ -14,11 +14,25 @@
  */
 import '@testing-library/jest-dom/vitest';
 
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deferred } from '../support/deferred';
+import {
+  SERVER_DIAGNOSTIC,
+  action,
+  addForm,
+  challengeSummary,
+  control,
+  field,
+  listing,
+  phoneNumber,
+  rowAction,
+  unavailableListing,
+  verifyForm,
+} from '../support/phone-numbers';
 import { makeQueryWrapper, okResponse, problemResponse } from '../support/query';
 
 const numbersGet = vi.fn();
@@ -55,88 +69,14 @@ vi.mock('@/lib/api', () => ({
 // Imported after the mock above so the module under test shares it.
 const { VoicePhoneNumbers } = await import('@/components/athena/voice-phone-numbers');
 
-/** Prose only the server would produce, so leaking it into the UI is unambiguous. */
-const SERVER_DIAGNOSTIC = 'psycopg2.errors.UniqueViolation at 0xdeadbeef';
-
-interface NumberOverrides {
-  readonly id?: string;
-  readonly status?: 'pending' | 'verified' | 'blocked';
-  readonly callingEnabled?: boolean;
-  readonly lastCalledAt?: string | null;
-  readonly challenge?: Record<string, unknown> | null;
-}
-
-/** A listed number, pending with a live challenge unless told otherwise. */
-function phoneNumber({
-  id = 'pn-1',
-  status = 'pending',
-  callingEnabled = true,
-  lastCalledAt = null,
-  challenge = status === 'pending' ? challengeSummary() : null,
-}: NumberOverrides = {}): Record<string, unknown> {
-  return {
-    id,
-    masked: '+1 ••• ••• ••58',
-    dialCode: '1',
-    country: 'US',
-    status,
-    callingEnabled,
-    verifiedAt: null,
-    lastCalledAt,
-    createdAt: '2026-08-15T09:00:00.000Z',
-    challenge,
-  };
-}
-
-/** Challenge limits, expired-cooldown by default so the resend button is live. */
-function challengeSummary(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    state: 'awaiting_code',
-    expiresAt: '2099-08-15T09:10:00.000Z',
-    attemptsRemaining: 5,
-    resendAvailableAt: '2000-01-01T00:00:00.000Z',
-    deliveryFailed: false,
-    ...overrides,
-  };
-}
-
-function listing(...items: Record<string, unknown>[]): unknown {
-  return okResponse({
-    athenaNumber: '+17025550100',
-    verification: { available: true, reason: null },
-    items,
-  });
-}
-
-function unavailableListing(reason: 'rollout_restricted' | 'temporarily_unavailable'): unknown {
-  return okResponse({
-    athenaNumber: '+17025550100',
-    verification: { available: false, reason },
-    items: [],
-  });
-}
-
 function renderSection(): ReturnType<typeof render> {
-  return render(<VoicePhoneNumbers />, { wrapper: makeQueryWrapper().wrapper });
-}
-
-const verifyForm = (): Element | null => document.querySelector('[data-phone-verify-form]');
-const addForm = (): Element | null => document.querySelector('[data-phone-add-form]');
-const action = (name: string): HTMLElement | null =>
-  document.querySelector<HTMLElement>(`[data-phone-action="${name}"]`);
-const rowAction = (id: string, name: string): HTMLElement | null =>
-  document.querySelector<HTMLElement>(
-    `[data-phone-number-id="${id}"] [data-phone-action="${name}"]`,
+  return render(
+    <>
+      <VoicePhoneNumbers />
+      <Toaster />
+    </>,
+    { wrapper: makeQueryWrapper().wrapper },
   );
-
-/** An input addressed by its role in the form rather than by the copy inside it. */
-const field = (name: string): HTMLElement =>
-  control(document.querySelector<HTMLElement>(`[data-phone-field="${name}"]`), name);
-
-/** The control, or a failure naming the one that was missing rather than a null dereference. */
-function control(element: HTMLElement | null, label: string): HTMLElement {
-  if (!element) throw new Error(`expected a "${label}" control to be rendered`);
-  return element;
 }
 
 beforeEach(() => {
@@ -148,7 +88,10 @@ beforeEach(() => {
   numbersGet.mockResolvedValue(listing());
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  dismissAllNotices();
+  cleanup();
+});
 
 describe('VoicePhoneNumbers', () => {
   it('shows how calls authenticate and starts a callback to the stored number', async () => {
@@ -396,7 +339,6 @@ describe('VoicePhoneNumbers', () => {
     renderSection();
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('Could not load your phone numbers.');
     expect(alert).not.toHaveTextContent(SERVER_DIAGNOSTIC);
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
     expect(addForm()).toBeNull();
@@ -689,6 +631,22 @@ describe('VoicePhoneNumbers', () => {
     await waitFor(() => {
       expect(numbersGet.mock.calls.length).toBeGreaterThan(before);
     });
+  });
+
+  it('reports a refused code under the code box, without server prose', async () => {
+    numbersGet.mockResolvedValue(listing(phoneNumber({ id: 'pn-1' })));
+    verifyPost.mockResolvedValue(problemResponse(SERVER_DIAGNOSTIC, 409, 'conflict'));
+    renderSection();
+
+    await waitFor(() => {
+      expect(verifyForm()).not.toBeNull();
+    });
+    await userEvent.type(field('code'), '000000');
+    await userEvent.click(control(action('verify'), 'verify'));
+
+    const alert = await screen.findByRole('alert');
+    expect(verifyForm()).toContainElement(alert);
+    expect(alert).not.toHaveTextContent(SERVER_DIAGNOSTIC);
   });
 
   it('describes the code’s real expiry rather than a fixed sentence', async () => {

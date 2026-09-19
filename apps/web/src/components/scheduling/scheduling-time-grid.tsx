@@ -1,5 +1,6 @@
 'use client';
 
+import { CRITICAL_PAINT } from '@docket/ui/primitives';
 import { type JSX, type ReactNode, useMemo } from 'react';
 
 import {
@@ -211,7 +212,7 @@ export function SchedulingTimeGrid({
             >
               {currentPosition?.date === lane.date ? (
                 <span
-                  className="bg-error absolute inset-x-0 h-0.5"
+                  className={`${CRITICAL_PAINT.line} absolute inset-x-0 h-0.5`}
                   data-current-time-line={lane.id}
                   style={{ top: tickTop(currentPosition.wallMinutes, pixelsPerHour) }}
                 />

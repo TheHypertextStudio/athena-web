@@ -4,6 +4,7 @@
 import { ChevronLeft, OpenInNew } from '@docket/ui/icons';
 import { Button, Skeleton, Text } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
+import { LoadFailure } from '@/components/feedback';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useId, useState } from 'react';
 
@@ -54,9 +55,8 @@ export default function FocusImmersive({ userId = null }: FocusImmersiveProps): 
 
   const start = (taskId?: string): void => {
     setNotice(null);
-    void controls.start(taskId ? { taskId } : {}).catch(() => {
-      setNotice('Could not start the timer. Try again.');
-    });
+    // A rejected start is presented as a notice by the timer's own mutation.
+    void controls.start(taskId ? { taskId } : {}).catch(() => undefined);
   };
 
   // placeholder: the running timer, the task it is against, and that task's notes.
@@ -107,12 +107,12 @@ export default function FocusImmersive({ userId = null }: FocusImmersiveProps): 
               <Skeleton className="h-36 w-full" />
             </div>
           ) : timer.error ? (
-            <div className="flex max-w-xl flex-col gap-2">
-              <Text token="headline-large">Your timer is temporarily unavailable.</Text>
-              <Text token="body-large" role="alert" className="text-error">
-                {timer.error}
-              </Text>
-            </div>
+            <LoadFailure
+              title="Your timer"
+              error={timer.failure}
+              onRetry={timer.reload}
+              retrying={timer.reloading}
+            />
           ) : timer.record?.taskId && timer.record.organizationId ? (
             <div className="flex max-w-3xl flex-col gap-6">
               <Link

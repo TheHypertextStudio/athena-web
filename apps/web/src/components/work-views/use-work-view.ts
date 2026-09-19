@@ -254,8 +254,6 @@ export interface WorkViewController<TTarget extends ViewTarget> {
    * experience as their changes silently not sticking.
    */
   readonly preferencesUnavailable: boolean;
-  /** Saved-view mutation failure owned by the open save dialog. */
-  readonly saveError: unknown;
   /**
    * Workspace-default **mutation** failure, owned by the default action.
    *
@@ -834,6 +832,7 @@ export function useWorkView<TTarget extends ViewTarget>(
       );
     },
     invalidateKeys: [queryKeys.savedViews(organizationId)],
+    failureTitle: 'Could not save this view.',
   });
 
   const defaultMutation = useApiMutation<
@@ -855,6 +854,8 @@ export function useWorkView<TTarget extends ViewTarget>(
       );
     },
     invalidateKeys: [queryKeys.workViewDefault(organizationId, target)],
+    // The page's operation-failure banner presents this write and owns its retry.
+    failure: 'silent',
   });
   const [failedDefaultInput, setFailedDefaultInput] = useState<DefaultWorkViewInput | null>(null);
 
@@ -1158,7 +1159,6 @@ export function useWorkView<TTarget extends ViewTarget>(
           ? new UserFacingError('Could not save your view preferences.')
           : null),
       preferencesUnavailable: preferencesQ.isError,
-      saveError: saveMutation.error,
       defaultError: defaultMutation.error,
       saving: saveMutation.isPending,
       settingDefault: defaultMutation.isPending,
@@ -1243,7 +1243,6 @@ export function useWorkView<TTarget extends ViewTarget>(
       requestFacet,
       resetPersonalOverride,
       saveMutation.isPending,
-      saveMutation.error,
       saveMutation.mutateAsync,
       setDefinition,
       timezone,

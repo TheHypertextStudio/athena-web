@@ -296,7 +296,7 @@ export default function CreateBlockForm({
             setDirty(true);
           }}
           placeholder="Add title"
-          className="aria-invalid:border-error text-title-large h-11 rounded-none border-x-0 border-t-0 px-0 aria-invalid:ring-0"
+          className="text-title-large h-11 rounded-none border-x-0 border-t-0 px-0 aria-invalid:ring-0"
         />
       </label>
 

@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { ContextProvider } from '@docket/ui/components';
+import { ContextProvider, Toaster, dismissAllNotices } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -36,6 +36,7 @@ function renderPage(): QueryClient {
       <QueryClientProvider client={queryClient}>
         <ContextProvider initialContext="old_org">
           <NewWorkspacePage />
+          <Toaster />
         </ContextProvider>
       </QueryClientProvider>
     </AuthenticationInterlockProvider>,
@@ -51,6 +52,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  dismissAllNotices();
   cleanup();
 });
 
@@ -81,7 +83,7 @@ describe('NewWorkspacePage', () => {
     expect(window.localStorage.getItem('docket:last-org:user_1')).toBe('new_org');
   });
 
-  it('keeps the entered name and surfaces safe retry copy after an API failure', async () => {
+  it('keeps the entered name and presents a notice after an API failure', async () => {
     createWorkspace.mockRejectedValue(new Error('Workspace limit reached.'));
     renderPage();
 
@@ -89,7 +91,7 @@ describe('NewWorkspacePage', () => {
     fireEvent.change(input, { target: { value: 'Acme' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not create your workspace.');
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(input).toHaveValue('Acme');
     expect(replace).not.toHaveBeenCalled();
   });

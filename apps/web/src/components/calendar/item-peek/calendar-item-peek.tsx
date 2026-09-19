@@ -94,10 +94,9 @@ export function CalendarItemPeek({
         {canDeleteCalendarItem(item) ? (
           <Button
             type="button"
-            variant="ghost"
+            variant="ghost-destructive"
             iconOnly
             aria-label={`Delete ${item.title}`}
-            className="text-error hover:text-error"
             onClick={onRequestDelete}
           >
             <Trash2 aria-hidden="true" />

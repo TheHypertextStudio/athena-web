@@ -118,6 +118,7 @@ export function useAnswerElicitation(): ReturnType<
       return { ok: true, elicitation: elicitation };
     },
     invalidateKeys: [elicitationKeys.all()],
+    failureTitle: 'Athena could not record that answer.',
   });
 }
 
@@ -135,6 +136,7 @@ export function useRegisterWebPush(): ReturnType<
         'Could not turn on notifications.',
       ),
     invalidateKeys: [elicitationKeys.pushSubscription()],
+    failureTitle: 'Could not turn on notifications.',
   });
 }
 
@@ -149,6 +151,7 @@ export function useRecordPresence(): ReturnType<typeof useApiMutation<AthenaPres
         () => api.v1.me.elicitations.presence.$post({ json: { focused } }),
         'Could not record that you are here.',
       ),
+    failure: 'silent',
   });
 }
 

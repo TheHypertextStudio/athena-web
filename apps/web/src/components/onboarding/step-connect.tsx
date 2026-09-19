@@ -27,13 +27,14 @@ import { Layers } from '@docket/ui/icons/layers';
 import { TaskAlt } from '@docket/ui/icons/task-alt';
 import { type JSX, useCallback, useEffect, useState } from 'react';
 
+import { presentFailure, presentRejectedResponse } from '@/components/feedback';
 import { api } from '@/lib/api';
-import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { connectorAvailable, usePublicConfig } from '@/lib/public-config';
 
 import {
   type CardState,
   type ProviderCard,
+  FAILED_CARD_STATE,
   INITIAL_CARD_STATE,
   ProviderRow,
 } from './step-connect-provider-row';
@@ -159,52 +160,31 @@ export function StepConnect({
   /** Connect a single provider: create the integration, then import its work. */
   const connect = useCallback(
     async (provider: OnboardingProvider): Promise<void> => {
-      setStates((prev) => ({
-        ...prev,
-        [provider]: { phase: 'connecting', mirrored: 0, error: null },
-      }));
+      const settle = (next: CardState): void => {
+        setStates((prev) => ({ ...prev, [provider]: next }));
+      };
+      settle({ phase: 'connecting', mirrored: 0 });
       try {
         const createRes = await createIntegration(orgId, provider);
         if (!createRes.ok) {
-          const message = userErrorMessage(
-            await readProblemError(createRes, 'Could not connect this source.'),
-            'Could not connect this source.',
-          );
-          setStates((prev) => ({
-            ...prev,
-            [provider]: { phase: 'error', mirrored: 0, error: message },
-          }));
+          await presentRejectedResponse(createRes, 'Could not connect this source.');
+          settle(FAILED_CARD_STATE);
           return;
         }
         const created = (await createRes.json()) as IntegrationOut;
 
         const importRes = await importWork(orgId, created.id);
         if (!importRes.ok) {
-          const message = userErrorMessage(
-            await readProblemError(importRes, 'Connected, but could not bring work in.'),
-            'Connected, but could not bring work in.',
-          );
-          setStates((prev) => ({
-            ...prev,
-            [provider]: { phase: 'error', mirrored: 0, error: message },
-          }));
+          await presentRejectedResponse(importRes, 'Connected, but could not bring work in.');
+          settle(FAILED_CARD_STATE);
           return;
         }
         const { items } = (await importRes.json()) as { items: TaskOut[] };
 
-        setStates((prev) => ({
-          ...prev,
-          [provider]: { phase: 'connected' as const, mirrored: items.length, error: null },
-        }));
+        settle({ phase: 'connected', mirrored: items.length });
       } catch (caught) {
-        const message = userErrorMessage(
-          caught,
-          'Docket could not connect this source. Try again.',
-        );
-        setStates((prev) => ({
-          ...prev,
-          [provider]: { phase: 'error', mirrored: 0, error: message },
-        }));
+        presentFailure(caught, 'Docket could not connect this source. Try again.');
+        settle(FAILED_CARD_STATE);
       }
     },
     [orgId, createIntegration, importWork],

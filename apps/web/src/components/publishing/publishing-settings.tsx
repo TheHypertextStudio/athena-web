@@ -30,7 +30,6 @@ import { SettingsSectionPage } from '@/components/settings/settings-section-page
 import { SettingsSubsection } from '@/components/settings/settings-subsection';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 import { DefaultAddressRow, DomainRow } from './address-rows';
@@ -158,12 +157,6 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
               {addDomain.isPending ? 'Adding…' : 'Add domain'}
             </Button>
           </form>
-        ) : null}
-
-        {addDomain.error ? (
-          <Text as="p" token="body-small" tone="error" role="alert">
-            {userErrorMessage(addDomain.error, 'Could not add that domain.')}
-          </Text>
         ) : null}
 
         <ul className="flex flex-col gap-2">

@@ -3,6 +3,7 @@
 import { entityNavigationSnapshotFromWorkViewRow } from '../../lib/contracts/entity-navigation';
 import { EntityTable, type EntityTableProps } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
+import { CRITICAL_PAINT } from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
 import {
   type CSSProperties,
@@ -23,6 +24,7 @@ import type { ObjectRef } from '@/lib/actions';
 import { objectKey, objectTargetProps } from '@/lib/actions/object';
 import { buildEntityHref } from '@/lib/authenticated-route';
 
+import { REJECTED_DROP_CLASS } from './card-styles';
 import {
   buildWorkListColumns,
   WORK_ROSTER_INLINE_LINK_COLUMN_KEY,
@@ -161,7 +163,7 @@ function WorkListRowInteraction<TTarget extends ViewTarget>({
           drag.className,
           drop.dropProps.className,
           drop.dropState === 'accept' && 'ring-primary bg-primary/8 z-10 ring-2 ring-inset',
-          drop.dropState === 'reject' && 'ring-error/60 bg-error/5 z-10 ring-1 ring-inset',
+          drop.dropState === 'reject' && `${REJECTED_DROP_CLASS} z-10 ring-inset`,
         ),
       })}
       {drop.effectLabel ? (
@@ -169,7 +171,7 @@ function WorkListRowInteraction<TTarget extends ViewTarget>({
           className={cn(
             'text-label-small pointer-events-none absolute inset-y-1 right-3 z-20 flex items-center rounded-md px-2',
             drop.dropState === 'reject'
-              ? 'bg-error-container text-on-error-container'
+              ? CRITICAL_PAINT.rejectedLabel
               : 'bg-primary-container text-on-primary-container',
           )}
           role="status"
@@ -399,7 +401,7 @@ export function WorkList<TTarget extends ViewTarget>({
           'h-full min-h-0 flex-1',
           initiativeRoot.dropProps.className,
           initiativeRoot.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
-          initiativeRoot.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-1 ring-inset',
+          initiativeRoot.dropState === 'reject' && `${REJECTED_DROP_CLASS} ring-inset`,
         )}
       />
     </div>

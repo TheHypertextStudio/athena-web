@@ -24,11 +24,12 @@ import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
-import { PartialLoadBanner } from '@/components/entity-detail/partial-load-banner';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { PartialLoadBanner, QueryLoadFailure } from '@/components/feedback';
 import { PlanWithAthenaAction } from '@/components/initiatives/plan-with-athena-action';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
+import { DetailUnavailable } from '@/components/entity-detail/detail-unavailable';
+import { HeaderLoadFailureBanner } from '@/components/entity-detail/header-load-failure';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
@@ -73,7 +74,6 @@ import {
 } from '@/lib/query';
 import { labelsDef, useCreateLabel } from '@/components/labels/queries';
 import { useInitiativeMutations } from '@/lib/use-initiative-mutations';
-import { userErrorMessage } from '@/lib/problem';
 import { formatPlanningTimeframe, toPlanningTimeframe } from '@/lib/planning-timeframe';
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
@@ -283,11 +283,12 @@ export default function InitiativeDetailPage(): JSX.Element {
 
   if (terminalState !== null) {
     return (
-      <p role="alert" className="text-on-surface-variant mx-auto max-w-7xl p-6">
-        {terminalState === 'forbidden'
-          ? `You no longer have access to this ${initiativeNoun.toLowerCase()}.`
-          : `This ${initiativeNoun.toLowerCase()} no longer exists.`}
-      </p>
+      <DetailUnavailable
+        noun={initiativeNoun.toLowerCase()}
+        forbidden={terminalState === 'forbidden'}
+        backHref={`/orgs/${orgId}/initiatives`}
+        backLabel={`Back to ${initiativePlural.toLowerCase()}`}
+      />
     );
   }
   if (aggregateState === 'loading')
@@ -425,7 +426,7 @@ export default function InitiativeDetailPage(): JSX.Element {
         />
       }
       metadata={
-        <div className="no-print">
+        <div className="no-print flex flex-col gap-2">
           <EntityMetadataRow ariaLabel={`${initiativeNoun} properties`}>
             <InitiativePropertiesPanel
               status={detail.status}
@@ -513,34 +514,29 @@ export default function InitiativeDetailPage(): JSX.Element {
               </Button>
             </EntityMetadataItem>
           </EntityMetadataRow>
-          {mutations.propsError ||
-          (targetPickerOpen ? planningCalendar.error : null) ||
-          (ownerPickerOpen && membersQ.isError ? 'Could not load members.' : null) ||
-          (labelsPickerOpen && (selectedLabelsQ.isError || labelsQ.isError)
-            ? 'Could not load labels.'
-            : null) ? (
-            <p role="alert" className="text-error mt-2 text-sm">
-              {mutations.propsError ??
-                planningCalendar.error ??
-                (ownerPickerOpen && membersQ.isError ? 'Could not load members.' : null) ??
-                (labelsPickerOpen && (selectedLabelsQ.isError || labelsQ.isError)
-                  ? 'Could not load labels.'
-                  : null)}
-            </p>
-          ) : null}
-          {entityDisplay.mutation.error ? (
-            <p role="alert" className="text-error mt-2 text-sm">
-              {userErrorMessage(
-                entityDisplay.mutation.error,
-                `Could not customize this ${initiativeNoun.toLowerCase()}.`,
-              )}
-            </p>
-          ) : null}
-          {entityDisplay.error ? (
-            <p role="alert" className="text-error mt-2 text-sm">
-              Could not load display settings.
-            </p>
-          ) : null}
+          <HeaderLoadFailureBanner
+            failures={[
+              {
+                failed: targetPickerOpen && planningCalendar.error !== null,
+                title: 'Could not load planning calendar settings',
+                onRetry: planningCalendar.retry,
+              },
+              {
+                failed: ownerPickerOpen && membersQ.isError,
+                title: 'Could not load members',
+                onRetry: () => void membersQ.refetch(),
+              },
+              {
+                failed: labelsPickerOpen && (selectedLabelsQ.isError || labelsQ.isError),
+                title: 'Could not load labels',
+                onRetry: () => {
+                  void selectedLabelsQ.refetch();
+                  void labelsQ.refetch();
+                },
+              },
+              { failed: entityDisplay.error !== null, title: 'Could not load display settings' },
+            ]}
+          />
         </div>
       }
       actions={
@@ -568,7 +564,6 @@ export default function InitiativeDetailPage(): JSX.Element {
                 <DropdownMenuItem
                   destructive
                   onSelect={() => {
-                    deleteInitiative.reset();
                     setConfirmDeleteOpen(true);
                   }}
                 >
@@ -605,25 +600,13 @@ export default function InitiativeDetailPage(): JSX.Element {
       ) : null}
       <ConfirmDestructiveDialog
         open={confirmDeleteOpen}
-        onOpenChange={(next) => {
-          // Clear any prior failure so a stale message never shows on reopen.
-          deleteInitiative.reset();
-          setConfirmDeleteOpen(next);
-        }}
+        onOpenChange={setConfirmDeleteOpen}
         title={`Delete this ${initiativeNoun.toLowerCase()}?`}
         description={
           <>
             This permanently deletes &ldquo;{detail.name}&rdquo; and unlinks any connected work from
             it. The linked projects and programs themselves are kept. This can&rsquo;t be undone.
           </>
-        }
-        error={
-          deleteInitiative.error
-            ? userErrorMessage(
-                deleteInitiative.error,
-                `Could not delete this ${initiativeNoun.toLowerCase()}.`,
-              )
-            : null
         }
         confirmLabel={`Delete ${initiativeNoun.toLowerCase()}`}
         pending={deleteInitiative.isPending}
@@ -646,16 +629,9 @@ export default function InitiativeDetailPage(): JSX.Element {
           <UpdatesPanel
             updates={updates}
             loading={updatesQ.isPending}
-            error={
-              updatesQ.isError ? userErrorMessage(updatesQ.error, 'Could not load updates.') : null
-            }
+            loadFailure={updatesQ.isError ? updatesQ : null}
             resolveActor={resolveActor}
             posting={postUpdate.isPending}
-            postError={
-              postUpdate.error
-                ? userErrorMessage(postUpdate.error, 'Could not post the update.')
-                : null
-            }
             onPost={async (body, health) => {
               await postUpdate.mutateAsync({ body, ...(health ? { health } : {}) });
             }}
@@ -676,15 +652,7 @@ export default function InitiativeDetailPage(): JSX.Element {
             loading={resourcesQ.isPending}
             canEdit={canEdit}
             pending={addResource.isPending || removeResource.isPending}
-            error={
-              resourcesQ.isError
-                ? 'Could not load resources.'
-                : addResource.error
-                  ? userErrorMessage(addResource.error, 'Could not add the resource.')
-                  : removeResource.error
-                    ? userErrorMessage(removeResource.error, 'Could not remove the resource.')
-                    : null
-            }
+            error={resourcesQ.isError ? 'Could not load resources.' : null}
             onAdd={addResource.mutate}
             onRemove={removeResource.mutate}
             subject={{ type: 'initiative', id: initiativeId, organizationId: orgId }}

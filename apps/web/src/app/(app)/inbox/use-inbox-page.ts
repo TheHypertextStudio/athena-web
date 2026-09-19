@@ -5,10 +5,11 @@ import type { NotificationOut } from '@docket/notifications/notification-contrac
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 
+import { presentFailure, presentRejectedResponse } from '@/components/feedback';
 import { isApproval, notificationNeedsAction } from '@/components/inbox/notification-meta';
 import type { SegmentDef } from '@/components/inbox/segmented-tabs';
 import { api } from '@/lib/api';
-import { userErrorMessage, readProblemError } from '@/lib/problem';
+import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, useLiveApiQuery } from '@/lib/query';
 
 /** The Inbox's attention slices and passive activity feed. */
@@ -31,7 +32,6 @@ export interface InboxPageData {
   pendingApprovals: number;
   loading: boolean;
   error: string | null;
-  actionError: string | null;
   pendingIds: ReadonlySet<string>;
   markingAll: boolean;
   segments: readonly SegmentDef<InboxTab>[];
@@ -59,7 +59,6 @@ export function useInboxPage(): InboxPageData {
   const [tab, setTab] = useState<InboxTab>('all');
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
   const [markingAll, setMarkingAll] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
 
   const inboxQ = useLiveApiQuery(
     apiQueryOptions(
@@ -108,7 +107,6 @@ export function useInboxPage(): InboxPageData {
 
   const onApprove = useCallback(
     async (id: string): Promise<void> => {
-      setActionError(null);
       setPending(id, true);
       try {
         const res = await api.v1.notifications[':id'].act.$post({
@@ -116,17 +114,12 @@ export function useInboxPage(): InboxPageData {
           json: { action: 'approve' },
         });
         if (!res.ok) {
-          setActionError(
-            userErrorMessage(
-              await readProblemError(res, 'Could not approve this item.'),
-              'Could not approve this item.',
-            ),
-          );
+          await presentRejectedResponse(res, 'Could not approve this item.');
           return;
         }
         await refreshInbox();
       } catch (caught) {
-        setActionError(userErrorMessage(caught, 'Something went wrong approving this item.'));
+        presentFailure(caught, 'Could not approve this item.');
       } finally {
         setPending(id, false);
       }
@@ -136,22 +129,16 @@ export function useInboxPage(): InboxPageData {
 
   const onMarkRead = useCallback(
     async (id: string): Promise<void> => {
-      setActionError(null);
       setPending(id, true);
       try {
         const res = await api.v1.notifications[':id'].read.$post({ param: { id } });
         if (!res.ok) {
-          setActionError(
-            userErrorMessage(
-              await readProblemError(res, 'Could not mark this item read.'),
-              'Could not mark this item read.',
-            ),
-          );
+          await presentRejectedResponse(res, 'Could not mark this item read.');
           return;
         }
         await refreshInbox();
       } catch (caught) {
-        setActionError(userErrorMessage(caught, 'Something went wrong updating this item.'));
+        presentFailure(caught, 'Could not mark this item read.');
       } finally {
         setPending(id, false);
       }
@@ -161,25 +148,19 @@ export function useInboxPage(): InboxPageData {
 
   const onCallMe = useCallback(
     async (id: string, phoneNumberId: string): Promise<void> => {
-      setActionError(null);
       setPending(id, true);
       try {
         const call = await api.v1.me['phone-numbers'][':id'].call.$post({
           param: { id: phoneNumberId },
         });
         if (!call.ok) {
-          setActionError(
-            userErrorMessage(
-              await readProblemError(call, 'Could not start the call.'),
-              'Could not start the call.',
-            ),
-          );
+          await presentRejectedResponse(call, 'Could not start the call.');
           return;
         }
         await api.v1.notifications[':id'].read.$post({ param: { id } });
         await refreshInbox();
       } catch (caught) {
-        setActionError(userErrorMessage(caught, 'Could not start the call.'));
+        presentFailure(caught, 'Could not start the call.');
       } finally {
         setPending(id, false);
       }
@@ -189,25 +170,19 @@ export function useInboxPage(): InboxPageData {
 
   const onUndoPhoneChange = useCallback(
     async (id: string, voiceSessionId: string, changeSetId: string): Promise<void> => {
-      setActionError(null);
       setPending(id, true);
       try {
         const undone = await api.v1.me.athena.voice[':id'].changes[':changeSetId'].undo.$post({
           param: { id: voiceSessionId, changeSetId },
         });
         if (!undone.ok) {
-          setActionError(
-            userErrorMessage(
-              await readProblemError(undone, 'That change can no longer be undone.'),
-              'That change can no longer be undone.',
-            ),
-          );
+          await presentRejectedResponse(undone, 'That change can no longer be undone.');
           return;
         }
         await api.v1.notifications[':id'].read.$post({ param: { id } });
         await refreshInbox();
       } catch (caught) {
-        setActionError(userErrorMessage(caught, 'That change can no longer be undone.'));
+        presentFailure(caught, 'That change can no longer be undone.');
       } finally {
         setPending(id, false);
       }
@@ -216,22 +191,16 @@ export function useInboxPage(): InboxPageData {
   );
 
   const onMarkAllRead = useCallback(async (): Promise<void> => {
-    setActionError(null);
     setMarkingAll(true);
     try {
       const res = await api.v1.notifications['read-all'].$post({ json: {} });
       if (!res.ok) {
-        setActionError(
-          userErrorMessage(
-            await readProblemError(res, 'Could not mark everything read.'),
-            'Could not mark everything read.',
-          ),
-        );
+        await presentRejectedResponse(res, 'Could not mark everything read.');
         return;
       }
       await refreshInbox();
     } catch (caught) {
-      setActionError(userErrorMessage(caught, 'Something went wrong marking everything read.'));
+      presentFailure(caught, 'Could not mark everything read.');
     } finally {
       setMarkingAll(false);
     }
@@ -290,7 +259,6 @@ export function useInboxPage(): InboxPageData {
     pendingApprovals,
     loading: inboxQ.isPending,
     error: inboxQ.error ? userErrorMessage(inboxQ.error, 'Could not load the inbox.') : null,
-    actionError,
     pendingIds,
     markingAll,
     segments,

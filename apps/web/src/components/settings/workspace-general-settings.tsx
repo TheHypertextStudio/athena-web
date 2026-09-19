@@ -5,7 +5,7 @@ import type { VocabularyPreset } from '@docket/work/vocabulary';
 import { Field, Input, Select, Skeleton, Textarea } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX } from 'react';
 
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';
 import { api } from '@/lib/api';

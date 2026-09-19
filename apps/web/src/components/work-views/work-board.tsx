@@ -37,7 +37,7 @@ import {
 } from './renderer-types';
 import { objectForWorkViewRow, type WorkViewRowInteractionPolicy } from './work-view-object';
 
-import { CARD_CHECKBOX_REVEAL_CLASS } from './card-styles';
+import { CARD_CHECKBOX_REVEAL_CLASS, REJECTED_DROP_CLASS } from './card-styles';
 
 const MAX_MOUNTED_CARDS_PER_CELL = 100;
 
@@ -256,7 +256,7 @@ function WorkBoardCard<TTarget extends ViewTarget>({
         'group/card border-outline-variant bg-surface text-on-surface hover:bg-surface-container-high relative rounded-lg border p-3',
         relation.dropProps.className,
         relation.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2',
-        relation.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-1',
+        relation.dropState === 'reject' && REJECTED_DROP_CLASS,
       )}
     >
       <div className="flex items-start gap-2">

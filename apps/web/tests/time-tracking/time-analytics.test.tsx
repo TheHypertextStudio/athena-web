@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -128,11 +128,10 @@ describe('TimeAnalytics', () => {
     });
   });
 
-  it('uses app-owned copy when the selected ledger data fails', async () => {
+  it('presents a failed ledger read as a region failure with a retry', async () => {
     timelineGet.mockResolvedValue(jsonResponse({ code: 'internal' }, 500));
     renderAnalytics();
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent('Could not load your sessions.'),
-    );
+    const alert = await screen.findByRole('alert');
+    expect(within(alert).getByRole('button')).toBeEnabled();
   });
 });

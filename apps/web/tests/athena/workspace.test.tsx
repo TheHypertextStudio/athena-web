@@ -1,8 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AthenaWorkspace,
@@ -48,6 +49,10 @@ function transport(): PersonalAthenaTransport {
     lifecycle: vi.fn().mockResolvedValue(okResponse(working)),
   };
 }
+
+afterEach(() => {
+  dismissAllNotices();
+});
 
 describe('AthenaWorkspace', () => {
   it('continues the Needs you lane without replacing its exact count', async () => {
@@ -490,13 +495,13 @@ describe('AthenaWorkspace', () => {
     expect(api.detail).toHaveBeenLastCalledWith(workspaceB.id);
   });
 
-  it('announces application-owned mutation failures and clears feedback on retry success', async () => {
+  it('presents a rejected start as a notice without provider text and starts on retry', async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
     const api = transport();
     vi.mocked(api.create)
-      .mockResolvedValueOnce(problemResponse('provider secret: sk-private', 500))
+      .mockResolvedValueOnce(problemResponse('provider secret: sk-private', 500, 'internal'))
       .mockResolvedValueOnce(okResponse(working));
     vi.mocked(api.queue).mockResolvedValue(
       okResponse({
@@ -508,18 +513,23 @@ describe('AthenaWorkspace', () => {
     render(
       <QueryClientProvider client={client}>
         <AthenaWorkspace transport={api} />
+        <Toaster />
       </QueryClientProvider>,
     );
 
     const objective = await screen.findByLabelText('Athena objective');
     fireEvent.change(objective, { target: { value: 'Prepare the review' } });
     fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Athena could not start this work.');
-    expect(screen.getByRole('alert')).not.toHaveTextContent('sk-private');
+    const notice = await waitFor(() => {
+      const card = document.querySelector<HTMLElement>('[data-toast-tone="critical"]');
+      if (card === null) throw new Error('the notice has not appeared yet');
+      return card;
+    });
+    expect(notice).not.toHaveTextContent('sk-private');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
+    fireEvent.click(within(notice).getByRole('button', { name: 'Try again' }));
     await waitFor(() => {
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(api.create).toHaveBeenCalledTimes(2);
     });
   });
 });

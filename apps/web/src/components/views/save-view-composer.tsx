@@ -58,8 +58,6 @@ export interface SaveViewComposerProps {
   canScopeToTeam: boolean;
   /** Whether a save is in flight (disables the form). */
   saving: boolean;
-  /** A save error to surface, or `null`. */
-  error: string | null;
   /** Save the view; the parent owns the RPC call. */
   onSave: (payload: SavedViewCreate) => void;
   /** Collapse the composer without saving. */
@@ -79,7 +77,6 @@ export function SaveViewComposer({
   summary,
   canScopeToTeam,
   saving,
-  error,
   onSave,
   onCancel,
 }: SaveViewComposerProps): JSX.Element {
@@ -165,12 +162,6 @@ export function SaveViewComposer({
           <p className="text-on-surface-variant text-body-small">
             Captures: <span className="text-on-surface">{summary}</span>
           </p>
-
-          {error ? (
-            <p role="alert" className="text-error text-body-medium">
-              {error}
-            </p>
-          ) : null}
 
           <div className="flex items-center gap-2">
             <Button type="submit" disabled={saving || name.trim().length === 0}>

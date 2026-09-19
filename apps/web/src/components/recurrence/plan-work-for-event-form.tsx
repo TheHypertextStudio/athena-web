@@ -6,12 +6,12 @@ import type {
   CalendarProcessBindingOut,
   ProcessDefinitionSummaryOut,
 } from '../../lib/contracts/recurrence';
-import { InlineBanner } from '@docket/ui/components';
 import { Button, Select } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { type JSX, type SubmitEventHandler, useEffect, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
+import { PartialLoadBanner } from '@/components/feedback';
 import { api } from '@/lib/api';
 import {
   apiQueryOptions,
@@ -48,14 +48,9 @@ function ReusableWorkStatus({
 }: ReusableWorkStatusProps): JSX.Element | null {
   if (failed) {
     return (
-      <InlineBanner
-        tone="critical"
-        density="compact"
-        title="Reusable work could not load"
-        action={{ label: 'Try again', onSelect: onRetry }}
-      >
+      <PartialLoadBanner density="compact" title="Reusable work could not load" onRetry={onRetry}>
         Docket could not read this workspace&apos;s reusable work.
-      </InlineBanner>
+      </PartialLoadBanner>
     );
   }
   if (empty) {

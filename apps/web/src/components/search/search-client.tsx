@@ -7,7 +7,7 @@ import type {
 } from '../../lib/contracts/search';
 import type { SourceSystemKind } from '@docket/connections/event-contract';
 import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
-import { EmptyState, InlineBanner } from '@docket/ui/components';
+import { EmptyState } from '@docket/ui/components';
 import { Activity, Search, type LucideIcon } from '@docket/ui/icons';
 import { Button, Input, Row, Skeleton, Stack } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
@@ -18,6 +18,7 @@ import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } f
 import { useActiveOrg } from '@/components/active-org';
 import { DatePicker } from '@/components/date-picker';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
+import { PartialLoadBanner } from '@/components/feedback';
 import { SEARCH_KIND_ICON, SEARCH_KIND_LABEL } from '@/components/command-palette/use-hub-search';
 import { OrgChip } from '@/components/org-chip';
 import { TaskTimerButton } from '@/components/time-tracking';
@@ -456,18 +457,14 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
 
         <main className="min-w-0">
           {error ? (
-            <InlineBanner
-              tone="critical"
+            <PartialLoadBanner
               title="Search did not answer"
-              action={{
-                label: 'Try again',
-                onSelect: () => {
-                  void searchQ.refetch();
-                },
+              onRetry={() => {
+                void searchQ.refetch();
               }}
             >
               {error}
-            </InlineBanner>
+            </PartialLoadBanner>
           ) : loadingInitial ? (
             /* placeholder: the matches for what has been typed — how many, and what each one is.
                Only the first search of a query pays this: `loadingInitial` is false while a

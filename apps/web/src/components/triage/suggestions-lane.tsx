@@ -21,6 +21,7 @@ import { Badge, Button, Card, CardContent, DecorativeIcon, Input } from '@docket
 import { type JSX, useState } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
+import { QueryLoadFailure } from '@/components/feedback';
 import { useEmailSuggestionThread, useEmailSuggestions } from '@/lib/use-email-suggestions';
 
 /** Props for {@link ConfidenceBadge}. */
@@ -68,13 +69,14 @@ interface ThreadPreviewProps {
 
 /** The expandable live source-thread view (read-on-demand; never persisted). */
 function ThreadPreview({ orgId, suggestionId, expanded }: ThreadPreviewProps): JSX.Element | null {
-  const { thread, isPending, error } = useEmailSuggestionThread(orgId, suggestionId, expanded);
+  const threadRead = useEmailSuggestionThread(orgId, suggestionId, expanded);
+  const { thread, isPending, error } = threadRead;
   if (!expanded) return null;
   if (isPending) {
     return <p className="text-on-surface-variant text-xs">Loading thread…</p>;
   }
   if (error !== null) {
-    return <p className="text-error text-xs">{error}</p>;
+    return <QueryLoadFailure title="Source email" query={threadRead} size="panel" />;
   }
   if (!thread) return null;
   return (
@@ -273,7 +275,7 @@ export default function SuggestionsLane({
   orgId,
   canAct,
 }: SuggestionsLaneProps): JSX.Element | null {
-  const { suggestions, accept, dismiss, actionError } = useEmailSuggestions(orgId);
+  const { suggestions, accept, dismiss } = useEmailSuggestions(orgId);
 
   // The lane is absent (not an empty box) when Athena has proposed nothing.
   if (suggestions.length === 0) return null;
@@ -299,7 +301,6 @@ export default function SuggestionsLane({
           />
         ))}
       </div>
-      {actionError ? <p className="text-error text-xs">{actionError}</p> : null}
     </section>
   );
 }

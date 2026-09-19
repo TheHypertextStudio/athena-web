@@ -115,9 +115,9 @@ export function MemberRow({
           </span>
         ) : (
           <Button
-            variant="ghost"
+            variant="ghost-destructive"
             size="icon"
-            className="text-on-surface-variant hover:text-error size-8"
+            className="size-8"
             aria-label={`Remove ${displayName}`}
             onClick={() => {
               setConfirming(true);

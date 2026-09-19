@@ -24,7 +24,6 @@ import { toRow } from './stream-meta';
 import { streamQueryFromViewState, streamQueryKeyPart } from './stream-query';
 import { mergeStreamSnapshot, revealStreamSnapshot, type StreamSnapshot } from './stream-snapshot';
 import type { StreamViewProps } from './stream-view';
-import { userErrorMessage } from '@/lib/problem';
 
 /** Focus-gated poll interval (ms) — matches the inbox cadence; SSE later replaces it. */
 const STREAM_POLL_MS = 15_000;
@@ -119,7 +118,7 @@ export function useStreamPage(args: UseStreamPageArgs): StreamPageData {
     newEventCount,
     onShowNewEvents: showNewEvents,
     loading: q.isLoading,
-    error: q.isError ? userErrorMessage(q.error, 'Could not load the activity stream.') : null,
+    error: q.isError ? q.error : null,
     onRetry: () => void q.refetch(),
     hasNextPage: q.hasNextPage,
     isFetchingNextPage: q.isFetchingNextPage,

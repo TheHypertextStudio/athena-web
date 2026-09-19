@@ -25,7 +25,7 @@ import type { TaskOut } from '@docket/work/task-model';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Skeleton, Surface } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useMemo } from 'react';
 

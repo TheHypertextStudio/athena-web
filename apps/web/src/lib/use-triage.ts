@@ -13,11 +13,11 @@ import type { GroupKey } from '@docket/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 
+import { presentFailure, presentRejectedResponse } from '@/components/feedback';
 import { buildProviderResolver } from '@/components/triage/provider-directory';
 import type { TriageDestination } from '@/components/triage/triage-actions';
 import type { TriageRowData } from '@/components/triage/triage-row';
 import { api } from './api';
-import { userErrorMessage, readProblemError } from './problem';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from './query';
 import { useOrgCapability } from './use-org-capability';
 import { useRenameTask } from './use-rename-task';
@@ -26,14 +26,12 @@ import type { CategoryOfState } from './work-category';
 function isUnsorted(task: TaskOut): boolean {
   return (task.projectId ?? null) === null && (task.programId ?? null) === null;
 }
-
 /** TriageState describes the use triage data contract shared by the hook or component. */
 export interface TriageState {
   queue: readonly TaskOut[];
   loading: boolean;
   /** The queue read's failure, when it did not arrive; null otherwise. */
   loadError: unknown;
-  actionError: string | null;
   pending: ReadonlySet<string>;
   projectDestinations: readonly TriageDestination[];
   programDestinations: readonly TriageDestination[];
@@ -66,7 +64,6 @@ export interface TriageState {
 export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageState {
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
-  const [actionError, setActionError] = useState<string | null>(null);
 
   // The queue itself is volatile (tasks get sorted/dismissed out of it); the supporting rosters and
   // the integration vocabulary are static within a triage session.
@@ -235,7 +232,6 @@ export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageSta
 
   const sortToProject = useCallback(
     async (taskId: string, projectId: string): Promise<void> => {
-      setActionError(null);
       beginPending(taskId);
       try {
         const res = await api.v1.orgs[':orgId'].tasks[':id'].$patch({
@@ -243,17 +239,12 @@ export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageSta
           json: { projectId: ProjectId.parse(projectId) },
         });
         if (!res.ok) {
-          setActionError(
-            userErrorMessage(
-              await readProblemError(res, 'Could not move that item. Please try again.'),
-              'Could not move that item. Please try again.',
-            ),
-          );
+          await presentRejectedResponse(res, 'Could not move that item.');
           return;
         }
         await refreshTasks();
       } catch (caught) {
-        setActionError(userErrorMessage(caught, 'Something went wrong moving that item.'));
+        presentFailure(caught, 'Could not move that item.');
       } finally {
         endPending(taskId);
       }
@@ -263,7 +254,6 @@ export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageSta
 
   const sortToProgram = useCallback(
     async (taskId: string, programId: string): Promise<void> => {
-      setActionError(null);
       beginPending(taskId);
       try {
         const res = await api.v1.orgs[':orgId'].tasks[':id'].$patch({
@@ -271,17 +261,12 @@ export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageSta
           json: { programId: ProgramId.parse(programId) },
         });
         if (!res.ok) {
-          setActionError(
-            userErrorMessage(
-              await readProblemError(res, 'Could not send that item. Please try again.'),
-              'Could not send that item. Please try again.',
-            ),
-          );
+          await presentRejectedResponse(res, 'Could not send that item.');
           return;
         }
         await refreshTasks();
       } catch (caught) {
-        setActionError(userErrorMessage(caught, 'Something went wrong sending that item.'));
+        presentFailure(caught, 'Could not send that item.');
       } finally {
         endPending(taskId);
       }
@@ -291,24 +276,18 @@ export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageSta
 
   const dismiss = useCallback(
     async (taskId: string): Promise<void> => {
-      setActionError(null);
       beginPending(taskId);
       try {
         const res = await api.v1.orgs[':orgId'].tasks[':id'].$delete({
           param: { orgId, id: taskId },
         });
         if (!res.ok) {
-          setActionError(
-            userErrorMessage(
-              await readProblemError(res, 'Could not dismiss that item. Please try again.'),
-              'Could not dismiss that item. Please try again.',
-            ),
-          );
+          await presentRejectedResponse(res, 'Could not dismiss that item.');
           return;
         }
         await refreshTasks();
       } catch (caught) {
-        setActionError(userErrorMessage(caught, 'Something went wrong dismissing that item.'));
+        presentFailure(caught, 'Could not dismiss that item.');
       } finally {
         endPending(taskId);
       }
@@ -320,7 +299,6 @@ export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageSta
     queue,
     loading: tasksQ.isPending,
     loadError: tasksQ.error ?? null,
-    actionError,
     pending,
     projectDestinations,
     programDestinations,

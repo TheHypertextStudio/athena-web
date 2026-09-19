@@ -4,7 +4,7 @@ import { InlineBanner } from '@docket/ui/components';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
-import { LoadFailure } from '@/components/feedback';
+import { QueryLoadFailure } from '@/components/feedback';
 import { SectionHeader } from '@/components/settings/section-header';
 import { BillingDiscountsSection } from '@/components/settings/billing-discounts-section';
 import { safeSameOriginPath } from '@/lib/auth-navigation';
@@ -140,14 +140,7 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
   // placeholder: this workspace's plan, seat count and renewal, all read from the provider.
   if (billingQ.isPending) return <Skeleton className="h-72 max-w-2xl rounded-lg" />;
   if (billingQ.isError) {
-    return (
-      <LoadFailure
-        title="Billing"
-        error={billingQ.error}
-        onRetry={() => void billingQ.refetch()}
-        retrying={billingQ.isFetching}
-      />
-    );
+    return <QueryLoadFailure title="Billing" query={billingQ} />;
   }
 
   const summary = billingQ.data;

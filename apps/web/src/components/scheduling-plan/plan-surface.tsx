@@ -14,6 +14,7 @@
  * and never a server sentence.
  */
 import { Button, ControlGroup, Skeleton, Stack, Text, Toolbar } from '@docket/ui/primitives';
+import { QueryLoadFailure, type QueryFailureSource } from '@/components/feedback';
 import { useAppSearchParams } from '@/lib/app-location';
 import type { JSX } from 'react';
 import { useState } from 'react';
@@ -153,11 +154,7 @@ export function PlanSurface(props: PlanSurfaceProps = {}): JSX.Element {
       />
 
       {lens === 'week' ? (
-        <LensBody
-          pending={week.isPending}
-          error={week.isError}
-          errorCopy="We could not load your week. Try again in a moment."
-        >
+        <LensBody query={week} title="Your week">
           {week.data === undefined ? null : (
             <WeekPlanBoard
               plan={week.data}
@@ -171,11 +168,7 @@ export function PlanSurface(props: PlanSurfaceProps = {}): JSX.Element {
       ) : null}
 
       {lens === 'morning' ? (
-        <LensBody
-          pending={dayStart.isPending}
-          error={dayStart.isError}
-          errorCopy="We could not load today's agenda. Try again in a moment."
-        >
+        <LensBody query={dayStart} title="Today's agenda">
           {dayStart.data === undefined ? null : (
             <Stack gap={8}>
               <DayStartReview
@@ -210,11 +203,7 @@ export function PlanSurface(props: PlanSurfaceProps = {}): JSX.Element {
       ) : null}
 
       {lens === 'evening' ? (
-        <LensBody
-          pending={review.isPending}
-          error={review.isError}
-          errorCopy="We could not load your day review. Try again in a moment."
-        >
+        <LensBody query={review} title="Your day review">
           {review.data === undefined ? null : (
             <EveningReview
               review={review.data}
@@ -239,14 +228,24 @@ export function PlanSurface(props: PlanSurfaceProps = {}): JSX.Element {
   );
 }
 
-/** Loading / error / content, with application-owned copy in every state. */
-function LensBody(props: {
-  readonly pending: boolean;
-  readonly error: boolean;
-  readonly errorCopy: string;
+/** The part of a lens's query that {@link LensBody} reads. */
+interface LensQuery extends QueryFailureSource {
+  readonly isPending: boolean;
+  readonly isError: boolean;
+}
+
+/** Props for {@link LensBody}. */
+interface LensBodyProps {
+  /** The query feeding this lens. */
+  readonly query: LensQuery;
+  /** Name of what the lens shows, used when a failure carries nothing more specific. */
+  readonly title: string;
   readonly children: React.ReactNode;
-}): JSX.Element {
-  if (props.pending) {
+}
+
+/** Loading / failed / content for one lens. */
+function LensBody(props: LensBodyProps): JSX.Element {
+  if (props.query.isPending) {
     return (
       <Stack gap={3} aria-busy>
         {/* placeholder: this lens's own heading and body, both read per lens. */}
@@ -255,12 +254,8 @@ function LensBody(props: {
       </Stack>
     );
   }
-  if (props.error) {
-    return (
-      <div role="alert" className="bg-surface-container-low rounded-xl p-6">
-        <Text token="body-medium">{props.errorCopy}</Text>
-      </div>
-    );
+  if (props.query.isError) {
+    return <QueryLoadFailure title={props.title} query={props.query} size="panel" />;
   }
   return <>{props.children}</>;
 }

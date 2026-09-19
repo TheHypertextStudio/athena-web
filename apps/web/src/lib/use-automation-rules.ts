@@ -12,7 +12,6 @@ import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
-import { userErrorMessage } from './problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from './query';
 
 /** All automation-rule data + mutation callbacks for the settings surface. */
@@ -32,7 +31,6 @@ export interface AutomationRulesData {
   rename: (id: string, name: string) => Promise<void>;
   setEnabled: (id: string, enabled: boolean) => Promise<void>;
   remove: (id: string) => Promise<void>;
-  actionError: string | null;
 }
 
 /**
@@ -103,14 +101,5 @@ export function useAutomationRules(orgId: string): AutomationRulesData {
     rename: async (id, name) => void (await renameM.mutateAsync({ id, name })),
     setEnabled: async (id, enabled) => void (await toggleM.mutateAsync({ id, enabled })),
     remove: async (id) => void (await removeM.mutateAsync(id)),
-    actionError: createM.error
-      ? userErrorMessage(createM.error, 'Could not create that automation rule.')
-      : renameM.error
-        ? userErrorMessage(renameM.error, 'Could not rename that automation rule.')
-        : toggleM.error
-          ? userErrorMessage(toggleM.error, 'Could not update that automation rule.')
-          : removeM.error
-            ? userErrorMessage(removeM.error, 'Could not remove that automation rule.')
-            : null,
   };
 }

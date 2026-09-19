@@ -29,6 +29,7 @@ import type {
 import type { DateResolution } from '@docket/work/planning-timeframe';
 import { cn } from '@docket/ui';
 import { Flag, FolderKanban } from '@docket/ui/icons';
+import { CRITICAL_PAINT } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
@@ -190,7 +191,7 @@ export function Roadmap({
               {/* The Initiative's own target date, drawn as a milestone marker when in range. */}
               {targetMarkerLeft !== null ? (
                 <div
-                  className="bg-error/70 absolute top-0 h-full w-px"
+                  className={cn(CRITICAL_PAINT.lineSoft, 'absolute top-0 h-full w-px')}
                   style={{ left: `${targetMarkerLeft}%` }}
                   title={`Target — ${
                     formatPlanningDate(

@@ -33,11 +33,11 @@ import { DateRangePicker } from '@/components/date-picker';
 import { resolveScheduleTimezone } from '@/components/scheduling';
 import { api } from '@/lib/api';
 import { useAppRouter } from '@/lib/interactions/navigation';
-import { userErrorMessage } from '@/lib/problem';
 import { useAppSearchParams } from '@/lib/app-location';
 import { STALE, apiQueryOptions, queryKeys, useApiListQuery, useApiQuery } from '@/lib/query';
 
 import { TimeAddPastDialog } from './time-add-past-dialog';
+import { SelectedTimeFailure } from './selected-time-failure';
 import { TimeRecordDialog } from './time-record-dialog';
 import { TimeSessionList } from './time-session-list';
 import { formatDuration, spokenDuration } from './format-duration';
@@ -300,19 +300,7 @@ export function TimeAnalytics(): JSX.Element {
       </Surface>
 
       {error ? (
-        <div role="alert" className="bg-error-container text-on-error-container rounded-xl p-4">
-          <Text token="body-medium">
-            {userErrorMessage(error, 'Could not load your selected time.')}
-          </Text>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="mt-3"
-            onClick={() => void timelineQ.refetch()}
-          >
-            Try again
-          </Button>
-        </div>
+        <SelectedTimeFailure error={error} queries={[timelineQ, summaryQ, breakdownQ]} />
       ) : null}
       {!error &&
       state.view === 'sessions' &&

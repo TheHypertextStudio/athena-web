@@ -1,8 +1,9 @@
 'use client';
 
-import { Button, Stack } from '@docket/ui/primitives';
+import { Stack } from '@docket/ui/primitives';
 import { type JSX, useMemo } from 'react';
 
+import { PartialLoadBanner } from '@/components/feedback';
 import { DayRecapEntry } from '@/components/today/day-recap-entry';
 import SuggestedTasks from '@/components/today/suggested-tasks';
 import NeedsAttention from '@/components/today/needs-attention';
@@ -85,21 +86,9 @@ export default function TodayPage(): JSX.Element {
       />
 
       {error ? (
-        <div
-          role="alert"
-          className="border-error/40 bg-error-container text-on-error-container text-body-medium flex items-center justify-between gap-4 rounded-xl border p-4"
-        >
-          <span>{error}</span>
-          <Button variant="outline" size="sm" onClick={refetch}>
-            Try again
-          </Button>
-        </div>
-      ) : null}
-
-      {actions.error ? (
-        <p role="alert" className="text-error text-body-small -mt-4">
-          {actions.error}
-        </p>
+        <PartialLoadBanner title="Today did not load" onRetry={refetch}>
+          {error}
+        </PartialLoadBanner>
       ) : null}
 
       {/* Approvals outrank anything self-scheduled: an agent that paused for a signature is

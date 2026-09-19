@@ -17,31 +17,35 @@
 import { Skeleton, Text } from '@docket/ui/primitives';
 import { type JSX, useId, useState } from 'react';
 
+import { LoadFailure } from '@/components/feedback';
+
 import FocusIdle from './focus-idle';
 import FocusModeLauncher from './focus-mode-launcher';
 import FocusSession from './focus-session';
 import FocusTaskQueue from './focus-task-queue';
 import FocusToday from './focus-today';
 import { useFocusToday } from './use-focus-today';
-import { type TimerStartInput, useTimerControls, useTimerState } from './use-timer';
+import {
+  type TimerStartInput,
+  type TimerState,
+  useTimerControls,
+  useTimerState,
+} from './use-timer';
 
 /** The Focus rail panel. */
 export default function FocusPanel(): JSX.Element {
+  const timer = useTimerState();
   const { record, phase, title, unanchored, elapsedMs, suggestion, nudging, loading, error } =
-    useTimerState();
+    timer;
   const controls = useTimerControls(record?.id ?? null);
   const [notice, setNotice] = useState<string | null>(null);
   const nameFieldId = useId();
   const today = useFocusToday();
 
+  // A rejected start is presented as a notice by the timer's own mutation.
   const start = async (input: TimerStartInput = {}): Promise<void> => {
     setNotice(null);
-    try {
-      await controls.start(input);
-    } catch (error) {
-      setNotice('Could not start the timer. Try again.');
-      throw error;
-    }
+    await controls.start(input);
   };
 
   // placeholder: whether a timer is running, and against which task.
@@ -80,9 +84,7 @@ export default function FocusPanel(): JSX.Element {
             <Skeleton className="h-28 w-full rounded-xl" />
           </div>
         ) : error ? (
-          <Text token="body-small" role="alert" className="text-error">
-            {error}
-          </Text>
+          <TimerReadFailure timer={timer} />
         ) : record ? (
           <FocusSession
             running={phase === 'running'}
@@ -141,5 +143,24 @@ export default function FocusPanel(): JSX.Element {
       </div>
       <FocusModeLauncher />
     </section>
+  );
+}
+
+/** Props for {@link TimerReadFailure}. */
+interface TimerReadFailureProps {
+  /** The tracker read that failed. */
+  readonly timer: Pick<TimerState, 'failure' | 'reload' | 'reloading'>;
+}
+
+/** The timer could not be read, so the panel has nothing to show in its place. */
+function TimerReadFailure({ timer }: TimerReadFailureProps): JSX.Element {
+  return (
+    <LoadFailure
+      title="Your timer"
+      error={timer.failure}
+      onRetry={timer.reload}
+      retrying={timer.reloading}
+      size="panel"
+    />
   );
 }

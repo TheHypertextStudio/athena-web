@@ -120,7 +120,7 @@ function MilestoneRow({
   onRemove,
 }: MilestoneRowProps): JSX.Element {
   const [open, setOpen] = useState(false);
-  const { patch, mutationError } = useMilestoneDetail(orgId, milestone.id, projectId);
+  const { patch } = useMilestoneDetail(orgId, milestone.id, projectId);
   const targetDate = toDay(milestone.targetDate);
   const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
 
@@ -222,11 +222,6 @@ function MilestoneRow({
             patch({ description });
           }}
         />
-        {mutationError ? (
-          <p role="alert" className="text-error text-body-medium">
-            {mutationError}
-          </p>
-        ) : null}
       </CollapsibleContent>
     </Collapsible>
   );
@@ -255,7 +250,7 @@ export function ProjectMilestonesPanel({
   taskNoun,
   canEdit,
 }: ProjectMilestonesPanelProps): JSX.Element {
-  const { create, remove, removing, mutationError } = useProjectMilestones(orgId, projectId);
+  const { create, remove, removing } = useProjectMilestones(orgId, projectId);
 
   const categoryOf = useCategoryOf('task');
   const progressByMilestone = useMemo(
@@ -303,12 +298,6 @@ export function ProjectMilestonesPanel({
         canEdit={canEdit}
         noun="milestone"
       />
-
-      {mutationError ? (
-        <p role="alert" className="text-error text-body-medium">
-          {mutationError}
-        </p>
-      ) : null}
     </section>
   );
 }

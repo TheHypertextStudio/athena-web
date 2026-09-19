@@ -15,6 +15,7 @@
  */
 import '@testing-library/jest-dom/vitest';
 
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -93,6 +94,7 @@ function renderInsideActivatableRow(options: {
           <TaskTimerButton taskId={options.taskId} title={options.title} withLabel={false} />
         </a>
       </TooltipProvider>
+      <Toaster />
     </QueryClientProvider>,
   );
   const anchor = screen.getByRole('link');
@@ -106,6 +108,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  dismissAllNotices();
   cleanup();
 });
 
@@ -145,7 +148,7 @@ describe('TaskTimerButton', () => {
     expect(anchor).toHaveAttribute('href', '/orgs/org_1/tasks/task_1');
   });
 
-  it('keeps the task anchor, explains a rejected start, and returns to an enabled retry state', async () => {
+  it('keeps the task anchor, reports a rejected start as a notice, and returns to an enabled retry state', async () => {
     activeGet.mockResolvedValue(jsonResponse(NOTHING_TRACKED));
     recordsPost.mockResolvedValue(jsonResponse({ code: 'conflict' }, 409));
     const onRowActivate = vi.fn();
@@ -160,9 +163,7 @@ describe('TaskTimerButton', () => {
       });
     });
     await waitFor(() => expect(button).not.toBeDisabled());
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      'Could not start tracking this task. Try again.',
-    );
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(onRowActivate).not.toHaveBeenCalled();
   });
 

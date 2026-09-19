@@ -13,7 +13,7 @@ import { Calendar, CheckCircle2, Pause, Play, RefreshCw, Stop } from '@docket/ui
 import { EmptyState } from '@docket/ui/components';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
@@ -333,11 +333,6 @@ export default function RecurrenceSeriesPage(): JSX.Element {
               This series is started by an event or explicit action rather than a calendar rule.
             </p>
           )}
-          {lifecycle.isError || edit.isError ? (
-            <p role="alert" className="text-error text-body-small">
-              We couldn&apos;t save that change. Please try again.
-            </p>
-          ) : null}
         </aside>
 
         <section

@@ -9,8 +9,8 @@ import { type JSX, type SyntheticEvent, useCallback, useState } from 'react';
 import { WorkspaceNameField } from '@/components/workspace-creation/workspace-name-field';
 import { writeLastOrg } from '@/components/app-shell-utils';
 import { useAuthenticationRecovery } from '@/components/authentication-interlock';
+import { presentFailure } from '@/components/feedback';
 import { authClient } from '@/lib/auth-client';
-import { userErrorMessage } from '@/lib/problem';
 import { queryKeys } from '@/lib/query';
 import { createWorkspace } from '@/lib/workspace-creation';
 
@@ -32,12 +32,10 @@ export default function NewWorkspacePage(): JSX.Element {
   const recoverAuthentication = useAuthenticationRecovery();
   const [name, setName] = useState('');
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const nameReady = name.trim().length > 0;
 
   const submit = useCallback(async (): Promise<void> => {
     if (!nameReady || pending) return;
-    setError(null);
     setPending(true);
     try {
       const result = await recoverAuthentication(() =>
@@ -52,7 +50,7 @@ export default function NewWorkspacePage(): JSX.Element {
       writeLastOrg(session?.user.id ?? null, result.organization.id);
       router.replace(`/orgs/${result.organization.id}/my-work`);
     } catch (caught) {
-      setError(userErrorMessage(caught, 'Could not create your workspace.'));
+      presentFailure(caught, 'Could not create your workspace.');
     } finally {
       setPending(false);
     }
@@ -93,12 +91,6 @@ export default function NewWorkspacePage(): JSX.Element {
           }}
           canSubmit={nameReady && !pending}
         />
-
-        {error ? (
-          <p role="alert" className="text-error text-body-medium">
-            {error}
-          </p>
-        ) : null}
 
         <div className="flex items-center justify-end gap-3">
           <Button

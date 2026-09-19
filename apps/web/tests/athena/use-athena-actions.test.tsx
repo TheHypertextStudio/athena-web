@@ -1,9 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { JSX } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useAthenaActions } from '../../src/components/athena/use-athena-actions';
 import type { PersonalAthenaTransport } from '../../src/lib/athena/query-defs';
@@ -42,7 +43,7 @@ function Harness({ api }: { readonly api: PersonalAthenaTransport }): JSX.Elemen
   const actions = useAthenaActions({ selectedId: detail.id, transport: api, onSelected: vi.fn() });
   return (
     <div>
-      {actions.feedback ? <p role="alert">{actions.feedback}</p> : null}
+      <Toaster />
       <button
         type="button"
         onClick={() => {
@@ -79,8 +80,12 @@ function Harness({ api }: { readonly api: PersonalAthenaTransport }): JSX.Elemen
   );
 }
 
+afterEach(() => {
+  dismissAllNotices();
+});
+
 describe('useAthenaActions', () => {
-  it('owns safe feedback for every mutation and clears it on retry success', async () => {
+  it('presents every rejected mutation as a notice that carries no provider text', async () => {
     const api = transport();
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -91,21 +96,32 @@ describe('useAthenaActions', () => {
       </QueryClientProvider>,
     );
 
-    for (const [button, copy] of [
-      ['Create', 'Athena could not start this work.'],
-      ['Message', 'Could not steer this Athena work.'],
-      ['Decide', 'Could not record your decision.'],
-      ['Lifecycle', 'Could not change this Athena work.'],
-    ] as const) {
+    for (const button of ['Create', 'Message', 'Decide', 'Lifecycle']) {
       fireEvent.click(screen.getByRole('button', { name: button }));
-      expect(await screen.findByRole('alert')).toHaveTextContent(copy);
-      expect(screen.getByRole('alert')).not.toHaveTextContent('provider secret');
+      expect(await screen.findByRole('alert')).not.toHaveTextContent('provider secret');
+      dismissAllNotices();
+      await waitFor(() => {
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      });
     }
+  });
 
+  it('reports no notice when a mutation succeeds', async () => {
+    const api = transport();
     vi.mocked(api.sendMessage).mockResolvedValueOnce(okResponse(detail));
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <Harness api={api} />
+      </QueryClientProvider>,
+    );
+
     fireEvent.click(screen.getByRole('button', { name: 'Message' }));
     await waitFor(() => {
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(api.sendMessage).toHaveBeenCalledTimes(1);
     });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

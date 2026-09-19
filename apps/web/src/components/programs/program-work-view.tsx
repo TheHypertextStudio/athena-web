@@ -25,7 +25,7 @@ import { ListChecks } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import { type JSX, useEffect, useMemo, useRef } from 'react';
 
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { applyView } from '@/components/views/apply-view';
 import { resolveRelationLabel, type FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';

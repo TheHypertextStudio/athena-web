@@ -112,11 +112,6 @@ export function LinearAgentInstallCard({
           {userErrorMessage(integrationsQ.error, 'Could not load the Linear Agent install status.')}
         </CardNote>
       ) : null}
-      {install.isError ? (
-        <CardNote tone="error">
-          {userErrorMessage(install.error, 'Could not start the Linear Agent install.')}
-        </CardNote>
-      ) : null}
     </>
   );
 

@@ -5,8 +5,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 
+import { PartialLoadBanner } from '@/components/feedback';
 import { api } from '@/lib/api';
-import { UserFacingError, userErrorMessage } from '@/lib/problem';
+import { UserFacingError } from '@/lib/problem';
 import {
   ApiRequestError,
   apiQueryOptions,
@@ -119,14 +120,13 @@ export function BillingRecovery(): JSX.Element | null {
         </p>
       ) : null}
       {billingQ.isError ? (
-        <p role="alert" className="text-error text-body-medium">
-          {userErrorMessage(billingQ.error, 'Could not confirm who can manage billing.')}
-        </p>
-      ) : null}
-      {portal.error ? (
-        <p role="alert" className="text-error text-body-medium">
-          {userErrorMessage(portal.error, 'Could not open payment settings.')}
-        </p>
+        <PartialLoadBanner
+          title="Could not confirm who can manage billing"
+          density="compact"
+          onRetry={() => void billingQ.refetch()}
+        >
+          Payment settings stay unavailable until this loads.
+        </PartialLoadBanner>
       ) : null}
 
       <div className="flex flex-nowrap items-center justify-end gap-2 overflow-x-auto">

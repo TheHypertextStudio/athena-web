@@ -1,3 +1,4 @@
+import { CRITICAL_PAINT } from '@docket/ui/primitives';
 import type { JSX, Ref } from 'react';
 
 import { minutesToPixels } from './scheduling-geometry';
@@ -83,7 +84,7 @@ export function SchedulingRegionPreview({
           ? selected
             ? 'border-primary/70 bg-primary/20 ring-primary/25 pointer-events-none absolute inset-x-1 z-10 rounded-md border ring-1'
             : 'border-primary/50 bg-primary/15 pointer-events-none absolute inset-x-1 z-10 rounded-md border'
-          : 'border-error/60 bg-error-container/60 pointer-events-none absolute inset-x-1 z-10 rounded-md border border-dashed'
+          : `${CRITICAL_PAINT.invalidRegion} pointer-events-none absolute inset-x-1 z-10 rounded-md`
       }
       data-schedule-region-preview={selected ? undefined : laneId}
       data-schedule-region-selection={selected ? laneId : undefined}

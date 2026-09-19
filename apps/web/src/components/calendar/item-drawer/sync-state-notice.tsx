@@ -4,17 +4,13 @@
  * `calendar/item-drawer/sync-state-notice` — what happened to an edit on its way to the provider.
  *
  * @remarks
- * `docs/core/specs/layered-calendar.md` makes "provider conflicts are visible and do not silently
- * overwrite remote changes" an acceptance criterion, and until now nothing met it: a conflicted
- * event was force-downgraded to read-only and said only "Read-only", while the one recovery the
- * API offers — `POST /v1/me/calendar/items/:id/retry-write` — had a client hook with no call site
- * anywhere in the app.
- *
- * A conflict here is not a failure to report and move past. Docket kept the local edit rather than
- * discarding it, so the notice says so and offers to send it again against the provider's newer
- * version. The state is persisted on the item, so it stays in the page as an `InlineBanner` beside
- * the fields a person can still read; a retry that itself fails is the retry mutation's own
- * notice. Every string is this application's own; provider error text never reaches a person.
+ * `docs/core/specs/layered-calendar.md` requires provider conflicts to be visible and to leave
+ * remote changes intact. When a provider write conflicts, Docket keeps the local edit, so the
+ * notice says that and offers to send it again against the provider's newer version
+ * (`POST /v1/me/calendar/items/:id/retry-write`, through `useRetryCalendarItemWrite`). The state is
+ * persisted on the item, so it stays in the page as an `InlineBanner` beside the fields a person
+ * can still read; a retry that itself fails is presented by the retry mutation as a notice. Every
+ * string is this application's own, and provider error text is never shown.
  */
 import type { CalendarItemOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
 import { InlineBanner, type InlineBannerAction } from '@docket/ui/components';

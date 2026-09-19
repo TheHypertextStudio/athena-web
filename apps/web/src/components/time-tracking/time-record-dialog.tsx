@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
   Field,
+  FieldError,
   Input,
   Select,
   Surface,
@@ -30,8 +31,7 @@ import {
 } from '@/components/calendar/datetime-input';
 import Link from '@/components/docket-link';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
-import { useApiMutation } from '@/lib/query';
+import { unwrap, useApiMutation } from '@/lib/query';
 
 import { formatDuration } from './format-duration';
 
@@ -66,7 +66,8 @@ export function TimeRecordDialog({
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [repairError, setRepairError] = useState<string | null>(null);
   useEffect(() => {
     setEditingIntervalId(null);
     setTitle(record?.title ?? '');
@@ -74,17 +75,16 @@ export function TimeRecordDialog({
     setStartOccurrence(null);
     setEndOccurrence(null);
     setConfirmingRemoval(false);
-    setError(null);
+    setNameError(null);
+    setRepairError(null);
   }, [record?.id]);
   const updateRecord = useApiMutation({
     mutationFn: async (input: { readonly title: string; readonly categoryId: string | null }) => {
       if (!record) throw new Error('Time record is unavailable.');
-      const response = await api.v1.time.records[':id'].$patch({
-        param: { id: record.id },
-        json: input,
-      });
-      if (!response.ok) throw new Error('Could not save this time record.');
-      return response.json();
+      return unwrap(
+        () => api.v1.time.records[':id'].$patch({ param: { id: record.id }, json: input }),
+        'Could not save this time record.',
+      );
     },
     invalidateKeys: [['me', 'time']],
   });
@@ -95,21 +95,24 @@ export function TimeRecordDialog({
       readonly endsAt: string;
     }) => {
       if (!record) throw new Error('Time record is unavailable.');
-      const response = await api.v1.time.records[':id'].intervals[':intervalId'].$patch({
-        param: { id: record.id, intervalId: input.intervalId },
-        json: { startsAt: input.startsAt, endsAt: input.endsAt },
-      });
-      if (!response.ok) throw new Error('Could not repair this interval.');
-      return response.json();
+      return unwrap(
+        () =>
+          api.v1.time.records[':id'].intervals[':intervalId'].$patch({
+            param: { id: record.id, intervalId: input.intervalId },
+            json: { startsAt: input.startsAt, endsAt: input.endsAt },
+          }),
+        'Could not repair this interval.',
+      );
     },
     invalidateKeys: [['me', 'time']],
   });
   const remove = useApiMutation({
     mutationFn: async () => {
       if (!record) throw new Error('Time record is unavailable.');
-      const response = await api.v1.time.records[':id'].$delete({ param: { id: record.id } });
-      if (!response.ok) throw new Error('Could not remove this time record.');
-      return response.json();
+      return unwrap(
+        () => api.v1.time.records[':id'].$delete({ param: { id: record.id } }),
+        'Could not remove this time record.',
+      );
     },
     invalidateKeys: [['me', 'time']],
   });
@@ -133,7 +136,7 @@ export function TimeRecordDialog({
     setEndOccurrence(
       interval.endedAt ? localInputOccurrenceForInstant(interval.endedAt, timezone) : null,
     );
-    setError(null);
+    setRepairError(null);
   }
   function saveRepair(): void {
     const startError = localInputResolutionError(startsAt, timezone, startOccurrence, 'start');
@@ -148,7 +151,7 @@ export function TimeRecordDialog({
       !end ||
       Temporal.Instant.compare(Temporal.Instant.from(end), Temporal.Instant.from(start)) <= 0
     ) {
-      setError(startError ?? endError ?? 'Choose an end time after the start time.');
+      setRepairError(startError ?? endError ?? 'Choose an end time after the start time.');
       return;
     }
     repair.mutate(
@@ -156,10 +159,7 @@ export function TimeRecordDialog({
       {
         onSuccess: () => {
           setEditingIntervalId(null);
-          setError(null);
-        },
-        onError: (caught) => {
-          setError(userErrorMessage(caught, 'Could not repair this interval.'));
+          setRepairError(null);
         },
       },
     );
@@ -167,17 +167,15 @@ export function TimeRecordDialog({
   function saveRecord(): void {
     const trimmed = title.trim();
     if (!trimmed) {
-      setError('Give this session a name.');
+      setNameError('Give this session a name.');
       return;
     }
+    setNameError(null);
     updateRecord.mutate(
       { title: trimmed, categoryId: categoryId || null },
       {
         onSuccess: () => {
           onOpenChange(false);
-        },
-        onError: (caught) => {
-          setError(userErrorMessage(caught, 'Could not save this time record.'));
         },
       },
     );
@@ -186,9 +184,6 @@ export function TimeRecordDialog({
     remove.mutate(undefined, {
       onSuccess: () => {
         onOpenChange(false);
-      },
-      onError: (caught) => {
-        setError(userErrorMessage(caught, 'Could not remove this time record.'));
       },
     });
   }
@@ -212,11 +207,13 @@ export function TimeRecordDialog({
             pad="roomy"
             className="grid grid-cols-1 gap-3 sm:grid-cols-2"
           >
-            <Field label="Session name">
+            <Field label="Session name" {...(nameError ? { error: nameError } : {})}>
               <Input
                 value={title}
+                aria-invalid={nameError !== null}
                 onChange={(event) => {
                   setTitle(event.target.value);
+                  setNameError(null);
                 }}
               />
             </Field>
@@ -271,29 +268,32 @@ export function TimeRecordDialog({
                   </Text>
                 </div>
                 {editingIntervalId === interval.id ? (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <CalendarTimeField
-                      label="Started"
-                      value={startsAt}
-                      displayTimezone={timezone}
-                      occurrence={startOccurrence}
-                      onValueChange={(value) => {
-                        setStartsAt(value);
-                        setStartOccurrence(null);
-                      }}
-                      onOccurrenceChange={setStartOccurrence}
-                    />
-                    <CalendarTimeField
-                      label="Ended"
-                      value={endsAt}
-                      displayTimezone={timezone}
-                      occurrence={endOccurrence}
-                      onValueChange={(value) => {
-                        setEndsAt(value);
-                        setEndOccurrence(null);
-                      }}
-                      onOccurrenceChange={setEndOccurrence}
-                    />
+                  <div className="flex flex-col gap-2">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <CalendarTimeField
+                        label="Started"
+                        value={startsAt}
+                        displayTimezone={timezone}
+                        occurrence={startOccurrence}
+                        onValueChange={(value) => {
+                          setStartsAt(value);
+                          setStartOccurrence(null);
+                        }}
+                        onOccurrenceChange={setStartOccurrence}
+                      />
+                      <CalendarTimeField
+                        label="Ended"
+                        value={endsAt}
+                        displayTimezone={timezone}
+                        occurrence={endOccurrence}
+                        onValueChange={(value) => {
+                          setEndsAt(value);
+                          setEndOccurrence(null);
+                        }}
+                        onOccurrenceChange={setEndOccurrence}
+                      />
+                    </div>
+                    {repairError ? <FieldError>{repairError}</FieldError> : null}
                   </div>
                 ) : (
                   <Text token="body-small" tone="muted">
@@ -333,13 +333,8 @@ export function TimeRecordDialog({
                 ) : null}
               </Surface>
             ))}
-          {error ? (
-            <Text role="alert" token="body-small" className="text-error">
-              {error}
-            </Text>
-          ) : null}
           {confirmingRemoval ? (
-            <div className="border-error/30 bg-error-container/30 flex flex-col gap-3 rounded-xl border p-4">
+            <Surface tone="floating" shape="medium" pad="roomy" className="flex flex-col gap-3">
               <Text token="body-medium">Remove this time from your personal history?</Text>
               <Text token="body-small" tone="muted">
                 Athena keeps the audit record, but this entry will no longer appear in your ledger.
@@ -353,11 +348,11 @@ export function TimeRecordDialog({
                 >
                   Keep time
                 </Button>
-                <Button className="text-error" onClick={removeRecord} disabled={remove.isPending}>
+                <Button variant="destructive" onClick={removeRecord} disabled={remove.isPending}>
                   {remove.isPending ? 'Removing…' : 'Remove time'}
                 </Button>
               </div>
-            </div>
+            </Surface>
           ) : null}
         </DialogBody>
         <DialogFooter>
@@ -366,8 +361,7 @@ export function TimeRecordDialog({
           </Button>
           {repairableRecord ? (
             <Button
-              variant="ghost"
-              className="text-error"
+              variant="ghost-destructive"
               onClick={() => {
                 setConfirmingRemoval(true);
               }}

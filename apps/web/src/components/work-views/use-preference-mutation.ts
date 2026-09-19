@@ -29,5 +29,7 @@ export function usePreferenceMutation() {
         'Could not save your view preferences.',
       ),
     invalidateKeys: [queryKeys.hubPreferences()],
+    // The page's operation-failure banner presents this write and owns its retry.
+    failure: 'silent',
   });
 }

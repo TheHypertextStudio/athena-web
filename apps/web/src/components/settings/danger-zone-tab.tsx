@@ -13,8 +13,9 @@
  * is presented as a notice by the mutation that made it.
  */
 import type { AccountStatusOut } from '@docket/identity-access/account-contract';
-import { QueryLoadFailure } from '@/components/query-load-failure';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import { InlineBanner } from '@docket/ui/components';
+import { QueryLoadFailure } from '@/components/feedback';
+import { Button, Skeleton, Surface } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { type JSX, useState } from 'react';
 
@@ -89,28 +90,21 @@ export function DangerZoneTab(): JSX.Element {
     <section className="flex flex-col gap-6" aria-label="Danger zone">
       {/* Pending-deletion banner */}
       {pending && status.deleteAfterAt ? (
-        <div className="bg-error-container text-on-error-container flex flex-col gap-3 rounded-xl p-4">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-title-small">Your account is scheduled for deletion</h3>
-            <p className="text-body-medium">
-              It will be permanently deleted on{' '}
-              <span className="text-label-large">{formatCalendarDate(status.deleteAfterAt)}</span> (
-              {daysUntil(status.deleteAfterAt)} days left). Cancel any time before then to restore
-              everything.
-            </p>
-          </div>
-          <div>
-            <Button
-              type="button"
-              disabled={cancelDeletion.isPending}
-              onClick={() => {
-                cancelDeletion.mutate(undefined);
-              }}
-            >
-              {cancelDeletion.isPending ? 'Cancelling…' : 'Cancel deletion'}
-            </Button>
-          </div>
-        </div>
+        <InlineBanner
+          tone="critical"
+          title="Your account is scheduled for deletion"
+          action={{
+            label: cancelDeletion.isPending ? 'Cancelling…' : 'Cancel deletion',
+            onSelect: () => {
+              if (!cancelDeletion.isPending) cancelDeletion.mutate(undefined);
+            },
+          }}
+        >
+          It will be permanently deleted on{' '}
+          <span className="text-label-large">{formatCalendarDate(status.deleteAfterAt)}</span> (
+          {daysUntil(status.deleteAfterAt)} days left). Cancel any time before then to restore
+          everything.
+        </InlineBanner>
       ) : null}
 
       {/* Ownership-blocker guide */}
@@ -150,10 +144,10 @@ export function DangerZoneTab(): JSX.Element {
 
       {/* Delete account card */}
       {!pending ? (
-        <div className="bg-error-container text-on-error-container flex flex-col gap-3 rounded-xl p-4">
+        <Surface tone="card" pad="roomy" className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <h3 className="text-title-small">Delete account</h3>
-            <p className="text-body-medium max-w-prose">
+            <p className="text-body-medium text-on-surface-variant max-w-prose">
               Permanently delete your Docket account, your personal workspace, and any workspace
               only you belong to. You&apos;ll have 14 days to change your mind. Want a copy first?
               Use <span className="text-label-large">Export data</span> before you delete.
@@ -171,7 +165,7 @@ export function DangerZoneTab(): JSX.Element {
               Delete account…
             </Button>
           </div>
-        </div>
+        </Surface>
       ) : null}
 
       <DeleteAccountDialog open={dialogOpen} onOpenChange={setDialogOpen} email={email} />

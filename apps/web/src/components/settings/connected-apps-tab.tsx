@@ -36,7 +36,7 @@ import {
 } from '@/lib/query';
 
 import { ConfirmDestructiveDialog } from '@docket/ui/components';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';
 import { ClientSetup } from './mcp-setup-panels';

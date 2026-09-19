@@ -1,7 +1,10 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
+import { Target } from '@docket/ui/icons';
 import { describe, expect, it } from 'vitest';
+
+import { PAGE_COPY } from '../../src/components/work-views/work-view-page-copy';
 
 const root = resolve(import.meta.dirname, '../../../../');
 const overviewPath = join(
@@ -212,7 +215,7 @@ describe('Initiative visual contract', () => {
     expect(control).toContain("fixed: 'coarse:h-10'");
     expect(control).toContain("width: 'coarse:w-10'");
     expect(dialog).toContain("controlChrome('sm', { iconOnly: true })");
-    expect(workPage).toContain('icon: Target');
+    expect(PAGE_COPY.initiative.icon).toBe(Target);
     expect(picker).toContain('props.size ?? 32');
     expect(picker).toContain('Math.max(40, size)');
     expect(detail).toContain('size={48}');
@@ -222,7 +225,7 @@ describe('Initiative visual contract', () => {
   it('uses Material icon components instead of Unicode control glyphs', () => {
     const workPage = source(workPagePath);
     const picker = source(loadedIconPickerPath);
-    expect(workPage).toContain('icon: Target');
+    expect(PAGE_COPY.initiative.icon).toBe(Target);
     expect(workPage).toContain('<Plus');
     expect(picker).toContain('<PopoverContent');
     expect(picker).toContain('Rounded');

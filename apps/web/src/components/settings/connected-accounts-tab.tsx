@@ -20,7 +20,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import NextLink from '@/components/docket-link';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
-import { LoadFailure, presentFailure } from '@/components/feedback';
+import { presentFailure, QueryLoadFailure } from '@/components/feedback';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { usePublicConfig } from '@/lib/public-config';
@@ -144,13 +144,7 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
           ))}
         </ul>
       ) : identitiesQ.isError ? (
-        <LoadFailure
-          size="panel"
-          title="Connected accounts"
-          error={identitiesQ.error}
-          onRetry={() => void identitiesQ.refetch()}
-          retrying={identitiesQ.isFetching}
-        />
+        <QueryLoadFailure size="panel" title="Connected accounts" query={identitiesQ} />
       ) : (
         <ul className="flex flex-col gap-2">
           {visibleProviders.map((entry) => (

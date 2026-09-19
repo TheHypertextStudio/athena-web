@@ -5,6 +5,7 @@ import type { JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import Link from '@/components/docket-link';
+import { LoadFailure } from '@/components/feedback';
 
 /** Let an authenticated customer choose which organization should receive Docket Pro. */
 export default function StartBillingPage(): JSX.Element {
@@ -27,9 +28,7 @@ export default function StartBillingPage(): JSX.Element {
           Loading your workspaces…
         </p>
       ) : orgsError ? (
-        <p className="text-error text-body-medium" role="alert">
-          {orgsError}
-        </p>
+        <LoadFailure title="Your workspaces" error={orgsError} size="panel" />
       ) : orgs.length === 0 ? (
         <div className="flex flex-col items-start gap-4">
           <p className="text-on-surface-variant text-body-medium">

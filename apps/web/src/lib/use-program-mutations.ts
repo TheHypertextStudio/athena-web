@@ -13,7 +13,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { api } from './api';
-import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
 import { invalidateWorkTargetQueries } from './work-target-invalidation';
 
@@ -54,19 +53,13 @@ export interface ProgramMutations {
   /** Post an update; the promise settles with the write so the composer can clear only on success. */
   postUpdate: (body: string, health: Health | undefined) => Promise<void>;
   propsPending: boolean;
-  propsError: string | null;
   updatePosting: boolean;
-  updateError: string | null;
 }
 
 /** The delete controls exposed to a Program detail surface. */
 export interface ProgramDeleteMutation {
   /** Delete the Program and run a caller-owned dialog completion after success. */
   deleteProgram: (onSuccess?: () => void) => void;
-  /** Clear a prior delete error before the confirmation dialog reopens. */
-  reset: () => void;
-  /** Application-owned delete error copy, or `null` before and after a successful write. */
-  error: string | null;
   /** Whether the delete request is still unsettled. */
   pending: boolean;
 }
@@ -183,13 +176,7 @@ export function useProgramMutations(
       await postUpdateM.mutateAsync({ body, health });
     },
     propsPending: patch.isPending,
-    propsError: patch.error
-      ? userErrorMessage(patch.error, 'Could not update this program.')
-      : null,
     updatePosting: postUpdateM.isPending,
-    updateError: postUpdateM.error
-      ? userErrorMessage(postUpdateM.error, 'Could not post that update.')
-      : null,
   };
 }
 
@@ -228,10 +215,6 @@ export function useProgramDeleteMutation(
     deleteProgram: (onSuccess) => {
       deletion.mutate(undefined, onSuccess === undefined ? undefined : { onSuccess });
     },
-    reset: deletion.reset,
-    error: deletion.error
-      ? userErrorMessage(deletion.error, `Could not delete this ${programLabel.toLowerCase()}.`)
-      : null,
     pending: deletion.isPending,
   };
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Row, Stack } from '@docket/ui/primitives';
+import { Button, FieldError, Row, Stack } from '@docket/ui/primitives';
 import { type JSX, useId, useState } from 'react';
 
 import { CalendarTimeField } from '@/components/calendar/calendar-time-field';
@@ -155,11 +155,7 @@ export function TimeboxForm({
           />
         </div>
       </Row>
-      {error ? (
-        <p id={errorId} role="alert" className="text-error text-body-small">
-          {error}
-        </p>
-      ) : null}
+      {error ? <FieldError id={errorId}>{error}</FieldError> : null}
       <Button type="submit" size="sm" disabled={!valid}>
         Set timebox
       </Button>

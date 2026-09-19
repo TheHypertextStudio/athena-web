@@ -14,7 +14,6 @@ import { formatWindow } from '@/components/cycles/format-window';
 
 import { api } from './api';
 import type { CycleDetailData } from './fetch-cycle-detail';
-import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
 import type { CategoryOfState } from './work-category';
 
@@ -27,11 +26,9 @@ export interface CycleMutations {
     name?: string | undefined;
   }) => void;
   propsPending: boolean;
-  propsError: string | null;
   dialogOpen: boolean;
   setDialogOpen: (open: boolean) => void;
   decisions: readonly CarryoverItem[];
-  closeError: string | null;
   moveTargets: readonly CarryoverTarget[];
   opening: boolean;
   closing: boolean;
@@ -42,7 +39,6 @@ export interface CycleMutations {
   backfillCycle: () => void;
   backfilling: boolean;
   backfillResult: number | null;
-  backfillError: string | null;
 }
 
 /**
@@ -71,9 +67,7 @@ export function useCycleMutations(
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [decisions, setDecisions] = useState<readonly CarryoverItem[]>([]);
-  const [closeError, setCloseError] = useState<string | null>(null);
   const [backfillResult, setBackfillResult] = useState<number | null>(null);
-  const [backfillError, setBackfillError] = useState<string | null>(null);
 
   const incompleteTasks = useMemo(
     () => tasks.filter((task) => categoryOf(task.state) !== 'completed'),
@@ -106,7 +100,6 @@ export function useCycleMutations(
         targetCycleId: defaultAction === 'move' ? defaultTarget : null,
       })),
     );
-    setCloseError(null);
     setDialogOpen(true);
   }, [incompleteTasks, moveTargets, categoryOf]);
 
@@ -155,14 +148,10 @@ export function useCycleMutations(
     onSuccess: () => {
       setDialogOpen(false);
     },
-    onError: (err) => {
-      setCloseError(userErrorMessage(err, `Could not close this ${cycleNounLower}.`));
-    },
     invalidateKeys: [cyclesKey],
   });
 
   const confirmClose = useCallback((): void => {
-    setCloseError(null);
     closeM.mutate(decisions);
   }, [closeM, decisions]);
 
@@ -177,16 +166,10 @@ export function useCycleMutations(
     onSuccess: (result) => {
       setBackfillResult(result.assignedCount);
     },
-    onError: (err) => {
-      setBackfillError(
-        userErrorMessage(err, `Could not assign backlog tasks to this ${cycleNounLower}.`),
-      );
-    },
     invalidateKeys: [detailKey, cyclesKey],
   });
 
   const backfillCycle = useCallback((): void => {
-    setBackfillError(null);
     setBackfillResult(null);
     backfillM.mutate(undefined);
   }, [backfillM]);
@@ -232,13 +215,9 @@ export function useCycleMutations(
   return {
     patchCycle: patch.mutate,
     propsPending: patch.isPending,
-    propsError: patch.error
-      ? userErrorMessage(patch.error, `Could not update this ${cycleNounLower}.`)
-      : null,
     dialogOpen,
     setDialogOpen,
     decisions,
-    closeError,
     moveTargets,
     opening: false,
     closing: closeM.isPending,
@@ -249,6 +228,5 @@ export function useCycleMutations(
     backfillCycle,
     backfilling: backfillM.isPending,
     backfillResult,
-    backfillError,
   };
 }

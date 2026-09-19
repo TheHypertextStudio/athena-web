@@ -1,6 +1,7 @@
 'use client';
 
 import type { HubTodayOut, HubTodayPlanItem, HubTodaySuggestion } from '../../../lib/contracts/hub';
+import { notifyFailure } from '@docket/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
@@ -8,14 +9,12 @@ import { useAgendaTimeboxMutation } from '@/components/agenda/agenda-timebox-mut
 import { CALENDAR_ITEMS_PREFIX } from '@/components/calendar/calendar-mutation-cache';
 import { useTimerControls } from '@/components/time-tracking/use-timer';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { optimisticPatch, queryKeys, unwrap, useApiMutation } from '@/lib/query';
 
 /** Inline actions available from Today without reproducing detailed workflows. */
 export interface TodayActions {
   readonly completing: boolean;
   readonly suggestionBusy: boolean;
-  readonly error: string | null;
   readonly complete: (item: HubTodayPlanItem) => void;
   readonly defer: (item: HubTodayPlanItem) => void;
   readonly promote: (item: HubTodayPlanItem, beforeSort: number) => void;
@@ -66,7 +65,6 @@ export function useTodayActions(date: string): TodayActions {
   const queryClient = useQueryClient();
   const timer = useTimerControls(null);
   const timeboxMutation = useAgendaTimeboxMutation(date);
-  const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const dayKeys = [
     queryKeys.today(date),
@@ -162,13 +160,12 @@ export function useTodayActions(date: string): TodayActions {
 
   const start = useCallback(
     (item: HubTodaySuggestion): void => {
-      setStartError(null);
       setStarting(true);
       void (async () => {
         try {
           await addMutation.mutateAsync({ item, placement: 'now' });
         } catch {
-          // The shared mutation exposes its application-owned error below.
+          // The add mutation presents its own failure as a notice.
           setStarting(false);
           return;
         }
@@ -179,7 +176,10 @@ export function useTodayActions(date: string): TodayActions {
             label: item.title,
           });
         } catch {
-          setStartError('Added to Today, but tracking did not start.');
+          notifyFailure({
+            title: 'Added to Today, but tracking did not start.',
+            dedupeKey: 'today-tracking-not-started',
+          });
         } finally {
           setStarting(false);
         }
@@ -206,24 +206,15 @@ export function useTodayActions(date: string): TodayActions {
           }),
         ]);
       } catch {
-        // The shared mutation owns rollback and exposes application-owned copy below.
+        // The shared mutation owns rollback and presents its own failure as a notice.
       }
     },
     [date, queryClient, timeboxMutation],
   );
 
-  const mutationError =
-    completeMutation.error ??
-    deferMutation.error ??
-    promoteMutation.error ??
-    addMutation.error ??
-    timeboxMutation.error;
   return {
     completing: completeMutation.isPending,
     suggestionBusy: addMutation.isPending || starting,
-    error:
-      startError ??
-      (mutationError ? userErrorMessage(mutationError, 'Could not update today.') : null),
     complete: (item) => {
       completeMutation.mutate(item);
     },

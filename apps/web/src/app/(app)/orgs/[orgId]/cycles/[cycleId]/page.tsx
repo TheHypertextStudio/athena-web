@@ -15,7 +15,7 @@ import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import type { ActorDirectory } from '@/components/agents/actor-directory';
 import { CloseCycleDialog } from '@/components/cycles/close-cycle-dialog';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { CycleMetadata } from '@/components/cycle-detail/cycle-metadata-row';
 import { CyclePacePanel } from '@/components/cycle-detail/cycle-pace-panel';
 import { formatWindow, windowProgress, windowRunway } from '@/components/cycles/format-window';
@@ -148,11 +148,9 @@ export default function CycleDetailPage(): JSX.Element {
 
   const {
     patchCycle,
-    propsError,
     dialogOpen,
     setDialogOpen,
     decisions,
-    closeError,
     moveTargets,
     closing,
     openCloseDialog,
@@ -162,7 +160,6 @@ export default function CycleDetailPage(): JSX.Element {
     backfillCycle,
     backfilling,
     backfillResult,
-    backfillError,
   } = useCycleMutations(orgId, cycleId, cycleNounLower, tasks, otherCycles, detailKey, categoryOf);
 
   const canEditCycle = useOrgCapability(members, roles, 'contribute');
@@ -363,11 +360,6 @@ export default function CycleDetailPage(): JSX.Element {
               }}
             />
           </EntityMetadataRow>
-          {propsError ? (
-            <p role="alert" className="text-error text-body-medium">
-              {propsError}
-            </p>
-          ) : null}
         </>
       }
       actions={
@@ -393,11 +385,6 @@ export default function CycleDetailPage(): JSX.Element {
                 {backfillResult === 0
                   ? `No open ${taskNounPlural} were waiting for a cycle.`
                   : `${backfillResult} ${backfillResult === 1 ? taskNoun : taskNounPlural} assigned.`}
-              </p>
-            ) : null}
-            {backfillError ? (
-              <p role="alert" className="text-error text-body-small">
-                {backfillError}
               </p>
             ) : null}
           </div>
@@ -492,7 +479,6 @@ export default function CycleDetailPage(): JSX.Element {
         items={decisions}
         targets={moveTargets}
         closing={closing}
-        closeError={closeError}
         onActionChange={onActionChange}
         onTargetChange={onTargetChange}
         onConfirm={() => {

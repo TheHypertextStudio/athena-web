@@ -8,13 +8,12 @@ import { McpConnectorsSection } from '@/components/settings/mcp-connectors-secti
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { usePersonalWorkspaceId } from '@/components/settings/use-personal-workspace-id';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
 
 import { VoicePhoneNumbers } from '@/components/athena/voice-phone-numbers';
 
 import { LatticeSection } from './lattice-section';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { SettingRowStatus } from '@/components/settings/setting-row-status';
@@ -126,13 +125,7 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
               <option value="suggest_only">Suggest only</option>
             </Select>
           </Field>
-          <SettingRowStatus
-            pending={save.isPending}
-            saved={save.isSuccess}
-            {...(save.isError
-              ? { error: userErrorMessage(save.error, 'Could not save Athena preferences.') }
-              : {})}
-          />
+          <SettingRowStatus pending={save.isPending} saved={save.isSuccess} />
         </SettingsGroup>
       )}
       <VoicePhoneNumbers />

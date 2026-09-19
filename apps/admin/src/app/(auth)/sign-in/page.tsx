@@ -1,6 +1,6 @@
 'use client';
 
-import { AuthLayout } from '@docket/ui/components';
+import { AuthLayout, InlineBanner } from '@docket/ui/components';
 import { useRedirectIfAuthenticated } from '@docket/ui/hooks';
 import { Button, Stack, Text } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
@@ -198,9 +198,9 @@ export default function SignInPage(): JSX.Element {
         />
 
         {error ? (
-          <p role="alert" className="text-error text-body-medium">
-            {error}
-          </p>
+          <InlineBanner tone="critical" density="compact" title={error}>
+            {null}
+          </InlineBanner>
         ) : null}
 
         {!passkeySupported && hydrated ? (

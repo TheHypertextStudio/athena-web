@@ -30,13 +30,7 @@ const NEEDS_ATTENTION = 'Needs attention';
  */
 export function CardNote({ tone, title, children }: CardNoteProps): JSX.Element {
   if (tone === 'error') {
-    return (
-      <div className="bg-surface-container px-4 py-2">
-        <InlineBanner tone="critical" density="compact" title={title ?? NEEDS_ATTENTION}>
-          {children}
-        </InlineBanner>
-      </div>
-    );
+    return <CardAlert message={title ?? NEEDS_ATTENTION} detail={children} />;
   }
   return (
     <p className="text-on-surface-variant bg-surface-container text-body-small px-4 py-2">

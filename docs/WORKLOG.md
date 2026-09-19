@@ -47,8 +47,9 @@
 
 ### [ERRORS-001] One error-presentation system replaces inline plaintext errors
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-09-18
+- **Completed**: 2026-09-19
 - **Priority**: P0
 - **Description**: About 150 hand-rolled `<p role="alert" className="text-error">` renderings sit between
   UI. Add the specified but missing toaster (`sonner` wrapped in `@docket/ui`), a critical `EmptyState`
@@ -60,10 +61,41 @@
   - [x] Feedback primitives in `@docket/ui` (`Toaster`, `notify`, `ToastCard`, critical `EmptyState`,
         compact `InlineBanner`, `FieldError`)
   - [x] App plumbing (`presentFailure`, `LoadFailure`, Toaster mount, `useApiMutation` default)
-  - [ ] Load failures, banners, mutation errors, field errors migrated
-  - [ ] ESLint rule switched on, `design-system.md` feedback section, e2e
+  - [x] Load failures, banners, mutation errors, field errors migrated
+  - [x] `docket-ui/no-raw-error-text` switched on in the root config
+  - [x] `docs/engineering/specs/error-presentation.md` describes the shipped system
 - **Notes**: Context7's quota was exhausted, so sonner 2.0.8's API was read from its shipped
   `index.d.ts`. Sonner compares ids strictly, so notices mint their own string ids.
+
+#### Change
+
+Notices sit inside a Radix `DismissableLayer.Branch` (the `Toaster` wrapper), which replaces the
+sonner-attribute check that only `dialog` and `sheet` carried: a dialog, sheet, popover, menu, context
+menu, or hover card stays open when a notice action is pressed. `useApiMutation` is the single owner of
+write failures, so the inline echoes of the same failure (`SettingRowStatus error=`, `actionError`,
+`propsError`, `mutationError`, `postError`) are gone, along with the state and fallback strings that fed
+them. Writes issued through a bare client call use `presentFailure` / `presentRejectedResponse`.
+`QueryLoadFailure`, `PartialLoadBanner`, and `RegionFrame` moved into `components/feedback` and replace the
+hand-wired copies. Non-text status geometry (a violated edge, a rejected drop preview, the current-time
+line) takes its colour from `CRITICAL_PAINT` in `@docket/ui/primitives`, so the primitive layer owns every
+error-role class.
+
+- **Files changed**: `packages/ui` (`Toaster`, `dialog`, `sheet`, `critical-paint`, `InlineBanner` action
+  label, `RowMeta` tone; `keep-open-for-notices` and its test deleted; `notice-over-overlays.test.tsx`
+  added); `apps/web/src/components/feedback/*`; the callers of `QueryLoadFailure` and `PartialLoadBanner`;
+  `lib/{query,use-triage,use-session-detail,use-task-mutations,use-project-dependencies,use-project-milestones,use-milestone-detail,use-email-suggestions,use-automation-rules}.ts`
+  and the cycle, initiative, program, and project mutation hooks; the inbox, today, triage, session,
+  settings, publishing, project-detail, calendar, time-tracking, athena, scheduling, and stream surfaces;
+  `apps/admin` sign-in; `eslint.config.js`; the tests beside each.
+- **Validation**: root `typecheck` is green. Scoped `apps/web` and `packages/ui` suites pass, and
+  `e2e/work/mutation-failure-toast.spec.ts` passes on the dev stack (a modal Settings shell stays open
+  while the notice's Try again is pressed). ESLint with `docket-ui/no-raw-error-text` on is clean on the
+  files this task owns.
+- **Learnings**: A test that asserts a notice must mount the real `<Toaster />` and clear the stack in
+  `afterEach`, and jsdom needs `setPointerCapture` stubbed before a notice can be pressed. Turning a
+  default notice on made background pollers loud (the presence heartbeat), so a poller opts out with
+  `failure: 'silent'`. `pnpm install` against this repo rewrites unrelated lockfile entries; adding one
+  dependency by hand and running `pnpm install --offline --frozen-lockfile` keeps the diff to the new line.
 - **Blockers**: None.
 
 ### [CANVAS-DEPS-001] Project dependencies get their own route on the floating canvas shell

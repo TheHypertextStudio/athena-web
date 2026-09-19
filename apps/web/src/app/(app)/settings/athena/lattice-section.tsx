@@ -24,7 +24,7 @@ import { type JSX, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SettingRow } from '@/components/settings/setting-row';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';

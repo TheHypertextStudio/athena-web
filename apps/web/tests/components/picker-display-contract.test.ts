@@ -16,7 +16,9 @@ describe('Picker display contract', () => {
 
     expect(projectDetail).toContain("queryKeys.entityDisplays(orgId, 'initiative')");
     expect(projectDetail).toContain('toInitiativeOptions(initiatives, initiativeDisplays)');
-    expect(taskDetail).toContain("useEntityDisplays(orgId, 'project')");
+    // The read is gated on whether the project roster is switched on, so the call names the
+    // subject first and the gate after it.
+    expect(taskDetail).toContain("useEntityDisplays(orgId, 'project'");
     expect(taskDetail).toContain('queryKeys.entityDisplays(orgId, subjectType)');
     expect(taskDetail).toContain('toProjectOptions(projects, projectDisplays)');
   });

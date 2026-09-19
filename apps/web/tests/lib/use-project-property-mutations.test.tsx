@@ -10,7 +10,7 @@
  * task mutation is held to in `use-task-mutations.test.tsx`:
  *
  * 1. the cache carries the new value **before** the mutation promise settles, and
- * 2. a forced failure restores the previous value **and** surfaces application-owned copy.
+ * 2. a forced failure restores the previous value **and** presents a notice.
  *
  * Claim 2 is checked against a deliberately hostile rejection — a message shaped like a
  * driver/transport leak — because the rule is not merely "show an error", it is that no provider or
@@ -24,8 +24,9 @@
  */
 import { OrganizationId } from '@docket/identity-access/ids';
 import { ProjectId } from '@docket/work/ids';
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, screen, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -118,9 +119,19 @@ function makeWrapper(): {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      {children}
+      <Toaster />
+    </QueryClientProvider>
   );
   return { client, wrapper };
+}
+
+/** The failure notice on screen, checked for leaked transport text. */
+async function expectFailureNotice(): Promise<void> {
+  const notice = await screen.findByRole('alert');
+  expect(notice.textContent).not.toContain('ECONNREFUSED');
+  expect(notice.textContent).not.toContain('pg pool');
 }
 
 /** Mount the hook against a fresh cache seeded with {@link baseDetail}. */
@@ -139,6 +150,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  dismissAllNotices();
   cleanup();
 });
 
@@ -214,16 +226,11 @@ describe('useProjectMutations — project field edits', () => {
       });
     });
 
-    await waitFor(() => {
-      expect(result.current.propsError).not.toBeNull();
-    });
+    await expectFailureNotice();
     // A partial rollback would be worse than none: the whole patch is one edit, so it reverts as one.
     expect(read()?.project?.name).toBe('Launch checklist');
     expect(read()?.project?.health).toBe('on_track');
     expect(read()?.project?.targetDate).toBeNull();
-    expect(result.current.propsError).toBe('Could not update the project.');
-    expect(result.current.propsError).not.toContain('ECONNREFUSED');
-    expect(result.current.propsError).not.toContain('pg pool');
   });
 });
 
@@ -256,16 +263,8 @@ describe('useProjectMutations — initiative field edits', () => {
       result.current.setInitiatives([INITIATIVE_ID, OTHER_INITIATIVE_ID]);
     });
 
-    await waitFor(() => {
-      expect(result.current.propsError).not.toBeNull();
-    });
+    await expectFailureNotice();
     expect(read()?.initiativeIds).toEqual([INITIATIVE_ID]);
-    // `unwrap`'s own fallback wins over the hook's, because the failure is already a
-    // `UserFacingError` by the time `propsError` reads it — both strings are application-owned, and
-    // the narrower one is the more accurate description of what failed.
-    expect(result.current.propsError).toBe('Could not update linked Initiatives.');
-    expect(result.current.propsError).not.toContain('ECONNREFUSED');
-    expect(result.current.propsError).not.toContain('pg pool');
   });
 });
 

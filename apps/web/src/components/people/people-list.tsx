@@ -24,7 +24,7 @@ import { EmptyState } from '@docket/ui/components';
 import { Plus, Users } from '@docket/ui/icons';
 import { Button, Skeleton, Text, Toolbar } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { type JSX, useMemo, useState } from 'react';
 
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';

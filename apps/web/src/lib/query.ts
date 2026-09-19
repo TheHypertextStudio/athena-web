@@ -367,7 +367,7 @@ export function useApiMutation<TData, TVariables, TContext = unknown>(
   });
   useEffect(() => {
     retryRef.current = mutation.mutate;
-  });
+  }, [mutation.mutate]);
   return mutation;
 }
 

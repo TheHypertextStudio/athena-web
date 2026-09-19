@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Button, Field, Input, Select, Skeleton, Textarea } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX, type SyntheticEvent } from 'react';
 
-import { LoadFailure } from '@/components/feedback';
+import { QueryLoadFailure } from '@/components/feedback';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
@@ -175,15 +175,7 @@ export function BillingDiscountsSection({
   // placeholder: the discounts applied to this workspace's subscription.
   if (discountsQ.isPending) return <Skeleton className="h-52 max-w-2xl rounded-lg" />;
   if (discountsQ.isError) {
-    return (
-      <LoadFailure
-        title="Discounts"
-        error={discountsQ.error}
-        onRetry={() => void discountsQ.refetch()}
-        retrying={discountsQ.isFetching}
-        size="panel"
-      />
-    );
+    return <QueryLoadFailure title="Discounts" query={discountsQ} size="panel" />;
   }
 
   const summary = discountsQ.data;

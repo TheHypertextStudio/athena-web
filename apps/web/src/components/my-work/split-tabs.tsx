@@ -1,8 +1,11 @@
 'use client';
 
 import { cn } from '@docket/ui/lib/utils';
-import { Tab, TabList, Tabs } from '@docket/ui/primitives';
+import { Badge, Tab, TabList, Tabs } from '@docket/ui/primitives';
 import type { JSX } from 'react';
+
+/** The count badge's tone on the selected tab, one tonal step off the resting badge. */
+const SELECTED_COUNT_TONE = 'bg-surface-container text-on-surface';
 
 /** A single tab in a {@link SplitTabs} control. */
 export interface SplitTab<TValue extends string> {
@@ -69,18 +72,12 @@ export function SplitTabs<TValue extends string>({
               <span className="inline-flex items-center gap-2">
                 {tab.label}
                 {showCount ? (
-                  <span
-                    className={cn(
-                      'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums',
-                      emphatic
-                        ? 'bg-error/10 text-error'
-                        : selected
-                          ? 'bg-surface-container text-on-surface'
-                          : 'bg-surface-container-high text-on-surface-variant',
-                    )}
+                  <Badge
+                    variant={emphatic ? 'destructive' : 'secondary'}
+                    className={cn('min-w-5', selected && !emphatic && SELECTED_COUNT_TONE)}
                   >
                     {tab.count}
-                  </span>
+                  </Badge>
                 ) : null}
               </span>
             </Tab>

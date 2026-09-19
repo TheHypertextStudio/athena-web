@@ -35,7 +35,6 @@ import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useEffect, useState } from 'react';
 
 import { CATEGORY_DESCRIPTION, CATEGORY_LABEL, isEnded } from '@/lib/work-category';
-import { userErrorMessage } from '@/lib/problem';
 
 import type { StatusLike } from './status-registry';
 
@@ -49,8 +48,6 @@ export interface StatusEditorDialogProps {
   entityLabel: string;
   /** Whether a save is in flight. */
   pending: boolean;
-  /** The failure from the last attempt, if any. */
-  error: unknown;
   /** Save the status. */
   onSave: (input: {
     name: string;
@@ -72,7 +69,6 @@ export function StatusEditorDialog({
   initialCategory,
   entityLabel,
   pending,
-  error,
   onSave,
   onClose,
 }: StatusEditorDialogProps): JSX.Element {
@@ -187,12 +183,6 @@ export function StatusEditorDialog({
                   : 'Work already in this status will be reopened, which changes progress and capacity.'}
               </p>
             ) : null}
-
-            {error === null || error === undefined ? null : (
-              <p role="alert" className="text-error text-body-small">
-                {userErrorMessage(error, 'That status could not be saved.')}
-              </p>
-            )}
           </DialogBody>
 
           <DialogFooter>

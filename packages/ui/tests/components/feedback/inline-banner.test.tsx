@@ -24,6 +24,37 @@ describe('InlineBanner', () => {
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
+  it('renders a title-only banner with its action and no empty message region', () => {
+    const onSelect = vi.fn();
+    const { container } = render(
+      <InlineBanner
+        tone="critical"
+        density="compact"
+        title="Could not load statuses"
+        action={{ label: 'Retry statuses', onSelect }}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load statuses');
+    expect(container.querySelector('.text-body-small')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry statuses' }));
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+
+  it('names its action with the fuller accessible name when one is given', () => {
+    render(
+      <InlineBanner
+        tone="critical"
+        title="Could not add that task"
+        action={{ label: 'Retry', ariaLabel: 'Retry adding Launch', onSelect: vi.fn() }}
+      >
+        Launch
+      </InlineBanner>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Retry adding Launch' })).toBeInTheDocument();
+  });
+
   it('announces its title and message without optional controls', () => {
     render(
       <InlineBanner tone="info" title="Recovery codes needed">

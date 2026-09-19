@@ -115,8 +115,7 @@ export function DeleteCalendarItemAction({
     <>
       <Button
         size="sm"
-        variant="ghost"
-        className="text-error hover:text-error"
+        variant="ghost-destructive"
         onClick={() => {
           setConfirming(true);
         }}

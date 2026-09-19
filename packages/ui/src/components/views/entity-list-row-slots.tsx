@@ -4,12 +4,15 @@ import * as React from 'react';
 
 import { cn } from '../../lib/utils';
 import { surfaceToneColor } from '../../primitives/surface';
+import { toneClass } from '../../primitives/text';
 
 /** Props for {@link RowMeta}. */
 export interface RowMetaProps {
   children: React.ReactNode;
   /** Use tabular figures (counts, dates, percentages) for stable alignment. */
   tabular?: boolean;
+  /** `error` reads as a state that needs attention, such as an overdue date or a blocked marker. */
+  tone?: 'default' | 'error';
   className?: string;
 }
 
@@ -19,11 +22,24 @@ export interface RowMetaProps {
  * @example
  * ```tsx
  * <RowMeta tabular><ListChecks className="size-4" /> 12 tasks</RowMeta>
+ * <RowMeta tabular tone="error">Jul 4</RowMeta>
  * ```
  */
-export function RowMeta({ children, tabular = false, className }: RowMetaProps): React.JSX.Element {
+export function RowMeta({
+  children,
+  tabular = false,
+  tone = 'default',
+  className,
+}: RowMetaProps): React.JSX.Element {
   return (
-    <span className={cn('flex items-center gap-1.5', tabular && 'tabular-nums', className)}>
+    <span
+      className={cn(
+        'flex items-center gap-1.5',
+        tabular && 'tabular-nums',
+        tone === 'error' && toneClass('error'),
+        className,
+      )}
+    >
       {children}
     </span>
   );

@@ -1,12 +1,12 @@
 'use client';
 
-import { InlineBanner } from '@docket/ui/components';
 import { CheckCircle2, Inbox as InboxIcon } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import type { NotificationOut } from '@docket/notifications/notification-contract';
 import { type JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
+import { PartialLoadBanner } from '@/components/feedback';
 import { ActivityRow } from '@/components/inbox/activity-row';
 import { notificationNeedsAction } from '@/components/inbox/notification-meta';
 import { NotificationRow } from '@/components/inbox/notification-row';
@@ -24,7 +24,6 @@ export default function InboxClient(): JSX.Element {
     loading,
     error,
     refetch,
-    actionError,
     pendingIds,
     markingAll,
     segments,
@@ -83,19 +82,9 @@ export default function InboxClient(): JSX.Element {
       </div>
 
       {error ? (
-        <InlineBanner
-          tone="critical"
-          title="Inbox did not answer"
-          action={{ label: 'Try again', onSelect: refetch }}
-        >
+        <PartialLoadBanner title="Inbox did not answer" onRetry={refetch}>
           {error}
-        </InlineBanner>
-      ) : null}
-
-      {actionError && !error ? (
-        <p role="alert" className="text-error text-body-medium">
-          {actionError}
-        </p>
+        </PartialLoadBanner>
       ) : null}
 
       {/* ── Inbox feed (actionable) ───────────────────────────────────────── */}

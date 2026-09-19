@@ -8,14 +8,13 @@ import {
 } from '../../../../../../lib/contracts/organization';
 import { Field, Select, Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { useTypedRoute } from '@/lib/app-location';
 import { useState, type JSX } from 'react';
 
 import { SettingRowStatus } from '@/components/settings/setting-row-status';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
@@ -200,11 +199,6 @@ export default function WorkStructureSettingsPage(): JSX.Element {
           <SettingRowStatus
             pending={saveDepth.isPending}
             saved={saveDepth.isSuccess}
-            error={
-              saveDepth.error
-                ? userErrorMessage(saveDepth.error, 'Could not save work structure settings.')
-                : null
-            }
             idleLabel={`Current maximum: ${settingsQ.data.initiativeMaxDepth}`}
           />
 
@@ -247,14 +241,6 @@ export default function WorkStructureSettingsPage(): JSX.Element {
           <SettingRowStatus
             pending={saveParentCompletion.isPending}
             saved={saveParentCompletion.isSuccess}
-            error={
-              saveParentCompletion.error
-                ? userErrorMessage(
-                    saveParentCompletion.error,
-                    'Could not save parent task completion.',
-                  )
-                : null
-            }
             idleLabel={autoCompleteParents ? 'On' : 'Off'}
           />
 
@@ -308,11 +294,6 @@ export default function WorkStructureSettingsPage(): JSX.Element {
           <SettingRowStatus
             pending={saveScale.isPending}
             saved={saveScale.isSuccess}
-            error={
-              saveScale.error
-                ? userErrorMessage(saveScale.error, 'Could not save the estimation scale.')
-                : null
-            }
             idleLabel={`Current scale: ${ESTIMATION_SCALE_LABEL[settingsQ.data.estimationScale]}`}
           />
 
@@ -350,14 +331,6 @@ export default function WorkStructureSettingsPage(): JSX.Element {
           <SettingRowStatus
             pending={saveFiscalMonth.isPending}
             saved={saveFiscalMonth.isSuccess}
-            error={
-              saveFiscalMonth.error
-                ? userErrorMessage(
-                    saveFiscalMonth.error,
-                    'Could not save the fiscal year start month.',
-                  )
-                : null
-            }
             idleLabel={`Current start: ${MONTH_NAMES[settingsQ.data.fiscalYearStartMonth] ?? 'January'}`}
           />
         </section>

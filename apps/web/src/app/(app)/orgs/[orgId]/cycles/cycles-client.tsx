@@ -45,7 +45,7 @@ import { type JSX, useCallback, useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { ActiveCycleOverview, findActiveCycle } from '@/components/cycles/active-cycle-overview';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { buildCycleCatalog } from '@/components/cycles/cycle-catalog';
 import { type CycleRowProps, CycleRows } from '@/components/cycles/cycle-row';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';

@@ -24,6 +24,7 @@ import { Activity } from '@docket/ui/icons';
 import { Badge, Button, Surface } from '@docket/ui/primitives';
 import { useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
 
+import { LoadFailure, PartialLoadBanner } from '@/components/feedback';
 import {
   type FieldCatalog,
   type ViewFilterTerm,
@@ -52,7 +53,8 @@ export interface StreamViewProps {
   readonly newEventCount: number;
   readonly onShowNewEvents: () => void;
   readonly loading: boolean;
-  readonly error: string | null;
+  /** The read's failure, when it did not arrive; null otherwise. */
+  readonly error: unknown;
   readonly onRetry: () => void;
   readonly hasNextPage: boolean;
   readonly isFetchingNextPage: boolean;
@@ -84,6 +86,35 @@ function TimelineSkeleton(): JSX.Element {
         </div>
       ))}
     </Surface>
+  );
+}
+
+/** Props for {@link StreamEmptyState}. */
+interface StreamEmptyStateProps {
+  /** Whether filters are narrowing the timeline. */
+  readonly hasFilters: boolean;
+  /** Drop every filter. */
+  readonly onClearFilters: () => void;
+}
+
+/** The timeline with nothing in it: a filtered-out view offers the way back, an empty one waits. */
+function StreamEmptyState({ hasFilters, onClearFilters }: StreamEmptyStateProps): JSX.Element {
+  if (hasFilters) {
+    return (
+      <EmptyState
+        icon={Activity}
+        title="No events match these filters"
+        body="Clear the filters to return to the full timeline."
+        cta={{ label: 'Clear filters', onClick: onClearFilters }}
+      />
+    );
+  }
+  return (
+    <EmptyState
+      icon={Activity}
+      title="Nothing yet"
+      body="Activity will appear here as work happens across your connected tools."
+    />
   );
 }
 
@@ -176,37 +207,25 @@ export function StreamView(props: StreamViewProps): JSX.Element {
           </div>
         ) : null}
 
-        {props.error ? (
-          <div
-            role="alert"
-            className="border-outline-variant text-on-surface-variant text-body-small flex items-center justify-between rounded-lg border p-4"
-          >
-            <span>{props.error}</span>
-            <button type="button" className="text-primary min-h-10 px-2" onClick={props.onRetry}>
-              Try again
-            </button>
+        {props.error !== null && props.events.length > 0 ? (
+          <div className="pb-4">
+            <PartialLoadBanner
+              title="Could not refresh the activity stream"
+              onRetry={props.onRetry}
+            />
           </div>
+        ) : null}
+
+        {props.error !== null && props.events.length === 0 ? (
+          <LoadFailure title="Activity stream" error={props.error} onRetry={props.onRetry} />
         ) : props.loading && props.events.length === 0 ? (
           <TimelineSkeleton />
         ) : props.events.length === 0 ? (
-          <EmptyState
-            icon={Activity}
-            title={hasFilters ? 'No events match these filters' : 'Nothing yet'}
-            body={
-              hasFilters
-                ? 'Clear the filters to return to the full timeline.'
-                : 'Activity will appear here as work happens across your connected tools.'
-            }
-            {...(hasFilters
-              ? {
-                  cta: {
-                    label: 'Clear filters',
-                    onClick: () => {
-                      props.onFiltersChange([]);
-                    },
-                  },
-                }
-              : {})}
+          <StreamEmptyState
+            hasFilters={hasFilters}
+            onClearFilters={() => {
+              props.onFiltersChange([]);
+            }}
           />
         ) : (
           <div

@@ -32,7 +32,7 @@ import { EmptyState } from '@docket/ui/components';
 import { Plus, Tag } from '@docket/ui/icons';
 import { type JSX, useState } from 'react';
 
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { useActiveOrg } from '@/components/active-org';
 import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { LabelEditorDialog } from '@/components/labels/label-editor-dialog';

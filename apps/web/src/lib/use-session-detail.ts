@@ -8,8 +8,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { buildActorDirectory, type ActorDirectory } from '@/components/agents/actor-directory';
 import type { ChangeReceiptItem, SessionControlsState } from '@/components/agents/session-sidebar';
+import { presentFailure, presentRejectedResponse } from '@/components/feedback';
 import { api } from './api';
-import { userErrorMessage, readProblemError } from './problem';
+import { readProblemError } from './problem';
 import { startViewTransition } from './view-transition';
 
 /** SessionDetailState describes the use session detail data contract shared by the hook or component. */
@@ -24,7 +25,6 @@ export interface SessionDetailState {
   loadError: unknown;
   /** Re-issue the session read after a failure. */
   reload: () => Promise<void>;
-  actionError: string | null;
   pendingActivityId: string | null;
   controlPending: boolean;
   directory: ActorDirectory;
@@ -60,7 +60,6 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
   const [taskTitle, setTaskTitle] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<unknown>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [pendingActivityId, setPendingActivityId] = useState<string | null>(null);
   const [controlPending, setControlPending] = useState(false);
   const [proposals, setProposals] = useState<readonly ProposalGroupOut[]>([]);
@@ -189,7 +188,6 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
 
   const approve = useCallback(
     async (activityId: string): Promise<void> => {
-      setActionError(null);
       setPendingActivityId(activityId);
       try {
         const res = await api.v1.orgs[':orgId'].sessions[':id'].activity[
@@ -199,17 +197,12 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
           json: { decision: 'approved' },
         });
         if (!res.ok) {
-          setActionError(
-            userErrorMessage(
-              await readProblemError(res, 'Could not approve this action.'),
-              'Could not approve this action.',
-            ),
-          );
+          await presentRejectedResponse(res, 'Could not approve this action.');
           return;
         }
         await load();
       } catch (caught) {
-        setActionError(userErrorMessage(caught, 'Something went wrong approving this action.'));
+        presentFailure(caught, 'Could not approve this action.');
       } finally {
         setPendingActivityId(null);
       }
@@ -219,7 +212,6 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
 
   const reject = useCallback(
     async (activityId: string): Promise<void> => {
-      setActionError(null);
       setPendingActivityId(activityId);
       try {
         const res = await api.v1.orgs[':orgId'].sessions[':id'].activity[
@@ -229,17 +221,12 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
           json: { decision: 'rejected' },
         });
         if (!res.ok) {
-          setActionError(
-            userErrorMessage(
-              await readProblemError(res, 'Could not reject this action.'),
-              'Could not reject this action.',
-            ),
-          );
+          await presentRejectedResponse(res, 'Could not reject this action.');
           return;
         }
         await load();
       } catch (caught) {
-        setActionError(userErrorMessage(caught, 'Something went wrong rejecting this action.'));
+        presentFailure(caught, 'Could not reject this action.');
       } finally {
         setPendingActivityId(null);
       }
@@ -249,7 +236,6 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
 
   const reply = useCallback(
     async (activityId: string, body: string): Promise<void> => {
-      setActionError(null);
       setPendingActivityId(activityId);
       try {
         const res = await api.v1.orgs[':orgId'].sessions[':id'].activity[':activityId'].reply.$post(
@@ -259,12 +245,7 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
           },
         );
         if (!res.ok) {
-          setActionError(
-            userErrorMessage(
-              await readProblemError(res, 'Could not send your reply.'),
-              'Could not send your reply.',
-            ),
-          );
+          await presentRejectedResponse(res, 'Could not send your reply.');
           return;
         }
         await reloadActivities();
@@ -276,7 +257,7 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
           setSession((current) => (current ? { ...current, status: detail.status } : detail));
         }
       } catch (caught) {
-        setActionError(userErrorMessage(caught, 'Something went wrong sending your reply.'));
+        presentFailure(caught, 'Could not send your reply.');
       } finally {
         setPendingActivityId(null);
       }
@@ -286,7 +267,6 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
 
   const transition = useCallback(
     async (action: 'pause' | 'resume' | 'cancel'): Promise<void> => {
-      setActionError(null);
       setControlPending(true);
       try {
         const param = { orgId, id: sessionId };
@@ -297,19 +277,12 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
               ? await api.v1.orgs[':orgId'].sessions[':id'].resume.$post({ param })
               : await api.v1.orgs[':orgId'].sessions[':id'].cancel.$post({ param });
         if (!res.ok) {
-          setActionError(
-            userErrorMessage(
-              await readProblemError(res, `Could not ${action} this session.`),
-              `Could not ${action} this session.`,
-            ),
-          );
+          await presentRejectedResponse(res, `Could not ${action} this session.`);
           return;
         }
         await load();
       } catch (caught) {
-        setActionError(
-          userErrorMessage(caught, `Something went wrong trying to ${action} this session.`),
-        );
+        presentFailure(caught, `Could not ${action} this session.`);
       } finally {
         setControlPending(false);
       }
@@ -323,7 +296,6 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
       decision: 'approve' | 'reject',
       activityIds?: readonly string[],
     ): Promise<void> => {
-      setActionError(null);
       setControlPending(true);
       try {
         const param = { orgId, id: sessionId, groupId };
@@ -337,19 +309,12 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
           },
         );
         if (!res.ok) {
-          setActionError(
-            userErrorMessage(
-              await readProblemError(res, `Could not ${decision} the batch.`),
-              `Could not ${decision} the batch.`,
-            ),
-          );
+          await presentRejectedResponse(res, `Could not ${decision} the batch.`);
           return;
         }
         await load();
       } catch (caught) {
-        setActionError(
-          userErrorMessage(caught, `Something went wrong trying to ${decision} the batch.`),
-        );
+        presentFailure(caught, `Could not ${decision} the batch.`);
       } finally {
         setControlPending(false);
       }
@@ -359,19 +324,13 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
 
   const editProposal = useCallback(
     async (activityId: string, input: Record<string, unknown>): Promise<void> => {
-      setActionError(null);
       setPendingActivityId(activityId);
       try {
         const res = await api.v1.orgs[':orgId'].sessions[':id'].activity[
           ':activityId'
         ].proposal.$patch({ param: { orgId, id: sessionId, activityId }, json: { input } });
         if (!res.ok) {
-          setActionError(
-            userErrorMessage(
-              await readProblemError(res, 'Could not save the edit.'),
-              'Could not save the edit.',
-            ),
-          );
+          await presentRejectedResponse(res, 'Could not save the edit.');
           return;
         }
         const proposalsRes = await api.v1.orgs[':orgId'].sessions[':id'].proposals.$get({
@@ -379,7 +338,7 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
         });
         if (proposalsRes.ok) setProposals(await proposalsRes.json());
       } catch (caught) {
-        setActionError(userErrorMessage(caught, 'Something went wrong saving the edit.'));
+        presentFailure(caught, 'Could not save the edit.');
       } finally {
         setPendingActivityId(null);
       }
@@ -395,7 +354,6 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
     loading,
     loadError,
     reload: load,
-    actionError,
     pendingActivityId,
     controlPending,
     directory,

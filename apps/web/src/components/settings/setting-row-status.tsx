@@ -4,12 +4,9 @@
  * `settings` — the shared "Saving… / Saved" status affordance for an autosaving settings field.
  *
  * @remarks
- * Before this, the same status-line markup was hand-written independently in at least three
- * settings surfaces (`profile/page.tsx`, `workspace-general-settings.tsx`, and a private
- * `AutosaveStatus` component in `work-structure/page.tsx`), each slightly different. This is that
- * seam, given one shared implementation.
+ * One implementation for every autosaving settings surface. A save that fails leaves `saved` false,
+ * so the line goes quiet; the mutation presents the failure itself as a notice.
  */
-import { Text } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 /** Props for {@link SettingRowStatus}. */
@@ -18,14 +15,6 @@ export interface SettingRowStatusProps {
   readonly pending: boolean;
   /** Whether the mutation's most recent run succeeded. */
   readonly saved: boolean;
-  /**
-   * Application-owned copy for a save that did not land, shown in place of the status line.
-   *
-   * @remarks
-   * The mutation's notice is what announces the failure; this line only keeps the row from
-   * claiming "Saved". Callers that let the mutation present itself omit it.
-   */
-  readonly error?: string | null;
   /**
    * What to show once settled with no unsaved change in flight (e.g. "Current maximum: 2").
    *
@@ -38,23 +27,18 @@ export interface SettingRowStatusProps {
   readonly idleLabel?: string;
 }
 
+/** The line's text for the field's current save state. */
+function statusText({ pending, saved, idleLabel }: SettingRowStatusProps): string {
+  if (pending) return 'Saving…';
+  if (saved) return 'Saved';
+  return idleLabel ?? '';
+}
+
 /** Inline "Saving… / Saved" affordance shared by every autosaving settings field. */
-export function SettingRowStatus({
-  pending,
-  saved,
-  error,
-  idleLabel,
-}: SettingRowStatusProps): JSX.Element {
-  if (error) {
-    return (
-      <Text as="p" token="body-small" tone="error">
-        {error}
-      </Text>
-    );
-  }
+export function SettingRowStatus(props: SettingRowStatusProps): JSX.Element {
   return (
     <p aria-live="polite" className="text-on-surface-variant text-body-small">
-      {pending ? 'Saving…' : saved ? 'Saved' : (idleLabel ?? '')}
+      {statusText(props)}
     </p>
   );
 }

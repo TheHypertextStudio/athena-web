@@ -7,16 +7,14 @@
  * Before, during, after, and everything merely related. The bands come from
  * {@link import('./arc-model').buildEventArc}, which sorts the roles the data has always carried.
  *
- * A band with nothing in it renders nothing at all. That is the ghost grammar's sixth rule
- * (`docs/design/ghost-grammar.md`) applied here: the drawer used to print two headings, two
- * apology sentences, and seven controls for an event with no work attached, and an empty event now
- * offers exactly one affordance.
+ * A band with nothing in it renders nothing at all, following the ghost grammar's sixth rule
+ * (`docs/design/ghost-grammar.md`): an event with no work attached offers exactly one affordance.
  */
 import type { CalendarItemOut } from '@docket/planning/calendar-contract';
-import { InlineBanner } from '@docket/ui/components';
 import { Skeleton, Surface } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
+import { PartialLoadBanner } from '@/components/feedback';
 import { PlanWorkForEventForm } from '@/components/recurrence/plan-work-for-event-form';
 import { useApiListQuery } from '@/lib/query';
 
@@ -56,19 +54,15 @@ export function EventArc({ item, onOpenTask, onOpenItem }: EventArcProps): JSX.E
       ) : null}
       {/* Linked tasks arrive on the item itself, so they stay usable while the relations do not. */}
       {relationsQuery.isError ? (
-        <InlineBanner
-          tone="critical"
+        <PartialLoadBanner
           density="compact"
           title="Related events did not load"
-          action={{
-            label: 'Try again',
-            onSelect: () => {
-              void relationsQuery.refetch();
-            },
+          onRetry={() => {
+            void relationsQuery.refetch();
           }}
         >
           The tasks around this event are shown; its related events are not.
-        </InlineBanner>
+        </PartialLoadBanner>
       ) : null}
 
       {arc.bands.map((band) => (

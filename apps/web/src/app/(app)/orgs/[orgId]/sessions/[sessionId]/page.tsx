@@ -29,7 +29,6 @@ export default function SessionViewPage(): JSX.Element {
     loading,
     loadError,
     reload,
-    actionError,
     pendingActivityId,
     controlPending,
     agentActor,
@@ -110,12 +109,6 @@ export default function SessionViewPage(): JSX.Element {
           </h1>
           <SessionStatusPill status={session.status} />
         </div>
-
-        {actionError ? (
-          <p role="alert" className="text-error text-body-medium">
-            {actionError}
-          </p>
-        ) : null}
       </header>
 
       <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">

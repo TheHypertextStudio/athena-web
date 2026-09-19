@@ -26,8 +26,7 @@ import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker
 import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { LatestUpdateSummary } from '@/components/entity-detail/latest-update-summary';
-import { PartialLoadBanner } from '@/components/entity-detail/partial-load-banner';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { PartialLoadBanner, QueryLoadFailure } from '@/components/feedback';
 import { PageContainer } from '@/components/views/page-layout';
 import { DetailPrintSummary } from '@/components/views/detail-print-summary';
 import { ContainerDetailLoading } from '@/components/views/entity-snapshot-metadata';
@@ -38,6 +37,7 @@ import { FlowSnapshot } from '@/components/programs/flow-snapshot';
 import { programFlowMetrics } from '@/components/programs/flow-metrics';
 import { ProgramPropertiesPanel } from '@/components/programs/properties-panel';
 import { ProgramWorkView } from '@/components/programs/program-work-view';
+import { DetailUnavailable } from '@/components/entity-detail/detail-unavailable';
 import { type ResolveActor, UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { memberActorOptions } from '@/components/pickers/options';
 import { PublishAction } from '@/components/publishing/publish-action';
@@ -52,7 +52,6 @@ import {
 } from '@/lib/detail-aggregate';
 import { orgMembersDef } from '@/lib/use-org-membership';
 import { useProgramDeleteMutation, useProgramMutations } from '@/lib/use-program-mutations';
-import { userErrorMessage } from '@/lib/problem';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
 import {
   removeNavigationSnapshot,
@@ -73,6 +72,7 @@ export default function ProgramDetailPage(): JSX.Element {
   const navigationSnapshot = useNavigationSnapshot('program', programId);
 
   const programLabel = useVocabulary('program');
+  const programPlural = useVocabulary('program', { plural: true });
   const refreshTitle = `Could not refresh this ${programLabel.toLowerCase()}`;
   const cyclesLabel = useVocabulary('cycle', { plural: true });
   const projectNounCased = useVocabulary('project');
@@ -174,7 +174,7 @@ export default function ProgramDetailPage(): JSX.Element {
         : { name: 'System', kind: 'human' };
   }, [aggregate?.references.owner, members, updatesQ.data?.authors]);
 
-  const { patchProgram, postUpdate, propsError, updatePosting, updateError } = useProgramMutations(
+  const { patchProgram, postUpdate, updatePosting } = useProgramMutations(
     orgId,
     programId,
     programLabel,
@@ -214,11 +214,12 @@ export default function ProgramDetailPage(): JSX.Element {
 
   if (terminalState !== null) {
     return (
-      <p role="alert" className="text-on-surface-variant mx-auto max-w-7xl p-6">
-        {terminalState === 'forbidden'
-          ? `You no longer have access to this ${programLabel.toLowerCase()}.`
-          : `This ${programLabel.toLowerCase()} no longer exists.`}
-      </p>
+      <DetailUnavailable
+        noun={programLabel.toLowerCase()}
+        forbidden={terminalState === 'forbidden'}
+        backHref={`/orgs/${orgId}/programs`}
+        backLabel={`Back to ${programPlural.toLowerCase()}`}
+      />
     );
   }
   if (aggregateState === 'loading') {
@@ -352,11 +353,6 @@ export default function ProgramDetailPage(): JSX.Element {
               }}
             />
           </EntityMetadataRow>
-          {propsError ? (
-            <p role="alert" className="text-error text-body-medium px-1">
-              {propsError}
-            </p>
-          ) : null}
         </div>
       }
       actions={
@@ -476,14 +472,9 @@ export default function ProgramDetailPage(): JSX.Element {
           <UpdatesPanel
             updates={updates}
             loading={updatesQ.isPending}
-            error={
-              updatesQ.isError
-                ? userErrorMessage(updatesQ.error, 'Could not load this program.')
-                : null
-            }
+            loadFailure={updatesQ.isError ? updatesQ : null}
             resolveActor={resolveActor}
             posting={updatePosting}
-            postError={updateError}
             onPost={(body, postHealth) => {
               return postUpdate(body, postHealth);
             }}
@@ -493,14 +484,9 @@ export default function ProgramDetailPage(): JSX.Element {
 
       <ConfirmDestructiveDialog
         open={confirmDeleteOpen}
-        onOpenChange={(next) => {
-          // Clear any prior failure so a stale message never shows on reopen.
-          deleteProgram.reset();
-          setConfirmDeleteOpen(next);
-        }}
+        onOpenChange={setConfirmDeleteOpen}
         title={`Delete this ${programLabel.toLowerCase()}?`}
         description={`This permanently removes "${program.name}" and unlinks its projects and work. This can't be undone.`}
-        error={deleteProgram.error}
         confirmLabel={`Delete ${programLabel.toLowerCase()}`}
         pending={deleteProgram.pending}
         onConfirm={() => {

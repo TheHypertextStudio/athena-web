@@ -216,6 +216,7 @@ export {
   type TabsItem,
   type TabsProps,
 } from './tabs';
+export { CRITICAL_PAINT, type CriticalPaint } from './critical-paint';
 export {
   Text,
   TEXT_TONES,

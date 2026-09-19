@@ -23,14 +23,12 @@
 import type { MilestoneOut, MilestoneUpdate } from '@docket/work/milestone-contract';
 
 import { api } from './api';
-import { userErrorMessage } from './problem';
 import { milestoneWriteKeys } from './project-milestones-def';
 import { unwrap, useApiMutation } from './query';
 
 /** Edit actions for one Milestone. */
 export interface MilestoneDetailMutations {
   patch: (patch: MilestoneUpdate) => void;
-  mutationError: string | null;
 }
 
 /**
@@ -39,7 +37,7 @@ export interface MilestoneDetailMutations {
  * @param orgId - The active org.
  * @param milestoneId - The milestone being edited.
  * @param projectId - The milestone's project, whose work read backs the Overview list.
- * @returns the patch action and its failure in application-owned copy.
+ * @returns the patch action.
  */
 export function useMilestoneDetail(
   orgId: string,
@@ -63,8 +61,5 @@ export function useMilestoneDetail(
     patch: (patch) => {
       patchMutation.mutate(patch);
     },
-    mutationError: patchMutation.error
-      ? userErrorMessage(patchMutation.error, 'Could not update this milestone.')
-      : null,
   };
 }

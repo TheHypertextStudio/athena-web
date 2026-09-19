@@ -88,11 +88,10 @@ export function PlanSelectionActions({
         <Button
           type="button"
           size="sm"
-          variant="ghost"
+          variant="ghost-destructive"
           iconOnly
           aria-label="Remove"
           title="Remove"
-          className="text-error"
           onClick={() => {
             onRemove(drafts.map((node) => node?.ref ?? '').filter((ref) => ref.length > 0));
           }}

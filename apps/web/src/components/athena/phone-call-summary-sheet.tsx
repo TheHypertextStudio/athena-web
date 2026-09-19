@@ -16,12 +16,12 @@ import {
   Surface,
   Text,
 } from '@docket/ui/primitives';
-import { type JSX, useState } from 'react';
+import type { JSX } from 'react';
 
+import { QueryLoadFailure } from '@/components/feedback';
 import { api } from '@/lib/api';
 import { useAppLocation, navigateWithoutRouter } from '@/lib/app-location';
 import { apiQueryOptions, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
-import { userErrorMessage } from '@/lib/problem';
 
 /** Props for the call-summary deep-link sheet. */
 export interface PhoneCallSummarySheetProps {
@@ -31,7 +31,6 @@ export interface PhoneCallSummarySheetProps {
 /** Show one call over the canonical Athena timeline without creating another call-log surface. */
 export function PhoneCallSummarySheet({ voiceSessionId }: PhoneCallSummarySheetProps): JSX.Element {
   const location = useAppLocation();
-  const [notice, setNotice] = useState<string | null>(null);
   const summaryKey = ['athena', 'phone-call', voiceSessionId ?? 'closed'] as const;
   const summary = useApiQuery(
     apiQueryOptions<PhoneCallSummaryOut>(
@@ -56,12 +55,7 @@ export function PhoneCallSummarySheet({ voiceSessionId }: PhoneCallSummarySheetP
       );
     },
     invalidateKeys: [summaryKey],
-    onSuccess: () => {
-      setNotice(null);
-    },
-    onError: (error) => {
-      setNotice(userErrorMessage(error, 'That change can no longer be undone.'));
-    },
+    failureTitle: 'That change can no longer be undone.',
   });
 
   const close = (): void => {
@@ -104,9 +98,7 @@ export function PhoneCallSummarySheet({ voiceSessionId }: PhoneCallSummarySheetP
               <Skeleton className="h-16 w-full" />
             </div>
           ) : summary.isError ? (
-            <p role="alert" className="text-error">
-              Could not load that phone call.
-            </p>
+            <QueryLoadFailure title="Phone call" query={summary} size="panel" />
           ) : changes.length === 0 ? (
             <Text token="body-medium" tone="muted">
               This call did not change any tasks.
@@ -140,11 +132,6 @@ export function PhoneCallSummarySheet({ voiceSessionId }: PhoneCallSummarySheetP
               ))}
             </ul>
           )}
-          {notice ? (
-            <p role="alert" className="text-error">
-              {notice}
-            </p>
-          ) : null}
         </SheetBody>
       </SheetContent>
     </Sheet>

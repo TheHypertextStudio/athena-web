@@ -28,7 +28,7 @@ import {
 } from '@docket/ui/primitives';
 import { Pause, Play } from '@docket/ui/icons';
 import type { ControlSize } from '@docket/ui/primitives';
-import { type JSX, useState } from 'react';
+import type { JSX } from 'react';
 
 import { useTimerControls, useTimerState } from './use-timer';
 
@@ -51,8 +51,6 @@ interface TaskTimerAction {
   readonly tracking: boolean;
   readonly label: string;
   readonly disabled: boolean;
-  /** Local, application-owned retry feedback after this control's last failed transition. */
-  readonly notice: string | null;
   readonly run: () => Promise<void>;
 }
 
@@ -60,7 +58,6 @@ interface TaskTimerAction {
 function useTaskTimerAction(taskId: string, title: string): TaskTimerAction {
   const { record, phase } = useTimerState();
   const controls = useTimerControls(record?.id ?? null);
-  const [notice, setNotice] = useState<string | null>(null);
   const tracking = record?.taskId === taskId;
   const active = tracking && phase === 'running';
 
@@ -69,9 +66,7 @@ function useTaskTimerAction(taskId: string, title: string): TaskTimerAction {
     tracking,
     label: active ? 'Pause tracking' : tracking ? 'Resume tracking' : 'Track this task',
     disabled: controls.starting || controls.transitioning,
-    notice,
     run: async () => {
-      setNotice(null);
       try {
         if (active) {
           await controls.pause();
@@ -79,11 +74,7 @@ function useTaskTimerAction(taskId: string, title: string): TaskTimerAction {
         }
         await controls.start({ label: title, taskId });
       } catch {
-        setNotice(
-          active
-            ? 'Could not pause tracking. Try again.'
-            : 'Could not start tracking this task. Try again.',
-        );
+        // The timer's mutation has already presented the failure as a notice.
       }
     },
   };
@@ -132,11 +123,6 @@ export function TaskTimerButton({
         </TooltipTrigger>
         <TooltipContent>{action.label}</TooltipContent>
       </Tooltip>
-      {action.notice ? (
-        <span role="status" aria-live="polite" className="text-error text-body-small">
-          {action.notice}
-        </span>
-      ) : null}
     </ControlGroup>
   );
 }

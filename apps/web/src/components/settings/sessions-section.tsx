@@ -13,7 +13,7 @@
  * notice by the mutation itself.
  */
 import type { SessionListOut, SessionOut } from '@docket/identity-access/session-contract';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { Computer, Phone } from '@docket/ui/icons';
 import { Badge, Button, DecorativeIcon, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';

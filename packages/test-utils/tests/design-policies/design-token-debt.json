@@ -9,7 +9,7 @@
     "raw-type-utility": 5
   },
   "apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx": {
-    "raw-type-utility": 5
+    "raw-type-utility": 2
   },
   "apps/web/src/app/(app)/orgs/[orgId]/my-work/my-work-client.tsx": {
     "raw-type-utility": 2
@@ -42,9 +42,6 @@
     "raw-type-utility": 1
   },
   "apps/web/src/app/(app)/settings/work-schedule/page.tsx": {
-    "ad-hoc-border": 2
-  },
-  "apps/web/src/app/(app)/today/page.tsx": {
     "ad-hoc-border": 2
   },
   "apps/web/src/app/(app)/workspaces/new/page.tsx": {
@@ -150,15 +147,15 @@
     "raw-type-utility": 1
   },
   "apps/web/src/components/athena/athena-panel-provider.tsx": {
-    "ad-hoc-border": 6
+    "ad-hoc-border": 4
   },
   "apps/web/src/components/athena/athena-workbench.tsx": {
     "ad-hoc-border": 18,
     "raw-type-utility": 26
   },
   "apps/web/src/components/athena/athena-workspace.tsx": {
-    "ad-hoc-border": 25,
-    "raw-type-utility": 32
+    "ad-hoc-border": 21,
+    "raw-type-utility": 30
   },
   "apps/web/src/components/athena/elicitation-control.tsx": {
     "ad-hoc-border": 3
@@ -186,7 +183,7 @@
     "ad-hoc-border": 2
   },
   "apps/web/src/components/calendar/create-block-form.tsx": {
-    "ad-hoc-border": 3
+    "ad-hoc-border": 2
   },
   "apps/web/src/components/calendar/item-drawer/linked-task-row.tsx": {
     "raw-radius-utility": 1
@@ -280,7 +277,7 @@
     "ad-hoc-border": 4
   },
   "apps/web/src/components/entity-detail/updates-panel.tsx": {
-    "ad-hoc-border": 8
+    "ad-hoc-border": 6
   },
   "apps/web/src/components/entity-display/entity-icon-picker-loaded.tsx": {
     "ad-hoc-border": 2,
@@ -298,13 +295,9 @@
     "raw-radius-utility": 1,
     "raw-type-utility": 6
   },
-  "apps/web/src/components/inbox/segmented-tabs.tsx": {
-    "raw-type-utility": 2
-  },
   "apps/web/src/components/initiatives/associations-panel.tsx": {
     "ad-hoc-border": 4,
-    "raw-radius-utility": 1,
-    "raw-type-utility": 6
+    "raw-type-utility": 5
   },
   "apps/web/src/components/initiatives/distribution-bar.tsx": {
     "raw-type-utility": 2
@@ -360,9 +353,6 @@
     "ad-hoc-border": 6,
     "raw-type-utility": 2
   },
-  "apps/web/src/components/my-work/split-tabs.tsx": {
-    "raw-type-utility": 2
-  },
   "apps/web/src/components/objects/object-list-row.tsx": {
     "raw-type-utility": 1
   },
@@ -377,7 +367,7 @@
   },
   "apps/web/src/components/onboarding/step-connect-provider-row.tsx": {
     "ad-hoc-border": 8,
-    "raw-type-utility": 8
+    "raw-type-utility": 7
   },
   "apps/web/src/components/onboarding/wizard-shell.tsx": {
     "raw-type-utility": 13
@@ -459,11 +449,11 @@
     "raw-z-index": 1
   },
   "apps/web/src/components/scheduling/scheduling-region-preview.tsx": {
-    "ad-hoc-border": 7,
+    "ad-hoc-border": 4,
     "raw-radius-utility": 1
   },
   "apps/web/src/components/scheduling/scheduling-relation-slot-lane.tsx": {
-    "ad-hoc-border": 3,
+    "ad-hoc-border": 2,
     "raw-z-index": 1
   },
   "apps/web/src/components/scheduling/scheduling-time-grid.tsx": {
@@ -506,7 +496,6 @@
     "raw-radius-utility": 1
   },
   "apps/web/src/components/stream/stream-view.tsx": {
-    "ad-hoc-border": 2,
     "raw-radius-utility": 4
   },
   "apps/web/src/components/task-detail/PriorityGlyph.tsx": {
@@ -549,9 +538,6 @@
     "ad-hoc-border": 2,
     "raw-radius-utility": 1
   },
-  "apps/web/src/components/time-tracking/time-record-dialog.tsx": {
-    "ad-hoc-border": 2
-  },
   "apps/web/src/components/time-tracking/time-session-list.tsx": {
     "ad-hoc-border": 2
   },
@@ -559,7 +545,7 @@
     "raw-z-index": 1
   },
   "apps/web/src/components/timeline/timeline-bar.tsx": {
-    "ad-hoc-border": 2,
+    "ad-hoc-border": 1,
     "raw-radius-utility": 2,
     "raw-z-index": 4
   },
@@ -586,7 +572,7 @@
   },
   "apps/web/src/components/triage/suggestions-lane.tsx": {
     "ad-hoc-border": 5,
-    "raw-type-utility": 17
+    "raw-type-utility": 15
   },
   "apps/web/src/components/triage/triage-row.tsx": {
     "raw-type-utility": 2
@@ -605,7 +591,7 @@
     "raw-type-utility": 1
   },
   "apps/web/src/components/views/quick-add-row.tsx": {
-    "ad-hoc-border": 6
+    "ad-hoc-border": 3
   },
   "apps/web/src/components/views/view-list.tsx": {
     "ad-hoc-border": 3

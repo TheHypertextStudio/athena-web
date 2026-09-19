@@ -50,6 +50,7 @@
  * a composer, not a row of content the rest of the page's width was chosen for. It does not share
  * the page's left edge, and is not meant to.
  */
+import { notifyFailure } from '@docket/ui/components';
 import { ArrowUp, Paperclip, Plus } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import {
@@ -77,10 +78,10 @@ import {
 } from 'react';
 
 import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
+import { presentFailure, presentRejectedResponse } from '@/components/feedback';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 import { useServerReachable } from '@/components/reachability';
 import { api } from '@/lib/api';
-import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { startViewTransition } from '@/lib/view-transition';
 import MentionTextarea from '@/components/mentions/mention-textarea';
 
@@ -133,7 +134,6 @@ export function TodayPrompt({
   const mentionOrgId = useMentionOrgId(orgId);
   const [busy, setBusy] = useState<'capture' | null>(null);
   const [notice, setNotice] = useState<CaptureNotice | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [mode, setModeState] = useState<CaptureMode>('athena');
   const [files, setFiles] = useState<readonly File[]>([]);
   const [dropping, setDropping] = useState(false);
@@ -167,7 +167,6 @@ export function TodayPrompt({
     if (captureText.length === 0) return;
 
     setBusy('capture');
-    setError(null);
     setNotice(null);
     try {
       // Only the capture request is guarded here. Anything after it runs with the task already
@@ -179,17 +178,12 @@ export function TodayPrompt({
             json: { text: captureText },
           });
           if (!res.ok) {
-            setError(
-              userErrorMessage(
-                await readProblemError(res, 'Could not capture that.'),
-                'Could not capture that.',
-              ),
-            );
+            await presentRejectedResponse(res, 'Could not capture that.');
             return null;
           }
           return await res.json();
         } catch (caught) {
-          setError(userErrorMessage(caught, 'Could not capture that.'));
+          presentFailure(caught, 'Could not capture that.');
           return null;
         }
       })();
@@ -220,9 +214,11 @@ export function TodayPrompt({
       const failed = files.filter((_, index) => results[index]?.status === 'rejected');
       setFiles(failed);
       if (failed.length > 0) {
-        setError(
-          `Task saved. ${failed.map((file) => file.name).join(', ')} could not be attached.`,
-        );
+        notifyFailure({
+          title: 'Task saved, and some files did not attach',
+          detail: `${failed.map((file) => file.name).join(', ')} stays selected for another try.`,
+          dedupeKey: 'today-attachments-failed',
+        });
       }
     } finally {
       setBusy(null);
@@ -231,7 +227,6 @@ export function TodayPrompt({
 
   const askAthena = useCallback((): void => {
     if (!orgId || !text.trim()) return;
-    setError(null);
     setNotice(null);
     const draft = text.trim();
     setText('');
@@ -465,9 +460,7 @@ export function TodayPrompt({
         </ControlGroup>
       </div>
       <div aria-live="polite" className="empty:hidden">
-        {error ? (
-          <p className="text-error text-body-small">{error}</p>
-        ) : notice ? (
+        {notice ? (
           <p className="text-on-surface-variant text-body-small">
             Added <span className="text-on-surface text-label-medium">“{notice.title}”</span> —{' '}
             <Button asChild variant="link" controlSize="sm">

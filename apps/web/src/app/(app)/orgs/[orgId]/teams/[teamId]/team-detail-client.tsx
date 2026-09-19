@@ -29,7 +29,7 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft, Folder } from '@docket/ui/icons';
 import { Button, Skeleton, Tabs } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { type JSX, useMemo, useState } from 'react';
 
 import { EntityDocument } from '@/components/editor/entity-document';
@@ -51,7 +51,6 @@ import {
   useApiMutation,
   useApiQuery,
 } from '@/lib/query';
-import { userErrorMessage } from '@/lib/problem';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useOrgMembership } from '@/lib/use-org-membership';
@@ -307,12 +306,6 @@ export default function TeamDetailClient(): JSX.Element {
             <TeamPeople members={members} taskNounPlural={taskNounPlural} />
           )}
         </section>
-      ) : null}
-
-      {entityDisplay.mutation.error ? (
-        <p role="alert" className="text-error text-body-medium">
-          {userErrorMessage(entityDisplay.mutation.error, 'Could not customize this team.')}
-        </p>
       ) : null}
     </EntityDetailLayout>
   );

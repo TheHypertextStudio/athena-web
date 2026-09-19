@@ -3,7 +3,7 @@
 > **Reader**: an engineer whose surface has something to say when a read or a write fails. After
 > reading, you should know which of four primitives the situation calls for, where the copy comes
 > from, and what is banned.
-> **Status**: primitives shipped 2026-09-18 (`ERRORS-001`); site migration in progress. Design:
+> **Status**: shipped 2026-09-18 (`ERRORS-001`); `docket-ui/no-raw-error-text` enforces it. Design:
 > `docs/superpowers/specs/2026-09-18-drafting-errors-canvas-task-detail-design.md`, Part 2. The
 > copy contract this builds on is `data-layer.md` §2.7.
 
@@ -30,7 +30,9 @@ becomes the region's state.
 ## The primitives
 
 - **`Toaster`** (`@docket/ui`) mounts once in `apps/web/src/components/providers.tsx`. Notices stack
-  bottom-right, stay clickable while a dialog is open, and are limited to three on screen.
+  bottom-right and are limited to three on screen. The stack is a Radix `DismissableLayer.Branch`,
+  so pressing a notice's action is inside every open dialog, sheet, popover, menu, and hover card as
+  far as their dismissal logic goes: they stay open.
 - **`notify` / `notifyFailure`** (`@docket/ui`) take a `ToastNotice`: title, optional detail, tone, at
   most one action (`onSelect` or `href`), an optional `dedupeKey`. The type has no slot for an
   `Error`; copy is resolved before it gets here. Notices sharing a key replace each other.
@@ -38,6 +40,8 @@ becomes the region's state.
   caught failure to a notice. It reads no `.message`: `failurePresentation` branches on the failure's
   stable problem code and HTTP status, so a 403 offers the destination that resolves it and a 500
   offers "Try again". The key is the code, so a poll that keeps failing shows one card.
+  `presentRejectedResponse(response, fallbackTitle)` is the same path for a write issued through a
+  bare client call that returned a non-`ok` response.
 - **`useApiMutation`** presents every rejected write this way by default, after the caller's
   `onError` so an optimistic rollback runs first, with "Try again" re-issuing the same variables.
   `failure: 'silent'` is for a caller that owns presentation, such as a field-attributable
@@ -45,9 +49,12 @@ becomes the region's state.
 - **`LoadFailure({ title, error, onRetry?, retrying?, size? })`** renders what happened and the
   action that resolves it, on `EmptyState tone="critical"`. Retry is offered only when it could work;
   a refusal gets a link to the place that can change the answer, so the state is never a dead end.
-  `size="panel"` fits a rail or a card.
+  `size="panel"` fits a rail or a card. `QueryLoadFailure({ title, query, size? })` wires it to the
+  one TanStack query that failed, and `RegionFrame` is the alert frame both share for any state that
+  replaces a region.
 - **`InlineBanner`** keeps a partial failure in the page beside the rows a person can still use;
-  `density="compact"` fits an overlay list.
+  `density="compact"` fits an overlay list. `PartialLoadBanner({ title, onRetry, density?, children })`
+  is the banner with its "Try again" already wired.
 - **`FieldError`** is `Field`'s own error line, exported for a control `Field` cannot wrap.
 
 ## What is banned
@@ -57,7 +64,12 @@ becomes the region's state.
 - One generic sentence per operation ("Could not save."). Branch on the problem code; say what
   happened and what to do.
 - Painting error state by hand: `text-error`, `bg-error`, `border-error`, or an intrinsic element
-  with `role="alert"` outside `@docket/ui` and `components/feedback`. An ESLint rule enforces this
-  once the migration completes.
+  with `role="alert"` outside `@docket/ui` and `components/feedback`. The ESLint rule
+  `docket-ui/no-raw-error-text` enforces this across `apps/web/src`, `apps/admin/src`, and
+  `packages/ui/src/components`.
+- Error-role colour on status geometry (a violated edge, a rejected drop preview, the current-time
+  line) written as a raw class. Use `CRITICAL_PAINT` from `@docket/ui/primitives`; error-coloured text
+  is `Text tone="error"` (or a component's own `tone="error"`), and a destructive trigger is
+  `Button variant="ghost-destructive"` or a menu item's `destructive` prop.
 - A local `error` `useState` plus a red paragraph for a mutation. Delete both; the mutation
   presents itself.

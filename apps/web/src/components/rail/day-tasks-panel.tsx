@@ -23,7 +23,7 @@ import type { JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { EditableTitle } from '@/components/editor/editable-title';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { OrgChip } from '@/components/org-chip';
 import { api } from '@/lib/api';

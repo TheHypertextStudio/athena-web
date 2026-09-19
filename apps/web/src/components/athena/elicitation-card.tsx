@@ -16,7 +16,15 @@
 import type { ElicitationOut } from '@docket/athena/elicitation-api';
 import { AlarmClock, CircleAlert, HelpCircle, ListChecks, Sparkles } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { Badge, Button, Chip, ControlGroup, Surface, Text } from '@docket/ui/primitives';
+import {
+  Badge,
+  Button,
+  Chip,
+  ControlGroup,
+  FieldError,
+  Surface,
+  Text,
+} from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 
 import { useNow } from '@/lib/use-now';
@@ -163,7 +171,6 @@ export function ElicitationCard({
   const pending = elicitation.status === 'pending';
   const [value, setValue] = useState<unknown>(() => emptyElicitationValue(incoming.spec));
   const [errors, setErrors] = useState<ElicitationErrorMap>({});
-  const [failure, setFailure] = useState<string | null>(null);
   // The deadline is on the card, so it has to keep being true while the card is awaiting an answer.
   const now = useNow(30_000, { enabled: pending }).getTime();
 
@@ -174,7 +181,6 @@ export function ElicitationCard({
   const rootError = errors[''];
 
   const submit = (): void => {
-    setFailure(null);
     answer.mutate(
       { id: elicitation.id, value: coerceElicitationValue(elicitation.spec, value) },
       {
@@ -186,9 +192,6 @@ export function ElicitationCard({
           // The question stays open and every other field the person typed stays exactly where it
           // was — that is what makes a rejection recoverable rather than a restart.
           setErrors(toErrorMap(result.errors));
-        },
-        onError: () => {
-          setFailure('Athena could not record that answer. Try again.');
         },
       },
     );
@@ -277,16 +280,7 @@ export function ElicitationCard({
             onChange={setValue}
           />
 
-          {rootError ? (
-            <Text token="body-small" tone="error" role="alert">
-              {rootError}
-            </Text>
-          ) : null}
-          {failure ? (
-            <Text token="body-small" tone="error" role="alert">
-              {failure}
-            </Text>
-          ) : null}
+          {rootError ? <FieldError>{rootError}</FieldError> : null}
 
           <ControlGroup controlSize="lg" wrap>
             <Button type="submit" disabled={!ready || answer.isPending}>
@@ -299,7 +293,6 @@ export function ElicitationCard({
               onClick={() => {
                 setValue(emptyElicitationValue(elicitation.spec));
                 setErrors({});
-                setFailure(null);
               }}
             >
               Clear
@@ -310,7 +303,9 @@ export function ElicitationCard({
         <div className="flex flex-col gap-1">
           <div className="flex items-start gap-2">
             {elicitation.status === 'parked' ? (
-              <CircleAlert aria-hidden="true" className="text-error mt-0.5 size-4 shrink-0" />
+              <Text token="body-medium" tone="error" className="mt-0.5 inline-flex shrink-0">
+                <CircleAlert aria-hidden="true" className="size-4" />
+              </Text>
             ) : null}
             <Text token="body-medium">{describeSettlement(elicitation)}</Text>
           </div>

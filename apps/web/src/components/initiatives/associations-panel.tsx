@@ -9,7 +9,7 @@
  * the currently-linked Projects and Programs, each with an unlink affordance, and offers a
  * styled {@link DropdownMenu} "add" picker per kind (never a bare `<select>`) listing the
  * org's unlinked candidates. Choosing a candidate links it; the trigger reads "Linking…"
- * while a mutation is in flight, and an inline `role="alert"` surfaces any failure.
+ * while a mutation is in flight. The page's mutations present a failed link or unlink as a notice.
  *
  * The panel is purely a controlled view: it reports link/unlink intents up to the page,
  * which owns the RPC calls and re-reads the timeline so the roadmap + roll-up stay in sync.
@@ -46,8 +46,6 @@ interface AssociationGroupProps {
   canEdit: boolean;
   /** Whether a link/unlink mutation is in flight for this group. */
   busy: boolean;
-  /** Link error for this group, when the last attempt failed. */
-  error: string | null;
   /** Link the candidate with the given id. */
   onLink: (id: string) => void;
   /** Unlink the child with the given id. */
@@ -62,7 +60,6 @@ function AssociationGroup({
   candidates,
   canEdit,
   busy,
-  error,
   onLink,
   onUnlink,
 }: AssociationGroupProps): JSX.Element {
@@ -124,28 +121,24 @@ function AssociationGroup({
                 {item.name}
               </span>
               {canEdit ? (
-                <button
+                <Button
                   type="button"
+                  variant="ghost-destructive"
+                  size="icon"
+                  className="size-6"
                   onClick={() => {
                     onUnlink(item.id);
                   }}
                   disabled={busy}
                   aria-label={`Unlink ${item.name}`}
-                  className="text-on-surface-variant hover:text-error focus-visible:ring-ring rounded p-0.5 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
                 >
                   <X aria-hidden="true" className="size-4" />
-                </button>
+                </Button>
               ) : null}
             </li>
           ))}
         </ul>
       )}
-
-      {error ? (
-        <p role="alert" className="text-error text-xs">
-          {error}
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -174,10 +167,6 @@ export interface AssociationsPanelProps {
   programBusy: boolean;
   /** Whether a Project link/unlink is in flight. */
   projectBusy: boolean;
-  /** The last Program mutation error, if any. */
-  programError: string | null;
-  /** The last Project mutation error, if any. */
-  projectError: string | null;
   /** Link a Program by id. */
   onLinkProgram: (id: string) => void;
   /** Unlink a Program by id. */
@@ -206,8 +195,6 @@ export function AssociationsPanel({
   canEdit,
   programBusy,
   projectBusy,
-  programError,
-  projectError,
   onLinkProgram,
   onUnlinkProgram,
   onLinkProject,
@@ -223,7 +210,6 @@ export function AssociationsPanel({
         candidates={programCandidates}
         canEdit={canEdit}
         busy={programBusy}
-        error={programError}
         onLink={onLinkProgram}
         onUnlink={onUnlinkProgram}
       />
@@ -234,7 +220,6 @@ export function AssociationsPanel({
         candidates={projectCandidates}
         canEdit={canEdit}
         busy={projectBusy}
-        error={projectError}
         onLink={onLinkProject}
         onUnlink={onUnlinkProject}
       />

@@ -38,7 +38,6 @@ vi.mock('@/lib/use-triage', () => ({
     queue: harness.triageQueue,
     loading: false,
     loadError: null,
-    actionError: null,
     pending: new Set<string>(),
     projectDestinations: [],
     programDestinations: [],

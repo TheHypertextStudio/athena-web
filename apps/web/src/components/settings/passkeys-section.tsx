@@ -56,7 +56,7 @@ import { passkey } from '@/lib/auth-client';
 import { formatCalendarDate } from '@/lib/format-date';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { toUserFacingError } from '@/lib/problem';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { SETTINGS_NODES } from './settings-capabilities';
 import { SettingsGroup } from './settings-group';
 

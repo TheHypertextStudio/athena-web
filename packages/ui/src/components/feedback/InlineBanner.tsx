@@ -20,6 +20,8 @@ export type InlineBannerTone = 'info' | 'warning' | 'critical';
 export interface InlineBannerAction {
   /** The action label. */
   readonly label: string;
+  /** A fuller accessible name, for a banner that repeats among siblings that share one label. */
+  readonly ariaLabel?: string | undefined;
   /** Invoked when the user selects the action. */
   readonly onSelect: () => void;
 }
@@ -35,8 +37,8 @@ export interface InlineBannerProps {
   readonly density?: InlineBannerDensity | undefined;
   /** The short status heading announced before the message. */
   readonly title: string;
-  /** The explanatory message. */
-  readonly children: ReactNode;
+  /** The explanatory message. Omit it when the title says everything. */
+  readonly children?: ReactNode | undefined;
   /** An optional leading icon. */
   readonly icon?: ReactNode | undefined;
   /** An optional action. */
@@ -52,6 +54,12 @@ const TONE_CLASS: Readonly<Record<InlineBannerTone, string>> = {
   warning: 'text-on-surface-variant',
   critical: 'text-error',
 };
+
+/** The banner's explanatory message; a banner whose title says everything renders none. */
+function BannerMessage({ children }: { readonly children: ReactNode }): React.JSX.Element | null {
+  if (children === undefined || children === null) return null;
+  return <div className="text-on-surface-variant text-body-small mt-0.5 min-w-0">{children}</div>;
+}
 
 /**
  * An inline status region with independently reachable action and dismissal controls.
@@ -89,7 +97,7 @@ export function InlineBanner({
       {icon ? <span className={`mt-0.5 shrink-0 ${TONE_CLASS[tone]}`}>{icon}</span> : null}
       <div className={icon ? 'min-w-0' : 'col-span-2 min-w-0'}>
         <p className="text-label-medium text-on-surface">{title}</p>
-        <div className="text-on-surface-variant text-body-small mt-0.5 min-w-0">{children}</div>
+        <BannerMessage>{children}</BannerMessage>
       </div>
       {canDismiss ? (
         <Button
@@ -109,6 +117,7 @@ export function InlineBanner({
           type="button"
           variant="link"
           controlSize={compact ? 'sm' : 'md'}
+          aria-label={action.ariaLabel}
           onClick={action.onSelect}
           className={
             icon ? 'col-start-2 justify-self-start px-0' : 'col-span-2 justify-self-start px-0'

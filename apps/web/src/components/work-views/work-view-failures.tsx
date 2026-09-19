@@ -7,6 +7,7 @@
  * Separated from `work-view-page.tsx` so the page reads as its layout rather than as its error
  * handling, and so each state's suppression rule lives with the state it suppresses.
  */
+import { InlineBanner } from '@docket/ui/components';
 import { RefreshCw } from '@docket/ui/icons';
 import {
   Button,
@@ -70,13 +71,24 @@ export function SavedViewsRetry({
   );
 }
 
-/** Report a saved-view create or update that the server refused, beside the dialog that tried it. */
-export function SaveViewFailure({ error }: { readonly error: unknown }): JSX.Element | null {
-  if (!error) return null;
+/** Props for {@link OperationFailure}. */
+interface OperationFailureProps {
+  /** Application-owned copy naming the operation that failed. */
+  readonly title: string;
+  /** What the person can still rely on, when the title alone leaves that open. */
+  readonly detail?: string | undefined;
+  /** Re-issue the operation that failed. */
+  readonly onRetry: () => void;
+}
+
+/** One failed operation kept in the page above the rows that still work, with its retry. */
+function OperationFailure({ title, detail, onRetry }: OperationFailureProps): JSX.Element {
   return (
-    <p role="alert" className="text-error text-body-medium">
-      Could not save this view. Check the details and try again.
-    </p>
+    <div className="px-3 py-2">
+      <InlineBanner tone="critical" title={title} action={{ label: 'Retry', onSelect: onRetry }}>
+        {detail}
+      </InlineBanner>
+    </div>
   );
 }
 
@@ -118,20 +130,16 @@ export function WorkViewOperationFailures({
   return (
     <>
       {rootContinuationError ? (
-        <p role="alert" className="text-error text-body-medium flex items-center gap-2 px-3 py-2">
-          Could not load more {title.toLowerCase()}.
-          <Button variant="ghost" controlSize="sm" onClick={onRetryRoot}>
-            Retry
-          </Button>
-        </p>
+        <OperationFailure
+          title={`Could not load more ${title.toLowerCase()}`}
+          onRetry={onRetryRoot}
+        />
       ) : null}
       {preferencesError ? (
-        <p role="alert" className="text-error text-body-medium flex items-center gap-2 px-3 py-2">
-          Could not save your view preferences.
-          <Button variant="ghost" controlSize="sm" onClick={onRetryPreferences}>
-            Retry
-          </Button>
-        </p>
+        <OperationFailure
+          title="Could not save your view preferences"
+          onRetry={onRetryPreferences}
+        />
       ) : null}
       {/*
         Not cosmetic. Presentation changes are refused while the stored settings are unknown,
@@ -140,20 +148,17 @@ export function WorkViewOperationFailures({
         to work and quietly do not.
       */}
       {preferencesUnavailable ? (
-        <p role="alert" className="text-error text-body-medium flex items-center gap-2 px-3 py-2">
-          Your view settings could not be loaded, so changes to this view are not being saved.
-          <Button variant="ghost" controlSize="sm" onClick={onRetryPreferences}>
-            Retry
-          </Button>
-        </p>
+        <OperationFailure
+          title="Your view settings could not be loaded"
+          detail="Changes to this view are not being saved."
+          onRetry={onRetryPreferences}
+        />
       ) : null}
       {defaultError ? (
-        <p role="alert" className="text-error text-body-medium flex items-center gap-2 px-3 py-2">
-          Could not set the workspace view default.
-          <Button variant="ghost" controlSize="sm" onClick={onRetryDefault}>
-            Retry
-          </Button>
-        </p>
+        <OperationFailure
+          title="Could not set the workspace view default"
+          onRetry={onRetryDefault}
+        />
       ) : null}
     </>
   );

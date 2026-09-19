@@ -2,6 +2,7 @@
 
 import type { NodeViewProps } from '@tiptap/core';
 import { NodeViewWrapper } from '@tiptap/react';
+import { InlineBanner } from '@docket/ui/components';
 import { FileImage, Info, MoreHorizontal, Trash2 } from '@docket/ui/icons';
 import {
   Button,
@@ -180,19 +181,17 @@ function FigureMedia({ attrs, onRetry, onRemove }: FigureMediaProps): JSX.Elemen
         </div>
       ) : null}
       {attrs.status === 'failed' ? (
-        <div
-          role="alert"
-          className="bg-error-container/95 text-on-error-container absolute inset-x-2 bottom-2 flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2"
-        >
-          <span>Could not upload this image.</span>
-          <span className="flex flex-nowrap gap-1">
-            <Button type="button" variant="ghost" size="sm" onClick={onRetry}>
-              Retry
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={onRemove}>
+        <div className="absolute inset-x-2 bottom-2">
+          <InlineBanner
+            tone="critical"
+            density="compact"
+            title="Could not upload this image."
+            action={{ label: 'Retry', onSelect: onRetry }}
+          >
+            <Button type="button" variant="ghost-destructive" size="sm" onClick={onRemove}>
               Remove
             </Button>
-          </span>
+          </InlineBanner>
         </div>
       ) : null}
     </div>

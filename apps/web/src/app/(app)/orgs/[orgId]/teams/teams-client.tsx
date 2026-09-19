@@ -16,7 +16,7 @@ import {
 import { type JSX, useCallback, useMemo } from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { type TeamCardMember, TeamCard, TeamCardsSkeleton } from '@/components/teams/team-card';
 import { buildTeamCatalog } from '@/components/teams/team-catalog';
 import { type TeamRow, ListSkeleton, TeamRows } from '@/components/teams/team-list-ui';

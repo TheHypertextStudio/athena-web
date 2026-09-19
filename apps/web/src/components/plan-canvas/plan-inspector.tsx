@@ -426,7 +426,7 @@ function DraftMenu({ onRemove }: { readonly onRemove: () => void }): JSX.Element
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem className="text-error" onSelect={onRemove}>
+        <DropdownMenuItem destructive onSelect={onRemove}>
           <Trash2 />
           Remove from plan
         </DropdownMenuItem>

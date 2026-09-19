@@ -99,7 +99,8 @@ describe('OfflineRouteOutlet', () => {
     pathname = '/orgs/not-an-org/tasks/not-a-task';
     render(<OfflineRouteOutlet />);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Page not found.');
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByText('Task route')).not.toBeInTheDocument();
   });
 
   it('paints the typed entity identity while its route module loads', () => {

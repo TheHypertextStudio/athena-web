@@ -145,8 +145,8 @@
       "excess": 5
     },
     "max-lines": {
-      "max": 1042,
-      "excess": 542
+      "max": 1035,
+      "excess": 535
     },
     "max-lines-per-function": {
       "max": 319,
@@ -187,16 +187,16 @@
   },
   "apps/api/src/agent/toolbox.ts": {
     "complexity": {
-      "max": 27,
-      "excess": 15
+      "max": 25,
+      "excess": 13
     },
     "max-lines-per-function": {
-      "max": 206,
-      "excess": 126
+      "max": 198,
+      "excess": 118
     },
     "sonarjs/cognitive-complexity": {
-      "max": 52,
-      "excess": 37
+      "max": 43,
+      "excess": 28
     }
   },
   "apps/api/src/calendar/calendar-outbox.ts": {
@@ -266,21 +266,9 @@
     }
   },
   "apps/api/src/container.ts": {
-    "complexity": {
-      "max": 45,
-      "excess": 33
-    },
-    "max-lines": {
-      "max": 550,
-      "excess": 50
-    },
     "max-lines-per-function": {
       "max": 95,
-      "excess": 17
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 44,
-      "excess": 29
+      "excess": 15
     }
   },
   "apps/api/src/content/drizzle-document-image-reference-storage.ts": {
@@ -637,12 +625,12 @@
       "excess": 49
     },
     "max-lines": {
-      "max": 923,
-      "excess": 423
+      "max": 922,
+      "excess": 422
     },
     "max-lines-per-function": {
-      "max": 324,
-      "excess": 267
+      "max": 312,
+      "excess": 255
     },
     "max-params": {
       "max": 6,
@@ -791,20 +779,16 @@
   },
   "apps/api/src/mcp/organize-tool.ts": {
     "complexity": {
-      "max": 30,
-      "excess": 24
-    },
-    "max-lines": {
-      "max": 594,
-      "excess": 94
+      "max": 18,
+      "excess": 6
     },
     "max-lines-per-function": {
-      "max": 242,
-      "excess": 258
+      "max": 149,
+      "excess": 96
     },
     "sonarjs/cognitive-complexity": {
-      "max": 38,
-      "excess": 24
+      "max": 16,
+      "excess": 1
     }
   },
   "apps/api/src/mcp/plan-tools.ts": {
@@ -833,12 +817,6 @@
     "max-lines-per-function": {
       "max": 212,
       "excess": 132
-    }
-  },
-  "apps/api/src/mcp/resource-work-hydrators.ts": {
-    "max-lines-per-function": {
-      "max": 84,
-      "excess": 4
     }
   },
   "apps/api/src/mcp/resources.ts": {
@@ -892,13 +870,9 @@
       "max": 30,
       "excess": 27
     },
-    "max-lines": {
-      "max": 576,
-      "excess": 76
-    },
     "max-lines-per-function": {
-      "max": 266,
-      "excess": 413
+      "max": 197,
+      "excess": 336
     },
     "max-params": {
       "max": 7,
@@ -1191,8 +1165,8 @@
   },
   "apps/api/src/routes/hub-today-actions.ts": {
     "max-lines-per-function": {
-      "max": 98,
-      "excess": 18
+      "max": 90,
+      "excess": 10
     }
   },
   "apps/api/src/routes/hub-today.ts": {
@@ -1319,24 +1293,20 @@
   },
   "apps/api/src/routes/integration-reconcile.ts": {
     "complexity": {
-      "max": 30,
-      "excess": 31
-    },
-    "max-lines": {
-      "max": 574,
-      "excess": 74
+      "max": 29,
+      "excess": 25
     },
     "max-lines-per-function": {
-      "max": 113,
-      "excess": 51
+      "max": 106,
+      "excess": 48
     },
     "max-params": {
       "max": 8,
-      "excess": 5
+      "excess": 4
     },
     "sonarjs/cognitive-complexity": {
-      "max": 28,
-      "excess": 15
+      "max": 24,
+      "excess": 9
     }
   },
   "apps/api/src/routes/integration-sync.ts": {
@@ -1427,8 +1397,8 @@
       "excess": 2
     },
     "max-lines": {
-      "max": 1338,
-      "excess": 838
+      "max": 1328,
+      "excess": 828
     },
     "max-lines-per-function": {
       "max": 96,
@@ -1501,12 +1471,12 @@
       "excess": 5
     },
     "max-lines": {
-      "max": 574,
-      "excess": 74
+      "max": 548,
+      "excess": 48
     },
     "max-lines-per-function": {
-      "max": 266,
-      "excess": 186
+      "max": 261,
+      "excess": 181
     },
     "sonarjs/cognitive-complexity": {
       "max": 18,
@@ -1525,24 +1495,24 @@
   },
   "apps/api/src/routes/notion-mirror-reconcile.ts": {
     "complexity": {
-      "max": 68,
-      "excess": 99
+      "max": 48,
+      "excess": 75
     },
     "max-depth": {
       "max": 5,
-      "excess": 4
+      "excess": 1
     },
     "max-lines": {
-      "max": 1255,
-      "excess": 755
+      "max": 1178,
+      "excess": 678
     },
     "max-lines-per-function": {
-      "max": 264,
-      "excess": 402
+      "max": 222,
+      "excess": 350
     },
     "sonarjs/cognitive-complexity": {
-      "max": 133,
-      "excess": 199
+      "max": 74,
+      "excess": 129
     }
   },
   "apps/api/src/routes/object-commands.ts": {
@@ -1555,12 +1525,12 @@
       "excess": 9
     },
     "max-lines": {
-      "max": 2516,
-      "excess": 2016
+      "max": 2513,
+      "excess": 2013
     },
     "max-lines-per-function": {
-      "max": 711,
-      "excess": 2073
+      "max": 706,
+      "excess": 2059
     },
     "max-params": {
       "max": 7,
@@ -1626,17 +1596,17 @@
     }
   },
   "apps/api/src/routes/projects.ts": {
-    "max-lines-per-function": {
-      "max": 138,
-      "excess": 148
-    },
     "complexity": {
       "max": 19,
-      "excess": 12
+      "excess": 8
     },
     "max-lines": {
-      "max": 874,
-      "excess": 374
+      "max": 859,
+      "excess": 359
+    },
+    "max-lines-per-function": {
+      "max": 127,
+      "excess": 129
     },
     "sonarjs/cognitive-complexity": {
       "max": 19,
@@ -1660,13 +1630,13 @@
       "max": 37,
       "excess": 39
     },
-    "sonarjs/cognitive-complexity": {
-      "max": 29,
-      "excess": 18
-    },
     "max-lines-per-function": {
       "max": 82,
       "excess": 2
+    },
+    "sonarjs/cognitive-complexity": {
+      "max": 29,
+      "excess": 18
     }
   },
   "apps/api/src/routes/stream-helpers.ts": {
@@ -1706,13 +1676,13 @@
     }
   },
   "apps/api/src/routes/task-helpers.ts": {
-    "max-lines-per-function": {
-      "max": 86,
-      "excess": 6
-    },
     "complexity": {
       "max": 23,
       "excess": 11
+    },
+    "max-lines-per-function": {
+      "max": 86,
+      "excess": 6
     },
     "sonarjs/cognitive-complexity": {
       "max": 18,
@@ -1722,19 +1692,19 @@
   "apps/api/src/routes/tasks.ts": {
     "complexity": {
       "max": 60,
-      "excess": 103
+      "excess": 101
     },
     "max-lines": {
-      "max": 1693,
-      "excess": 1193
+      "max": 1667,
+      "excess": 1167
     },
     "max-lines-per-function": {
       "max": 416,
-      "excess": 946
+      "excess": 944
     },
     "sonarjs/cognitive-complexity": {
-      "max": 45,
-      "excess": 74
+      "max": 43,
+      "excess": 72
     }
   },
   "apps/api/src/routes/team-reports.ts": {
@@ -1781,16 +1751,16 @@
   },
   "apps/api/src/routes/voice-tools.ts": {
     "complexity": {
-      "max": 20,
-      "excess": 8
+      "max": 19,
+      "excess": 7
     },
     "max-lines-per-function": {
-      "max": 134,
-      "excess": 54
+      "max": 132,
+      "excess": 52
     },
     "sonarjs/cognitive-complexity": {
-      "max": 26,
-      "excess": 14
+      "max": 25,
+      "excess": 13
     }
   },
   "apps/api/src/routes/voice-websocket.ts": {
@@ -1819,20 +1789,16 @@
   },
   "apps/api/src/routes/work-statuses.ts": {
     "complexity": {
-      "max": 16,
-      "excess": 4
+      "max": 14,
+      "excess": 2
     },
     "max-lines": {
-      "max": 636,
-      "excess": 136
+      "max": 635,
+      "excess": 135
     },
     "max-lines-per-function": {
-      "max": 112,
-      "excess": 47
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 22,
-      "excess": 7
+      "max": 94,
+      "excess": 14
     }
   },
   "apps/api/src/search/backfill.ts": {
@@ -2333,8 +2299,8 @@
       "excess": 3
     },
     "max-lines": {
-      "max": 1888,
-      "excess": 1388
+      "max": 1856,
+      "excess": 1356
     }
   },
   "apps/api/tests/mcp/mcp-tools.test.ts": {
@@ -2345,8 +2311,8 @@
   },
   "apps/api/tests/mcp/mcp-update-tool.test.ts": {
     "max-lines": {
-      "max": 706,
-      "excess": 206
+      "max": 647,
+      "excess": 147
     }
   },
   "apps/api/tests/recurrence/materialize.test.ts": {
@@ -2537,8 +2503,8 @@
   },
   "apps/api/tests/routes/integration-reconcile-orchestration.test.ts": {
     "max-lines": {
-      "max": 737,
-      "excess": 237
+      "max": 729,
+      "excess": 229
     }
   },
   "apps/api/tests/routes/integration-reconcile-sunsama.test.ts": {
@@ -2609,14 +2575,14 @@
   },
   "apps/api/tests/routes/notion-mirror-reconcile.test.ts": {
     "max-lines": {
-      "max": 1482,
-      "excess": 982
+      "max": 1317,
+      "excess": 817
     }
   },
   "apps/api/tests/routes/object-commands.test.ts": {
     "max-lines": {
-      "max": 3563,
-      "excess": 3063
+      "max": 3552,
+      "excess": 3052
     }
   },
   "apps/api/tests/routes/personal-athena-assignments.test.ts": {
@@ -2705,14 +2671,14 @@
   },
   "apps/api/tests/routes/work-location.test.ts": {
     "max-lines": {
-      "max": 549,
-      "excess": 49
+      "max": 510,
+      "excess": 10
     }
   },
   "apps/api/tests/routes/work-statuses.test.ts": {
     "max-lines": {
-      "max": 970,
-      "excess": 470
+      "max": 846,
+      "excess": 346
     }
   },
   "apps/api/tests/routes/work-views.test.ts": {
@@ -2721,8 +2687,8 @@
       "excess": 15
     },
     "max-lines": {
-      "max": 3157,
-      "excess": 2657
+      "max": 3139,
+      "excess": 2639
     }
   },
   "apps/api/tests/search/jobs.test.ts": {
@@ -3027,70 +2993,66 @@
   },
   "apps/web/src/app/(app)/external-agent/connect/page.tsx": {
     "max-lines-per-function": {
-      "max": 95,
-      "excess": 15
+      "max": 89,
+      "excess": 9
     }
   },
   "apps/web/src/app/(app)/inbox/inbox-client.tsx": {
-    "complexity": {
-      "max": 14,
-      "excess": 2
-    },
     "max-lines-per-function": {
-      "max": 136,
-      "excess": 56
+      "max": 124,
+      "excess": 44
     }
   },
   "apps/web/src/app/(app)/inbox/use-inbox-page.ts": {
     "max-lines-per-function": {
-      "max": 238,
-      "excess": 158
+      "max": 206,
+      "excess": 126
     }
   },
   "apps/web/src/app/(app)/orgs/[orgId]/cycles/[cycleId]/page.tsx": {
     "complexity": {
-      "max": 28,
-      "excess": 16
+      "max": 26,
+      "excess": 14
     },
     "max-lines-per-function": {
-      "max": 368,
-      "excess": 288
+      "max": 352,
+      "excess": 272
     },
     "sonarjs/cognitive-complexity": {
-      "max": 27,
-      "excess": 12
+      "max": 24,
+      "excess": 9
     }
   },
   "apps/web/src/app/(app)/orgs/[orgId]/cycles/cycles-client.tsx": {
     "complexity": {
-      "max": 19,
-      "excess": 7
+      "max": 18,
+      "excess": 6
     },
     "max-lines-per-function": {
-      "max": 184,
-      "excess": 104
+      "max": 180,
+      "excess": 100
     },
     "sonarjs/cognitive-complexity": {
-      "max": 20,
-      "excess": 5
+      "max": 19,
+      "excess": 4
     }
   },
   "apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx": {
     "complexity": {
-      "max": 111,
-      "excess": 99
+      "max": 84,
+      "excess": 72
     },
     "max-lines": {
-      "max": 761,
-      "excess": 261
+      "max": 724,
+      "excess": 224
     },
     "max-lines-per-function": {
-      "max": 679,
-      "excess": 599
+      "max": 640,
+      "excess": 560
     },
     "sonarjs/cognitive-complexity": {
-      "max": 59,
-      "excess": 44
+      "max": 31,
+      "excess": 16
     }
   },
   "apps/web/src/app/(app)/orgs/[orgId]/my-work/my-work-client.tsx": {
@@ -3099,8 +3061,8 @@
       "excess": 5
     },
     "max-lines-per-function": {
-      "max": 197,
-      "excess": 117
+      "max": 195,
+      "excess": 115
     },
     "sonarjs/cognitive-complexity": {
       "max": 31,
@@ -3109,48 +3071,48 @@
   },
   "apps/web/src/app/(app)/orgs/[orgId]/programs/[programId]/program-detail-client.tsx": {
     "complexity": {
-      "max": 43,
-      "excess": 31
+      "max": 38,
+      "excess": 26
     },
     "max-lines-per-function": {
-      "max": 416,
-      "excess": 336
+      "max": 398,
+      "excess": 318
     },
     "sonarjs/cognitive-complexity": {
-      "max": 26,
-      "excess": 11
+      "max": 18,
+      "excess": 3
     }
   },
   "apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx": {
     "complexity": {
-      "max": 125,
-      "excess": 113
+      "max": 108,
+      "excess": 96
     },
     "max-lines": {
-      "max": 941,
-      "excess": 441
+      "max": 907,
+      "excess": 407
     },
     "max-lines-per-function": {
-      "max": 788,
-      "excess": 708
+      "max": 753,
+      "excess": 673
     },
     "sonarjs/cognitive-complexity": {
-      "max": 77,
-      "excess": 62
+      "max": 58,
+      "excess": 43
     }
   },
   "apps/web/src/app/(app)/orgs/[orgId]/recurrence-series/[seriesId]/page.tsx": {
     "complexity": {
-      "max": 24,
-      "excess": 13
+      "max": 22,
+      "excess": 11
     },
     "max-lines": {
-      "max": 556,
-      "excess": 56
+      "max": 547,
+      "excess": 47
     },
     "max-lines-per-function": {
-      "max": 299,
-      "excess": 278
+      "max": 290,
+      "excess": 269
     },
     "sonarjs/cognitive-complexity": {
       "max": 25,
@@ -3159,218 +3121,202 @@
   },
   "apps/web/src/app/(app)/orgs/[orgId]/sessions/[sessionId]/page.tsx": {
     "max-lines-per-function": {
-      "max": 163,
-      "excess": 83
+      "max": 153,
+      "excess": 73
     }
   },
   "apps/web/src/app/(app)/orgs/[orgId]/settings/labels/page.tsx": {
     "complexity": {
-      "max": 27,
-      "excess": 15
+      "max": 26,
+      "excess": 14
     },
     "max-lines-per-function": {
-      "max": 263,
-      "excess": 183
+      "max": 248,
+      "excess": 168
     },
     "sonarjs/cognitive-complexity": {
-      "max": 30,
-      "excess": 15
+      "max": 29,
+      "excess": 14
     }
   },
   "apps/web/src/app/(app)/orgs/[orgId]/settings/statuses/page.tsx": {
-    "complexity": {
-      "max": 21,
-      "excess": 9
-    },
-    "max-lines-per-function": {
-      "max": 297,
-      "excess": 217
-    }
-  },
-  "apps/web/src/app/(app)/orgs/[orgId]/settings/templates/page.tsx": {
-    "max-lines-per-function": {
-      "max": 128,
-      "excess": 59
-    }
-  },
-  "apps/web/src/app/(app)/orgs/[orgId]/settings/work-structure/page.tsx": {
     "complexity": {
       "max": 19,
       "excess": 7
     },
     "max-lines-per-function": {
-      "max": 299,
-      "excess": 219
+      "max": 286,
+      "excess": 206
+    }
+  },
+  "apps/web/src/app/(app)/orgs/[orgId]/settings/templates/page.tsx": {
+    "max-lines-per-function": {
+      "max": 114,
+      "excess": 45
+    }
+  },
+  "apps/web/src/app/(app)/orgs/[orgId]/settings/work-structure/page.tsx": {
+    "complexity": {
+      "max": 15,
+      "excess": 3
+    },
+    "max-lines-per-function": {
+      "max": 270,
+      "excess": 190
     },
     "sonarjs/cognitive-complexity": {
-      "max": 30,
-      "excess": 15
+      "max": 18,
+      "excess": 3
     }
   },
   "apps/web/src/app/(app)/orgs/[orgId]/teams/[teamId]/team-detail-client.tsx": {
     "complexity": {
-      "max": 18,
-      "excess": 6
+      "max": 17,
+      "excess": 5
     },
     "max-lines-per-function": {
-      "max": 232,
-      "excess": 152
+      "max": 220,
+      "excess": 140
+    },
+    "sonarjs/cognitive-complexity": {
+      "max": 23,
+      "excess": 8
+    }
+  },
+  "apps/web/src/app/(app)/orgs/[orgId]/teams/teams-client.tsx": {
+    "max-lines-per-function": {
+      "max": 215,
+      "excess": 135
+    },
+    "sonarjs/cognitive-complexity": {
+      "max": 19,
+      "excess": 4
+    }
+  },
+  "apps/web/src/app/(app)/orgs/[orgId]/triage/page.tsx": {
+    "max-lines-per-function": {
+      "max": 157,
+      "excess": 77
     },
     "sonarjs/cognitive-complexity": {
       "max": 24,
       "excess": 9
     }
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/teams/teams-client.tsx": {
-    "max-lines-per-function": {
-      "max": 217,
-      "excess": 137
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 20,
-      "excess": 5
-    }
-  },
-  "apps/web/src/app/(app)/orgs/[orgId]/triage/page.tsx": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    },
-    "max-lines-per-function": {
-      "max": 165,
-      "excess": 85
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 25,
-      "excess": 10
-    }
-  },
   "apps/web/src/app/(app)/orgs/[orgId]/views/page.tsx": {
     "max-lines-per-function": {
-      "max": 134,
-      "excess": 54
+      "max": 130,
+      "excess": 50
     }
   },
   "apps/web/src/app/(app)/orgs/[orgId]/views/use-views-page.ts": {
-    "complexity": {
-      "max": 15,
-      "excess": 3
-    },
-    "max-lines-per-function": {
-      "max": 221,
-      "excess": 141
-    }
-  },
-  "apps/web/src/app/(app)/portfolio/portfolio-client.tsx": {
-    "max-lines-per-function": {
-      "max": 143,
-      "excess": 63
-    }
-  },
-  "apps/web/src/app/(app)/settings/athena/lattice-section.tsx": {
-    "complexity": {
-      "max": 25,
-      "excess": 13
-    },
-    "max-lines": {
-      "max": 539,
-      "excess": 39
-    },
-    "max-lines-per-function": {
-      "max": 272,
-      "excess": 194
-    }
-  },
-  "apps/web/src/app/(app)/settings/athena/page.tsx": {
-    "max-lines-per-function": {
-      "max": 104,
-      "excess": 24
-    }
-  },
-  "apps/web/src/app/(app)/settings/calendar/page.tsx": {
-    "complexity": {
-      "max": 27,
-      "excess": 15
-    },
-    "max-lines-per-function": {
-      "max": 273,
-      "excess": 193
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 25,
-      "excess": 10
-    }
-  },
-  "apps/web/src/app/(app)/settings/notifications/page.tsx": {
     "complexity": {
       "max": 14,
       "excess": 2
     },
     "max-lines-per-function": {
-      "max": 145,
-      "excess": 65
+      "max": 217,
+      "excess": 137
+    }
+  },
+  "apps/web/src/app/(app)/portfolio/portfolio-client.tsx": {
+    "max-lines-per-function": {
+      "max": 140,
+      "excess": 60
+    }
+  },
+  "apps/web/src/app/(app)/settings/athena/lattice-section.tsx": {
+    "complexity": {
+      "max": 23,
+      "excess": 11
+    },
+    "max-lines": {
+      "max": 527,
+      "excess": 27
+    },
+    "max-lines-per-function": {
+      "max": 255,
+      "excess": 177
+    }
+  },
+  "apps/web/src/app/(app)/settings/athena/page.tsx": {
+    "max-lines-per-function": {
+      "max": 95,
+      "excess": 15
+    }
+  },
+  "apps/web/src/app/(app)/settings/calendar/page.tsx": {
+    "complexity": {
+      "max": 25,
+      "excess": 13
+    },
+    "max-lines-per-function": {
+      "max": 264,
+      "excess": 184
     },
     "sonarjs/cognitive-complexity": {
       "max": 21,
       "excess": 6
     }
   },
+  "apps/web/src/app/(app)/settings/notifications/page.tsx": {
+    "max-lines-per-function": {
+      "max": 144,
+      "excess": 64
+    }
+  },
   "apps/web/src/app/(app)/settings/places/page.tsx": {
     "max-lines": {
-      "max": 697,
-      "excess": 197
+      "max": 666,
+      "excess": 166
     },
     "max-lines-per-function": {
-      "max": 281,
-      "excess": 226
+      "max": 263,
+      "excess": 200
     }
   },
   "apps/web/src/app/(app)/settings/profile/page.tsx": {
     "max-lines-per-function": {
-      "max": 85,
-      "excess": 5
+      "max": 81,
+      "excess": 1
     }
   },
   "apps/web/src/app/(app)/settings/work-schedule/page.tsx": {
     "max-lines": {
-      "max": 612,
-      "excess": 112
+      "max": 585,
+      "excess": 85
     },
+    "max-lines-per-function": {
+      "max": 149,
+      "excess": 69
+    }
+  },
+  "apps/web/src/app/(app)/tasks/all-tasks-client.tsx": {
+    "complexity": {
+      "max": 15,
+      "excess": 3
+    }
+  },
+  "apps/web/src/app/(app)/today/page.tsx": {
+    "complexity": {
+      "max": 15,
+      "excess": 3
+    },
+    "max-lines-per-function": {
+      "max": 87,
+      "excess": 7
+    }
+  },
+  "apps/web/src/app/(app)/today/use-today-actions.ts": {
     "max-lines-per-function": {
       "max": 161,
       "excess": 81
     }
   },
-  "apps/web/src/app/(app)/tasks/all-tasks-client.tsx": {
-    "complexity": {
-      "max": 16,
-      "excess": 4
-    },
-    "max-lines-per-function": {
-      "max": 85,
-      "excess": 5
-    }
-  },
-  "apps/web/src/app/(app)/today/page.tsx": {
-    "complexity": {
-      "max": 16,
-      "excess": 4
-    },
-    "max-lines-per-function": {
-      "max": 101,
-      "excess": 21
-    }
-  },
-  "apps/web/src/app/(app)/today/use-today-actions.ts": {
-    "max-lines-per-function": {
-      "max": 169,
-      "excess": 89
-    }
-  },
   "apps/web/src/app/(app)/workspaces/new/page.tsx": {
     "max-lines-per-function": {
-      "max": 89,
-      "excess": 9
+      "max": 82,
+      "excess": 2
     }
   },
   "apps/web/src/app/(auth)/oauth/authorize/page.tsx": {
@@ -3411,8 +3357,8 @@
   },
   "apps/web/src/app/(marketing)/privacy/page.tsx": {
     "max-lines-per-function": {
-      "max": 87,
-      "excess": 7
+      "max": 81,
+      "excess": 1
     }
   },
   "apps/web/src/app/(marketing)/terms/page.tsx": {
@@ -3523,8 +3469,8 @@
       "excess": 4
     },
     "max-lines-per-function": {
-      "max": 110,
-      "excess": 30
+      "max": 106,
+      "excess": 26
     }
   },
   "apps/web/src/components/agenda/agenda-timebox-mutation.ts": {
@@ -3554,7 +3500,7 @@
     },
     "max-lines-per-function": {
       "max": 87,
-      "excess": 12
+      "excess": 11
     }
   },
   "apps/web/src/components/agents/session-sidebar.tsx": {
@@ -3569,12 +3515,12 @@
       "excess": 19
     },
     "max-lines": {
-      "max": 743,
-      "excess": 243
+      "max": 741,
+      "excess": 241
     },
     "max-lines-per-function": {
       "max": 175,
-      "excess": 183
+      "excess": 182
     }
   },
   "apps/web/src/components/athena/athena-conversation-browser.tsx": {
@@ -3592,17 +3538,9 @@
     }
   },
   "apps/web/src/components/athena/athena-conversation.tsx": {
-    "complexity": {
-      "max": 19,
-      "excess": 10
-    },
     "max-lines-per-function": {
-      "max": 177,
-      "excess": 97
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 17,
-      "excess": 2
+      "max": 126,
+      "excess": 46
     }
   },
   "apps/web/src/components/athena/athena-mcp-panel.tsx": {
@@ -3621,16 +3559,16 @@
   },
   "apps/web/src/components/athena/athena-panel-provider.tsx": {
     "complexity": {
-      "max": 16,
-      "excess": 4
+      "max": 15,
+      "excess": 3
     },
     "max-lines-per-function": {
-      "max": 154,
-      "excess": 127
+      "max": 148,
+      "excess": 113
     },
     "sonarjs/cognitive-complexity": {
-      "max": 22,
-      "excess": 7
+      "max": 21,
+      "excess": 6
     }
   },
   "apps/web/src/components/athena/athena-workbench.tsx": {
@@ -3649,34 +3587,34 @@
   },
   "apps/web/src/components/athena/athena-workspace.tsx": {
     "complexity": {
-      "max": 65,
-      "excess": 56
+      "max": 63,
+      "excess": 54
     },
     "max-lines": {
-      "max": 585,
-      "excess": 85
+      "max": 567,
+      "excess": 67
     },
     "max-lines-per-function": {
-      "max": 479,
-      "excess": 399
+      "max": 460,
+      "excess": 380
     },
     "sonarjs/cognitive-complexity": {
-      "max": 31,
-      "excess": 16
+      "max": 29,
+      "excess": 14
     }
   },
   "apps/web/src/components/athena/elicitation-card.tsx": {
     "complexity": {
       "max": 22,
-      "excess": 17
+      "excess": 16
     },
     "max-lines-per-function": {
-      "max": 161,
-      "excess": 81
+      "max": 148,
+      "excess": 68
     },
     "sonarjs/cognitive-complexity": {
       "max": 20,
-      "excess": 8
+      "excess": 6
     }
   },
   "apps/web/src/components/athena/elicitation-control.tsx": {
@@ -3735,32 +3673,32 @@
   },
   "apps/web/src/components/athena/phone-call-summary-sheet.tsx": {
     "max-lines-per-function": {
-      "max": 117,
-      "excess": 37
+      "max": 104,
+      "excess": 24
     }
   },
   "apps/web/src/components/athena/voice-mode.tsx": {
     "max-lines-per-function": {
-      "max": 183,
-      "excess": 103
+      "max": 174,
+      "excess": 94
     }
   },
   "apps/web/src/components/athena/voice-phone-numbers.tsx": {
     "complexity": {
-      "max": 24,
-      "excess": 23
+      "max": 20,
+      "excess": 18
     },
     "max-lines": {
-      "max": 739,
-      "excess": 239
+      "max": 696,
+      "excess": 196
     },
     "max-lines-per-function": {
-      "max": 488,
-      "excess": 574
+      "max": 438,
+      "excess": 522
     },
     "sonarjs/cognitive-complexity": {
-      "max": 30,
-      "excess": 19
+      "max": 27,
+      "excess": 16
     }
   },
   "apps/web/src/components/authentication-interlock.tsx": {
@@ -3771,8 +3709,8 @@
   },
   "apps/web/src/components/billing/billing-recovery.tsx": {
     "max-lines-per-function": {
-      "max": 104,
-      "excess": 24
+      "max": 103,
+      "excess": 23
     }
   },
   "apps/web/src/components/calendar/calendar-actions.ts": {
@@ -3833,14 +3771,8 @@
   },
   "apps/web/src/components/calendar/item-drawer/use-core-field-drafts.ts": {
     "max-lines-per-function": {
-      "max": 116,
-      "excess": 36
-    }
-  },
-  "apps/web/src/components/calendar/item-peek/calendar-item-peek-overlay.tsx": {
-    "max-lines-per-function": {
-      "max": 82,
-      "excess": 2
+      "max": 115,
+      "excess": 35
     }
   },
   "apps/web/src/components/calendar/timezone-index.ts": {
@@ -3856,19 +3788,15 @@
     }
   },
   "apps/web/src/components/canvas/bulk-actions-bar.tsx": {
-    "complexity": {
-      "max": 14,
-      "excess": 2
-    },
     "max-lines-per-function": {
-      "max": 157,
-      "excess": 77
+      "max": 91,
+      "excess": 11
     }
   },
   "apps/web/src/components/canvas/canvas-command-context.tsx": {
     "max-lines-per-function": {
-      "max": 166,
-      "excess": 86
+      "max": 153,
+      "excess": 73
     }
   },
   "apps/web/src/components/canvas/canvas-menus.tsx": {
@@ -3887,20 +3815,20 @@
   },
   "apps/web/src/components/canvas/canvas-properties-editor.tsx": {
     "complexity": {
-      "max": 59,
-      "excess": 48
+      "max": 57,
+      "excess": 46
     },
     "max-lines": {
-      "max": 802,
-      "excess": 302
+      "max": 779,
+      "excess": 279
     },
     "max-lines-per-function": {
-      "max": 589,
-      "excess": 513
+      "max": 585,
+      "excess": 509
     },
     "sonarjs/cognitive-complexity": {
-      "max": 53,
-      "excess": 38
+      "max": 50,
+      "excess": 35
     }
   },
   "apps/web/src/components/canvas/canvas-retained-snapshots.ts": {
@@ -3925,16 +3853,16 @@
   },
   "apps/web/src/components/canvas/canvas.tsx": {
     "complexity": {
-      "max": 26,
-      "excess": 14
+      "max": 21,
+      "excess": 9
     },
     "max-lines-per-function": {
-      "max": 391,
-      "excess": 314
+      "max": 360,
+      "excess": 288
     },
     "sonarjs/cognitive-complexity": {
-      "max": 26,
-      "excess": 11
+      "max": 16,
+      "excess": 1
     }
   },
   "apps/web/src/components/canvas/dependency-edge.tsx": {
@@ -3971,12 +3899,6 @@
     "sonarjs/cognitive-complexity": {
       "max": 50,
       "excess": 35
-    }
-  },
-  "apps/web/src/components/canvas/graph-inspector-host.tsx": {
-    "max-lines-per-function": {
-      "max": 125,
-      "excess": 45
     }
   },
   "apps/web/src/components/canvas/graph-layout-engine.ts": {
@@ -4022,15 +3944,15 @@
   "apps/web/src/components/canvas/task-graph-panel.tsx": {
     "complexity": {
       "max": 21,
-      "excess": 11
+      "excess": 9
     },
     "max-lines": {
-      "max": 701,
-      "excess": 201
+      "max": 693,
+      "excess": 193
     },
     "max-lines-per-function": {
-      "max": 618,
-      "excess": 538
+      "max": 608,
+      "excess": 528
     }
   },
   "apps/web/src/components/canvas/task-hierarchy-layout.ts": {
@@ -4068,11 +3990,11 @@
   "apps/web/src/components/canvas/use-canvas-command-history.ts": {
     "complexity": {
       "max": 18,
-      "excess": 12
+      "excess": 6
     },
     "max-lines-per-function": {
-      "max": 173,
-      "excess": 94
+      "max": 166,
+      "excess": 87
     }
   },
   "apps/web/src/components/canvas/use-canvas-relation-drop-target.ts": {
@@ -4111,8 +4033,8 @@
       "excess": 22
     },
     "max-lines-per-function": {
-      "max": 297,
-      "excess": 217
+      "max": 292,
+      "excess": 212
     },
     "sonarjs/cognitive-complexity": {
       "max": 26,
@@ -4137,8 +4059,8 @@
       "excess": 28
     },
     "max-lines-per-function": {
-      "max": 265,
-      "excess": 185
+      "max": 244,
+      "excess": 164
     },
     "sonarjs/cognitive-complexity": {
       "max": 29,
@@ -4169,8 +4091,8 @@
   },
   "apps/web/src/components/cycles/active-cycle-overview.tsx": {
     "max-lines-per-function": {
-      "max": 168,
-      "excess": 88
+      "max": 166,
+      "excess": 86
     },
     "sonarjs/cognitive-complexity": {
       "max": 17,
@@ -4191,8 +4113,8 @@
   },
   "apps/web/src/components/cycles/close-cycle-dialog.tsx": {
     "max-lines-per-function": {
-      "max": 87,
-      "excess": 7
+      "max": 81,
+      "excess": 1
     }
   },
   "apps/web/src/components/cycles/create-cycle.tsx": {
@@ -4227,8 +4149,8 @@
       "excess": 1
     },
     "max-lines-per-function": {
-      "max": 102,
-      "excess": 22
+      "max": 85,
+      "excess": 5
     }
   },
   "apps/web/src/components/editor/code-language-loader.ts": {
@@ -4325,18 +4247,18 @@
   },
   "apps/web/src/components/entity-detail/updates-panel.tsx": {
     "max-lines-per-function": {
-      "max": 169,
-      "excess": 89
+      "max": 158,
+      "excess": 78
     }
   },
   "apps/web/src/components/entity-display/entity-icon-picker-loaded.tsx": {
     "max-lines": {
-      "max": 1262,
-      "excess": 762
+      "max": 1257,
+      "excess": 757
     },
     "max-lines-per-function": {
       "max": 323,
-      "excess": 474
+      "excess": 468
     }
   },
   "apps/web/src/components/in-page-search/in-page-search-field.tsx": {
@@ -4367,8 +4289,8 @@
   },
   "apps/web/src/components/initiatives/associations-panel.tsx": {
     "max-lines-per-function": {
-      "max": 92,
-      "excess": 12
+      "max": 88,
+      "excess": 8
     }
   },
   "apps/web/src/components/initiatives/create-initiative.tsx": {
@@ -4377,8 +4299,8 @@
       "excess": 10
     },
     "max-lines-per-function": {
-      "max": 263,
-      "excess": 183
+      "max": 252,
+      "excess": 172
     }
   },
   "apps/web/src/components/initiatives/initiative-actions.ts": {
@@ -4399,8 +4321,8 @@
       "excess": 22
     },
     "max-lines-per-function": {
-      "max": 287,
-      "excess": 207
+      "max": 276,
+      "excess": 196
     },
     "sonarjs/cognitive-complexity": {
       "max": 35,
@@ -4427,16 +4349,16 @@
   },
   "apps/web/src/components/labels/label-editor-dialog.tsx": {
     "complexity": {
-      "max": 20,
-      "excess": 8
+      "max": 19,
+      "excess": 7
     },
     "max-lines-per-function": {
-      "max": 172,
-      "excess": 92
+      "max": 141,
+      "excess": 61
     },
     "sonarjs/cognitive-complexity": {
-      "max": 21,
-      "excess": 6
+      "max": 19,
+      "excess": 4
     }
   },
   "apps/web/src/components/library/library-client.tsx": {
@@ -4445,12 +4367,12 @@
       "excess": 35
     },
     "max-lines": {
-      "max": 517,
-      "excess": 17
+      "max": 506,
+      "excess": 6
     },
     "max-lines-per-function": {
-      "max": 444,
-      "excess": 364
+      "max": 433,
+      "excess": 353
     },
     "sonarjs/cognitive-complexity": {
       "max": 66,
@@ -4463,8 +4385,8 @@
       "excess": 6
     },
     "max-lines-per-function": {
-      "max": 154,
-      "excess": 74
+      "max": 152,
+      "excess": 72
     },
     "sonarjs/cognitive-complexity": {
       "max": 27,
@@ -4526,23 +4448,13 @@
     }
   },
   "apps/web/src/components/onboarding/step-connect-provider-row.tsx": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    },
     "max-lines-per-function": {
-      "max": 86,
-      "excess": 6
+      "max": 82,
+      "excess": 2
     },
     "sonarjs/cognitive-complexity": {
-      "max": 23,
-      "excess": 8
-    }
-  },
-  "apps/web/src/components/onboarding/step-connect.tsx": {
-    "max-lines-per-function": {
-      "max": 87,
-      "excess": 7
+      "max": 21,
+      "excess": 6
     }
   },
   "apps/web/src/components/onboarding/wizard-shell.tsx": {
@@ -4559,8 +4471,8 @@
   },
   "apps/web/src/components/people/people-list.tsx": {
     "max-lines-per-function": {
-      "max": 115,
-      "excess": 35
+      "max": 110,
+      "excess": 30
     }
   },
   "apps/web/src/components/people/person-profile.tsx": {
@@ -4585,8 +4497,8 @@
       "excess": 16
     },
     "max-lines-per-function": {
-      "max": 257,
-      "excess": 177
+      "max": 250,
+      "excess": 170
     },
     "sonarjs/cognitive-complexity": {
       "max": 17,
@@ -4609,8 +4521,8 @@
       "excess": 7
     },
     "max-lines-per-function": {
-      "max": 241,
-      "excess": 161
+      "max": 230,
+      "excess": 150
     }
   },
   "apps/web/src/components/programs/flow-metrics.ts": {
@@ -4621,14 +4533,14 @@
   },
   "apps/web/src/components/programs/program-projects-panel.tsx": {
     "max-lines-per-function": {
-      "max": 134,
-      "excess": 54
+      "max": 129,
+      "excess": 49
     }
   },
   "apps/web/src/components/programs/program-work-view.tsx": {
     "max-lines-per-function": {
-      "max": 203,
-      "excess": 123
+      "max": 199,
+      "excess": 119
     }
   },
   "apps/web/src/components/project-detail/milestone-tasks.tsx": {
@@ -4639,8 +4551,8 @@
   },
   "apps/web/src/components/project-detail/project-milestones.tsx": {
     "max-lines-per-function": {
-      "max": 108,
-      "excess": 28
+      "max": 103,
+      "excess": 23
     }
   },
   "apps/web/src/components/project-detail/project-restore-controller.ts": {
@@ -4661,12 +4573,12 @@
       "excess": 13
     },
     "max-lines": {
-      "max": 544,
-      "excess": 44
+      "max": 539,
+      "excess": 39
     },
     "max-lines-per-function": {
-      "max": 304,
-      "excess": 227
+      "max": 293,
+      "excess": 220
     }
   },
   "apps/web/src/components/projects/project-catalog.ts": {
@@ -4699,16 +4611,16 @@
   },
   "apps/web/src/components/publishing/address-rows.tsx": {
     "complexity": {
-      "max": 25,
-      "excess": 22
+      "max": 22,
+      "excess": 18
     },
     "max-lines-per-function": {
       "max": 177,
-      "excess": 143
+      "excess": 135
     },
     "sonarjs/cognitive-complexity": {
-      "max": 25,
-      "excess": 19
+      "max": 24,
+      "excess": 15
     }
   },
   "apps/web/src/components/publishing/brief-document.tsx": {
@@ -4733,12 +4645,12 @@
   },
   "apps/web/src/components/publishing/publishing-settings.tsx": {
     "complexity": {
-      "max": 21,
-      "excess": 9
+      "max": 20,
+      "excess": 8
     },
     "max-lines-per-function": {
-      "max": 168,
-      "excess": 88
+      "max": 163,
+      "excess": 83
     }
   },
   "apps/web/src/components/pwa/offline-write.ts": {
@@ -4789,18 +4701,18 @@
   },
   "apps/web/src/components/recurrence/plan-work-for-event-form.tsx": {
     "complexity": {
-      "max": 22,
-      "excess": 10
+      "max": 19,
+      "excess": 7
     },
     "max-lines-per-function": {
-      "max": 146,
-      "excess": 66
+      "max": 137,
+      "excess": 57
     }
   },
   "apps/web/src/components/recurrence/repeat-project-dialog.tsx": {
     "max-lines-per-function": {
-      "max": 210,
-      "excess": 130
+      "max": 206,
+      "excess": 126
     }
   },
   "apps/web/src/components/recurrence/repeat-task-control.tsx": {
@@ -4825,8 +4737,8 @@
       "excess": 5
     },
     "max-lines-per-function": {
-      "max": 133,
-      "excess": 53
+      "max": 121,
+      "excess": 41
     }
   },
   "apps/web/src/components/scheduling/scheduling-all-day-gesture-runtime.ts": {
@@ -5025,12 +4937,12 @@
       "excess": 47
     },
     "max-lines": {
-      "max": 685,
-      "excess": 185
+      "max": 679,
+      "excess": 179
     },
     "max-lines-per-function": {
-      "max": 427,
-      "excess": 347
+      "max": 420,
+      "excess": 340
     },
     "sonarjs/cognitive-complexity": {
       "max": 31,
@@ -5075,56 +4987,56 @@
   },
   "apps/web/src/components/settings/automations-tab.tsx": {
     "complexity": {
-      "max": 15,
-      "excess": 3
+      "max": 14,
+      "excess": 2
     },
     "max-lines-per-function": {
-      "max": 148,
-      "excess": 68
+      "max": 143,
+      "excess": 63
     },
     "sonarjs/cognitive-complexity": {
-      "max": 18,
-      "excess": 3
+      "max": 17,
+      "excess": 2
     }
   },
   "apps/web/src/components/settings/billing-discounts-section.tsx": {
     "complexity": {
-      "max": 45,
-      "excess": 33
+      "max": 42,
+      "excess": 30
     },
     "max-lines-per-function": {
-      "max": 360,
-      "excess": 280
+      "max": 352,
+      "excess": 272
     },
     "sonarjs/cognitive-complexity": {
-      "max": 35,
-      "excess": 20
+      "max": 34,
+      "excess": 19
     }
   },
   "apps/web/src/components/settings/billing-settings.tsx": {
     "complexity": {
-      "max": 45,
-      "excess": 33
+      "max": 43,
+      "excess": 31
     },
     "max-lines-per-function": {
-      "max": 166,
-      "excess": 86
+      "max": 158,
+      "excess": 78
     },
     "sonarjs/cognitive-complexity": {
-      "max": 46,
-      "excess": 31
+      "max": 45,
+      "excess": 30
     }
   },
   "apps/web/src/components/settings/connected-accounts-tab.tsx": {
     "max-lines-per-function": {
-      "max": 126,
-      "excess": 46
+      "max": 119,
+      "excess": 39
     }
   },
   "apps/web/src/components/settings/connected-apps-tab.tsx": {
     "max-lines-per-function": {
-      "max": 134,
-      "excess": 54
+      "max": 126,
+      "excess": 46
     }
   },
   "apps/web/src/components/settings/contact-points-section.tsx": {
@@ -5139,12 +5051,12 @@
   },
   "apps/web/src/components/settings/danger-zone-tab.tsx": {
     "complexity": {
-      "max": 14,
-      "excess": 2
+      "max": 13,
+      "excess": 1
     },
     "max-lines-per-function": {
-      "max": 134,
-      "excess": 54
+      "max": 118,
+      "excess": 38
     }
   },
   "apps/web/src/components/settings/delete-account-dialog.tsx": {
@@ -5159,56 +5071,52 @@
       "excess": 1
     },
     "max-lines-per-function": {
-      "max": 96,
-      "excess": 16
+      "max": 94,
+      "excess": 14
     }
   },
   "apps/web/src/components/settings/export-request-form.tsx": {
     "max-lines-per-function": {
-      "max": 162,
-      "excess": 82
+      "max": 114,
+      "excess": 34
     }
   },
   "apps/web/src/components/settings/google-calendar-settings.tsx": {
     "complexity": {
-      "max": 40,
-      "excess": 28
+      "max": 36,
+      "excess": 24
     },
     "max-lines": {
-      "max": 636,
-      "excess": 136
+      "max": 598,
+      "excess": 98
     },
     "max-lines-per-function": {
-      "max": 288,
-      "excess": 246
+      "max": 272,
+      "excess": 230
     },
     "sonarjs/cognitive-complexity": {
-      "max": 24,
-      "excess": 9
+      "max": 17,
+      "excess": 2
     }
   },
   "apps/web/src/components/settings/gtasks-accounts-section.tsx": {
     "complexity": {
-      "max": 14,
-      "excess": 2
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 16,
+      "max": 13,
       "excess": 1
     }
   },
   "apps/web/src/components/settings/integration-config-panel.tsx": {
     "complexity": {
-      "max": 27,
-      "excess": 15
+      "max": 24,
+      "excess": 12
     },
     "max-lines-per-function": {
-      "max": 289,
-      "excess": 209
+      "max": 278,
+      "excess": 198
     },
     "sonarjs/cognitive-complexity": {
-      "max": 34,
-      "excess": 19
+      "max": 32,
+      "excess": 17
     }
   },
   "apps/web/src/components/settings/integration-row-actions.tsx": {
@@ -5227,114 +5135,102 @@
   },
   "apps/web/src/components/settings/linear-agent-install-card.tsx": {
     "complexity": {
-      "max": 18,
-      "excess": 6
+      "max": 17,
+      "excess": 5
     },
     "max-lines-per-function": {
-      "max": 91,
-      "excess": 11
+      "max": 86,
+      "excess": 6
     },
     "sonarjs/cognitive-complexity": {
-      "max": 19,
-      "excess": 4
+      "max": 18,
+      "excess": 3
     }
   },
   "apps/web/src/components/settings/mcp-connectors-section.tsx": {
     "complexity": {
-      "max": 26,
-      "excess": 14
+      "max": 23,
+      "excess": 11
     },
     "max-lines": {
-      "max": 576,
-      "excess": 76
+      "max": 557,
+      "excess": 57
     },
     "max-lines-per-function": {
-      "max": 226,
-      "excess": 285
+      "max": 210,
+      "excess": 263
     },
     "sonarjs/cognitive-complexity": {
-      "max": 34,
-      "excess": 19
+      "max": 31,
+      "excess": 16
     }
   },
   "apps/web/src/components/settings/members-tab.tsx": {
     "complexity": {
-      "max": 15,
-      "excess": 3
+      "max": 13,
+      "excess": 1
     },
     "max-lines-per-function": {
-      "max": 182,
-      "excess": 102
+      "max": 160,
+      "excess": 80
     }
   },
   "apps/web/src/components/settings/notification-preferences-section.tsx": {
     "max-lines-per-function": {
-      "max": 197,
-      "excess": 117
+      "max": 195,
+      "excess": 115
     }
   },
   "apps/web/src/components/settings/notion/notion-mirror-panel.tsx": {
     "complexity": {
-      "max": 34,
-      "excess": 22
+      "max": 31,
+      "excess": 19
     },
     "max-lines-per-function": {
-      "max": 234,
-      "excess": 154
+      "max": 220,
+      "excess": 140
     },
     "sonarjs/cognitive-complexity": {
-      "max": 34,
-      "excess": 19
+      "max": 30,
+      "excess": 15
     }
   },
   "apps/web/src/components/settings/notion/notion-people-panel.tsx": {
     "max-lines-per-function": {
-      "max": 116,
-      "excess": 36
-    }
-  },
-  "apps/web/src/components/settings/notion/notion-setup-card.tsx": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
+      "max": 109,
+      "excess": 29
     }
   },
   "apps/web/src/components/settings/notion/notion-table-designer.tsx": {
     "complexity": {
-      "max": 22,
-      "excess": 10
+      "max": 20,
+      "excess": 8
     },
     "max-lines-per-function": {
-      "max": 272,
-      "excess": 192
+      "max": 271,
+      "excess": 191
     },
     "sonarjs/cognitive-complexity": {
-      "max": 26,
-      "excess": 11
+      "max": 25,
+      "excess": 10
     }
   },
   "apps/web/src/components/settings/notion/use-notion-mirror-controller.ts": {
     "complexity": {
-      "max": 18,
-      "excess": 6
+      "max": 16,
+      "excess": 4
     }
   },
   "apps/web/src/components/settings/passkeys-section.tsx": {
     "max-lines-per-function": {
-      "max": 104,
-      "excess": 30
+      "max": 95,
+      "excess": 17
     }
   },
   "apps/web/src/components/settings/recovery-codes-dialog.tsx": {
     "max-lines-per-function": {
-      "max": 128,
-      "excess": 48
-    }
-  },
-  "apps/web/src/components/settings/security-tab.tsx": {
-    "sonarjs/cognitive-complexity": {
-      "max": 16,
-      "excess": 1
+      "max": 124,
+      "excess": 44
     }
   },
   "apps/web/src/components/settings/sessions-section.tsx": {
@@ -5343,8 +5239,8 @@
       "excess": 4
     },
     "max-lines-per-function": {
-      "max": 125,
-      "excess": 45
+      "max": 114,
+      "excess": 34
     },
     "sonarjs/cognitive-complexity": {
       "max": 28,
@@ -5387,8 +5283,8 @@
   },
   "apps/web/src/components/settings/use-gtasks-controller.ts": {
     "max-lines-per-function": {
-      "max": 227,
-      "excess": 147
+      "max": 223,
+      "excess": 143
     }
   },
   "apps/web/src/components/settings/use-integrations-data.ts": {
@@ -5399,8 +5295,8 @@
   },
   "apps/web/src/components/settings/use-members-mutations.ts": {
     "max-lines-per-function": {
-      "max": 141,
-      "excess": 61
+      "max": 130,
+      "excess": 50
     }
   },
   "apps/web/src/components/settings/workspace-general-settings.tsx": {
@@ -5409,28 +5305,22 @@
       "excess": 13
     },
     "max-lines-per-function": {
-      "max": 155,
-      "excess": 75
+      "max": 148,
+      "excess": 68
     },
     "sonarjs/cognitive-complexity": {
-      "max": 28,
-      "excess": 13
-    }
-  },
-  "apps/web/src/components/statuses/delete-status-dialog.tsx": {
-    "max-lines-per-function": {
-      "max": 81,
-      "excess": 1
+      "max": 23,
+      "excess": 8
     }
   },
   "apps/web/src/components/statuses/status-editor-dialog.tsx": {
     "complexity": {
-      "max": 15,
-      "excess": 3
+      "max": 13,
+      "excess": 1
     },
     "max-lines-per-function": {
-      "max": 132,
-      "excess": 52
+      "max": 126,
+      "excess": 46
     }
   },
   "apps/web/src/components/statuses/status-entity-section.tsx": {
@@ -5481,12 +5371,12 @@
       "excess": 5
     },
     "max-lines-per-function": {
-      "max": 165,
-      "excess": 85
+      "max": 152,
+      "excess": 72
     },
     "sonarjs/cognitive-complexity": {
-      "max": 30,
-      "excess": 15
+      "max": 21,
+      "excess": 6
     }
   },
   "apps/web/src/components/tabs/open-documents.tsx": {
@@ -5513,8 +5403,8 @@
       "excess": 3
     },
     "max-lines-per-function": {
-      "max": 148,
-      "excess": 68
+      "max": 143,
+      "excess": 63
     },
     "sonarjs/cognitive-complexity": {
       "max": 16,
@@ -5531,8 +5421,8 @@
       "excess": 99
     },
     "max-lines-per-function": {
-      "max": 408,
-      "excess": 339
+      "max": 402,
+      "excess": 338
     },
     "sonarjs/cognitive-complexity": {
       "max": 24,
@@ -5563,8 +5453,8 @@
   },
   "apps/web/src/components/tasks/task-hierarchy-picker-overlay.tsx": {
     "max-lines-per-function": {
-      "max": 120,
-      "excess": 40
+      "max": 115,
+      "excess": 35
     }
   },
   "apps/web/src/components/tasks/task-relation-port.ts": {
@@ -5589,12 +5479,12 @@
   },
   "apps/web/src/components/teams/create-team.tsx": {
     "complexity": {
-      "max": 15,
-      "excess": 3
+      "max": 13,
+      "excess": 1
     },
     "max-lines-per-function": {
-      "max": 209,
-      "excess": 129
+      "max": 159,
+      "excess": 79
     }
   },
   "apps/web/src/components/teams/team-card.tsx": {
@@ -5647,8 +5537,8 @@
       "excess": 17
     },
     "max-lines-per-function": {
-      "max": 182,
-      "excess": 102
+      "max": 180,
+      "excess": 100
     },
     "sonarjs/cognitive-complexity": {
       "max": 31,
@@ -5661,8 +5551,8 @@
       "excess": 7
     },
     "max-lines-per-function": {
-      "max": 107,
-      "excess": 27
+      "max": 101,
+      "excess": 21
     },
     "sonarjs/cognitive-complexity": {
       "max": 25,
@@ -5705,8 +5595,8 @@
       "excess": 1
     },
     "max-lines-per-function": {
-      "max": 186,
-      "excess": 106
+      "max": 182,
+      "excess": 102
     }
   },
   "apps/web/src/components/time-tracking/time-analytics.tsx": {
@@ -5715,12 +5605,12 @@
       "excess": 29
     },
     "max-lines": {
-      "max": 921,
-      "excess": 421
+      "max": 909,
+      "excess": 409
     },
     "max-lines-per-function": {
-      "max": 267,
-      "excess": 291
+      "max": 255,
+      "excess": 279
     }
   },
   "apps/web/src/components/time-tracking/time-record-dialog.tsx": {
@@ -5729,8 +5619,8 @@
       "excess": 2
     },
     "max-lines-per-function": {
-      "max": 335,
-      "excess": 258
+      "max": 329,
+      "excess": 255
     }
   },
   "apps/web/src/components/time-tracking/time-review-state.ts": {
@@ -5817,18 +5707,18 @@
   },
   "apps/web/src/components/today/suggested-tasks.tsx": {
     "max-lines-per-function": {
-      "max": 110,
-      "excess": 30
+      "max": 104,
+      "excess": 24
     }
   },
   "apps/web/src/components/today/today-prompt.tsx": {
     "complexity": {
-      "max": 16,
-      "excess": 4
+      "max": 15,
+      "excess": 3
     },
     "max-lines-per-function": {
-      "max": 280,
-      "excess": 200
+      "max": 272,
+      "excess": 192
     }
   },
   "apps/web/src/components/triage/suggestions-lane.tsx": {
@@ -5861,24 +5751,24 @@
       "excess": 14
     },
     "max-lines-per-function": {
-      "max": 158,
-      "excess": 78
+      "max": 131,
+      "excess": 51
     },
     "sonarjs/cognitive-complexity": {
-      "max": 26,
-      "excess": 11
+      "max": 25,
+      "excess": 10
     }
   },
   "apps/web/src/components/views/quick-add-row.tsx": {
     "max-lines-per-function": {
-      "max": 99,
-      "excess": 19
+      "max": 86,
+      "excess": 6
     }
   },
   "apps/web/src/components/views/save-view-composer.tsx": {
     "max-lines-per-function": {
-      "max": 105,
-      "excess": 25
+      "max": 99,
+      "excess": 19
     }
   },
   "apps/web/src/components/views/task-catalog.ts": {
@@ -5911,26 +5801,14 @@
       "excess": 38
     }
   },
-  "apps/web/src/components/work-location/place-editor-dialog.tsx": {
-    "max-lines-per-function": {
-      "max": 108,
-      "excess": 28
-    }
-  },
-  "apps/web/src/components/work-location/place-map-picker.tsx": {
-    "max-lines-per-function": {
-      "max": 103,
-      "excess": 23
-    }
-  },
   "apps/web/src/components/work-location/schedule-editor-dialog.tsx": {
     "complexity": {
       "max": 29,
-      "excess": 29
+      "excess": 27
     },
     "max-lines-per-function": {
-      "max": 264,
-      "excess": 184
+      "max": 248,
+      "excess": 168
     }
   },
   "apps/web/src/components/work-location/use-work-location-calendar-composition.tsx": {
@@ -5973,12 +5851,12 @@
   },
   "apps/web/src/components/work-location/work-schedule-editor-dialog.tsx": {
     "max-lines": {
-      "max": 711,
-      "excess": 211
+      "max": 697,
+      "excess": 197
     },
     "max-lines-per-function": {
-      "max": 349,
-      "excess": 348
+      "max": 343,
+      "excess": 336
     }
   },
   "apps/web/src/components/work-views/display-control-panel.tsx": {
@@ -5993,8 +5871,8 @@
       "excess": 31
     },
     "max-lines": {
-      "max": 1155,
-      "excess": 655
+      "max": 1151,
+      "excess": 651
     },
     "max-lines-per-function": {
       "max": 415,
@@ -6031,24 +5909,18 @@
       "excess": 34
     }
   },
-  "apps/web/src/components/work-views/use-project-timeline-mutations.ts": {
-    "max-lines-per-function": {
-      "max": 81,
-      "excess": 1
-    }
-  },
   "apps/web/src/components/work-views/use-work-view.ts": {
-    "max-lines-per-function": {
-      "max": 804,
-      "excess": 726
-    },
     "complexity": {
       "max": 53,
-      "excess": 47
+      "excess": 46
     },
     "max-lines": {
-      "max": 1167,
-      "excess": 667
+      "max": 1151,
+      "excess": 651
+    },
+    "max-lines-per-function": {
+      "max": 802,
+      "excess": 724
     }
   },
   "apps/web/src/components/work-views/view-state.ts": {
@@ -6102,21 +5974,21 @@
     }
   },
   "apps/web/src/components/work-views/work-view-page.tsx": {
-    "max-lines-per-function": {
-      "max": 531,
-      "excess": 451
-    },
     "complexity": {
-      "max": 47,
-      "excess": 35
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 28,
-      "excess": 13
+      "max": 42,
+      "excess": 30
     },
     "max-lines": {
-      "max": 815,
-      "excess": 315
+      "max": 789,
+      "excess": 289
+    },
+    "max-lines-per-function": {
+      "max": 517,
+      "excess": 437
+    },
+    "sonarjs/cognitive-complexity": {
+      "max": 23,
+      "excess": 8
     }
   },
   "apps/web/src/components/work-views/work-view-toolbar.tsx": {
@@ -6125,8 +5997,8 @@
       "excess": 13
     },
     "max-lines-per-function": {
-      "max": 173,
-      "excess": 93
+      "max": 171,
+      "excess": 91
     },
     "sonarjs/cognitive-complexity": {
       "max": 16,
@@ -6243,8 +6115,8 @@
   },
   "apps/web/src/lib/use-cycle-mutations.ts": {
     "max-lines-per-function": {
-      "max": 177,
-      "excess": 97
+      "max": 159,
+      "excess": 79
     },
     "max-params": {
       "max": 7,
@@ -6257,8 +6129,8 @@
       "excess": 3
     },
     "max-lines-per-function": {
-      "max": 148,
-      "excess": 68
+      "max": 135,
+      "excess": 55
     }
   },
   "apps/web/src/lib/use-my-work.ts": {
@@ -6267,14 +6139,14 @@
       "excess": 9
     },
     "max-lines-per-function": {
-      "max": 196,
-      "excess": 116
+      "max": 194,
+      "excess": 114
     }
   },
   "apps/web/src/lib/use-program-mutations.ts": {
     "max-lines-per-function": {
-      "max": 87,
-      "excess": 7
+      "max": 81,
+      "excess": 1
     }
   },
   "apps/web/src/lib/use-project-detail-page.ts": {
@@ -6293,8 +6165,8 @@
       "excess": 5
     },
     "max-lines-per-function": {
-      "max": 191,
-      "excess": 111
+      "max": 183,
+      "excess": 103
     },
     "sonarjs/cognitive-complexity": {
       "max": 16,
@@ -6303,18 +6175,14 @@
   },
   "apps/web/src/lib/use-session-detail.ts": {
     "max-lines-per-function": {
-      "max": 341,
-      "excess": 261
+      "max": 295,
+      "excess": 215
     }
   },
   "apps/web/src/lib/use-task-detail.ts": {
     "complexity": {
-      "max": 44,
-      "excess": 32
-    },
-    "max-lines-per-function": {
-      "max": 130,
-      "excess": 50
+      "max": 13,
+      "excess": 1
     }
   },
   "apps/web/src/lib/use-task-mutations.ts": {
@@ -6323,18 +6191,18 @@
       "excess": 7
     },
     "max-lines-per-function": {
-      "max": 322,
-      "excess": 242
+      "max": 307,
+      "excess": 227
     },
     "sonarjs/cognitive-complexity": {
       "max": 23,
-      "excess": 15
+      "excess": 8
     }
   },
   "apps/web/src/lib/use-triage.ts": {
     "max-lines-per-function": {
-      "max": 251,
-      "excess": 171
+      "max": 229,
+      "excess": 149
     }
   },
   "apps/web/src/proxy.ts": {
@@ -6357,8 +6225,8 @@
   },
   "apps/web/tests/athena/voice-phone-numbers.test.tsx": {
     "max-lines": {
-      "max": 571,
-      "excess": 71
+      "max": 540,
+      "excess": 40
     }
   },
   "apps/web/tests/calendar/calendar-data.test.tsx": {
@@ -6369,8 +6237,8 @@
   },
   "apps/web/tests/calendar/calendar-item-drawer.test.tsx": {
     "max-lines": {
-      "max": 704,
-      "excess": 204
+      "max": 703,
+      "excess": 203
     }
   },
   "apps/web/tests/calendar/calendar-scheduling-surface.test.tsx": {
@@ -6403,8 +6271,8 @@
       "excess": 7
     },
     "max-lines": {
-      "max": 921,
-      "excess": 421
+      "max": 920,
+      "excess": 420
     }
   },
   "apps/web/tests/composers/create-task.test.tsx": {
@@ -6413,8 +6281,8 @@
       "excess": 3
     },
     "max-lines": {
-      "max": 1136,
-      "excess": 636
+      "max": 1131,
+      "excess": 631
     }
   },
   "apps/web/tests/create-object/create-object-provider.test.tsx": {
@@ -6423,8 +6291,8 @@
       "excess": 10
     },
     "max-lines": {
-      "max": 808,
-      "excess": 308
+      "max": 806,
+      "excess": 306
     }
   },
   "apps/web/tests/create-object/launcher-source-policy.test.ts": {
@@ -6597,8 +6465,8 @@
       "excess": 4
     },
     "sonarjs/cognitive-complexity": {
-      "max": 18,
-      "excess": 3
+      "max": 16,
+      "excess": 1
     }
   },
   "domains/athena/src/turn/translate.ts": {
@@ -6703,8 +6571,8 @@
   },
   "domains/connections/src/contracts/integration.ts": {
     "max-lines": {
-      "max": 578,
-      "excess": 78
+      "max": 564,
+      "excess": 64
     }
   },
   "domains/connections/src/notion/adapters/notion-sdk-schema.ts": {
@@ -6737,8 +6605,8 @@
   },
   "domains/planning/src/contracts/work-location.ts": {
     "max-lines": {
-      "max": 690,
-      "excess": 190
+      "max": 614,
+      "excess": 114
     }
   },
   "domains/planning/src/work-location-resolution.ts": {
@@ -6833,12 +6701,6 @@
     "sonarjs/cognitive-complexity": {
       "max": 27,
       "excess": 12
-    }
-  },
-  "packages/auth/src/passkey-migration.ts": {
-    "max-lines-per-function": {
-      "max": 84,
-      "excess": 4
     }
   },
   "packages/auth/src/restore-credential.ts": {
@@ -6967,8 +6829,8 @@
   },
   "packages/env/tests/registry/env.test.ts": {
     "max-lines": {
-      "max": 1020,
-      "excess": 520
+      "max": 1000,
+      "excess": 500
     }
   },
   "packages/integrations/src/agent-surface-github.ts": {
@@ -7111,12 +6973,6 @@
       "excess": 3
     },
     "sonarjs/cognitive-complexity": {
-      "max": 19,
-      "excess": 4
-    }
-  },
-  "packages/integrations/src/notion.ts": {
-    "sonarjs/cognitive-complexity": {
       "max": 17,
       "excess": 2
     }
@@ -7185,8 +7041,8 @@
   },
   "packages/integrations/tests/notion/notion-client.test.ts": {
     "max-lines": {
-      "max": 599,
-      "excess": 99
+      "max": 554,
+      "excess": 54
     }
   },
   "packages/integrations/tests/notion/notion-fixtures.ts": {
@@ -7341,8 +7197,8 @@
   },
   "packages/ui/src/components/menus/MenuActionRow.tsx": {
     "max-lines-per-function": {
-      "max": 139,
-      "excess": 59
+      "max": 138,
+      "excess": 58
     }
   },
   "packages/ui/src/components/menus/MenuListbox.tsx": {
@@ -7407,8 +7263,8 @@
       "excess": 14
     },
     "max-lines-per-function": {
-      "max": 304,
-      "excess": 224
+      "max": 298,
+      "excess": 218
     }
   },
   "packages/ui/src/components/shell/ExpandedSidebar.tsx": {
@@ -7421,12 +7277,6 @@
     "max-lines-per-function": {
       "max": 118,
       "excess": 54
-    }
-  },
-  "packages/ui/src/components/shell/Sidebar.tsx": {
-    "max-lines-per-function": {
-      "max": 88,
-      "excess": 8
     }
   },
   "packages/ui/src/components/shell/SidebarNavItem.tsx": {
@@ -7556,13 +7406,9 @@
     }
   },
   "packages/ui/src/primitives/tabs.tsx": {
-    "complexity": {
-      "max": 16,
-      "excess": 4
-    },
     "max-lines-per-function": {
-      "max": 115,
-      "excess": 35
+      "max": 110,
+      "excess": 30
     }
   },
   "packages/ui/tests/components/pickers/pickers.test.tsx": {
@@ -7573,8 +7419,8 @@
   },
   "packages/ui/tests/components/shell/shell-full.test.tsx": {
     "max-lines": {
-      "max": 1530,
-      "excess": 1030
+      "max": 1525,
+      "excess": 1025
     }
   },
   "packages/ui/tests/components/views/entity-table.test.tsx": {
@@ -7613,12 +7459,12 @@
       "excess": 13
     },
     "max-lines": {
-      "max": 1016,
-      "excess": 516
+      "max": 1013,
+      "excess": 513
     },
     "max-lines-per-function": {
-      "max": 149,
-      "excess": 153
+      "max": 144,
+      "excess": 148
     },
     "sonarjs/cognitive-complexity": {
       "max": 26,
@@ -7665,8 +7511,8 @@
   },
   "scripts/integration-providers.ts": {
     "max-lines": {
-      "max": 783,
-      "excess": 283
+      "max": 772,
+      "excess": 272
     },
     "max-lines-per-function": {
       "max": 84,

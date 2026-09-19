@@ -22,7 +22,10 @@ vi.mock('../../src/lib/api', () => ({
   },
 }));
 
+const { presentFailure } = vi.hoisted(() => ({ presentFailure: vi.fn() }));
+
 vi.mock('../../src/lib/work-target-invalidation', () => ({ invalidateWorkTargetQueries }));
+vi.mock('../../src/components/feedback', () => ({ presentFailure }));
 
 const OWNER_ORGANIZATION_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAX';
 const SECOND_OWNER_ORGANIZATION_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAY';
@@ -153,18 +156,15 @@ describe('useProjectTimelineMutations', () => {
       await Promise.resolve();
     });
     expect(result.current.applyingCascade).toBe(true);
-    expect(result.current.error).toBeNull();
+    expect(presentFailure).not.toHaveBeenCalled();
     expect(invalidateWorkTargetQueries).not.toHaveBeenCalled();
 
     delayedSuccess.resolve(okResponse({ id: SECOND_PROJECT_ID }));
     await waitFor(() => {
       expect(result.current.applyingCascade).toBe(false);
-      expect(result.current.error).toMatchObject({
-        name: 'ApiRequestError',
-        message: 'Could not reschedule a dependent project.',
-        status: 0,
-      });
     });
+    expect(presentFailure).toHaveBeenCalledOnce();
+    expect(presentFailure.mock.calls[0]?.[0]).toMatchObject({ name: 'ApiRequestError', status: 0 });
     expect(invalidateWorkTargetQueries).toHaveBeenCalledTimes(2);
     expect(invalidateWorkTargetQueries).toHaveBeenCalledWith(expect.anything(), {
       target: 'project',

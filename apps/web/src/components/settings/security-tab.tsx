@@ -12,7 +12,7 @@
  * write is presented as a notice by the mutation that made it.
  */
 import type { RecoveryCodesStatusOut } from '@docket/identity-access/account-contract';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { InlineBanner } from '@docket/ui/components';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';

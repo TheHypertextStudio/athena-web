@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * `components/query-load-failure` — {@link LoadFailure} wired to the query that failed.
+ * `components/feedback/query-load-failure` — {@link LoadFailure} wired to the query that failed.
  *
  * @remarks
  * Nearly every failed read renders the same three props from one TanStack query: its `error`, a
@@ -11,7 +11,7 @@
  */
 import type { JSX } from 'react';
 
-import { LoadFailure } from '@/components/feedback';
+import { LoadFailure } from './load-failure';
 
 /** The part of a TanStack query result that {@link QueryLoadFailure} reads. */
 export interface QueryFailureSource {

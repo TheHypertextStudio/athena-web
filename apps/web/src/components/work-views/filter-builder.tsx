@@ -22,6 +22,7 @@ import type { ViewTarget } from '@docket/work/view-contract';
 import { type ReactElement, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
 import { fromLocalInputValue, toLocalInputValue } from '@/components/calendar/datetime-input';
+import { PartialLoadBanner } from '@/components/feedback';
 
 import {
   parseFilterDraft,
@@ -555,14 +556,9 @@ function FacetLoadFailure({
 }): ReactElement | null {
   if (!error || !onRetry) return null;
   return (
-    <div role="alert" className="flex items-center gap-2">
-      <Text token="body-small" tone="muted">
-        Could not load filter options.
-      </Text>
-      <Button variant="ghost" controlSize="sm" onClick={onRetry}>
-        Retry
-      </Button>
-    </div>
+    <PartialLoadBanner title="Could not load filter options" onRetry={onRetry} density="compact">
+      The options listed may be incomplete.
+    </PartialLoadBanner>
   );
 }
 

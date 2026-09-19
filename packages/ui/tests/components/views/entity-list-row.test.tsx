@@ -199,6 +199,17 @@ describe('RowMeta', () => {
     render(<RowMeta tabular>42</RowMeta>);
     expect(screen.getByText('42')).toHaveClass('tabular-nums');
   });
+
+  it('takes the error text colour only when its tone asks for it', () => {
+    render(
+      <>
+        <RowMeta tone="error">late</RowMeta>
+        <RowMeta>on time</RowMeta>
+      </>,
+    );
+    expect(screen.getByText('late')).toHaveClass('text-error');
+    expect(screen.getByText('on time')).not.toHaveClass('text-error');
+  });
 });
 
 describe('RowProgress', () => {

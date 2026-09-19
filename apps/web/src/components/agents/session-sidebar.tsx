@@ -179,11 +179,11 @@ export function SessionSidebar({
             ) : null}
             {controls.canCancel ? (
               <Button
-                variant="outline"
+                variant="ghost-destructive"
                 size="sm"
                 disabled={controlPending}
                 onClick={onCancel}
-                className="text-error hover:text-error justify-start"
+                className="justify-start"
               >
                 Cancel session
               </Button>

@@ -22,11 +22,13 @@ export type CardPhase = 'idle' | 'connecting' | 'connected' | 'error';
 export interface CardState {
   readonly phase: CardPhase;
   readonly mirrored: number;
-  readonly error: string | null;
 }
 
 /** The initial state shared by every card. */
-export const INITIAL_CARD_STATE: CardState = { phase: 'idle', mirrored: 0, error: null };
+export const INITIAL_CARD_STATE: CardState = { phase: 'idle', mirrored: 0 };
+
+/** The state after a connect attempt failed; the failure itself is presented as a notice. */
+export const FAILED_CARD_STATE: CardState = { phase: 'error', mirrored: 0 };
 
 /** Props for a single provider row. */
 export interface ProviderRowProps<Provider extends string = string> {
@@ -78,10 +80,6 @@ export function ProviderRow<Provider extends string = string>({
         </span>
         {connected ? (
           <span className="text-primary text-body-medium leading-snug">{mirroredLabel}</span>
-        ) : phase === 'error' ? (
-          <span role="alert" className="text-error text-body-medium leading-snug">
-            {state.error}
-          </span>
         ) : (
           <span className="text-on-surface-variant text-body-medium leading-snug">
             {card.blurb}

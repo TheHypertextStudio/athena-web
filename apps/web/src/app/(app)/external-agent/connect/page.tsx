@@ -5,10 +5,11 @@ import { Button } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX, type ReactNode } from 'react';
 
 import Link from '@/components/docket-link';
+import { presentFailure } from '@/components/feedback';
 import { api } from '@/lib/api';
 import { useAppSearchParams } from '@/lib/app-location';
 import { authClient } from '@/lib/auth-client';
-import { UserFacingError, userErrorMessage } from '@/lib/problem';
+import { UserFacingError } from '@/lib/problem';
 import { unwrap, useApiMutation } from '@/lib/query';
 
 /** Complete the account-link continuation for an Athena session opened outside Docket. */
@@ -16,8 +17,10 @@ export default function ExternalAgentConnectPage(): JSX.Element {
   const searchParams = useAppSearchParams();
   const token = searchParams.get('token');
   const [linking, setLinking] = useState(false);
-  const [linkError, setLinkError] = useState<string | null>(null);
   const complete = useApiMutation({
+    // The page renders the outcome as its own persistent state, including the expected
+    // identity-mismatch branch, so the default notice would report it a second time.
+    failure: 'silent',
     mutationFn: (continuation: string) =>
       unwrap(
         () =>
@@ -71,7 +74,6 @@ export default function ExternalAgentConnectPage(): JSX.Element {
           disabled={linking}
           onClick={() => {
             setLinking(true);
-            setLinkError(null);
             void authClient
               .linkSocial({
                 provider: 'linear',
@@ -79,18 +81,13 @@ export default function ExternalAgentConnectPage(): JSX.Element {
                 callbackURL: `/external-agent/connect?${new URLSearchParams({ token }).toString()}`,
               })
               .catch((error: unknown) => {
-                setLinkError(userErrorMessage(error, 'Could not start Linear account linking.'));
+                presentFailure(error, 'Could not start Linear account linking.');
                 setLinking(false);
               });
           }}
         >
           {linking ? 'Opening Linear…' : 'Connect Linear account'}
         </Button>
-        {linkError ? (
-          <p role="alert" className="text-error text-body-medium">
-            {linkError}
-          </p>
-        ) : null}
       </ContinuationFrame>
     );
   }

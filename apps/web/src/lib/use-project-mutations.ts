@@ -22,7 +22,6 @@ import { useCallback, useMemo } from 'react';
 
 import { api } from './api';
 import type { ProjectDetailData } from './fetch-project-detail';
-import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
 import { invalidateWorkTargetQueries } from './work-target-invalidation';
 
@@ -82,9 +81,7 @@ export interface ProjectMutations {
   /** Post an update; the promise settles with the write so the composer can clear only on success. */
   postUpdate: (body: string) => Promise<void>;
   propsPending: boolean;
-  propsError: string | null;
   updatePosting: boolean;
-  updateError: string | null;
 }
 
 /**
@@ -314,14 +311,6 @@ export function useProjectMutations(
       await updateM.mutateAsync(body);
     },
     propsPending: patch.isPending || initiativeM.isPending,
-    propsError: patch.error
-      ? userErrorMessage(patch.error, 'Could not update this project.')
-      : initiativeM.error
-        ? userErrorMessage(initiativeM.error, 'Could not update the linked initiative.')
-        : null,
     updatePosting: updateM.isPending,
-    updateError: updateM.error
-      ? userErrorMessage(updateM.error, 'Could not post that update.')
-      : null,
   };
 }

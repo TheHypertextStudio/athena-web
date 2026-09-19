@@ -38,8 +38,7 @@ import {
   useApiQuery,
 } from '@/lib/query';
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
-import { LoadFailure } from '@/components/feedback';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { LoadFailure, QueryLoadFailure } from '@/components/feedback';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';

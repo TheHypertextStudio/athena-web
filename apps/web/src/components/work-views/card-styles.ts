@@ -6,6 +6,16 @@
  * the same shape, and they sit in three files that do not import each other. These constants are
  * what they agree through, so a card and its placeholder cannot drift into two different shapes.
  */
+import { CRITICAL_PAINT } from '@docket/ui/primitives';
+
+/**
+ * The ring and wash a card, board card, or list row shows while a drop onto it is refused.
+ *
+ * @remarks
+ * Every lens draws the refusal the same way, so a target reads identically whichever lens the
+ * person is in. Callers add `ring-inset` when the frame must not grow past the row.
+ */
+export const REJECTED_DROP_CLASS = `${CRITICAL_PAINT.rejectedDrop} ring-1`;
 
 /**
  * The card's single inset.

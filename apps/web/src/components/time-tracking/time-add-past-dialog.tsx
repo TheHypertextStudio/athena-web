@@ -12,9 +12,9 @@ import {
   DialogHeader,
   DialogTitle,
   Field,
+  FieldError,
   Input,
   Select,
-  Text,
 } from '@docket/ui/primitives';
 import { useEffect, useMemo, useState, type JSX } from 'react';
 
@@ -25,8 +25,7 @@ import {
   type LocalInputOccurrence,
 } from '@/components/calendar/datetime-input';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
-import { apiQueryOptions, queryKeys, useApiListQuery, useApiMutation } from '@/lib/query';
+import { apiQueryOptions, queryKeys, unwrap, useApiListQuery, useApiMutation } from '@/lib/query';
 
 /** Props for {@link TimeAddPastDialog}. */
 export interface TimeAddPastDialogProps {
@@ -79,19 +78,22 @@ export function TimeAddPastDialog({
     ),
   );
   const create = useApiMutation({
-    mutationFn: async (input: { readonly startsAt: string; readonly endsAt: string }) => {
-      const response = await api.v1.time.records.$post({
-        json: {
-          startNow: false,
-          captureSource: 'manual',
-          startsAt: input.startsAt,
-          endsAt: input.endsAt,
-          context: taskId ? { taskId: taskId } : { label: title.trim(), organizationId: workspace },
-        },
-      });
-      if (!response.ok) throw new Error('Could not save past time.');
-      return response.json();
-    },
+    mutationFn: (input: { readonly startsAt: string; readonly endsAt: string }) =>
+      unwrap(
+        () =>
+          api.v1.time.records.$post({
+            json: {
+              startNow: false,
+              captureSource: 'manual',
+              startsAt: input.startsAt,
+              endsAt: input.endsAt,
+              context: taskId
+                ? { taskId: taskId }
+                : { label: title.trim(), organizationId: workspace },
+            },
+          }),
+        'Could not save past time.',
+      ),
     invalidateKeys: [['me', 'time']],
   });
   const tasks = useMemo(() => tasksQ.data?.items ?? [], [tasksQ.data]);
@@ -122,9 +124,6 @@ export function TimeAddPastDialog({
       {
         onSuccess: () => {
           onOpenChange(false);
-        },
-        onError: (caught) => {
-          setError(userErrorMessage(caught, 'Could not save past time.'));
         },
       },
     );
@@ -208,11 +207,7 @@ export function TimeAddPastDialog({
               onOccurrenceChange={setEndOccurrence}
             />
           </div>
-          {error ? (
-            <Text role="alert" token="body-small" className="text-error">
-              {error}
-            </Text>
-          ) : null}
+          {error ? <FieldError>{error}</FieldError> : null}
         </div>
         <DialogFooter>
           <Button

@@ -18,6 +18,7 @@
  * (prod).
  */
 import type { PublicConfigOut } from '@docket/identity-access/public-config-contract';
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
@@ -31,6 +32,7 @@ import { queryKeys } from '../../../src/lib/query-keys';
 import { jsonResponse } from '../../support/http';
 
 afterEach(() => {
+  dismissAllNotices();
   cleanup();
 });
 
@@ -146,19 +148,21 @@ describe('StepConnect (dev / mock mode)', () => {
     });
   });
 
-  it('surfaces application-owned copy and offers a retry when connecting fails', async () => {
+  it('presents a notice without provider text and offers a retry when connecting fails', async () => {
     const createIntegration = vi.fn(async () =>
       jsonResponse(false, { detail: 'Provider is unavailable.' }),
     );
     renderStep(
       LOCAL_CONFIG,
-      <StepConnect orgId="org_1" createIntegration={createIntegration} importWork={importOk(1)} />,
+      <>
+        <StepConnect orgId="org_1" createIntegration={createIntegration} importWork={importOk(1)} />
+        <Toaster />
+      </>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect Google Tasks' }));
-    await waitFor(() => {
-      expect(screen.getByText('Could not connect this source.')).toBeTruthy();
-    });
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).not.toContain('Provider is unavailable');
     expect(screen.getByRole('button', { name: 'Retry connecting Google Tasks' })).toBeTruthy();
   });
 });

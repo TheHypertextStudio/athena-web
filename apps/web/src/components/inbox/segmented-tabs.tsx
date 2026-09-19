@@ -19,6 +19,7 @@
 import { useResponsiveControlLayout, type ResponsiveControlItem } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
 import {
+  Badge,
   Button,
   DropdownMenu,
   DropdownMenuContent,
@@ -170,6 +171,9 @@ export function SegmentedTabs<TId extends string>({
   );
 }
 
+/** The count badge's tone on the selected segment, one tonal step off the resting badge. */
+const SELECTED_COUNT_TONE = 'bg-surface-container text-on-surface';
+
 function SegmentLabel<TId extends string>({
   segment,
   selected,
@@ -182,18 +186,12 @@ function SegmentLabel<TId extends string>({
     <span className="inline-flex items-center gap-2">
       {segment.label}
       {showCount ? (
-        <span
-          className={cn(
-            'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums',
-            segment.emphasis
-              ? 'bg-error/10 text-error'
-              : selected
-                ? 'bg-surface-container text-on-surface'
-                : 'bg-surface-container-high text-on-surface-variant',
-          )}
+        <Badge
+          variant={segment.emphasis ? 'destructive' : 'secondary'}
+          className={cn('min-w-5', selected && !segment.emphasis && SELECTED_COUNT_TONE)}
         >
           {segment.count}
-        </span>
+        </Badge>
       ) : null}
     </span>
   );

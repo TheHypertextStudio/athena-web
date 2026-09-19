@@ -67,7 +67,6 @@ function renderInbox(
       .length,
     loading: false,
     error: null,
-    actionError: null,
     pendingIds: new Set<string>(),
     markingAll: false,
     segments: [

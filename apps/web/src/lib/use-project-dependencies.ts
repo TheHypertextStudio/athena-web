@@ -5,9 +5,10 @@ import type { ProjectDependencyCreated, ProjectDependencyOut } from './contracts
 import { useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
+import type { QueryFailureSource } from '@/components/feedback';
+
 import { api } from './api';
 import { projectWorkSectionsDef } from './fetch-project-sections';
-import { userErrorMessage } from './problem';
 import { apiQueryOptions, unwrap, useApiMutation, useApiQuery } from './query';
 import { invalidateWorkTargetQueries } from './work-target-invalidation';
 
@@ -18,11 +19,11 @@ export type ProjectDependencyDirection = 'blockedBy' | 'blocking';
 export interface ProjectDependencies {
   dependencies: ProjectDependencyOut;
   loading: boolean;
-  error: string | null;
+  /** The dependency read, once it has failed; `null` while it is pending or has answered. */
+  loadFailure: QueryFailureSource | null;
   add: (direction: ProjectDependencyDirection, otherProjectId: string) => void;
   remove: (otherProjectId: string) => void;
   pending: boolean;
-  mutationError: string | null;
 }
 
 /** Read and edit dependency edges for one Project without leaving its detail view. */
@@ -88,18 +89,11 @@ export function useProjectDependencies(orgId: string, projectId: string): Projec
   return {
     dependencies: query.data ?? { blocking: [], blockedBy: [] },
     loading: query.isPending,
-    error: query.isError
-      ? userErrorMessage(query.error, 'Could not load project dependencies.')
-      : null,
+    loadFailure: query.isError ? query : null,
     add: (direction, otherProjectId) => {
       addMutation.mutate({ direction, otherProjectId });
     },
     remove: removeMutation.mutate,
     pending: addMutation.isPending || removeMutation.isPending,
-    mutationError: addMutation.error
-      ? userErrorMessage(addMutation.error, 'Could not add the project dependency.')
-      : removeMutation.error
-        ? userErrorMessage(removeMutation.error, 'Could not remove the project dependency.')
-        : null,
   };
 }

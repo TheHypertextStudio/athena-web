@@ -34,7 +34,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { calendarSettingsDef } from '@/components/calendar/calendar-data';
 import { CALENDAR_ITEMS_PREFIX } from '@/components/calendar/calendar-mutation-cache';
-import { LoadFailure, presentFailure } from '@/components/feedback';
+import { presentFailure, QueryLoadFailure } from '@/components/feedback';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
@@ -512,12 +512,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
   if (query.isError) {
     return (
       <SettingsGroup>
-        <LoadFailure
-          title="Google Calendar settings"
-          error={query.error}
-          onRetry={() => void query.refetch()}
-          retrying={query.isFetching}
-        />
+        <QueryLoadFailure title="Google Calendar settings" query={query} />
       </SettingsGroup>
     );
   }

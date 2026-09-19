@@ -34,7 +34,6 @@ export default function TriagePage(): JSX.Element {
     queue,
     loading,
     loadError,
-    actionError,
     pending,
     projectDestinations,
     programDestinations,
@@ -113,12 +112,6 @@ export default function TriagePage(): JSX.Element {
       {!loading && !loadError ? (
         <p className="text-on-surface-variant text-xs tabular-nums">
           {queue.length} {queue.length === 1 ? 'item' : 'items'} to sort
-        </p>
-      ) : null}
-
-      {actionError ? (
-        <p role="alert" className="text-error text-body-medium">
-          {actionError}
         </p>
       ) : null}
 

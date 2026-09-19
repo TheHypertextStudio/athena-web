@@ -1,7 +1,8 @@
 'use client';
 
 import { Schedule } from '@docket/ui/icons';
-import { Button, Checkbox, Select, Surface } from '@docket/ui/primitives';
+import { cn } from '@docket/ui/lib/utils';
+import { Button, Checkbox, CRITICAL_PAINT, Select, Surface } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
@@ -68,6 +69,12 @@ function compactZone(zone: string): string {
   return zone.split('/').at(-1)?.replaceAll('_', ' ') ?? zone;
 }
 
+/** The collapsed summary button, ringed when the schedule is invalid. */
+const SUMMARY_BUTTON_CLASS = cn(
+  CRITICAL_PAINT.ringWhenInvalid,
+  'hover:bg-surface-container-high focus-visible:ring-ring flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left focus-visible:ring-2 focus-visible:outline-none aria-invalid:ring-2',
+);
+
 /** Collapsed schedule overview with progressive date, time, and all-day disclosure. */
 export function CreateBlockScheduleEditor({
   draft,
@@ -93,7 +100,7 @@ export function CreateBlockScheduleEditor({
         onClick={() => {
           setExpanded(true);
         }}
-        className="hover:bg-surface-container-high focus-visible:ring-ring aria-invalid:ring-error flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left focus-visible:ring-2 focus-visible:outline-none aria-invalid:ring-2"
+        className={SUMMARY_BUTTON_CLASS}
       >
         <Schedule className="text-on-surface-variant mt-0.5 size-5 shrink-0" aria-hidden="true" />
         <span className="min-w-0">

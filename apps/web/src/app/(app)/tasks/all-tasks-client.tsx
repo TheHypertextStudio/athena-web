@@ -20,9 +20,9 @@
  */
 import type { TaskOut } from '@docket/work/task-model';
 import type { Priority } from '@docket/work/task-contract';
-import { EmptyState, InlineBanner, StatusGlyph } from '@docket/ui/components';
+import { EmptyState, StatusGlyph } from '@docket/ui/components';
 import { ListChecks } from '@docket/ui/icons';
-import { Button, Row, Skeleton, Stack } from '@docket/ui/primitives';
+import { Button, Row, Skeleton, Stack, Text } from '@docket/ui/primitives';
 import { useQueries } from '@tanstack/react-query';
 import Link from '@/components/docket-link';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
@@ -31,7 +31,7 @@ import { type JSX, useMemo, useState } from 'react';
 import { useActiveOrg } from '@/components/active-org';
 import { formatDay } from '@/components/date-picker';
 import { EditableTitle } from '@/components/editor/editable-title';
-import { LoadFailure } from '@/components/feedback';
+import { LoadFailure, PartialLoadBanner } from '@/components/feedback';
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { OrgChip } from '@/components/org-chip';
 import { api } from '@/lib/api';
@@ -138,13 +138,9 @@ export default function AllTasksClient(): JSX.Element {
           rows below are then real but incomplete, and silently presenting a short list as the whole
           list is the same lie in a quieter voice. */}
       {partial ? (
-        <InlineBanner
-          tone="critical"
-          title="Some workspaces did not answer"
-          action={{ label: 'Try again', onSelect: refetchAll }}
-        >
+        <PartialLoadBanner title="Some workspaces did not answer" onRetry={refetchAll}>
           This list may be incomplete until they do.
-        </InlineBanner>
+        </PartialLoadBanner>
       ) : null}
 
       {loading && mine.length === 0 ? (
@@ -256,15 +252,9 @@ function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
           </span>
         )}
         {task.dueDate ? (
-          <span
-            className={
-              overdue
-                ? 'text-error text-body-small shrink-0 tabular-nums'
-                : 'text-on-surface-variant text-body-small shrink-0 tabular-nums'
-            }
-          >
+          <Text token="body-small" tone={overdue ? 'error' : 'muted'} numeric className="shrink-0">
             {formatDue(task.dueDate)}
-          </span>
+          </Text>
         ) : null}
         <OrgChip orgId={task.organizationId} name={orgLabel} />
       </Link>

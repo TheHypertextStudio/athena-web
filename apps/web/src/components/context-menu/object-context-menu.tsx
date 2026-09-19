@@ -38,7 +38,6 @@
  * anchored to the focused object's own box instead. Radix supplies arrow-key roving, typeahead,
  * and Escape-to-close; focus is returned to the element the menu was opened from.
  */
-import { cn } from '@docket/ui';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -368,7 +367,7 @@ function renderSections(actions: readonly ResolvedAction[], onClose: () => void)
         key={action.id}
         disabled={action.disabledReason !== null}
         {...(action.disabledReason === null ? {} : { supporting: action.disabledReason })}
-        className={cn(action.destructive && 'text-error focus:text-error')}
+        destructive={action.destructive}
         onSelect={() => {
           onClose();
           // Let Radix finish its close and focus-restoration cycle before an action opens a

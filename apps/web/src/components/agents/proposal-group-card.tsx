@@ -112,10 +112,9 @@ export function ProposalGroupCard({
             Approve selected{selection.length > 0 ? ` (${String(selection.length)})` : ''}
           </Button>
           <Button
-            variant="ghost"
+            variant="ghost-destructive"
             size="sm"
             disabled={pending}
-            className="text-error"
             onClick={() => {
               onDecide(group.proposalGroupId, 'reject');
             }}

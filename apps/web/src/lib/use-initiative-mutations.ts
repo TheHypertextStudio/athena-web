@@ -16,7 +16,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
-import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
 import { invalidateWorkTargetQueries } from './work-target-invalidation';
 
@@ -94,15 +93,12 @@ function toInitiativePatchBody(patch: InitiativePatch): InitiativeUpdate {
 export interface InitiativeMutations {
   patchInitiative: (patch: InitiativePatch) => void;
   propsPending: boolean;
-  propsError: string | null;
   linkProgram: (programId: string) => void;
   unlinkProgram: (programId: string) => void;
   linkProject: (projectId: string) => void;
   unlinkProject: (projectId: string) => void;
   programBusy: boolean;
   projectBusy: boolean;
-  programError: string | null;
-  projectError: string | null;
 }
 
 /** useInitiativeMutations coordinates use initiative mutations state, loading, and mutations for its screen. */
@@ -243,24 +239,11 @@ export function useInitiativeMutations(
   return {
     patchInitiative: patch.mutate,
     propsPending: patch.isPending,
-    propsError: patch.error
-      ? userErrorMessage(patch.error, 'Could not update this initiative.')
-      : null,
     linkProgram: linkProgramM.mutate,
     unlinkProgram: unlinkProgramM.mutate,
     linkProject: linkProjectM.mutate,
     unlinkProject: unlinkProjectM.mutate,
     programBusy: linkProgramM.isPending || unlinkProgramM.isPending,
     projectBusy: linkProjectM.isPending || unlinkProjectM.isPending,
-    programError: linkProgramM.error
-      ? userErrorMessage(linkProgramM.error, 'Could not link that program.')
-      : unlinkProgramM.error
-        ? userErrorMessage(unlinkProgramM.error, 'Could not unlink that program.')
-        : null,
-    projectError: linkProjectM.error
-      ? userErrorMessage(linkProjectM.error, 'Could not link that project.')
-      : unlinkProjectM.error
-        ? userErrorMessage(unlinkProjectM.error, 'Could not unlink that project.')
-        : null,
   };
 }

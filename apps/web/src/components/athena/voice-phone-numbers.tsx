@@ -58,10 +58,11 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useEffect, useMemo, useRef, useState } from 'react';
 
+import { QueryLoadFailure } from '@/components/feedback';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { useReauth } from '@/components/settings/use-reauth';
-import { ConfirmDestructiveDialog } from '@docket/ui/components';
+import { ConfirmDestructiveDialog, InlineBanner } from '@docket/ui/components';
 
 import { api } from '@/lib/api';
 import { formatClock } from '@/lib/format-time';
@@ -87,9 +88,10 @@ const STATUS_LABEL: Record<PhoneNumberStatus, string> = {
   blocked: 'Not usable',
 };
 
-interface Feedback {
-  readonly tone: 'error' | 'success';
-  readonly copy: string;
+/** Application-owned words for a challenge state that needs the person to act. */
+interface ChallengeNotice {
+  readonly title: string;
+  readonly body: string;
 }
 
 /**
@@ -126,21 +128,29 @@ function acceptsCode(state: PhoneChallengeState | null): boolean {
 }
 
 /** Shown when the transport could not deliver a code, whoever asked for it. */
-const STATE_MESSAGE: Partial<Record<PhoneChallengeState, Feedback>> = {
+const STATE_MESSAGE: Partial<Record<PhoneChallengeState, ChallengeNotice>> = {
   delivery_unknown: {
-    tone: 'error',
-    copy: 'Delivery could not be confirmed. The code may still arrive, or you can send a new one.',
+    title: 'Delivery could not be confirmed',
+    body: 'The code may still arrive, or you can send a new one.',
   },
   delivery_failed: {
-    tone: 'error',
-    copy: 'We couldn’t deliver the code to that number. Check it and send a new one.',
+    title: 'The code did not reach that number',
+    body: 'Check the number and send a new code.',
   },
-  expired: { tone: 'error', copy: 'That code expired. Send a new one to continue.' },
+  expired: { title: 'That code expired', body: 'Send a new one to continue.' },
   attempts_exhausted: {
-    tone: 'error',
-    copy: 'That code used all of its tries. Send a new one to continue.',
+    title: 'That code used all of its tries',
+    body: 'Send a new one to continue.',
   },
 };
+
+/** The line under the code box after the server refuses a code, in words the section owns. */
+function verifyFailureCopy(error: unknown): string {
+  if (error instanceof UserFacingError && error.status === 503) {
+    return userErrorMessage(error, 'Docket could not check that code. Try again.');
+  }
+  return userErrorMessage(error, 'That code didn’t work.');
+}
 
 /** Format the public Athena destination without exposing a linked caller number. */
 function formatDestination(e164: string): string {
@@ -324,7 +334,8 @@ export function VoicePhoneNumbers(): JSX.Element {
   const [nationalNumber, setNationalNumber] = useState('');
   const [code, setCode] = useState('');
   const [target, setTarget] = useState<CodeTarget>({ kind: 'auto' });
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [confirmation, setConfirmation] = useState<string | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<PhoneNumberOut | null>(null);
   const queryClient = useQueryClient();
   const reauth = useReauth();
@@ -370,7 +381,8 @@ export function VoicePhoneNumbers(): JSX.Element {
   const pointAt = (next: CodeTarget): void => {
     setTarget(next);
     setCode('');
-    setFeedback(null);
+    setConfirmation(null);
+    setCodeError(null);
   };
 
   /**
@@ -388,7 +400,7 @@ export function VoicePhoneNumbers(): JSX.Element {
 
   const bind = useApiMutation<PhoneChallengeOut, undefined>({
     onMutate: () => {
-      setFeedback(null);
+      setConfirmation(null);
     },
     mutationFn: () =>
       withFreshSession<PhoneChallengeOut>(
@@ -399,23 +411,20 @@ export function VoicePhoneNumbers(): JSX.Element {
         'Could not send the code.',
       ),
     invalidateKeys: [queryKeys.phoneNumbers()],
+    failureTitle: 'Could not send the code.',
     onSuccess: (result) => {
       acceptChallenge(result);
       setNationalNumber('');
-      setFeedback(
-        result.state === 'awaiting_code'
-          ? { tone: 'success', copy: 'Docket sent a verification code.' }
-          : null,
-      );
-    },
-    onError: (error) => {
-      setFeedback({ tone: 'error', copy: userErrorMessage(error, 'Could not send the code.') });
+      setConfirmation(result.state === 'awaiting_code' ? 'Docket sent a verification code.' : null);
     },
   });
 
+  // A refused code is about the code box, so its line sits under that field; the mutation's own
+  // notice stays off.
   const verify = useApiMutation<PhoneNumberOut, string>({
     onMutate: () => {
-      setFeedback(null);
+      setConfirmation(null);
+      setCodeError(null);
     },
     mutationFn: (id) =>
       withFreshSession<PhoneNumberOut>(
@@ -423,26 +432,19 @@ export function VoicePhoneNumbers(): JSX.Element {
         'That code didn’t work.',
       ),
     invalidateKeys: [queryKeys.phoneNumbers()],
+    failure: 'silent',
     onSuccess: () => {
       pointAt({ kind: 'auto' });
-      setFeedback({ tone: 'success', copy: 'Your phone number is verified.' });
+      setConfirmation('Your phone number is verified.');
     },
     onError: (error) => {
-      setFeedback({
-        tone: 'error',
-        copy: userErrorMessage(
-          error,
-          error instanceof UserFacingError && error.status === 503
-            ? 'Docket could not check that code. Try again.'
-            : 'That code didn’t work.',
-        ),
-      });
+      setCodeError(verifyFailureCopy(error));
     },
   });
 
   const resend = useApiMutation<PhoneChallengeOut, string>({
     onMutate: () => {
-      setFeedback(null);
+      setConfirmation(null);
     },
     mutationFn: (id) =>
       unwrap(
@@ -452,19 +454,12 @@ export function VoicePhoneNumbers(): JSX.Element {
     // The new code resets this number's expiry, tries, and cooldown — all of which now live on the
     // listed row, so the list has to be refetched for the section to stop describing the old code.
     invalidateKeys: [queryKeys.phoneNumbers()],
+    failureTitle: 'Could not send another code.',
     onSuccess: (result) => {
       acceptChallenge(result);
-      setFeedback(
-        result.state === 'awaiting_code'
-          ? { tone: 'success', copy: 'Docket sent a new verification code.' }
-          : null,
+      setConfirmation(
+        result.state === 'awaiting_code' ? 'Docket sent a new verification code.' : null,
       );
-    },
-    onError: (error) => {
-      setFeedback({
-        tone: 'error',
-        copy: userErrorMessage(error, 'Could not send another code.'),
-      });
     },
   });
 
@@ -473,7 +468,7 @@ export function VoicePhoneNumbers(): JSX.Element {
     { readonly id: string; readonly enabled: boolean }
   >({
     onMutate: () => {
-      setFeedback(null);
+      setConfirmation(null);
     },
     mutationFn: ({ id, enabled }) => {
       const request = (): Promise<RpcResponse<PhoneNumberOut>> =>
@@ -486,24 +481,16 @@ export function VoicePhoneNumbers(): JSX.Element {
         : unwrap(request, 'Could not pause phone calls.');
     },
     invalidateKeys: [queryKeys.phoneNumbers()],
+    failureTitle: 'Could not change phone calling.',
     onSuccess: (result, input) => {
-      setFeedback({
-        tone: 'success',
-        copy: input.enabled ? 'Athena calls are enabled.' : 'Athena calls are paused.',
-      });
+      setConfirmation(input.enabled ? 'Athena calls are enabled.' : 'Athena calls are paused.');
       seedListItem(queryClient, queryKeys.phoneNumbers(), result);
-    },
-    onError: (error) => {
-      setFeedback({
-        tone: 'error',
-        copy: userErrorMessage(error, 'Could not change phone calling.'),
-      });
     },
   });
 
   const call = useApiMutation<PhoneCallOut, string>({
     onMutate: () => {
-      setFeedback(null);
+      setConfirmation(null);
     },
     mutationFn: (id) =>
       unwrap(
@@ -511,20 +498,15 @@ export function VoicePhoneNumbers(): JSX.Element {
         'Could not start the call.',
       ),
     invalidateKeys: [queryKeys.phoneNumbers()],
+    failureTitle: 'Could not start the call.',
     onSuccess: () => {
-      setFeedback({
-        tone: 'success',
-        copy: 'Athena is calling your verified number. Press 1 when asked to connect.',
-      });
-    },
-    onError: (error) => {
-      setFeedback({ tone: 'error', copy: userErrorMessage(error, 'Could not start the call.') });
+      setConfirmation('Athena is calling your verified number. Press 1 when asked to connect.');
     },
   });
 
   const remove = useApiMutation<PhoneNumberOut, string>({
     onMutate: () => {
-      setFeedback(null);
+      setConfirmation(null);
     },
     mutationFn: (id) =>
       withFreshSession<PhoneNumberOut>(
@@ -532,16 +514,11 @@ export function VoicePhoneNumbers(): JSX.Element {
         'Could not remove that number.',
       ),
     invalidateKeys: [queryKeys.phoneNumbers()],
+    failureTitle: 'Could not remove that number.',
     onSuccess: () => {
       pointAt({ kind: 'auto' });
       setRemoveTarget(null);
-      setFeedback({ tone: 'success', copy: 'The phone number was removed.' });
-    },
-    onError: (error) => {
-      setFeedback({
-        tone: 'error',
-        copy: userErrorMessage(error, 'Could not remove that number.'),
-      });
+      setConfirmation('The phone number was removed.');
     },
   });
 
@@ -615,10 +592,10 @@ export function VoicePhoneNumbers(): JSX.Element {
 
   const statefulNumber =
     verifying ?? pendingNumbers.find((number) => liveChallengeState(number, now) !== null) ?? null;
-  const challengeFeedback = statefulNumber
+  const challengeMessage = statefulNumber
     ? (STATE_MESSAGE[liveChallengeState(statefulNumber, now) ?? 'awaiting_code'] ?? null)
     : null;
-  const visibleFeedback = feedback ?? challengeFeedback ?? null;
+  const challengeNotice = confirmation === null ? challengeMessage : null;
 
   const renderLoaded = (): JSX.Element | null => {
     const data = numbersQ.data;
@@ -687,6 +664,7 @@ export function VoicePhoneNumbers(): JSX.Element {
           >
             <Field
               label="Enter the 6-digit code"
+              {...(codeError ? { error: codeError } : {})}
               description={
                 challenge ? (
                   <>
@@ -709,6 +687,7 @@ export function VoicePhoneNumbers(): JSX.Element {
                 value={code}
                 onChange={(event) => {
                   setCode(event.target.value.replace(/\D/g, ''));
+                  setCodeError(null);
                 }}
                 placeholder="000000"
                 data-phone-field="code"
@@ -804,19 +783,15 @@ export function VoicePhoneNumbers(): JSX.Element {
           </Text>
         )}
 
-        {visibleFeedback ? (
-          <p
-            role={visibleFeedback.tone === 'error' ? 'alert' : 'status'}
-            aria-live="polite"
-            className={visibleFeedback.tone === 'error' ? 'text-error' : undefined}
-          >
-            <Text
-              token="body-small"
-              tone={visibleFeedback.tone === 'error' ? 'inherit' : undefined}
-            >
-              {visibleFeedback.copy}
-            </Text>
+        {confirmation ? (
+          <p role="status" aria-live="polite">
+            <Text token="body-small">{confirmation}</Text>
           </p>
+        ) : null}
+        {challengeNotice ? (
+          <InlineBanner tone="critical" title={challengeNotice.title}>
+            {challengeNotice.body}
+          </InlineBanner>
         ) : null}
       </>
     );
@@ -832,19 +807,7 @@ export function VoicePhoneNumbers(): JSX.Element {
         </div>
       ) : null}
       {numbersQ.isError ? (
-        <div role="alert" className="flex items-center justify-between gap-3">
-          <Text token="body-small" tone="error">
-            Could not load your phone numbers.
-          </Text>
-          <Button
-            variant="outline"
-            onClick={() => {
-              void numbersQ.refetch();
-            }}
-          >
-            Try again
-          </Button>
-        </div>
+        <QueryLoadFailure title="Phone numbers" query={numbersQ} size="panel" />
       ) : null}
       {renderLoaded()}
       <ConfirmDestructiveDialog
@@ -860,10 +823,9 @@ export function VoicePhoneNumbers(): JSX.Element {
         }
         confirmLabel="Remove phone number"
         pending={remove.isPending}
-        error={removeTarget && feedback?.tone === 'error' ? feedback.copy : null}
         onConfirm={() => {
           if (!removeTarget) return;
-          setFeedback(null);
+          setConfirmation(null);
           remove.mutate(removeTarget.id);
         }}
       />

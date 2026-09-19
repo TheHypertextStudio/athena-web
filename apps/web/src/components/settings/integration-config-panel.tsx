@@ -33,8 +33,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { JSX } from 'react';
 import { useState } from 'react';
 
-import { presentFailure } from '@/components/feedback';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { presentFailure, QueryLoadFailure } from '@/components/feedback';
 import { api } from '@/lib/api';
 import {
   ApiRequestError,

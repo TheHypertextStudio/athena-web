@@ -19,7 +19,8 @@ import {
   type PersonalAthenaSessionDetail,
   type PersonalAthenaSessionSummary,
 } from '@/lib/athena/presentation';
-import { queryKeys, useLiveApiQuery } from '@/lib/query';
+import { queryKeys, unwrap, useLiveApiQuery } from '@/lib/query';
+import { presentFailure } from '@/components/feedback';
 import MentionTextarea from '@/components/mentions/mention-textarea';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 
@@ -97,7 +98,6 @@ export function AthenaWorkspace({
   } | null>(null);
   const [loadingOlderLane, setLoadingOlderLane] = useState<AthenaQueueState | null>(null);
   const [loadingOlderActivity, setLoadingOlderActivity] = useState(false);
-  const [historyFeedback, setHistoryFeedback] = useState<string | null>(null);
   const allSessions = useMemo(() => {
     if (!queue.data) return [];
     const sessions = [
@@ -179,7 +179,6 @@ export function AthenaWorkspace({
   const detail = useLiveApiQuery(personalAthenaDetailDef(effectiveSelectedId, transport), 3_000);
   useEffect(() => {
     setActivityHistory(null);
-    setHistoryFeedback(null);
   }, [effectiveSelectedId]);
   const workbenchSession = useMemo(() => {
     if (!detail.data) return null;
@@ -211,11 +210,11 @@ export function AthenaWorkspace({
       if (!cursor || loadingOlderLane !== null) return;
       const config = QUEUE_LANE_CONTINUATION[lane];
       setLoadingOlderLane(lane);
-      setHistoryFeedback(null);
       try {
-        const response = await transport.queue({ [config.inputCursor]: cursor });
-        if (!response.ok) throw new Error(`older ${lane} page failed`);
-        const page = await response.json();
+        const page = await unwrap(
+          () => transport.queue({ [config.inputCursor]: cursor }),
+          'Could not load older Athena work.',
+        );
         const nextCursor = page.nextCursors?.[config.responseCursor];
         setOlderSessions((current) => ({
           ...current,
@@ -224,8 +223,8 @@ export function AthenaWorkspace({
             ...(nextCursor ? { nextCursor } : {}),
           },
         }));
-      } catch {
-        setHistoryFeedback('Could not load older Athena work.');
+      } catch (caught) {
+        presentFailure(caught, 'Could not load older Athena work.');
       } finally {
         setLoadingOlderLane(null);
       }
@@ -236,19 +235,20 @@ export function AthenaWorkspace({
   const loadOlderActivity = useCallback(async (): Promise<void> => {
     if (!workbenchSession?.activityNextCursor || loadingOlderActivity) return;
     const sessionId = workbenchSession.id;
+    const cursor = workbenchSession.activityNextCursor;
     setLoadingOlderActivity(true);
-    setHistoryFeedback(null);
     try {
-      const response = await transport.activity(sessionId, workbenchSession.activityNextCursor);
-      if (!response.ok) throw new Error('older activity page failed');
-      const page = await response.json();
+      const page = await unwrap(
+        () => transport.activity(sessionId, cursor),
+        'Could not load older Athena activity.',
+      );
       setActivityHistory((current) => ({
         sessionId,
         items: [...page.items, ...(current?.sessionId === sessionId ? current.items : [])],
         ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
       }));
-    } catch {
-      setHistoryFeedback('Could not load older Athena activity.');
+    } catch (caught) {
+      presentFailure(caught, 'Could not load older Athena activity.');
     } finally {
       setLoadingOlderActivity(false);
     }
@@ -301,25 +301,6 @@ export function AthenaWorkspace({
           <VoiceLaunch workspaceId={workspaceFilter ?? null} />
         </div>
       </header>
-
-      {actions.feedback ? (
-        <p
-          role="alert"
-          aria-live="assertive"
-          className="border-outline-variant bg-error-container text-on-error-container border-b px-4 py-3 text-sm"
-        >
-          {actions.feedback}
-        </p>
-      ) : null}
-      {historyFeedback ? (
-        <p
-          role="alert"
-          aria-live="assertive"
-          className="border-outline-variant bg-error-container text-on-error-container border-b px-4 py-3 text-sm"
-        >
-          {historyFeedback}
-        </p>
-      ) : null}
 
       {/* placeholder: the session list and the pane beside it — which Athena sessions exist, how
           they group, and what the first one contains. The workspace's own header and controls are

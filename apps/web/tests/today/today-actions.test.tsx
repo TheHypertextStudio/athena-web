@@ -6,10 +6,13 @@ import {
 } from '../../src/lib/contracts/hub';
 import { OrganizationId } from '@docket/identity-access/ids';
 import { TaskId } from '@docket/work/ids';
+import '@testing-library/jest-dom/vitest';
+
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, screen, waitFor } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { queryKeys } from '../../src/lib/query';
 import { useTodayActions } from '../../src/app/(app)/today/use-today-actions';
@@ -111,10 +114,18 @@ function setup(initial: HubTodayOut): {
   return {
     client,
     wrapper: ({ children }) => (
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      <QueryClientProvider client={client}>
+        {children}
+        <Toaster />
+      </QueryClientProvider>
     ),
   };
 }
+
+afterEach(() => {
+  dismissAllNotices();
+  cleanup();
+});
 
 beforeEach(() => {
   completePost.mockReset().mockResolvedValue(response());
@@ -295,7 +306,7 @@ describe('useTodayActions', () => {
     ).toBe(startsAt);
   });
 
-  it('surfaces an application-owned error when the shared timer cannot start', async () => {
+  it('presents a notice when the shared timer cannot start', async () => {
     startTimer.mockRejectedValueOnce(new Error('provider internals'));
     const now = item('now', 0);
     const after = item('after', 1);
@@ -312,8 +323,7 @@ describe('useTodayActions', () => {
       result.current.start(suggestion);
     });
 
-    await waitFor(() => {
-      expect(result.current.error).toBe('Added to Today, but tracking did not start.');
-    });
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).not.toContain('provider internals');
   });
 });

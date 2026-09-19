@@ -21,7 +21,7 @@
 import type { NotionWorkspacePerson } from '@docket/connections/notion/mirror-contract';
 import { CheckCircle2, CircleAlert, User, UserOff, Users } from '@docket/ui/icons';
 import { EmptyState } from '@docket/ui/components';
-import { Avatar, AvatarFallback, Button, Select, Skeleton } from '@docket/ui/primitives';
+import { Avatar, AvatarFallback, Button, Select, Skeleton, Text } from '@docket/ui/primitives';
 import NextLink from '@/components/docket-link';
 import type { JSX, ReactNode } from 'react';
 import { useState } from 'react';
@@ -56,6 +56,20 @@ function initials(name: string): string {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? '')
     .join('');
+}
+
+/** The heading above the people who still need a decision. */
+function UnmatchedHeader({ count }: { readonly count: number }): JSX.Element {
+  return (
+    <div className="bg-surface-container flex items-center gap-2 px-4 py-2.5">
+      <Text token="label-large" tone="error" className="flex shrink-0">
+        <CircleAlert aria-hidden="true" className="size-4" />
+      </Text>
+      <span className="text-on-surface text-label-large">
+        {count === 1 ? '1 person to sort out' : `${String(count)} people to sort out`}
+      </span>
+    </div>
+  );
 }
 
 /** The Notion ↔ Docket identity surface. */
@@ -112,14 +126,7 @@ export function NotionPeoplePanel({
     <div className="@container flex flex-col gap-4">
       {people.unmatched.length > 0 ? (
         <SettingsGroup className="overflow-hidden" body="rows">
-          <div className="bg-surface-container flex items-center gap-2 px-4 py-2.5">
-            <CircleAlert aria-hidden="true" className="text-error size-4" />
-            <span className="text-on-surface text-label-large">
-              {people.unmatched.length === 1
-                ? '1 person to sort out'
-                : `${String(people.unmatched.length)} people to sort out`}
-            </span>
-          </div>
+          <UnmatchedHeader count={people.unmatched.length} />
           <p className="text-on-surface-variant text-body-small px-4 py-2">
             These people work in your Notion workspace but Docket doesn’t know who they are. Until
             you say, anything assigned to them in Notion can’t reach Docket.

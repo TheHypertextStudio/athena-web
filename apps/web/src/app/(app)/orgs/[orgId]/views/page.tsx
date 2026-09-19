@@ -63,7 +63,6 @@ export default function ViewsPage(): JSX.Element {
     querySummary,
     canScopeToTeam,
     saving,
-    saveError,
     save,
     resetSave,
     openView,
@@ -157,7 +156,6 @@ export default function ViewsPage(): JSX.Element {
                 summary={querySummary}
                 canScopeToTeam={canScopeToTeam}
                 saving={saving}
-                error={saveError}
                 onSave={(payload) => {
                   save(payload);
                 }}

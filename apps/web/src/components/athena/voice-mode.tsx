@@ -30,6 +30,7 @@ import type {
   VoiceSessionState,
   VoiceTurnOut,
 } from '@docket/athena/voice';
+import { InlineBanner } from '@docket/ui/components';
 import { Mic, MicOff, PhoneOff, Sparkles, SoundWave } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import {
@@ -49,7 +50,6 @@ import {
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 import {
@@ -90,6 +90,32 @@ const REFUSAL_COPY: Readonly<Record<VoiceStartRefusal, string>> = {
   'link-failed': 'The voice connection didn’t open. Try again in a moment.',
 };
 
+/** Props for {@link VoiceStartNotice}. */
+interface VoiceStartNoticeProps {
+  /** Application-owned copy for why the session did not open. */
+  readonly notice: string;
+  /** Open the microphone and the session again. */
+  readonly onRetry: () => Promise<void>;
+}
+
+/** What went wrong opening a session, with the retry beside it. */
+function VoiceStartNotice({ notice, onRetry }: VoiceStartNoticeProps): JSX.Element {
+  return (
+    <InlineBanner
+      tone="critical"
+      title="Voice mode could not start"
+      action={{
+        label: 'Try again',
+        onSelect: () => {
+          void onRetry();
+        },
+      }}
+    >
+      {notice}
+    </InlineBanner>
+  );
+}
+
 /**
  * The live voice session panel.
  *
@@ -123,6 +149,7 @@ export function VoiceMode({
   const start = useApiMutation<VoiceSessionOut, { workspaceId: string | null }>({
     mutationFn: (json) =>
       unwrap(() => api.v1.me.athena.voice.$post({ json }), 'Voice mode isn’t available right now.'),
+    failureTitle: 'Voice mode isn’t available right now.',
   });
 
   const teardown = useCallback((): void => {
@@ -150,9 +177,9 @@ export function VoiceMode({
     let opened: VoiceSessionOut;
     try {
       opened = await start.mutateAsync({ workspaceId: workspaceId ?? null });
-    } catch (caught) {
+    } catch {
+      // The rejected session request is already on the notice stack, from the mutation.
       for (const track of stream.getTracks()) track.stop();
-      setNotice(userErrorMessage(caught, 'Voice mode isn’t available right now.'));
       return;
     }
     setSession(opened);
@@ -254,16 +281,7 @@ export function VoiceMode({
         <DialogBody className="flex flex-col gap-4">
           <VoiceStatus state={state} level={level} />
 
-          {notice ? (
-            <p
-              role="alert"
-              className="bg-error-container text-on-error-container rounded-md px-3 py-2"
-            >
-              <Text token="body-medium" tone="inherit">
-                {notice}
-              </Text>
-            </p>
-          ) : null}
+          {notice ? <VoiceStartNotice notice={notice} onRetry={begin} /> : null}
 
           <Surface
             tone="card"

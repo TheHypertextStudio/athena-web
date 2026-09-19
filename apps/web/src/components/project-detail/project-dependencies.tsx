@@ -8,6 +8,7 @@ import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 import { useMemo, useState } from 'react';
 
+import { QueryLoadFailure } from '@/components/feedback';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { useProjectDependencies } from '@/lib/use-project-dependencies';
 
@@ -26,8 +27,10 @@ export function ProjectDependenciesPanel({
 }: ProjectDependenciesPanelProps): JSX.Element {
   const [pickerOpen, setPickerOpen] = useState(false);
   const options = useComposerOptions(orgId, ['projects'], pickerOpen);
-  const { dependencies, loading, error, add, remove, pending, mutationError } =
-    useProjectDependencies(orgId, projectId);
+  const { dependencies, loading, loadFailure, add, remove, pending } = useProjectDependencies(
+    orgId,
+    projectId,
+  );
   const projectOptions = useMemo(
     () => options.projectOptions.filter((option) => option.value !== projectId),
     [options.projectOptions, projectId],
@@ -47,10 +50,8 @@ export function ProjectDependenciesPanel({
           <Skeleton className="h-24 w-full rounded-xl" />
           <Skeleton className="h-24 w-full rounded-xl" />
         </div>
-      ) : error ? (
-        <p role="alert" className="text-error text-body-medium">
-          {error}
-        </p>
+      ) : loadFailure ? (
+        <QueryLoadFailure size="panel" title="Project dependencies" query={loadFailure} />
       ) : (
         <div className="flex flex-col gap-3">
           <DependencyColumn
@@ -87,11 +88,6 @@ export function ProjectDependenciesPanel({
           />
         </div>
       )}
-      {mutationError ? (
-        <p role="alert" className="text-error text-body-medium">
-          {mutationError}
-        </p>
-      ) : null}
     </section>
   );
 }

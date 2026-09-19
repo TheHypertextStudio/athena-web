@@ -9,6 +9,7 @@ import {
   PopoverContent,
   type PopoverVirtualAnchor,
   Button,
+  FieldError,
   Skeleton,
 } from '@docket/ui/primitives';
 import { RELATION_DEFINITIONS } from '@docket/work/relation-contract';
@@ -279,11 +280,7 @@ export function RelationTargetPickerOverlay({
                 setSlotError(null);
               }}
             />
-            {slotError ? (
-              <p id="relation-slot-error" role="alert" className="text-error text-body-small">
-                {slotError}
-              </p>
-            ) : null}
+            {slotError ? <FieldError id="relation-slot-error">{slotError}</FieldError> : null}
             <Button type="submit" disabled={slotStart.length === 0}>
               Schedule for 30 minutes
             </Button>

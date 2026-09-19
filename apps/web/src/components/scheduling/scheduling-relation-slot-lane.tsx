@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@docket/ui/lib/utils';
+import { CRITICAL_PAINT } from '@docket/ui/primitives';
 import type { HTMLAttributes, JSX, ReactNode } from 'react';
 
 import { useSchedulingSlotDropTarget } from '@/components/dnd/use-scheduling-slot-drop-target';
@@ -45,10 +46,10 @@ export function SchedulingRelationSlotLane({
       {drop.startMinutes !== null ? (
         <div
           className={cn(
-            'text-label-small pointer-events-none absolute inset-x-1 z-[65] rounded-md border-2 px-2 py-1',
+            'text-label-small pointer-events-none absolute inset-x-1 z-[65] rounded-md px-2 py-1',
             drop.dropState === 'accept'
-              ? 'border-primary bg-primary-container text-on-primary-container'
-              : 'border-error bg-error-container text-on-error-container',
+              ? 'border-primary bg-primary-container text-on-primary-container border-2'
+              : CRITICAL_PAINT.rejectedBlock,
           )}
           data-schedule-slot-preview={drop.startMinutes}
           style={{ top: previewTop(drop.startMinutes), height: previewHeight }}

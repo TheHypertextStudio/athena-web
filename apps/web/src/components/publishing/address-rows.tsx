@@ -231,15 +231,7 @@ export function DefaultAddressRow({
               Use lowercase letters and numbers, separated by hyphens, and not a reserved name.
             </Text>
           ) : (
-            <SettingRowStatus
-              pending={rename.isPending}
-              saved={rename.isSuccess}
-              error={
-                rename.error
-                  ? userErrorMessage(rename.error, 'Could not change this address.')
-                  : null
-              }
-            />
+            <SettingRowStatus pending={rename.isPending} saved={rename.isSuccess} />
           )}
         </div>
       ) : null}
@@ -440,15 +432,15 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
         </Text>
       ) : null}
 
-      {verify.error || remove.error ? (
+      {verify.error ? (
         <div className={`flex items-center gap-3 ${ROW_INDENT}`}>
           <Text as="p" token="body-small" tone="error" role="alert">
-            {userErrorMessage(verify.error ?? remove.error, 'Could not update this domain.')}
+            {userErrorMessage(verify.error, 'Could not check this domain.')}
           </Text>
           {/* The auto-reverify effect only runs on mount, so a domain that was already `verified`
               when this row loaded has no other trigger to retry a failed re-check — without this,
               the stale `Verified`/`Primary` badges above sit next to this error indefinitely. */}
-          {domain.verified && verify.error ? (
+          {domain.verified ? (
             // A pending retry clears `verify.error` immediately (TanStack's mutation states are
             // mutually exclusive), so this branch never coexists with a pending request to show a
             // "Checking…" label for.

@@ -3,13 +3,7 @@
 /** The workspace Library: full-corpus resource search and work-context browsing. */
 import type { ExternalResourceType } from '@docket/connections/resource-provider-contract';
 import type { SearchDocumentKind, SearchOut, SearchResult } from '../../lib/contracts/search';
-import {
-  type Column,
-  EntityTable,
-  type EntityTableGroup,
-  EmptyState,
-  InlineBanner,
-} from '@docket/ui/components';
+import { type Column, EntityTable, type EntityTableGroup, EmptyState } from '@docket/ui/components';
 import { Info, Library, Link as LinkIcon, RefreshCw, type LucideIcon } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
@@ -25,7 +19,7 @@ import {
 } from 'react';
 
 import { SEARCH_KIND_ICON } from '@/components/command-palette/use-hub-search';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { PartialLoadBanner, QueryLoadFailure } from '@/components/feedback';
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
 import { InPageFindButton } from '@/components/in-page-search/in-page-find-button';
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
@@ -340,14 +334,13 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
         Loading more resources
       </div>
     ) : resourcesQ.isFetchNextPageError ? (
-      <InlineBanner
-        tone="critical"
+      <PartialLoadBanner
         density="compact"
         title="More resources could not load"
-        action={{ label: 'Try again', onSelect: () => void resourcesQ.fetchNextPage() }}
+        onRetry={() => void resourcesQ.fetchNextPage()}
       >
         The resources above are still current.
-      </InlineBanner>
+      </PartialLoadBanner>
     ) : undefined;
 
   // placeholder: the library's resources, which the current filters decide, and the fields of

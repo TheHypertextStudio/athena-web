@@ -32,7 +32,6 @@ import {
 } from '@tanstack/react-query';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
-import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { useHighlightedIds } from '@/components/athena/proposal-highlight';
 import { useProposedTaskChanges } from '@/lib/athena/proposed-changes';
 import { useCreateLabel } from '@/components/labels/queries';
@@ -49,7 +48,7 @@ import {
   type AgentActivityEntry,
 } from '@/components/project-detail/agent-activity-feed';
 import { AgentsStrip, type AgentHere } from '@/components/project-detail/agents-strip';
-import { MilestoneTasks } from '@/components/project-detail/milestone-tasks';
+import { ProjectTasksTab } from '@/components/project-detail/project-tasks-tab';
 import { ProjectMilestonesPanel } from '@/components/project-detail/project-milestones';
 import { ProjectDependenciesPanel } from '@/components/project-detail/project-dependencies';
 import { OverviewSummary } from '@/components/project-detail/overview-summary';
@@ -820,47 +819,24 @@ export default function ProjectDetailPage(): JSX.Element {
         </section>
       ) : null}
       {tab === 'tasks' ? (
-        <section
-          role="tabpanel"
-          id="tabpanel-tasks"
-          aria-labelledby="tab-tasks"
-          className="flex flex-col gap-2"
-        >
-          {workQ.isError ? (
-            <PartialLoadBanner title={workTitle} onRetry={() => void workQ.refetch()} />
-          ) : null}
-          <MilestoneTasks
-            orgId={orgId}
-            tasks={milestoneTasks}
-            milestones={(workQ.data?.milestones ?? []).map((milestone) => ({
-              id: milestone.id,
-              name: milestone.name,
-              targetDate: milestone.targetDate ?? null,
-            }))}
-            resolveActor={() => ({ name: 'Unknown', kind: 'human' as const })}
-            taskNoun="task"
-            onOpenTask={(task) => {
-              openTaskRecord(task);
-            }}
-            onCreate={() => {
-              router.push(`/orgs/${orgId}/tasks?projectId=${projectId}`);
-            }}
-            onQuickAdd={async () => undefined}
-            onRename={() => undefined}
-            canEdit={false}
-            proposedByTaskId={proposedByTaskId}
-            highlightedIds={highlightedIds}
-          />
-          <div className="bg-surface-container h-96 overflow-hidden rounded-xl">
-            <TaskGraphPanel
-              scope={{ orgId, projectId }}
-              density="compact"
-              onExpand={() => {
-                router.push(`/orgs/${orgId}/graph?projectId=${projectId}`);
-              }}
-            />
-          </div>
-        </section>
+        <ProjectTasksTab
+          orgId={orgId}
+          projectId={projectId}
+          tasks={milestoneTasks}
+          milestones={(workQ.data?.milestones ?? []).map((milestone) => ({
+            id: milestone.id,
+            name: milestone.name,
+            targetDate: milestone.targetDate ?? null,
+          }))}
+          workFailure={
+            workQ.isError ? { title: workTitle, onRetry: () => void workQ.refetch() } : null
+          }
+          proposedByTaskId={proposedByTaskId}
+          highlightedIds={highlightedIds}
+          onOpenTask={(task) => {
+            openTaskRecord(task);
+          }}
+        />
       ) : null}
       {tab === 'updates' ? (
         <div role="tabpanel" id="tabpanel-updates" aria-labelledby="tab-updates">

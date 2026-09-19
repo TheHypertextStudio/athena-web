@@ -1,6 +1,6 @@
 /** Durable post-commit consequence queue for canvas object commands. */
 import { db, objectCommandEffectJob, type project } from '@docket/db';
-import { and, asc, eq, inArray, lt, lte, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, lt, lte, or, type SQL } from 'drizzle-orm';
 
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { emitEventStrict } from '../routes/event-emit';
@@ -95,6 +95,56 @@ export interface ProcessObjectCommandEffectJobsResult {
   readonly failed: number;
 }
 
+/** Process a single command effect job, returning success/failure count. */
+async function processCommandEffectJob(
+  now: Date,
+  jobId: string,
+  due: SQL | undefined,
+): Promise<{ succeeded: 0 | 1; failed: 0 | 1 }> {
+  const [job] = await db
+    .update(objectCommandEffectJob)
+    .set({ status: 'processing', lockedAt: now })
+    .where(and(eq(objectCommandEffectJob.id, jobId), due))
+    .returning();
+  if (!job) return { succeeded: 0, failed: 0 };
+  try {
+    const payload = parseObjectCommandEffectPayload(job.payload);
+    for (let index = job.nextEffect; index < payload.effects.length; index += 1) {
+      const effect = payload.effects[index];
+      if (!effect) throw new Error('Command effect payload contains an empty effect');
+      await processObjectCommandEffect(payload, effect);
+      await db
+        .update(objectCommandEffectJob)
+        .set({ nextEffect: index + 1 })
+        .where(eq(objectCommandEffectJob.id, job.id));
+    }
+    await db
+      .update(objectCommandEffectJob)
+      .set({
+        status: 'succeeded',
+        processedAt: now,
+        lockedAt: null,
+        lastError: null,
+      })
+      .where(eq(objectCommandEffectJob.id, job.id));
+    return { succeeded: 1, failed: 0 };
+  } catch (error) {
+    const attempts = job.attempts + 1;
+    const retryMs = Math.min(60_000, 1_000 * 2 ** Math.max(0, attempts - 1));
+    await db
+      .update(objectCommandEffectJob)
+      .set({
+        status: 'failed',
+        attempts,
+        lockedAt: null,
+        lastError: error instanceof Error ? error.message : String(error),
+        runAfter: new Date(now.getTime() + retryMs),
+      })
+      .where(eq(objectCommandEffectJob.id, job.id));
+    return { succeeded: 0, failed: 1 };
+  }
+}
+
 /** Drain committed canvas command consequences. */
 export async function processObjectCommandEffectJobs(
   options: ProcessObjectCommandEffectJobsOptions = {},
@@ -121,48 +171,9 @@ export async function processObjectCommandEffectJobs(
   let failed = 0;
 
   for (const candidate of jobs) {
-    const [job] = await db
-      .update(objectCommandEffectJob)
-      .set({ status: 'processing', lockedAt: now })
-      .where(and(eq(objectCommandEffectJob.id, candidate.id), due))
-      .returning();
-    if (!job) continue;
-    try {
-      const payload = parseObjectCommandEffectPayload(job.payload);
-      for (let index = job.nextEffect; index < payload.effects.length; index += 1) {
-        const effect = payload.effects[index];
-        if (!effect) throw new Error('Command effect payload contains an empty effect');
-        await processObjectCommandEffect(payload, effect);
-        await db
-          .update(objectCommandEffectJob)
-          .set({ nextEffect: index + 1 })
-          .where(eq(objectCommandEffectJob.id, job.id));
-      }
-      await db
-        .update(objectCommandEffectJob)
-        .set({
-          status: 'succeeded',
-          processedAt: now,
-          lockedAt: null,
-          lastError: null,
-        })
-        .where(eq(objectCommandEffectJob.id, job.id));
-      succeeded += 1;
-    } catch (error) {
-      const attempts = job.attempts + 1;
-      const retryMs = Math.min(60_000, 1_000 * 2 ** Math.max(0, attempts - 1));
-      await db
-        .update(objectCommandEffectJob)
-        .set({
-          status: 'failed',
-          attempts,
-          lockedAt: null,
-          lastError: error instanceof Error ? error.message : String(error),
-          runAfter: new Date(now.getTime() + retryMs),
-        })
-        .where(eq(objectCommandEffectJob.id, job.id));
-      failed += 1;
-    }
+    const result = await processCommandEffectJob(now, candidate.id, due);
+    succeeded += result.succeeded;
+    failed += result.failed;
   }
   try {
     await pruneSucceededObjectCommandEffectJobs(now);

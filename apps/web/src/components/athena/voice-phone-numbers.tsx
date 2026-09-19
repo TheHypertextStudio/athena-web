@@ -603,7 +603,7 @@ export function VoicePhoneNumbers(): JSX.Element {
     return (
       <>
         {data.athenaNumber ? (
-          <div className="border-outline-variant flex min-w-0 flex-col gap-1 border-b pb-3">
+          <div className="flex min-w-0 flex-col gap-1 pb-3">
             <Text token="body-medium">
               Call{' '}
               <a

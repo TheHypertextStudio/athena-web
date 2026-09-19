@@ -203,13 +203,10 @@ describe('McpAppView frames', () => {
     expect(posted).toHaveLength(0);
   });
 
-  it('draws a visible boundary only when the resource explicitly prefers one', () => {
+  it('sets the frame on a tonal surface only when the resource explicitly prefers a boundary', () => {
     const { view } = mount();
-    expect(screen.getByTestId('mcp-app-view')).toHaveClass(
-      'border',
-      'border-outline-variant',
-      'bg-surface-container-low',
-    );
+    expect(screen.getByTestId('mcp-app-view')).toHaveClass('bg-surface-container-low');
+    expect(screen.getByTestId('mcp-app-view')).not.toHaveClass('border');
     cleanup();
     render(
       <McpAppView

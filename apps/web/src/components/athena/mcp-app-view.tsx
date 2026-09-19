@@ -311,6 +311,20 @@ function deliverDownloads(contents: readonly unknown[]): boolean {
 }
 
 /**
+ * Classes for the inline frame's figure.
+ *
+ * @param displayMode - The view's current display mode; fullscreen hides the inline figure.
+ * @param prefersBorder - Whether the resource asked for a visible boundary. The boundary is the
+ *   figure's `card` tone against the transcript; no line is drawn.
+ * @returns The figure's class string.
+ */
+function frameClassName(displayMode: McpUiDisplayMode, prefersBorder: boolean): string {
+  if (displayMode === 'fullscreen') return 'm-0 hidden';
+  if (prefersBorder) return 'm-0 overflow-hidden';
+  return 'm-0 overflow-hidden bg-transparent';
+}
+
+/**
  * The browser half of the MCP Apps host: one sandboxed card in a transcript.
  *
  * @remarks
@@ -658,13 +672,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
         as="figure"
         tone={resource.meta?.prefersBorder === true ? 'card' : 'page'}
         shape="medium"
-        className={
-          displayMode === 'fullscreen'
-            ? 'm-0 hidden'
-            : resource.meta?.prefersBorder === true
-              ? 'border-outline-variant m-0 overflow-hidden border'
-              : 'm-0 overflow-hidden bg-transparent'
-        }
+        className={frameClassName(displayMode, resource.meta?.prefersBorder === true)}
         data-testid="mcp-app-view"
         data-display-mode={displayMode}
         data-resource-uri={resource.uri}

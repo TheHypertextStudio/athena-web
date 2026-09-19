@@ -180,7 +180,8 @@ function MailRowView({
   return (
     <li
       className={cn(
-        'group/row border-outline-variant/40 flex flex-col gap-1.5 border-b px-4 py-3 last:border-b-0',
+        surfaceToneColor('well'),
+        'group/row flex flex-col gap-1.5 rounded-lg px-4 py-3',
       )}
     >
       <div className="flex min-w-0 items-baseline gap-2">
@@ -285,7 +286,12 @@ export function MailInbox(): JSX.Element {
           </Text>
         </Surface>
       ) : (
-        <Surface as="ul" tone="card" shape="medium" className="min-h-0 flex-1 overflow-auto">
+        <Surface
+          as="ul"
+          tone="card"
+          shape="medium"
+          className="flex min-h-0 flex-1 flex-col gap-1 overflow-auto p-1"
+        >
           {messages.map((message) => (
             <MailRowView
               key={message.id}

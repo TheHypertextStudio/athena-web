@@ -112,8 +112,9 @@ export const RULE_ROOTS: Partial<Record<DesignTokenRule, readonly string[]>> = {
  *
  * - **A field's editable affordance.** `field.tsx` — the outline is what says "type here", and
  *   `Input`, `Textarea` and `Select` all resolve through it.
- * - **A control's own outline.** `checkbox.tsx` and `switch.tsx` draw a box and a track; without
- *   the border there is no control, only a fill that appears when checked.
+ * - **A control's own outline.** `switch.tsx` draws a track; without the border there is no
+ *   control, only a fill that appears when on. `checkbox.tsx` left this list when its unchecked box
+ *   became a tonal fill that clears 3:1 on its own.
  * - **MD3's outlined variants**, where the line *is* the variant: `button.tsx` (Outlined Button),
  *   `chip.tsx` (`outline-width 1dp` unselected, per the chip spec) and `badge.tsx`, whose
  *   `outline` variant has no fill and would otherwise be bare text.
@@ -128,7 +129,6 @@ export const BORDER_EARNED_FILES: readonly string[] = [
   'packages/ui/src/components/shell/AppShell.tsx',
   'packages/ui/src/primitives/badge.tsx',
   'packages/ui/src/primitives/button.tsx',
-  'packages/ui/src/primitives/checkbox.tsx',
   'packages/ui/src/primitives/chip.tsx',
   'packages/ui/src/primitives/field.tsx',
   'packages/ui/src/primitives/switch.tsx',

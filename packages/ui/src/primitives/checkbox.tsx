@@ -15,8 +15,15 @@
  *   participation, the `indeterminate` IDL property, label association, `:checked` state, and
  *   assistive-technology support. No ARIA is re-implemented and no extra dependency is introduced.
  * - `appearance-none` removes the platform rendering; the box, the fill, and the radius are drawn
- *   with semantic tokens (`outline`, `primary`, `on-primary`), so light and dark both resolve
- *   automatically.
+ *   with semantic tokens (`on-surface-variant`, `primary`, `on-primary`), so light and dark both
+ *   resolve automatically.
+ * - The unchecked box is a tonal fill, not a drawn outline: `on-surface-variant` at 70%. That is the
+ *   lightest step that still clears WCAG 1.4.11's 3:1 for a UI component against every surface a
+ *   checkbox sits on. Measured against the surface ramp (sRGB blend, WCAG relative luminance):
+ *   light 3.25:1 on `surface-container-highest` up to 3.60:1 on `surface`; dark 3.73:1 on
+ *   `surface-container-highest` up to 5.15:1 on `surface-container-lowest`. The obvious tonal
+ *   candidate, `surface-container-highest`, measures 1.0–1.6:1 on the same surfaces and would leave
+ *   an unchecked box invisible.
  * - The tick is a sibling {@link Check} glyph revealed by `peer-checked:` rather than a background
  *   image, because a `data:` SVG would have to hard-code a stroke colour and could not follow the
  *   theme.
@@ -81,8 +88,8 @@ export function Checkbox({
           // `corner-xs` (4px), not an arbitrary 3px. MD3 specs the checkbox at a 2px corner and
           // this sat between that and the scale; 4px is the smallest corner the system names, and
           // one pixel on a 16px box is not a distinction worth an off-scale value.
-          'peer border-outline rounded-corner-xs size-4 shrink-0 appearance-none border-2 bg-transparent transition-colors',
-          'checked:border-primary checked:bg-primary indeterminate:border-primary indeterminate:bg-primary',
+          'peer rounded-corner-xs bg-on-surface-variant/70 size-4 shrink-0 appearance-none transition-colors',
+          'checked:bg-primary indeterminate:bg-primary',
           'disabled:cursor-not-allowed disabled:opacity-50',
           focusRing,
           className,

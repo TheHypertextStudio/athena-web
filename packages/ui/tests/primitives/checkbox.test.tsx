@@ -24,8 +24,10 @@ describe('Checkbox', () => {
     const box = screen.getByRole('checkbox', { name: 'Show holidays' });
     // `appearance-none` is what removes the OS rendering; without it `accent-*` just tints a
     // native blue square that ignores the theme and dark mode.
-    expect(box).toHaveClass('appearance-none', 'border-outline', 'checked:bg-primary');
+    expect(box).toHaveClass('appearance-none', 'bg-on-surface-variant/70', 'checked:bg-primary');
     expect(box.className).not.toContain('accent-');
+    // The unchecked box is a tonal fill; a drawn outline is banned outside field affordances.
+    expect(box.className).not.toMatch(/(^|\s)border(-|\s|$)/);
     // One shared keyboard-focus convention, same as every other control.
     expect(box.className).toContain('focus-visible:ring-ring');
   });

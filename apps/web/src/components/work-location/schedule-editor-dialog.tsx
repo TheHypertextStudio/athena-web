@@ -9,6 +9,7 @@ import type {
 } from '@docket/planning/work-location-contract';
 import {
   Button,
+  Checkbox,
   Dialog,
   DialogBody,
   DialogClose,
@@ -88,10 +89,9 @@ function WeekdaysFieldset(props: {
       {WEEKDAYS.map((label, day) => (
         <label
           key={label}
-          className="text-on-surface text-label-large flex min-h-10 items-center gap-1"
+          className="text-on-surface text-label-large flex min-h-10 items-center gap-2"
         >
-          <input
-            type="checkbox"
+          <Checkbox
             checked={props.weekdays.includes(day)}
             onChange={(event) => {
               props.onChange(

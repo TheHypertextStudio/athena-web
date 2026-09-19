@@ -17,7 +17,7 @@
  */
 import type { ProposalGroupOut, ProposalItemOut } from '@docket/athena/agent-contract';
 import { cn } from '@docket/ui/lib/utils';
-import { Button, surfaceToneColor } from '@docket/ui/primitives';
+import { Button, Checkbox, surfaceToneColor } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';
 
 import { ProposalInputRows } from '@/components/athena/proposal-input-rows';
@@ -280,8 +280,7 @@ function ProposalRow({
     >
       <div className="flex items-center gap-2.5">
         {showCheckbox && canAct ? (
-          <input
-            type="checkbox"
+          <Checkbox
             aria-label={`Select "${sentence}"`}
             checked={checked}
             disabled={pending}
@@ -290,7 +289,6 @@ function ProposalRow({
             }}
             onFocus={highlight.onFocus}
             onBlur={highlight.onBlur}
-            className="accent-primary h-4 w-4 shrink-0"
           />
         ) : null}
         <ProposalRowTitle

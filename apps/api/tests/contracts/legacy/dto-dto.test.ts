@@ -176,13 +176,7 @@ import {
   UpdateOut,
   UpdateSubjectType,
 } from '@docket/work/update-contract';
-
-/** A canonical valid 26-char Crockford ULID, reused across DTO fixtures. */
-const ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
-/** A second distinct valid ULID. */
-const ID2 = '01BX5ZZKBKACTAV9WEVGEMMVRZ';
-/** A third distinct valid ULID. */
-const ID3 = '01BX5ZZKBKACTAV9WEVGEMMVS0';
+import { ID, ID2, ID3, builders } from './dto-fixtures';
 
 describe('organization DTOs', () => {
   it('OrgCreate applies defaults and parses', () => {
@@ -342,26 +336,7 @@ describe('project DTOs', () => {
   });
 
   it('ProjectOut parses with nullable fields', () => {
-    const parsed = ProjectOut.parse({
-      id: ID,
-      organizationId: ID2,
-      name: 'P',
-      description: null,
-      status: 'started',
-      priority: 'none',
-      health: 'on_track',
-      leadId: null,
-      teamId: null,
-      programId: null,
-      startDate: null,
-      startDateResolution: null,
-      startDateFiscalYearStartMonth: null,
-      targetDate: null,
-      targetDateResolution: null,
-      targetDateFiscalYearStartMonth: null,
-      createdAt: 'x',
-      updatedAt: 'x',
-    });
+    const parsed = ProjectOut.parse(builders.project());
     expect(parsed.health).toBe('on_track');
   });
 
@@ -500,25 +475,8 @@ describe('task DTOs', () => {
 
   it('TaskOut parses', () => {
     const parsed = TaskOut.parse({
-      labels: [],
-      id: ID,
-      organizationId: ID2,
-      title: 'T',
+      ...builders.task(),
       description: null,
-      summary: null,
-      teamId: ID,
-      state: 'todo',
-      priority: 'none',
-      autoCompletedBySubtasks: false,
-      assigneeId: null,
-      delegateId: null,
-      projectId: null,
-      programId: null,
-      startDate: null,
-      dueDate: null,
-      provenance: { source: 'native' },
-      createdAt: 'x',
-      updatedAt: 'x',
     });
     expect(parsed.provenance.source).toBe('native');
     expect(parsed.startDate).toBeNull();
@@ -985,20 +943,7 @@ describe('cycle DTOs', () => {
   });
 
   it('CycleOut parses', () => {
-    const parsed = CycleOut.parse({
-      id: ID,
-      organizationId: ID2,
-      teamId: ID,
-      number: 1,
-      name: null,
-      // Required: every read derives it (author name, else the window). See
-      // `tests/dto/cycle-display-name.test.ts` for the scheme itself.
-      displayName: 'Jul 27 – Aug 2',
-      startsAt: 'x',
-      endsAt: 'y',
-      status: 'active',
-      createdAt: 'z',
-    });
+    const parsed = CycleOut.parse(builders.cycle());
     expect(parsed.number).toBe(1);
     expect(parsed.displayName).toBe('Jul 27 – Aug 2');
   });
@@ -2055,36 +2000,29 @@ describe('calendar DTOs', () => {
   });
 
   it('CalendarEventOut parses all-day and timed Google events', () => {
-    const timed = CalendarEventOut.parse({
-      id: ID3,
-      connectionId: ID,
-      calendarId: ID2,
-      externalCalendarId: 'primary',
-      externalEventId: 'event-1',
-      status: 'confirmed',
-      title: 'Design review',
-      description: 'Bring notes',
-      location: 'Room 3',
-      htmlLink: 'https://calendar.google.com/calendar/event?eid=event-1',
-      startsAt: '2026-06-30T16:00:00.000Z',
-      endsAt: '2026-06-30T17:00:00.000Z',
-      allDayStartDate: null,
-      allDayEndDate: null,
-      organizer: { email: 'ada@example.com', displayName: 'Ada', self: true },
-      attendees: [{ email: 'grace@example.com', displayName: 'Grace', responseStatus: 'accepted' }],
-      updatedExternalAt: '2026-06-30T15:00:00.000Z',
-      createdAt: '2026-06-30T15:01:00.000Z',
-      updatedAt: '2026-06-30T15:01:00.000Z',
-    });
+    const timed = CalendarEventOut.parse(
+      builders.calendarEvent.timed({
+        description: 'Bring notes',
+        location: 'Room 3',
+        htmlLink: 'https://calendar.google.com/calendar/event?eid=event-1',
+        organizer: { email: 'ada@example.com', displayName: 'Ada', self: true },
+        attendees: [
+          { email: 'grace@example.com', displayName: 'Grace', responseStatus: 'accepted' },
+        ],
+        updatedExternalAt: '2026-06-30T15:00:00.000Z',
+      }),
+    );
     expect(timed.startsAt).toContain('T16:00');
 
-    const allDay = CalendarEventOut.parse({
-      ...timed,
-      startsAt: null,
-      endsAt: null,
-      allDayStartDate: '2026-06-30',
-      allDayEndDate: '2026-07-01',
-    });
+    const allDay = CalendarEventOut.parse(
+      builders.calendarEvent.allDay({
+        organizer: { email: 'ada@example.com', displayName: 'Ada', self: true },
+        attendees: [
+          { email: 'grace@example.com', displayName: 'Grace', responseStatus: 'accepted' },
+        ],
+        updatedExternalAt: '2026-06-30T15:00:00.000Z',
+      }),
+    );
     expect(allDay.allDayStartDate).toBe('2026-06-30');
   });
 

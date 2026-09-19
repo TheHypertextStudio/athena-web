@@ -10,19 +10,21 @@ import {
   sourceUpdatedAt,
   subjectVisibility,
 } from '../types';
-function contentDocument(
-  row: OrgScopedRow,
-  kind: SearchDocumentDraft['kind'],
-  title: string,
-  subjectKind: string,
-  subjectId: string,
-  options: {
-    summary?: string | null | undefined;
-    body?: string | null | undefined;
-    facet?: Record<string, unknown> | undefined;
-    externalUrl?: string | null | undefined;
-  } = {},
-): SearchDocumentDraft {
+
+/** Document creation options. */
+interface ContentDocumentOptions {
+  readonly kind: SearchDocumentDraft['kind'];
+  readonly title: string;
+  readonly subjectKind: string;
+  readonly subjectId: string;
+  readonly summary?: string | null | undefined;
+  readonly body?: string | null | undefined;
+  readonly facet?: Record<string, unknown> | undefined;
+  readonly externalUrl?: string | null | undefined;
+}
+
+function contentDocument(row: OrgScopedRow, options: ContentDocumentOptions): SearchDocumentDraft {
+  const { kind, title, subjectKind, subjectId, summary, body, facet, externalUrl } = options;
   return {
     id: searchDocumentId(kind, row.organizationId, row.id),
     organizationId: row.organizationId,
@@ -34,11 +36,11 @@ function contentDocument(
     subjectKind,
     subjectId,
     sourceSystem: 'docket',
-    externalUrl: options.externalUrl ?? null,
+    externalUrl,
     title,
-    summary: cleanText(options.summary),
-    body: cleanText(options.body),
-    facet: { subjectKind, subjectId, ...(options.facet ?? {}) },
+    summary: cleanText(summary),
+    body: cleanText(body),
+    facet: { subjectKind, subjectId, ...(facet ?? {}) },
     route: contentRoute(row.organizationId, subjectKind, subjectId, kind, row.id),
     visibility: subjectVisibility(subjectKind, subjectId),
     baseRank: baseRankFor(kind),
@@ -59,26 +61,23 @@ export const commentSearchProjector = preloadedProjector<
     editedAt?: Date | null | undefined;
   }
 >('comment', (row) => ({
-  ...contentDocument(
-    row,
-    'comment',
-    `Comment on ${row.subjectType}`,
-    row.subjectType,
-    row.subjectId,
-    {
-      // `body` is Markdown (comments are authored in the same rich editor as everything else a
-      // reader mentions), so the display summary needs the same plain-text treatment `work.ts`
-      // gives Initiative/Project/Program/Task — otherwise a `@`-mentioned comment's hovercard
-      // shows raw `#`/`*` source.
-      summary: markdownToPlainText(row.body),
-      body: row.body,
-      facet: {
-        authorId: row.authorId,
-        parentCommentId: row.parentCommentId,
-        editedAt: row.editedAt?.toISOString() ?? null,
-      },
+  ...contentDocument(row, {
+    kind: 'comment',
+    title: `Comment on ${row.subjectType}`,
+    subjectKind: row.subjectType,
+    subjectId: row.subjectId,
+    // `body` is Markdown (comments are authored in the same rich editor as everything else a
+    // reader mentions), so the display summary needs the same plain-text treatment `work.ts`
+    // gives Initiative/Project/Program/Task — otherwise a `@`-mentioned comment's hovercard
+    // shows raw `#`/`*` source.
+    summary: markdownToPlainText(row.body),
+    body: row.body,
+    facet: {
+      authorId: row.authorId,
+      parentCommentId: row.parentCommentId,
+      editedAt: row.editedAt?.toISOString() ?? null,
     },
-  ),
+  }),
   sourceTable: 'comment',
 }));
 
@@ -92,20 +91,17 @@ export const updateSearchProjector = preloadedProjector<
     body: string;
   }
 >('update', (row) => ({
-  ...contentDocument(
-    row,
-    'update',
-    `Update on ${row.subjectType}`,
-    row.subjectType,
-    row.subjectId,
-    {
-      // Same reasoning as `commentSearchProjector`: `body` is Markdown, so the summary shown in a
-      // preview needs the plain-text treatment, not the raw source.
-      summary: markdownToPlainText(row.body),
-      body: row.body,
-      facet: { authorId: row.authorId, health: row.health },
-    },
-  ),
+  ...contentDocument(row, {
+    kind: 'update',
+    title: `Update on ${row.subjectType}`,
+    subjectKind: row.subjectType,
+    subjectId: row.subjectId,
+    // Same reasoning as `commentSearchProjector`: `body` is Markdown, so the summary shown in a
+    // preview needs the plain-text treatment, not the raw source.
+    summary: markdownToPlainText(row.body),
+    body: row.body,
+    facet: { authorId: row.authorId, health: row.health },
+  }),
   sourceTable: 'update',
 }));
 
@@ -125,7 +121,11 @@ export const attachmentSearchProjector = preloadedProjector<
     byteSize?: number | null | undefined;
   }
 >('attachment', (row) => ({
-  ...contentDocument(row, 'attachment', row.title, row.subjectType, row.subjectId, {
+  ...contentDocument(row, {
+    kind: 'attachment',
+    title: row.title,
+    subjectKind: row.subjectType,
+    subjectId: row.subjectId,
     summary: row.url ?? row.kind,
     body: row.url,
     externalUrl: row.url ?? null,

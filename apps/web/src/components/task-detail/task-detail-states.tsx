@@ -13,10 +13,11 @@
 import { EmptyState } from '@docket/ui/components';
 import { CircleAlert, Shield } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
+import type { TaskDetail } from '@docket/work/task-model';
 import type { JSX } from 'react';
 
 import Link from '@/components/docket-link';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure, RegionFrame } from '@/components/feedback';
 import type { TaskNavigationSnapshot } from '@/lib/contracts/entity-navigation';
 import type { TaskReadState } from '@/lib/use-task-detail';
 
@@ -25,8 +26,13 @@ import { TaskDetailLoading } from './task-detail-loading';
 /** Why a task the reader opened is no longer available. */
 export type TaskTerminalState = 'forbidden' | 'not-found';
 
-/** Which surface the task page shows. */
-export type TaskDetailView = 'loading' | 'unavailable' | 'failed' | 'ready';
+/** Which stand-in the task page shows when there is no task to render. */
+export type TaskDetailFallbackView = 'loading' | 'unavailable' | 'failed';
+
+/** What the task page renders: the task itself, or one of the stand-ins. */
+export type TaskDetailResolution =
+  | { readonly kind: 'ready'; readonly task: TaskDetail }
+  | { readonly kind: 'fallback'; readonly view: TaskDetailFallbackView };
 
 /** What {@link resolveTaskDetailView} decides from. */
 export interface TaskDetailViewInput {
@@ -36,32 +42,32 @@ export interface TaskDetailViewInput {
   readonly terminalState: TaskTerminalState | null;
   /** The read settled on an error. */
   readonly isError: boolean;
-  /** A task record is in hand. */
-  readonly hasTask: boolean;
+  /** The task record, when one is in hand. */
+  readonly task: TaskDetail | null;
 }
 
 /**
- * Pick the surface for the task page's current read state.
+ * Pick what the task page renders for its current read state.
  *
  * @param input - The read state.
- * @returns `ready` only when a task is in hand and nothing has gone wrong.
+ * @returns the task when one is in hand and nothing has gone wrong, otherwise the stand-in.
  */
 export function resolveTaskDetailView({
   isPending,
   terminalState,
   isError,
-  hasTask,
-}: TaskDetailViewInput): TaskDetailView {
-  if (isPending) return 'loading';
-  if (terminalState !== null) return 'unavailable';
-  if (isError) return 'failed';
-  return hasTask ? 'ready' : 'unavailable';
+  task,
+}: TaskDetailViewInput): TaskDetailResolution {
+  if (isPending) return { kind: 'fallback', view: 'loading' };
+  if (terminalState !== null) return { kind: 'fallback', view: 'unavailable' };
+  if (isError) return { kind: 'fallback', view: 'failed' };
+  return task === null ? { kind: 'fallback', view: 'unavailable' } : { kind: 'ready', task };
 }
 
 /** Props for {@link TaskDetailFallback}. */
 export interface TaskDetailFallbackProps {
-  /** Which surface to show. */
-  readonly view: TaskDetailView;
+  /** Which stand-in to show. */
+  readonly view: TaskDetailFallbackView;
   readonly orgId: string;
   /** Why the task is unavailable, when the read said; a missing record reads as gone. */
   readonly terminalState: TaskTerminalState | null;
@@ -81,7 +87,7 @@ function TaskUnavailable({
 }): JSX.Element {
   const forbidden = terminalState === 'forbidden';
   return (
-    <div role="alert" className="flex min-h-64 flex-1 items-center justify-center p-6">
+    <RegionFrame>
       <EmptyState
         frame="none"
         icon={forbidden ? Shield : CircleAlert}
@@ -92,7 +98,7 @@ function TaskUnavailable({
           </Button>
         }
       />
-    </div>
+    </RegionFrame>
   );
 }
 
@@ -114,8 +120,6 @@ export function TaskDetailFallback({
       return <TaskDetailLoading snapshot={snapshot} />;
     case 'failed':
       return <QueryLoadFailure title="This task" query={query} />;
-    // `ready` never reaches here with a task in hand; without one, the task is gone.
-    case 'ready':
     case 'unavailable':
       return <TaskUnavailable orgId={orgId} terminalState={terminalState} />;
   }

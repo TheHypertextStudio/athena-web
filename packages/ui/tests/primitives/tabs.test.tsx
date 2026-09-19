@@ -242,6 +242,52 @@ describe('Tabs (adaptive overflow)', () => {
     expect(disconnect).toHaveBeenCalledOnce();
     vi.unstubAllGlobals();
   });
+
+  describe('measuring', () => {
+    /** The overflow bar for a set of items, as a caller writes it: a fresh array on every render. */
+    function overflowBar(items: readonly TabsItem[]): React.JSX.Element {
+      return (
+        <Tabs
+          value="overview"
+          onValueChange={() => undefined}
+          label="Project sections"
+          overflow={{ menuLabel: 'More Project sections' }}
+          items={items}
+        />
+      );
+    }
+
+    it('measures the tabs again only when what decides their widths changes', () => {
+      const measure = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
+      const initial = [
+        { value: 'overview', label: 'Overview', priority: 0 },
+        { value: 'tasks', label: 'Tasks', priority: 1 },
+      ];
+      const { rerender } = render(overflowBar(initial));
+      measure.mockClear();
+
+      rerender(overflowBar(initial.map((item) => ({ ...item }))));
+      expect(measure).not.toHaveBeenCalled();
+
+      rerender(overflowBar([...initial, { value: 'graph', label: 'Graph', priority: 2 }]));
+      expect(measure).toHaveBeenCalled();
+      measure.mockRestore();
+    });
+
+    it('measures the tabs again when a label or count changes', () => {
+      const measure = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
+      const { rerender } = render(overflowBar([{ value: 'tasks', label: 'Tasks', count: 1 }]));
+      measure.mockClear();
+
+      rerender(overflowBar([{ value: 'tasks', label: 'Tasks', count: 12 }]));
+      expect(measure).toHaveBeenCalled();
+      measure.mockClear();
+
+      rerender(overflowBar([{ value: 'tasks', label: 'Engagements', count: 12 }]));
+      expect(measure).toHaveBeenCalled();
+      measure.mockRestore();
+    });
+  });
 });
 
 describe('Tabs (composable)', () => {

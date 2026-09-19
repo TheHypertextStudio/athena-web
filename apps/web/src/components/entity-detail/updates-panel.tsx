@@ -14,7 +14,7 @@
  * Project) pass `showHealthComposer={false}` to hide it.
  *
  * Loading uses {@link Skeleton} rows; the empty state invites the first post; a failed load
- * is announced via `role="alert"`.
+ * renders a {@link QueryLoadFailure} panel in place of the history.
  */
 import type { Health } from '@docket/work/capability-contract';
 import type { UpdateOut } from '@docket/work/update-contract';
@@ -37,6 +37,7 @@ import { useActiveOrgIdOptional } from '@/components/active-org';
 import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
+import { QueryLoadFailure, type QueryFailureSource } from '@/components/feedback';
 
 /** Resolve an actor id to a display name + kind (passed by the caller). */
 export type ResolveActor = (actorId: string | null | undefined) => {
@@ -66,21 +67,19 @@ export interface UpdatesPanelProps {
   updates: readonly UpdateOut[];
   /** Whether the updates are still loading. */
   loading: boolean;
-  /** A load error to announce, if any. */
-  error: string | null;
+  /** The updates query, passed only while its read is failing; it replaces the history. */
+  loadFailure?: QueryFailureSource | null | undefined;
   /** Resolve an author id to its display name + kind. */
   resolveActor: ResolveActor;
   /** Whether a post is in flight. */
   posting: boolean;
-  /** A post error to surface, if any. */
-  postError: string | null;
   /**
    * Post a new update with an optional health verdict.
    *
    * @remarks
    * Returns a promise that settles with the write, so the panel can clear the composer on success
-   * and preserve the draft on failure. A rejection is expected to be reported through
-   * {@link UpdatesPanelProps.postError}; the panel swallows it rather than re-reporting.
+   * and preserve the draft on failure. The write's own mutation presents a rejection as a notice;
+   * the panel swallows it rather than re-reporting.
    */
   onPost: (body: string, health: Health | undefined) => Promise<void>;
   /**
@@ -99,10 +98,9 @@ export interface UpdatesPanelProps {
 export function UpdatesPanel({
   updates,
   loading,
-  error,
+  loadFailure = null,
   resolveActor,
   posting,
-  postError,
   onPost,
   showHealthComposer = true,
 }: UpdatesPanelProps): JSX.Element {
@@ -116,10 +114,8 @@ export function UpdatesPanel({
    * Post the draft, clearing the composer only once the update is actually saved.
    *
    * @remarks
-   * Clearing optimistically on submit reads fine until the post fails: the panel would surface
-   * {@link UpdatesPanelProps.postError} over an empty box, having already thrown away the text the
-   * author would need to retry. Awaiting the parent's write keeps a failed draft exactly where it
-   * was — the error is recoverable instead of destructive.
+   * Clearing on submit would discard the text the author needs to retry a failed post. Awaiting the
+   * parent's write keeps a failed draft exactly where it was.
    */
   async function submit(): Promise<void> {
     const trimmed = bodyRef.current.trim();
@@ -127,7 +123,7 @@ export function UpdatesPanel({
     try {
       await onPost(trimmed, health === '' ? undefined : health);
     } catch {
-      // The parent owns the message and renders it through `postError`; keep the draft to retry.
+      // The parent's mutation presents the failure as a notice; keep the draft to retry.
       return;
     }
     bodyRef.current = '';
@@ -213,11 +209,6 @@ export function UpdatesPanel({
             {posting ? 'Posting…' : 'Post update'}
           </Button>
         </div>
-        {postError ? (
-          <p role="alert" className="text-error text-body-medium">
-            {postError}
-          </p>
-        ) : null}
       </form>
 
       {/* placeholder: the posted updates — how many there are, who wrote each one, when, and what
@@ -235,13 +226,8 @@ export function UpdatesPanel({
             </div>
           ))}
         </div>
-      ) : error ? (
-        <p
-          role="alert"
-          className="border-outline-variant text-error text-body-medium rounded-xl border p-4"
-        >
-          {error}
-        </p>
+      ) : loadFailure ? (
+        <QueryLoadFailure title="Updates" query={loadFailure} size="panel" />
       ) : updates.length === 0 ? (
         <div className="border-outline-variant text-on-surface-variant text-body-medium rounded-xl border border-dashed p-8 text-center">
           No updates yet. Post the first one to keep stakeholders in the loop.

@@ -7,7 +7,7 @@ import { type EntityMention } from '../../lib/contracts/mention';
 import { formatBytes } from '@docket/ui';
 import { Calendar, FileText, Link as LinkIcon, Mail, Plus, Trash2 } from '@docket/ui/icons';
 import { EmptyState } from '@docket/ui/components';
-import { Button } from '@docket/ui/primitives';
+import { Button, Text } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useMemo, useState } from 'react';
 
@@ -354,9 +354,9 @@ export function ResourcesTab({
         hasProse={hasProse}
       />
       {error ? (
-        <p role="alert" className="text-error text-body-small">
+        <Text as="p" token="body-small" tone="error" role="alert">
           {error}
-        </p>
+        </Text>
       ) : null}
     </div>
   );

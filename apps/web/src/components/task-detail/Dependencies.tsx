@@ -3,11 +3,12 @@
 import type { TaskRef } from '@docket/work/task-model';
 import { StatusIcon } from '@docket/ui/components';
 import { ChevronLeft, ChevronRight } from '@docket/ui/icons';
-import { Surface } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
+
+import { TaskSection } from './task-section';
 
 /** Props for {@link Dependencies}. */
 interface DependenciesProps {
@@ -123,17 +124,7 @@ export function Dependencies({
   const empty = blocking.length === 0 && blockedBy.length === 0;
 
   return (
-    <Surface
-      as="section"
-      tone="card"
-      pad="roomy"
-      aria-labelledby="dependencies-heading"
-      className="flex flex-col gap-3"
-    >
-      <h2 id="dependencies-heading" className="text-title-small text-on-surface">
-        Dependencies
-      </h2>
-
+    <TaskSection id="dependencies" title="Dependencies" gap={3}>
       {empty ? (
         <p className="text-on-surface-variant text-body-medium">No dependencies.</p>
       ) : (
@@ -183,6 +174,6 @@ export function Dependencies({
           ) : null}
         </div>
       )}
-    </Surface>
+    </TaskSection>
   );
 }

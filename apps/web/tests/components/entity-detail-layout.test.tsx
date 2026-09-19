@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { assertDefined } from '@docket/test-utils';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import type { JSX } from 'react';
+import { type JSX, useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -225,8 +225,47 @@ describe('EntityDetailLayout aside', () => {
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
     expect(screen.queryByText('secondary properties')).not.toBeInTheDocument();
     expect(screen.getByTestId('docked')).toHaveTextContent('false');
-    // The body is a direct child of the body grid, exactly as before the slot existed.
-    expect(screen.getByTestId('panel').parentElement).toHaveClass('detail-body');
+    // The body sits in the same wrapper it has when docked, in a plain single-column block.
+    const columns = assertDefined(screen.getByTestId('panel').parentElement?.parentElement);
+    expect(columns).not.toHaveClass('grid');
+    expect(columns.parentElement).toHaveClass('detail-body');
+  });
+
+  it('keeps the panel mounted as the pane crosses the threshold', () => {
+    const lifecycle = { mounted: 0, unmounted: 0 };
+    function Panel(): JSX.Element {
+      useEffect(() => {
+        lifecycle.mounted += 1;
+        return () => {
+          lifecycle.unmounted += 1;
+        };
+      }, []);
+      return <div data-testid="panel">body</div>;
+    }
+    render(
+      <EntityDetailLayout
+        icon={<span>icon</span>}
+        title="Launch"
+        tabs={<div>tabs</div>}
+        aside={<div>secondary properties</div>}
+      >
+        <Panel />
+      </EntityDetailLayout>,
+    );
+    const panel = screen.getByTestId('panel');
+    expect(screen.getByRole('complementary')).toBeInTheDocument();
+
+    act(() => {
+      resize?.([{ contentRect: { width: 700 } } as ResizeObserverEntry], {} as ResizeObserver);
+    });
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    act(() => {
+      resize?.([{ contentRect: { width: 1000 } } as ResizeObserverEntry], {} as ResizeObserver);
+    });
+    expect(screen.getByRole('complementary')).toBeInTheDocument();
+
+    expect(screen.getByTestId('panel')).toBe(panel);
+    expect(lifecycle).toEqual({ mounted: 1, unmounted: 0 });
   });
 
   it('docks at exactly the threshold and undocks when the pane narrows', () => {

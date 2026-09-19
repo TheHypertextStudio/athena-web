@@ -72,22 +72,16 @@ describe('detail route ownership', () => {
     expect(source).not.toContain('.aggregate.$get');
   });
 
-  it('keeps Task identity on its aggregate while pickers and activity stay dormant', () => {
+  it('keeps Task identity on its aggregate and reads no organization roster', () => {
     const source = readFileSync(join(root, 'src/lib/use-task-detail.ts'), 'utf8');
 
     expect(source).toContain('taskDetailAggregateDef');
     expect(source).toContain('defaultView.task');
-    expect(source).toContain('enabled: options.projectsOpen ?? false');
-    expect(source).toContain('enabled: options.programsOpen ?? false');
-    expect(source).toContain('enabled: options.membersOpen ?? false');
-    // Dormant until the picker opens, and then scoped to the task's own project — a milestone from
-    // any other project is refused by the server, so a wider read could only offer dead options.
-    // `projectMilestonesDef` owns both gates; passing the task's project is what keeps it narrow.
-    expect(source).toContain(
-      'projectMilestonesDef(orgId, task?.projectId, options.milestonesOpen)',
-    );
-    expect(source).toContain('enabled: options.cyclesOpen ?? false');
-    expect(source).toContain('enabled: options.activityOpen ?? false');
+    // Rosters belong to `useTaskRosters`, which keeps each dormant until its picker opens or the
+    // task holds a value from it.
+    expect(source).not.toContain('.members.$get');
+    expect(source).not.toContain('.projects.$get');
+    expect(source).not.toContain('.roles.$get');
   });
 
   it('never renders a partial navigation snapshot as an entity document', () => {

@@ -1,27 +1,14 @@
 /**
- * Data hook for the task detail page — encapsulates all parallel queries.
+ * Data hook for the task detail page: the task aggregate and its derived reads.
  *
  * @remarks
- * Returns a stable snapshot of every data slice the task detail surface needs:
- * the rich task + its team's workflow states, picker rosters loaded only when their
- * own editor opens, the task's comment stream, and the activity from the most-recent
- * agent session bound to the task.
+ * Returns the rich task, its team's workflow states, the viewer's capabilities, and the
+ * description's entity mentions. The pickers' organization rosters are read by
+ * `useTaskRosters`, and the Activity feed reads its own pages.
  *
  * All queries run through {@link useApiQuery} so they auto-refetch on window focus
  * and after any mutation without manual refresh.
  */
-import {
-  type AgentOut,
-  type AgentSessionOut,
-  type SessionActivityOut,
-} from '@docket/athena/agent-contract';
-import { type CommentOut } from '@docket/work/comment-contract';
-import { type CycleOut } from '@docket/work/cycle-contract';
-import { type MemberOut } from '@docket/identity-access/member-contract';
-import { type MilestoneOut } from '@docket/work/milestone-contract';
-import { type ProgramOut } from '@docket/work/program-contract';
-import { type ProjectOut } from './contracts/project';
-import { type RoleOut } from './contracts/role';
 import { type TaskDetail } from '@docket/work/task-model';
 import { type TaskNavigationSnapshot } from './contracts/entity-navigation';
 import { TaskSubjectRef } from '@docket/work/subject-ref-contract';
@@ -29,22 +16,20 @@ import { type WorkflowState } from '@docket/work/workflow';
 import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
+import type { QueryFailureSource } from '@/components/feedback';
+
 import { api } from './api';
-import { projectMilestonesDef } from './project-milestones-def';
 import {
   taskDetailAggregateDef,
   terminalDetailFailure,
   type TerminalDetailFailure,
 } from './detail-aggregate';
 import { useEntityMentions, type EntityMentionsData } from './use-entity-mentions';
-import { STALE, apiQueryOptions, queryKeys, useApiQuery, useLiveApiQuery } from './query';
-
-/** Focus-only poll interval (ms) for a task's bound agent-session activity stream. */
-const TASK_ACTIVITY_POLL_MS = 4_000;
+import { STALE, apiQueryOptions, queryKeys, useApiQuery } from './query';
 
 /**
- * Typed query definition for a task's primary detail read — shared by {@link useTaskDetail} and
- * task-list row prefetch, so a hovered row warms the exact cache entry the detail opens from.
+ * Typed query definition for a task's primary detail read — shared by task-list row prefetch, tab
+ * titles, and the breadcrumb's parent read, so each warms or reads one cache entry.
  */
 export function taskDetailDef(orgId: string, taskId: string) {
   return apiQueryOptions(
@@ -59,16 +44,6 @@ export function taskDetailDef(orgId: string, taskId: string) {
 export interface TaskDetailData {
   task: TaskDetail | null;
   workflowStates: readonly WorkflowState[] | null;
-  projects: readonly ProjectOut[];
-  programs: readonly ProgramOut[];
-  members: readonly MemberOut[];
-  agents: readonly AgentOut[];
-  milestones: readonly MilestoneOut[];
-  cycles: readonly CycleOut[];
-  roles: readonly RoleOut[];
-  comments: readonly CommentOut[];
-  activities: readonly SessionActivityOut[];
-  taskSession: AgentSessionOut | null;
   /** Permissions resolved by the aggregate, without an organization-role roster. */
   capabilities: { comment: boolean; contribute: boolean; assign: boolean; manage: boolean } | null;
   /** The authenticated actor who edits this Task's document. */
@@ -81,8 +56,6 @@ export interface TaskDetailData {
   entityMentions: EntityMentionsData;
   /** The stable React Query key for the task detail — mutations invalidate against this. */
   detailKey: QueryKey;
-  /** The stable React Query key for the comment stream. */
-  commentsKey: QueryKey;
   /** The stable React Query key for the unified Activity history. */
   activityKey: QueryKey;
   isPending: boolean;
@@ -91,22 +64,12 @@ export interface TaskDetailData {
 }
 
 /** The parts of the task read a surface needs to present its failure. */
-export interface TaskReadState {
-  readonly isError: boolean;
-  readonly error: unknown;
-  readonly isFetching: boolean;
-  readonly refetch: () => unknown;
-}
+export type TaskReadState = QueryFailureSource & { readonly isError: boolean };
 
-/** Which of the task page's optional reads are switched on. Each is dormant unless stated. */
+/** Which of the task page's optional reads are switched on. */
 export interface TaskDetailOptions {
+  /** Whether the aggregate read runs; off once the task is known to be gone. Defaults to on. */
   aggregateEnabled?: boolean;
-  activityOpen?: boolean;
-  membersOpen?: boolean;
-  projectsOpen?: boolean;
-  programsOpen?: boolean;
-  milestonesOpen?: boolean;
-  cyclesOpen?: boolean;
   /**
    * Whether the Resources tab is showing, which is when the description's derived references are
    * read. Left out, the references are read as soon as the task is.
@@ -115,11 +78,12 @@ export interface TaskDetailOptions {
 }
 
 /**
- * Parallel-fetch all data slices needed by the task detail page.
+ * Read the task aggregate and the slices derived from it.
  *
  * @param orgId - The active organization id.
  * @param taskId - The task being viewed.
- * @returns All data slices + query-state flags.
+ * @param options - Which optional reads are switched on.
+ * @returns The data slices + query-state flags.
  */
 export function useTaskDetail(
   orgId: string,
@@ -131,7 +95,6 @@ export function useTaskDetail(
     () => queryKeys.taskAggregate(orgId, taskId),
     [orgId, taskId],
   );
-  const commentsKey = useMemo<QueryKey>(() => [...detailKey, 'comments'], [detailKey]);
   const activityKey = useMemo<QueryKey>(
     () => queryKeys.taskActivity(orgId, taskId),
     [orgId, taskId],
@@ -142,120 +105,16 @@ export function useTaskDetail(
     ...taskDetailAggregateDef(orgId, taskId),
     enabled: options.aggregateEnabled ?? true,
   });
-  const task = taskQ.data?.defaultView.task ?? null;
-  // Picker rosters change rarely within a session, so an opened editor keeps its own static
-  // result. The first detail paint never opens an organization roster by accident.
-  const projectsQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.projects(orgId),
-      () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
-      'Could not load projects.',
-      { enabled: options.projectsOpen ?? false, staleTime: STALE.static },
-    ),
-  );
-  const programsQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.programs(orgId),
-      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
-      'Could not load programs.',
-      { enabled: options.programsOpen ?? false, staleTime: STALE.static },
-    ),
-  );
-  const membersQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.members(orgId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
-      'Could not load members.',
-      { enabled: options.membersOpen ?? false, staleTime: STALE.static },
-    ),
-  );
-  const agentsQ = useApiQuery(
-    apiQueryOptions(
-      ['org', orgId, 'agents'],
-      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
-      'Could not load agents.',
-      { enabled: options.activityOpen ?? false, staleTime: STALE.static },
-    ),
-  );
-  // The task's own project's milestones, not the org's: the server refuses a milestone from any
-  // other project, so a wider list could only offer options that cannot be saved.
-  const milestonesQ = useApiQuery(
-    projectMilestonesDef(orgId, task?.projectId, options.milestonesOpen),
-  );
-  const cyclesQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.cycles(orgId),
-      () => api.v1.orgs[':orgId'].cycles.$get({ param: { orgId }, query: {} }),
-      'Could not load cycles.',
-      { enabled: options.cyclesOpen ?? false, staleTime: STALE.static },
-    ),
-  );
-  const rolesQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.roles(orgId),
-      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
-      'Could not load roles.',
-      { staleTime: STALE.static },
-    ),
-  );
-  const commentsQ = useApiQuery(
-    apiQueryOptions(
-      commentsKey,
-      () =>
-        api.v1.orgs[':orgId'].comments.$get({
-          param: { orgId },
-          query: subject,
-        }),
-      'Could not load comments.',
-      { enabled: options.activityOpen ?? false },
-    ),
-  );
-
-  const sessionQ = useApiQuery(
-    apiQueryOptions(
-      [...detailKey, 'session'],
-      () => api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
-      'Could not load sessions.',
-      { enabled: options.activityOpen ?? false, staleTime: STALE.volatile },
-    ),
-  );
-  const taskSession = sessionQ.data?.items.find((s) => s.taskId === taskId) ?? null;
-
-  // The bound session's activity stream polls on a short focus-only interval so an agent's progress
-  // shows live; the poll is gated by `enabled` so idle tasks (no session) never fetch.
-  const activityQ = useLiveApiQuery(
-    apiQueryOptions(
-      [...detailKey, 'activity', taskSession?.id ?? ''],
-      () =>
-        api.v1.orgs[':orgId'].sessions[':id'].activity.$get({
-          param: { orgId, id: taskSession?.id ?? '' },
-        }),
-      'Could not load activity.',
-      { enabled: Boolean(options.activityOpen && taskSession) },
-    ),
-    TASK_ACTIVITY_POLL_MS,
-  );
 
   return {
-    task,
+    task: taskQ.data?.defaultView.task ?? null,
     workflowStates: taskQ.data?.references.workflowStates ?? null,
-    projects: projectsQ.data?.items ?? [],
-    programs: programsQ.data?.items ?? [],
-    members: membersQ.data?.items ?? [],
-    agents: agentsQ.data?.items ?? [],
-    milestones: milestonesQ.data?.items ?? [],
-    cycles: cyclesQ.data?.items ?? [],
-    roles: rolesQ.data?.items ?? [],
-    comments: commentsQ.data?.items ?? [],
-    activities: activityQ.data?.items ?? [],
-    taskSession,
     capabilities: taskQ.data?.capabilities ?? null,
     currentActorId: taskQ.data?.viewer.actorId ?? null,
     snapshot: taskQ.data?.snapshot ?? null,
     terminalFailure: terminalDetailFailure(taskQ.error),
     entityMentions,
     detailKey,
-    commentsKey,
     activityKey,
     isPending: taskQ.isPending,
     taskQuery: taskQ,

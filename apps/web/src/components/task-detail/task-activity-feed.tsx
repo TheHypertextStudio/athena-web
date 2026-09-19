@@ -18,13 +18,14 @@ import type { JSX } from 'react';
 import { useMemo, useState } from 'react';
 
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
-import { QueryLoadFailure } from '@/components/query-load-failure';
+import { QueryLoadFailure } from '@/components/feedback';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { relativeTime } from '@/components/project-detail/format-time';
 import { api } from '@/lib/api';
 import { apiInfiniteQueryOptions, queryKeys, useInfiniteApiQuery } from '@/lib/query';
 
 import { activityActorName, activitySentence } from './format-activity';
+import { TaskSection } from './task-section';
 
 const ALL_CATEGORIES = 'all';
 type ActivityFilter = TaskActivityCategory | typeof ALL_CATEGORIES;
@@ -140,17 +141,11 @@ export function TaskActivityFeed({
 
   // placeholder: this task's comments and activity, at the chosen filter.
   return (
-    <Surface
-      as="section"
-      tone="card"
-      pad="roomy"
-      aria-labelledby="activity-heading"
-      className="flex flex-col gap-4"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <h2 id="activity-heading" className="text-title-small text-on-surface">
-          Activity
-        </h2>
+    <TaskSection
+      id="activity"
+      title="Activity"
+      gap={4}
+      headerEnd={
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="gap-1.5" aria-label="Filter activity">
@@ -173,8 +168,8 @@ export function TaskActivityFeed({
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-
+      }
+    >
       {query.isPending ? (
         <div className="flex flex-col gap-3" aria-hidden="true">
           <Skeleton className="h-5 w-3/5 rounded" />
@@ -244,6 +239,6 @@ export function TaskActivityFeed({
           </Surface>
         </form>
       ) : null}
-    </Surface>
+    </TaskSection>
   );
 }

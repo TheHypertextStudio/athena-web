@@ -10,8 +10,8 @@
  * task has to name its assignee, and a task in a project has to name the project, before anyone
  * opens anything. The second case is why the gates read the task rather than only the pickers.
  *
- * Every roster shares its query key with `useTaskDetail`, so the two observers read one cache
- * entry and a roster is fetched once however many surfaces want it.
+ * Every roster uses the shared `queryKeys` entry for its list, so a roster is fetched once however
+ * many surfaces want it.
  */
 import type { AgentOut } from '@docket/athena/agent-contract';
 import type { MemberOut } from '@docket/identity-access/member-contract';
@@ -38,15 +38,20 @@ export interface TaskRosters {
   readonly programs: readonly ProgramOut[];
   readonly milestones: readonly MilestoneOut[];
   readonly cycles: readonly CycleOut[];
+  /** Whether the roster is switched on: its picker was opened, or the task holds a value from it. */
+  readonly wanted: Readonly<Record<TaskRoster, boolean>>;
   /** Whether the roster was requested and has not answered yet. */
   readonly loading: Readonly<Record<TaskRoster, boolean>>;
   /** Pass to a picker's `onOpenChange`: opening it starts its roster. */
   readonly onOpenChange: Readonly<Record<TaskRoster, (open: boolean) => void>>;
 }
 
+/** The one empty roster, so a roster that has not loaded keeps a stable identity across renders. */
+export const NO_ITEMS: readonly never[] = [];
+
 /** The rows of a list response, or none before it arrives. */
 function itemsOf<T>(page: { readonly items: readonly T[] } | undefined): readonly T[] {
-  return page?.items ?? [];
+  return page?.items ?? NO_ITEMS;
 }
 
 /** Which rosters the task already holds a value from. */
@@ -96,12 +101,19 @@ function useOpenedRosters(): {
 export function useTaskRosters(orgId: string, task: TaskDetail | null): TaskRosters {
   const { opened, onOpenChange } = useOpenedRosters();
   const held = heldRosters(task);
-  const wants = (roster: TaskRoster): boolean => opened.has(roster) || held[roster];
+  const wanted: Record<TaskRoster, boolean> = {
+    members: opened.has('members') || held.members,
+    projects: opened.has('projects') || held.projects,
+    programs: opened.has('programs') || held.programs,
+    milestones: opened.has('milestones') || held.milestones,
+    cycles: opened.has('cycles') || held.cycles,
+  };
+  const wants = (roster: TaskRoster): boolean => wanted[roster];
 
   const membersQ = useApiQuery({ ...orgMembersDef(orgId), enabled: wants('members') });
   const agentsQ = useApiQuery(
     apiQueryOptions(
-      ['org', orgId, 'agents'],
+      queryKeys.agents(orgId),
       () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
       'Could not load agents.',
       { enabled: Boolean(task?.delegateId), staleTime: STALE.static },
@@ -144,6 +156,7 @@ export function useTaskRosters(orgId: string, task: TaskDetail | null): TaskRost
     programs: itemsOf(programsQ.data),
     milestones: itemsOf(milestonesQ.data),
     cycles: itemsOf(cyclesQ.data),
+    wanted,
     loading: {
       members: isLoading('members', membersQ.isPending),
       projects: isLoading('projects', projectsQ.isPending),

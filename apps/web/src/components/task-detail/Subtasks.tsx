@@ -3,7 +3,7 @@
 import type { TaskRef } from '@docket/work/task-model';
 import { StatusIcon } from '@docket/ui/components';
 import { Plus } from '@docket/ui/icons';
-import { Button, Input, Surface } from '@docket/ui/primitives';
+import { Button, Input } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useMemo, useState } from 'react';
 
@@ -12,6 +12,8 @@ import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { useTaskHierarchyDrop } from '@/components/tasks/task-hierarchy-drop';
 import type { ObjectRef } from '@/lib/actions';
 import type { CategoryOfState } from '@/lib/work-category';
+
+import { TaskSection } from './task-section';
 
 /** Props for {@link Subtasks}. */
 interface SubtasksProps {
@@ -76,24 +78,19 @@ export function Subtasks({
   }
 
   return (
-    <Surface
-      as="section"
-      tone="card"
-      pad="roomy"
-      aria-labelledby="subtasks-heading"
-      className="flex flex-col gap-2"
-    >
-      <div className="flex items-baseline justify-between">
-        <h2 id="subtasks-heading" className="text-title-small text-on-surface">
-          Subtasks
-        </h2>
-        {subtasks.length > 0 ? (
+    <TaskSection
+      id="subtasks"
+      title="Subtasks"
+      gap={2}
+      headerAlign="baseline"
+      headerEnd={
+        subtasks.length > 0 ? (
           <span className="text-on-surface-variant text-body-small tabular-nums">
             {doneCount}/{subtasks.length}
           </span>
-        ) : null}
-      </div>
-
+        ) : null
+      }
+    >
       {subtasks.length === 0 ? (
         <p className="text-on-surface-variant text-body-medium">No subtasks yet.</p>
       ) : (
@@ -127,7 +124,7 @@ export function Subtasks({
       )}
 
       {canEdit ? <SubtaskComposer onAdd={onAdd} /> : null}
-    </Surface>
+    </TaskSection>
   );
 }
 

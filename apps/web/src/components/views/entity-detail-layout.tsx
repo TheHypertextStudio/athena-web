@@ -45,6 +45,7 @@ import {
 import { objectTargetProps, type ObjectRef } from '@/lib/actions/object';
 
 import { useDetailHeaderCollapse } from './entity-detail-collapse';
+import { useElementWidth } from './use-element-width';
 
 /** Props for {@link EntityDetailLayout}. */
 export interface EntityDetailLayoutProps {
@@ -93,8 +94,20 @@ export interface EntityDetailLayoutProps {
   object?: ObjectRef;
 }
 
-/** The pane width, in px, at which an opted-in aside docks beside the body (Tailwind's `4xl`). */
-export const ENTITY_DETAIL_ASIDE_MIN_WIDTH = 896;
+/** Tailwind's `--container-4xl` token (`56rem`), the width of the `@4xl` container-query step. */
+const CONTAINER_4XL_REM = 56;
+
+/** The px per rem the framework's container tokens resolve against. */
+const REM_PX = 16;
+
+/** The pane width, in px, at which an opted-in aside docks beside the body: the `@4xl` step. */
+export const ENTITY_DETAIL_ASIDE_MIN_WIDTH = CONTAINER_4XL_REM * REM_PX;
+
+/**
+ * The last width the aside's pane measured, so a detail page opened after another starts from the
+ * arrangement the pane is most likely to need instead of the narrow one.
+ */
+let lastPaneWidth = 0;
 
 /** What a page can read about the aside its layout is holding. */
 export interface EntityDetailAsideState {
@@ -125,27 +138,11 @@ export function useEntityDetailAside(): EntityDetailAsideState {
  * @returns `true` while the aside should be docked.
  */
 function useAsideDocked(scrollRef: RefObject<HTMLDivElement | null>, enabled: boolean): boolean {
-  const [wide, setWide] = useState(false);
-
+  const width = useElementWidth(scrollRef, enabled, 'self', lastPaneWidth);
   useLayoutEffect(() => {
-    const scroller = scrollRef.current;
-    if (!enabled || !scroller) return;
-    // Read the width before paint so a wide pane never flashes the undocked arrangement; the
-    // observer's first report lands a frame later. A zero width means there is no layout to
-    // measure, which is not an answer.
-    const initial = scroller.getBoundingClientRect().width;
-    if (initial > 0) setWide(initial >= ENTITY_DETAIL_ASIDE_MIN_WIDTH);
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setWide(entry.contentRect.width >= ENTITY_DETAIL_ASIDE_MIN_WIDTH);
-    });
-    observer.observe(scroller);
-    return () => {
-      observer.disconnect();
-    };
-  }, [enabled, scrollRef]);
-
-  return enabled && wide;
+    if (width > 0) lastPaneWidth = width;
+  }, [width]);
+  return enabled && width >= ENTITY_DETAIL_ASIDE_MIN_WIDTH;
 }
 
 /** Props for {@link DetailHeader}: the layout's masthead slots, plus the collapse hook's ref. */
@@ -293,20 +290,29 @@ function DetailBody({ printSummary, aside, docked, children }: DetailBodyProps):
     // for the scroll-linked header to reach its compact endpoint on short panels.
     <div className="detail-body page-bleed page-grid gap-y-4 @2xl:gap-y-5">
       {printSummary ? <div className="detail-print-summary">{printSummary}</div> : null}
-      {docked ? (
-        <div className="grid grid-cols-[minmax(0,1fr)_20rem] items-start gap-x-8">
-          <div className="flex min-w-0 flex-col gap-4 @2xl:gap-5">{children}</div>
-          {/* Sticky under the header, whose measured height the collapse hook publishes; the
-              fallback keeps it inert before the first measurement. */}
-          <aside
-            aria-label="Details"
-            className="no-print sticky top-[calc(var(--detail-header-height,0px)+1rem)] min-w-0"
-          >
-            {aside}
-          </aside>
-        </div>
-      ) : (
+      {aside === undefined ? (
         children
+      ) : (
+        // A page that opted into an aside keeps one wrapper pair whether or not the aside is
+        // docked, so crossing the threshold restyles the wrapper and adds or removes only the
+        // aside: the panel is never re-parented, and so is never unmounted and remounted.
+        <div
+          className={
+            docked ? 'grid grid-cols-[minmax(0,1fr)_20rem] items-start gap-x-8' : undefined
+          }
+        >
+          <div className="flex min-w-0 flex-col gap-4 @2xl:gap-5">{children}</div>
+          {docked ? (
+            // Sticky under the header, whose measured height the collapse hook publishes; the
+            // fallback keeps it inert before the first measurement.
+            <aside
+              aria-label="Details"
+              className="no-print sticky top-[calc(var(--detail-header-height,0px)+1rem)] min-w-0"
+            >
+              {aside}
+            </aside>
+          ) : null}
+        </div>
       )}
     </div>
   );
@@ -693,33 +699,18 @@ export function EntityMetadataRow({
   const inlineRef = useRef<HTMLDivElement>(null);
   const { visiblePriority, hasOverflow, declareItem, setAvailableWidth } = useMetadataFit();
 
+  // The row's own width, read before the first paint: without it `availableWidth` stays at its
+  // initial `0` and `visiblePriority` at its "show everything" default, so every pill renders inline
+  // and the row's `overflow-hidden` clips whichever ones don't fit instead of demoting them into
+  // the overflow popover.
+  //
+  // Only a positive width is forwarded. A `0` means the row has no layout to measure (detached, or a
+  // test environment with no layout engine), and recomputing against that non-answer would collapse
+  // the row to its priority-zero items instead of leaving it at the "show everything" default.
+  const rowWidth = useElementWidth(inlineRef, true, 'parent');
   useLayoutEffect(() => {
-    const row = inlineRef.current?.parentElement;
-    if (!row) return;
-    // `ResizeObserver` never reports synchronously, even from `useLayoutEffect` — its first
-    // callback lands a frame later. Without this, `availableWidth` stays at its initial `0` and
-    // `visiblePriority` stays at its "show everything" default through the first paint, so every
-    // pill renders inline and the row's `overflow-hidden` clips whichever ones don't fit instead
-    // of demoting them into the overflow popover. Reading the width here, before paint, closes
-    // that gap — the row commits already clamped to what actually fits.
-    //
-    // Only recompute when that read comes back positive. A real, mounted row always does (a
-    // synchronous `getBoundingClientRect` forces layout); a `0` means the row has no layout yet
-    // to measure — a detached row, or a test environment with no layout engine at all — and
-    // forcing a recompute against that non-answer is what previously collapsed the row to only
-    // its highest-priority item instead of leaving it at the "show everything" default the
-    // `availableWidth.current <= 0` guard inside `recomputeVisibility` already exists to give it.
-    const width = row.getBoundingClientRect().width;
-    if (width > 0) setAvailableWidth(width);
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setAvailableWidth(entry.contentRect.width);
-    });
-    observer.observe(row);
-    return () => {
-      observer.disconnect();
-    };
-  }, [setAvailableWidth]);
+    if (rowWidth > 0) setAvailableWidth(rowWidth);
+  }, [rowWidth, setAvailableWidth]);
 
   const inlineLane = useMemo<EntityMetadataLaneContext>(
     () => ({ lane: 'inline', visiblePriority, declareItem }),

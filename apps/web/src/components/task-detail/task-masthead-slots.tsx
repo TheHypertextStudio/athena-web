@@ -10,7 +10,7 @@
  */
 import type { MemberOut } from '@docket/identity-access/member-contract';
 import type { TaskDetail } from '@docket/work/task-model';
-import { Tabs } from '@docket/ui/primitives';
+import { Tabs, type TabsItem } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -21,11 +21,24 @@ import { DetailPrintSummary } from '@/components/views/detail-print-summary';
 import { formatCalendarDate } from '@/lib/format-date';
 import type { TaskPatch } from '@/lib/use-task-mutations';
 
-/** The task page's sections, Overview first. */
-export type TaskTab = 'overview' | 'resources' | 'graph';
-
-/** The section ids in tab order, as `useDetailTab` reads them. */
+/** The section ids in tab order, Overview first, as `useDetailTab` reads them. */
 export const TASK_TABS = ['overview', 'resources', 'graph'] as const;
+
+/** The task page's sections. */
+export type TaskTab = (typeof TASK_TABS)[number];
+
+const TASK_TAB_LABEL: Readonly<Record<TaskTab, string>> = {
+  overview: 'Overview',
+  resources: 'Resources',
+  graph: 'Graph',
+};
+
+/** The tab bar's items, in tab order; an earlier section stays visible longer as the pane narrows. */
+const TASK_TAB_ITEMS: readonly TabsItem[] = TASK_TABS.map((value, priority) => ({
+  value,
+  label: TASK_TAB_LABEL[value],
+  priority,
+}));
 
 /** Props for {@link TaskIcon}. */
 export interface TaskIconProps {
@@ -112,11 +125,7 @@ export function TaskTabs({ tab, onTabChange }: TaskTabsProps): JSX.Element {
       }}
       label="Task sections"
       overflow={{ menuLabel: 'More Task sections' }}
-      items={[
-        { value: 'overview', label: 'Overview', priority: 0 },
-        { value: 'resources', label: 'Resources', priority: 1 },
-        { value: 'graph', label: 'Graph', priority: 2 },
-      ]}
+      items={TASK_TAB_ITEMS}
     />
   );
 }

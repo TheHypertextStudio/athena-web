@@ -24,15 +24,12 @@ import {
   EntityMetadataRow,
   useEntityDetailAside,
 } from '@/components/views/entity-detail-layout';
-import { formatCalendarDate } from '@/lib/format-date';
+import { formatCalendarDate, isoDateOf } from '@/lib/format-date';
 import type { TaskPatch } from '@/lib/use-task-mutations';
 
 import { PriorityPicker } from './PriorityPicker';
 import { StatusPicker } from './StatusPicker';
-import {
-  TaskSecondaryProperties,
-  type TaskSecondaryPropertiesProps,
-} from './task-secondary-properties';
+import { TaskSecondaryProperties, type TaskSecondaryModel } from './task-secondary-properties';
 
 /** The geometry a status or priority menu trigger needs to sit beside the other chips. */
 const MENU_CHIP_CLASS = cn(
@@ -59,7 +56,7 @@ export interface TaskPropertyModel {
   readonly projectLoading: boolean;
   readonly onProjectOpenChange: (open: boolean) => void;
   /** Every property the lead set does not carry. */
-  readonly secondary: Omit<TaskSecondaryPropertiesProps, 'presentation'>;
+  readonly secondary: TaskSecondaryModel;
 }
 
 /** The masthead's labelled property row, holding the chips for `model`. */
@@ -74,11 +71,6 @@ export function TaskMetadataRow({ model }: { readonly model: TaskPropertyModel }
 /** Props for {@link TaskMastheadProperties}. */
 export interface TaskMastheadPropertiesProps {
   readonly model: TaskPropertyModel;
-}
-
-/** A calendar day from a stored date or timestamp, in the `YYYY-MM-DD` the date field exchanges. */
-function isoDateOf(value: string | null | undefined): string | null {
-  return value ? value.slice(0, 10) : null;
 }
 
 /** The task's project, under the workspace's own noun for one. */
@@ -174,7 +166,7 @@ export function TaskMastheadProperties({ model }: TaskMastheadPropertiesProps): 
           triggerClassName={ENTITY_METADATA_CHIP_CLASS}
         />
       </EntityMetadataItem>
-      {docked ? null : <TaskSecondaryProperties presentation="chips" {...model.secondary} />}
+      {docked ? null : <TaskSecondaryProperties presentation="chips" model={model} />}
     </>
   );
 }

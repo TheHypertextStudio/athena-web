@@ -24,10 +24,15 @@ import { TaskActivityFeed } from './task-activity-feed';
 import { TaskDetails } from './task-details';
 import type { DescriptionExpansion } from './use-description-expansion';
 
+/** The writes the Overview tab makes: the description, subtasks, and comments. */
+export type TaskOverviewMutations = Pick<
+  TaskMutations,
+  'patchTask' | 'addSubtask' | 'toggleSubtask' | 'addComment'
+>;
+
 /** Props for {@link TaskOverviewPanel}. */
 export interface TaskOverviewPanelProps {
   readonly orgId: string;
-  readonly taskId: string;
   readonly task: TaskDetail;
   readonly currentActorId: string | null;
   readonly canEdit: boolean;
@@ -35,10 +40,7 @@ export interface TaskOverviewPanelProps {
   /** The name to show for a project id. */
   readonly projectName: (projectId: string) => string;
   readonly projectLabel: string;
-  readonly mutations: Pick<
-    TaskMutations,
-    'patchTask' | 'addSubtask' | 'toggleSubtask' | 'addComment'
-  >;
+  readonly mutations: TaskOverviewMutations;
   /** The task's detail cache key, which a subtask rename re-reads. */
   readonly detailKey: QueryKey;
   readonly expansion: DescriptionExpansion;
@@ -52,7 +54,6 @@ export interface TaskOverviewPanelProps {
  */
 export function TaskOverviewPanel({
   orgId,
-  taskId,
   task,
   currentActorId,
   canEdit,
@@ -70,6 +71,7 @@ export function TaskOverviewPanel({
   const onOpenTask = (id: string): void => {
     router.push(`/orgs/${orgId}/tasks/${id}`);
   };
+  const taskId = task.id;
   return (
     <div className="flex min-w-0 flex-col gap-4 @2xl:gap-5">
       <TaskDetails

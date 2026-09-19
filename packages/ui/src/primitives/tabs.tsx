@@ -316,6 +316,66 @@ interface OverflowTabListProps {
   readonly overflow: TabsOverflow;
 }
 
+/**
+ * What decides the widths of the measured tabs: each item's value, text label, count, priority, and
+ * disabled state.
+ *
+ * @remarks
+ * Callers pass `items` as a fresh array literal on every render, so the array's identity says
+ * nothing about whether the tabs changed. Comparing this string does.
+ */
+function measurementKey(items: readonly TabsItem[]): string {
+  return JSON.stringify(
+    items.map((item) => [
+      item.value,
+      typeof item.label === 'string' ? item.label : null,
+      item.count ?? null,
+      item.priority ?? null,
+      item.disabled === true,
+    ]),
+  );
+}
+
+/**
+ * The tab values that fit the lane, in tab order.
+ *
+ * @remarks
+ * The selected tab claims its room first, so it is never the one demoted. The rest follow by
+ * priority, each only if it still leaves room for the overflow button while any tab stays hidden.
+ *
+ * @param tabs - Every tab, in order.
+ * @param selectedValue - The selected tab's value.
+ * @param widths - Each tab's measured width in px.
+ * @param available - The lane's width in px.
+ * @param moreWidth - The overflow button's width in px.
+ */
+function fitVisibleValues(
+  tabs: readonly TabsItem[],
+  selectedValue: string,
+  widths: ReadonlyMap<string, number>,
+  available: number,
+  moreWidth: number,
+): string[] {
+  const selected = tabs.find((item) => item.value === selectedValue);
+  const candidates = [...tabs]
+    .filter((item) => item.value !== selected?.value)
+    .sort(
+      (left, right) =>
+        (left.priority ?? Number.MAX_SAFE_INTEGER) - (right.priority ?? Number.MAX_SAFE_INTEGER),
+    );
+  const next = new Set<string>(selected ? [selected.value] : []);
+  let used = selected ? (widths.get(selected.value) ?? 0) : 0;
+  for (const item of candidates) {
+    const width = widths.get(item.value) ?? 0;
+    const needsMore = next.size + 1 < tabs.length;
+    if (used + width + (needsMore ? moreWidth : 0) > available) continue;
+    next.add(item.value);
+    used += width;
+  }
+  if (next.size === 0 && tabs[0]) next.add(tabs[0].value);
+  return tabs.filter((item) => next.has(item.value)).map((item) => item.value);
+}
+
 /** A measured detail-section tab lane that promotes the selected section before hiding others. */
 function OverflowTabList({
   label,
@@ -327,6 +387,15 @@ function OverflowTabList({
   const laneRef = React.useRef<HTMLDivElement>(null);
   const moreRef = React.useRef<HTMLButtonElement>(null);
   const measureRefs = React.useRef(new Map<string, HTMLButtonElement>());
+  const measureLaneRef = React.useRef<HTMLDivElement>(null);
+  // `recompute` reads the latest items through this ref and is re-created only when
+  // `itemsKey` changes, so an unchanged tab set does not re-measure every tab on each render.
+  const itemsRef = React.useRef(items);
+  const itemsKey = measurementKey(items);
+  const firstValue = items[0]?.value;
+  React.useLayoutEffect(() => {
+    itemsRef.current = items;
+  });
   const [visibleValues, setVisibleValues] = React.useState<readonly string[]>(() => {
     const first = items[0]?.value;
     return first && first !== value ? [first, value] : [value];
@@ -337,40 +406,24 @@ function OverflowTabList({
   const hiddenItems = items.filter((item) => !visibleSet.has(item.value));
 
   const recompute = React.useCallback(() => {
+    const tabs = itemsRef.current;
     const available = laneRef.current?.clientWidth ?? 0;
     const moreWidth = moreRef.current?.getBoundingClientRect().width ?? 40;
     const widths = new Map(
-      items.map((item) => [
+      tabs.map((item) => [
         item.value,
         measureRefs.current.get(item.value)?.getBoundingClientRect().width ?? 0,
       ]),
     );
     if (available <= 0 || [...widths.values()].some((width) => width <= 0)) return;
 
-    const selected = items.find((item) => item.value === value);
-    const candidates = [...items]
-      .filter((item) => item.value !== selected?.value)
-      .sort(
-        (left, right) =>
-          (left.priority ?? Number.MAX_SAFE_INTEGER) - (right.priority ?? Number.MAX_SAFE_INTEGER),
-      );
-    const next = new Set<string>(selected ? [selected.value] : []);
-    let used = selected ? (widths.get(selected.value) ?? 0) : 0;
-    for (const item of candidates) {
-      const width = widths.get(item.value) ?? 0;
-      const needsMore = next.size + 1 < items.length;
-      if (used + width + (needsMore ? moreWidth : 0) > available) continue;
-      next.add(item.value);
-      used += width;
-    }
-    if (next.size === 0 && items[0]) next.add(items[0].value);
-    const ordered = items.filter((item) => next.has(item.value)).map((item) => item.value);
+    const ordered = fitVisibleValues(tabs, value, widths, available, moreWidth);
     setVisibleValues((current) =>
       current.length === ordered.length && current.every((item, index) => item === ordered[index])
         ? current
         : ordered,
     );
-  }, [items, value]);
+  }, [itemsKey, value]);
 
   React.useLayoutEffect(() => {
     recompute();
@@ -378,6 +431,8 @@ function OverflowTabList({
     if (!lane || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(recompute);
     observer.observe(lane);
+    // A label's width also moves when its font loads, with no change to the lane or the tab set.
+    if (measureLaneRef.current) observer.observe(measureLaneRef.current);
     return () => {
       observer.disconnect();
     };
@@ -385,13 +440,12 @@ function OverflowTabList({
 
   React.useLayoutEffect(() => {
     if (visibleSet.has(value)) return;
-    const first = items[0]?.value;
     setVisibleValues((current) =>
-      first && first !== value
-        ? [...new Set([first, value, ...current])]
+      firstValue && firstValue !== value
+        ? [...new Set([firstValue, value, ...current])]
         : [...new Set([value, ...current])],
     );
-  }, [items, value, visibleSet]);
+  }, [firstValue, value, visibleSet]);
 
   return (
     <div ref={laneRef} className="flex min-w-0 items-center gap-1">
@@ -430,7 +484,11 @@ function OverflowTabList({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-      <div aria-hidden="true" className="pointer-events-none invisible absolute whitespace-nowrap">
+      <div
+        ref={measureLaneRef}
+        aria-hidden="true"
+        className="pointer-events-none invisible absolute whitespace-nowrap"
+      >
         {items.map((item) => (
           <TabMeasurement key={item.value} item={item} refs={measureRefs} />
         ))}

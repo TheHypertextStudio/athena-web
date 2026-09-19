@@ -12,11 +12,10 @@ import type { QueryKey } from '@tanstack/react-query';
 import type { JSX } from 'react';
 
 import type { EntityMentionsData } from '@/lib/use-entity-mentions';
-import type { TaskMutations } from '@/lib/use-task-mutations';
 
 import { TaskGraphTab } from './task-graph-tab';
 import type { TaskTab } from './task-masthead-slots';
-import { TaskOverviewPanel } from './task-overview-panel';
+import { TaskOverviewPanel, type TaskOverviewMutations } from './task-overview-panel';
 import { TaskResourcesPanel } from './task-resources-panel';
 import type { DescriptionExpansion } from './use-description-expansion';
 
@@ -32,10 +31,7 @@ export interface TaskSectionsProps {
   readonly mentions: EntityMentionsData;
   readonly projectName: (projectId: string) => string;
   readonly projectLabel: string;
-  readonly mutations: Pick<
-    TaskMutations,
-    'patchTask' | 'addSubtask' | 'toggleSubtask' | 'addComment'
-  >;
+  readonly mutations: TaskOverviewMutations;
   readonly expansion: DescriptionExpansion;
 }
 
@@ -56,7 +52,7 @@ function ActiveSection({ tab, mentions, ...section }: TaskSectionsProps): JSX.El
     case 'graph':
       return <TaskGraphTab orgId={orgId} taskId={task.id} />;
     case 'overview':
-      return <TaskOverviewPanel taskId={task.id} {...section} />;
+      return <TaskOverviewPanel {...section} />;
   }
 }
 

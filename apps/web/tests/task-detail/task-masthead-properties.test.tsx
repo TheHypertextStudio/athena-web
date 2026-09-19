@@ -70,8 +70,6 @@ function modelFor(overrides: Partial<TaskPropertyModel> = {}): TaskPropertyModel
     projectLoading: false,
     onProjectOpenChange: vi.fn(),
     secondary: {
-      task: subject,
-      projectLabel: 'Project',
       programLabel: 'Program',
       cycleLabel: 'Cycle',
       programOptions: [],
@@ -80,8 +78,6 @@ function modelFor(overrides: Partial<TaskPropertyModel> = {}): TaskPropertyModel
       labelOptions: [],
       onCreateLabel: vi.fn(),
       estimationScale: 'fibonacci',
-      canEdit: true,
-      onPatch: vi.fn(),
     },
     ...overrides,
   };

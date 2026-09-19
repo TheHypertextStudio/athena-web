@@ -82,16 +82,13 @@ export interface TaskMutations {
    * the caller supplies `onSuccess` to close its confirm dialog and navigate away.
    */
   deleteTask: (options?: { onSuccess?: (() => void) | undefined }) => void;
-  actionError: string | null;
-  propsPending: boolean;
   statusPending: boolean;
   priorityPending: boolean;
   /** Whether the delete/archive request is in flight (disables the confirm affordance). */
   deletePending: boolean;
   /**
    * User-facing message for a failed delete/archive, or `null` when there is none. Surfaced inside
-   * the confirm dialog so the failure stays visible while the dialog remains open; kept out of
-   * {@link actionError} to avoid double-rendering the same failure in the page header.
+   * the confirm dialog so the failure stays visible while the dialog remains open.
    */
   deleteError: string | null;
   /** Clears any prior delete failure so a reopened confirm dialog never shows a stale message. */
@@ -439,20 +436,6 @@ export function useTaskMutations(
     deleteMutation.reset();
   }, [deleteMutation]);
 
-  const actionError = propsMutation.error
-    ? userErrorMessage(propsMutation.error, 'Could not update this task.')
-    : stateMutation.error
-      ? userErrorMessage(stateMutation.error, 'Could not change the task state.')
-      : priorityMutation.error
-        ? userErrorMessage(priorityMutation.error, 'Could not change the task priority.')
-        : addSubtaskMutation.error
-          ? userErrorMessage(addSubtaskMutation.error, 'Could not add that subtask.')
-          : toggleSubtaskMutation.error
-            ? userErrorMessage(toggleSubtaskMutation.error, 'Could not update that subtask.')
-            : commentMutation.error
-              ? userErrorMessage(commentMutation.error, 'Could not post that comment.')
-              : null;
-
   const deleteError = deleteMutation.error
     ? userErrorMessage(deleteMutation.error, 'Could not delete this task.')
     : null;
@@ -466,8 +449,6 @@ export function useTaskMutations(
     addComment,
     deleteTask,
     resetDelete,
-    actionError,
-    propsPending: propsMutation.isPending,
     statusPending: stateMutation.isPending,
     priorityPending: priorityMutation.isPending,
     deletePending: deleteMutation.isPending,

@@ -37,7 +37,7 @@ import type { TaskMutations } from '@/lib/use-task-mutations';
 
 import type { TaskPropertyModel } from './task-masthead-properties';
 import type { TaskDelegate } from './task-secondary-properties';
-import type { TaskRosters } from './use-task-rosters';
+import { NO_ITEMS, type TaskRosters } from './use-task-rosters';
 
 /** What {@link useTaskPropertyModel} builds the model from. */
 export interface TaskPropertyModelInput {
@@ -59,19 +59,26 @@ export interface TaskPropertyModelResult {
   readonly projectName: (projectId: string) => string;
 }
 
-/** The workspace's per-entity icon overrides for one kind of subject, read for picker options. */
+/**
+ * The workspace's per-entity icon overrides for one kind of subject, read for picker options.
+ *
+ * @param enabled - Whether the roster these icons decorate is switched on; a dormant roster has no
+ * options to decorate.
+ */
 function useEntityDisplays(
   orgId: string,
   subjectType: EntityDisplaySubjectType,
+  enabled: boolean,
 ): readonly EntityDisplayOut[] {
   const query = useApiListQuery(
     apiQueryOptions(
       queryKeys.entityDisplays(orgId, subjectType),
       () => api.v1.orgs[':orgId'].display[':subjectType'].$get({ param: { orgId, subjectType } }),
       `Could not load ${subjectType} icons.`,
+      { enabled },
     ),
   );
-  return query.data?.items ?? [];
+  return query.data?.items ?? NO_ITEMS;
 }
 
 /** Resolve the delegate's display name and avatar from the member and agent rosters. */
@@ -88,11 +95,11 @@ function useDelegate(task: TaskDetail, rosters: TaskRosters): TaskDelegate | nul
 
 /** The picker options, built from the rosters and the workspace's icon overrides. */
 function useTaskPickerOptions(orgId: string, task: TaskDetail, rosters: TaskRosters) {
-  const projectDisplays = useEntityDisplays(orgId, 'project');
-  const cycleDisplays = useEntityDisplays(orgId, 'cycle');
-  const milestoneDisplays = useEntityDisplays(orgId, 'milestone');
+  const { members, projects, programs, cycles, milestones, wanted } = rosters;
+  const projectDisplays = useEntityDisplays(orgId, 'project', wanted.projects);
+  const cycleDisplays = useEntityDisplays(orgId, 'cycle', wanted.cycles);
+  const milestoneDisplays = useEntityDisplays(orgId, 'milestone', wanted.milestones);
   const labelsQ = useApiListQuery(labelsDef(orgId));
-  const { members, projects, programs, cycles, milestones } = rosters;
   return {
     memberOptions: useMemo(() => memberActorOptions(members), [members]),
     projectOptions: useMemo(
@@ -115,7 +122,7 @@ function useTaskPickerOptions(orgId: string, task: TaskDetail, rosters: TaskRost
       [milestoneDisplays, milestones, task.projectId],
     ),
     labelOptions: useMemo<readonly PickerOption[]>(
-      () => toLabelOptions(labelsQ.data?.items ?? []),
+      () => toLabelOptions(labelsQ.data?.items ?? NO_ITEMS),
       [labelsQ.data],
     ),
   };
@@ -182,8 +189,6 @@ export function useTaskPropertyModel({
     projectLoading: rosters.loading.projects,
     onProjectOpenChange: rosters.onOpenChange.projects,
     secondary: {
-      task,
-      projectLabel,
       programLabel,
       cycleLabel,
       programOptions: options.programOptions,
@@ -199,8 +204,6 @@ export function useTaskPropertyModel({
       onCreateLabel,
       estimationScale,
       delegate,
-      canEdit,
-      onPatch: patchTask,
     },
   };
   return { model, projectName };

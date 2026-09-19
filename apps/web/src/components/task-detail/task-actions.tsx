@@ -26,10 +26,10 @@ import {
 } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
+import { copyObjects } from '@/components/actions/copy-object-action';
 import { useCopyOutcome } from '@/components/clipboard';
 import { TaskTimerButton } from '@/components/time-tracking';
-import { objectsToClipboard } from '@/lib/clipboard/object-clipboard';
-import { canWriteClipboard, writeClipboard } from '@/lib/clipboard/write';
+import { canWriteClipboard } from '@/lib/clipboard/write';
 import type { TaskMutations } from '@/lib/use-task-mutations';
 
 import { TaskDeleteDialog, type TaskDeletePrompt, useTaskDeletePrompt } from './task-delete-dialog';
@@ -64,7 +64,7 @@ export function TaskOverflowMenu({
   const canCopy = canWriteClipboard();
   const copyLink = async (): Promise<void> => {
     const object = { kind: 'task', id: task.id, organizationId: orgId, title: task.title } as const;
-    reportOutcome(await writeClipboard(objectsToClipboard([object], window.location.origin)));
+    await copyObjects([object], reportOutcome);
   };
   if (!canEdit && !canCopy && !canManage) return null;
   return (

@@ -20,8 +20,8 @@ export interface TaskBreadcrumbProps {
   readonly orgId: string;
   /** The task's project, or `null` when it has none. */
   readonly projectId: string | null;
-  /** The project's display name; the workspace's noun for a project until it resolves. */
-  readonly projectName: string;
+  /** The project's display name, or `null` when the task has none. */
+  readonly projectName: string | null;
   /** The workspace's noun for a project, for the task that has none. */
   readonly projectLabel: string;
   /** The task's parent, when it is a subtask. */
@@ -69,7 +69,7 @@ export function TaskBreadcrumb({
         href={projectId ? `/orgs/${orgId}/projects/${projectId}` : `/orgs/${orgId}/tasks`}
         className="hover:text-on-surface min-w-0 truncate"
       >
-        {projectId ? projectName : `No ${projectLabel.toLowerCase()}`}
+        {projectName ?? `No ${projectLabel.toLowerCase()}`}
       </Link>
       {parentTaskId ? (
         <>

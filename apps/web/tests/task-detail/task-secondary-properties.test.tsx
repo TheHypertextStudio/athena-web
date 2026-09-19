@@ -25,6 +25,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   TaskSecondaryProperties,
+  type TaskSecondaryHostModel,
+  type TaskSecondaryModel,
+  type TaskSecondaryPresentation,
   type TaskSecondaryPropertiesProps,
 } from '../../src/components/task-detail/task-secondary-properties';
 import { EntityMetadataRow } from '../../src/components/views/entity-detail-layout';
@@ -65,28 +68,38 @@ function task(overrides: Partial<TaskDetail> = {}): TaskDetail {
   } as TaskDetail;
 }
 
-/** The props both presentations share; `props` overrides any of them. */
-function propsFor(props: Partial<TaskSecondaryPropertiesProps> = {}): TaskSecondaryPropertiesProps {
+/** What a case is about, flat: the model's shared fields, its secondary fields, and the layout. */
+type CaseOverrides = Partial<Omit<TaskSecondaryHostModel, 'secondary'> & TaskSecondaryModel> & {
+  readonly presentation?: TaskSecondaryPresentation;
+};
+
+/** The props both presentations share; `overrides` replaces any of the fields. */
+function propsFor(overrides: CaseOverrides = {}): TaskSecondaryPropertiesProps {
+  const { presentation, task: subject, canEdit, onPatch, projectLabel, ...secondary } = overrides;
   return {
-    presentation: 'rows',
-    task: task(),
-    projectLabel: 'Project',
-    programLabel: 'Program',
-    cycleLabel: 'Cycle',
-    labelOptions: [],
-    onCreateLabel: () => undefined,
-    programOptions: [],
-    milestoneOptions: [],
-    cycleOptions: [],
-    estimationScale: 'fibonacci',
-    canEdit: true,
-    onPatch: vi.fn(),
-    ...props,
+    presentation: presentation ?? 'rows',
+    model: {
+      task: subject ?? task(),
+      canEdit: canEdit ?? true,
+      onPatch: onPatch ?? vi.fn(),
+      projectLabel: projectLabel ?? 'Project',
+      secondary: {
+        programLabel: 'Program',
+        cycleLabel: 'Cycle',
+        labelOptions: [],
+        onCreateLabel: () => undefined,
+        programOptions: [],
+        milestoneOptions: [],
+        cycleOptions: [],
+        estimationScale: 'fibonacci',
+        ...secondary,
+      },
+    },
   };
 }
 
 /** Render the docked rows; returns the panel element. */
-function renderRows(props: Partial<TaskSecondaryPropertiesProps> = {}): HTMLElement {
+function renderRows(props: CaseOverrides = {}): HTMLElement {
   const { container } = render(<TaskSecondaryProperties {...propsFor(props)} />);
   const panel = container.firstElementChild;
   if (!panel) throw new Error('the properties did not render');
@@ -279,7 +292,7 @@ describe('TaskSecondaryProperties rows — origin', () => {
 });
 
 /** Render the chips inside the metadata row they are built for. */
-function renderChips(props: Partial<TaskSecondaryPropertiesProps> = {}): void {
+function renderChips(props: CaseOverrides = {}): void {
   render(
     <EntityMetadataRow ariaLabel="Task properties">
       <TaskSecondaryProperties {...propsFor({ presentation: 'chips', ...props })} />

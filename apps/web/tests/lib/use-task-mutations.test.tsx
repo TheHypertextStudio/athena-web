@@ -8,19 +8,22 @@
  * claims here:
  *
  * 1. the cache carries the new value **before** the mutation promise settles, and
- * 2. a forced failure restores the previous value **and** surfaces application-owned copy.
+ * 2. a forced failure restores the previous value **and** presents a notice.
  *
  * The second claim is checked against a deliberately hostile rejection — a message shaped like a
- * driver/transport leak — because the rule is not merely "show an error", it is that no provider or
- * exception text ever reaches the screen. `unwrap` is the boundary that enforces it, so the
- * mutations are exercised through it rather than around it.
+ * driver/transport leak — because the rule is that no provider or exception text ever reaches the
+ * screen. `unwrap` is the boundary that enforces it, so the mutations are exercised through it
+ * rather than around it, with the real notice stack mounted to read what a person would see.
  */
+import '@testing-library/jest-dom/vitest';
+
 import { OrganizationId } from '@docket/identity-access/ids';
 import { type TaskDetail } from '@docket/work/task-model';
 import { type TaskDetailAggregate } from '../../src/lib/contracts/detail-aggregate';
 import { TaskId } from '@docket/work/ids';
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, screen, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -142,15 +145,24 @@ function makeHarness(): {
     defaultView: { task: baseDetail() },
   } as unknown as TaskDetailAggregate);
   const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      {children}
+      <Toaster />
+    </QueryClientProvider>
   );
   return { client, wrapper, detailKey };
+}
+
+/** The failure notice on screen, checked for leaked transport text. */
+async function expectFailureNotice(): Promise<void> {
+  const notice = await screen.findByRole('alert');
+  expect(notice.textContent).not.toContain('ECONNREFUSED');
+  expect(notice.textContent).not.toContain('pg pool');
 }
 
 /** Mount the hook against a fresh cache seeded with {@link baseDetail}. */
 function mountMutations() {
   const { client, wrapper, detailKey } = makeHarness();
-  // The comment stream hangs off the detail key, exactly as `use-task-detail` derives it.
   const commentsKey = [...detailKey, 'comments'];
   const { result } = renderHook(() => useTaskMutations(ORG_ID, TASK_ID, detailKey, commentsKey), {
     wrapper,
@@ -167,6 +179,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  dismissAllNotices();
   cleanup();
 });
 
@@ -192,7 +205,7 @@ describe('useTaskMutations — task status', () => {
     });
   });
 
-  it('reverts to the previous status and surfaces application-owned copy on failure', async () => {
+  it('reverts to the previous status and presents a notice on failure', async () => {
     statePost.mockRejectedValue(new Error(LEAKY_REJECTION));
     const { result, read } = mountMutations();
 
@@ -203,9 +216,7 @@ describe('useTaskMutations — task status', () => {
     await waitFor(() => {
       expect(read()?.state).toBe('todo');
     });
-    expect(result.current.actionError).toBe('Could not update the status.');
-    expect(result.current.actionError).not.toContain('ECONNREFUSED');
-    expect(result.current.actionError).not.toContain('pg pool');
+    await expectFailureNotice();
   });
 });
 
@@ -229,7 +240,7 @@ describe('useTaskMutations — task priority', () => {
     });
   });
 
-  it('reverts to the previous priority and surfaces application-owned copy on failure', async () => {
+  it('reverts to the previous priority and presents a notice on failure', async () => {
     taskPatch.mockRejectedValue(new Error(LEAKY_REJECTION));
     const { result, read } = mountMutations();
 
@@ -240,8 +251,7 @@ describe('useTaskMutations — task priority', () => {
     await waitFor(() => {
       expect(read()?.priority).toBe('low');
     });
-    expect(result.current.actionError).toBe('Could not update the priority.');
-    expect(result.current.actionError).not.toContain('ECONNREFUSED');
+    await expectFailureNotice();
   });
 });
 
@@ -287,7 +297,7 @@ describe('useTaskMutations — task title', () => {
     expect(options.headers['Idempotency-Key']).toBe(request.json.commandId);
   });
 
-  it('keeps an offline-queued title visible and surfaces the saved-on-device copy', async () => {
+  it('keeps an offline-queued title visible and tells the person it is saved on the device', async () => {
     const renamed = 'Publish the launch note offline';
     objectCommandsPost.mockRejectedValue(new QueuedOfflineWriteError('queued-title-command'));
     const { result, read } = mountMutations();
@@ -299,11 +309,9 @@ describe('useTaskMutations — task title', () => {
     await waitFor(() => {
       expect(read()?.title).toBe(renamed);
     });
-    await waitFor(() => {
-      expect(result.current.actionError).toBe(
-        "Saved on this device. Docket will sync it as soon as you're back online.",
-      );
-    });
+    // A queued write is a neutral notice, not a failure alert.
+    await screen.findByRole('status');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(taskPatch).not.toHaveBeenCalled();
   });
 
@@ -330,44 +338,15 @@ describe('useTaskMutations — task title', () => {
     });
   });
 
-  it('clears a failed title command after a later ordinary patch succeeds', async () => {
+  it('presents a failed title command as a notice', async () => {
     objectCommandsPost.mockRejectedValue(new Error(LEAKY_REJECTION));
-    taskPatch.mockResolvedValue(okResponse({ ...baseDetail(), dueDate: '2026-09-01' }));
     const { result } = mountMutations();
 
     act(() => {
       result.current.patchTask({ title: 'This rename will fail' });
     });
-    await waitFor(() => {
-      expect(result.current.actionError).toBe('Could not update the task.');
-    });
 
-    act(() => {
-      result.current.patchTask({ dueDate: '2026-09-01' });
-    });
-    await waitFor(() => {
-      expect(result.current.actionError).toBeNull();
-    });
-  });
-
-  it('clears a failed ordinary patch after a later title command succeeds', async () => {
-    taskPatch.mockRejectedValue(new Error(LEAKY_REJECTION));
-    objectCommandsPost.mockResolvedValue(titleCommandResponse('Publish the launch note'));
-    const { result } = mountMutations();
-
-    act(() => {
-      result.current.patchTask({ dueDate: '2026-09-01' });
-    });
-    await waitFor(() => {
-      expect(result.current.actionError).toBe('Could not update the task.');
-    });
-
-    act(() => {
-      result.current.patchTask({ title: 'Publish the launch note' });
-    });
-    await waitFor(() => {
-      expect(result.current.actionError).toBeNull();
-    });
+    await expectFailureNotice();
   });
 });
 
@@ -375,7 +354,7 @@ describe('useTaskMutations — assignee and dates', () => {
   it('shows a new assignee before the request settles', async () => {
     const pending = deferred<ReturnType<typeof okResponse>>();
     taskPatch.mockReturnValue(pending.promise);
-    const { result, read } = mountMutations();
+    const { client, result, read } = mountMutations();
 
     act(() => {
       result.current.patchTask({ assigneeId: ASSIGNEE_ID });
@@ -387,14 +366,14 @@ describe('useTaskMutations — assignee and dates', () => {
 
     pending.resolve(okResponse({ ...baseDetail(), assigneeId: ASSIGNEE_ID }));
     await waitFor(() => {
-      expect(result.current.propsPending).toBe(false);
+      expect(client.isMutating()).toBe(0);
     });
   });
 
   it('shows a new due date before the request settles', async () => {
     const pending = deferred<ReturnType<typeof okResponse>>();
     taskPatch.mockReturnValue(pending.promise);
-    const { result, read } = mountMutations();
+    const { client, result, read } = mountMutations();
 
     act(() => {
       result.current.patchTask({ dueDate: '2026-09-01' });
@@ -406,11 +385,11 @@ describe('useTaskMutations — assignee and dates', () => {
 
     pending.resolve(okResponse({ ...baseDetail(), dueDate: '2026-09-01' }));
     await waitFor(() => {
-      expect(result.current.propsPending).toBe(false);
+      expect(client.isMutating()).toBe(0);
     });
   });
 
-  it('reverts assignee and due date together and surfaces application-owned copy on failure', async () => {
+  it('reverts assignee and due date together and presents a notice on failure', async () => {
     taskPatch.mockRejectedValue(new Error(LEAKY_REJECTION));
     const { result, read } = mountMutations();
 
@@ -418,14 +397,10 @@ describe('useTaskMutations — assignee and dates', () => {
       result.current.patchTask({ assigneeId: ASSIGNEE_ID, dueDate: '2026-09-01' });
     });
 
-    await waitFor(() => {
-      expect(result.current.actionError).not.toBeNull();
-    });
+    await expectFailureNotice();
     // A partial rollback would be worse than none: the whole patch is one edit, so it reverts as one.
     expect(read()?.assigneeId).toBeNull();
     expect(read()?.dueDate).toBeNull();
-    expect(result.current.actionError).toBe('Could not update the task.');
-    expect(result.current.actionError).not.toContain('ECONNREFUSED');
   });
 });
 
@@ -449,7 +424,7 @@ describe('useTaskMutations — subtask completion', () => {
     });
   });
 
-  it('unchecks the subtask again and surfaces application-owned copy on failure', async () => {
+  it('unchecks the subtask again and presents a notice on failure', async () => {
     statePost.mockRejectedValue(new Error(LEAKY_REJECTION));
     const { result, read } = mountMutations();
 
@@ -460,7 +435,6 @@ describe('useTaskMutations — subtask completion', () => {
     await waitFor(() => {
       expect(read()?.subtasks[0]?.state).toBe('todo');
     });
-    expect(result.current.actionError).toBe('Could not update the subtask.');
-    expect(result.current.actionError).not.toContain('ECONNREFUSED');
+    await expectFailureNotice();
   });
 });

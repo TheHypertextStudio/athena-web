@@ -23,8 +23,8 @@
  * trigger through {@link ROW_CONTROL_CLASS}. Groups carry `role="group"` and an `aria-label`
  * instead of a visible heading, so the structure is announced without a second type style.
  *
- * Every picker reports through {@link TaskSecondaryPropertiesProps.onPatch}; read-only and
- * loading state are controlled by the parent, so this component holds no mutation state.
+ * Every picker reports through the model's `onPatch`; read-only and loading state are controlled
+ * by the parent, so this component holds no mutation state.
  */
 import type { EstimationScale } from '../../lib/contracts/organization';
 import type { TaskDetail } from '@docket/work/task-model';
@@ -45,7 +45,7 @@ import {
   EntityMetadataItem,
   EntityMetadataStaticChip,
 } from '@/components/views/entity-detail-layout';
-import { formatCalendarDate } from '@/lib/format-date';
+import { formatCalendarDate, isoDateOf } from '@/lib/format-date';
 import type { TaskPatch } from '@/lib/use-task-mutations';
 import { EstimatePicker } from './EstimatePicker';
 import { PropertyRow } from './PropertyRow';
@@ -69,12 +69,8 @@ export interface TaskDelegate {
 /** How the secondary properties are laid out. */
 export type TaskSecondaryPresentation = 'rows' | 'chips';
 
-/** Props for {@link TaskSecondaryProperties}. */
-export interface TaskSecondaryPropertiesProps {
-  /** `chips` for the metadata row, `rows` for the docked aside. */
-  presentation: TaskSecondaryPresentation;
-  task: TaskDetail;
-  projectLabel: string;
+/** The properties only the secondary set reads; the shared ones stay on the property model. */
+export interface TaskSecondaryModel {
   programLabel: string;
   cycleLabel: string;
   programOptions: readonly PickerOption[];
@@ -85,11 +81,9 @@ export interface TaskSecondaryPropertiesProps {
   programLoading?: boolean | undefined;
   milestoneLoading?: boolean | undefined;
   cycleLoading?: boolean | undefined;
-  labelsLoading?: boolean | undefined;
   onProgramOpenChange?: ((open: boolean) => void) | undefined;
   onMilestoneOpenChange?: ((open: boolean) => void) | undefined;
   onCycleOpenChange?: ((open: boolean) => void) | undefined;
-  onLabelsOpenChange?: ((open: boolean) => void) | undefined;
   /** Create a label from a name typed into the picker, and attach it. */
   onCreateLabel: (name: string) => void;
   /**
@@ -103,19 +97,33 @@ export interface TaskSecondaryPropertiesProps {
   estimationScale: EstimationScale | null;
   /** Who the work is delegated to, when someone. */
   delegate?: TaskDelegate | null | undefined;
-  canEdit: boolean;
-  onPatch: (patch: TaskPatch) => void;
 }
 
-/** What one field renders from: the shared props plus the trigger class its presentation wants. */
+/** The slice of the page's property model the secondary set renders from. */
+export interface TaskSecondaryHostModel {
+  readonly task: TaskDetail;
+  readonly canEdit: boolean;
+  readonly onPatch: (patch: TaskPatch) => void;
+  readonly projectLabel: string;
+  readonly secondary: TaskSecondaryModel;
+}
+
+/** Props for {@link TaskSecondaryProperties}. */
+export interface TaskSecondaryPropertiesProps {
+  /** `chips` for the metadata row, `rows` for the docked aside. */
+  presentation: TaskSecondaryPresentation;
+  model: TaskSecondaryHostModel;
+}
+
+/** What a presentation renders from. */
+interface SecondaryProps {
+  readonly model: TaskSecondaryHostModel;
+}
+
+/** What one field renders from: the shared model plus the trigger class its presentation wants. */
 interface FieldProps {
-  readonly props: TaskSecondaryPropertiesProps;
+  readonly model: TaskSecondaryHostModel;
   readonly triggerClassName: string;
-}
-
-/** Narrow an ISO timestamp or date to the bare `YYYY-MM-DD` the date fields and API exchange. */
-function isoDateOf(value: string | null | undefined): string | null {
-  return value ? value.slice(0, 10) : null;
 }
 
 /**
@@ -140,22 +148,23 @@ function hasEstimate(scale: EstimationScale | null): scale is Exclude<Estimation
   return scale !== null && scale !== 'none';
 }
 
-function ProgramField({ props, triggerClassName }: FieldProps): JSX.Element {
-  const { task, programLabel, programOptions, programLoading, onProgramOpenChange } = props;
+function ProgramField({ model, triggerClassName }: FieldProps): JSX.Element {
+  const { task, canEdit, onPatch, secondary } = model;
+  const { programLabel, programOptions, programLoading, onProgramOpenChange } = secondary;
   const noun = programLabel.toLowerCase();
   return (
     <EntityPicker
       options={programOptions}
       value={task.programId ?? null}
       onChange={(programId) => {
-        props.onPatch({ programId });
+        onPatch({ programId });
       }}
       placeholder={`Set ${noun}`}
       triggerIcon={<Layers className="text-on-surface-variant size-4" />}
       clearLabel={`No ${noun}`}
       searchPlaceholder={`Search ${noun}s…`}
       ariaLabel={programLabel}
-      readOnly={!props.canEdit}
+      readOnly={!canEdit}
       loading={programLoading ?? false}
       {...(onProgramOpenChange ? { onOpenChange: onProgramOpenChange } : {})}
       triggerClassName={triggerClassName}
@@ -163,15 +172,16 @@ function ProgramField({ props, triggerClassName }: FieldProps): JSX.Element {
   );
 }
 
-function MilestoneField({ props, triggerClassName }: FieldProps): JSX.Element {
-  const { task, projectLabel, milestoneOptions, milestoneLoading, onMilestoneOpenChange } = props;
+function MilestoneField({ model, triggerClassName }: FieldProps): JSX.Element {
+  const { task, canEdit, onPatch, projectLabel, secondary } = model;
+  const { milestoneOptions, milestoneLoading, onMilestoneOpenChange } = secondary;
   const noun = projectLabel.toLowerCase();
   return (
     <EntityPicker
       options={milestoneOptions}
       value={task.milestoneId ?? null}
       onChange={(milestoneId) => {
-        props.onPatch({ milestoneId });
+        onPatch({ milestoneId });
       }}
       placeholder={task.projectId ? 'Set milestone' : `Set a ${noun} first`}
       triggerIcon={<Flag className="text-on-surface-variant size-4" />}
@@ -179,7 +189,7 @@ function MilestoneField({ props, triggerClassName }: FieldProps): JSX.Element {
       searchPlaceholder="Search milestones…"
       emptyText={task.projectId ? 'No milestones' : `Set a ${noun} to choose a milestone`}
       ariaLabel="Milestone"
-      readOnly={!props.canEdit || !task.projectId}
+      readOnly={!canEdit || !task.projectId}
       loading={milestoneLoading ?? false}
       {...(onMilestoneOpenChange ? { onOpenChange: onMilestoneOpenChange } : {})}
       triggerClassName={triggerClassName}
@@ -187,22 +197,23 @@ function MilestoneField({ props, triggerClassName }: FieldProps): JSX.Element {
   );
 }
 
-function CycleField({ props, triggerClassName }: FieldProps): JSX.Element {
-  const { task, cycleLabel, cycleOptions, cycleLoading, onCycleOpenChange } = props;
+function CycleField({ model, triggerClassName }: FieldProps): JSX.Element {
+  const { task, canEdit, onPatch, secondary } = model;
+  const { cycleLabel, cycleOptions, cycleLoading, onCycleOpenChange } = secondary;
   const noun = cycleLabel.toLowerCase();
   return (
     <EntityPicker
       options={cycleOptions}
       value={task.cycleId ?? null}
       onChange={(cycleId) => {
-        props.onPatch({ cycleId });
+        onPatch({ cycleId });
       }}
       placeholder={`Set ${noun}`}
       triggerIcon={<RefreshCw className="text-on-surface-variant size-4" />}
       clearLabel={`No ${noun}`}
       searchPlaceholder={`Search ${noun}s…`}
       ariaLabel={cycleLabel}
-      readOnly={!props.canEdit}
+      readOnly={!canEdit}
       loading={cycleLoading ?? false}
       {...(onCycleOpenChange ? { onOpenChange: onCycleOpenChange } : {})}
       triggerClassName={triggerClassName}
@@ -210,12 +221,12 @@ function CycleField({ props, triggerClassName }: FieldProps): JSX.Element {
   );
 }
 
-function LabelsField({ props, triggerClassName }: FieldProps): JSX.Element {
-  const { task, labelOptions, labelsLoading, onLabelsOpenChange, onPatch } = props;
+function LabelsField({ model, triggerClassName }: FieldProps): JSX.Element {
+  const { task, canEdit, onPatch, secondary } = model;
   const labelIds: readonly string[] = task.labels.map((label) => label.id);
   return (
     <LabelsPicker
-      options={labelOptions}
+      options={secondary.labelOptions}
       value={labelIds}
       onToggle={(labelId) => {
         onPatch({
@@ -224,45 +235,44 @@ function LabelsField({ props, triggerClassName }: FieldProps): JSX.Element {
             : [...labelIds, labelId],
         });
       }}
-      onCreate={props.onCreateLabel}
+      onCreate={secondary.onCreateLabel}
       placeholder="Add labels"
       triggerIcon={<Tag className="text-on-surface-variant size-4" />}
       ariaLabel="Labels"
-      readOnly={!props.canEdit}
-      loading={labelsLoading ?? false}
-      {...(onLabelsOpenChange ? { onOpenChange: onLabelsOpenChange } : {})}
+      readOnly={!canEdit}
       triggerClassName={triggerClassName}
     />
   );
 }
 
-function StartField({ props, triggerClassName }: FieldProps): JSX.Element {
+function StartField({ model, triggerClassName }: FieldProps): JSX.Element {
   return (
     <DatePicker
-      value={isoDateOf(props.task.startDate)}
+      value={isoDateOf(model.task.startDate)}
       onChange={(startDate) => {
-        props.onPatch({ startDate });
+        model.onPatch({ startDate });
       }}
       placeholder="Set anticipated start"
       formatLabel={(value) => formatCalendarDate(value) ?? undefined}
       ariaLabel="Anticipated start"
-      readOnly={!props.canEdit}
+      readOnly={!model.canEdit}
       triggerClassName={triggerClassName}
     />
   );
 }
 
-function EstimateField({ props, triggerClassName }: FieldProps): JSX.Element | null {
-  const { estimationScale, task } = props;
+function EstimateField({ model, triggerClassName }: FieldProps): JSX.Element | null {
+  const { task, canEdit, onPatch, secondary } = model;
+  const { estimationScale } = secondary;
   if (!hasEstimate(estimationScale)) return null;
   return (
     <EstimatePicker
       scale={estimationScale}
       value={task.estimate ?? null}
       onChange={(estimate) => {
-        props.onPatch({ estimate });
+        onPatch({ estimate });
       }}
-      readOnly={!props.canEdit}
+      readOnly={!canEdit}
       triggerClassName={triggerClassName}
     />
   );
@@ -312,9 +322,10 @@ function OriginLink({
 }
 
 /** The docked presentation: labelled rows in spacing-separated groups. */
-function SecondaryRows(props: TaskSecondaryPropertiesProps): JSX.Element {
-  const { task, programLabel, cycleLabel, delegate } = props;
-  const field: FieldProps = { props, triggerClassName: ROW_CONTROL_CLASS };
+function SecondaryRows({ model }: SecondaryProps): JSX.Element {
+  const { task, secondary } = model;
+  const { programLabel, cycleLabel, delegate } = secondary;
+  const field: FieldProps = { model, triggerClassName: ROW_CONTROL_CLASS };
   const provenance = task.provenance;
   return (
     <div aria-labelledby="properties-heading" className="text-body-medium flex flex-col gap-6">
@@ -349,7 +360,7 @@ function SecondaryRows(props: TaskSecondaryPropertiesProps): JSX.Element {
         <PropertyRow label="Anticipated start">
           <StartField {...field} />
         </PropertyRow>
-        {hasEstimate(props.estimationScale) ? (
+        {hasEstimate(secondary.estimationScale) ? (
           <PropertyRow label="Estimate">
             <EstimateField {...field} />
           </PropertyRow>
@@ -375,8 +386,9 @@ function SecondaryRows(props: TaskSecondaryPropertiesProps): JSX.Element {
 }
 
 /** Delegate, created and origin as read-only chips at the end of the metadata row's overflow. */
-function ReadOnlyChips({ props }: { readonly props: TaskSecondaryPropertiesProps }): JSX.Element {
-  const { task, delegate } = props;
+function ReadOnlyChips({ model }: SecondaryProps): JSX.Element {
+  const { task, secondary } = model;
+  const { delegate } = secondary;
   const provenance = task.provenance;
   return (
     <>
@@ -415,11 +427,11 @@ function ReadOnlyChips({ props }: { readonly props: TaskSecondaryPropertiesProps
 }
 
 /** The metadata-row presentation: prioritized chips that demote into the row's overflow. */
-function SecondaryChips(props: TaskSecondaryPropertiesProps): JSX.Element {
-  const field: FieldProps = { props, triggerClassName: ENTITY_METADATA_CHIP_CLASS };
+function SecondaryChips({ model }: SecondaryProps): JSX.Element {
+  const field: FieldProps = { model, triggerClassName: ENTITY_METADATA_CHIP_CLASS };
   return (
     <>
-      {hasEstimate(props.estimationScale) ? (
+      {hasEstimate(model.secondary.estimationScale) ? (
         <EntityMetadataItem priority={4}>
           <EstimateField {...field} />
         </EntityMetadataItem>
@@ -439,7 +451,7 @@ function SecondaryChips(props: TaskSecondaryPropertiesProps): JSX.Element {
       <EntityMetadataItem priority={7} overflowOnly>
         <StartField {...field} />
       </EntityMetadataItem>
-      <ReadOnlyChips props={props} />
+      <ReadOnlyChips model={model} />
     </>
   );
 }
@@ -450,10 +462,13 @@ function SecondaryChips(props: TaskSecondaryPropertiesProps): JSX.Element {
  * @param props - See {@link TaskSecondaryPropertiesProps}.
  * @returns the chips (for an `EntityMetadataRow`) or the labelled rows (for the aside).
  */
-export function TaskSecondaryProperties(props: TaskSecondaryPropertiesProps): JSX.Element {
-  return props.presentation === 'rows' ? (
-    <SecondaryRows {...props} />
+export function TaskSecondaryProperties({
+  presentation,
+  model,
+}: TaskSecondaryPropertiesProps): JSX.Element {
+  return presentation === 'rows' ? (
+    <SecondaryRows model={model} />
   ) : (
-    <SecondaryChips {...props} />
+    <SecondaryChips model={model} />
   );
 }

@@ -81,7 +81,7 @@ function TaskDetailReady({
         <TaskBreadcrumb
           orgId={orgId}
           projectId={task.projectId ?? null}
-          projectName={project ?? projectLabel}
+          projectName={project}
           projectLabel={projectLabel}
           parentTaskId={task.parentTaskId ?? null}
         />
@@ -89,7 +89,7 @@ function TaskDetailReady({
       icon={<TaskIcon orgId={orgId} taskId={task.id} title={task.title} canEdit={canEdit} />}
       title={<TaskTitle title={task.title} canEdit={canEdit} onPatch={mutations.patchTask} />}
       metadata={<TaskMetadataRow model={model} />}
-      aside={<TaskSecondaryProperties presentation="rows" {...model.secondary} />}
+      aside={<TaskSecondaryProperties presentation="rows" model={model} />}
       actions={
         <TaskActions
           orgId={orgId}
@@ -154,20 +154,26 @@ export default function TaskDetailPage(): JSX.Element {
     queryClient.removeQueries({ queryKey: detailKey, exact: true });
   }, [detailKey, queryClient, taskId, terminalFailure]);
 
-  const view = resolveTaskDetailView({
+  const resolution = resolveTaskDetailView({
     isPending: detail.isPending,
     terminalState,
     isError: detail.taskQuery.isError,
-    hasTask: task !== null,
+    task,
   });
-  if (view === 'ready' && task !== null) {
+  if (resolution.kind === 'ready') {
     return (
-      <TaskDetailReady orgId={orgId} task={task} detail={detail} tab={tab} onTabChange={setTab} />
+      <TaskDetailReady
+        orgId={orgId}
+        task={resolution.task}
+        detail={detail}
+        tab={tab}
+        onTabChange={setTab}
+      />
     );
   }
   return (
     <TaskDetailFallback
-      view={view}
+      view={resolution.view}
       orgId={orgId}
       terminalState={terminalState}
       snapshot={navigationSnapshot}

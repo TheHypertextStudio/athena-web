@@ -73,3 +73,13 @@ export function formatCalendarDate(
   if (!date) return null;
   return date.toLocaleDateString(undefined, options);
 }
+
+/**
+ * Narrow an ISO timestamp or date to the bare `YYYY-MM-DD` that date fields and the API exchange.
+ *
+ * @param value - The ISO date or date-time string, or null/undefined when unset.
+ * @returns the calendar day, or `null` when no value is set.
+ */
+export function isoDateOf(value: string | null | undefined): string | null {
+  return value ? value.slice(0, 10) : null;
+}

@@ -225,39 +225,46 @@ function toResourceOut(
   };
 }
 
-/**
- * Run one tool on one connection and return everything a view needs to render it.
- *
- * @remarks
- * Shared by the two call routes so the model-initiated path and the widget-initiated path can
- * never diverge in what they authorize or what they return.
- *
- * @param ownerUserId - The authenticated owner.
- * @param connectionId - The personal connection to run against.
- * @param tool - The un-namespaced tool name.
- * @param args - The tool arguments.
- * @param requireAppVisible - Whether to enforce the view-callable visibility rule.
- * @returns the render payload.
- */
-function validateToolVisibility(
+/** Check if tool is callable from an embedded view. */
+function requireAppVisibleCheck(
   descriptor: RemoteToolDescriptor,
-  requireAppVisible: boolean,
   toolName: string,
   connectionName: string,
 ): void {
-  if (requireAppVisible && !isAppCallableTool(descriptor)) {
+  if (!isAppCallableTool(descriptor)) {
     throw new ApiError(
       403,
       'forbidden',
       `${toolName} is not callable from an embedded view on ${connectionName}`,
     );
   }
-  if (!requireAppVisible && !isModelCallableTool(descriptor)) {
+}
+
+/** Check if tool is available in the Connected Tools launcher. */
+function requireModelVisibleCheck(
+  descriptor: RemoteToolDescriptor,
+  toolName: string,
+  connectionName: string,
+): void {
+  if (!isModelCallableTool(descriptor)) {
     throw new ApiError(
       403,
       'forbidden',
       `${toolName} is not available in the Connected Tools launcher on ${connectionName}`,
     );
+  }
+}
+
+function validateToolVisibility(
+  descriptor: RemoteToolDescriptor,
+  requireAppVisible: boolean,
+  toolName: string,
+  connectionName: string,
+): void {
+  if (requireAppVisible) {
+    requireAppVisibleCheck(descriptor, toolName, connectionName);
+  } else {
+    requireModelVisibleCheck(descriptor, toolName, connectionName);
   }
 }
 

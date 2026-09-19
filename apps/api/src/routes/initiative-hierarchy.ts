@@ -234,6 +234,95 @@ export function initiativeHierarchyDepth(
   return maximum;
 }
 
+/**
+ * Validate that a potential parent-child pair exists and is accessible.
+ * @throws NotFoundError if either initiative is inaccessible
+ */
+async function assertInitiativeIdsAccessible(
+  input: {
+    readonly contextOrganizationId: string;
+    readonly parentInitiativeId: string;
+    readonly childInitiativeId: string;
+    readonly session: AuthSession;
+  },
+  nodeRows: readonly (typeof initiative.$inferSelect)[],
+  accessibleNodeIds: Set<string>,
+): Promise<{ parent: typeof initiative.$inferSelect; child: typeof initiative.$inferSelect }> {
+  const nodesById = new Map(nodeRows.map((node) => [node.id, node]));
+  const parent = nodesById.get(input.parentInitiativeId);
+  const child = nodesById.get(input.childInitiativeId);
+  if (!parent || !child || !accessibleNodeIds.has(parent.id) || !accessibleNodeIds.has(child.id)) {
+    throw new NotFoundError('Initiative not found');
+  }
+  return { parent, child };
+}
+
+/**
+ * Validate that the child has no existing parent in the workspace.
+ * @throws ConflictError if child already has a parent
+ * @throws NotFoundError if existing parent is not accessible
+ */
+function assertChildHasNoExistingParent(
+  childInitiativeId: string,
+  excludeLinkId: string | undefined,
+  currentEdges: readonly HierarchyLinkRow[],
+  visibleCurrentLinkIds: Set<string>,
+): void {
+  const edges = currentEdges.filter((edge) => edge.id !== excludeLinkId);
+  const existingParent = edges.find((edge) => edge.childInitiativeId === childInitiativeId);
+  if (existingParent && !visibleCurrentLinkIds.has(existingParent.id)) {
+    throw new NotFoundError('Initiative not found');
+  }
+  if (existingParent) {
+    throw new ConflictError('Initiative already has a parent in this workspace');
+  }
+}
+
+/**
+ * Validate that parent remains visible after applying the new edge.
+ * @throws ConflictError if parent is not visible in the resulting projection
+ */
+function assertParentVisibleInProjection(
+  contextOrganizationId: string,
+  parentInitiativeId: string,
+  edges: readonly HierarchyLinkRow[],
+  accessibleNodes: readonly AccessibleInitiativeHierarchyNode[],
+): void {
+  const projection = accessibleInitiativeHierarchyProjection(
+    contextOrganizationId,
+    accessibleNodes,
+    edges,
+  );
+  if (!projection.nodeIds.has(parentInitiativeId)) {
+    throw new ConflictError('A hierarchy parent must be visible in the context workspace');
+  }
+}
+
+/**
+ * Validate that adding the edge does not exceed the workspace depth limit.
+ * @throws ConflictError if depth would be exceeded
+ */
+function assertHierarchyDepthAllowed(
+  parentInitiativeId: string,
+  childInitiativeId: string,
+  edges: readonly HierarchyLinkRow[],
+  maxDepth: number,
+): void {
+  const candidateEdges = [
+    ...edges,
+    {
+      parentInitiativeId,
+      childInitiativeId,
+    },
+  ] as HierarchyLinkRow[];
+  const depth = initiativeHierarchyDepth(candidateEdges);
+  if (depth > maxDepth) {
+    throw new ConflictError(
+      `Initiative hierarchy exceeds the workspace maximum depth of ${maxDepth}`,
+    );
+  }
+}
+
 /** Validate a hierarchy create or move and return the current context edges. */
 export async function validateInitiativeHierarchyChange(
   input: {
@@ -263,6 +352,7 @@ export async function validateInitiativeHierarchyChange(
 
   const settings = settingsRows[0];
   if (!settings) throw new NotFoundError('Workspace not found');
+
   const graphNodeIds = [
     ...new Set([
       input.parentInitiativeId,
@@ -270,17 +360,19 @@ export async function validateInitiativeHierarchyChange(
       ...currentEdges.flatMap((edge) => [edge.parentInitiativeId, edge.childInitiativeId]),
     ]),
   ];
+
   const nodeRows = await database
     .select({ id: initiative.id, organizationId: initiative.organizationId })
     .from(initiative)
     .where(inArray(initiative.id, graphNodeIds));
+
   const accessibleNodeIds = await accessibleInitiativeNodeIds(input.session, nodeRows, database);
-  const nodesById = new Map(nodeRows.map((node) => [node.id, node]));
-  const parent = nodesById.get(input.parentInitiativeId);
-  const child = nodesById.get(input.childInitiativeId);
-  if (!parent || !child || !accessibleNodeIds.has(parent.id) || !accessibleNodeIds.has(child.id)) {
-    throw new NotFoundError('Initiative not found');
-  }
+  const { parent } = await assertInitiativeIdsAccessible(
+    input,
+    nodeRows,
+    accessibleNodeIds,
+    database,
+  );
 
   const accessibleNodes = nodeRows.filter((node) => accessibleNodeIds.has(node.id));
   const currentProjection = accessibleInitiativeHierarchyProjection(
@@ -288,41 +380,26 @@ export async function validateInitiativeHierarchyChange(
     accessibleNodes,
     currentEdges,
   );
+
   const visibleCurrentLinkIds = new Set(currentProjection.links.map((edge) => edge.id));
   if (input.excludeLinkId !== undefined && !visibleCurrentLinkIds.has(input.excludeLinkId)) {
     throw new NotFoundError('Initiative hierarchy link not found');
   }
 
   const edges = currentEdges.filter((edge) => edge.id !== input.excludeLinkId);
-  const existingParent = edges.find((edge) => edge.childInitiativeId === input.childInitiativeId);
-  if (existingParent && !visibleCurrentLinkIds.has(existingParent.id)) {
-    throw new NotFoundError('Initiative not found');
-  }
-  if (existingParent) {
-    throw new ConflictError('Initiative already has a parent in this workspace');
-  }
-
-  const projection = accessibleInitiativeHierarchyProjection(
-    input.contextOrganizationId,
-    accessibleNodes,
-    edges,
+  assertChildHasNoExistingParent(
+    input.childInitiativeId,
+    input.excludeLinkId,
+    currentEdges,
+    visibleCurrentLinkIds,
   );
-  if (!projection.nodeIds.has(parent.id)) {
-    throw new ConflictError('A hierarchy parent must be visible in the context workspace');
-  }
+  assertParentVisibleInProjection(input.contextOrganizationId, parent.id, edges, accessibleNodes);
+  assertHierarchyDepthAllowed(
+    input.parentInitiativeId,
+    input.childInitiativeId,
+    edges,
+    settings.initiativeMaxDepth,
+  );
 
-  const candidateEdges = [
-    ...edges,
-    {
-      parentInitiativeId: input.parentInitiativeId,
-      childInitiativeId: input.childInitiativeId,
-    },
-  ];
-  const depth = initiativeHierarchyDepth(candidateEdges);
-  if (depth > settings.initiativeMaxDepth) {
-    throw new ConflictError(
-      `Initiative hierarchy exceeds the workspace maximum depth of ${settings.initiativeMaxDepth}`,
-    );
-  }
   return currentEdges;
 }

@@ -63,12 +63,28 @@ function searchKindForEntity(
   return ENTITY_KIND_MAP[entityKind] ?? null;
 }
 
+/** Compute subject ID based on kind and entity ID. */
+function computeSubjectId(
+  subjectKind: SearchDocumentKind | null,
+  docketEntityId: string | null | undefined,
+): string | null {
+  return subjectKind ? (docketEntityId ?? null) : null;
+}
+
+/** Compute visibility mode based on subject. */
+function computeVisibility(subjectKind: SearchDocumentKind | null, subjectId: string | null) {
+  return subjectKind && subjectId
+    ? { mode: 'event' as const, subjectKind, subjectId }
+    : { mode: 'event' as const };
+}
+
 /** Projector that turns a canonical event-log row into searchable activity. */
 export const eventSearchProjector = preloadedProjector<EventRow>(
   'event',
   (row): SearchDocumentDraft => {
     const subjectKind = searchKindForEntity(row.entityKind, row.docketEntityId);
-    const subjectId = subjectKind ? (row.docketEntityId ?? null) : null;
+    const subjectId = computeSubjectId(subjectKind, row.docketEntityId);
+    const externalUrl = row.externalUrl ?? row.entity?.url ?? null;
     return {
       id: searchDocumentId('activity', row.organizationId, row.id),
       organizationId: row.organizationId,
@@ -80,7 +96,7 @@ export const eventSearchProjector = preloadedProjector<EventRow>(
       subjectKind,
       subjectId,
       sourceSystem: row.sourceSystem,
-      externalUrl: row.externalUrl ?? row.entity?.url ?? null,
+      externalUrl,
       title: row.title,
       summary: cleanText(row.summary),
       body: cleanText(row.summary),
@@ -92,9 +108,8 @@ export const eventSearchProjector = preloadedProjector<EventRow>(
         participants: row.participants ?? [],
         detail: row.detail,
       },
-      route: activityRoute(row.organizationId, row.id, row.externalUrl ?? row.entity?.url ?? null),
-      visibility:
-        subjectKind && subjectId ? { mode: 'event', subjectKind, subjectId } : { mode: 'event' },
+      route: activityRoute(row.organizationId, row.id, externalUrl),
+      visibility: computeVisibility(subjectKind, subjectId),
       baseRank: baseRankFor('activity'),
       occurredAt: row.occurredAt,
       sourceUpdatedAt: sourceUpdatedAt(row),

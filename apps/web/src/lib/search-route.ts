@@ -30,15 +30,23 @@ export function hrefForSearchRoute(route: SearchRoute): string | null {
   }
 }
 
-// Mapping for standard entity paths to reduce complexity
-const STANDARD_ENTITY_PATHS: Record<string, string> = {
+/** The kinds whose detail page is `/orgs/<org>/<segment>/<id>`. */
+const STANDARD_ENTITY_PATHS = {
   agent_session: 'sessions',
   task: 'tasks',
   project: 'projects',
   program: 'programs',
   initiative: 'initiatives',
   cycle: 'cycles',
-};
+} as const satisfies Partial<Record<SearchDocumentKind, string>>;
+
+/** One kind that resolves through {@link STANDARD_ENTITY_PATHS}. */
+type StandardEntityKind = keyof typeof STANDARD_ENTITY_PATHS;
+
+/** Whether this kind lives at a standard org entity path. */
+function isStandardEntityKind(kind: SearchDocumentKind): kind is StandardEntityKind {
+  return kind in STANDARD_ENTITY_PATHS;
+}
 
 function hrefForEntity(
   organizationId: string,
@@ -46,13 +54,10 @@ function hrefForEntity(
   entityId: string,
   serverHref: string,
 ): string {
-  // Standard org entity paths using mapping
-  if (kind in STANDARD_ENTITY_PATHS) {
-    const pathSegment = STANDARD_ENTITY_PATHS[kind as keyof typeof STANDARD_ENTITY_PATHS];
-    return `/orgs/${organizationId}/${pathSegment}/${entityId}`;
+  if (isStandardEntityKind(kind)) {
+    return `/orgs/${organizationId}/${STANDARD_ENTITY_PATHS[kind]}/${entityId}`;
   }
 
-  // Special cases requiring custom logic
   switch (kind) {
     case 'organization':
       return `/orgs/${organizationId}/my-work`;

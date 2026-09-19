@@ -28,6 +28,12 @@ const AUTHORITATIVE_CAP = 512;
  * New values are visible synchronously. Transport is serialized per field, while stale
  * settlements only update the authoritative base and never clear a newer local intent.
  */
+/** The authoritative value a settle carries, and whether the delivery produced one at all. */
+interface AuthoritativeSettle<T> {
+  readonly authoritative?: T | undefined;
+  readonly hasAuthoritative?: boolean;
+}
+
 export class IntentJournal<T> {
   private readonly fields = new Map<string, FieldState<T>>();
   private readonly authoritative = new Map<string, T>();
@@ -129,7 +135,7 @@ export class IntentJournal<T> {
         this.discard(scope, field, entry.version);
       },
       settleSuccess: (authoritative) => {
-        this.settle(scope, field, entry, true, authoritative);
+        this.settle(scope, field, entry, true, { authoritative });
       },
       settleFailure: () => {
         this.settle(scope, field, entry, false);
@@ -163,7 +169,7 @@ export class IntentJournal<T> {
     field: string,
     entry: Entry<T>,
     state: FieldState<T>,
-    options?: { authoritative?: T; hasAuthoritative?: boolean },
+    options?: AuthoritativeSettle<T>,
   ): void {
     if (!options?.hasAuthoritative || entry.version < state.authoritativeVersion) return;
     const authoritative = options.authoritative as T;
@@ -177,7 +183,7 @@ export class IntentJournal<T> {
     field: string,
     entry: Entry<T>,
     success: boolean,
-    options?: { authoritative?: T; hasAuthoritative?: boolean },
+    options?: AuthoritativeSettle<T>,
   ): void {
     const state = this.fields.get(identityKey(scope, field));
     if (!state?.latest && !state?.inFlight) return;

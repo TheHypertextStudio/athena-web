@@ -42,18 +42,23 @@ function clientYFor(event: Event | undefined, fallback: number): number {
     : fallback;
 }
 
+/** The drag-end event Dnd Kit hands a monitor. */
+type DragEndEvent = Parameters<
+  NonNullable<Parameters<typeof useDragDropMonitor>[0]['onDragEnd']>
+>[0];
+
+/** What the drag-end handler needs from the slot it was registered for. */
+interface DragEndTarget {
+  readonly droppableId: string;
+  readonly nodeRef: { current: Element | null };
+  readonly registry: ReturnType<typeof useOptionalActionRegistry>;
+  readonly dragController: ReturnType<typeof useDragController>;
+  readonly targetAt: (minutes: number) => ObjectRef | null;
+  readonly startMinutesAt: (clientY: number, bounds: DOMRect) => number;
+}
+
 /** Handle drag-end event with action invocation. */
-async function handleDragEnd(
-  event: Parameters<Parameters<typeof useDragDropMonitor>[0]['onDragEnd']>[0],
-  opts: {
-    droppableId: string;
-    nodeRef: { current: Element | null };
-    registry: ReturnType<typeof useOptionalActionRegistry>;
-    dragController: ReturnType<typeof useDragController>;
-    targetAt: (minutes: number) => ObjectRef | null;
-    startMinutesAt: (clientY: number, bounds: DOMRect) => number;
-  },
-): Promise<void> {
+async function handleDragEnd(event: DragEndEvent, opts: DragEndTarget): Promise<void> {
   if (event.operation.target?.id !== opts.droppableId) return;
   if (opts.registry === null || opts.nodeRef.current === null) return;
   const dragData = event.operation.source?.data;

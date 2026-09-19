@@ -63,7 +63,7 @@ async function handleLeadRelation(
   organizationId: string,
   dependencies: ProjectRelationDependencies,
 ): Promise<boolean> {
-  if (subject.meta?.leadId === intent.target.id) return false;
+  if (subject.meta?.['leadId'] === intent.target.id) return false;
   await dependencies.patchProject(organizationId, subject.id, {
     leadId: intent.target.id,
   });

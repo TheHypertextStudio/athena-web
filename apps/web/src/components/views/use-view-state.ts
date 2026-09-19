@@ -79,6 +79,33 @@ export interface UseViewStateDefaults {
 
 const EMPTY_VIEW_STATE_DEFAULTS: UseViewStateDefaults = {};
 
+/** Helper: validate that a param is not view-owned. */
+function validateSearchParamName(name: string): void {
+  if (VIEW_PARAM_KEYS.includes(name)) {
+    throw new Error(`View-owned URL parameter cannot be written directly: ${name}`);
+  }
+}
+
+/** Helper: apply a single value to search params (delete if null). */
+function applySearchParamValue(params: URLSearchParams, name: string, value: string | null): void {
+  if (value === null || value.length === 0) {
+    params.delete(name);
+  } else {
+    params.set(name, value);
+  }
+}
+
+/** Helper: apply multiple search params, validating all. */
+function applySearchParamUpdates(
+  params: URLSearchParams,
+  updates: Readonly<Record<string, string | null>>,
+): void {
+  for (const [name, value] of Object.entries(updates)) {
+    validateSearchParamName(name);
+    applySearchParamValue(params, name, value);
+  }
+}
+
 /**
  * Hold a list page's view state in the URL search params.
  *
@@ -157,12 +184,9 @@ export function useViewState(
 
   const setSearchParam = useCallback(
     (name: string, value: string | null): void => {
-      if (VIEW_PARAM_KEYS.includes(name)) {
-        throw new Error(`View-owned URL parameter cannot be written directly: ${name}`);
-      }
+      validateSearchParamName(name);
       const params = new URLSearchParams(pendingSearch.current);
-      if (value === null || value.length === 0) params.delete(name);
-      else params.set(name, value);
+      applySearchParamValue(params, name, value);
       replaceParams(params);
     },
     [replaceParams],
@@ -171,13 +195,7 @@ export function useViewState(
   const pushSearchParams = useCallback(
     (updates: Readonly<Record<string, string | null>>): void => {
       const params = new URLSearchParams(pendingSearch.current);
-      for (const [name, value] of Object.entries(updates)) {
-        if (VIEW_PARAM_KEYS.includes(name)) {
-          throw new Error(`View-owned URL parameter cannot be written directly: ${name}`);
-        }
-        if (value === null || value.length === 0) params.delete(name);
-        else params.set(name, value);
-      }
+      applySearchParamUpdates(params, updates);
       navigateParams(params, 'push');
     },
     [navigateParams],

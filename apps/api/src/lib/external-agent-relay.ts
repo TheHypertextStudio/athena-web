@@ -65,54 +65,67 @@ function projectionContext(link: LinkRow) {
   };
 }
 
+/**
+ * The external actor an elicitation is asking to authenticate, when it is asking that.
+ *
+ * @param row - The session activity row.
+ * @returns The external actor id, or `null` when this row is not an authentication elicitation.
+ */
+function authenticationActorIdOf(row: ActivityRow): string | null {
+  if (row.type !== 'elicitation') return null;
+  const externalControl = row.body['externalAgentControl'];
+  if (typeof externalControl !== 'object' || externalControl === null) return null;
+  if (Reflect.get(externalControl, 'type') !== 'authentication') return null;
+  const actorId: unknown = Reflect.get(externalControl, 'externalActorId');
+  return typeof actorId === 'string' ? actorId : null;
+}
+
+/**
+ * Mint the Docket-signed control an external surface renders alongside this activity.
+ *
+ * @param row - The session activity row.
+ * @param link - The external session link the activity is relayed through.
+ * @param externalProvider - The surface the control is addressed to.
+ * @returns The control, or `undefined` when the activity needs none.
+ */
+function activityControl(
+  row: ActivityRow,
+  link: LinkRow,
+  externalProvider: AgentSurfaceProvider,
+): CanonicalAgentActivity['control'] {
+  if (row.type === 'action' && row.approvalStatus === 'proposed') {
+    const base = {
+      provider: externalProvider,
+      organizationId: link.organizationId,
+      sessionId: link.sessionId,
+      activityId: row.id,
+    } as const;
+    return {
+      type: 'approval',
+      activityId: row.id,
+      approveToken: signExternalAgentControl({ kind: 'approval', ...base, decision: 'approve' }),
+      rejectToken: signExternalAgentControl({ kind: 'approval', ...base, decision: 'reject' }),
+    };
+  }
+  const authenticationActorId = authenticationActorIdOf(row);
+  if (authenticationActorId === null) return undefined;
+  const token = signExternalAgentControl({
+    kind: 'authentication',
+    provider: externalProvider,
+    organizationId: link.organizationId,
+    sessionId: link.sessionId,
+    externalActorId: authenticationActorId,
+  });
+  return {
+    type: 'authentication',
+    url: `${webAppOrigin()}/external-agent/connect?${new URLSearchParams({ token }).toString()}`,
+    externalActorId: authenticationActorId,
+  };
+}
+
 function canonicalActivity(row: ActivityRow, link: LinkRow): CanonicalAgentActivity {
   const externalProvider = provider(link.provider);
-  const externalControl = row.body['externalAgentControl'];
-  const authenticationActorId =
-    row.type === 'elicitation' &&
-    typeof externalControl === 'object' &&
-    externalControl !== null &&
-    Reflect.get(externalControl, 'type') === 'authentication' &&
-    typeof Reflect.get(externalControl, 'externalActorId') === 'string'
-      ? (Reflect.get(externalControl, 'externalActorId') as string)
-      : null;
-  const control =
-    row.type === 'action' && row.approvalStatus === 'proposed'
-      ? {
-          type: 'approval' as const,
-          activityId: row.id,
-          approveToken: signExternalAgentControl({
-            kind: 'approval',
-            provider: externalProvider,
-            organizationId: link.organizationId,
-            sessionId: link.sessionId,
-            activityId: row.id,
-            decision: 'approve',
-          }),
-          rejectToken: signExternalAgentControl({
-            kind: 'approval',
-            provider: externalProvider,
-            organizationId: link.organizationId,
-            sessionId: link.sessionId,
-            activityId: row.id,
-            decision: 'reject',
-          }),
-        }
-      : authenticationActorId
-        ? {
-            type: 'authentication' as const,
-            url: `${webAppOrigin()}/external-agent/connect?${new URLSearchParams({
-              token: signExternalAgentControl({
-                kind: 'authentication',
-                provider: externalProvider,
-                organizationId: link.organizationId,
-                sessionId: link.sessionId,
-                externalActorId: authenticationActorId,
-              }),
-            }).toString()}`,
-            externalActorId: authenticationActorId,
-          }
-        : undefined;
+  const control = activityControl(row, link, externalProvider);
   return {
     id: row.id,
     type: row.type,
@@ -231,6 +244,91 @@ async function prepareExternalSession(
   });
 }
 
+/** How far a relay has got, carried across the retry write. */
+interface RelayWatermark {
+  readonly id: string | null;
+  readonly updatedAt: Date | null;
+}
+
+/**
+ * Record a failed relay attempt so the sweep retries it after a backoff.
+ *
+ * @param link - The external session link.
+ * @param now - The clock.
+ * @param message - The application-owned reason to store.
+ * @param watermark - How far the relay got before failing, so the retry resumes there.
+ */
+async function recordRelayFailure(
+  link: LinkRow,
+  now: Date,
+  message: string,
+  watermark?: RelayWatermark,
+): Promise<void> {
+  const attempts = link.relayAttempts + 1;
+  await db
+    .update(agentSessionExternalLink)
+    .set({
+      ...(watermark
+        ? { lastRelayedActivityId: watermark.id, lastRelayedActivityUpdatedAt: watermark.updatedAt }
+        : {}),
+      relayStatus: 'retrying',
+      relayAttempts: attempts,
+      nextRelayAt: new Date(now.getTime() + retryDelay(attempts)),
+      lastRelayError: message,
+    })
+    .where(eq(agentSessionExternalLink.sessionId, link.sessionId));
+}
+
+/**
+ * Acknowledge the external session before any activity is relayed into it.
+ *
+ * @param link - The external session link.
+ * @param now - The clock.
+ * @param dependencies - The publication boundary.
+ * @returns `true` when the relay may continue, `false` when it must wait for a retry.
+ */
+async function ensureSessionPrepared(
+  link: LinkRow,
+  now: Date,
+  dependencies: ExternalAgentRelayDependencies,
+): Promise<boolean> {
+  if (link.relayStatus !== 'pending' || link.lastRelayedActivityUpdatedAt) return true;
+  try {
+    await prepareExternalSession(dependencies.publish, link);
+    return true;
+  } catch (error) {
+    if (isExternalAgentInstallationError(error)) {
+      await markInstallationUnavailable(link);
+      return false;
+    }
+    await recordRelayFailure(link, now, 'External provider session acknowledgement failed.');
+    return false;
+  }
+}
+
+/**
+ * Read the activity rows this link has not relayed yet, oldest first.
+ *
+ * @param link - The external session link, whose watermark is the cursor.
+ * @returns The due rows in relay order.
+ */
+async function dueActivityRows(link: LinkRow) {
+  const cursor = link.lastRelayedActivityUpdatedAt
+    ? or(
+        gt(sessionActivity.updatedAt, link.lastRelayedActivityUpdatedAt),
+        and(
+          eq(sessionActivity.updatedAt, link.lastRelayedActivityUpdatedAt),
+          gt(sessionActivity.id, link.lastRelayedActivityId ?? ''),
+        ),
+      )
+    : undefined;
+  return db
+    .select()
+    .from(sessionActivity)
+    .where(and(eq(sessionActivity.sessionId, link.sessionId), cursor))
+    .orderBy(asc(sessionActivity.updatedAt), asc(sessionActivity.id));
+}
+
 /** Relay all due activity for one linked external session in cursor order. */
 export async function relayExternalAgentActivity(
   sessionId: string,
@@ -245,44 +343,13 @@ export async function relayExternalAgentActivity(
   if (!link || link.relayStatus === 'errored' || (link.nextRelayAt && link.nextRelayAt > now)) {
     return;
   }
-  if (link.relayStatus === 'pending' && !link.lastRelayedActivityUpdatedAt) {
-    try {
-      await prepareExternalSession(dependencies.publish, link);
-    } catch (error) {
-      if (isExternalAgentInstallationError(error)) {
-        await markInstallationUnavailable(link);
-        return;
-      }
-      const attempts = link.relayAttempts + 1;
-      await db
-        .update(agentSessionExternalLink)
-        .set({
-          relayStatus: 'retrying',
-          relayAttempts: attempts,
-          nextRelayAt: new Date(now.getTime() + retryDelay(attempts)),
-          lastRelayError: 'External provider session acknowledgement failed.',
-        })
-        .where(eq(agentSessionExternalLink.sessionId, sessionId));
-      return;
-    }
-  }
-  const cursor = link.lastRelayedActivityUpdatedAt
-    ? or(
-        gt(sessionActivity.updatedAt, link.lastRelayedActivityUpdatedAt),
-        and(
-          eq(sessionActivity.updatedAt, link.lastRelayedActivityUpdatedAt),
-          gt(sessionActivity.id, link.lastRelayedActivityId ?? ''),
-        ),
-      )
-    : undefined;
-  const rows = await db
-    .select()
-    .from(sessionActivity)
-    .where(and(eq(sessionActivity.sessionId, sessionId), cursor))
-    .orderBy(asc(sessionActivity.updatedAt), asc(sessionActivity.id));
-  let watermarkId = link.lastRelayedActivityId;
-  let watermarkUpdatedAt = link.lastRelayedActivityUpdatedAt;
-  for (const row of rows) {
+  if (!(await ensureSessionPrepared(link, now, dependencies))) return;
+
+  let watermark: RelayWatermark = {
+    id: link.lastRelayedActivityId,
+    updatedAt: link.lastRelayedActivityUpdatedAt,
+  };
+  for (const row of await dueActivityRows(link)) {
     if (!shouldSkip(row)) {
       try {
         await publishActivity(dependencies.publish, link, canonicalActivity(row, link));
@@ -291,29 +358,17 @@ export async function relayExternalAgentActivity(
           await markInstallationUnavailable(link);
           return;
         }
-        const attempts = link.relayAttempts + 1;
-        await db
-          .update(agentSessionExternalLink)
-          .set({
-            lastRelayedActivityId: watermarkId,
-            lastRelayedActivityUpdatedAt: watermarkUpdatedAt,
-            relayStatus: 'retrying',
-            relayAttempts: attempts,
-            nextRelayAt: new Date(now.getTime() + retryDelay(attempts)),
-            lastRelayError: 'External provider delivery failed.',
-          })
-          .where(eq(agentSessionExternalLink.sessionId, sessionId));
+        await recordRelayFailure(link, now, 'External provider delivery failed.', watermark);
         return;
       }
     }
-    watermarkId = row.id;
-    watermarkUpdatedAt = row.updatedAt;
+    watermark = { id: row.id, updatedAt: row.updatedAt };
   }
   await db
     .update(agentSessionExternalLink)
     .set({
-      lastRelayedActivityId: watermarkId,
-      lastRelayedActivityUpdatedAt: watermarkUpdatedAt,
+      lastRelayedActivityId: watermark.id,
+      lastRelayedActivityUpdatedAt: watermark.updatedAt,
       relayStatus: 'ready',
       relayAttempts: 0,
       nextRelayAt: null,

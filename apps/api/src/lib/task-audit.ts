@@ -225,66 +225,72 @@ async function loadNames(
   if (ids.length === 0) return names;
   const list = [...ids];
 
+  if (kind === 'cycle') {
+    const rows = await database
+      .select({ id: cycle.id, name: cycle.name, startsAt: cycle.startsAt, endsAt: cycle.endsAt })
+      .from(cycle)
+      .where(and(inArray(cycle.id, list), eq(cycle.organizationId, orgId)));
+    for (const row of rows) {
+      // An unnamed cycle is named by its window: the stored `number` is an epoch-anchored
+      // sequence that means nothing to a reader. Shared with every other surface that renders
+      // a cycle so the ledger can never disagree with the cycle page about the same cycle.
+      names.set(row.id, row.name ?? defaultCycleName(row.startsAt, row.endsAt));
+    }
+    return names;
+  }
+
+  for (const row of await selectNamedRows(orgId, list, kind, database)) {
+    names.set(row.id, row.name);
+  }
+  return names;
+}
+
+/**
+ * Read `id` and display name for one reference kind whose name is a plain column.
+ *
+ * @remarks
+ * Split from {@link loadNames} so the derived cycle name keeps its own branch and these five stay
+ * the one query they are.
+ *
+ * @param orgId - The organization the rows must belong to.
+ * @param list - The ids to read.
+ * @param kind - The reference kind, which chooses the table.
+ * @param database - The database handle.
+ * @returns The matching rows.
+ */
+async function selectNamedRows(
+  orgId: string,
+  list: string[],
+  kind: Exclude<TaskAuditFieldKind, 'cycle'>,
+  database: Pick<typeof db, 'select'>,
+): Promise<readonly { id: string; name: string }[]> {
   switch (kind) {
-    case 'actor': {
-      const rows = await database
+    case 'actor':
+      return database
         .select({ id: actor.id, name: actor.displayName })
         .from(actor)
         .where(and(inArray(actor.id, list), eq(actor.organizationId, orgId)));
-      for (const row of rows) names.set(row.id, row.name);
-      return names;
-    }
-    case 'project': {
-      const rows = await database
+    case 'project':
+      return database
         .select({ id: project.id, name: project.name })
         .from(project)
         .where(and(inArray(project.id, list), eq(project.organizationId, orgId)));
-      for (const row of rows) names.set(row.id, row.name);
-      return names;
-    }
-    case 'program': {
-      const rows = await database
+    case 'program':
+      return database
         .select({ id: program.id, name: program.name })
         .from(program)
         .where(and(inArray(program.id, list), eq(program.organizationId, orgId)));
-      for (const row of rows) names.set(row.id, row.name);
-      return names;
-    }
-    case 'milestone': {
-      const rows = await database
+    case 'milestone':
+      return database
         .select({ id: milestone.id, name: milestone.name })
         .from(milestone)
         .where(and(inArray(milestone.id, list), eq(milestone.organizationId, orgId)));
-      for (const row of rows) names.set(row.id, row.name);
-      return names;
-    }
-    case 'cycle': {
-      const rows = await database
-        .select({
-          id: cycle.id,
-          name: cycle.name,
-          startsAt: cycle.startsAt,
-          endsAt: cycle.endsAt,
-        })
-        .from(cycle)
-        .where(and(inArray(cycle.id, list), eq(cycle.organizationId, orgId)));
-      for (const row of rows) {
-        // An unnamed cycle is named by its window: the stored `number` is an epoch-anchored
-        // sequence that means nothing to a reader. Shared with every other surface that renders
-        // a cycle so the ledger can never disagree with the cycle page about the same cycle.
-        names.set(row.id, row.name ?? defaultCycleName(row.startsAt, row.endsAt));
-      }
-      return names;
-    }
     /* v8 ignore next -- @preserve the switch is exhaustive over the reference kinds passed here */
-    default: {
-      const rows = await database
+    default:
+      return database
         .select({ id: task.id, name: task.title })
         .from(task)
         .where(and(inArray(task.id, list), eq(task.organizationId, orgId)));
-      for (const row of rows) names.set(row.id, row.name);
-      return names;
-    }
   }
 }
 

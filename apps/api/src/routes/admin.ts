@@ -210,10 +210,7 @@ export function createAdminRoutes<
               .offset(offset),
             db.select({ n: count() }).from(organization).where(where),
           ]);
-          const exemptIds = await loadActiveExemptOrgIds(
-            db,
-            items.map((i) => i.id),
-          );
+          const exemptIds = await loadActiveExemptOrgIds(items.map((i) => i.id));
           return ok(c, AdminOrgPage, {
             items: items.map((i) => toOrgOut(i, exemptIds)),
             total: countOf(totals),
@@ -240,7 +237,7 @@ export function createAdminRoutes<
         async (c) => {
           const { id } = c.req.valid('param');
           const org = await loadOrg(id);
-          const exemptIds = await loadActiveExemptOrgIds(db, [org.id]);
+          const exemptIds = await loadActiveExemptOrgIds([org.id]);
           return ok(c, AdminOrgOut, toOrgOut(org, exemptIds));
         },
       )
@@ -265,10 +262,7 @@ export function createAdminRoutes<
         }),
         async (c) => {
           const rows = await db.select().from(organization).orderBy(desc(organization.createdAt));
-          const exemptIds = await loadActiveExemptOrgIds(
-            db,
-            rows.map((r) => r.id),
-          );
+          const exemptIds = await loadActiveExemptOrgIds(rows.map((r) => r.id));
           return ok(c, AdminLifecycleBoard, {
             columns: LIFECYCLE_STATES.map((state) => ({
               lifecycleState: state,
@@ -317,7 +311,7 @@ export function createAdminRoutes<
           const sess = inserted[0];
           /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
           if (!sess) throw new NotFoundError('Impersonation insert returned no row');
-          await audit(db, staffUserId, 'impersonation.started', 'actor', targetUserId, {
+          await audit(staffUserId, 'impersonation.started', 'actor', targetUserId, {
             impersonationId: sess.id,
             reason,
             ttlMinutes,
@@ -352,7 +346,7 @@ export function createAdminRoutes<
             .returning();
           const sess = ended[0];
           if (!sess) throw new NotFoundError('Active impersonation session not found');
-          await audit(db, staffUserId, 'impersonation.ended', 'actor', sess.targetUserId, {
+          await audit(staffUserId, 'impersonation.ended', 'actor', sess.targetUserId, {
             impersonationId: id,
           });
           return ok(c, AdminImpersonationOut, toImpersonationOut(sess));

@@ -57,13 +57,13 @@ function resolveProviderEventPermission(
 }
 
 /** Kinds with fixed, context-free permissions. */
-const BUILTIN_KINDS = new Set([
+const BUILTIN_KINDS: ReadonlySet<CalendarItemKind> = new Set([
   'native_block',
   'native_event',
   'timebox',
   'task_timebox',
   'availability_block',
-] as const);
+]);
 
 /**
  * Resolve a calendar item's normalized edit/delete permissions for the viewer.

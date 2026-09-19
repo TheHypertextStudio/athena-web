@@ -1,3 +1,4 @@
+import type { CanonicalEntityKind } from '@docket/connections/event-contract';
 import { and, desc, eq, gt, inArray } from 'drizzle-orm';
 
 import { enqueueSearchIndexJob } from './enqueue';
@@ -198,13 +199,16 @@ async function enqueueStaleRows(sourceTable: string, rows: readonly unknown[]): 
   return enqueued;
 }
 
-async function enqueueEventAndTargetJobs(row: {
-  id: string;
-  organizationId: string;
-  userId: string;
-  entityKind?: unknown;
-  docketEntityId?: unknown;
-}): Promise<number> {
+/** One canonical event row, reduced to what a repair pass reindexes from it. */
+interface RepairableEventRow {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly userId: string | null;
+  readonly entityKind: CanonicalEntityKind | null;
+  readonly docketEntityId: string | null;
+}
+
+async function enqueueEventAndTargetJobs(row: RepairableEventRow): Promise<number> {
   let enqueued = 0;
   await enqueueSearchIndexJob({
     organizationId: row.organizationId,
@@ -288,10 +292,10 @@ function isValidSourceScanCursor(parsed: unknown): parsed is SourceScanCursor {
   if (typeof parsed !== 'object' || parsed === null) return false;
   const obj = parsed as Record<PropertyKey, unknown>;
   return (
-    typeof obj.sourceTableIndex === 'number' &&
-    Number.isInteger(obj.sourceTableIndex) &&
-    obj.sourceTableIndex >= 0 &&
-    typeof obj.rowId === 'string'
+    typeof obj['sourceTableIndex'] === 'number' &&
+    Number.isInteger(obj['sourceTableIndex']) &&
+    obj['sourceTableIndex'] >= 0 &&
+    typeof obj['rowId'] === 'string'
   );
 }
 

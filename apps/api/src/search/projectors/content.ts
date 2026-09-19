@@ -36,7 +36,7 @@ function contentDocument(row: OrgScopedRow, options: ContentDocumentOptions): Se
     subjectKind,
     subjectId,
     sourceSystem: 'docket',
-    externalUrl,
+    externalUrl: externalUrl ?? null,
     title,
     summary: cleanText(summary),
     body: cleanText(body),

@@ -9,6 +9,7 @@ import { rawResultRows } from '../raw-result';
 import { compileRosterCtes, type WorkViewSqlContext } from './context-sql';
 import { decodeWorkViewCursor, encodeWorkViewCursor, fingerprintWorkViewQuery } from './cursor';
 import { WORK_VIEW_SQL_CONTRACTS } from './contracts';
+import type { WorkViewSqlExecution } from './projection-sql';
 import {
   compileFilterSql,
   type ExecutableFilterNode,
@@ -245,108 +246,107 @@ function resolvePage(
  * @returns The transport response with distinct counts, groups, and keyset continuation.
  * @throws ApiError when a cursor does not belong to this execution or sort definition.
  */
-export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkViewQueryResponse> {
-  const request = internalRequest(input.request);
-  const contract = WORK_VIEW_SQL_CONTRACTS[request.target];
-  const sortTerms = request.definition.arrangement.orderBy;
-  const manualRank = {
-    value: manualRankExpression(),
-    cursor: z.string().nullable(),
-  };
-  const baseSorts: Readonly<Record<string, SortFieldCompiler>> = contract.sorts;
+/**
+ * Layer the contextual manual rank over the priority sort when the view sorts by priority.
+ *
+ * @remarks
+ * Dragging a card inside a priority column writes a contextual rank, and that rank has to win over
+ * the priority value itself — otherwise a drag within one column would not stick. The semantic
+ * priority stays behind it as the tiebreak.
+ *
+ * @param baseSorts - The target's declared sort compilers.
+ * @param sortTerms - The view's order-by terms.
+ * @param manualRank - The contextual rank expression.
+ * @returns The compilers to sort with.
+ */
+function resolveSorts(
+  baseSorts: Readonly<Record<string, SortFieldCompiler>>,
+  sortTerms: readonly { readonly field: string }[],
+  manualRank: SortFieldCompiler,
+): Readonly<Record<string, SortFieldCompiler>> {
   const priority = baseSorts['priority'];
-  const sorts: Readonly<Record<string, SortFieldCompiler>> =
-    priority && sortTerms.some((term) => term.field === 'priority')
-      ? {
-          ...baseSorts,
-          priority: {
-            value: manualRank.value,
-            cursor: manualRank.cursor,
-            /* v8 ignore next -- @preserve Every priority compiler defines semantic ranks. */
-            semanticRanks: [...(priority.semanticRanks ?? []), priority.value],
-            /* v8 ignore next -- @preserve Every priority compiler defines cursor schemas. */
-            semanticCursorSchemas: [...(priority.semanticCursorSchemas ?? []), priority.cursor],
-            valueDirection: 'asc',
-          },
-        }
-      : baseSorts;
-  const groupPath = input.groupPath ?? request.groupPath;
-  const suppliedCursor =
-    request.cursor !== undefined && request.cursor !== null
-      ? decodeWorkViewCursor(request.cursor, undefined, groupPath)
-      : null;
-  if (suppliedCursor) {
-    try {
-      validateSortTuple(sortTerms, sorts, suppliedCursor.sortTuple, manualRank);
-    } catch {
-      throw new ApiError(400, 'validation_error', 'This page cursor does not match the view sort');
-    }
-  }
-  const asOf = suppliedCursor?.asOf ?? (input.now ?? new Date()).toISOString();
-  const timeZone = input.timeZone ?? 'UTC';
-  const callerRows = await executeRows(
-    input.database,
-    sql`select user_id from actor
-      where id=${input.actorId} and organization_id=${input.organizationId}
-        and kind='human' and status='active' and archived_at is null`,
-    callerRowSchema,
-  );
-  const execution = {
+  if (!priority || !sortTerms.some((term) => term.field === 'priority')) return baseSorts;
+  return {
+    ...baseSorts,
+    priority: {
+      value: manualRank.value,
+      cursor: manualRank.cursor,
+      /* v8 ignore next -- @preserve Every priority compiler defines semantic ranks. */
+      semanticRanks: [...(priority.semanticRanks ?? []), priority.value],
+      /* v8 ignore next -- @preserve Every priority compiler defines cursor schemas. */
+      semanticCursorSchemas: [...(priority.semanticCursorSchemas ?? []), priority.cursor],
+      valueDirection: 'asc',
+    },
+  };
+}
+
+/** Everything the aggregate statement is compiled from, resolved by {@link queryWorkView}. */
+interface WorkViewAggregateInput {
+  readonly input: QueryWorkViewInput;
+  readonly request: ReturnType<typeof internalRequest>;
+  readonly contract: (typeof WORK_VIEW_SQL_CONTRACTS)[keyof typeof WORK_VIEW_SQL_CONTRACTS];
+  readonly execution: WorkViewSqlExecution;
+  readonly sortTerms: ReturnType<typeof internalRequest>['definition']['arrangement']['orderBy'];
+  readonly sorts: Readonly<Record<string, SortFieldCompiler>>;
+  readonly manualRank: SortFieldCompiler;
+  readonly groupPath: readonly string[];
+  readonly cursor: ReturnType<typeof decodeWorkViewCursor> | null;
+  readonly pageLimit: number;
+  readonly asOf: string;
+  readonly timeZone: string;
+}
+
+/**
+ * Compile the one statement that returns a page, its groups, and the total count.
+ *
+ * @param compiled - The resolved request.
+ * @returns The aggregate query.
+ */
+function workViewAggregateSql(compiled: WorkViewAggregateInput): SQL {
+  const { input, request, contract, execution, sortTerms, sorts, manualRank, cursor } = compiled;
+  const fields: Readonly<Record<string, FilterFieldCompiler>> = contract.filters;
+  const ctes = compileRosterCtes({
+    target: request.target,
+    context: request.context,
     organizationId: input.organizationId,
     actorId: input.actorId,
-    userId: callerRows[0]?.user_id ?? null,
-    timeZone,
-    asOf,
-  };
-  const fields: Readonly<Record<string, FilterFieldCompiler>> = contract.filters;
-  const filter = filterSql(request, fields, input.actorId, new Date(asOf), timeZone);
-  const ctes = compileRosterCtes(
-    request.target,
-    request.context,
-    input.organizationId,
-    input.actorId,
-    execution.userId,
-    filter,
-  );
-  const fingerprint = fingerprintWorkViewQuery(input.request, execution);
-  const cursor = request.cursor
-    ? decodeWorkViewCursor(request.cursor, fingerprint, groupPath)
-    : null;
-  const sortValues = sortValueExpressions(sortTerms, sorts, manualRank);
-  const keyset = cursor
-    ? compileKeysetSql(sortTerms, sorts, cursor.sortTuple, sql`e.id`, cursor.entityId, manualRank)
-    : sql`true`;
-  const order = compileSortSql(sortTerms, sorts, sql`e.id`, manualRank);
-  const pageLimit = Math.min(request.limit, 100);
-  const groupScope = compileGroupPathSql(
-    request.target,
-    request.definition.arrangement.groupBy,
-    request.definition.arrangement.subGroupBy,
-    groupPath,
-  );
+    userId: execution.userId,
+    filter: filterSql(request, fields, input.actorId, new Date(compiled.asOf), compiled.timeZone),
+  });
   const isInitiativePage = request.target === 'initiative';
-  const countSource = request.target === 'initiative' ? 'direct' : 'matched';
-  const groupJson = compileGroupJsonSql(
-    request.target,
-    request.definition.arrangement.groupBy,
-    request.definition.arrangement.subGroupBy,
-    countSource,
-  );
+  const countSource = isInitiativePage ? 'direct' : 'matched';
+  const arrangement = request.definition.arrangement;
   const page = pageSql({
     initiative: isInitiativePage,
-    groupScope,
-    keyset,
-    order,
+    groupScope: compileGroupPathSql(
+      request.target,
+      arrangement.groupBy,
+      arrangement.subGroupBy,
+      compiled.groupPath,
+    ),
+    keyset: cursor
+      ? compileKeysetSql(sortTerms, sorts, {
+          tuple: cursor.sortTuple,
+          entityId: sql`e.id`,
+          cursorEntityId: cursor.entityId,
+          fallback: manualRank,
+        })
+      : sql`true`,
+    order: compileSortSql(sortTerms, sorts, sql`e.id`, manualRank),
     organizationId: input.organizationId,
-    pageLimit,
-    sortValues,
+    pageLimit: compiled.pageLimit,
+    sortValues: sortValueExpressions(sortTerms, sorts, manualRank),
   });
   const rowOrder = isInitiativePage
     ? sql`page_data._page_order, page_data.id`
     : sql`page_data._page_order`;
-  const aggregateRows = await executeRows(
-    input.database,
-    sql`with recursive ${ctes}, contextual_order as materialized (
+  const groupJson = compileGroupJsonSql(
+    request.target,
+    arrangement.groupBy,
+    arrangement.subGroupBy,
+    countSource,
+  );
+  return sql`with recursive ${ctes}, contextual_order as materialized (
       select item_id, rank from work_item_order
       where organization_id=${input.organizationId}
         and context_type=${request.context.kind}
@@ -374,9 +374,111 @@ export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkView
     )
     select coalesce((select json_agg(page_data order by ${rowOrder}) from page_data), '[]'::json) rows,
       (select count(*)::int from ${sql.raw(countSource)} e) total_count,
-      ${groupJson} groups${page.aggregate}`,
+      ${groupJson} groups${page.aggregate}`;
+}
+
+/** A supplied page cursor, with the sort it has to agree with. */
+interface SuppliedCursorInput {
+  readonly cursor: string | null | undefined;
+  readonly groupPath: readonly string[];
+  readonly sortTerms: readonly ExecutableSortTerm<string>[];
+  readonly sorts: Readonly<Record<string, SortFieldCompiler>>;
+  readonly manualRank: SortFieldCompiler;
+}
+
+/**
+ * Decode the caller's page cursor and refuse one that was minted for a different sort.
+ *
+ * @param input - The cursor and the sort it has to agree with.
+ * @returns The decoded cursor, or `null` when the caller asked for the first page.
+ * @throws {ApiError} `400` when the cursor's sort tuple does not match this view's sort.
+ */
+function validatedSuppliedCursor(
+  input: SuppliedCursorInput,
+): ReturnType<typeof decodeWorkViewCursor> | null {
+  if (input.cursor === undefined || input.cursor === null) return null;
+  const decoded = decodeWorkViewCursor(input.cursor, undefined, input.groupPath);
+  try {
+    validateSortTuple(input.sortTerms, input.sorts, decoded.sortTuple, input.manualRank);
+  } catch {
+    throw new ApiError(400, 'validation_error', 'This page cursor does not match the view sort');
+  }
+  return decoded;
+}
+
+/**
+ * Resolve the identity and clock every compiler in this query reads from.
+ *
+ * @param input - The query request.
+ * @param asOf - The cursor-stable timestamp this page is read at.
+ * @param timeZone - The IANA timezone calendar operands resolve in.
+ * @returns The execution descriptor.
+ */
+async function resolveExecution(
+  input: QueryWorkViewInput,
+  asOf: string,
+  timeZone: string,
+): Promise<WorkViewSqlExecution> {
+  const callerRows = await executeRows(
+    input.database,
+    sql`select user_id from actor
+      where id=${input.actorId} and organization_id=${input.organizationId}
+        and kind='human' and status='active' and archived_at is null`,
+    callerRowSchema,
+  );
+  return {
+    organizationId: input.organizationId,
+    actorId: input.actorId,
+    userId: callerRows[0]?.user_id ?? null,
+    timeZone,
+    asOf,
+  };
+}
+
+export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkViewQueryResponse> {
+  const request = internalRequest(input.request);
+  const contract = WORK_VIEW_SQL_CONTRACTS[request.target];
+  const sortTerms = request.definition.arrangement.orderBy;
+  const manualRank: SortFieldCompiler = {
+    value: manualRankExpression(),
+    cursor: z.string().nullable(),
+  };
+  const sorts = resolveSorts(contract.sorts, sortTerms, manualRank);
+  const groupPath = input.groupPath ?? request.groupPath;
+  const suppliedCursor = validatedSuppliedCursor({
+    cursor: request.cursor,
+    groupPath,
+    sortTerms,
+    sorts,
+    manualRank,
+  });
+  const asOf = suppliedCursor?.asOf ?? (input.now ?? new Date()).toISOString();
+  const timeZone = input.timeZone ?? 'UTC';
+  const execution = await resolveExecution(input, asOf, timeZone);
+  const fingerprint = fingerprintWorkViewQuery(input.request, execution);
+  const cursor = request.cursor
+    ? decodeWorkViewCursor(request.cursor, fingerprint, groupPath)
+    : null;
+  const pageLimit = Math.min(request.limit, 100);
+  const aggregateRows = await executeRows(
+    input.database,
+    workViewAggregateSql({
+      input,
+      request,
+      contract,
+      execution,
+      sortTerms,
+      sorts,
+      manualRank,
+      groupPath,
+      cursor,
+      pageLimit,
+      asOf,
+      timeZone,
+    }),
     workViewAggregateRecordSchema,
   );
+  const isInitiativePage = request.target === 'initiative';
   const aggregate = aggregateRows[0];
   /* v8 ignore next -- @preserve A SELECT of SQL aggregates always returns exactly one row. */
   if (!aggregate) throw new TypeError('A work-view aggregate query returned no row.');

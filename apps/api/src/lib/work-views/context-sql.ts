@@ -35,21 +35,8 @@ export function compileContextSql(
   switch (context.kind) {
     case 'organization':
       return target === 'initiative' ? sql`e.organization_id=${organizationId}` : sql`true`;
-    case 'team': {
-      const teamId = String(context['teamId']);
-      if (target === 'task') {
-        return compileTenantScalarRelationHasValueSql(
-          WORK_VIEW_SCALAR_RELATIONS.team,
-          sql`e.team_id`,
-          sql`e.organization_id`,
-          teamId,
-        );
-      }
-      if (target === 'project') {
-        return compileProjectHasTeamSql(sql`e.id`, sql`e.organization_id`, sql`e.team_id`, teamId);
-      }
-      return sql`false`;
-    }
+    case 'team':
+      return compileTeamContextSql(target, String(context['teamId']));
     case 'project':
       return target === 'task'
         ? compileTenantScalarRelationHasValueSql(
@@ -59,80 +46,135 @@ export function compileContextSql(
             String(context['projectId']),
           )
         : sql`false`;
-    case 'program': {
-      const programId = String(context['programId']);
-      if (target === 'task') {
-        return sql`(${compileTenantScalarRelationHasValueSql(
-          WORK_VIEW_SCALAR_RELATIONS.program,
-          sql`e.program_id`,
-          sql`e.organization_id`,
-          programId,
-        )} or exists (
-          select 1 from project p where p.id=e.project_id and p.organization_id=e.organization_id
-            and ${compileTenantScalarRelationHasValueSql(
-              WORK_VIEW_SCALAR_RELATIONS.program,
-              sql`p.program_id`,
-              sql`p.organization_id`,
-              programId,
-            )}))`;
-      }
-      return target === 'project'
-        ? compileTenantScalarRelationHasValueSql(
-            WORK_VIEW_SCALAR_RELATIONS.program,
-            sql`e.program_id`,
-            sql`e.organization_id`,
-            programId,
-          )
-        : sql`false`;
-    }
-    case 'initiative': {
-      const initiativeId = String(context['initiativeId']);
-      if (target === 'task') {
-        return sql`(${compileTenantRelationHasValueSql(
-          WORK_VIEW_RELATIONS.projectInitiatives,
-          compileTenantScalarRelationIdSql(
-            WORK_VIEW_SCALAR_RELATIONS.project,
-            sql`e.project_id`,
-            sql`e.organization_id`,
-          ),
-          sql`e.organization_id`,
-          initiativeId,
-        )} or ${compileTenantRelationHasValueSql(
-          WORK_VIEW_RELATIONS.programInitiatives,
-          compileTenantScalarRelationIdSql(
-            WORK_VIEW_SCALAR_RELATIONS.program,
-            sql`e.program_id`,
-            sql`e.organization_id`,
-          ),
-          sql`e.organization_id`,
-          initiativeId,
-        )})`;
-      }
-      if (target === 'project')
-        return compileTenantRelationHasValueSql(
-          WORK_VIEW_RELATIONS.projectInitiatives,
-          sql`e.id`,
-          sql`e.organization_id`,
-          initiativeId,
-        );
-      if (target === 'program')
-        return compileTenantRelationHasValueSql(
-          WORK_VIEW_RELATIONS.programInitiatives,
-          sql`e.id`,
-          sql`e.organization_id`,
-          initiativeId,
-        );
-      return sql`(e.id=${initiativeId} or exists (
-        with recursive descendants(id) as (
-          select context_root.id from authorized context_root where context_root.id=${initiativeId}
-          union
-          select h.child_initiative_id from initiative_hierarchy_link h join descendants d on h.parent_initiative_id=d.id
-          where h.context_organization_id=${organizationId}
-        ) select 1 from descendants d where d.id=e.id))`;
-    }
+    case 'program':
+      return compileProgramContextSql(target, String(context['programId']));
+    case 'initiative':
+      return compileInitiativeContextSql(target, String(context['initiativeId']), organizationId);
     default:
       return sql`false`;
   }
+}
+
+/**
+ * The membership predicate for a team context.
+ *
+ * @param target - Requested work-view target.
+ * @param teamId - The team the context names.
+ * @returns A correlated context predicate for entity alias `e`.
+ */
+function compileTeamContextSql(target: ViewTarget, teamId: string): SQL {
+  if (target === 'task') {
+    return compileTenantScalarRelationHasValueSql(
+      WORK_VIEW_SCALAR_RELATIONS.team,
+      sql`e.team_id`,
+      sql`e.organization_id`,
+      teamId,
+    );
+  }
+  if (target === 'project') {
+    return compileProjectHasTeamSql(sql`e.id`, sql`e.organization_id`, sql`e.team_id`, teamId);
+  }
+  return sql`false`;
+}
+
+/**
+ * The membership predicate for a program context.
+ *
+ * @remarks
+ * A task belongs to a program either directly or through the project it is filed under, so both
+ * paths are accepted rather than only the column the task itself carries.
+ *
+ * @param target - Requested work-view target.
+ * @param programId - The program the context names.
+ * @returns A correlated context predicate for entity alias `e`.
+ */
+function compileProgramContextSql(target: ViewTarget, programId: string): SQL {
+  if (target === 'task') {
+    return sql`(${compileTenantScalarRelationHasValueSql(
+      WORK_VIEW_SCALAR_RELATIONS.program,
+      sql`e.program_id`,
+      sql`e.organization_id`,
+      programId,
+    )} or exists (
+      select 1 from project p where p.id=e.project_id and p.organization_id=e.organization_id
+        and ${compileTenantScalarRelationHasValueSql(
+          WORK_VIEW_SCALAR_RELATIONS.program,
+          sql`p.program_id`,
+          sql`p.organization_id`,
+          programId,
+        )}))`;
+  }
+  return target === 'project'
+    ? compileTenantScalarRelationHasValueSql(
+        WORK_VIEW_SCALAR_RELATIONS.program,
+        sql`e.program_id`,
+        sql`e.organization_id`,
+        programId,
+      )
+    : sql`false`;
+}
+
+/**
+ * The membership predicate for an initiative context.
+ *
+ * @remarks
+ * An initiative context reaches its whole subtree, so an initiative target walks the hierarchy
+ * edges rather than matching the root alone.
+ *
+ * @param target - Requested work-view target.
+ * @param initiativeId - The initiative the context names.
+ * @param organizationId - Organization that owns the hierarchy edges.
+ * @returns A correlated context predicate for entity alias `e`.
+ */
+function compileInitiativeContextSql(
+  target: ViewTarget,
+  initiativeId: string,
+  organizationId: string,
+): SQL {
+  if (target === 'task') {
+    return sql`(${compileTenantRelationHasValueSql(
+      WORK_VIEW_RELATIONS.projectInitiatives,
+      compileTenantScalarRelationIdSql(
+        WORK_VIEW_SCALAR_RELATIONS.project,
+        sql`e.project_id`,
+        sql`e.organization_id`,
+      ),
+      sql`e.organization_id`,
+      initiativeId,
+    )} or ${compileTenantRelationHasValueSql(
+      WORK_VIEW_RELATIONS.programInitiatives,
+      compileTenantScalarRelationIdSql(
+        WORK_VIEW_SCALAR_RELATIONS.program,
+        sql`e.program_id`,
+        sql`e.organization_id`,
+      ),
+      sql`e.organization_id`,
+      initiativeId,
+    )})`;
+  }
+  if (target === 'project') {
+    return compileTenantRelationHasValueSql(
+      WORK_VIEW_RELATIONS.projectInitiatives,
+      sql`e.id`,
+      sql`e.organization_id`,
+      initiativeId,
+    );
+  }
+  if (target === 'program') {
+    return compileTenantRelationHasValueSql(
+      WORK_VIEW_RELATIONS.programInitiatives,
+      sql`e.id`,
+      sql`e.organization_id`,
+      initiativeId,
+    );
+  }
+  return sql`(e.id=${initiativeId} or exists (
+    with recursive descendants(id) as (
+      select context_root.id from authorized context_root where context_root.id=${initiativeId}
+      union
+      select h.child_initiative_id from initiative_hierarchy_link h join descendants d on h.parent_initiative_id=d.id
+      where h.context_organization_id=${organizationId}
+    ) select 1 from descendants d where d.id=e.id))`;
 }
 
 function enrichmentSql(target: ViewTarget): SQL {
@@ -224,15 +266,30 @@ function requiredScalarRelationsJoin(target: ViewTarget): SQL {
  * @param authorizationScope - Optional indexed candidate restriction for point authorization.
  * @returns Materialized CTE definitions reused by page, count, and group projections.
  */
-export function compileRosterCtes(
-  target: ViewTarget,
-  context: WorkViewSqlContext,
-  organizationId: string,
-  actorId: string,
-  userId: string | null,
-  filter: SQL,
-  authorizationScope: SQL = sql`true`,
-): SQL {
+/** One roster compilation: the target, the context it is scoped to, and who is asking. */
+export interface RosterCtesInput {
+  readonly target: ViewTarget;
+  readonly context: WorkViewSqlContext;
+  readonly organizationId: string;
+  readonly actorId: string;
+  /** The acting person's Better Auth user id, when they have one. */
+  readonly userId: string | null;
+  /** The predicate that narrows the roster to the rows the caller asked for. */
+  readonly filter: SQL;
+  /** Narrows the authorized base before the context applies; defaults to the whole organization. */
+  readonly authorizationScope?: SQL;
+}
+
+export function compileRosterCtes(input: RosterCtesInput): SQL {
+  const {
+    target,
+    context,
+    organizationId,
+    actorId,
+    userId,
+    filter,
+    authorizationScope = sql`true`,
+  } = input;
   const table = WORK_VIEW_SQL_CONTRACTS[target].table;
   if (target === 'initiative') {
     return sql`authorized_base as materialized (

@@ -391,78 +391,88 @@ export async function applySubtaskCompletionPolicyForParents(
     const parentId = pending.shift();
     if (!parentId || evaluated.has(parentId)) continue;
     evaluated.add(parentId);
-    const parentRows = await tx
-      .select()
-      .from(task)
-      .where(
-        and(
-          eq(task.id, parentId),
-          eq(task.organizationId, organizationId),
-          isNull(task.archivedAt),
-        ),
-      )
-      .for('update');
-    const parent = parentRows[0];
-    if (!parent) continue;
-
-    const children = await tx
-      .select({ completedAt: task.completedAt, canceledAt: task.canceledAt })
-      .from(task)
-      .where(
-        and(
-          eq(task.parentTaskId, parent.id),
-          eq(task.organizationId, parent.organizationId),
-          isNull(task.archivedAt),
-        ),
-      );
-    const everyChildEnded =
-      children.length > 0 &&
-      children.every((child) => child.completedAt !== null || child.canceledAt !== null);
-
-    if (everyChildEnded && parent.completedAt === null && parent.canceledAt === null) {
-      const completed = await statusForCategory(
-        tx,
-        parent.organizationId,
-        parent.teamId,
-        (category) => category === 'completed',
-      );
-      if (!completed) continue;
-      const next = await writeTaskStateTransition(tx, {
-        before: parent,
-        statusId: completed.id,
-        state: completed.key,
-        completedAt: new Date(),
-        canceledAt: null,
-        autoCompletedBySubtasks: true,
-      });
-      if (!next) continue;
-      cascades.push(next);
-      if (next.after.parentTaskId !== null) pending.push(next.after.parentTaskId);
-      continue;
-    }
-
-    if (!everyChildEnded && parent.autoCompletedBySubtasks && parent.completedAt !== null) {
-      const reopened = await statusForCategory(
-        tx,
-        parent.organizationId,
-        parent.teamId,
-        (category) => !isTerminalCategory(category),
-      );
-      if (!reopened) continue;
-      const next = await writeTaskStateTransition(tx, {
-        before: parent,
-        statusId: reopened.id,
-        state: reopened.key,
-        completedAt: null,
-        canceledAt: null,
-      });
-      if (!next) continue;
-      cascades.push(next);
-      if (next.after.parentTaskId !== null) pending.push(next.after.parentTaskId);
-      continue;
-    }
+    const next = await applyPolicyToParent(tx, organizationId, parentId);
+    if (!next) continue;
+    cascades.push(next);
+    if (next.after.parentTaskId !== null) pending.push(next.after.parentTaskId);
   }
   return cascades;
+}
+
+/**
+ * Evaluate one parent against its current direct children and move it if the policy says so.
+ *
+ * @param tx - The open transaction.
+ * @param organizationId - The workspace the parent belongs to.
+ * @param parentId - The parent to evaluate.
+ * @returns The transition it made, or `null` when the parent is already where it belongs.
+ */
+async function applyPolicyToParent(
+  tx: TaskStateTransaction,
+  organizationId: string,
+  parentId: string,
+): Promise<TaskStateMutation | null> {
+  const parentRows = await tx
+    .select()
+    .from(task)
+    .where(
+      and(eq(task.id, parentId), eq(task.organizationId, organizationId), isNull(task.archivedAt)),
+    )
+    .for('update');
+  const parent = parentRows[0];
+  if (!parent) return null;
+
+  const children = await tx
+    .select({ completedAt: task.completedAt, canceledAt: task.canceledAt })
+    .from(task)
+    .where(
+      and(
+        eq(task.parentTaskId, parent.id),
+        eq(task.organizationId, parent.organizationId),
+        isNull(task.archivedAt),
+      ),
+    );
+  const everyChildEnded =
+    children.length > 0 &&
+    children.every((child) => child.completedAt !== null || child.canceledAt !== null);
+
+  if (everyChildEnded && parent.completedAt === null && parent.canceledAt === null) {
+    const completed = await statusForCategory(
+      tx,
+      parent.organizationId,
+      parent.teamId,
+      (category) => category === 'completed',
+    );
+    if (!completed) return null;
+    return writeTaskStateTransition(tx, {
+      before: parent,
+      statusId: completed.id,
+      state: completed.key,
+      completedAt: new Date(),
+      canceledAt: null,
+      autoCompletedBySubtasks: true,
+    });
+  }
+
+  // A parent this policy completed reopens only when it again owns active direct work; a
+  // person-completed parent stays complete.
+  if (!everyChildEnded && parent.autoCompletedBySubtasks && parent.completedAt !== null) {
+    const reopened = await statusForCategory(
+      tx,
+      parent.organizationId,
+      parent.teamId,
+      (category) => !isTerminalCategory(category),
+    );
+    if (!reopened) return null;
+    return writeTaskStateTransition(tx, {
+      before: parent,
+      statusId: reopened.id,
+      state: reopened.key,
+      completedAt: null,
+      canceledAt: null,
+    });
+  }
+  return null;
 }
 
 /** Publish the stream, search, and process consequences after durable history is committed. */

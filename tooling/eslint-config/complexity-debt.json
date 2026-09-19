@@ -207,40 +207,6 @@
       "excess": 4
     }
   },
-  "apps/api/src/lib/external-agent-publisher.ts": {
-    "complexity": {
-      "max": 16,
-      "excess": 4
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 17,
-      "excess": 2
-    }
-  },
-  "apps/api/src/lib/external-agent-relay.ts": {
-    "complexity": {
-      "max": 16,
-      "excess": 6
-    },
-    "max-lines-per-function": {
-      "max": 89,
-      "excess": 9
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 20,
-      "excess": 5
-    }
-  },
-  "apps/api/src/lib/identity/resolve-external-actor.ts": {
-    "max-lines-per-function": {
-      "max": 84,
-      "excess": 4
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 18,
-      "excess": 3
-    }
-  },
   "apps/api/src/lib/recurrence/advance.ts": {
     "complexity": {
       "max": 15,
@@ -337,102 +303,6 @@
     "sonarjs/cognitive-complexity": {
       "max": 42,
       "excess": 27
-    }
-  },
-  "apps/api/src/lib/sql-state.ts": {
-    "complexity": {
-      "max": 18,
-      "excess": 6
-    }
-  },
-  "apps/api/src/lib/task-audit.ts": {
-    "complexity": {
-      "max": 14,
-      "excess": 2
-    }
-  },
-  "apps/api/src/lib/task-state.ts": {
-    "complexity": {
-      "max": 20,
-      "excess": 8
-    },
-    "max-lines-per-function": {
-      "max": 88,
-      "excess": 8
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 31,
-      "excess": 16
-    }
-  },
-  "apps/api/src/lib/work-views/context-sql.ts": {
-    "complexity": {
-      "max": 15,
-      "excess": 3
-    },
-    "max-lines-per-function": {
-      "max": 107,
-      "excess": 27
-    },
-    "max-params": {
-      "max": 7,
-      "excess": 2
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 19,
-      "excess": 4
-    }
-  },
-  "apps/api/src/lib/work-views/facets.ts": {
-    "complexity": {
-      "max": 15,
-      "excess": 4
-    },
-    "max-lines": {
-      "max": 599,
-      "excess": 99
-    },
-    "max-lines-per-function": {
-      "max": 120,
-      "excess": 41
-    }
-  },
-  "apps/api/src/lib/work-views/filter-sql.ts": {
-    "complexity": {
-      "max": 33,
-      "excess": 21
-    }
-  },
-  "apps/api/src/lib/work-views/order.ts": {
-    "complexity": {
-      "max": 45,
-      "excess": 49
-    },
-    "max-lines": {
-      "max": 922,
-      "excess": 422
-    },
-    "max-lines-per-function": {
-      "max": 312,
-      "excess": 255
-    },
-    "max-params": {
-      "max": 6,
-      "excess": 1
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 76,
-      "excess": 72
-    }
-  },
-  "apps/api/src/lib/work-views/query.ts": {
-    "complexity": {
-      "max": 24,
-      "excess": 12
-    },
-    "max-lines-per-function": {
-      "max": 154,
-      "excess": 74
     }
   },
   "apps/api/src/lib/work-views/temporal-sql.ts": {
@@ -743,8 +613,8 @@
   },
   "apps/api/src/routes/admin.ts": {
     "max-lines-per-function": {
-      "max": 354,
-      "excess": 274
+      "max": 348,
+      "excess": 268
     }
   },
   "apps/api/src/routes/agent-session-approval.ts": {

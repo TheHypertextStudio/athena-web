@@ -97,93 +97,137 @@ export async function resolveExternalActor(
   input: ResolveExternalActorInput,
 ): Promise<ResolvedExternalActor> {
   const connectorProviderId = connectorProviderForSource(input.source);
+  return (
+    (await manualOverrideRung(orgId, input, connectorProviderId)) ??
+    (await linkedAccountRung(orgId, input)) ??
+    (await syncedEmailRung(orgId, input, connectorProviderId)) ??
+    (await adHocEmailRung(orgId, input)) ?? { actorId: null, matchedBy: null }
+  );
+}
 
-  // Rung 1 — manual external_actor override (checked first: a human's decision always wins).
-  if (connectorProviderId) {
-    const [manualRow] = await db
-      .select({ actorId: externalActor.actorId })
-      .from(externalActor)
-      .innerJoin(integration, eq(externalActor.integrationId, integration.id))
-      .where(
-        and(
-          eq(integration.organizationId, orgId),
-          eq(integration.provider, connectorProviderId),
-          eq(externalActor.externalId, input.externalId),
-          eq(externalActor.matchedBy, 'manual'),
-        ),
-      )
-      .limit(1);
-    if (manualRow) {
-      // A manual row always terminates resolution here — even a null actorId (an admin
-      // explicitly unbinding this identity) is a deliberate decision, not a cue to keep looking.
-      return manualRow.actorId
-        ? { actorId: manualRow.actorId, matchedBy: 'manual' }
-        : { actorId: null, matchedBy: null };
-    }
-  }
+/**
+ * Rung 1 — the manual `external_actor` override, checked first: a human's decision always wins.
+ *
+ * @param orgId - The organization the resolved actor must belong to.
+ * @param input - The external actor's source and native id.
+ * @param connectorProviderId - The connector whose ids this source is addressed in, if any.
+ * @returns The resolution, or `null` to keep looking.
+ */
+async function manualOverrideRung(
+  orgId: string,
+  input: ResolveExternalActorInput,
+  connectorProviderId: string | null,
+): Promise<ResolvedExternalActor | null> {
+  if (!connectorProviderId) return null;
+  const [manualRow] = await db
+    .select({ actorId: externalActor.actorId })
+    .from(externalActor)
+    .innerJoin(integration, eq(externalActor.integrationId, integration.id))
+    .where(
+      and(
+        eq(integration.organizationId, orgId),
+        eq(integration.provider, connectorProviderId),
+        eq(externalActor.externalId, input.externalId),
+        eq(externalActor.matchedBy, 'manual'),
+      ),
+    )
+    .limit(1);
+  if (!manualRow) return null;
+  // A manual row always terminates resolution here — even a null actorId (an admin
+  // explicitly unbinding this identity) is a deliberate decision, not a cue to keep looking.
+  return manualRow.actorId
+    ? { actorId: manualRow.actorId, matchedBy: 'manual' }
+    : { actorId: null, matchedBy: null };
+}
 
-  // Rung 2 — linked Better Auth account (the person's own OAuth consent).
+/**
+ * Rung 2 — the linked Better Auth account, from the person's own OAuth consent.
+ *
+ * @param orgId - The organization the resolved actor must belong to.
+ * @param input - The external actor's source and native id.
+ * @returns The resolution, or `null` to keep looking.
+ */
+async function linkedAccountRung(
+  orgId: string,
+  input: ResolveExternalActorInput,
+): Promise<ResolvedExternalActor | null> {
   const identityProviderId = sourceIdentityProvider(input.source);
-  if (identityProviderId) {
-    const [linkedAccount] = await db
-      .select({ userId: account.userId })
-      .from(account)
-      .where(
-        and(eq(account.providerId, identityProviderId), eq(account.accountId, input.externalId)),
-      )
-      .limit(1);
-    if (linkedAccount) {
-      const [linkedActor] = await db
-        .select({ actorId: actor.id })
-        .from(actor)
-        .where(
-          and(
-            eq(actor.organizationId, orgId),
-            eq(actor.userId, linkedAccount.userId),
-            eq(actor.status, 'active'),
-          ),
-        )
-        .limit(1);
-      if (linkedActor) return { actorId: linkedActor.actorId, matchedBy: 'linked_account' };
-    }
-  }
+  if (!identityProviderId) return null;
+  const [linkedAccount] = await db
+    .select({ userId: account.userId })
+    .from(account)
+    .where(and(eq(account.providerId, identityProviderId), eq(account.accountId, input.externalId)))
+    .limit(1);
+  if (!linkedAccount) return null;
+  const [linkedActor] = await db
+    .select({ actorId: actor.id })
+    .from(actor)
+    .where(
+      and(
+        eq(actor.organizationId, orgId),
+        eq(actor.userId, linkedAccount.userId),
+        eq(actor.status, 'active'),
+      ),
+    )
+    .limit(1);
+  return linkedActor ? { actorId: linkedActor.actorId, matchedBy: 'linked_account' } : null;
+}
 
-  // Rung 3 — email-matched external_actor row from the sync engine.
-  if (connectorProviderId) {
-    const [emailRow] = await db
-      .select({ actorId: externalActor.actorId })
-      .from(externalActor)
-      .innerJoin(integration, eq(externalActor.integrationId, integration.id))
-      .where(
-        and(
-          eq(integration.organizationId, orgId),
-          eq(integration.provider, connectorProviderId),
-          eq(externalActor.externalId, input.externalId),
-          eq(externalActor.matchedBy, 'email'),
-          isNotNull(externalActor.actorId),
-        ),
-      )
-      .limit(1);
-    if (emailRow?.actorId) return { actorId: emailRow.actorId, matchedBy: 'email' };
-  }
+/**
+ * Rung 3 — the email-matched `external_actor` row the sync engine wrote.
+ *
+ * @param orgId - The organization the resolved actor must belong to.
+ * @param input - The external actor's source and native id.
+ * @param connectorProviderId - The connector whose ids this source is addressed in, if any.
+ * @returns The resolution, or `null` to keep looking.
+ */
+async function syncedEmailRung(
+  orgId: string,
+  input: ResolveExternalActorInput,
+  connectorProviderId: string | null,
+): Promise<ResolvedExternalActor | null> {
+  if (!connectorProviderId) return null;
+  const [emailRow] = await db
+    .select({ actorId: externalActor.actorId })
+    .from(externalActor)
+    .innerJoin(integration, eq(externalActor.integrationId, integration.id))
+    .where(
+      and(
+        eq(integration.organizationId, orgId),
+        eq(integration.provider, connectorProviderId),
+        eq(externalActor.externalId, input.externalId),
+        eq(externalActor.matchedBy, 'email'),
+        isNotNull(externalActor.actorId),
+      ),
+    )
+    .limit(1);
+  return emailRow?.actorId ? { actorId: emailRow.actorId, matchedBy: 'email' } : null;
+}
 
-  // Rung 4 — ad-hoc email fallback (case-insensitive, mirroring syncExternalActors).
-  if (input.email) {
-    const emailLower = input.email.toLowerCase();
-    const [matchedActor] = await db
-      .select({ actorId: actor.id })
-      .from(actor)
-      .innerJoin(user, eq(actor.userId, user.id))
-      .where(
-        and(
-          eq(actor.organizationId, orgId),
-          eq(actor.status, 'active'),
-          eq(sql`lower(${user.email})`, emailLower),
-        ),
-      )
-      .limit(1);
-    if (matchedActor) return { actorId: matchedActor.actorId, matchedBy: 'email' };
-  }
-
-  return { actorId: null, matchedBy: null };
+/**
+ * Rung 4 — the ad-hoc email fallback, case-insensitive, mirroring `syncExternalActors`.
+ *
+ * @param orgId - The organization the resolved actor must belong to.
+ * @param input - The external actor's email, when the provider exposed one.
+ * @returns The resolution, or `null` when nothing matched.
+ */
+async function adHocEmailRung(
+  orgId: string,
+  input: ResolveExternalActorInput,
+): Promise<ResolvedExternalActor | null> {
+  if (!input.email) return null;
+  const emailLower = input.email.toLowerCase();
+  const [matchedActor] = await db
+    .select({ actorId: actor.id })
+    .from(actor)
+    .innerJoin(user, eq(actor.userId, user.id))
+    .where(
+      and(
+        eq(actor.organizationId, orgId),
+        eq(actor.status, 'active'),
+        eq(sql`lower(${user.email})`, emailLower),
+      ),
+    )
+    .limit(1);
+  return matchedActor ? { actorId: matchedActor.actorId, matchedBy: 'email' } : null;
 }

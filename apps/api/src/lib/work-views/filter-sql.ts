@@ -17,7 +17,7 @@ import {
 
 import type { ViewFieldKind } from '@docket/work/view-contract';
 
-import { resolveTemporalRange } from './temporal-sql';
+import { resolveTemporalRange, type TemporalRange } from './temporal-sql';
 
 /** A scalar field that compiles directly against one SQL value expression. */
 export interface ScalarFilterCompiler {
@@ -117,15 +117,44 @@ function compileRelation(
   }
 }
 
+/** One scalar predicate, with the operand already resolved against the actor and clock. */
+interface ScalarPredicate {
+  readonly operator: string;
+  readonly operand: unknown;
+  readonly field: ScalarFilterCompiler;
+  readonly context: FilterSqlContext;
+  /** The operand as a plain value, after any symbolic operand resolved. */
+  readonly value: unknown;
+  /** The half-open day window a symbolic date operand names, when the operand is one. */
+  readonly range: TemporalRange | null;
+}
+
 function compileScalar(
   operator: string,
   operand: unknown,
   field: ScalarFilterCompiler,
   context: FilterSqlContext,
 ): SQL {
-  const value = operandValue(operand, context);
-  const range = resolveTemporalRange(operand, field, context);
-  switch (operator) {
+  const predicate: ScalarPredicate = {
+    operator,
+    operand,
+    field,
+    context,
+    value: operandValue(operand, context),
+    range: resolveTemporalRange(operand, field, context),
+  };
+  return (
+    compileScalarEquality(predicate) ??
+    compileScalarOrdering(predicate) ??
+    compileScalarPresence(predicate) ??
+    unsupportedOperator(field.kind, operator)
+  );
+}
+
+/** Equality, set membership, and substring operators. */
+function compileScalarEquality(predicate: ScalarPredicate): SQL | null {
+  const { operand, field, context, value, range } = predicate;
+  switch (predicate.operator) {
     case 'is':
     case 'on':
       return range
@@ -141,41 +170,96 @@ function compileScalar(
       return sql`${field.value} ilike ${`%${likeLiteral(value)}%`} escape '\\'`;
     case 'notContains':
       return not(sql`${field.value} ilike ${`%${likeLiteral(value)}%`} escape '\\'`);
+    default:
+      return null;
+  }
+}
+
+/**
+ * Ordering and range operators.
+ *
+ * @remarks
+ * A symbolic date operand names a half-open day window rather than an instant, so "after today"
+ * compares against the window's exclusive end and "on or before today" against the same edge.
+ */
+function compileScalarOrdering(predicate: ScalarPredicate): SQL | null {
+  return compileDayOrdering(predicate) ?? compareValueOrdering(predicate);
+}
+
+/**
+ * The day-shaped ordering operators, which read a symbolic operand as a window.
+ *
+ * @param predicate - The scalar predicate.
+ * @returns The condition, or `null` when the operator belongs to another family.
+ */
+function compileDayOrdering({ operator, field, value, range }: ScalarPredicate): SQL | null {
+  switch (operator) {
     case 'before':
       return lt(field.value, range?.start ?? value);
-    case 'lessThan':
-      return lt(field.value, value);
     case 'after':
-      return range ? gte(field.value, range.end) : gt(field.value, value);
-    case 'greaterThan':
-      return gt(field.value, value);
+      return range === null ? gt(field.value, value) : gte(field.value, range.end);
     case 'onOrBefore':
-      return range ? lt(field.value, range.end) : lte(field.value, value);
-    case 'lessThanOrEqual':
-      return lte(field.value, value);
+      return range === null ? lte(field.value, value) : lt(field.value, range.end);
     case 'onOrAfter':
       return gte(field.value, range?.start ?? value);
+    default:
+      return null;
+  }
+}
+
+/**
+ * The plain value-ordering operators, which compare against the operand as given.
+ *
+ * @param predicate - The scalar predicate.
+ * @returns The condition, or `null` when the operator belongs to another family.
+ */
+function compareValueOrdering(predicate: ScalarPredicate): SQL | null {
+  const { field, value } = predicate;
+  switch (predicate.operator) {
+    case 'lessThan':
+      return lt(field.value, value);
+    case 'greaterThan':
+      return gt(field.value, value);
+    case 'lessThanOrEqual':
+      return lte(field.value, value);
     case 'greaterThanOrEqual':
       return gte(field.value, value);
-    case 'between': {
-      if (!Array.isArray(operand) || operand.length !== 2) {
-        throw new TypeError('A between predicate requires exactly two operands.');
-      }
-      const lowerRange = resolveTemporalRange(operand[0], field, context);
-      const upperRange = resolveTemporalRange(operand[1], field, context);
-      const lower = lowerRange?.start ?? operandValue(operand[0], context);
-      const upper = upperRange?.end ?? operandValue(operand[1], context);
-      return requiredCondition(
-        and(gte(field.value, lower), upperRange ? lt(field.value, upper) : lte(field.value, upper)),
-      );
-    }
-    case 'isEmpty':
-      return isNull(field.value);
-    case 'isNotEmpty':
-      return isNotNull(field.value);
+    case 'between':
+      return compileBetween(predicate);
     default:
-      throw new TypeError(`Unsupported ${field.kind} filter operator: ${operator}`);
+      return null;
   }
+}
+
+/** Null-presence operators. */
+function compileScalarPresence(predicate: ScalarPredicate): SQL | null {
+  switch (predicate.operator) {
+    case 'isEmpty':
+      return isNull(predicate.field.value);
+    case 'isNotEmpty':
+      return isNotNull(predicate.field.value);
+    default:
+      return null;
+  }
+}
+
+/** The two-operand range operator, whose upper bound is exclusive for a symbolic day window. */
+function compileBetween({ operand, field, context }: ScalarPredicate): SQL {
+  if (!Array.isArray(operand) || operand.length !== 2) {
+    throw new TypeError('A between predicate requires exactly two operands.');
+  }
+  const lowerRange = resolveTemporalRange(operand[0], field, context);
+  const upperRange = resolveTemporalRange(operand[1], field, context);
+  const lower = lowerRange?.start ?? operandValue(operand[0], context);
+  const upper = upperRange?.end ?? operandValue(operand[1], context);
+  return requiredCondition(
+    and(gte(field.value, lower), upperRange ? lt(field.value, upper) : lte(field.value, upper)),
+  );
+}
+
+/** Refuse an operator no scalar family compiles. */
+function unsupportedOperator(kind: string, operator: string): never {
+  throw new TypeError(`Unsupported ${kind} filter operator: ${operator}`);
 }
 
 function requiredCondition(condition: SQL | undefined): SQL {

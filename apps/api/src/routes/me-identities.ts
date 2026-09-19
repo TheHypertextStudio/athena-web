@@ -61,22 +61,41 @@ const identityParam = z.object({ provider: IdentityProvider, accountId: z.string
 const externalAgentCompleteInput = z.object({ token: z.string().min(1) });
 const externalAgentCompleteOutput = z.object({ status: z.literal(true), sessionId: z.string() });
 
+/** The signed continuation this endpoint accepts, once its kind and provider are known. */
+type AuthenticationControl = Extract<
+  NonNullable<ReturnType<typeof verifyExternalAgentControl>>,
+  { kind: 'authentication' }
+>;
+
+/** The waiting session a continuation names, as this endpoint reads it. */
+interface LinkedAgentSession {
+  readonly organizationId: string;
+  readonly provider: string;
+  readonly initiatorId: string | null;
+}
+
+/** What one continuation resolved to, before the three parts are checked against each other. */
+interface ExternalAgentContinuation {
+  readonly control: AuthenticationControl;
+  readonly linked: LinkedAgentSession | undefined;
+  readonly identity: { id: string } | undefined;
+  readonly member: { id: string } | undefined;
+}
+
+/** The continuation once every part is present and agrees with the others. */
+interface MatchedExternalAgentContinuation {
+  readonly control: AuthenticationControl;
+  readonly linked: LinkedAgentSession;
+  readonly member: { id: string };
+}
+
 /**
  * Validate external agent control and fetch linked session and actor data.
  */
 async function validateExternalAgentControl(
   token: string,
   userId: string,
-): Promise<{
-  control: ReturnType<typeof verifyExternalAgentControl>;
-  linked: {
-    organizationId: string;
-    provider: IdentityProvider;
-    initiatorId: string | null;
-  } | null;
-  identity: { id: string } | null;
-  member: { id: string } | null;
-}> {
+): Promise<ExternalAgentContinuation> {
   const control = verifyExternalAgentControl(token);
   if (control?.kind !== 'authentication' || control.provider !== 'linear') {
     throw new ConflictError(
@@ -123,7 +142,7 @@ async function validateExternalAgentControl(
         .limit(1)
     : [];
 
-  return { control, linked: linked ?? null, identity: identity ?? null, member: member ?? null };
+  return { control, linked, identity, member };
 }
 
 /**
@@ -131,15 +150,9 @@ async function validateExternalAgentControl(
  * Throws if validation fails; returns nothing if successful.
  */
 function validateExternalAgentMatch(
-  control: ReturnType<typeof verifyExternalAgentControl>,
-  linked: { organizationId: string; provider: IdentityProvider; initiatorId: string | null } | null,
-  identity: { id: string } | null,
-  member: { id: string } | null,
-): asserts linked is {
-  organizationId: string;
-  provider: IdentityProvider;
-  initiatorId: string | null;
-} {
+  continuation: ExternalAgentContinuation,
+): MatchedExternalAgentContinuation {
+  const { control, linked, identity, member } = continuation;
   if (!linked || !identity || !member) {
     throw new ConflictError(
       'Link the Linear account that opened this Athena session before continuing.',
@@ -158,6 +171,7 @@ function validateExternalAgentMatch(
       'external_identity_mismatch',
     );
   }
+  return { control, linked, member };
 }
 
 /**
@@ -287,12 +301,9 @@ The display \`email\`/\`name\`/\`picture\` are **decoded server-side from the st
     zJson(externalAgentCompleteInput),
     async (c) => {
       const current = requireSession(c);
-      const { control, linked, identity, member } = await validateExternalAgentControl(
-        c.req.valid('json').token,
-        current.user.id,
+      const { control, linked, member } = validateExternalAgentMatch(
+        await validateExternalAgentControl(c.req.valid('json').token, current.user.id),
       );
-
-      validateExternalAgentMatch(control, linked, identity, member);
 
       if (linked.initiatorId === null) {
         await resumeExternalAgentSession(control.sessionId, linked.organizationId, member.id);

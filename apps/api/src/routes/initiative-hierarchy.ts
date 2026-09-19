@@ -245,9 +245,12 @@ async function assertInitiativeIdsAccessible(
     readonly childInitiativeId: string;
     readonly session: AuthSession;
   },
-  nodeRows: readonly (typeof initiative.$inferSelect)[],
+  nodeRows: readonly AccessibleInitiativeHierarchyNode[],
   accessibleNodeIds: Set<string>,
-): Promise<{ parent: typeof initiative.$inferSelect; child: typeof initiative.$inferSelect }> {
+): Promise<{
+  parent: AccessibleInitiativeHierarchyNode;
+  child: AccessibleInitiativeHierarchyNode;
+}> {
   const nodesById = new Map(nodeRows.map((node) => [node.id, node]));
   const parent = nodesById.get(input.parentInitiativeId);
   const child = nodesById.get(input.childInitiativeId);
@@ -367,12 +370,7 @@ export async function validateInitiativeHierarchyChange(
     .where(inArray(initiative.id, graphNodeIds));
 
   const accessibleNodeIds = await accessibleInitiativeNodeIds(input.session, nodeRows, database);
-  const { parent } = await assertInitiativeIdsAccessible(
-    input,
-    nodeRows,
-    accessibleNodeIds,
-    database,
-  );
+  const { parent } = await assertInitiativeIdsAccessible(input, nodeRows, accessibleNodeIds);
 
   const accessibleNodes = nodeRows.filter((node) => accessibleNodeIds.has(node.id));
   const currentProjection = accessibleInitiativeHierarchyProjection(

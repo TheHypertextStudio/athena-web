@@ -39,6 +39,32 @@ type ExternalAgentPublicationHandler<P extends AgentSurfaceProvider> = (
   request: ExternalAgentPublishRequest<P>,
 ) => Promise<ExternalRef>;
 
+/** The elicitation signal Docket rendered, before it is flattened onto Linear's input. */
+type LinearOutboundSignal = Extract<
+  ExternalAgentPublishRequest<'linear'>,
+  { kind: 'activity' }
+>['output']['signal'];
+
+/**
+ * Flatten a rendered signal into Linear's `signal` and `signalMetadata` fields.
+ *
+ * @param signal - The signal on the rendered output, if any.
+ * @returns The fields to spread into the activity-create input; empty when nothing is signalled.
+ */
+function linearSignalFields(signal: LinearOutboundSignal) {
+  switch (signal?.type) {
+    case 'select':
+      return { signal: 'select' as const, signalMetadata: { options: signal.options } };
+    case 'auth':
+      return {
+        signal: 'auth' as const,
+        signalMetadata: { url: signal.url, userId: signal.userId, providerName: 'Docket' },
+      };
+    default:
+      return {};
+  }
+}
+
 type ExternalAgentPublicationRegistry = {
   readonly [P in AgentSurfaceProvider]: ExternalAgentPublicationHandler<P>;
 };
@@ -59,22 +85,7 @@ async function publishLinear(request: ExternalAgentPublishRequest<'linear'>): Pr
       return { id: request.session.id, url: request.externalUrl };
     }
     const { output } = request;
-    const signal =
-      output.signal?.type === 'select'
-        ? {
-            signal: 'select' as const,
-            signalMetadata: { options: output.signal.options },
-          }
-        : output.signal?.type === 'auth'
-          ? {
-              signal: 'auth' as const,
-              signalMetadata: {
-                url: output.signal.url,
-                userId: output.signal.userId,
-                providerName: 'Docket',
-              },
-            }
-          : {};
+    const signal = linearSignalFields(output.signal);
     return await port.agentActivityCreate(
       output.type === 'action'
         ? {

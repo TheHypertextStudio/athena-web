@@ -84,24 +84,28 @@ export function sortValueExpressions<TKey extends string>(
   });
 }
 
+/** Context for keyset pagination over a sort tuple. */
+interface KeysetContext {
+  readonly tuple: readonly WorkViewCursorScalar[];
+  readonly entityId: SQL;
+  readonly cursorEntityId: string;
+  readonly fallback?: SortFieldCompiler;
+}
+
 /**
  * Compile strict lexicographic continuation after a complete sort tuple.
  *
  * @param terms - Sort terms used by the query.
  * @param fields - Target sort compiler registry.
- * @param tuple - Cursor values for every semantic and raw expression.
- * @param entityId - Stable entity-id SQL expression.
- * @param cursorEntityId - Last entity id from the cursor.
+ * @param context - Cursor state, entity identity, and optional fallback rank.
  * @returns A keyset condition that follows the same nulls-last order as `ORDER BY`.
  */
 export function compileKeysetSql<TKey extends string>(
   terms: readonly ExecutableSortTerm<TKey>[],
   fields: SortCompilerMap<TKey>,
-  tuple: readonly WorkViewCursorScalar[],
-  entityId: SQL,
-  cursorEntityId: string,
-  fallback?: SortFieldCompiler,
+  context: KeysetContext,
 ): SQL {
+  const { tuple, entityId, cursorEntityId, fallback } = context;
   const positions = terms.flatMap((term) => {
     const field = fields[term.field];
     return [

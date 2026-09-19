@@ -554,7 +554,6 @@ describe('token-resolution failure (env.APP_MODE=production) across /lists, /ver
     expect(after.status).toBe('error');
     expect(after.lastError).toContain('Sign in with google');
   });
-
   it('/import 409s and demotes the integration to error with the real reason', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const row = await seedGtasksIntegration(orgId, humanActorId);

@@ -356,7 +356,6 @@ describe('voice session engine', () => {
     const tools = new SpyToolRunner(() => engineRef.current);
     const engine = new VoiceSessionEngine(ctx, { store, tools, now: tickingClock() });
     engineRef.current = engine;
-
     engine.begin();
     await engine.receive([
       { type: 'user.transcript', text: 'Add a task to', final: false },

@@ -277,7 +277,6 @@ describe('merged agent-updates stream', () => {
       text += decoder.decode(value, { stream: true });
     }
     void reader.cancel();
-
     nowSpy.mockRestore();
     expect(text).toContain(': heartbeat');
   });

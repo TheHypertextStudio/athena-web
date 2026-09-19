@@ -13,7 +13,6 @@
  */
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-
 import type { AppEnv } from '../context';
 import { AuthError } from '../error';
 import { type StreamEvent, subscribe } from '../lib/event-bus';

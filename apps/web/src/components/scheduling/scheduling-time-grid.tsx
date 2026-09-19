@@ -230,6 +230,43 @@ function TimeGridCurrentLine({
   );
 }
 
+/** Compute schedule ticks for a given date and timezone configuration. */
+function useTicks(
+  referenceDate: string,
+  displayTimezone: string,
+  pixelsPerHour: number,
+  labelStyle: ScheduleTickLabelStyle,
+): ScheduleTick[] {
+  return useMemo(
+    () =>
+      deriveScheduleTicks({
+        date: referenceDate,
+        timezone: displayTimezone,
+        pixelsPerHour,
+        labelStyle,
+      }),
+    [displayTimezone, labelStyle, pixelsPerHour, referenceDate],
+  );
+}
+
+/** Compute transition bands keyed by date. */
+function useTransitionsByDate(
+  lanes: readonly ScheduleLane[],
+  displayTimezone: string,
+  pixelsPerHour: number,
+): Map<string, ScheduleTransitionBand[]> {
+  return useMemo(() => {
+    const transitions = new Map<string, ScheduleTransitionBand[]>();
+    for (const date of new Set(lanes.map((lane) => lane.date))) {
+      transitions.set(
+        date,
+        transitionBands(deriveScheduleTicks({ date, timezone: displayTimezone, pixelsPerHour })),
+      );
+    }
+    return transitions;
+  }, [displayTimezone, lanes, pixelsPerHour]);
+}
+
 /**
  * Render adaptive labels, major/minor rules, DST annotations, and a deterministic current line.
  *
@@ -250,26 +287,8 @@ export function SchedulingTimeGrid({
 }: SchedulingTimeGridProps): JSX.Element {
   const currentPosition = now ? scheduleWallPositionForInstant(now, displayTimezone) : null;
   const referenceDate = lanes[0]?.date ?? currentPosition?.date ?? '1970-01-01';
-  const ticks = useMemo(
-    () =>
-      deriveScheduleTicks({
-        date: referenceDate,
-        timezone: displayTimezone,
-        pixelsPerHour,
-        labelStyle,
-      }),
-    [displayTimezone, labelStyle, pixelsPerHour, referenceDate],
-  );
-  const transitionsByDate = useMemo(() => {
-    const transitions = new Map<string, ScheduleTransitionBand[]>();
-    for (const date of new Set(lanes.map((lane) => lane.date))) {
-      transitions.set(
-        date,
-        transitionBands(deriveScheduleTicks({ date, timezone: displayTimezone, pixelsPerHour })),
-      );
-    }
-    return transitions;
-  }, [displayTimezone, lanes, pixelsPerHour]);
+  const ticks = useTicks(referenceDate, displayTimezone, pixelsPerHour, labelStyle);
+  const transitionsByDate = useTransitionsByDate(lanes, displayTimezone, pixelsPerHour);
   const gridHeight = 24 * pixelsPerHour;
 
   return (

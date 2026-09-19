@@ -122,13 +122,57 @@ function RevealedCodes({ codes }: { readonly codes: readonly string[] }): JSX.El
   );
 }
 
-/** The recovery-codes (re)generation dialog (passkey step-up → reveal codes once). */
-export function RecoveryCodesDialog({
-  open,
-  onOpenChange,
+/** Dialog footer buttons for the reveal or confirm phase. */
+function DialogFooterButtons({
+  revealed,
+  copied,
+  downloaded,
+  busy,
   mode,
-  onGenerated,
-}: RecoveryCodesDialogProps): JSX.Element {
+  onCopy,
+  onDownload,
+  onConfirm,
+  onClose,
+}: {
+  readonly revealed: boolean;
+  readonly copied: boolean;
+  readonly downloaded: boolean;
+  readonly busy: boolean;
+  readonly mode: RecoveryCodesMode;
+  readonly onCopy: () => void;
+  readonly onDownload: () => void;
+  readonly onConfirm: () => void;
+  readonly onClose: () => void;
+}): JSX.Element {
+  if (revealed) {
+    return (
+      <>
+        <Button type="button" variant="outline" onClick={onCopy}>
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+        <Button type="button" variant="outline" onClick={onDownload}>
+          Download
+        </Button>
+        <Button type="button" disabled={!copied && !downloaded} onClick={onClose}>
+          Done
+        </Button>
+      </>
+    );
+  }
+  return (
+    <>
+      <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
+        Cancel
+      </Button>
+      <Button type="button" disabled={busy} onClick={onConfirm}>
+        {busy ? 'Verifying…' : mode === 'regenerate' ? 'Regenerate codes' : 'Generate codes'}
+      </Button>
+    </>
+  );
+}
+
+/** Extract state management and setup. */
+function useRecoveryCodesState() {
   const [codes, setCodes] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,25 +180,46 @@ export function RecoveryCodesDialog({
   const [downloaded, setDownloaded] = useState(false);
   const reauth = useReauth();
 
-  function close(next: boolean): void {
-    if (busy) return; // don't dismiss mid-request
-    if (!next) {
-      const revealed = codes !== null;
-      setCodes(null);
-      setError(null);
-      setCopied(false);
-      setDownloaded(false);
-      if (revealed) onGenerated();
-    }
-    onOpenChange(next);
-  }
+  const resetState = () => {
+    setCodes(null);
+    setError(null);
+    setCopied(false);
+    setDownloaded(false);
+  };
 
-  async function onConfirm(): Promise<void> {
+  return {
+    codes,
+    setCodes,
+    busy,
+    setBusy,
+    error,
+    setError,
+    copied,
+    setCopied,
+    downloaded,
+    setDownloaded,
+    reauth,
+    resetState,
+  };
+}
+
+/** Handler callbacks for code generation and copying. */
+function useRecoveryCodesHandlers(
+  codes: string[] | null,
+  reauth: () => Promise<void>,
+  state: {
+    setCodes: (codes: string[] | null) => void;
+    setBusy: (busy: boolean) => void;
+    setError: (error: string | null) => void;
+    setCopied: (copied: boolean) => void;
+  },
+) {
+  const { setCodes, setBusy, setError, setCopied } = state;
+
+  const onConfirm = async (): Promise<void> => {
     setError(null);
     setBusy(true);
     try {
-      // Step-up: re-verify the passkey (mints a fresh session so the server's fresh-session gate
-      // passes), then (re)generate via Docket's REST endpoint.
       await reauth();
       setCodes(await generateCodes());
     } catch (err) {
@@ -162,9 +227,9 @@ export function RecoveryCodesDialog({
     } finally {
       setBusy(false);
     }
-  }
+  };
 
-  async function onCopy(): Promise<void> {
+  const onCopy = async (): Promise<void> => {
     if (!codes) return;
     try {
       await navigator.clipboard.writeText(codes.join('\n'));
@@ -172,6 +237,48 @@ export function RecoveryCodesDialog({
     } catch {
       setCopied(false);
     }
+  };
+
+  return { onConfirm, onCopy };
+}
+
+/** The recovery-codes (re)generation dialog (passkey step-up → reveal codes once). */
+export function RecoveryCodesDialog({
+  open,
+  onOpenChange,
+  mode,
+  onGenerated,
+}: RecoveryCodesDialogProps): JSX.Element {
+  const state = useRecoveryCodesState();
+  const {
+    codes,
+    setCodes,
+    busy,
+    setBusy,
+    error,
+    setError,
+    copied,
+    setCopied,
+    downloaded,
+    setDownloaded,
+    reauth,
+    resetState,
+  } = state;
+  const { onConfirm, onCopy } = useRecoveryCodesHandlers(codes, reauth, {
+    setCodes,
+    setBusy,
+    setError,
+    setCopied,
+  });
+
+  function close(next: boolean): void {
+    if (busy) return; // don't dismiss mid-request
+    if (!next) {
+      const revealed = codes !== null;
+      resetState();
+      if (revealed) onGenerated();
+    }
+    onOpenChange(next);
   }
 
   const revealed = codes !== null;
@@ -197,64 +304,26 @@ export function RecoveryCodesDialog({
         ) : null}
 
         <DialogFooter>
-          {revealed ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  void onCopy();
-                }}
-              >
-                {copied ? 'Copied' : 'Copy'}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  downloadCodes(codes);
-                  setDownloaded(true);
-                }}
-              >
-                Download
-              </Button>
-              <Button
-                type="button"
-                disabled={!copied && !downloaded}
-                onClick={() => {
-                  close(false);
-                }}
-              >
-                Done
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy}
-                onClick={() => {
-                  close(false);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  void onConfirm();
-                }}
-              >
-                {busy
-                  ? 'Verifying…'
-                  : mode === 'regenerate'
-                    ? 'Regenerate codes'
-                    : 'Generate codes'}
-              </Button>
-            </>
-          )}
+          <DialogFooterButtons
+            revealed={revealed}
+            copied={copied}
+            downloaded={downloaded}
+            busy={busy}
+            mode={mode}
+            onCopy={() => {
+              void onCopy();
+            }}
+            onDownload={() => {
+              if (codes) downloadCodes(codes);
+              setDownloaded(true);
+            }}
+            onConfirm={() => {
+              void onConfirm();
+            }}
+            onClose={() => {
+              close(false);
+            }}
+          />
         </DialogFooter>
       </DialogContent>
     </Dialog>

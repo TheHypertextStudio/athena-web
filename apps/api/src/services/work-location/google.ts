@@ -341,37 +341,73 @@ function recurringSchedule(event: GoogleWorkingLocationEvent): WorkLocationSched
   };
 }
 
+/** Build common metadata for normalized events. */
+function buildEventMetadata(event: GoogleWorkingLocationEvent): {
+  readonly externalEventId: string;
+  readonly parentExternalEventId: string | null;
+  readonly occurrenceKey: string | null;
+  readonly etag: string | null;
+  readonly updatedAt: Date | null;
+} {
+  return {
+    externalEventId: event.id ?? '',
+    parentExternalEventId: event.recurringEventId ?? null,
+    occurrenceKey: occurrenceKey(event),
+    etag: event.etag ?? null,
+    updatedAt: event.updated ? new Date(event.updated) : null,
+  };
+}
+
+/** Handle deletion event type. */
+function handleDeletedEvent(
+  event: GoogleWorkingLocationEvent,
+): Extract<NormalizedGoogleWorkingLocation, { kind: 'delete' }> {
+  const meta = buildEventMetadata(event);
+  return {
+    kind: 'delete',
+    externalEventId: meta.externalEventId,
+    parentExternalEventId: meta.parentExternalEventId,
+    occurrenceKey: meta.occurrenceKey,
+    etag: meta.etag,
+    updatedAt: meta.updatedAt,
+  };
+}
+
+/** Handle valid working location event. */
+function handleValidEvent(
+  event: GoogleWorkingLocationEvent,
+  place: GoogleImportedPlace,
+): NormalizedGoogleWorkingLocation {
+  const schedule = event.recurrence ? recurringSchedule(event) : oneOffSchedule(event);
+  if (!schedule) {
+    return {
+      kind: 'unsupported',
+      externalEventId: event.id ?? '',
+      reason: 'unsupported_recurrence',
+    };
+  }
+  const meta = buildEventMetadata(event);
+  return {
+    kind: event.recurringEventId ? 'exception' : 'assertion',
+    externalEventId: meta.externalEventId,
+    parentExternalEventId: meta.parentExternalEventId,
+    occurrenceKey: meta.occurrenceKey,
+    etag: meta.etag,
+    updatedAt: meta.updatedAt,
+    place,
+    schedule,
+  };
+}
+
 /** Normalize one primary-calendar Google working-location master, exception, or tombstone. */
 export function normalizeGoogleWorkingLocationEvent(
   event: GoogleWorkingLocationEvent,
 ): NormalizedGoogleWorkingLocation {
   const externalEventId = event.id ?? null;
   if (!externalEventId) return { kind: 'ignored', externalEventId: null };
-  if (event.status === 'cancelled') {
-    return {
-      kind: 'delete',
-      externalEventId,
-      parentExternalEventId: event.recurringEventId ?? null,
-      occurrenceKey: occurrenceKey(event),
-      etag: event.etag ?? null,
-      updatedAt: event.updated ? new Date(event.updated) : null,
-    };
-  }
+  if (event.status === 'cancelled') return handleDeletedEvent(event);
   if (event.eventType !== 'workingLocation') return { kind: 'ignored', externalEventId };
   const place = importedPlace(event.workingLocationProperties);
   if (!place) return { kind: 'unsupported', externalEventId, reason: 'invalid_working_location' };
-  const schedule = event.recurrence ? recurringSchedule(event) : oneOffSchedule(event);
-  if (!schedule) {
-    return { kind: 'unsupported', externalEventId, reason: 'unsupported_recurrence' };
-  }
-  return {
-    kind: event.recurringEventId ? 'exception' : 'assertion',
-    externalEventId,
-    parentExternalEventId: event.recurringEventId ?? null,
-    occurrenceKey: occurrenceKey(event),
-    etag: event.etag ?? null,
-    updatedAt: event.updated ? new Date(event.updated) : null,
-    place,
-    schedule,
-  };
+  return handleValidEvent(event, place);
 }

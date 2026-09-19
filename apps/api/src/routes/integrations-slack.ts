@@ -40,6 +40,39 @@ function settingsRedirect(orgId: string | null, status: 'connected' | 'error'): 
   return `${base}/orgs/${orgId}/settings/connections?slack=${status}`;
 }
 
+/** Store or update Slack account credentials. */
+async function storeSlackAccount(
+  userId: string,
+  grant: { readonly accessToken: string; readonly scope: string; readonly slackUserId: string },
+): Promise<void> {
+  const sealedAccessToken = sealCredential(grant.accessToken);
+  const [existing] = await db
+    .select({ id: account.id })
+    .from(account)
+    .where(
+      and(
+        eq(account.userId, userId),
+        eq(account.providerId, 'slack'),
+        eq(account.accountId, grant.slackUserId),
+      ),
+    )
+    .limit(1);
+  if (existing) {
+    await db
+      .update(account)
+      .set({ accessToken: sealedAccessToken, scope: grant.scope })
+      .where(eq(account.id, existing.id));
+  } else {
+    await db.insert(account).values({
+      accountId: grant.slackUserId,
+      providerId: 'slack',
+      userId,
+      accessToken: sealedAccessToken,
+      scope: grant.scope,
+    });
+  }
+}
+
 /** The Slack OAuth connect callback edge. */
 const integrationsSlack = new Hono().get('/callback', async (c) => {
   const code = c.req.query('code');
@@ -81,39 +114,7 @@ const integrationsSlack = new Hono().get('/callback', async (c) => {
   try {
     const grant = await exchangeSlackCode(code, decoded.userId);
 
-    // Store the xoxp- user token as a Better Auth account row (credential by reference —
-    // the integration carries only a credentialsRef). One row per (user, slack account).
-    // Sealed (AES-256-GCM, `credentials.ts`) before it ever touches the DB: writing here bypasses
-    // Better Auth's own `encryptOAuthTokens` (that only fires inside Better Auth's own handlers),
-    // so this raw Drizzle write must encrypt itself rather than land the token in plaintext. Any
-    // future reader of `account.accessToken` for `providerId: 'slack'` MUST call
-    // `unsealCredential` first — there is no current production reader to keep in sync with.
-    const sealedAccessToken = sealCredential(grant.accessToken);
-    const [existing] = await db
-      .select({ id: account.id })
-      .from(account)
-      .where(
-        and(
-          eq(account.userId, decoded.userId),
-          eq(account.providerId, 'slack'),
-          eq(account.accountId, grant.slackUserId),
-        ),
-      )
-      .limit(1);
-    if (existing) {
-      await db
-        .update(account)
-        .set({ accessToken: sealedAccessToken, scope: grant.scope })
-        .where(eq(account.id, existing.id));
-    } else {
-      await db.insert(account).values({
-        accountId: grant.slackUserId,
-        providerId: 'slack',
-        userId: decoded.userId,
-        accessToken: sealedAccessToken,
-        scope: grant.scope,
-      });
-    }
+    await storeSlackAccount(decoded.userId, grant);
 
     await db
       .update(integration)

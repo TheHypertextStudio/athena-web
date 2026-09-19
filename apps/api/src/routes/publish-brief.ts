@@ -416,6 +416,51 @@ async function taskSection(
   return section('tasks', items, rows.length);
 }
 
+/** Load projects for an initiative brief. */
+async function loadInitiativeProjects(initiativeId: string, orgId: string) {
+  return db
+    .select({ p: project })
+    .from(initiativeProject)
+    .innerJoin(project, eq(initiativeProject.projectId, project.id))
+    .where(
+      and(
+        eq(initiativeProject.initiativeId, initiativeId),
+        eq(initiativeProject.organizationId, orgId),
+        isNull(project.archivedAt),
+      ),
+    )
+    .orderBy(asc(project.targetDate), asc(project.name));
+}
+
+/** Load programs for an initiative brief. */
+async function loadInitiativePrograms(initiativeId: string, orgId: string) {
+  return db
+    .select({ p: program })
+    .from(initiativeProgram)
+    .innerJoin(program, eq(initiativeProgram.programId, program.id))
+    .where(
+      and(
+        eq(initiativeProgram.initiativeId, initiativeId),
+        eq(initiativeProgram.organizationId, orgId),
+      ),
+    )
+    .orderBy(asc(program.name));
+}
+
+/** Build facts for an initiative brief. */
+function buildInitiativeFacts(
+  row: typeof initiative.$inferSelect,
+  owner: string | null,
+): z.input<typeof BriefFact>[] {
+  return [
+    { key: 'status', value: row.status },
+    { key: 'health', value: row.health },
+    { key: 'priority', value: row.priority },
+    { key: 'owner', value: owner },
+    { key: 'targetDate', value: calendarDay(row.targetDate) },
+  ];
+}
+
 /** The brief body for a published initiative: its programs, its projects, and its dates. */
 async function initiativeBrief(
   resolved: ResolvedPublication,
@@ -439,39 +484,12 @@ async function initiativeBrief(
   if (!row) throw new NotFoundError('Brief not found');
 
   const [projects, programs, owner] = await Promise.all([
-    db
-      .select({ p: project })
-      .from(initiativeProject)
-      .innerJoin(project, eq(initiativeProject.projectId, project.id))
-      .where(
-        and(
-          eq(initiativeProject.initiativeId, row.id),
-          eq(initiativeProject.organizationId, resolved.organizationId),
-          isNull(project.archivedAt),
-        ),
-      )
-      .orderBy(asc(project.targetDate), asc(project.name)),
-    db
-      .select({ p: program })
-      .from(initiativeProgram)
-      .innerJoin(program, eq(initiativeProgram.programId, program.id))
-      .where(
-        and(
-          eq(initiativeProgram.initiativeId, row.id),
-          eq(initiativeProgram.organizationId, resolved.organizationId),
-        ),
-      )
-      .orderBy(asc(program.name)),
+    loadInitiativeProjects(row.id, resolved.organizationId),
+    loadInitiativePrograms(row.id, resolved.organizationId),
     ownerName(resolved.organizationId, row.ownerId),
   ]);
 
-  const facts: z.input<typeof BriefFact>[] = [
-    { key: 'status', value: row.status },
-    { key: 'health', value: row.health },
-    { key: 'priority', value: row.priority },
-    { key: 'owner', value: owner },
-    { key: 'targetDate', value: calendarDay(row.targetDate) },
-  ];
+  const facts = buildInitiativeFacts(row, owner);
 
   return {
     title: row.name,

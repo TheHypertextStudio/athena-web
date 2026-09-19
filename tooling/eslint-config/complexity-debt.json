@@ -2679,12 +2679,6 @@
       "excess": 4
     }
   },
-  "apps/web/src/components/actions/entity-navigation-actions.ts": {
-    "max-lines-per-function": {
-      "max": 393,
-      "excess": 616
-    }
-  },
   "apps/web/src/components/activity/day-highlight-row.tsx": {
     "max-lines-per-function": {
       "max": 82,

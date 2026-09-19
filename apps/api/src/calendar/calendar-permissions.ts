@@ -59,6 +59,15 @@ function resolveProviderEventPermission(
   return { canEditCore: true, canDelete: true, readOnlyReason: null };
 }
 
+/** Kinds with fixed, context-free permissions. */
+const BUILTIN_KINDS = new Set([
+  'native_block',
+  'native_event',
+  'timebox',
+  'task_timebox',
+  'availability_block',
+] as const);
+
 /**
  * Resolve a calendar item's normalized edit/delete permissions for the viewer.
  *
@@ -92,14 +101,7 @@ export function resolveItemPermissions(input: {
     return { canEditCore: false, canDelete: false, readOnlyReason: 'conflict' };
   }
 
-  const builtInKinds = new Set([
-    'native_block',
-    'native_event',
-    'timebox',
-    'task_timebox',
-    'availability_block',
-  ] as const);
-  if (builtInKinds.has(kind)) {
+  if (BUILTIN_KINDS.has(kind)) {
     return defaultItemPermissionsForKind(kind);
   }
 

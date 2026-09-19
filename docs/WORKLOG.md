@@ -216,6 +216,36 @@ chunk, and back or forward all swap instantly.
   20 px one, and Playwright's `animations: 'disabled'` fast-forwards the collapsing header to its
   compact end, so evidence shots of detail pages must not use it.
 - **Blockers**: None.
+### [DESIGN-BORDERS-001] Remove the borders the companion audit found, and its smaller defects
+
+- **Status**: REVIEW
+- **Started**: 2026-09-18
+- **Priority**: P1
+- **Description**: Findings 11 and 12 of `docs/design/audits/2026-09-18-athena-companion.md`: every
+  drawn border that survived, plus the project Tasks tab's `Unknown` assignees, its doubled task
+  rendering, and the sidebar's doubled `Tasks`/`Stream`.
+- **Subtasks**:
+  - [x] Checkbox: unchecked box is `on-surface-variant` at 70%, measured ≥3.25:1 (light) and
+        ≥3.73:1 (dark) against every surface step; `surface-container-highest` measured 1.0–1.6:1
+        and was rejected. Raw checkboxes in proposal rows and the weekday picker use the primitive.
+  - [x] Project Tasks tab: assignees resolve from the roster; List and Graph are one lens each
+  - [x] Graph cards, toolbar, handles, swimlanes, inspector edge, and drag preview are tonal
+  - [x] Athena mail rows, phone-number header, and MCP frame are tonal or spaced
+  - [x] Plan canvas: solid low-contrast initiative links; empty states are label + action
+  - [x] Demo launch plan deals work round-robin within each team
+  - [x] Dashed empty-state frames and `divide-y` lists across the web app
+  - [x] Button `outline` variant deleted; every caller moved to `secondary` (filled tonal)
+  - [ ] Sidebar duplicate `Tasks`/`Stream` in a personal workspace — the fix is in
+        `packages/ui/src/components/shell/navigation-catalog.tsx` (mark `workspace:tasks` and
+        `workspace:stream` `sharedWorkspaceOnly`), which another change owns right now
+  - [ ] Task comment form outline (`apps/web/src/components/task-detail/task-activity-feed.tsx`),
+        same reason
+- **Blockers**: The two open items sit in paths reserved for a parallel change.
+- **Learnings**: `project-detail-client.tsx` lost its roster read in f6b45fae2 and replaced the
+  resolver with a constant `Unknown`; the graph was originally a titled "Task dependencies" section
+  whose heading the same commit dropped, which is what made it read as a duplicate. Screenshots:
+  `apps/web/.data/design-review/2026-09-19-borders/{before,after}`.
+
 ### [ATHENA-PLAN-FLOW-001] Athena plans a feature launch and the confirmation is undoable
 
 - **Status**: IN_PROGRESS

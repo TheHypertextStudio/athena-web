@@ -92,11 +92,11 @@ but not applied at commit; the created object starts at the workspace's default 
 ## The surface
 
 `projectPlan` turns the document into xyflow nodes keyed by ref: an initiative card, a project
-container, and task rows held by containment. Initiative-to-project membership is a dashed
+container, and task rows held by containment. Initiative-to-project membership is a solid
 `planLink` edge into the container's header; dependencies use the shared `DependencyEdge`, end in
 the shared arrowhead (`dependencyMarkerEnd`), and run from a container's bottom edge into the next
-one's top edge. Both edge kinds take the `outline` stroke so they read in either theme; membership
-keeps a longer dash and no arrowhead, so a dependency still reads heavier. The projection resolves
+one's top edge. Membership takes `on-surface-variant` at 35% opacity and no arrowhead, so a
+dependency still reads heavier. The projection resolves
 actor ids through `resolveActor` (`plan-actors.ts`, built from the members the route already
 fetches) into `PlanActor` values, so a card draws an avatar and a name rather than a string.
 `layoutPlan` draws a board rather than a dependency graph: on a landscape host the initiative

@@ -12,13 +12,12 @@ function source(path: string): string {
 describe('Picker display contract', () => {
   it('joins configured display rows in direct Project and Task property pickers', () => {
     const projectDetail = source('apps/web/src/lib/use-project-detail-page.ts');
-    const taskDetail = source(
-      'apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx',
-    );
+    const taskDetail = source('apps/web/src/components/task-detail/use-task-property-model.ts');
 
     expect(projectDetail).toContain("queryKeys.entityDisplays(orgId, 'initiative')");
     expect(projectDetail).toContain('toInitiativeOptions(initiatives, initiativeDisplays)');
-    expect(taskDetail).toContain("queryKeys.entityDisplays(orgId, 'project')");
+    expect(taskDetail).toContain("useEntityDisplays(orgId, 'project')");
+    expect(taskDetail).toContain('queryKeys.entityDisplays(orgId, subjectType)');
     expect(taskDetail).toContain('toProjectOptions(projects, projectDisplays)');
   });
 

@@ -3207,20 +3207,6 @@
       "excess": 15
     }
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx": {
-    "complexity": {
-      "max": 25,
-      "excess": 13
-    },
-    "max-lines": {
-      "max": 519,
-      "excess": 19
-    },
-    "max-lines-per-function": {
-      "max": 465,
-      "excess": 385
-    }
-  },
   "apps/web/src/app/(app)/orgs/[orgId]/teams/[teamId]/team-detail-client.tsx": {
     "complexity": {
       "max": 18,
@@ -5537,24 +5523,14 @@
   },
   "apps/web/src/components/task-detail/task-details.tsx": {
     "max-lines-per-function": {
-      "max": 126,
-      "excess": 46
+      "max": 117,
+      "excess": 37
     }
   },
   "apps/web/src/components/task-detail/task-header-controls.tsx": {
     "max-lines-per-function": {
       "max": 86,
       "excess": 6
-    }
-  },
-  "apps/web/src/components/task-detail/task-properties-rail.tsx": {
-    "complexity": {
-      "max": 23,
-      "excess": 11
-    },
-    "max-lines-per-function": {
-      "max": 205,
-      "excess": 125
     }
   },
   "apps/web/src/components/tasks/create-task.tsx": {
@@ -6351,12 +6327,12 @@
   },
   "apps/web/src/lib/use-task-detail.ts": {
     "complexity": {
-      "max": 45,
-      "excess": 33
+      "max": 44,
+      "excess": 32
     },
     "max-lines-per-function": {
-      "max": 139,
-      "excess": 59
+      "max": 130,
+      "excess": 50
     }
   },
   "apps/web/src/lib/use-task-mutations.ts": {

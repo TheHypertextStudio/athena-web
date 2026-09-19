@@ -71,6 +71,8 @@ export { default as FileSpreadsheet } from '@mui/icons-material/TableChartOutlin
 export { default as FileText } from '@mui/icons-material/DescriptionOutlined';
 export { default as FileVideo } from '@mui/icons-material/MovieOutlined';
 export { default as Fingerprint } from '@mui/icons-material/Fingerprint';
+/** A dial: how large a piece of work is, as a point estimate. */
+export { default as Gauge } from '@mui/icons-material/SpeedOutlined';
 export { default as Folder } from '@mui/icons-material/FolderOpen';
 export { default as FolderKanban } from '@mui/icons-material/ViewKanban';
 export { default as GanttChart } from '@mui/icons-material/ViewTimeline';

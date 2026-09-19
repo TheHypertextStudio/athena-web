@@ -17,6 +17,7 @@
  */
 import { ESTIMATION_SCALES, type EstimationScale } from '../../lib/contracts/organization';
 import { EnumPicker, type PickerOption } from '@docket/ui/components';
+import { Gauge } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
 /** Props for {@link EstimatePicker}. */
@@ -60,6 +61,7 @@ export function EstimatePicker({
         onChange(next !== null ? Number(next) : null);
       }}
       placeholder={placeholder}
+      triggerIcon={<Gauge className="text-on-surface-variant size-4" />}
       clearLabel="None"
       ariaLabel="Estimate"
       readOnly={readOnly}

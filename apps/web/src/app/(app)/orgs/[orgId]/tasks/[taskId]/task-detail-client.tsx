@@ -1,132 +1,158 @@
 'use client';
 
-import type { Priority } from '@docket/work/task-contract';
-import { ActorAvatar, ActorPicker, type ActorKind, type PickerOption } from '@docket/ui/components';
+import type { TaskDetail } from '@docket/work/task-model';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Button, Skeleton, SkeletonChip, SkeletonText } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
+import { type JSX, useEffect, useState } from 'react';
+
+import { TaskActions } from '@/components/task-detail/task-actions';
+import { TaskBreadcrumb } from '@/components/task-detail/task-breadcrumb';
+import { TaskDeleteDialog, useTaskDeletePrompt } from '@/components/task-detail/task-delete-dialog';
+import {
+  TaskDetailFallback,
+  resolveTaskDetailView,
+  type TaskTerminalState,
+} from '@/components/task-detail/task-detail-states';
+import {
+  TASK_TABS,
+  TaskIcon,
+  TaskPrintSummary,
+  TaskTabs,
+  TaskTitle,
+  type TaskTab,
+} from '@/components/task-detail/task-masthead-slots';
+import { TaskMetadataRow } from '@/components/task-detail/task-masthead-properties';
+import { TaskSections } from '@/components/task-detail/task-sections';
+import { useTaskPropertyModel } from '@/components/task-detail/use-task-property-model';
+import { useTaskRosters } from '@/components/task-detail/use-task-rosters';
+import { EntityDetailLayout } from '@/components/views/entity-detail-layout';
+import { useDetailTab } from '@/components/views/use-detail-tab';
 import { useTypedRoute } from '@/lib/app-location';
-import { useAppRouter } from '@/lib/interactions/navigation';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
-
-import TaskGraphPanel from '@/components/canvas/task-graph-panel';
-import { useTaskPageIdentity } from './use-task-page-identity';
-import { ConfirmDestructiveDialog } from '@docket/ui/components';
-import { ResourcesTab } from '@/components/entity-detail/resources-tab';
-import { QueryLoadFailure } from '@/components/query-load-failure';
-import { EditableTitle } from '@/components/editor/editable-title';
-import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
-import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
-import { formatWindow } from '@/components/cycles/format-window';
-import { Dependencies } from '@/components/task-detail/Dependencies';
-import { TaskActivityFeed } from '@/components/task-detail/task-activity-feed';
-import { PriorityPicker } from '@/components/task-detail/PriorityPicker';
-import { StatusPicker } from '@/components/task-detail/StatusPicker';
-import { Subtasks } from '@/components/task-detail/Subtasks';
 import {
-  TaskHeaderControls,
-  TaskHeaderOverflowMenu,
-} from '@/components/task-detail/task-header-controls';
-import { TaskTimerButton } from '@/components/time-tracking';
-import { TaskDetails } from '@/components/task-detail/task-details';
-import { TaskPropertiesRail } from '@/components/task-detail/task-properties-rail';
-import {
-  cycleOptions as toCycleOptions,
-  labelOptions as toLabelOptions,
-  memberActorOptions,
-  milestoneOptions as toMilestoneOptions,
-  programOptions as toProgramOptions,
-  projectOptions as toProjectOptions,
-} from '@/components/pickers/options';
-import { labelsDef, useCreateLabel } from '@/components/labels/queries';
-import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
-import { useEstimationScale } from '@/lib/use-estimation-scale';
-import { useTaskDetail } from '@/lib/use-task-detail';
-import { useTaskAttachments } from '@/lib/use-attachments';
+  removeNavigationSnapshot,
+  seedNavigationSnapshot,
+} from '@/lib/navigation-snapshot-runtime';
+import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
+import { type TaskDetailData, useTaskDetail } from '@/lib/use-task-detail';
 import { useTaskMutations } from '@/lib/use-task-mutations';
-import { useRenameTask } from '@/lib/use-rename-task';
-import { useCategoryOf } from '@/components/entity-display/use-work-status';
-import { TaskRepeatingWorkBacklink } from '@/components/recurrence/repeating-work-backlink';
-import { removeNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
 
-interface TaskFeedActor {
-  name: string;
-  kind: ActorKind;
-  avatarUrl?: string | null | undefined;
+import { useTaskPageIdentity } from './use-task-page-identity';
+
+/** Props for {@link TaskDetailReady}: a task is in hand and every slot can render from it. */
+interface TaskDetailReadyProps {
+  readonly orgId: string;
+  readonly task: TaskDetail;
+  readonly detail: TaskDetailData;
+  readonly tab: TaskTab;
+  readonly onTabChange: (tab: TaskTab) => void;
+  readonly linkedContentOpen: boolean;
+  readonly onOpenLinkedContent: () => void;
+}
+
+/** The task page once its task has loaded: masthead, tabs, the active section, and the delete prompt. */
+function TaskDetailReady({
+  orgId,
+  task,
+  detail,
+  tab,
+  onTabChange,
+  linkedContentOpen,
+  onOpenLinkedContent,
+}: TaskDetailReadyProps): JSX.Element {
+  const projectLabel = useVocabulary('project');
+  const canEdit = detail.capabilities?.contribute ?? false;
+  const mutations = useTaskMutations(orgId, task.id, detail.detailKey, detail.activityKey);
+  const deletePrompt = useTaskDeletePrompt(mutations.resetDelete);
+  const rosters = useTaskRosters(orgId, task);
+  const { model, projectName } = useTaskPropertyModel({
+    orgId,
+    task,
+    canEdit,
+    workflowStates: detail.workflowStates,
+    rosters,
+    mutations,
+  });
+  const project = task.projectId ? projectName(task.projectId) : null;
+
+  return (
+    <>
+      <EntityDetailLayout
+        object={{ kind: 'task', id: task.id, organizationId: orgId, title: task.title }}
+        printSummary={
+          <TaskPrintSummary task={task} members={rosters.members} projectName={project} />
+        }
+        eyebrow={
+          <TaskBreadcrumb
+            orgId={orgId}
+            projectId={task.projectId ?? null}
+            projectName={project ?? projectLabel}
+            projectLabel={projectLabel}
+            parentTaskId={task.parentTaskId ?? null}
+          />
+        }
+        icon={<TaskIcon orgId={orgId} taskId={task.id} title={task.title} canEdit={canEdit} />}
+        title={<TaskTitle title={task.title} canEdit={canEdit} onPatch={mutations.patchTask} />}
+        metadata={<TaskMetadataRow model={model} />}
+        actions={
+          <TaskActions
+            task={task}
+            memberOptions={model.memberOptions}
+            canEdit={canEdit}
+            canManage={detail.capabilities?.manage ?? false}
+            mutations={mutations}
+            deletePrompt={deletePrompt}
+          />
+        }
+        tabs={<TaskTabs tab={tab} onTabChange={onTabChange} />}
+      >
+        <TaskSections
+          tab={tab}
+          orgId={orgId}
+          task={task}
+          detailKey={detail.detailKey}
+          currentActorId={detail.currentActorId}
+          canEdit={canEdit}
+          canComment={detail.capabilities?.comment ?? false}
+          mentions={detail.entityMentions}
+          projectName={projectName}
+          projectLabel={projectLabel}
+          mutations={mutations}
+          linkedContentOpen={linkedContentOpen}
+          onOpenLinkedContent={onOpenLinkedContent}
+        />
+      </EntityDetailLayout>
+      <TaskDeleteDialog orgId={orgId} prompt={deletePrompt} mutations={mutations} />
+    </>
+  );
 }
 
 /** TaskDetailPage renders the authenticated task page. */
 export default function TaskDetailPage(): JSX.Element {
-  const router = useAppRouter();
   const { params } = useTypedRoute('/orgs/[orgId]/tasks/[taskId]');
   const { orgId, taskId } = params;
   const queryClient = useQueryClient();
-
-  const projectLabel = useVocabulary('project');
-  const programLabel = useVocabulary('program');
-  const cycleLabel = useVocabulary('cycle');
-  const categoryOf = useCategoryOf('task');
+  const { tab, setTab } = useDetailTab<TaskTab>(TASK_TABS);
+  const navigationSnapshot = useNavigationSnapshot('task', taskId);
   const [aggregateEnabled, setAggregateEnabled] = useState(true);
-  const [terminalState, setTerminalState] = useState<'forbidden' | 'not-found' | null>(null);
+  const [terminalState, setTerminalState] = useState<TaskTerminalState | null>(null);
   const [linkedContentOpen, setLinkedContentOpen] = useState(false);
+  const detail = useTaskDetail(orgId, taskId, {
+    aggregateEnabled,
+    resourcesOpen: tab === 'resources',
+  });
+  const { task, snapshot, detailKey, terminalFailure } = detail;
 
-  const {
-    task,
-    workflowStates,
-    projects,
-    programs,
-    members,
-    agents,
-    milestones,
-    cycles,
-    capabilities,
-    currentActorId,
-    entityMentions,
-    detailKey,
-    activityKey,
-    terminalFailure,
-    isPending,
-    taskQuery,
-  } = useTaskDetail(orgId, taskId, { aggregateEnabled });
-
-  const {
-    attachments,
-    addUrl: addResourceUrl,
-    addFile: addResourceFile,
-    remove: removeResource,
-    downloadUrl,
-    isUploading: resourceUploadPending,
-    actionError: resourceActionError,
-  } = useTaskAttachments(orgId, taskId);
-
-  useTaskPageIdentity(orgId, taskId, task?.title);
-
-  const {
-    setState,
-    setPriority,
-    patchTask,
-    addSubtask,
-    toggleSubtask,
-    addComment,
-    deleteTask,
-    resetDelete,
-    actionError,
-    statusPending,
-    priorityPending,
-    deletePending,
-    deleteError,
-  } = useTaskMutations(orgId, taskId, detailKey, activityKey);
-
-  const { scale: estimationScale } = useEstimationScale(orgId);
-
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  useTaskPageIdentity(orgId, taskId, task?.title ?? navigationSnapshot?.title);
 
   useEffect(() => {
     setAggregateEnabled(true);
     setTerminalState(null);
     setLinkedContentOpen(false);
   }, [taskId]);
+
+  useEffect(() => {
+    if (snapshot) seedNavigationSnapshot(snapshot);
+  }, [snapshot]);
 
   useEffect(() => {
     if (terminalFailure === null) return;
@@ -136,425 +162,34 @@ export default function TaskDetailPage(): JSX.Element {
     queryClient.removeQueries({ queryKey: detailKey, exact: true });
   }, [detailKey, queryClient, taskId, terminalFailure]);
 
-  const resolveActor = useCallback(
-    (actorId: string | null | undefined): TaskFeedActor => {
-      if (!actorId) return { name: 'Unknown', kind: 'human' };
-      const member = members.find((m) => m.actorId === actorId);
-      if (member) return { name: member.displayName, kind: 'human', avatarUrl: member.avatar };
-      if (agents.some((a) => a.actorId === actorId)) return { name: 'Agent', kind: 'agent' };
-      return { name: 'Unknown', kind: 'human' };
-    },
-    [members, agents],
-  );
-
-  const projectName = useCallback(
-    (projectId: string): string => projects.find((p) => p.id === projectId)?.name ?? projectLabel,
-    [projects, projectLabel],
-  );
-
-  const delegate = useMemo(
-    () => (task?.delegateId ? resolveActor(task.delegateId) : null),
-    [task, resolveActor],
-  );
-
-  const canEdit = capabilities?.contribute ?? false;
-  const canComment = capabilities?.comment ?? false;
-  const canManage = capabilities?.manage ?? false;
-  const entityDisplay = useEntityDisplay({
-    organizationId: orgId,
-    subjectType: 'task',
-    subjectId: taskId,
-    errorMessage: 'Could not load this task’s icon.',
-    enabled: terminalState === null,
+  const view = resolveTaskDetailView({
+    isPending: detail.isPending,
+    terminalState,
+    isError: detail.taskQuery.isError,
+    hasTask: task !== null,
   });
-  // Rename any subtask in place (an arbitrary task by id), then re-read this task's detail so the
-  // refreshed subtask titles flow back in.
-  const renameSubtask = useRenameTask(orgId, [detailKey]);
-  const memberOptions = useMemo<readonly PickerOption[]>(
-    () => memberActorOptions(members),
-    [members],
-  );
-  const projectDisplaysQ = useApiListQuery(
-    apiQueryOptions(
-      queryKeys.entityDisplays(orgId, 'project'),
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'].$get({
-          param: { orgId, subjectType: 'project' },
-        }),
-      'Could not load project icons.',
-    ),
-  );
-  const projectDisplays = projectDisplaysQ.data?.items ?? [];
-  const cycleDisplaysQ = useApiListQuery(
-    apiQueryOptions(
-      queryKeys.entityDisplays(orgId, 'cycle'),
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'].$get({
-          param: { orgId, subjectType: 'cycle' },
-        }),
-      'Could not load cycle icons.',
-    ),
-  );
-  const milestoneDisplaysQ = useApiListQuery(
-    apiQueryOptions(
-      queryKeys.entityDisplays(orgId, 'milestone'),
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'].$get({
-          param: { orgId, subjectType: 'milestone' },
-        }),
-      'Could not load milestone icons.',
-    ),
-  );
-  const projectOptions = useMemo<readonly PickerOption[]>(
-    () => toProjectOptions(projects, projectDisplays),
-    [projectDisplays, projects],
-  );
-  const programOptions = useMemo<readonly PickerOption[]>(
-    () => toProgramOptions(programs),
-    [programs],
-  );
-  const cycleOptions = useMemo<readonly PickerOption[]>(
-    () => toCycleOptions(cycles, formatWindow, cycleDisplaysQ.data?.items ?? []),
-    [cycleDisplaysQ.data, cycles],
-  );
-  const labelsQ = useApiListQuery(labelsDef(orgId));
-  const labelOptions = useMemo<readonly PickerOption[]>(
-    () => toLabelOptions(labelsQ.data?.items ?? []),
-    [labelsQ.data],
-  );
-  const createLabel = useCreateLabel(orgId);
-  // Inline creation attaches as it creates: the user typed the name into *this* task's picker,
-  // so leaving them to then find and tick it would be a second step nobody asked for.
-  const onCreateLabel = useCallback(
-    (name: string): void => {
-      createLabel.mutate(
-        { name },
-        {
-          onSuccess: (created) => {
-            patchTask({ labels: [...(task?.labels ?? []).map((l) => l.id), created.id] });
-          },
-        },
-      );
-    },
-    [createLabel, patchTask, task?.labels],
-  );
-  const milestoneOptions = useMemo<readonly PickerOption[]>(
-    () =>
-      toMilestoneOptions(
-        milestones.filter((milestone) => milestone.projectId === task?.projectId),
-        milestoneDisplaysQ.data?.items ?? [],
-      ),
-    [milestoneDisplaysQ.data, milestones, task?.projectId],
-  );
-
-  const openTask = useCallback(
-    (id: string): void => {
-      router.push(`/orgs/${orgId}/tasks/${id}`);
-    },
-    [router, orgId],
-  );
-
-  const changeConfirmDeleteOpen = useCallback(
-    (open: boolean): void => {
-      // Clear any prior failure so a reopened dialog never shows a stale error.
-      resetDelete();
-      setConfirmDeleteOpen(open);
-    },
-    [resetDelete],
-  );
-
-  if (isPending) {
-    // placeholder: the task's own record — its title, the state/priority/assignee controls whose
-    // current values are the whole point of rendering them, its description, and its subtasks,
-    // comments and relations. The route carries only a task id.
+  if (view === 'ready' && task !== null) {
     return (
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-        <header className="flex flex-col gap-4">
-          <SkeletonText scale="title" className="w-2/3 max-w-lg" />
-          <div className="flex flex-nowrap gap-2 overflow-hidden">
-            <SkeletonChip className="w-32" />
-            <SkeletonChip className="w-32" />
-            <SkeletonChip className="w-24" />
-          </div>
-        </header>
-        <Skeleton className="h-48 w-full rounded-lg" />
-        <Skeleton className="h-48 w-full rounded-lg" />
-      </div>
-    );
-  }
-
-  if (terminalState !== null) {
-    return (
-      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p role="alert" className="text-on-surface-variant text-body-medium">
-          {terminalState === 'forbidden'
-            ? 'You no longer have access to this task.'
-            : 'This task no longer exists.'}
-        </p>
-      </div>
-    );
-  }
-
-  if (taskQuery.isError) {
-    return (
-      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <QueryLoadFailure title="This task" query={taskQuery} />
-      </div>
-    );
-  }
-
-  if (!task) {
-    return (
-      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p className="border-outline-variant text-on-surface-variant text-body-medium rounded-lg border border-dashed p-6 text-center">
-          This task could not be found.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex flex-col gap-4">
-        <div className="flex min-w-0 items-start gap-3">
-          <EntityIconPicker
-            display={entityDisplay.display}
-
-            workspaceId={orgId}
-            entityName={task.title}
-            editable={canEdit}
-            pending={entityDisplay.mutation.isPending}
-            loading={entityDisplay.loading}
-            size={40}
-            onChange={(glyph, colorKey, customColor) => {
-              entityDisplay.mutation.mutate({ glyph, colorKey, customColor });
-            }}
-          />
-          <h1 className="min-w-0">
-            <EditableTitle
-              value={task.title}
-              onSave={(title) => {
-                patchTask({ title });
-              }}
-              canEdit={canEdit}
-              ariaLabel="Task title"
-              className="text-on-surface text-title-large"
-            />
-          </h1>
-        </div>
-
-        <TaskHeaderControls
-          status={
-            <StatusPicker
-              current={task.state}
-              states={workflowStates}
-              currentType={categoryOf(task.state)}
-              onSelect={(stateKey) => {
-                void setState(stateKey);
-              }}
-              pending={statusPending}
-            />
-          }
-          priority={
-            <PriorityPicker
-              current={task.priority}
-              onSelect={(priority: Priority) => {
-                void setPriority(priority);
-              }}
-              pending={priorityPending}
-            />
-          }
-          assignee={
-            <ActorPicker
-              options={memberOptions}
-              value={task.assigneeId ?? null}
-              onChange={(assigneeId) => {
-                patchTask({ assigneeId });
-              }}
-              placeholder="Assign"
-              clearLabel="Unassigned"
-              ariaLabel="Assignee"
-              triggerVariant="outline"
-              triggerClassName="min-w-0 shrink"
-              readOnly={!canEdit}
-            />
-          }
-          delegate={
-            delegate ? (
-              <span className="text-body-medium flex min-w-0 items-center gap-1.5 whitespace-nowrap">
-                <span className="text-on-surface-variant text-body-small">delegate</span>
-                <ActorAvatar
-                  kind={delegate.kind}
-                  name={delegate.name}
-                  avatarUrl={delegate.avatarUrl}
-                />
-                <span className="text-on-surface-variant truncate">{delegate.name}</span>
-              </span>
-            ) : null
-          }
-          actions={
-            // Track this task. Deliberately unconditional on workflow state and on `canEdit`:
-            // time tracking is the viewer's own personal record of what they did, so it is not a
-            // content mutation and a task being blocked, done or someone else's does not stop a
-            // person having spent real time on it.
-            <TaskTimerButton taskId={taskId} title={task.title} controlSize="md" />
-          }
-          overflow={
-            <TaskHeaderOverflowMenu
-              taskId={taskId}
-              title={task.title}
-              priority={task.priority}
-              priorityPending={priorityPending}
-              memberOptions={memberOptions}
-              assigneeId={task.assigneeId ?? null}
-              canEdit={canEdit}
-              canManage={canManage}
-              onPriorityChange={(priority) => {
-                void setPriority(priority);
-              }}
-              onAssigneeChange={(assigneeId) => {
-                patchTask({ assigneeId });
-              }}
-              onDelete={() => {
-                changeConfirmDeleteOpen(true);
-              }}
-            />
-          }
-        />
-
-        {actionError ? (
-          <p role="alert" className="text-error text-body-medium">
-            {actionError}
-          </p>
-        ) : null}
-      </header>
-
-      {linkedContentOpen ? <TaskRepeatingWorkBacklink orgId={orgId} entityId={taskId} /> : null}
-
-      <div className="flex min-w-0 flex-col gap-6">
-        <TaskDetails
-          orgId={orgId}
-          taskId={taskId}
-          task={task}
-          currentActorId={currentActorId}
-          canEdit={canEdit}
-          onSave={(description) => {
-            patchTask({ description: description ?? '' });
-          }}
-          details={
-            <TaskPropertiesRail
-              task={task}
-              projectLabel={projectLabel}
-              programLabel={programLabel}
-              cycleLabel={cycleLabel}
-              projectOptions={projectOptions}
-              programOptions={programOptions}
-              milestoneOptions={milestoneOptions}
-              cycleOptions={cycleOptions}
-              labelOptions={labelOptions}
-              onCreateLabel={onCreateLabel}
-              estimationScale={estimationScale}
-              canEdit={canEdit}
-              onPatch={patchTask}
-            />
-          }
-        />
-
-        <Subtasks
-          organizationId={orgId}
-          parentTaskId={taskId}
-          subtasks={task.subtasks}
-          onAdd={addSubtask}
-          onToggle={(subtask, done) => toggleSubtask(subtask.id, done)}
-          onOpen={openTask}
-          onRename={renameSubtask}
-          canEdit={canEdit}
-        />
-
-        <ResourcesTab
-          resources={attachments}
-          canEdit={canEdit}
-          pending={resourceUploadPending}
-          error={resourceActionError}
-          onAdd={(resource) => {
-            void addResourceUrl(resource);
-          }}
-          onRemove={(resourceId) => {
-            void removeResource(resourceId);
-          }}
-          onUpload={(file) => {
-            void addResourceFile({ file });
-          }}
-          uploading={resourceUploadPending}
-          downloadHref={downloadUrl}
-          mentionedExternal={entityMentions.external}
-          mentionedEntities={entityMentions.entities}
-          mentionsPending={entityMentions.isPending}
-          hasProse={(task.description ?? '').trim().length > 0}
-        />
-
-        <Dependencies
-          blocking={task.blocking}
-          blockedBy={task.blockedBy}
-          projectName={projectName}
-          projectLabel={projectLabel}
-          onOpen={openTask}
-          canEdit={canEdit}
-          onRename={renameSubtask}
-        />
-
-        {linkedContentOpen ? (
-          <section className="flex flex-col gap-2">
-            <h2 className="text-on-surface text-title-small">Dependency map</h2>
-            <div className="bg-surface-container h-80 overflow-hidden rounded-xl">
-              <TaskGraphPanel
-                scope={{ orgId, rootTaskId: taskId, depth: 2 }}
-                density="compact"
-                onExpand={() => {
-                  router.push(`/orgs/${orgId}/graph?rootTaskId=${taskId}`);
-                }}
-              />
-            </div>
-          </section>
-        ) : (
-          <section aria-label="Linked task content">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setLinkedContentOpen(true);
-              }}
-            >
-              Load attachments and dependency map
-            </Button>
-          </section>
-        )}
-
-        <TaskActivityFeed
-          orgId={orgId}
-          taskId={taskId}
-          onComment={addComment}
-          canComment={canComment}
-        />
-      </div>
-
-      <ConfirmDestructiveDialog
-        open={confirmDeleteOpen}
-        onOpenChange={changeConfirmDeleteOpen}
-        title="Delete this task?"
-        description="This removes the task from your lists and boards, along with its subtasks and dependency links. You can't undo this."
-        confirmLabel="Delete task"
-        pending={deletePending}
-        error={deleteError}
-        onConfirm={() => {
-          deleteTask({
-            onSuccess: () => {
-              setConfirmDeleteOpen(false);
-              router.push(`/orgs/${orgId}/my-work`);
-            },
-          });
+      <TaskDetailReady
+        orgId={orgId}
+        task={task}
+        detail={detail}
+        tab={tab}
+        onTabChange={setTab}
+        linkedContentOpen={linkedContentOpen}
+        onOpenLinkedContent={() => {
+          setLinkedContentOpen(true);
         }}
       />
-    </div>
+    );
+  }
+  return (
+    <TaskDetailFallback
+      view={view}
+      orgId={orgId}
+      terminalState={terminalState}
+      snapshot={navigationSnapshot}
+      query={detail.taskQuery}
+    />
   );
 }

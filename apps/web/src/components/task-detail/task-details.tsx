@@ -3,7 +3,7 @@
 import type { TaskDetail } from '@docket/work/task-model';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@docket/ui/primitives';
-import type { JSX, ReactNode } from 'react';
+import type { JSX } from 'react';
 import { useState } from 'react';
 
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
@@ -18,11 +18,9 @@ export interface TaskDetailsProps {
   readonly currentActorId?: string | null;
   readonly canEdit: boolean;
   readonly onSave: (description: string | null) => void;
-  /** Less-frequent task fields that do not belong beside the primary description. */
-  readonly details: ReactNode;
 }
 
-/** Keep one task's description and secondary details in the document flow. */
+/** Keep one task's description, and the expansion that rewrites it, in the document flow. */
 export function TaskDetails({
   orgId,
   taskId,
@@ -30,7 +28,6 @@ export function TaskDetails({
   currentActorId,
   canEdit,
   onSave,
-  details,
 }: TaskDetailsProps): JSX.Element {
   const queryClient = useQueryClient();
   const [undoToken, setUndoToken] = useState<string | null>(null);
@@ -99,57 +96,48 @@ export function TaskDetails({
   }
 
   return (
-    <>
-      <section aria-labelledby="description-heading" className="flex flex-col gap-3">
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <h2 id="description-heading" className="text-on-surface text-title-small">
-            Description
-          </h2>
-          {canEdit ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={expandMutation.isPending || undoMutation.isPending}
-              onClick={expand}
-            >
-              {expandMutation.isPending ? 'Expanding…' : 'Expand'}
+    <section aria-labelledby="description-heading" className="flex flex-col gap-3">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <h2 id="description-heading" className="text-on-surface text-title-small">
+          Description
+        </h2>
+        {canEdit ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={expandMutation.isPending || undoMutation.isPending}
+            onClick={expand}
+          >
+            {expandMutation.isPending ? 'Expanding…' : 'Expand'}
+          </Button>
+        ) : null}
+      </div>
+      <TemplateAwareEntityDocument
+        orgId={orgId}
+        kind="task"
+        {...(currentActorId === undefined ? {} : { currentActorId })}
+        teamId={task.teamId}
+        value={task.description}
+        canEdit={canEdit}
+        onSave={onSave}
+        placeholder="Add a description…"
+      />
+      {notice ? (
+        <div className="flex flex-wrap items-center gap-2" role="status" aria-live="polite">
+          <p className="text-on-surface-variant text-body-medium">{notice}</p>
+          {undoToken ? (
+            <Button type="button" size="sm" variant="link" onClick={undo}>
+              Undo expansion
             </Button>
           ) : null}
         </div>
-        <TemplateAwareEntityDocument
-          orgId={orgId}
-          kind="task"
-          {...(currentActorId === undefined ? {} : { currentActorId })}
-          teamId={task.teamId}
-          value={task.description}
-          canEdit={canEdit}
-          onSave={onSave}
-          placeholder="Add a description…"
-        />
-        {notice ? (
-          <div className="flex flex-wrap items-center gap-2" role="status" aria-live="polite">
-            <p className="text-on-surface-variant text-body-medium">{notice}</p>
-            {undoToken ? (
-              <Button type="button" size="sm" variant="link" onClick={undo}>
-                Undo expansion
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-        {error ? (
-          <p role="alert" className="text-error text-body-medium">
-            {error}
-          </p>
-        ) : null}
-      </section>
-
-      <details className="bg-surface-container-low rounded-xl">
-        <summary className="text-on-surface text-label-large flex min-h-11 cursor-pointer list-none items-center px-4 [&::-webkit-details-marker]:hidden">
-          Details
-        </summary>
-        <div className="px-4 pb-4">{details}</div>
-      </details>
-    </>
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-error text-body-medium">
+          {error}
+        </p>
+      ) : null}
+    </section>
   );
 }

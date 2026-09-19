@@ -82,7 +82,6 @@ function renderDetails(
         task={task()}
         canEdit
         onSave={() => undefined}
-        details={<p>Schedule and placement</p>}
         {...options}
       />
     </QueryClientProvider>,
@@ -91,14 +90,11 @@ function renderDetails(
 }
 
 describe('TaskDetails', () => {
-  it('keeps the task description first and puts secondary details in an inline disclosure', () => {
+  it('renders the description as the whole section, with no properties disclosure or aside', () => {
     renderDetails();
 
-    const description = screen.getByTestId('task-description');
-    const details = screen.getByText('Schedule and placement');
-    expect(description.compareDocumentPosition(details)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(screen.getByText('Details')).toBeInTheDocument();
-    expect(details.closest('details')).not.toHaveAttribute('open');
+    expect(screen.getByTestId('task-description')).toHaveTextContent('The current definition.');
+    expect(document.querySelector('details')).toBeNull();
     expect(document.querySelector('aside')).toBeNull();
   });
 

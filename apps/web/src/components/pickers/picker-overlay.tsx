@@ -13,7 +13,7 @@
  * resolve them) both call the same `open`.
  *
  * One overlay moved to the target, not one picker mounted per row — the per-row composers
- * (`task-properties-rail.tsx` and friends) keep mounting their own `LabelsPicker` unchanged,
+ * (`task-secondary-properties.tsx` and friends) keep mounting their own `LabelsPicker` unchanged,
  * since they already have an anchor and don't need this indirection.
  */
 import {

@@ -2,6 +2,7 @@
 
 import type { Priority } from '@docket/work/task-contract';
 import { Check } from '@docket/ui/icons';
+import { cn } from '@docket/ui/lib/utils';
 import {
   Button,
   DropdownMenu,
@@ -26,6 +27,10 @@ interface PriorityPickerProps {
   pending: boolean;
   /** Whether the viewer lacks permission to change this Task. */
   disabled?: boolean;
+  /** Trigger weight: `outline` (boxed, the default) or `ghost` (a metadata-row chip). */
+  triggerVariant?: 'ghost' | 'outline';
+  /** Extra classes merged onto the trigger, e.g. the metadata-row chip geometry. */
+  triggerClassName?: string;
 }
 
 /**
@@ -42,11 +47,19 @@ export function PriorityPicker({
   onSelect,
   pending,
   disabled = false,
+  triggerVariant = 'outline',
+  triggerClassName,
 }: PriorityPickerProps): JSX.Element {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" disabled={pending || disabled} className="gap-2">
+        <Button
+          variant={triggerVariant}
+          size="sm"
+          disabled={pending || disabled}
+          aria-label={`Priority — ${PRIORITY_LABEL[current]}`}
+          className={cn('gap-2', triggerClassName)}
+        >
           <PriorityGlyph priority={current} />
           {PRIORITY_LABEL[current]}
         </Button>

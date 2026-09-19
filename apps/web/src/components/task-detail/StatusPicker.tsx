@@ -3,6 +3,7 @@
 import type { WorkflowState } from '@docket/work/workflow';
 import { StatusIcon, type WorkflowStateType } from '@docket/ui/components';
 import { Check, ChevronDown } from '@docket/ui/icons';
+import { cn } from '@docket/ui/lib/utils';
 import {
   Button,
   DropdownMenu,
@@ -31,6 +32,10 @@ interface StatusPickerProps {
   pending: boolean;
   /** Whether the viewer lacks permission to change this Task. */
   disabled?: boolean;
+  /** Trigger weight: `outline` (boxed, the default) or `ghost` (a metadata-row chip). */
+  triggerVariant?: 'ghost' | 'outline';
+  /** Extra classes merged onto the trigger, e.g. the metadata-row chip geometry. */
+  triggerClassName?: string;
 }
 
 /**
@@ -51,14 +56,17 @@ export function StatusPicker({
   onSelect,
   pending,
   disabled = false,
+  triggerVariant = 'outline',
+  triggerClassName,
 }: StatusPickerProps): JSX.Element {
   const activeState = states?.find((s) => s.key === current);
   const label = activeState?.name ?? humanizeKey(current);
   const type = activeState?.type ?? currentType;
+  const triggerClasses = cn('gap-2', triggerClassName);
 
   if (!states) {
     return (
-      <Button variant="outline" size="sm" disabled className="gap-2">
+      <Button variant={triggerVariant} size="sm" disabled className={triggerClasses}>
         <StatusIcon type={type} />
         {label}
       </Button>
@@ -68,7 +76,13 @@ export function StatusPicker({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" disabled={pending || disabled} className="gap-2">
+        <Button
+          variant={triggerVariant}
+          size="sm"
+          disabled={pending || disabled}
+          aria-label={`Status — ${label}`}
+          className={triggerClasses}
+        >
           <StatusIcon type={type} />
           {label}
           <ChevronDown className="text-on-surface-variant" />

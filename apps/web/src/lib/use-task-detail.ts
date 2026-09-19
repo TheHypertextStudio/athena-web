@@ -98,6 +98,22 @@ export interface TaskReadState {
   readonly refetch: () => unknown;
 }
 
+/** Which of the task page's optional reads are switched on. Each is dormant unless stated. */
+export interface TaskDetailOptions {
+  aggregateEnabled?: boolean;
+  activityOpen?: boolean;
+  membersOpen?: boolean;
+  projectsOpen?: boolean;
+  programsOpen?: boolean;
+  milestonesOpen?: boolean;
+  cyclesOpen?: boolean;
+  /**
+   * Whether the Resources tab is showing, which is when the description's derived references are
+   * read. Left out, the references are read as soon as the task is.
+   */
+  resourcesOpen?: boolean;
+}
+
 /**
  * Parallel-fetch all data slices needed by the task detail page.
  *
@@ -108,15 +124,7 @@ export interface TaskReadState {
 export function useTaskDetail(
   orgId: string,
   taskId: string,
-  options: {
-    aggregateEnabled?: boolean;
-    activityOpen?: boolean;
-    membersOpen?: boolean;
-    projectsOpen?: boolean;
-    programsOpen?: boolean;
-    milestonesOpen?: boolean;
-    cyclesOpen?: boolean;
-  } = {},
+  options: TaskDetailOptions = {},
 ): TaskDetailData {
   const subject = TaskSubjectRef.parse({ subjectType: 'task', subjectId: taskId });
   const detailKey = useMemo<QueryKey>(
@@ -128,7 +136,7 @@ export function useTaskDetail(
     () => queryKeys.taskActivity(orgId, taskId),
     [orgId, taskId],
   );
-  const entityMentions = useEntityMentions(orgId, subject);
+  const entityMentions = useEntityMentions(orgId, subject, options.resourcesOpen);
 
   const taskQ = useApiQuery({
     ...taskDetailAggregateDef(orgId, taskId),

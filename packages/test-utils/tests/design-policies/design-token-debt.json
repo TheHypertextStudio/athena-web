@@ -25,9 +25,6 @@
     "raw-radius-utility": 1,
     "raw-type-utility": 3
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx": {
-    "ad-hoc-border": 3
-  },
   "apps/web/src/app/(app)/orgs/[orgId]/teams/[teamId]/team-detail-client.tsx": {
     "raw-radius-utility": 6
   },
@@ -521,9 +518,6 @@
   "apps/web/src/components/task-detail/task-activity-feed.tsx": {
     "ad-hoc-border": 2,
     "raw-radius-utility": 2
-  },
-  "apps/web/src/components/task-detail/task-properties-rail.tsx": {
-    "raw-radius-utility": 1
   },
   "apps/web/src/components/tasks/task-hierarchy-drop.ts": {
     "ad-hoc-border": 3

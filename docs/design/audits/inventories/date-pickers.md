@@ -41,7 +41,8 @@ delegation are asserted in `apps/web/tests/pickers/timeframe-picker-contract.tes
 
 | #   | Surface                                   | File                                                                        | Field(s)                                 | Status                                        |
 | --- | ----------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------- | --------------------------------------------- |
-| 1   | Task detail → properties rail             | `apps/web/src/components/task-detail/task-properties-rail.tsx`              | Start date, Due date                     | Shared picker                                 |
+| 1   | Task detail → secondary properties        | `apps/web/src/components/task-detail/task-secondary-properties.tsx`         | Start date                               | Shared picker                                 |
+| 1a  | Task detail → masthead property row       | `apps/web/src/components/task-detail/task-masthead-properties.tsx`          | Due date                                 | Shared picker                                 |
 | 2   | Task create/edit composer                 | `apps/web/src/components/tasks/task-form-pickers.tsx`                       | Due date                                 | Shared picker                                 |
 | 3   | Project detail → properties panel         | `apps/web/src/components/project-detail/properties-panel.tsx`               | Timeline (start → target)                | Planning picker                               |
 | 4   | Project create composer                   | `apps/web/src/components/projects/create-project.tsx`                       | Timeline (start → target)                | Planning picker                               |

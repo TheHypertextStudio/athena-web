@@ -327,7 +327,7 @@ function DockedColumn({
       inert={open ? undefined : true}
       onKeyDown={onKeyDown}
       className={cn(
-        'border-outline-variant @container h-full min-h-0 shrink-0 overflow-hidden border-l',
+        '@container h-full min-h-0 shrink-0 overflow-hidden',
         animating && 'transition-[width] duration-(--dur-slow) ease-in-out',
         open ? 'w-[clamp(16rem,22%,20rem)]' : 'w-0',
       )}

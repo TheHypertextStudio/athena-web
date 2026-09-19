@@ -84,6 +84,9 @@ export interface ProjectNodeData extends Record<string, unknown> {
   isRoot?: boolean;
 }
 
+/** A connection handle as a small tonal dot; `!border-0` cancels react-flow's outlined circle. */
+const HANDLE_CLASS = '!bg-on-surface-variant/40 !size-2 !border-0';
+
 /** Read the typed {@link ProjectNodeData} off an xyflow node (one place for the `data` cast). */
 export function projectData(node: { data: unknown }): ProjectNodeData {
   return node.data as ProjectNodeData;
@@ -168,7 +171,7 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
             )}
           />
         ) : null}
-        <Handle type="target" position={Position.Left} className="!bg-outline-variant !size-2" />
+        <Handle type="target" position={Position.Left} className={HANDLE_CLASS} />
 
         {/* Explicit navigation affordance: the card itself never navigates (too easy to mis-click
           while panning or connecting), so a deliberate corner button reveals on hover/focus. */}
@@ -241,7 +244,7 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
           </>
         ) : null}
 
-        <Handle type="source" position={Position.Right} className="!bg-outline-variant !size-2" />
+        <Handle type="source" position={Position.Right} className={HANDLE_CLASS} />
         {relation.effectLabel ? (
           <span
             className={cn(

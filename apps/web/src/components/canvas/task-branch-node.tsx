@@ -35,7 +35,7 @@ function TaskBranchNodeComponent(props: NodeProps): React.JSX.Element {
       {previewCount > 0 ? (
         <div
           aria-hidden="true"
-          className="border-primary bg-primary/8 text-primary text-label-medium pointer-events-none absolute left-12 flex items-center rounded-xl border border-dashed px-3 opacity-80"
+          className="bg-primary/12 text-primary text-label-medium pointer-events-none absolute left-12 flex items-center rounded-xl px-3 opacity-80"
           style={{ top: previewY, width: card.width, height: card.height }}
         >
           {previewCount === 1 ? 'Move task here' : `Move ${previewCount} task branches here`}

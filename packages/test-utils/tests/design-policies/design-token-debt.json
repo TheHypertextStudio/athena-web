@@ -172,11 +172,7 @@
   "apps/web/src/components/canvas/canvas-properties-editor.tsx": {
     "ad-hoc-border": 2
   },
-  "apps/web/src/components/canvas/graph-inspector-host.tsx": {
-    "ad-hoc-border": 2
-  },
   "apps/web/src/components/canvas/group-node.tsx": {
-    "ad-hoc-border": 2,
     "raw-type-utility": 2
   },
   "apps/web/src/components/canvas/node-peek.tsx": {
@@ -186,14 +182,10 @@
   "apps/web/src/components/canvas/project-node.tsx": {
     "raw-radius-utility": 1
   },
-  "apps/web/src/components/canvas/task-branch-node.tsx": {
-    "ad-hoc-border": 3
-  },
   "apps/web/src/components/canvas/task-graph-panel.tsx": {
     "raw-radius-utility": 1
   },
   "apps/web/src/components/canvas/task-node.tsx": {
-    "ad-hoc-border": 6,
     "raw-radius-utility": 4,
     "raw-type-utility": 9
   },

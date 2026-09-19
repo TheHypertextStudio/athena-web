@@ -94,7 +94,9 @@ describe('the card separates itself by tone, not by a stroke', () => {
     // card's status glyph is an SVG.
     for (const element of container.querySelectorAll('*')) {
       const classes = element.getAttribute('class') ?? '';
-      expect(classes).not.toMatch(/\bborder(?:-[a-z]|\b)/);
+      // `border-0` asserts that nothing is drawn — the handles use it to cancel react-flow's
+      // default outlined circle — so it is the one border utility the card may carry.
+      expect(classes).not.toMatch(/\bborder(?!-0\b)(?:-[a-z]|\b)/);
       expect(classes).not.toMatch(/\bshadow-(?!none)/);
     }
     const card = container.querySelector('[style*="view-transition-name"]');

@@ -32,6 +32,12 @@ import { useLod } from './use-lod';
 /** The ring and wash a node shows while a drop onto it is refused. */
 const REJECTED_DROP_CLASS = `${CRITICAL_PAINT.rejectedDrop} ring-2 ring-inset`;
 
+/**
+ * A react-flow connection handle drawn as a small tonal dot rather than the library's outlined
+ * circle. The handle stays in the DOM because edges anchor to it and a drag starts from it.
+ */
+const GRAPH_HANDLE_CLASS = '!bg-on-surface-variant/40 !size-2 !border-0';
+
 /** Whether an ISO `dueDate` is in the past relative to now (start of today). */
 function isOverdue(dueDate: string | null): boolean {
   if (dueDate === null) return false;
@@ -168,7 +174,7 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
         style={{ viewTransitionName: taskNodeTransitionName(id) }}
         className={cn(
           surfaceToneColor('floating'),
-          'task-branch-header group border-outline-variant relative flex items-start gap-2.5 rounded-xl border transition-colors',
+          'task-branch-header group relative flex items-start gap-2.5 rounded-xl transition-colors',
           compact ? 'h-14 w-[240px] px-2.5 py-2' : 'h-[84px] w-[300px] px-3 py-2.5',
           (selected || selection.selected) && 'ring-primary ring-2',
           relation.dropProps.className,
@@ -183,8 +189,8 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
           <NodeToolbar position={Position.Top} offset={8}>
             <div
               className={cn(
-                surfaceToneColor('canvas'),
-                'border-outline-variant flex items-center gap-1 rounded-lg border p-1',
+                surfaceToneColor('prominent'),
+                'flex items-center gap-1 rounded-lg p-1',
               )}
             >
               <button
@@ -222,11 +228,7 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
           </NodeToolbar>
         ) : null}
 
-        <Handle
-          type="target"
-          position={Position.Left}
-          className={cn(surfaceToneColor('page'), '!border-outline-variant !size-2')}
-        />
+        <Handle type="target" position={Position.Left} className={GRAPH_HANDLE_CLASS} />
 
         <StatusIcon type={stateType} label={statusName} className="mt-0.5 shrink-0" />
 
@@ -263,16 +265,12 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
           />
         ) : null}
 
-        <Handle
-          type="source"
-          position={Position.Right}
-          className={cn(surfaceToneColor('page'), '!border-outline-variant !size-2')}
-        />
+        <Handle type="source" position={Position.Right} className={GRAPH_HANDLE_CLASS} />
         {relation.effectLabel ? (
           <span
             className={cn(
               surfaceToneColor('page'),
-              'ring-outline-variant pointer-events-none absolute -top-7 left-1/2 z-50 -translate-x-1/2 rounded px-2 py-1 whitespace-nowrap ring-1',
+              'pointer-events-none absolute -top-7 left-1/2 z-50 -translate-x-1/2 rounded px-2 py-1 whitespace-nowrap',
             )}
           >
             {relation.effectLabel}

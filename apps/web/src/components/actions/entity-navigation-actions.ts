@@ -71,6 +71,133 @@ function target(context: ActionContext, kind: ObjectKind): string | null {
   return objectHref(object);
 }
 
+function createProjectPortAdapter(): ReturnType<typeof createProjectRelationCommandPort> {
+  const duplicateAsNoOp = async (
+    write: () => Promise<unknown>,
+  ): Promise<'applied' | 'unchanged'> => {
+    try {
+      await write();
+      return 'applied';
+    } catch (error) {
+      if (error instanceof UserFacingError && error.status === 409) return 'unchanged';
+      throw error;
+    }
+  };
+
+  return createProjectRelationCommandPort({
+    patchProject: async (organizationId, projectId, patch) => {
+      await unwrap(
+        () =>
+          api.v1.orgs[':orgId'].projects[':id'].$patch({
+            param: { orgId: organizationId, id: projectId },
+            json: ProjectUpdate.parse(patch),
+          }),
+        'Could not change the project relationship.',
+      );
+    },
+    linkInitiative: (organizationId, projectId, initiativeId) =>
+      duplicateAsNoOp(() =>
+        unwrap(
+          () =>
+            api.v1.orgs[':orgId'].initiatives[':id'].projects.$post({
+              param: { orgId: organizationId, id: initiativeId },
+              json: { projectId },
+            }),
+          'Could not link the project to the initiative.',
+        ),
+      ),
+    addLabel: async (organizationId, projectId, labelId) => {
+      await unwrap(
+        () =>
+          api.v1.orgs[':orgId'].projects[':id'].labels.$post({
+            param: { orgId: organizationId, id: projectId },
+            json: { labelId },
+          }),
+        'Could not add the project label.',
+      );
+      return 'applied';
+    },
+    addDependency: (organizationId, blockingProjectId, blockedProjectId) =>
+      duplicateAsNoOp(() =>
+        unwrap(
+          () =>
+            api.v1.orgs[':orgId'].projects[':id'].dependencies.$post({
+              param: { orgId: organizationId, id: blockingProjectId },
+              json: { blockedProjectId },
+            }),
+          'Could not create the project dependency.',
+        ),
+      ),
+  });
+}
+
+function createProgramPortAdapter(): ReturnType<typeof createProgramRelationCommandPort> {
+  const duplicateAsNoOp = async (
+    write: () => Promise<unknown>,
+  ): Promise<'applied' | 'unchanged'> => {
+    try {
+      await write();
+      return 'applied';
+    } catch (error) {
+      if (error instanceof UserFacingError && error.status === 409) return 'unchanged';
+      throw error;
+    }
+  };
+
+  return createProgramRelationCommandPort({
+    setOwner: async (organizationId, programId, ownerId) => {
+      await unwrap(
+        () =>
+          api.v1.orgs[':orgId'].programs[':id'].$patch({
+            param: { orgId: organizationId, id: programId },
+            json: ProgramUpdate.parse({ ownerId }),
+          }),
+        'Could not set the program owner.',
+      );
+    },
+    linkInitiative: (organizationId, programId, initiativeId) =>
+      duplicateAsNoOp(() =>
+        unwrap(
+          () =>
+            api.v1.orgs[':orgId'].initiatives[':id'].programs.$post({
+              param: { orgId: organizationId, id: initiativeId },
+              json: { programId },
+            }),
+          'Could not link the program to the initiative.',
+        ),
+      ),
+    addLabel: (organizationId, programId, labelId) =>
+      duplicateAsNoOp(() =>
+        unwrap(
+          () =>
+            api.v1.orgs[':orgId'].programs[':id'].labels.$post({
+              param: { orgId: organizationId, id: programId },
+              json: { labelId },
+            }),
+          'Could not add the program label.',
+        ),
+      ),
+  });
+}
+
+function getSubjects<TKind extends 'project' | 'program'>(
+  context: ActionContext,
+  kind: TKind,
+): readonly (RelationEndpoint & { readonly kind: TKind })[] {
+  return context.objects.flatMap((object) =>
+    object.kind === kind
+      ? [
+          {
+            kind,
+            id: object.id,
+            organizationId: object.organizationId,
+            ...(object.meta ? { meta: object.meta } : {}),
+          },
+        ]
+      : [],
+  );
+}
+
 /** Register the common Open action for Project, Program, Cycle, and Team objects. */
 export function useRegisterEntityNavigationActions(): void {
   const router = useRouter();
@@ -78,112 +205,9 @@ export function useRegisterEntityNavigationActions(): void {
   const pickerOverlay = usePickerOverlay();
   const reportOutcome = useCopyOutcome();
   const domains = useMemo(() => {
-    const duplicateAsNoOp = async (
-      write: () => Promise<unknown>,
-    ): Promise<'applied' | 'unchanged'> => {
-      try {
-        await write();
-        return 'applied';
-      } catch (error) {
-        if (error instanceof UserFacingError && error.status === 409) return 'unchanged';
-        throw error;
-      }
-    };
-    const projectPort = createProjectRelationCommandPort({
-      patchProject: async (organizationId, projectId, patch) => {
-        await unwrap(
-          () =>
-            api.v1.orgs[':orgId'].projects[':id'].$patch({
-              param: { orgId: organizationId, id: projectId },
-              json: ProjectUpdate.parse(patch),
-            }),
-          'Could not change the project relationship.',
-        );
-      },
-      linkInitiative: (organizationId, projectId, initiativeId) =>
-        duplicateAsNoOp(() =>
-          unwrap(
-            () =>
-              api.v1.orgs[':orgId'].initiatives[':id'].projects.$post({
-                param: { orgId: organizationId, id: initiativeId },
-                json: { projectId },
-              }),
-            'Could not link the project to the initiative.',
-          ),
-        ),
-      addLabel: async (organizationId, projectId, labelId) => {
-        await unwrap(
-          () =>
-            api.v1.orgs[':orgId'].projects[':id'].labels.$post({
-              param: { orgId: organizationId, id: projectId },
-              json: { labelId },
-            }),
-          'Could not add the project label.',
-        );
-        return 'applied';
-      },
-      addDependency: (organizationId, blockingProjectId, blockedProjectId) =>
-        duplicateAsNoOp(() =>
-          unwrap(
-            () =>
-              api.v1.orgs[':orgId'].projects[':id'].dependencies.$post({
-                param: { orgId: organizationId, id: blockingProjectId },
-                json: { blockedProjectId },
-              }),
-            'Could not create the project dependency.',
-          ),
-        ),
-    });
-    const programPort = createProgramRelationCommandPort({
-      setOwner: async (organizationId, programId, ownerId) => {
-        await unwrap(
-          () =>
-            api.v1.orgs[':orgId'].programs[':id'].$patch({
-              param: { orgId: organizationId, id: programId },
-              json: ProgramUpdate.parse({ ownerId }),
-            }),
-          'Could not set the program owner.',
-        );
-      },
-      linkInitiative: (organizationId, programId, initiativeId) =>
-        duplicateAsNoOp(() =>
-          unwrap(
-            () =>
-              api.v1.orgs[':orgId'].initiatives[':id'].programs.$post({
-                param: { orgId: organizationId, id: initiativeId },
-                json: { programId },
-              }),
-            'Could not link the program to the initiative.',
-          ),
-        ),
-      addLabel: (organizationId, programId, labelId) =>
-        duplicateAsNoOp(() =>
-          unwrap(
-            () =>
-              api.v1.orgs[':orgId'].programs[':id'].labels.$post({
-                param: { orgId: organizationId, id: programId },
-                json: { labelId },
-              }),
-            'Could not add the program label.',
-          ),
-        ),
-    });
-    const subjects = <TKind extends 'project' | 'program'>(
-      context: ActionContext,
-      kind: TKind,
-    ): readonly (RelationEndpoint & { readonly kind: TKind })[] =>
-      context.objects.flatMap((object) =>
-        object.kind === kind
-          ? [
-              {
-                kind,
-                id: object.id,
-                organizationId: object.organizationId,
-                ...(object.meta ? { meta: object.meta } : {}),
-              },
-            ]
-          : [],
-      );
+    const projectPort = createProjectPortAdapter();
+    const programPort = createProgramPortAdapter();
+
     const executeProject = async (
       context: ActionContext,
       relationId: ProjectRelationId,
@@ -200,7 +224,7 @@ export function useRegisterEntityNavigationActions(): void {
         return;
       }
       const target = context.target;
-      const projectSubjects = subjects(context, 'project');
+      const projectSubjects = getSubjects(context, 'project');
       const pairs = new Map<
         string,
         { target: 'project' | 'program' | 'initiative'; owner: string }
@@ -254,6 +278,7 @@ export function useRegisterEntityNavigationActions(): void {
         () => invalidateOwnerTargetPairs(queryClient, pairs),
       );
     };
+
     const executeProgram = async (
       context: ActionContext,
       relationId: ProgramRelationId,
@@ -270,7 +295,7 @@ export function useRegisterEntityNavigationActions(): void {
         return;
       }
       const target = context.target;
-      const programSubjects = subjects(context, 'program');
+      const programSubjects = getSubjects(context, 'program');
       const pairs = new Map<string, { target: 'program' | 'initiative'; owner: string }>();
       for (const subject of programSubjects) {
         if (subject.organizationId !== null && subject.organizationId === target.organizationId) {

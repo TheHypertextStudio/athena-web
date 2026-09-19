@@ -239,6 +239,28 @@ function toResourceOut(
  * @param requireAppVisible - Whether to enforce the view-callable visibility rule.
  * @returns the render payload.
  */
+function validateToolVisibility(
+  descriptor: RemoteToolDescriptor,
+  requireAppVisible: boolean,
+  toolName: string,
+  connectionName: string,
+): void {
+  if (requireAppVisible && !isAppCallableTool(descriptor)) {
+    throw new ApiError(
+      403,
+      'forbidden',
+      `${toolName} is not callable from an embedded view on ${connectionName}`,
+    );
+  }
+  if (!requireAppVisible && !isModelCallableTool(descriptor)) {
+    throw new ApiError(
+      403,
+      'forbidden',
+      `${toolName} is not available in the Connected Tools launcher on ${connectionName}`,
+    );
+  }
+}
+
 export async function runWidgetTool(
   ownerUserId: string,
   connectionId: string,
@@ -250,8 +272,6 @@ export async function runWidgetTool(
   return withSession(connection, async (session) => {
     const tools = await session.listTools();
     const descriptor = tools.find((candidate) => candidate.name === tool);
-    // Refusals are named. A widget must be able to tell "this server does not offer that" from
-    // "the host would not let me", and an operator reading a log must be able to tell too.
     if (!descriptor) {
       throw new ApiError(
         404,
@@ -259,20 +279,7 @@ export async function runWidgetTool(
         `${connection.name} does not offer a tool named ${tool}`,
       );
     }
-    if (requireAppVisible && !isAppCallableTool(descriptor)) {
-      throw new ApiError(
-        403,
-        'forbidden',
-        `${tool} is not callable from an embedded view on ${connection.name}`,
-      );
-    }
-    if (!requireAppVisible && !isModelCallableTool(descriptor)) {
-      throw new ApiError(
-        403,
-        'forbidden',
-        `${tool} is not available in the Connected Tools launcher on ${connection.name}`,
-      );
-    }
+    validateToolVisibility(descriptor, requireAppVisible, tool, connection.name);
     const result = session.callToolRaw
       ? await session.callToolRaw(tool, args)
       : {

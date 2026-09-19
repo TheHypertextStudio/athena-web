@@ -27,7 +27,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { ConflictError, NotFoundError } from '../error';
+import { ConflictError, NotFoundError, ValidationError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
 import { created, ok } from '../lib/ok';
 import { pageResultById, pageResultByTuple, seekAfterId } from '../lib/list-cursor';
@@ -35,6 +35,7 @@ import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
+import { changeTeamCycleCadence } from '../services/team-cycle-cadence';
 import { entityMentionRoutes } from './entity-mentions';
 import { archiveTeamActor, createTeamActor, findTeamActorId, renameTeamActor } from './team-actor';
 import {
@@ -94,16 +95,42 @@ async function assertKeyAvailable(orgId: string, key: string, exceptId?: string)
   if (clash) throw new ConflictError('A team with this key already exists');
 }
 
-/** Pick only cadence columns supplied by a Team patch. */
-function cadencePatch(body: z.infer<typeof TeamUpdate>): {
-  cycleCadenceDays?: number;
-  cycleCadenceAnchor?: string;
-} {
+async function cadenceChangeForPatch(
+  orgId: string,
+  teamId: string,
+  body: z.infer<typeof TeamUpdate>,
+): Promise<Awaited<ReturnType<typeof changeTeamCycleCadence>> | undefined> {
+  const changesCadence =
+    body.cycleCadenceDays !== undefined || body.cycleCadenceAnchor !== undefined;
+  if (!changesCadence) return undefined;
+  if (body.cycleCadenceRevision === undefined) {
+    throw new ValidationError([
+      {
+        path: ['cycleCadenceRevision'],
+        message: 'The current cadence revision is required when changing cadence',
+      },
+    ]);
+  }
+  return changeTeamCycleCadence({
+    orgId,
+    teamId,
+    expectedRevision: body.cycleCadenceRevision,
+    ...(body.cycleCadenceDays !== undefined ? { cadenceDays: body.cycleCadenceDays } : {}),
+    ...(body.cycleCadenceAnchor !== undefined ? { requestedAnchor: body.cycleCadenceAnchor } : {}),
+    now: new Date(),
+  });
+}
+
+function mutableTeamPatch(body: z.infer<typeof TeamUpdate>): Partial<typeof team.$inferInsert> {
   return {
-    ...(body.cycleCadenceDays !== undefined ? { cycleCadenceDays: body.cycleCadenceDays } : {}),
-    ...(body.cycleCadenceAnchor !== undefined
-      ? { cycleCadenceAnchor: body.cycleCadenceAnchor }
-      : {}),
+    ...(body.name !== undefined ? { name: body.name } : {}),
+    ...(body.key !== undefined ? { key: body.key } : {}),
+    ...clearableTextPatch('summary', body.summary),
+    ...(body.description !== undefined ? { description: body.description } : {}),
+    ...(body.workflowStates !== undefined ? { workflowStates: body.workflowStates } : {}),
+    ...(body.triageEnabled !== undefined ? { triageEnabled: body.triageEnabled } : {}),
+    ...(body.agentGuidance !== undefined ? { agentGuidance: body.agentGuidance } : {}),
+    ...(body.approvalRouting !== undefined ? { approvalRouting: body.approvalRouting } : {}),
   };
 }
 
@@ -267,17 +294,8 @@ Setting \`workflowStates\` **replaces the entire array** (it is not a merge). \`
       const { teamId } = c.req.valid('param');
       const body = c.req.valid('json');
       if (body.key !== undefined) await assertKeyAvailable(orgId, body.key, teamId);
-      const patch = {
-        ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.key !== undefined ? { key: body.key } : {}),
-        ...clearableTextPatch('summary', body.summary),
-        ...(body.description !== undefined ? { description: body.description } : {}),
-        ...(body.workflowStates !== undefined ? { workflowStates: body.workflowStates } : {}),
-        ...(body.triageEnabled !== undefined ? { triageEnabled: body.triageEnabled } : {}),
-        ...cadencePatch(body),
-        ...(body.agentGuidance !== undefined ? { agentGuidance: body.agentGuidance } : {}),
-        ...(body.approvalRouting !== undefined ? { approvalRouting: body.approvalRouting } : {}),
-      };
+      const cadenceChange = await cadenceChangeForPatch(orgId, teamId, body);
+      const patch = mutableTeamPatch(body);
       const where = and(
         eq(team.id, teamId),
         eq(team.organizationId, orgId),
@@ -287,6 +305,15 @@ Setting \`workflowStates\` **replaces the entire array** (it is not a merge). \`
       // An empty patch body is a valid no-op: Drizzle rejects an empty `.set({})`, so
       // re-read the row (still enforcing the org-scoped existence check) and return it.
       if (Object.keys(patch).length === 0) {
+        if (cadenceChange) {
+          return ok(c, TeamDetail, {
+            ...toOut(cadenceChange.team, await findTeamActorId(db, orgId, cadenceChange.team.id)),
+            cadenceChange: {
+              effectiveAnchor: cadenceChange.effectiveAnchor,
+              removedEmptyCycles: cadenceChange.removedEmptyCycles,
+            },
+          });
+        }
         const rows = await db.select().from(team).where(where).limit(1);
         const existing = rows[0];
         if (!existing) throw new NotFoundError('Team not found');
@@ -303,7 +330,17 @@ Setting \`workflowStates\` **replaces the entire array** (it is not a merge). \`
         return { row: patched, actorId: await findTeamActorId(tx, orgId, patched.id) };
       });
       await enqueueSearchUpsert(orgId, 'team', updatedTeam.row.id);
-      return ok(c, TeamDetail, toOut(updatedTeam.row, updatedTeam.actorId));
+      return ok(c, TeamDetail, {
+        ...toOut(updatedTeam.row, updatedTeam.actorId),
+        ...(cadenceChange
+          ? {
+              cadenceChange: {
+                effectiveAnchor: cadenceChange.effectiveAnchor,
+                removedEmptyCycles: cadenceChange.removedEmptyCycles,
+              },
+            }
+          : {}),
+      });
     },
   )
   .delete(

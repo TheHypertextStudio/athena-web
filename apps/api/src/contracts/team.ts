@@ -305,6 +305,13 @@ export const TeamDetail = TeamOut.extend({
   cycleCadenceDays: z.number().int().min(1).max(365),
   cycleCadenceAnchor: z.iso.date(),
   cycleCadenceRevision: z.number().int().positive(),
+  cadenceChange: z
+    .object({
+      effectiveAnchor: z.iso.date(),
+      removedEmptyCycles: z.number().int().nonnegative(),
+    })
+    .optional()
+    .describe('Result metadata present only after changing the native cadence.'),
 }).meta({ id: 'TeamDetail', description: 'Full detail for a single team.' });
 /** Team-detail value. */
 export type TeamDetail = z.infer<typeof TeamDetail>;

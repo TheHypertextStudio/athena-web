@@ -627,12 +627,6 @@
       "excess": 74
     }
   },
-  "apps/api/src/lib/work-views/sort-sql.ts": {
-    "max-params": {
-      "max": 6,
-      "excess": 1
-    }
-  },
   "apps/api/src/lib/work-views/temporal-sql.ts": {
     "complexity": {
       "max": 15,
@@ -921,12 +915,12 @@
       "excess": 29
     },
     "max-lines": {
-      "max": 1132,
-      "excess": 632
+      "max": 1128,
+      "excess": 628
     },
     "max-lines-per-function": {
-      "max": 271,
-      "excess": 256
+      "max": 269,
+      "excess": 254
     },
     "sonarjs/cognitive-complexity": {
       "max": 24,
@@ -937,12 +931,6 @@
     "max-lines-per-function": {
       "max": 128,
       "excess": 48
-    }
-  },
-  "apps/api/src/routes/admin-serializers.ts": {
-    "max-params": {
-      "max": 6,
-      "excess": 1
     }
   },
   "apps/api/src/routes/admin.ts": {
@@ -1127,12 +1115,6 @@
       "excess": 5
     }
   },
-  "apps/api/src/routes/grants.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    }
-  },
   "apps/api/src/routes/hub-portfolio.ts": {
     "max-lines-per-function": {
       "max": 105,
@@ -1173,20 +1155,6 @@
       "excess": 3
     }
   },
-  "apps/api/src/routes/ingest.ts": {
-    "complexity": {
-      "max": 14,
-      "excess": 2
-    },
-    "max-lines-per-function": {
-      "max": 84,
-      "excess": 4
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 20,
-      "excess": 5
-    }
-  },
   "apps/api/src/routes/initiative-aggregates.ts": {
     "complexity": {
       "max": 35,
@@ -1203,16 +1171,6 @@
     "sonarjs/cognitive-complexity": {
       "max": 45,
       "excess": 37
-    }
-  },
-  "apps/api/src/routes/initiative-hierarchy.ts": {
-    "complexity": {
-      "max": 15,
-      "excess": 3
-    },
-    "max-lines-per-function": {
-      "max": 85,
-      "excess": 5
     }
   },
   "apps/api/src/routes/initiatives.ts": {
@@ -1389,16 +1347,6 @@
     "max-lines-per-function": {
       "max": 84,
       "excess": 4
-    }
-  },
-  "apps/api/src/routes/me-identities.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    },
-    "max-lines-per-function": {
-      "max": 90,
-      "excess": 10
     }
   },
   "apps/api/src/routes/members.ts": {
@@ -1595,12 +1543,6 @@
       "excess": 41
     }
   },
-  "apps/api/src/routes/roles.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    }
-  },
   "apps/api/src/routes/saved-views.ts": {
     "complexity": {
       "max": 37,
@@ -1619,12 +1561,6 @@
     "complexity": {
       "max": 28,
       "excess": 16
-    }
-  },
-  "apps/api/src/routes/stream-sse.ts": {
-    "max-depth": {
-      "max": 5,
-      "excess": 1
     }
   },
   "apps/api/src/routes/sync-notion.ts": {
@@ -1779,34 +1715,14 @@
   },
   "apps/api/src/search/backfill.ts": {
     "complexity": {
-      "max": 17,
-      "excess": 6
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 20,
-      "excess": 5
+      "max": 15,
+      "excess": 3
     }
   },
   "apps/api/src/search/projectors/activity.ts": {
     "complexity": {
       "max": 14,
       "excess": 2
-    }
-  },
-  "apps/api/src/search/projectors/content.ts": {
-    "max-params": {
-      "max": 6,
-      "excess": 1
-    }
-  },
-  "apps/api/src/search/query-browse.ts": {
-    "complexity": {
-      "max": 17,
-      "excess": 5
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 22,
-      "excess": 7
     }
   },
   "apps/api/src/search/query-filters.ts": {
@@ -4599,12 +4515,6 @@
       "excess": 227
     }
   },
-  "apps/web/src/components/projects/project-catalog.ts": {
-    "max-lines-per-function": {
-      "max": 91,
-      "excess": 11
-    }
-  },
   "apps/web/src/components/projects/project-form-pickers.tsx": {
     "max-lines-per-function": {
       "max": 108,
@@ -4613,11 +4523,7 @@
   },
   "apps/web/src/components/projects/project-relation-port.ts": {
     "complexity": {
-      "max": 19,
-      "excess": 7
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 19,
+      "max": 16,
       "excess": 4
     }
   },
@@ -5521,12 +5427,8 @@
   },
   "apps/web/src/components/tasks/task-relation-port.ts": {
     "complexity": {
-      "max": 18,
-      "excess": 6
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 17,
-      "excess": 2
+      "max": 13,
+      "excess": 1
     }
   },
   "apps/web/src/components/team-detail/throughput-chart.tsx": {
@@ -5553,12 +5455,6 @@
     "max-lines-per-function": {
       "max": 97,
       "excess": 17
-    }
-  },
-  "apps/web/src/components/teams/team-list-ui.tsx": {
-    "max-lines-per-function": {
-      "max": 92,
-      "excess": 12
     }
   },
   "apps/web/src/components/teams/team-picker.tsx": {
@@ -5753,12 +5649,6 @@
     "sonarjs/cognitive-complexity": {
       "max": 16,
       "excess": 1
-    }
-  },
-  "apps/web/src/components/today/focus-card.tsx": {
-    "max-lines-per-function": {
-      "max": 92,
-      "excess": 12
     }
   },
   "apps/web/src/components/today/hub-task-row.tsx": {
@@ -6159,16 +6049,6 @@
       "excess": 93
     }
   },
-  "apps/web/src/lib/mutations/intent-journal.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    },
-    "max-params": {
-      "max": 6,
-      "excess": 1
-    }
-  },
   "apps/web/src/lib/navigation-snapshots.ts": {
     "max-lines-per-function": {
       "max": 100,
@@ -6183,8 +6063,8 @@
   },
   "apps/web/src/lib/search-route.ts": {
     "complexity": {
-      "max": 20,
-      "excess": 8
+      "max": 15,
+      "excess": 3
     }
   },
   "apps/web/src/lib/use-cycle-mutations.ts": {
@@ -6717,8 +6597,8 @@
   },
   "domains/work/src/contracts/saved-view.ts": {
     "max-lines": {
-      "max": 512,
-      "excess": 12
+      "max": 517,
+      "excess": 17
     }
   },
   "domains/work/src/contracts/task.ts": {
@@ -6893,12 +6773,6 @@
       "excess": 41
     }
   },
-  "packages/env/src/custom-domain.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    }
-  },
   "packages/env/src/registry-vars-core.ts": {
     "max-lines": {
       "max": 552,
@@ -6961,12 +6835,6 @@
     "complexity": {
       "max": 15,
       "excess": 3
-    }
-  },
-  "packages/integrations/src/lattice-oauth.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
     }
   },
   "packages/integrations/src/linear.ts": {
@@ -7175,12 +7043,6 @@
       "excess": 8
     }
   },
-  "packages/test-utils/src/doc-coverage.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    }
-  },
   "packages/test-utils/tests/design-policies/design-token-scan.ts": {
     "complexity": {
       "max": 13,
@@ -7265,12 +7127,6 @@
     "sonarjs/cognitive-complexity": {
       "max": 26,
       "excess": 11
-    }
-  },
-  "packages/ui/src/components/atoms/LabelChip.tsx": {
-    "max-lines-per-function": {
-      "max": 81,
-      "excess": 1
     }
   },
   "packages/ui/src/components/menus/MenuActionRow.tsx": {
@@ -7533,12 +7389,6 @@
     "max-lines": {
       "max": 554,
       "excess": 54
-    }
-  },
-  "scripts/billing-runtime-rollout.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
     }
   },
   "scripts/bootstrap.ts": {

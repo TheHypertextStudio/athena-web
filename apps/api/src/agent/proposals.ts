@@ -98,18 +98,14 @@ function soleCaptureText(raw: unknown): string | null {
  * @param input - Its stored, still-editable input.
  * @returns the ghost, or null when the proposal has no spatial home.
  */
-function projectGhost(
-  tool: string,
-  input: Record<string, unknown>,
-): z.input<typeof GhostTaskOut> | null {
-  if (tool === 'capture') {
-    const text = soleCaptureText(input['text']);
-    if (!text) return null;
-    // The same derivation `capture` itself uses, so the preview and the write agree on the title.
-    return { title: deriveCaptureTitle(text), teamId: null, projectId: null, dueDate: null };
-  }
+function projectCaptureGhost(input: Record<string, unknown>): z.input<typeof GhostTaskOut> | null {
+  const text = soleCaptureText(input['text']);
+  if (!text) return null;
+  // The same derivation `capture` itself uses, so the preview and the write agree on the title.
+  return { title: deriveCaptureTitle(text), teamId: null, projectId: null, dueDate: null };
+}
 
-  if (tool !== 'organize') return null;
+function projectOrganizeGhost(input: Record<string, unknown>): z.input<typeof GhostTaskOut> | null {
   const items = input['items'];
   if (!Array.isArray(items) || items.length !== 1) return null;
   const only: unknown = items[0];
@@ -124,6 +120,19 @@ function projectGhost(
     projectId: ghostRef(item['project']),
     dueDate: ghostDate(item['dueDate']),
   };
+}
+
+function projectGhost(
+  tool: string,
+  input: Record<string, unknown>,
+): z.input<typeof GhostTaskOut> | null {
+  if (tool === 'capture') {
+    return projectCaptureGhost(input);
+  }
+  if (tool === 'organize') {
+    return projectOrganizeGhost(input);
+  }
+  return null;
 }
 
 /** Project one proposed action row into its {@link ProposalItemOut}. */
@@ -245,13 +254,15 @@ export async function editProposalInput(
         .limit(1);
       if (!authorized[0]) throw new NotFoundError('Workspace not found');
       organizationId = inputOrganizationId;
-    } else if (
-      authorization?.registeredOrganizationId &&
-      inputOrganizationId &&
-      inputOrganizationId !== authorization.registeredOrganizationId
-    ) {
-      throw new NotFoundError('Workspace not found');
     }
+
+  if (
+    authorization?.registeredOrganizationId &&
+    inputOrganizationId &&
+    inputOrganizationId !== authorization.registeredOrganizationId
+  ) {
+    throw new NotFoundError('Workspace not found');
+  }
     const [updated] = await tx
       .update(sessionActivity)
       .set({

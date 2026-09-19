@@ -9,9 +9,11 @@ import {
 import {
   JOURNALING_PLAN_TURNS,
   MockAgentTurnRuntime,
+  SCRIPTED_TASK_ID,
   SCRIPTED_TURNS,
   type TurnEvent,
   type TurnMessage,
+  type TurnSubjectTask,
 } from '../src/turn/turn';
 
 const ORG = '01J0000000000000000000ORG1';
@@ -174,5 +176,36 @@ describe('MockAgentTurnRuntime script choice', () => {
 
   it('runs the default script otherwise', async () => {
     await expect(firstToolName('Plan my day.')).resolves.toBe(scriptedFirstTool(SCRIPTED_TURNS));
+  });
+
+  /** The input of the first streamed turn's tool call, when the turn names a subject task. */
+  async function firstToolCall(subjectTask: TurnSubjectTask): Promise<unknown> {
+    const runtime = new MockAgentTurnRuntime();
+    for await (const event of runtime.streamTurn({
+      system: '',
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'Start this.' }] }],
+      tools: [],
+      subjectTask,
+    })) {
+      if (event.type === 'tool_use') return { name: event.name, input: event.input };
+    }
+    return undefined;
+  }
+
+  it('aims the default script at the turn’s subject task', async () => {
+    const subject = { id: '01J00000000000000000TASK01', organizationId: ORG };
+    await expect(firstToolCall(subject)).resolves.toEqual({
+      name: 'update',
+      input: {
+        orgId: ORG,
+        entity: 'task',
+        scope: { ids: [subject.id] },
+        set: { state: 'in_progress' },
+      },
+    });
+    const defaultUse = SCRIPTED_TURNS[0]?.message.content.find(
+      (block) => block.type === 'tool_use',
+    );
+    expect(defaultUse).toMatchObject({ input: { taskId: SCRIPTED_TASK_ID } });
   });
 });

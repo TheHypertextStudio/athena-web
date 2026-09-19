@@ -53,6 +53,7 @@ import {
 import { classifyTool, decideUserOwnedToolExecution } from './approval-policy';
 import { assertHostedExecutionSurface } from './execution-surface';
 import { markProvenance } from './provenance';
+import { sessionSubjectTask } from './subject-task';
 import { buildSystemPrompt } from './system-prompt';
 import {
   ASK_USER_TOOL,
@@ -378,12 +379,11 @@ async function driveSessionWithAdmission(
   deps: LoopDeps,
   admission: DriveAdmission,
 ): Promise<SessionRow> {
-  const sessionRows = await db
+  const [session] = await db
     .select()
     .from(agentSession)
     .where(eq(agentSession.id, sessionId))
     .limit(1);
-  const session = sessionRows[0];
   if (!session) throw new NotFoundError('Session not found');
   if (session.executorKind === 'registered_agent' && session.organizationId !== orgId) {
     throw new NotFoundError('Session not found');
@@ -514,6 +514,7 @@ async function driveSessionWithAdmission(
       guidance: agentRow.guidance,
       activePlan: await activePlanContext(sessionId),
     });
+    const subjectTask = await sessionSubjectTask(sessionId, session.taskId);
 
     for (;;) {
       const execution = await executeApprovedActions(orgId, sessionId, lease, deps);
@@ -565,14 +566,13 @@ async function driveSessionWithAdmission(
         .where(eq(agentSession.id, sessionId))
         .limit(1);
       if (statusRows[0]?.status !== 'running') {
-        const rows = await db
+        const [current] = await db
           .select()
           .from(agentSession)
           .where(eq(agentSession.id, sessionId))
           .limit(1);
         /* v8 ignore next -- @preserve defensive: the session row exists */
-        if (!rows[0]) throw new Error('session vanished mid-run');
-        const current = rows[0];
+        if (!current) throw new Error('session vanished mid-run');
         if (current.status === 'canceled') return await settleOwned('canceled');
         return await settleOwned('awaiting_input');
       }
@@ -600,6 +600,7 @@ async function driveSessionWithAdmission(
         system,
         messages,
         tools: openedToolbox.tools,
+        subjectTask,
       })) {
         if (event.type === 'thinking') {
           await persistGenerationEffect(lease, deps, 'thought-activity', async (tx) => {

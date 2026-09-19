@@ -95,6 +95,23 @@ export interface TurnInput {
   readonly messages: readonly TurnMessage[];
   /** The tools available during this turn. */
   readonly tools: readonly TurnToolDef[];
+  /**
+   * The task this work is about, when the session has one: the task the person asked from, or the
+   * task the work was filed as.
+   *
+   * @remarks
+   * Model-backed runtimes ignore this field. {@link MockAgentTurnRuntime} aims its default script
+   * at it, so a locally dispatched job proposes a change to a task that exists.
+   */
+  readonly subjectTask?: TurnSubjectTask | undefined;
+}
+
+/** A task a turn's work is about, with the workspace that holds it. */
+export interface TurnSubjectTask {
+  /** The task id. */
+  readonly id: string;
+  /** The workspace the task belongs to. */
+  readonly organizationId: string;
 }
 
 /** Provider-neutral port for streaming one model turn. */
@@ -111,37 +128,92 @@ export interface ScriptedTurn {
   readonly stopReason: TurnStopReason;
 }
 
-/** The default script {@link MockAgentTurnRuntime} replays in deterministic tests. */
-export const SCRIPTED_TURNS: readonly ScriptedTurn[] = [
-  {
-    message: {
-      role: 'assistant',
-      content: [
-        {
-          type: 'thinking',
-          thinking: 'Reviewing the task and the current board state.',
-          signature: 'mock-sig-turn-0',
-        },
-        {
-          type: 'tool_use',
-          id: 'toolu_mock_0001',
-          name: 'update_task',
-          input: { taskId: '01HZ0000000000000000LN0001', state: 'in_progress' },
-        },
-      ],
+/**
+ * The placeholder task id in {@link SCRIPTED_TURNS}. No real task can match it; a turn with a
+ * subject task replays the script aimed at that task instead.
+ */
+export const SCRIPTED_TASK_ID = '01HZ0000000000000000LN0001';
+
+/** The one tool call the default script proposes. */
+interface ScriptedToolCall {
+  /** The tool name. */
+  readonly name: string;
+  /** The tool input. */
+  readonly input: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Move one task to In Progress through the `update` tool, the way a model would.
+ *
+ * @param subject - The task to move.
+ * @returns the `update` call scoped to exactly that task.
+ */
+function startTaskCall(subject: TurnSubjectTask): ScriptedToolCall {
+  return {
+    name: 'update',
+    input: {
+      orgId: subject.organizationId,
+      entity: 'task',
+      scope: { ids: [subject.id] },
+      set: { state: 'in_progress' },
     },
-    stopReason: 'tool_use',
-  },
-  {
-    message: {
-      role: 'assistant',
-      content: [
-        { type: 'text', text: 'Moved the task to In Progress and verified the board reflects it.' },
-      ],
+  };
+}
+
+/**
+ * The default script around one tool call.
+ *
+ * @param call - The call the first turn proposes.
+ * @returns the two scripted turns: propose the change, then report it.
+ */
+function defaultScriptTurns(call: ScriptedToolCall): readonly ScriptedTurn[] {
+  return [
+    {
+      message: {
+        role: 'assistant',
+        content: [
+          {
+            type: 'thinking',
+            thinking: 'Reviewing the task and the current board state.',
+            signature: 'mock-sig-turn-0',
+          },
+          {
+            type: 'tool_use',
+            id: 'toolu_mock_0001',
+            name: call.name,
+            input: call.input,
+          },
+        ],
+      },
+      stopReason: 'tool_use',
     },
-    stopReason: 'end_turn',
-  },
-];
+    {
+      message: {
+        role: 'assistant',
+        content: [
+          {
+            type: 'text',
+            text: 'Moved the task to In Progress and verified the board reflects it.',
+          },
+        ],
+      },
+      stopReason: 'end_turn',
+    },
+  ];
+}
+
+/**
+ * The default script {@link MockAgentTurnRuntime} replays in deterministic tests.
+ *
+ * @remarks
+ * Its `update_task` call names a tool Docket's toolbox does not serve and a task id no task can
+ * have, so approving it changes nothing. A turn with a subject task replays the same script as a
+ * real `update` of that task.
+ */
+export const SCRIPTED_TURNS: readonly ScriptedTurn[] = defaultScriptTurns({
+  name: 'update_task',
+  input: { taskId: SCRIPTED_TASK_ID, state: 'in_progress' },
+});
 
 /** The Sunsama-import script used by onboarding and firehose tests. */
 export const SUNSAMA_IMPORT_TURNS: readonly ScriptedTurn[] = [
@@ -253,13 +325,15 @@ export class MockAgentTurnRuntime implements AgentTurnRuntime {
    * @remarks
    * An injected script always wins, so every test that hands one in keeps its exact turns. With no
    * injection, a conversation asking to plan a journaling launch runs the journaling planning
-   * script and everything else runs the default one.
+   * script and everything else runs the default one, aimed at the turn's subject task when it has
+   * one.
    */
   private scriptFor(input: TurnInput): readonly ScriptedTurn[] {
     if (this.injected) return this.injected;
     if (PLANNING_TRIGGER.test(firstUserText(input.messages))) {
       return bindJournalingPlanTurns(input.messages);
     }
+    if (input.subjectTask) return defaultScriptTurns(startTaskCall(input.subjectTask));
     return SCRIPTED_TURNS;
   }
 

@@ -207,7 +207,10 @@ describe('POST /:id/run (agent session via the AgentRuntime port)', () => {
     const action = rows.find((r) => r.type === 'action');
     expect(action?.approvalStatus).toBe('proposed');
     expect(action?.body).toMatchObject({
-      action: { kind: 'update_task', summary: 'update task' },
+      action: {
+        kind: 'update',
+        toolCall: { input: { orgId: s.orgId, scope: { ids: [s.taskId] } } },
+      },
     });
     // Non-action activities carry text and no approval.
     const thought = rows.find((r) => r.type === 'thought');

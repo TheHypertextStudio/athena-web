@@ -61,6 +61,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Input,
   Stack,
   Tab,
   TabList,
@@ -103,40 +104,75 @@ interface CaptureNotice {
  */
 type CaptureMode = 'task' | 'athena';
 
-/**
- * The mode the composer actually sends to: the armed destination, unless the conversation is
- * already open elsewhere on the screen, in which case the box only ever captures a task.
- */
-function resolveCaptureMode(mode: CaptureMode, captureOnly: boolean): CaptureMode {
-  return captureOnly ? 'task' : mode;
+/** The composer's placeholder for the armed destination. */
+function composerPlaceholder(mode: CaptureMode): string {
+  return mode === 'athena' ? 'Ask Athena about today…' : 'What task needs capturing?';
 }
 
-/** The composer's placeholder, given the effective mode and whether the destination is hidden. */
-function composerPlaceholder(effectiveMode: CaptureMode, captureOnly: boolean): string {
-  if (captureOnly) return 'Add a task';
-  return effectiveMode === 'athena' ? 'Ask Athena about today…' : 'What task needs capturing?';
+/** The task a capture created: enough to name it and link to it. */
+interface CapturedTask {
+  readonly id: string;
+  readonly title: string;
+}
+
+/**
+ * Capture one line of text as a task in `orgId`; never throws.
+ *
+ * @returns the created task, or `null` after reporting the failure as a notice.
+ */
+async function captureTask(orgId: string, text: string): Promise<CapturedTask | null> {
+  const fallback = 'Could not capture that.';
+  try {
+    const res = await api.v1.orgs[':orgId'].capture.$post({ param: { orgId }, json: { text } });
+    if (!res.ok) {
+      await presentRejectedResponse(res, fallback);
+      return null;
+    }
+    const created = await res.json();
+    return { id: created.id, title: created.title };
+  } catch (caught) {
+    presentFailure(caught, fallback);
+    return null;
+  }
+}
+
+/** Props for {@link CaptureFeedback}. */
+interface CaptureFeedbackProps {
+  readonly notice: CaptureNotice | null;
+}
+
+/** The task a capture just added, or nothing. */
+function CaptureFeedbackLine({ notice }: CaptureFeedbackProps): JSX.Element | null {
+  if (!notice) return null;
+  return (
+    <p className="text-on-surface-variant text-body-small">
+      Added <span className="text-on-surface text-label-medium">“{notice.title}”</span> —{' '}
+      <Button asChild variant="link" controlSize="sm">
+        <Link href={notice.href}>view task</Link>
+      </Button>
+    </p>
+  );
+}
+
+/** The one live region under the prompt, announcing a capture's outcome. */
+function CaptureFeedback(props: CaptureFeedbackProps): JSX.Element {
+  return (
+    <div aria-live="polite" className="empty:hidden">
+      <CaptureFeedbackLine {...props} />
+    </div>
+  );
 }
 
 /** Props for {@link DestinationToggle}. */
 interface DestinationToggleProps {
   /** The currently armed destination. */
   mode: CaptureMode;
-  /** Whether the conversation is already open elsewhere; hides the toggle entirely. */
-  captureOnly: boolean;
   /** Arms a new destination when the person switches tabs. */
   onModeChange: (next: CaptureMode) => void;
 }
 
-/**
- * The Task/Athena segmented control, or nothing while the conversation is open elsewhere on the
- * screen and the box only captures tasks.
- */
-function DestinationToggle({
-  mode,
-  captureOnly,
-  onModeChange,
-}: DestinationToggleProps): JSX.Element | null {
-  if (captureOnly) return null;
+/** The Task/Athena segmented control. */
+function DestinationToggle({ mode, onModeChange }: DestinationToggleProps): JSX.Element {
   return (
     <Tabs
       value={mode}
@@ -171,27 +207,92 @@ export interface TodayPromptProps {
    */
   onStartSession?: ((draft: string) => void) | undefined;
   /**
-   * Hide the Athena destination while the conversation is open elsewhere on the screen; the box
-   * only captures tasks.
+   * The conversation is open elsewhere on the screen (the companion panel), so the prompt yields:
+   * it shrinks to one line that only adds a task, and the screen keeps a single composer.
    */
   captureOnly?: boolean | undefined;
 }
 
+/**
+ * Today's prompt: the full composer, or — while the companion panel is open beside the page — one
+ * line that adds a task, so the screen never holds two composers.
+ */
+export function TodayPrompt({ captureOnly = false, ...props }: TodayPromptProps): JSX.Element {
+  if (captureOnly) return <TodayQuickAdd orgId={props.orgId} onCaptured={props.onCaptured} />;
+  return <TodayComposer {...props} />;
+}
+
+/** Props for {@link TodayQuickAdd}. */
+interface TodayQuickAddProps {
+  readonly orgId: string | null;
+  readonly onCaptured?: (() => void) | undefined;
+}
+
+/** The yielded prompt: a single-line field that adds a task on Enter, with no send control. */
+function TodayQuickAdd({ orgId, onCaptured }: TodayQuickAddProps): JSX.Element {
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<CaptureNotice | null>(null);
+
+  async function add(): Promise<void> {
+    const draft = text.trim();
+    if (!orgId || busy || draft.length === 0) return;
+    setBusy(true);
+    setNotice(null);
+    const created = await captureTask(orgId, draft);
+    setBusy(false);
+    if (!created) return;
+    setText('');
+    setNotice({ title: created.title, href: `/orgs/${orgId}/tasks/${created.id}` });
+    onCaptured?.();
+  }
+
+  return (
+    <Stack gap={2} className="w-full max-w-[600px]">
+      <form
+        data-slot="today-quick-add"
+        style={{ viewTransitionName: 'today-composer' }}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void add();
+        }}
+      >
+        <Input
+          variant="filled"
+          controlSize="lg"
+          leading={<Plus aria-hidden="true" />}
+          aria-label="Add a task"
+          placeholder="Add a task"
+          value={text}
+          disabled={orgId === null || busy}
+          onChange={(event) => {
+            setText(event.target.value);
+            if (notice) setNotice(null);
+          }}
+        />
+      </form>
+      <CaptureFeedback notice={notice} />
+    </Stack>
+  );
+}
+
+/** Props for {@link TodayComposer}. */
+type TodayComposerProps = Omit<TodayPromptProps, 'captureOnly'>;
+
 /** The hybrid prompt box: capture a task, or hand the thought to Athena. */
-export function TodayPrompt({
+function TodayComposer({
   orgId,
   orgLabel,
   onCaptured,
   onStartSession,
-  captureOnly = false,
-}: TodayPromptProps): JSX.Element {
+}: TodayComposerProps): JSX.Element {
   const { openAthena } = useAthenaPanel();
   const [text, setText] = useState('');
   const mentionOrgId = useMentionOrgId(orgId);
   const [busy, setBusy] = useState<'capture' | null>(null);
   const [notice, setNotice] = useState<CaptureNotice | null>(null);
   const [mode, setModeState] = useState<CaptureMode>('athena');
-  const effectiveMode = resolveCaptureMode(mode, captureOnly);
+
   const [files, setFiles] = useState<readonly File[]>([]);
   const [dropping, setDropping] = useState(false);
   const filePicker = useRef<HTMLInputElement>(null);
@@ -213,7 +314,7 @@ export function TodayPrompt({
   const canSubmit =
     orgId !== null &&
     busy === null &&
-    (text.trim().length > 0 || (effectiveMode === 'task' && files.length > 0));
+    (text.trim().length > 0 || (mode === 'task' && files.length > 0));
 
   const capture = useCallback(async (): Promise<void> => {
     if (!orgId) return;
@@ -226,24 +327,9 @@ export function TodayPrompt({
     setBusy('capture');
     setNotice(null);
     try {
-      // Only the capture request is guarded here. Anything after it runs with the task already
-      // saved, and must never be able to report the capture as failed.
-      const created = await (async () => {
-        try {
-          const res = await api.v1.orgs[':orgId'].capture.$post({
-            param: { orgId },
-            json: { text: captureText },
-          });
-          if (!res.ok) {
-            await presentRejectedResponse(res, 'Could not capture that.');
-            return null;
-          }
-          return await res.json();
-        } catch (caught) {
-          presentFailure(caught, 'Could not capture that.');
-          return null;
-        }
-      })();
+      // Only the capture request can fail the capture. Anything after it runs with the task
+      // already saved, and must never be able to report the capture as failed.
+      const created = await captureTask(orgId, captureText);
       if (!created) return;
 
       setText('');
@@ -300,9 +386,9 @@ export function TodayPrompt({
 
   /** Send the draft wherever the active mode points. */
   const submit = useCallback((): void => {
-    if (effectiveMode === 'athena') askAthena();
+    if (mode === 'athena') askAthena();
     else void capture();
-  }, [effectiveMode, askAthena, capture]);
+  }, [mode, askAthena, capture]);
 
   const setMode = useCallback((next: CaptureMode): void => {
     setModeState(next);
@@ -416,8 +502,8 @@ export function TodayPrompt({
           rows={3}
           autoGrow
           maxRows={16}
-          placeholder={composerPlaceholder(effectiveMode, captureOnly)}
-          aria-label={effectiveMode === 'athena' ? 'Ask Athena about today' : 'Add a task'}
+          placeholder={composerPlaceholder(mode)}
+          aria-label={mode === 'athena' ? 'Ask Athena about today' : 'Add a task'}
           disabled={orgId === null}
           className="placeholder:text-on-surface-variant text-body-large w-full resize-none bg-transparent px-2 pt-1 outline-none disabled:opacity-50"
         />
@@ -491,13 +577,13 @@ export function TodayPrompt({
           >
             <Plus aria-hidden="true" />
           </Button>
-          <DestinationToggle mode={mode} captureOnly={captureOnly} onModeChange={setMode} />
+          <DestinationToggle mode={mode} onModeChange={setMode} />
           <Button
             type="button"
             iconOnly
             disabled={!canSubmit}
             onClick={submit}
-            aria-label={effectiveMode === 'task' ? 'Add task' : 'Send'}
+            aria-label={mode === 'task' ? 'Add task' : 'Send'}
             // Same corner as the box it sits in, so the control reads as part of the field.
             className="ml-auto rounded-xl"
           >
@@ -505,16 +591,7 @@ export function TodayPrompt({
           </Button>
         </ControlGroup>
       </div>
-      <div aria-live="polite" className="empty:hidden">
-        {notice ? (
-          <p className="text-on-surface-variant text-body-small">
-            Added <span className="text-on-surface text-label-medium">“{notice.title}”</span> —{' '}
-            <Button asChild variant="link" controlSize="sm">
-              <Link href={notice.href}>view task</Link>
-            </Button>
-          </p>
-        ) : null}
-      </div>
+      <CaptureFeedback notice={notice} />
     </Stack>
   );
 }

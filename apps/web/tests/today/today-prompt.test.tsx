@@ -249,18 +249,39 @@ describe('TodayPrompt', () => {
     expect(screen.getByRole('button', { name: 'Add files' })).toBeEnabled();
   });
 
-  it('captures only while the conversation is open', async () => {
+  it('yields to one single-line add-a-task field while the conversation is open', async () => {
     render(<TodayPrompt orgId={ORG} orgLabel="Space" captureOnly />);
 
+    // One composer per screen: no destination toggle, no send slab, no attach control.
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
 
     const field = screen.getByLabelText('Add a task');
+    expect(field.tagName).toBe('INPUT');
     fireEvent.change(field, { target: { value: 'Buy milk' } });
-    fireEvent.keyDown(field, { key: 'Enter' });
+    const form = field.closest('form');
+    if (!form) throw new Error('the field sits in a form');
+    fireEvent.submit(form);
 
     await waitFor(() => {
       expect(capturePost).toHaveBeenCalledOnce();
     });
     expect(openAthena).not.toHaveBeenCalled();
+  });
+
+  it('keeps the yielded field’s text and says why when the capture fails', async () => {
+    capturePost.mockRejectedValue(new Error('network down'));
+    render(<TodayPrompt orgId={ORG} orgLabel="Space" captureOnly />);
+
+    const field = screen.getByLabelText('Add a task');
+    fireEvent.change(field, { target: { value: 'Buy milk' } });
+    const form = field.closest('form');
+    if (!form) throw new Error('the field sits in a form');
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(form.parentElement?.querySelector('[aria-live] p')).not.toBeNull();
+    });
+    expect(field).toHaveValue('Buy milk');
   });
 });

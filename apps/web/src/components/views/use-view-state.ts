@@ -233,7 +233,8 @@ export function useViewState(
     [commit, state],
   );
   const reset = useCallback((): void => {
-    commit({ filters: [], groupBy: defaults.groupBy ?? null, sort: [] }, DEFAULT_VIEW_DISPLAY);
+    const defaultState = { filters: [], groupBy: defaults.groupBy ?? null, sort: [] };
+    commit(defaultState, DEFAULT_VIEW_DISPLAY);
   }, [commit, defaults.groupBy]);
 
   return {

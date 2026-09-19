@@ -45,6 +45,17 @@ async function deliverBatch(
   }
 }
 
+/** Wait for the next event or heartbeat deadline, resolving when either arrives. */
+async function waitForEventOrHeartbeat(notify: { v: (() => void) | null }): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, HEARTBEAT_MS);
+    notify.v = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+  });
+}
+
 /** Live stream router: a single SSE subscription per connection. */
 const streamSse = new Hono<AppEnv>().get('/sse', (c) => {
   const session = c.get('session');
@@ -56,8 +67,8 @@ const streamSse = new Hono<AppEnv>().get('/sse', (c) => {
       const signal = c.req.raw.signal;
       let pending: StreamEvent[] = [];
       // `notify` wakes the writer loop when an event arrives or the request aborts.
-      let notify: (() => void) | null = null;
-      const wake = (): void => notify?.();
+      const notifyRef = { v: null as (() => void) | null };
+      const wake = (): void => notifyRef.v?.();
 
       const unsubscribe = subscribe(userId, (event) => {
         pending.push(event);
@@ -74,14 +85,8 @@ const streamSse = new Hono<AppEnv>().get('/sse', (c) => {
             continue;
           }
           // Wait for the next event or the heartbeat deadline, whichever comes first.
-          await new Promise<void>((resolve) => {
-            const timer = setTimeout(resolve, HEARTBEAT_MS);
-            notify = () => {
-              clearTimeout(timer);
-              resolve();
-            };
-          });
-          notify = null;
+          await waitForEventOrHeartbeat(notifyRef);
+          notifyRef.v = null;
           // Heartbeat only when nothing arrived; the `while` re-checks `aborted` to exit.
           if (pending.length === 0) {
             await stream.writeSSE({ event: 'ping', data: '' });

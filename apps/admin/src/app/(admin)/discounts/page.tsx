@@ -165,20 +165,14 @@ function DecisionPanel({
   );
 }
 
-/** One application under review, with its decision controls. */
-function ApplicationReview({
-  application,
-  canDecide,
-  onDecided,
-}: {
-  readonly application: Application;
-  readonly canDecide: boolean;
-  readonly onDecided: () => void;
-}): JSX.Element {
-  const [reason, setReason] = useState('');
-  const [preview, setPreview] = useState<ApprovalPreview | null>(null);
-  const detail = useApiQuery(detailDef(application.id));
-
+/** Setup mutations for a discount application review. */
+function useMutations(
+  application: Application,
+  preview: ApprovalPreview | null,
+  reason: string,
+  onDecided: () => void,
+  setPreview: (preview: ApprovalPreview) => void,
+) {
   const routes = api.admin['discount-applications'][':applicationId'];
   const param = { applicationId: application.id };
   const invalidates = [queryKeys.discounts(), queryKeys.discount(application.id)];
@@ -215,11 +209,34 @@ function ApplicationReview({
     { invalidates, onSuccess: onDecided },
   );
 
+  return { runPreview, approve, requestInformation, reject };
+}
+
+/** One application under review, with its decision controls. */
+function ApplicationReview({
+  application,
+  canDecide,
+  onDecided,
+}: {
+  readonly application: Application;
+  readonly canDecide: boolean;
+  readonly onDecided: () => void;
+}): JSX.Element {
+  const [reason, setReason] = useState('');
+  const [preview, setPreview] = useState<ApprovalPreview | null>(null);
+  const detail = useApiQuery(detailDef(application.id));
+
+  const { runPreview, approve, requestInformation, reject } = useMutations(
+    application,
+    preview,
+    reason,
+    onDecided,
+    setPreview,
+  );
+
   const busy =
     runPreview.isPending || approve.isPending || requestInformation.isPending || reject.isPending;
 
-  // The one failure this panel is showing: whichever of the read or the four decisions failed most
-  // recently. Named here so the guard below reads as a question about the panel's state.
   const failure =
     detail.error ?? runPreview.error ?? approve.error ?? requestInformation.error ?? reject.error;
 

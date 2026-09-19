@@ -16,6 +16,16 @@ import {
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { NotFoundError } from '../error';
 import type { TaskViewFilter } from './resource-work-hydrators';
+
+async function fetchActor(actorId: string | null, orgId: string) {
+  if (!actorId) return null;
+  const rows = await db
+    .select({ id: actor.id, displayName: actor.displayName })
+    .from(actor)
+    .where(and(eq(actor.id, actorId), eq(actor.organizationId, orgId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
 /** Org summary + entity counts. */
 export async function hydrateOrg(orgId: string, id: string): Promise<unknown> {
   const rows = await db.select().from(organization).where(eq(organization.id, orgId)).limit(1);
@@ -69,14 +79,9 @@ export async function hydrateUpdate(orgId: string, id: string): Promise<unknown>
     .limit(1);
   const u = rows[0];
   if (!u) throw new NotFoundError();
-  const authorRows = u.authorId
-    ? await db
-        .select({ id: actor.id, displayName: actor.displayName })
-        .from(actor)
-        .where(and(eq(actor.id, u.authorId), eq(actor.organizationId, orgId)))
-        .limit(1)
-    : [];
-  const author = authorRows[0] ?? null;
+
+  const author = await fetchActor(u.authorId, orgId);
+
   return {
     id: u.id,
     authorId: u.authorId,
@@ -87,6 +92,22 @@ export async function hydrateUpdate(orgId: string, id: string): Promise<unknown>
     body: u.body,
     createdAt: u.createdAt.toISOString(),
   };
+}
+
+async function validateTaskAccess(taskId: string, orgId: string, canViewTask: TaskViewFilter) {
+  const rows = await db
+    .select({
+      id: task.id,
+      teamId: task.teamId,
+      projectId: task.projectId,
+      programId: task.programId,
+      visibility: task.visibility,
+    })
+    .from(task)
+    .where(and(eq(task.id, taskId), eq(task.organizationId, orgId), isNull(task.archivedAt)))
+    .limit(1);
+  const subject = rows[0];
+  if (!subject || !canViewTask(subject)) throw new NotFoundError();
 }
 
 /** Comment: author, subject ref, body, thread parent. */
@@ -102,30 +123,15 @@ export async function hydrateComment(
     .limit(1);
   const c = rows[0];
   if (!c) throw new NotFoundError();
+
   if (c.subjectType === 'task') {
     // Keep the hydrator self-defending: callers can never accidentally serialize a task comment
     // merely because they remembered the generic comment gate but skipped the owning task gate.
-    const [subject] = await db
-      .select({
-        id: task.id,
-        teamId: task.teamId,
-        projectId: task.projectId,
-        programId: task.programId,
-        visibility: task.visibility,
-      })
-      .from(task)
-      .where(and(eq(task.id, c.subjectId), eq(task.organizationId, orgId), isNull(task.archivedAt)))
-      .limit(1);
-    if (!subject || !canViewTask(subject)) throw new NotFoundError();
+    await validateTaskAccess(c.subjectId, orgId, canViewTask);
   }
-  const authorRows = c.authorId
-    ? await db
-        .select({ id: actor.id, displayName: actor.displayName })
-        .from(actor)
-        .where(and(eq(actor.id, c.authorId), eq(actor.organizationId, orgId)))
-        .limit(1)
-    : [];
-  const author = authorRows[0] ?? null;
+
+  const author = await fetchActor(c.authorId, orgId);
+
   return {
     id: c.id,
     authorId: c.authorId,
@@ -137,6 +143,36 @@ export async function hydrateComment(
     editedAt: c.editedAt?.toISOString() ?? null,
     createdAt: c.createdAt.toISOString(),
   };
+}
+
+async function fetchSessionAgent(agentId: string | null, orgId: string) {
+  if (!agentId) return null;
+  const rows = await db
+    .select({ id: agent.id, displayName: actor.displayName })
+    .from(agent)
+    .innerJoin(actor, eq(agent.actorId, actor.id))
+    .where(and(eq(agent.id, agentId), eq(agent.organizationId, orgId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+async function fetchSessionTask(taskId: string | null, orgId: string, canViewTask: TaskViewFilter) {
+  if (!taskId) return null;
+  const rows = await db
+    .select({
+      id: task.id,
+      title: task.title,
+      state: task.state,
+      teamId: task.teamId,
+      projectId: task.projectId,
+      programId: task.programId,
+      visibility: task.visibility,
+    })
+    .from(task)
+    .where(and(eq(task.id, taskId), eq(task.organizationId, orgId), isNull(task.archivedAt)))
+    .limit(1);
+  const subject = rows[0];
+  return subject && canViewTask(subject) ? subject : null;
 }
 
 /** Agent Session: status, agent, task ref, trigger, accountability, activity stream. */
@@ -153,39 +189,16 @@ export async function hydrateSession(
   const s = rows[0];
   if (!s) throw new NotFoundError();
 
-  const [activities, agentRows, taskRows] = await Promise.all([
+  const [activities, sessionAgent, visibleTask] = await Promise.all([
     db
       .select()
       .from(sessionActivity)
       .where(eq(sessionActivity.sessionId, id))
       .orderBy(asc(sessionActivity.createdAt)),
-    s.agentId
-      ? db
-          .select({ id: agent.id, displayName: actor.displayName })
-          .from(agent)
-          .innerJoin(actor, eq(agent.actorId, actor.id))
-          .where(and(eq(agent.id, s.agentId), eq(agent.organizationId, orgId)))
-          .limit(1)
-      : Promise.resolve([]),
-    s.taskId
-      ? db
-          .select({
-            id: task.id,
-            title: task.title,
-            state: task.state,
-            teamId: task.teamId,
-            projectId: task.projectId,
-            programId: task.programId,
-            visibility: task.visibility,
-          })
-          .from(task)
-          .where(
-            and(eq(task.id, s.taskId), eq(task.organizationId, orgId), isNull(task.archivedAt)),
-          )
-          .limit(1)
-      : Promise.resolve([]),
+    fetchSessionAgent(s.agentId, orgId),
+    fetchSessionTask(s.taskId, orgId, canViewTask),
   ]);
-  const visibleTask = taskRows[0] && canViewTask(taskRows[0]) ? taskRows[0] : null;
+
   // Session activities often quote the task title or a tool summary. Once the task reference is
   // hidden, retaining its transcript would recreate the same disclosure through a side channel.
   const visibleActivities = s.taskId && !visibleTask ? [] : activities;
@@ -194,7 +207,7 @@ export async function hydrateSession(
     id: s.id,
     agentId: s.agentId,
     taskId: visibleTask?.id ?? null,
-    agent: agentRows[0] ?? null,
+    agent: sessionAgent,
     task: visibleTask
       ? { id: visibleTask.id, title: visibleTask.title, state: visibleTask.state }
       : null,
@@ -223,20 +236,19 @@ export async function hydrateAgent(orgId: string, id: string): Promise<unknown> 
     .limit(1);
   const a = rows[0];
   if (!a) throw new NotFoundError();
-  const actorRows = await db
-    .select({ displayName: actor.displayName })
-    .from(actor)
-    .where(and(eq(actor.id, a.actorId), eq(actor.organizationId, orgId)))
-    .limit(1);
+
+  const actorData = await fetchActor(a.actorId, orgId);
+
   // The connection carries endpoint/protocol only -- credentials live in the boundary
   // layer and are never surfaced over MCP (no token passthrough; mcp-surface.md 4.3).
   const connection = a.connection
     ? { protocol: a.connection.protocol, endpoint: a.connection.endpoint }
     : null;
+
   return {
     id: a.id,
     actorId: a.actorId,
-    displayName: actorRows[0]?.displayName ?? null,
+    displayName: actorData?.displayName ?? null,
     connection,
     approvalPolicy: a.approvalPolicy,
     accountableOwnerId: a.accountableOwnerId,

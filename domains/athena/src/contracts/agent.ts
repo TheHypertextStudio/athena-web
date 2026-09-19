@@ -697,10 +697,9 @@ export const ProposalItemOut = z
     sessionId: AgentSessionId.describe('The owning session.'),
     proposalGroupId: z.string().describe('The batch this proposal belongs to (one per turn).'),
     tool: z.string().describe('The raw tool the proposal would execute (e.g. `create_task`).'),
+    connection: z.string().nullable().describe("The connector; null for Docket's own tools."),
     summary: z.string().describe('The human-readable one-line headline.'),
-    input: z
-      .record(z.string(), z.unknown())
-      .describe('The proposed tool input — editable until approved (the ghost-edit target).'),
+    input: z.record(z.string(), z.unknown()).describe('The tool input (the ghost-edit target).'),
     mode: z
       .enum(['proposal', 'suggestion'])
       .describe(

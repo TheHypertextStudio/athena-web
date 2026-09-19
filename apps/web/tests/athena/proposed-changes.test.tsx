@@ -86,6 +86,7 @@ function proposalItem(overrides: Partial<ProposalItemOut> = {}): ProposalItemOut
     sessionId: 'session_1' as AgentSessionId,
     proposalGroupId: 'group_1',
     tool: 'update_task',
+    connection: null,
     summary: 'move to in progress',
     input: { taskId: 'task_1', state: 'in_progress' },
     mode: 'proposal',

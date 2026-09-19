@@ -27,7 +27,7 @@ import { JobSteps, newestChangeSetId, StepUndo } from '@/components/athena/job-c
 import { ProposalInputRows } from '@/components/athena/proposal-input-rows';
 import { taskIdsFromInput, useHighlightHandlers } from '@/components/athena/proposal-highlight';
 import MentionTextarea from '@/components/mentions/mention-textarea';
-import { isOutwardTool } from '@/lib/athena/describe-proposal';
+import { isOutwardProposal } from '@/lib/athena/describe-proposal';
 import {
   presentAthenaActivity,
   type AthenaActivityPresentation,
@@ -145,7 +145,7 @@ export function outwardDecisionInput(
   activities: readonly AthenaActivityPresentation[],
 ): Record<string, unknown> | null {
   const toolName = newestToolStep(activities)?.technical?.toolName;
-  if (!toolName || !isOutwardTool(toolName)) return null;
+  if (!toolName || !isOutwardProposal({ tool: toolName })) return null;
   return newestToolInput(activities);
 }
 

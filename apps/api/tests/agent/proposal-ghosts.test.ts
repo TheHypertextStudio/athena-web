@@ -192,10 +192,11 @@ describe('proposal ghosts', () => {
     expect(ghostOf(group)).toBeNull();
   });
 
-  it('keeps the raw tool name on the item, whatever the ghost does', async () => {
+  it('keeps the raw tool name on the item, and projects the docket sentinel connection as null', async () => {
     const seed = await seedSession();
     const group = await propose(seed, 'capture', { orgId: seed.orgId, text: 'Trace me' });
     expect(group.items[0]?.tool).toBe('capture');
+    expect(group.items[0]?.connection).toBeNull();
 
     const rows = await db
       .select({ type: schema.sessionActivity.type })

@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { type JSX, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { okResponse } from '../support/query';
@@ -286,6 +287,54 @@ describe('AthenaConversation page context', () => {
           context: { workspaceId: ORG_ID, source: { type: 'project', id: 'project_1' } },
         },
       });
+    });
+  });
+
+  it('omits context on a detached send, then shows the chip attached again for the next message', async () => {
+    chatGet.mockResolvedValue(okResponse(thread([])));
+    personalPost.mockResolvedValue(okResponse(thread([])));
+
+    function Harness(): JSX.Element {
+      const [attached, setAttached] = useState(false);
+      return (
+        <AthenaConversation
+          orgId={ORG_ID}
+          context={{
+            workspaceId: ORG_ID,
+            source: { type: 'project', id: 'project_1', label: 'Fall fundraiser launch' },
+          }}
+          contextAttached={attached}
+          onDetachContext={() => {
+            setAttached(false);
+          }}
+          onAttachContext={() => {
+            setAttached(true);
+          }}
+        />
+      );
+    }
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <Harness />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByRole('button', { name: /Include Fall fundraiser launch/ }),
+    ).toBeVisible();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Message Athena' }), {
+      target: { value: 'What is at risk?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => {
+      expect(personalPost).toHaveBeenCalledWith({ json: { body: 'What is at risk?' } });
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('group', { name: /Fall fundraiser launch/ })).toBeVisible();
     });
   });
 

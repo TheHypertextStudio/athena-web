@@ -128,10 +128,9 @@ function useRailContent(): RailContent {
 /**
  * Keep Athena's personal session state available to contextual entry points.
  *
- * The provider owns no viewport-level chrome. The shared shell owns where the compact panel opens,
- * and the full `/athena` route remains the place for broad operations work. The rail shows the
- * person's one conversation by default; `/athena` keeps the job queue until Phase 2 brings
- * delegated work into the thread itself.
+ * The provider owns no viewport-level chrome. The shared shell owns where the compact panel opens.
+ * The rail shows the person's one conversation; the wide `/athena` view is that same thread beside
+ * the work ledger, not a second surface with its own queue.
  */
 export function AthenaPanelProvider({
   children,
@@ -148,9 +147,12 @@ export function AthenaPanelProvider({
 
   // The page moves under the panel; the panel's context always follows it. An explicit context
   // passed to `openAthena` applies immediately (the `setContext` call below) and lasts only until
-  // the page context next changes, at which point this effect takes back over.
+  // the page context next changes, at which point this effect takes back over. Reattaching here
+  // too means a detach ("send without this page") applies only to the next message on the SAME
+  // page — moving to a new one always starts carrying it again.
   useEffect(() => {
     setContext(pageContext);
+    setContextAttached(true);
   }, [pageContext]);
 
   const reveal = useAthenaReveal(onRevealRail, onOpenFullAthena);

@@ -6,6 +6,8 @@ import {
   capitalizeFirst,
   describeProposal,
   describeToolActivity,
+  isOutwardProposal,
+  isOutwardTool,
 } from '../../src/lib/athena/describe-proposal';
 
 function proposal(overrides: Partial<ProposalItemOut> = {}): ProposalItemOut {
@@ -14,6 +16,7 @@ function proposal(overrides: Partial<ProposalItemOut> = {}): ProposalItemOut {
     sessionId: 'session_1' as AgentSessionId,
     proposalGroupId: 'group_1',
     tool: 'update_task',
+    connection: null,
     summary: 'update the task',
     input: {},
     mode: 'proposal',
@@ -174,6 +177,29 @@ describe('describeToolActivity', () => {
 
   it('falls back to the capitalized action when there is no raw tool call at all', () => {
     expect(describeToolActivity({ action: 'protected focus time' })).toBe('Protected focus time');
+  });
+});
+
+describe('isOutwardProposal', () => {
+  it('is outward on a non-null connection alone, whatever the tool is named', () => {
+    expect(isOutwardProposal(proposal({ tool: 'update_task', connection: 'linear' }))).toBe(true);
+  });
+
+  it('falls back to the tool-name match when connection is null', () => {
+    expect(isOutwardProposal(proposal({ tool: 'send_email', connection: null }))).toBe(true);
+    expect(isOutwardProposal(proposal({ tool: 'update_task', connection: null }))).toBe(false);
+  });
+
+  it('still matches on the tool name alone for a caller with no connection to read', () => {
+    expect(isOutwardProposal({ tool: 'send_email' })).toBe(true);
+    expect(isOutwardProposal({ tool: 'update_task' })).toBe(false);
+  });
+});
+
+describe('isOutwardTool', () => {
+  it('matches only on the tool name, unaware of any connection', () => {
+    expect(isOutwardTool('send_email')).toBe(true);
+    expect(isOutwardTool('update_task')).toBe(false);
   });
 });
 

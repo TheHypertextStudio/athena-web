@@ -20,6 +20,7 @@ import type {
 import { and, asc, eq, isNotNull, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 
+import { DOCKET_CONNECTION } from './toolbox';
 import { ConflictError, NotFoundError } from '../error';
 import { deriveCaptureTitle } from '../lib/capture-title';
 import type { ActivityRow } from '../routes/agent-session-helpers';
@@ -152,6 +153,7 @@ function toProposalItem(row: ActivityRow): z.input<typeof ProposalItemOut> | nul
     sessionId: row.sessionId,
     proposalGroupId: row.proposalGroupId,
     tool: call.tool,
+    connection: call.connection === DOCKET_CONNECTION ? null : call.connection,
     summary: action.summary,
     input,
     mode: action.mode ?? 'proposal',

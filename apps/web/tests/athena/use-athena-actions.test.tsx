@@ -134,4 +134,44 @@ describe('useAthenaActions', () => {
     });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
+
+  it('names a gone change on a 404 undo, and a settled change on a 409 undo', async () => {
+    const api = transport();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <Harness api={api} />
+      </QueryClientProvider>,
+    );
+
+    vi.mocked(api.undoChange).mockResolvedValueOnce(problemResponse('not found', 404, 'not_found'));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This change is no longer here to undo.',
+    );
+
+    vi.mocked(api.undoChange).mockResolvedValueOnce(problemResponse('conflict', 409, 'conflict'));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Someone changed this since; undo left it as it is.',
+    );
+  });
+
+  it('names an already-made decision on a 409 decide', async () => {
+    const api = transport();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <Harness api={api} />
+      </QueryClientProvider>,
+    );
+
+    vi.mocked(api.decide).mockResolvedValueOnce(problemResponse('conflict', 409, 'conflict'));
+    fireEvent.click(screen.getByRole('button', { name: 'Decide' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('This decision was already made.');
+  });
 });

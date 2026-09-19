@@ -19,6 +19,7 @@ function item(overrides: Partial<ProposalItemOut> = {}): ProposalItemOut {
     sessionId: 'session_1' as AgentSessionId,
     proposalGroupId: 'group_1',
     tool: 'update_task',
+    connection: null,
     summary: 'update the task',
     input: { taskId: '01HZ0000000000000000LN0001', state: 'in_progress' },
     mode: 'proposal',
@@ -206,6 +207,57 @@ describe('ProposalGroupCard', () => {
     const approveButton = within(section).getByRole('button', { name: 'Approve' });
     fireEvent.click(approveButton);
     expect(onDecide).toHaveBeenCalledWith('group_1', 'approve');
+  });
+
+  it('treats a connector proposal as outward on connection alone, whatever the tool is named', () => {
+    render(
+      <ProposalGroupCard
+        group={group([
+          item({
+            tool: 'update_task',
+            connection: 'linear',
+            summary: 'update the linked issue',
+            input: { taskId: 'x', state: 'done' },
+          }),
+        ])}
+        canAct
+        pending={false}
+        onDecide={vi.fn()}
+        onEdit={vi.fn()}
+      />,
+    );
+
+    const section = screen.getByRole('region', { name: /Proposed changes/ });
+    expect(within(section).getByRole('button', { name: 'Review' })).toBeVisible();
+    expect(within(section).queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+  });
+
+  it('approves a mixed group’s checked in-Docket row in one click, with no Review step', () => {
+    const onDecide = vi.fn();
+    render(
+      <ProposalGroupCard
+        group={group([
+          item({ activityId: activityId('activity_1'), connection: null }),
+          item({
+            activityId: activityId('activity_2'),
+            tool: 'update_task',
+            connection: 'linear',
+            input: { taskId: 'x', state: 'done' },
+          }),
+        ])}
+        canAct
+        pending={false}
+        onDecide={onDecide}
+        onEdit={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(assertDefined(screen.getAllByRole('checkbox')[0]));
+
+    const approveButton = screen.getByRole('button', { name: 'Approve selected (1)' });
+    fireEvent.click(approveButton);
+
+    expect(onDecide).toHaveBeenCalledWith('group_1', 'approve', ['activity_1']);
   });
 
   it('renders no action row when the reviewer cannot act', () => {

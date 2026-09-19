@@ -89,7 +89,7 @@ function transport(): PersonalAthenaTransport {
 }
 
 function AthenaLaunchers(): ReactNode {
-  const { openAthena, railStatus, railVisible } = useAthenaPanel();
+  const { openAthena, railStatus, railVisible, detachContext } = useAthenaPanel();
   return (
     <>
       <span data-testid="athena-rail-status">{railStatus?.tone ?? 'none'}</span>
@@ -120,6 +120,14 @@ function AthenaLaunchers(): ReactNode {
         }}
       >
         Open with a line
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          detachContext();
+        }}
+      >
+        Detach
       </button>
     </>
   );
@@ -308,6 +316,27 @@ describe('AthenaPanelProvider', () => {
     fireEvent.click(screen.getByRole('button', { name: /Open contextual Athena/ }));
     await waitFor(() => {
       expect(screen.getByRole('group', { name: /Athena launch/ })).toBeVisible();
+    });
+
+    view.rerender(
+      pageTree(<PageSource type="project" id="project_2" label="Winter grant cycle" />),
+    );
+    await waitFor(() => {
+      expect(screen.getByRole('group', { name: /Winter grant cycle/ })).toBeVisible();
+    });
+  });
+
+  it('reattaches the page once the page underneath changes after a detach', async () => {
+    const view = renderPanelWithPage(
+      <PageSource type="task" id="task_1" label="Confirm venue contract" />,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole('group', { name: /Confirm venue contract/ })).toBeVisible();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Detach' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Include Confirm venue contract/ })).toBeVisible();
     });
 
     view.rerender(

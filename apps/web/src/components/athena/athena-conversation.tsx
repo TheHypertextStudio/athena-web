@@ -519,13 +519,16 @@ export default function AthenaConversation({
     setDraft('');
     try {
       commitThread(await sendOrgChatMessage(orgId, text, contextAttached ? context : null));
+      // A detach applies to exactly one message: once it has gone out (attached or not), the
+      // next one carries the page again unless the person detaches it again.
+      onAttachContext?.();
     } catch (caught) {
       setDraft(text);
       presentFailure(caught, 'Could not send your message.');
     } finally {
       setSending(false);
     }
-  }, [orgId, draft, sending, commitThread, context, contextAttached]);
+  }, [orgId, draft, sending, commitThread, context, contextAttached, onAttachContext]);
 
   // A widget speaking as the user posts into THIS thread, exactly as if typed into the composer.
   return (

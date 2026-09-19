@@ -22,7 +22,7 @@ import { type JSX, useMemo, useState } from 'react';
 
 import { ProposalInputRows } from '@/components/athena/proposal-input-rows';
 import { taskIdsFromInput, useHighlightHandlers } from '@/components/athena/proposal-highlight';
-import { describeProposal, isOutwardTool } from '@/lib/athena/describe-proposal';
+import { describeProposal, isOutwardProposal } from '@/lib/athena/describe-proposal';
 
 /** Props for {@link ProposalGroupCard}. */
 export interface ProposalGroupCardProps {
@@ -74,10 +74,12 @@ export function ProposalGroupCard({
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const [reviewed, setReviewed] = useState(false);
   const count = group.items.length;
-  const hasOutward = group.items.some((item) => isOutwardTool(item.tool));
-  const needsReview = hasOutward && !reviewed;
   const selection = group.items.filter((item) => checked.has(item.activityId));
   const partialSelection = selection.length > 0 && selection.length < count;
+  // A partial selection is reviewed on its own terms: approving only the in-Docket rows of a
+  // mixed group needs no Review click, because nothing selected reaches outside Docket.
+  const hasOutward = (partialSelection ? selection : group.items).some(isOutwardProposal);
+  const needsReview = hasOutward && !reviewed;
 
   const toggle = (activityId: string): void => {
     setChecked((current) => {
@@ -261,7 +263,7 @@ function ProposalRow({
   onEdit,
 }: ProposalRowProps): JSX.Element {
   const sentence = describeProposal(item);
-  const outward = isOutwardTool(item.tool);
+  const outward = isOutwardProposal(item);
   const targetIds = useMemo(() => taskIdsFromInput(item.input), [item.input]);
   const highlight = useHighlightHandlers(targetIds);
 

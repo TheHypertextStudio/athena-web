@@ -24,6 +24,31 @@ export function isOutwardTool(tool: string): boolean {
   return /send|post|publish|mail|email|invite|pay|charge/i.test(tool);
 }
 
+/** The pieces of a proposal {@link isOutwardProposal} needs to classify it. */
+export interface OutwardProposalLike {
+  readonly tool: string;
+  /** The connector the tool call runs on; null for one of Docket's own tools. */
+  readonly connection?: string | null | undefined;
+}
+
+/**
+ * Whether a proposal leaves Docket — the authoritative check, ahead of {@link isOutwardTool}'s
+ * name match.
+ *
+ * @remarks
+ * A stored tool call's `connection` says exactly where it runs: a remote integration alias for
+ * anything that leaves Docket, `null` for Docket's own toolbox. That is decisive whenever it is
+ * known, so a connector call is outward regardless of what its tool happens to be named. Only when
+ * a caller has no `connection` to read (e.g. a work-log step that keeps only the tool name) does
+ * this fall back to the name match.
+ *
+ * @param item - The proposal to classify.
+ * @returns whether the proposal reaches outside Docket.
+ */
+export function isOutwardProposal(item: OutwardProposalLike): boolean {
+  return (item.connection ?? null) !== null || isOutwardTool(item.tool);
+}
+
 /** One label/value row of an outward proposal's raw input, for the Review expansion. */
 export interface ProposalInputRow {
   readonly label: string;

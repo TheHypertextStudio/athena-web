@@ -184,19 +184,27 @@ const DEFAULT_DIALOG_PRESENTATION: DialogPresentation = {
   height: 'content',
 };
 
+type PresentationClassBuilder = (size: string, height: string, heightSm: string) => string;
+
+const PRESENTATION_CLASS_BUILDERS: Readonly<Record<string, PresentationClassBuilder>> = {
+  fullscreen: () => 'inset-0 h-[100dvh] w-[100vw] rounded-none border-0',
+  'bottom-sheet': (_, height) =>
+    `inset-x-0 bottom-0 ${height} w-full rounded-t-xl border-x-0 border-b-0`,
+  'responsive-fullscreen': (size, _, heightSm) =>
+    `inset-0 h-[100dvh] w-[100vw] rounded-none border-0 sm:top-1/2 sm:left-1/2 sm:w-[calc(100%-1.5rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl ${size} ${heightSm}`,
+  top: (size, height) => `top-3 left-1/2 w-[calc(100%-1.5rem)] -translate-x-1/2 ${size} ${height}`,
+  hosted: (size, height) => `${size} ${height}`,
+  centered: (size, height) =>
+    `top-1/2 left-1/2 w-[calc(100%-1.5rem)] -translate-x-1/2 -translate-y-1/2 ${size} ${height}`,
+};
+
 function dialogPresentationClass(presentation: DialogPresentation): string {
   const size = DIALOG_SIZE[presentation.size ?? 'standard'];
   const height = DIALOG_HEIGHT[presentation.height ?? 'content'];
-  if (presentation.kind === 'fullscreen')
-    return 'inset-0 h-[100dvh] w-[100vw] rounded-none border-0';
-  if (presentation.kind === 'bottom-sheet')
-    return `inset-x-0 bottom-0 ${height} w-full rounded-t-xl border-x-0 border-b-0`;
-  if (presentation.kind === 'responsive-fullscreen')
-    return `inset-0 h-[100dvh] w-[100vw] rounded-none border-0 sm:top-1/2 sm:left-1/2 sm:w-[calc(100%-1.5rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl ${size} ${DIALOG_HEIGHT_SM[presentation.height ?? 'content']}`;
-  if (presentation.kind === 'top')
-    return `top-3 left-1/2 w-[calc(100%-1.5rem)] -translate-x-1/2 ${size} ${height}`;
-  if (presentation.kind === 'hosted') return `${size} ${height}`;
-  return `top-1/2 left-1/2 w-[calc(100%-1.5rem)] -translate-x-1/2 -translate-y-1/2 ${size} ${height}`;
+  const heightSm = DIALOG_HEIGHT_SM[presentation.height ?? 'content'];
+  const builder =
+    PRESENTATION_CLASS_BUILDERS[presentation.kind] ?? PRESENTATION_CLASS_BUILDERS.centered;
+  return builder(size, height, heightSm);
 }
 
 /** Props for {@link DialogContent}. */

@@ -323,6 +323,16 @@ function cell(value: string): string {
  * @param sites - Every placeholder found.
  * @returns The complete Markdown document.
  */
+function buildUnannotatedTail(unannotated: readonly PlaceholderSite[]): string[] {
+  const unannotatedByFile = new Map<string, number>();
+  for (const site of unannotated) {
+    unannotatedByFile.set(site.file, (unannotatedByFile.get(site.file) ?? 0) + 1);
+  }
+  return [...unannotatedByFile.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([file, count]) => `| \`${file}\` | ${String(count)} |`);
+}
+
 function renderDocument(sites: readonly PlaceholderSite[]): string {
   const annotated = sites.filter((site) => site.annotation !== null);
   const unannotated = sites.filter((site) => site.annotation === null);
@@ -336,13 +346,7 @@ function renderDocument(sites: readonly PlaceholderSite[]): string {
       } |`,
   );
 
-  const unannotatedByFile = new Map<string, number>();
-  for (const site of unannotated) {
-    unannotatedByFile.set(site.file, (unannotatedByFile.get(site.file) ?? 0) + 1);
-  }
-  const tail = [...unannotatedByFile.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([file, count]) => `| \`${file}\` | ${String(count)} |`);
+  const tail = buildUnannotatedTail(unannotated);
 
   return `# Placeholder inventory
 

@@ -312,7 +312,7 @@ chunk, and back or forward all swap instantly.
   schedules that create templated work. Statuses, rules, and properties per template are designed
   for and built later.
 - **Plan**: `docs/superpowers/specs/2026-09-14-work-templates-overview-design.md` — purpose,
-  vocabulary, 39 numbered decisions from the brainstorm, the model, blueprint behavior, what
+  vocabulary, 50 numbered decisions from the brainstorm, the resolved limitations, the model, blueprint behavior, what
   happens to the repeating-work engine, the experience, agents, errors, testing, four delivery
   layers, risks, and three decisions to confirm.
 - **Subtasks**:

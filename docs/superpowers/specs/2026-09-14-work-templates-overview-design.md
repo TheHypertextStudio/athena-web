@@ -149,6 +149,45 @@ Numbered so layer specs can cite them.
 - **D39** This overview records the model and decisions. Each layer gets its own detailed spec and
   implementation plan.
 
+### Agents
+
+- **D40** An assignee rule may name the workspace's Athena actor. No other specific actor appears in
+  a template.
+- **D41** Templates and blueprints never distinguish agent from human work. A step assigned to
+  Athena is created, dated, and started like any other assignment, and the assignment trigger is
+  how Athena picks it up. A blueprint creates tasks, never sessions: a task is the work, a session
+  is one actor's attempt at it, and a session owns no state the task already has.
+
+### Resolved limitations (§16)
+
+- **D42** Step timing counts in calendar days or working days. Working days follow the workspace's
+  working weekdays, set in Settings → General with Monday to Friday as the default. A timing may
+  also snap to the next or previous occurrence of a weekday ("then the following Monday").
+- **D43** Timing is date-only. Placing work at a time of day belongs to auto-scheduling and the
+  calendar.
+- **D44** A Program template may carry default schedules. Creating a Program from it creates those
+  schedules on the new Program, prefilled and editable, and each Program owns its own copies.
+- **D45** A step expands its child template at the latest published version by default. A step may
+  pin a version. A template with pinned children shows "update available" in Settings when any
+  pinned child has a newer version, and republishing takes it. Refines D13.
+- **D46** A step may be marked optional. Optional steps appear in the composer's children summary
+  with a checkbox, ticked or unticked as the author chose, and the person decides at creation.
+  Conditions on facts ("if headcount is over 50") arrive with properties (§8) and reuse the
+  automation predicate grammar in `@docket/automation/evaluation`. Refines D12.
+- **D47** A starting draft may carry a default status key. When the destination team's set has no
+  such key, that set's default applies. Flows such as Drafting → Submitted → Awarded run on the
+  kind's workspace status set until per-template sets ship (§8).
+- **D48** Outline headings are a contract. An agent fills a ticket-shaped template by heading name,
+  and when properties ship, a heading can be promoted to a property without changing existing
+  items.
+- **D49** A copied or gallery-installed template records its origin: the source template and
+  version. When the origin publishes a new version, the copy's workspace sees "update available"
+  in Settings → Work templates and takes it through the D17 preview. Nothing propagates on its
+  own, and the origin never learns of the copy.
+- **D50** Templates still hold no row references. Placement comes from where the person creates the
+  item (D28) and from a Program's schedules (D44). A step's cycle comes from a rule, "parent's
+  cycle" or "the current cycle at creation", alongside D14's assignee rules.
+
 ## 4. The model
 
 ```
@@ -180,13 +219,13 @@ Schedule (kept engine)
 
 ### 4.2 Anchor dates
 
-| Kind       | Anchor date                                                                                                                            |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Initiative | Target date                                                                                                                            |
-| Program    | Programs have no date field. Blueprint children count from the day the Program is created.                                             |
-| Project    | Target date                                                                                                                            |
-| Task       | Due date                                                                                                                               |
-| Scheduled  | Schedules create Projects and Tasks. The run date becomes the created item's anchor date (a Project's target date, a Task's due date). |
+| Kind       | Anchor date                                                                                                                                                       |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Initiative | Target date                                                                                                                                                       |
+| Program    | Programs have no date field. Blueprint children count from the day the Program is created; recurring children take the run date of the Program's schedules (D44). |
+| Project    | Target date                                                                                                                                                       |
+| Task       | Due date                                                                                                                                                          |
+| Scheduled  | Schedules create Projects and Tasks. The run date becomes the created item's anchor date (a Project's target date, a Task's due date).                            |
 
 A step's timing is one of: no date; a number of days before or after the parent's anchor date; or a
 number of days after a sibling step's child is completed. These are the engine's existing timing
@@ -341,7 +380,7 @@ their steps move into the schedule's draft and step assignments, so existing ass
 
 - The composer's template control replaces the Template menu (D27). Choosing a template applies its
   starting draft by the merge policy in §5.1, and a summary line such as "Creates 6 tasks and 2
-  milestones" expands into the children with their dates.
+  milestones" expands into the children with their dates. Optional steps carry a checkbox (D46).
 - "New Event" appears in the command palette and a Program's add menu lists the templates that fit
   inside it (D28).
 - The empty-description "Start from template" action stays.
@@ -361,7 +400,8 @@ their steps move into the schedule's draft and step assignments, so existing ass
   listed with dates such as "event day − 21", child templates shown as chips, and team and assignee
   chosen from parent-based rules. Closing returns to Settings. Edits collect in a draft; **Publish**
   creates the version (D32).
-- The authoring setting (D7) and team narrowing (D6) live here.
+- The authoring setting (D7) and team narrowing (D6) live here. A template with a newer origin
+  version (D49) or a newer pinned child (D45) shows **Update available** on its row.
 
 ### 7.4 Save as template
 
@@ -667,3 +707,44 @@ Each layer ships something usable and gets its own spec and plan.
    concept say "Work templates" (§2).
 3. **Size limit**: one creation produces at most 500 items (§5.7). The number is a starting guard
    and the Layer 2 spec may change it after measuring §14's date-recalculation cost.
+
+## 16. Resolved limitations
+
+Each limitation the chosen design carried, and the decision that removes or bounds it.
+
+| Limitation                                                                          | Resolution                                                                                                                    | Decision |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------- |
+| Offsets were whole calendar days; no working days or "the following Monday"         | Calendar or working days per the workspace's working weekdays, plus a weekday snap                                            | D42      |
+| No time of day                                                                      | Stays date-only; auto-scheduling and the calendar place work within a day                                                     | D43      |
+| Programs have no anchor date, so their children counted from creation               | Program templates carry default schedules; recurring children anchor to run dates                                             | D44      |
+| A child template always expanded at its latest version                              | Latest by default, pinnable per step, with an update nudge on the parent                                                      | D45      |
+| Children were unconditional                                                         | Optional steps chosen at creation now; fact-based conditions arrive with properties using the automation predicate grammar    | D46      |
+| Grant-style flows had no statuses until per-template sets ship                      | Workspace status sets already allow several statuses per category; a draft may carry a default status with a stated miss rule | D47      |
+| Ticket-shaped templates were prose until properties ship                            | Headings are the contract agents fill; a heading later promotes to a property                                                 | D48      |
+| Workspace copies drift apart                                                        | Copies record their origin and take new versions by opt-in preview; organizations stay separate                               | D49      |
+| No row references, so "always inside this Program" or "in this cycle" was unsayable | Placement from creation context and Program schedules; cycle from a rule                                                      | D50      |
+| Athena's involvement was undefined                                                  | Athena is an assignee rule value and otherwise indistinguishable from a person; blueprints create tasks, never sessions       | D40, D41 |
+
+The 500-item cap (§5.7) and the rule that a template holds no reference to a specific person,
+project, or date remain in place on purpose.
+
+## 17. Open questions by layer
+
+Each layer spec answers its rows before its plan is written.
+
+| Layer | Question                                                                                                               |
+| ----- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1     | Base template names under vocabulary skins: "Blank project" must read "Blank campaign" where the skin says so          |
+| 1     | Which existing writers assign the base template silently: the Linear reconciler, email-to-task, imports, MCP `capture` |
+| 1     | Estimate defaults, given the composer has no estimate control today                                                    |
+| 1     | The work-view field, the search facet, and the index behind filter and group by template                               |
+| 1     | Creating from a template is one undoable action and one notification per assignee, however many children it makes      |
+| 2     | Milestones as intermediate anchors, so a task can count from a milestone rather than the project date                  |
+| 2     | Saving an item that itself came from a template: does the new template reference the original or copy it?              |
+| 2     | Archiving a child template that parents still reference                                                                |
+| 2     | Anchor moves rewriting up to 500 dates against the replay-safe, local-first write path                                 |
+| 3     | Scheduler time travel so E2E can prove a monthly run without waiting a month                                           |
+| 4     | Copying across workspaces is transitive: child templates and referenced labels are copied or mapped                    |
+| 4     | Where the gallery lives (repo data or hosted) and how Hypertext Studio publishes updates to it                         |
+| 4     | What "repeated work" means for Athena's suggestions, and which connected-tool signals are fair to read                 |
+| 4     | Personal workspaces: team narrowing has no meaning there, and the "just me" catalog rows need a home                   |

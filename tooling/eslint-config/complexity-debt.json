@@ -5855,12 +5855,6 @@
       "excess": 6
     }
   },
-  "apps/web/src/components/views/entity-detail-layout.tsx": {
-    "max-lines-per-function": {
-      "max": 136,
-      "excess": 77
-    }
-  },
   "apps/web/src/components/views/filter-toolbar.tsx": {
     "complexity": {
       "max": 26,

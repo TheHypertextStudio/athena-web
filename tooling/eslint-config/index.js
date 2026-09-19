@@ -238,7 +238,7 @@ export const rosterOwnershipConfig = [
           // rule still rejects explicit and statically resolved columnheader roles inside them.
           allowPassthroughIn: [
             'CanvasSelectionFrame',
-            'EntityDetailLayout',
+            'DetailHeader',
             'MentionTextarea',
             'PasskeyMark',
             'ProjectNodeComponent',

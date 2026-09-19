@@ -30,7 +30,9 @@ import {
 import { EntityMetadataRow } from '../../src/components/views/entity-detail-layout';
 import { mockWideMetadataRow } from '../support/metadata-row-layout';
 
-beforeEach(mockWideMetadataRow);
+beforeEach(() => {
+  mockWideMetadataRow();
+});
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();

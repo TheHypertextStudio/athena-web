@@ -21,6 +21,7 @@ import {
   type TaskTab,
 } from '@/components/task-detail/task-masthead-slots';
 import { TaskMetadataRow } from '@/components/task-detail/task-masthead-properties';
+import { TaskSecondaryProperties } from '@/components/task-detail/task-secondary-properties';
 import { TaskSections } from '@/components/task-detail/task-sections';
 import { useDescriptionExpansion } from '@/components/task-detail/use-description-expansion';
 import { useTaskPropertyModel } from '@/components/task-detail/use-task-property-model';
@@ -88,6 +89,7 @@ function TaskDetailReady({
       icon={<TaskIcon orgId={orgId} taskId={task.id} title={task.title} canEdit={canEdit} />}
       title={<TaskTitle title={task.title} canEdit={canEdit} onPatch={mutations.patchTask} />}
       metadata={<TaskMetadataRow model={model} />}
+      aside={<TaskSecondaryProperties presentation="rows" {...model.secondary} />}
       actions={
         <TaskActions
           orgId={orgId}

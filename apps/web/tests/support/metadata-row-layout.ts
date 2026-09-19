@@ -8,13 +8,18 @@
  */
 import { vi } from 'vitest';
 
-/** Mock the box measurements the metadata row reads. Restore with `vi.restoreAllMocks()`. */
-export function mockWideMetadataRow(): void {
+/**
+ * Mock the box measurements the metadata row and the layout's aside read.
+ *
+ * @param paneWidth - The width every container reports; the default is wide enough to dock an aside.
+ *   Restore with `vi.restoreAllMocks()`.
+ */
+export function mockWideMetadataRow(paneWidth = 4000): void {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement,
   ) {
     const isItem = this.hasAttribute('data-entity-metadata-priority');
-    const width = isItem ? 80 : 4000;
+    const width = isItem ? 80 : paneWidth;
     return {
       x: 0,
       y: 0,

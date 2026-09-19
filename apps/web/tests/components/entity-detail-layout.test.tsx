@@ -2,13 +2,16 @@ import '@testing-library/jest-dom/vitest';
 
 import { assertDefined } from '@docket/test-utils';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import type { JSX } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  ENTITY_DETAIL_ASIDE_MIN_WIDTH,
   EntityDetailLayout,
   EntityMetadataItem,
   EntityMetadataRow,
   fitEntityMetadataPriority,
+  useEntityDetailAside,
 } from '../../src/components/views/entity-detail-layout';
 
 describe('EntityDetailLayout', () => {
@@ -131,6 +134,132 @@ describe('EntityDetailLayout', () => {
     expect(printBrief.closest('.detail-body')).not.toBeNull();
     expect(printBrief.closest('header')).toBeNull();
     expect(container.querySelector('.detail-header')).toHaveClass('detail-print-hidden');
+  });
+});
+
+describe('EntityDetailLayout aside', () => {
+  let resize: ResizeObserverCallback | null = null;
+  let paneWidth = 1200;
+
+  beforeEach(() => {
+    paneWidth = 1200;
+    resize = null;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const width = this.hasAttribute('data-detail-panel-scroll') ? paneWidth : 0;
+      return {
+        x: 0,
+        y: 0,
+        top: 0,
+        right: width,
+        bottom: 0,
+        left: 0,
+        width,
+        height: 0,
+        toJSON: () => ({}),
+      };
+    });
+    vi.stubGlobal(
+      'ResizeObserver',
+      class ResizeObserverMock {
+        readonly callback: ResizeObserverCallback;
+
+        constructor(callback: ResizeObserverCallback) {
+          this.callback = callback;
+        }
+
+        // Only the observer on the scroll container is the aside's; the header has its own.
+        observe(target: Element): void {
+          if (target.hasAttribute('data-detail-panel-scroll')) resize = this.callback;
+        }
+        unobserve(): void {
+          return undefined;
+        }
+        disconnect(): void {
+          return undefined;
+        }
+      },
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  /** A slot that reports what the layout says about its aside. */
+  function DockedProbe(): JSX.Element {
+    const { docked } = useEntityDetailAside();
+    return <output data-testid="docked">{String(docked)}</output>;
+  }
+
+  function renderLayout(withAside = true): void {
+    render(
+      <EntityDetailLayout
+        icon={<span>icon</span>}
+        title="Launch"
+        tabs={<div>tabs</div>}
+        metadata={<DockedProbe />}
+        {...(withAside ? { aside: <div>secondary properties</div> } : {})}
+      >
+        <div data-testid="panel">body</div>
+      </EntityDetailLayout>,
+    );
+  }
+
+  it('docks the aside beside the body on a wide pane and tells its slots', () => {
+    renderLayout();
+
+    const aside = screen.getByRole('complementary', { name: 'Details' });
+    expect(aside).toHaveTextContent('secondary properties');
+    expect(aside).toHaveClass('sticky');
+    expect(aside.parentElement?.contains(screen.getByTestId('panel'))).toBe(true);
+    expect(screen.getByTestId('docked')).toHaveTextContent('true');
+  });
+
+  it('renders no aside below the threshold, and tells its slots so', () => {
+    paneWidth = 895;
+    renderLayout();
+
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    expect(screen.queryByText('secondary properties')).not.toBeInTheDocument();
+    expect(screen.getByTestId('docked')).toHaveTextContent('false');
+    // The body is a direct child of the body grid, exactly as before the slot existed.
+    expect(screen.getByTestId('panel').parentElement).toHaveClass('detail-body');
+  });
+
+  it('docks at exactly the threshold and undocks when the pane narrows', () => {
+    paneWidth = ENTITY_DETAIL_ASIDE_MIN_WIDTH;
+    renderLayout();
+    expect(screen.getByRole('complementary')).toBeInTheDocument();
+
+    act(() => {
+      resize?.([{ contentRect: { width: 700 } } as ResizeObserverEntry], {} as ResizeObserver);
+    });
+
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    expect(screen.getByTestId('docked')).toHaveTextContent('false');
+
+    act(() => {
+      resize?.([{ contentRect: { width: 1000 } } as ResizeObserverEntry], {} as ResizeObserver);
+    });
+
+    expect(screen.getByRole('complementary')).toBeInTheDocument();
+  });
+
+  it('lays out exactly as before for a page that passes no aside', () => {
+    renderLayout(false);
+
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    expect(screen.getByTestId('docked')).toHaveTextContent('false');
+    expect(screen.getByTestId('panel').parentElement).toHaveClass('detail-body');
+  });
+
+  it('keeps the aside out of print', () => {
+    renderLayout();
+
+    expect(screen.getByRole('complementary')).toHaveClass('no-print');
   });
 });
 

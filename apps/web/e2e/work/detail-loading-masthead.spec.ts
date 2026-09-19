@@ -89,6 +89,57 @@ test('an Initiative opened from its list states its properties while the rest lo
   expect(await mastheadGeometry(page)).toEqual(before);
 });
 
+test('a Task opened from its list states its status and priority while the rest loads', async ({
+  page,
+}) => {
+  await signUpAndOnboard(page, 'task-loading-masthead');
+  const fixture = await createMobileAuditFixture(page);
+  const taskPath = `/v1/orgs/${fixture.orgId}/tasks/${fixture.taskId}`;
+  await apiJson(page, taskPath, { method: 'PATCH', body: { priority: 'high' } });
+  const { title } = await apiJson<{ title: string }>(page, taskPath);
+
+  let releaseAggregate: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    releaseAggregate = resolve;
+  });
+  await page.route('**/tasks/*/aggregate-detail*', async (route) => {
+    await held;
+    await route.continue();
+  });
+
+  await page.goto(orgHref(fixture.orgId, 'tasks'));
+  await page.getByText(title, { exact: true }).first().click();
+
+  const busy = page.getByRole('status', { name: /detail$/ });
+  await expect(busy).toBeVisible({ timeout: TIMEOUTS.ui });
+
+  // The title is known, so it is shown rather than placeheld, and each known property is its
+  // own resolved chip: a workspace's name for the status and the priority's word, never a key.
+  await expect(busy.getByRole('heading', { level: 1 })).toContainText(title);
+  await expect(busy.locator('[aria-label^="Status"]')).toBeVisible();
+  await expect(busy.locator('[aria-label^="Priority"]')).toContainText('High');
+
+  // Assignee, project, and due date wait on the detail read, each in its own slot.
+  const pending = busy.locator('[data-entity-metadata-item] [data-slot="skeleton"]');
+  expect(await pending.count()).toBeGreaterThan(0);
+
+  const before = await mastheadGeometry(page);
+
+  releaseAggregate();
+  await expect(page.getByRole('status', { name: /detail$/ })).toBeHidden({
+    timeout: TIMEOUTS.ui,
+  });
+
+  // The loaded page keeps the loading page's masthead: same title box, same property row height,
+  // same row position. (A task has no summary line, so that slot is not compared.)
+  const after = await mastheadGeometry(page);
+  expect({ title: after.title, row: after.row, rowY: after.rowY }).toEqual({
+    title: before.title,
+    row: before.row,
+    rowY: before.rowY,
+  });
+});
+
 /** The masthead measurements that must survive the aggregate landing. */
 interface MastheadGeometry {
   readonly title: number;
@@ -104,8 +155,13 @@ interface MastheadGeometry {
  * @returns The {@link MastheadGeometry}, rounded so sub-pixel text metrics do not make it flaky.
  */
 async function mastheadGeometry(page: Page): Promise<MastheadGeometry> {
-  const heightOf = async (selector: string): Promise<number> =>
-    Math.round((await page.locator(selector).first().boundingBox())?.height ?? -1);
+  // A page with no summary line (a Task) has no such slot, which measures as zero rather than
+  // waiting for an element that will never arrive.
+  const heightOf = async (selector: string): Promise<number> => {
+    const slot = page.locator(selector).first();
+    if ((await slot.count()) === 0) return 0;
+    return Math.round((await slot.boundingBox())?.height ?? -1);
+  };
   const row = page.locator('.entity-metadata-row').first();
   return {
     title: await heightOf('.detail-title'),

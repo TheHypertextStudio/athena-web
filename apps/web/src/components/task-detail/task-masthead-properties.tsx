@@ -22,6 +22,7 @@ import {
   ENTITY_METADATA_CHIP_CLASS,
   EntityMetadataItem,
   EntityMetadataRow,
+  useEntityDetailAside,
 } from '@/components/views/entity-detail-layout';
 import { formatCalendarDate } from '@/lib/format-date';
 import type { TaskPatch } from '@/lib/use-task-mutations';
@@ -73,8 +74,6 @@ export function TaskMetadataRow({ model }: { readonly model: TaskPropertyModel }
 /** Props for {@link TaskMastheadProperties}. */
 export interface TaskMastheadPropertiesProps {
   readonly model: TaskPropertyModel;
-  /** Leave the secondary set to the docked aside. */
-  readonly leadOnly?: boolean | undefined;
 }
 
 /** A calendar day from a stored date or timestamp, in the `YYYY-MM-DD` the date field exchanges. */
@@ -108,14 +107,16 @@ function ProjectPicker({ model }: { readonly model: TaskPropertyModel }): JSX.El
 /**
  * Render the task's properties as prioritized metadata chips.
  *
+ * @remarks
+ * While the layout has docked its aside, the secondary set lives there, so this row leads with the
+ * five lead properties alone and no property is mounted twice.
+ *
  * @param props - See {@link TaskMastheadPropertiesProps}.
  * @returns the chips, to be placed inside an `EntityMetadataRow`.
  */
-export function TaskMastheadProperties({
-  model,
-  leadOnly = false,
-}: TaskMastheadPropertiesProps): JSX.Element {
+export function TaskMastheadProperties({ model }: TaskMastheadPropertiesProps): JSX.Element {
   const { task, canEdit, onPatch } = model;
+  const { docked } = useEntityDetailAside();
   const categoryOf = useCategoryOf('task');
   return (
     <>
@@ -173,7 +174,7 @@ export function TaskMastheadProperties({
           triggerClassName={ENTITY_METADATA_CHIP_CLASS}
         />
       </EntityMetadataItem>
-      {leadOnly ? null : <TaskSecondaryProperties presentation="chips" {...model.secondary} />}
+      {docked ? null : <TaskSecondaryProperties presentation="chips" {...model.secondary} />}
     </>
   );
 }

@@ -93,6 +93,8 @@ export function TaskDetailLoading({ snapshot }: TaskDetailLoadingProps): JSX.Ele
       tabCount={3}
       chipCount={5}
       hasSubtitle={false}
+      // A task always names where it sits, project or none, so a trail is always coming.
+      hasEyebrow
       title={snapshot?.title}
       icon={
         snapshot ? (

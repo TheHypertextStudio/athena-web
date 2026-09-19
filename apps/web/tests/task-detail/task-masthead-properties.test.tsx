@@ -17,10 +17,15 @@ import {
   TaskMastheadProperties,
   type TaskPropertyModel,
 } from '../../src/components/task-detail/task-masthead-properties';
-import { EntityMetadataRow } from '../../src/components/views/entity-detail-layout';
+import {
+  EntityDetailLayout,
+  EntityMetadataRow,
+} from '../../src/components/views/entity-detail-layout';
 import { mockWideMetadataRow } from '../support/metadata-row-layout';
 
-beforeEach(mockWideMetadataRow);
+beforeEach(() => {
+  mockWideMetadataRow();
+});
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -85,12 +90,28 @@ function modelFor(overrides: Partial<TaskPropertyModel> = {}): TaskPropertyModel
 /** Render the chips inside the row they are built for; returns each item's declared priority. */
 function renderChips(
   model: TaskPropertyModel,
-  leadOnly = false,
+  withAside = false,
 ): { readonly priorities: readonly number[] } {
-  render(
+  const row = (
     <EntityMetadataRow ariaLabel="Task properties">
-      <TaskMastheadProperties model={model} leadOnly={leadOnly} />
-    </EntityMetadataRow>,
+      <TaskMastheadProperties model={model} />
+    </EntityMetadataRow>
+  );
+  render(
+    withAside ? (
+      // A layout that holds an aside docks it on a wide pane and tells its slots so.
+      <EntityDetailLayout
+        icon={<span>icon</span>}
+        title="Ship it"
+        tabs={<div>tabs</div>}
+        metadata={row}
+        aside={<div>aside</div>}
+      >
+        <div>body</div>
+      </EntityDetailLayout>
+    ) : (
+      row
+    ),
   );
   const items = [
     ...document.querySelectorAll('[data-entity-metadata-inline] [data-entity-metadata-item]'),
@@ -120,11 +141,21 @@ describe('TaskMastheadProperties', () => {
     expect(screen.getByRole('button', { name: 'Due — Oct 1, 2026' })).toBeVisible();
   });
 
-  it('leaves the secondary set out when the aside holds it', () => {
+  it('leaves the secondary set out when the layout has docked its aside', () => {
     const { priorities } = renderChips(modelFor(), true);
 
     expect(priorities).toEqual([0, 0, 1, 2, 3]);
     expect(screen.queryByRole('button', { name: /^Labels/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Details' })).toBeInTheDocument();
+  });
+
+  it('keeps the secondary set in the row when the pane is too narrow to dock the aside', () => {
+    vi.restoreAllMocks();
+    mockWideMetadataRow(800);
+    const { priorities } = renderChips(modelFor(), true);
+
+    expect(priorities).toEqual([0, 0, 1, 2, 3, 4, 5, 6, 7, 7, 7, 7]);
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
   });
 
   it('writes a status choice through the model', async () => {

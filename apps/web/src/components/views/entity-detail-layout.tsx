@@ -1,6 +1,6 @@
 /**
- * `views` — the one canonical entity-detail shell that project / initiative / program detail pages
- * compose.
+ * `views` — the one canonical entity-detail shell that task / project / initiative / program detail
+ * pages compose.
  *
  * @remarks
  * Every strategic-work detail page used to hand-roll its own masthead: some put the status chip
@@ -11,6 +11,10 @@
  * then the tab bar, and the active panel — so a page only supplies
  * content through slots. The canonical title token (`text-headline-medium font-medium`) is owned
  * here so no page can diverge from it.
+ *
+ * A page with properties too many for the metadata row can opt into an aside: a second column
+ * beside the body that appears only when the pane is wide enough to hold it, and that the page
+ * reads back through {@link useEntityDetailAside} to keep every property on screen exactly once.
  */
 import { useOwnPageScroll } from '@docket/ui/components';
 import { Ellipsis } from '@docket/ui/icons';
@@ -29,6 +33,7 @@ import {
   type CSSProperties,
   type JSX,
   type ReactNode,
+  type RefObject,
   useCallback,
   useContext,
   useLayoutEffect,
@@ -69,6 +74,17 @@ export interface EntityDetailLayoutProps {
   tabs: ReactNode;
   /** The active tab panel's content. */
   children: ReactNode;
+  /**
+   * A second column beside the body, docked only while the pane is at least
+   * {@link ENTITY_DETAIL_ASIDE_MIN_WIDTH} wide.
+   *
+   * @remarks
+   * Opt-in: a page that passes nothing lays out exactly as before. While docked the column stays in
+   * view under the header as the body scrolls; below the threshold it is not rendered at all, and
+   * {@link useEntityDetailAside} reports `docked: false` so the page can carry those properties
+   * somewhere else instead. A page must never mount the same control in both places.
+   */
+  aside?: ReactNode;
   /** Static, document-first content rendered only for print media. */
   printSummary?: ReactNode;
   /** Extra container classes (e.g. a page print scope). */
@@ -77,19 +93,79 @@ export interface EntityDetailLayoutProps {
   object?: ObjectRef;
 }
 
+/** The pane width, in px, at which an opted-in aside docks beside the body (Tailwind's `4xl`). */
+export const ENTITY_DETAIL_ASIDE_MIN_WIDTH = 896;
+
+/** What a page can read about the aside its layout is holding. */
+export interface EntityDetailAsideState {
+  /** Whether the aside is docked beside the body right now. */
+  readonly docked: boolean;
+}
+
+const EntityDetailAsideContext = createContext<EntityDetailAsideState>({ docked: false });
+
 /**
- * The standard entity-detail arrangement.
+ * Read whether the enclosing {@link EntityDetailLayout} has docked its aside.
  *
  * @remarks
- * Renders (top to bottom): an optional eyebrow, a masthead whose primary row holds the identity and
- * actions, the collapsible subtitle/metadata block, the tab bar, and the active panel. The identity
- * owns the remaining width and truncates only at the compact endpoint, so actions never create a
- * second header row. Status/health and every other property live in the metadata slot.
+ * Call it from inside a slot (the metadata row, a tab panel): the layout provides the state to
+ * everything it renders. Outside a layout, or in one that passed no `aside`, it reports `false`.
  *
- * @param props - The {@link EntityDetailLayoutProps}.
- * @returns the composed detail page.
+ * @returns the aside state.
  */
-export function EntityDetailLayout({
+export function useEntityDetailAside(): EntityDetailAsideState {
+  return useContext(EntityDetailAsideContext);
+}
+
+/**
+ * Track whether the scroll container is wide enough to dock the aside.
+ *
+ * @param scrollRef - The layout's scroll container.
+ * @param enabled - Whether the page opted into an aside at all.
+ * @returns `true` while the aside should be docked.
+ */
+function useAsideDocked(scrollRef: RefObject<HTMLDivElement | null>, enabled: boolean): boolean {
+  const [wide, setWide] = useState(false);
+
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current;
+    if (!enabled || !scroller) return;
+    // Read the width before paint so a wide pane never flashes the undocked arrangement; the
+    // observer's first report lands a frame later. A zero width means there is no layout to
+    // measure, which is not an answer.
+    const initial = scroller.getBoundingClientRect().width;
+    if (initial > 0) setWide(initial >= ENTITY_DETAIL_ASIDE_MIN_WIDTH);
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setWide(entry.contentRect.width >= ENTITY_DETAIL_ASIDE_MIN_WIDTH);
+    });
+    observer.observe(scroller);
+    return () => {
+      observer.disconnect();
+    };
+  }, [enabled, scrollRef]);
+
+  return enabled && wide;
+}
+
+/** Props for {@link DetailHeader}: the layout's masthead slots, plus the collapse hook's ref. */
+type DetailHeaderProps = Pick<
+  EntityDetailLayoutProps,
+  'cover' | 'eyebrow' | 'icon' | 'title' | 'subtitle' | 'metadata' | 'actions' | 'tabs'
+> & {
+  readonly headerRef: RefObject<HTMLElement | null>;
+  readonly object: ObjectRef | undefined;
+  readonly hasPrintSummary: boolean;
+};
+
+/**
+ * The sticky, collapsing header: the masthead band, then the tab bar.
+ *
+ * @param props - The {@link DetailHeaderProps}.
+ * @returns the header element.
+ */
+function DetailHeader({
+  headerRef,
   cover,
   eyebrow,
   icon,
@@ -98,21 +174,10 @@ export function EntityDetailLayout({
   metadata,
   actions,
   tabs,
-  children,
-  printSummary,
-  className,
   object,
-}: EntityDetailLayoutProps): JSX.Element {
-  // Every detail page owns its scrolling, backdrop or not. Making it conditional would mean two
-  // layouts again — one that scrolls itself and one the shell scrolls — which is the duplication
-  // this component exists to remove. It is also required for a backdrop: the shell's `<main>`
-  // reserves a permanent scrollbar gutter while it scrolls, and no child of a gutter-reserving box
-  // can reach the pane's edge. Owning the scroll additionally gives the header something to pin to
-  // and a timeline to collapse against, which every detail page benefits from equally.
-  useOwnPageScroll();
-  const { scrollRef, headerRef } = useDetailHeaderCollapse({ hasCover: Boolean(cover) });
-
-  const header = (
+  hasPrintSummary,
+}: DetailHeaderProps): JSX.Element {
+  return (
     <header
       ref={headerRef}
       {...(object ? objectTargetProps(object) : {})}
@@ -136,7 +201,7 @@ export function EntityDetailLayout({
       }
       className={cn(
         'detail-header page-bleed page-grid sticky top-0 isolate z-10 gap-y-0',
-        printSummary ? 'detail-print-hidden' : undefined,
+        hasPrintSummary ? 'detail-print-hidden' : undefined,
       )}
     >
       {/* The masthead band: the cover, eyebrow, and identity live inside this one wrapper, and
@@ -209,34 +274,119 @@ export function EntityDetailLayout({
       <div className="detail-tabs min-w-0">{tabs}</div>
     </header>
   );
+}
+
+/** Props for {@link DetailBody}: the layout's body slots, plus whether the aside is docked. */
+type DetailBodyProps = Pick<EntityDetailLayoutProps, 'printSummary' | 'aside' | 'children'> & {
+  readonly docked: boolean;
+};
+
+/**
+ * The scrolling body: the print brief, then the active panel, beside the aside when it is docked.
+ *
+ * @param props - The {@link DetailBodyProps}.
+ * @returns the body element.
+ */
+function DetailBody({ printSummary, aside, docked, children }: DetailBodyProps): JSX.Element {
+  return (
+    // This nested grid preserves the page measure while guaranteeing enough stable block-size
+    // for the scroll-linked header to reach its compact endpoint on short panels.
+    <div className="detail-body page-bleed page-grid gap-y-4 @2xl:gap-y-5">
+      {printSummary ? <div className="detail-print-summary">{printSummary}</div> : null}
+      {docked ? (
+        <div className="grid grid-cols-[minmax(0,1fr)_20rem] items-start gap-x-8">
+          <div className="flex min-w-0 flex-col gap-4 @2xl:gap-5">{children}</div>
+          {/* Sticky under the header, whose measured height the collapse hook publishes; the
+              fallback keeps it inert before the first measurement. */}
+          <aside
+            aria-label="Details"
+            className="no-print sticky top-[calc(var(--detail-header-height,0px)+1rem)] min-w-0"
+          >
+            {aside}
+          </aside>
+        </div>
+      ) : (
+        children
+      )}
+    </div>
+  );
+}
+
+/**
+ * The standard entity-detail arrangement.
+ *
+ * @remarks
+ * Renders (top to bottom): an optional eyebrow, a masthead whose primary row holds the identity and
+ * actions, the collapsible subtitle/metadata block, the tab bar, and the active panel. The identity
+ * owns the remaining width and truncates only at the compact endpoint, so actions never create a
+ * second header row. Status/health and every other property live in the metadata slot.
+ *
+ * @param props - The {@link EntityDetailLayoutProps}.
+ * @returns the composed detail page.
+ */
+export function EntityDetailLayout({
+  cover,
+  eyebrow,
+  icon,
+  title,
+  subtitle,
+  metadata,
+  actions,
+  tabs,
+  children,
+  aside,
+  printSummary,
+  className,
+  object,
+}: EntityDetailLayoutProps): JSX.Element {
+  // Every detail page owns its scrolling, backdrop or not. Making it conditional would mean two
+  // layouts again — one that scrolls itself and one the shell scrolls — which is the duplication
+  // this component exists to remove. It is also required for a backdrop: the shell's `<main>`
+  // reserves a permanent scrollbar gutter while it scrolls, and no child of a gutter-reserving box
+  // can reach the pane's edge. Owning the scroll additionally gives the header something to pin to
+  // and a timeline to collapse against, which every detail page benefits from equally.
+  useOwnPageScroll();
+  const { scrollRef, headerRef } = useDetailHeaderCollapse({ hasCover: Boolean(cover) });
+  const docked = useAsideDocked(scrollRef, aside !== undefined);
+  const asideState = useMemo<EntityDetailAsideState>(() => ({ docked }), [docked]);
 
   return (
-    <div
-      ref={scrollRef}
-      data-detail-panel-scroll=""
-      data-detail-cover={cover ? 'present' : 'absent'}
-      data-detail-print={printSummary ? '' : undefined}
-      className={cn(
-        // Sections are rows of this grid, so the rhythm between them is declared once here rather
-        // than by each section spacing itself against its neighbours. The bottom inset is not one
-        // of them: it belongs to `.detail-body`, because this element declares its own container
-        // and so can never resolve the `--page-gutter` step its own descendants see.
-        'page-grid h-full min-h-0 w-full gap-y-4 overflow-y-auto @2xl:gap-y-5',
-        className,
-      )}
-    >
-      {/* Bleeds the full pane so the backdrop can reach both edges, and re-measures its own
-          children through the nested grid, so nothing inside has to know it sits in a bleeding
-          section. */}
-      {header}
-
-      {/* This nested grid preserves the page measure while guaranteeing enough stable block-size
-          for the scroll-linked header to reach its compact endpoint on short panels. */}
-      <div className="detail-body page-bleed page-grid gap-y-4 @2xl:gap-y-5">
-        {printSummary ? <div className="detail-print-summary">{printSummary}</div> : null}
-        {children}
+    <EntityDetailAsideContext.Provider value={asideState}>
+      <div
+        ref={scrollRef}
+        data-detail-panel-scroll=""
+        data-detail-cover={cover ? 'present' : 'absent'}
+        data-detail-print={printSummary ? '' : undefined}
+        className={cn(
+          // Sections are rows of this grid, so the rhythm between them is declared once here rather
+          // than by each section spacing itself against its neighbours. The bottom inset is not one
+          // of them: it belongs to `.detail-body`, because this element declares its own container
+          // and so can never resolve the `--page-gutter` step its own descendants see.
+          'page-grid h-full min-h-0 w-full gap-y-4 overflow-y-auto @2xl:gap-y-5',
+          className,
+        )}
+      >
+        {/* Bleeds the full pane so the backdrop can reach both edges, and re-measures its own
+            children through the nested grid, so nothing inside has to know it sits in a bleeding
+            section. */}
+        <DetailHeader
+          headerRef={headerRef}
+          cover={cover}
+          eyebrow={eyebrow}
+          icon={icon}
+          title={title}
+          subtitle={subtitle}
+          metadata={metadata}
+          actions={actions}
+          tabs={tabs}
+          object={object}
+          hasPrintSummary={Boolean(printSummary)}
+        />
+        <DetailBody printSummary={printSummary} aside={aside} docked={docked}>
+          {children}
+        </DetailBody>
       </div>
-    </div>
+    </EntityDetailAsideContext.Provider>
   );
 }
 
@@ -433,31 +583,22 @@ export interface EntityMetadataRowProps {
   children: ReactNode;
 }
 
+/** One declared item: its tier, its measured width, and whether it stays out of the inline row. */
+interface MetadataMeasurement {
+  priority: EntityMetadataPriority;
+  width: number;
+  overflowOnly: boolean;
+}
+
 /**
- * A single-line property row with a stable overflow surface.
+ * Measure the declared items and decide how many tiers fit the row.
  *
- * @remarks
- * Each property is rendered inline at its declared priority and rendered again inside the popover.
- * The popover copy is mounted only while open, so picker state never competes between two live
- * controls. This mirrors the task-header rule: narrow widths remove controls from the row, never
- * from the product.
- *
- * @param props - The {@link EntityMetadataRowProps}.
- * @returns a labelled group wrapping its property chips.
+ * @returns the visible tier, whether anything overflows, the item registration callback, and the
+ *   setter through which the row reports its available width.
  */
-export function EntityMetadataRow({
-  ariaLabel,
-  className,
-  children,
-}: EntityMetadataRowProps): JSX.Element {
-  const inlineRef = useRef<HTMLDivElement>(null);
+function useMetadataFit() {
   const availableWidth = useRef(0);
-  const itemMeasurements = useRef(
-    new Map<
-      HTMLElement,
-      { priority: EntityMetadataPriority; width: number; overflowOnly: boolean }
-    >(),
-  );
+  const itemMeasurements = useRef(new Map<HTMLElement, MetadataMeasurement>());
   const [visiblePriority, setVisiblePriority] = useState<EntityMetadataPriority>(7);
   const [declaredPriority, setDeclaredPriority] = useState<EntityMetadataPriority>(0);
   const [hasSupplemental, setHasSupplemental] = useState(false);
@@ -516,6 +657,42 @@ export function EntityMetadataRow({
     [recomputeVisibility],
   );
 
+  const setAvailableWidth = useCallback(
+    (width: number): void => {
+      availableWidth.current = width;
+      recomputeVisibility();
+    },
+    [recomputeVisibility],
+  );
+
+  return {
+    visiblePriority,
+    hasOverflow: hasSupplemental || declaredPriority > visiblePriority,
+    declareItem,
+    setAvailableWidth,
+  };
+}
+
+/**
+ * A single-line property row with a stable overflow surface.
+ *
+ * @remarks
+ * Each property is rendered inline at its declared priority and rendered again inside the popover.
+ * The popover copy is mounted only while open, so picker state never competes between two live
+ * controls. This mirrors the task-header rule: narrow widths remove controls from the row, never
+ * from the product.
+ *
+ * @param props - The {@link EntityMetadataRowProps}.
+ * @returns a labelled group wrapping its property chips.
+ */
+export function EntityMetadataRow({
+  ariaLabel,
+  className,
+  children,
+}: EntityMetadataRowProps): JSX.Element {
+  const inlineRef = useRef<HTMLDivElement>(null);
+  const { visiblePriority, hasOverflow, declareItem, setAvailableWidth } = useMetadataFit();
+
   useLayoutEffect(() => {
     const row = inlineRef.current?.parentElement;
     if (!row) return;
@@ -533,21 +710,16 @@ export function EntityMetadataRow({
     // its highest-priority item instead of leaving it at the "show everything" default the
     // `availableWidth.current <= 0` guard inside `recomputeVisibility` already exists to give it.
     const width = row.getBoundingClientRect().width;
-    if (width > 0) {
-      availableWidth.current = width;
-      recomputeVisibility();
-    }
+    if (width > 0) setAvailableWidth(width);
     if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(([entry]) => {
-      if (!entry) return;
-      availableWidth.current = entry.contentRect.width;
-      recomputeVisibility();
+      if (entry) setAvailableWidth(entry.contentRect.width);
     });
     observer.observe(row);
     return () => {
       observer.disconnect();
     };
-  }, [recomputeVisibility]);
+  }, [setAvailableWidth]);
 
   const inlineLane = useMemo<EntityMetadataLaneContext>(
     () => ({ lane: 'inline', visiblePriority, declareItem }),
@@ -557,7 +729,6 @@ export function EntityMetadataRow({
     () => ({ lane: 'overflow', visiblePriority }),
     [visiblePriority],
   );
-  const hasOverflow = hasSupplemental || declaredPriority > visiblePriority;
 
   return (
     <ControlGroup

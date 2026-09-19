@@ -138,8 +138,9 @@ chunk, and back or forward all swap instantly.
 
 ### [TASK-DETAIL-002] The task page composes the shared entity-detail masthead
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-09-18
+- **Completed**: 2026-09-18
 - **Priority**: P1
 - **Description**: `/orgs/[orgId]/tasks/[taskId]` is the only detail page that hand-rolls its masthead.
   Put it on `EntityDetailLayout` (48px icon, headline title, metadata chips, tabs), order the overview
@@ -147,9 +148,41 @@ chunk, and back or forward all swap instantly.
   tab, and give the layout an opt-in aside slot for secondary properties on wide widths.
 - **Plan**: spec above, Part 4.
 - **Subtasks**:
-  - [ ] Masthead, metadata row, actions, tabs, states
-  - [ ] Overview order, graph tab, overflow menu, delete `TaskHeaderControls`
-  - [ ] `aside` slot on `EntityDetailLayout`
+  - [x] Masthead, metadata row, actions, tabs, states
+  - [x] Overview order, graph tab, overflow menu, delete `TaskHeaderControls`
+  - [x] `aside` slot on `EntityDetailLayout`
+- **Notes**: The task page is composition only. `task-detail-client.tsx` is 175 lines and left the
+  complexity ledger. The masthead chips (`TaskMastheadProperties`) carry status and priority at tier 0,
+  then assignee, project, and due date; the rest (`TaskSecondaryProperties`) is `chips` in the row or
+  `rows` in the aside, chosen by `useEntityDetailAside().docked`, so no property mounts twice. The
+  aside docks at a 896 px pane, is sticky under the header, and is `no-print`. The overflow menu is
+  Expand description, Copy link, Delete task, and its label omits "Athena" because
+  `tests/athena/entry-points.test.ts` forbids that word in task controls.
+- **Files changed**: `apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx`;
+  `apps/web/src/components/task-detail/` (new `task-masthead-properties`, `task-secondary-properties`
+  (was `task-properties-rail`), `task-masthead-slots`, `task-overview-panel`, `task-sections`,
+  `task-graph-tab`, `task-resources-panel`, `task-actions`, `task-delete-dialog`, `task-breadcrumb`,
+  `task-detail-states`, `use-task-rosters`, `use-task-property-model`, `use-description-expansion`;
+  reworked `task-details`, `task-detail-loading`, `Subtasks`, `Dependencies`, `task-activity-feed`,
+  the three pickers; deleted `task-header-controls`); `apps/web/src/components/views/entity-detail-layout.tsx`
+  (`aside`, `useEntityDetailAside`, `DetailHeader`, `useMetadataFit`) and `entity-detail-skeleton.tsx`;
+  `apps/web/src/lib/use-task-detail.ts`; `packages/ui/src/icons/index.ts` (`Gauge`);
+  `tooling/eslint-config/complexity-debt.json` and `index.js`; the design-token ledger; tests under
+  `apps/web/tests/task-detail/`, `tests/components/entity-detail-layout.test.tsx`, and the e2e specs
+  `work/task-detail-shots.spec.ts` and `work/detail-loading-masthead.spec.ts`.
+- **Validation**: Root `pnpm typecheck` passes. The unit suites for task detail, the layout, the detail
+  route policy, aggregates, skeletons, pickers, and Athena entry points pass, as do the design-token
+  policy and `pnpm complexity:check` for these files (the `task-detail-client`, `task-header-controls`,
+  `task-properties-rail`, and `entity-detail-layout` ledger entries are gone). Against the dev stack,
+  `detail-loading-masthead.spec.ts` (now with a Task case), `task-hierarchy.spec.ts`,
+  `local-first-detail-navigation.spec.ts`, and `task-detail-shots.spec.ts` pass, including the 320 px
+  overflow check. Shots at 1440, 1900, and 390 in both themes were read by eye.
+- **Learnings**: The old page passed `useTaskDetail` none of its lazy-open flags (commit `e0b4ecf62`
+  dropped them), so by the code no roster ever loaded and every picker would open empty. Rosters now
+  start when a picker opens or when the task already holds a value from them. The loading page moved 4 px
+  when the real breadcrumb arrived because the eyebrow placeholder was a 16 px line standing in for a
+  20 px one, and Playwright's `animations: 'disabled'` fast-forwards the collapsing header to its
+  compact end, so evidence shots of detail pages must not use it.
 - **Blockers**: None.
 
 ### [ATHENA-SSE-406-001] A browser can open an Athena activity stream

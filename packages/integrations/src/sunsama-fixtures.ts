@@ -15,10 +15,8 @@
  * caller opts into it explicitly.
  */
 import type { FixtureMcpServer, RemoteToolResult } from './mcp-connector';
-
 /** The host {@link SUNSAMA_MIGRATION_FIXTURE_SERVER} is registered under in the mock connector. */
 export const SUNSAMA_FIXTURE_HOST = 'sunsama.fixture.localhost';
-
 /** The endpoint URL that reaches {@link SUNSAMA_MIGRATION_FIXTURE_SERVER}. */
 export const SUNSAMA_FIXTURE_URL = `https://${SUNSAMA_FIXTURE_HOST}/mcp`;
 

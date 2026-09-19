@@ -14,7 +14,6 @@ import type {
   ScheduleItem,
   ScheduleLane,
 } from './scheduling-types';
-
 interface ScheduleItemTimeRangeOptions {
   readonly item: ScheduleItem;
   readonly lane: ScheduleLane;
@@ -25,12 +24,10 @@ interface ScheduleItemTimeRangeOptions {
   readonly preview?: ScheduleGesturePreview | null;
   readonly previewMode?: ScheduleGestureMode | null;
 }
-
 interface ScheduleInstantRange {
   readonly startsAt: string;
   readonly endsAt: string;
 }
-
 type SchedulePreviewRangeResolution =
   | { readonly kind: 'resolved'; readonly range: ScheduleInstantRange }
   | { readonly kind: 'skipped' | 'repeated' | 'invalid' };

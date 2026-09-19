@@ -22,17 +22,14 @@
  * shutter, so a shot is never of a skeleton or a redirect landing page.
  */
 import type { Page } from '@playwright/test';
-
 import { signUpAndOnboard } from '../helpers/app';
 import { TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { setColorScheme } from '../helpers/ui';
-
 const SHOT_DIR = new URL(
   '../../../../docs/design/audits/screenshots/2026-08-15-settings-audit/',
   import.meta.url,
 ).pathname;
-
 /** The Personal group, in registry order. */
 const PERSONAL = [
   'profile',
@@ -47,7 +44,6 @@ const PERSONAL = [
   'security',
   'data-privacy',
 ] as const;
-
 /** The Workspace group, in registry order. */
 const WORKSPACE = [
   'general',

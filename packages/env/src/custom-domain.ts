@@ -23,7 +23,6 @@
  *
  * @see {@link ./hosts} for the product's own hosts, which are configuration, not user input.
  */
-
 /**
  * Reduce a URL, an authority, or a bare hostname to its lowercased hostname.
  *

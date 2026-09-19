@@ -7,7 +7,6 @@ export type TimeReviewView = 'sessions' | 'breakdown' | 'now';
 export type TimeReviewPeriod = 'day' | 'week' | 'month' | 'cycle' | 'custom';
 /** Which additive effort measure the page presents. */
 export type TimeReviewMeasure = 'human' | 'agent' | 'combined';
-
 /** One cycle available to the caller's personal history picker. */
 export interface TimeReviewCycle {
   readonly id: string;
@@ -17,7 +16,6 @@ export interface TimeReviewCycle {
   readonly startsAt: string;
   readonly endsAt: string;
 }
-
 /** The settled selection behind all time-review queries and controls. */
 export interface TimeReviewState {
   readonly view: TimeReviewView;
@@ -33,14 +31,12 @@ export interface TimeReviewState {
   readonly categoryId?: string | undefined;
   readonly captureSource?: 'live' | 'manual' | 'reconstructed' | 'agent' | undefined;
 }
-
 /** The exact half-open UTC window sent to the Time Ledger. */
 export interface TimeReviewRange {
   readonly start: string;
   readonly end: string;
   readonly label: string;
 }
-
 /** Filters with omitted keys so typed API clients never receive explicit `undefined` values. */
 export interface TimeReviewApiFilters {
   readonly workspaceId?: string;
@@ -49,7 +45,6 @@ export interface TimeReviewApiFilters {
   readonly categoryId?: string;
   readonly captureSource?: 'live' | 'manual' | 'reconstructed' | 'agent';
 }
-
 const VIEWS: readonly TimeReviewView[] = ['sessions', 'breakdown', 'now'];
 const PERIODS: readonly TimeReviewPeriod[] = ['day', 'week', 'month', 'cycle', 'custom'];
 const MEASURES: readonly TimeReviewMeasure[] = ['human', 'agent', 'combined'];

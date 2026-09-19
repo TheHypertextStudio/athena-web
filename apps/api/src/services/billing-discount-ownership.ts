@@ -10,7 +10,6 @@ export interface DiscountProviderIdentity {
   /** Stripe subscription discount observed after the coupon was attached. */
   readonly providerDiscountId: string | null;
 }
-
 /**
  * Confirm that every discount on a Stripe subscription belongs to the current Docket award.
  *

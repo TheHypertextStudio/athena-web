@@ -12,7 +12,6 @@ import {
 import { createContext, type JSX, type ReactNode, useCallback, useContext, useState } from 'react';
 import { AuthenticationRequiredError } from '@/lib/query-core';
 import { safeSameOriginPath, signInReturnPath } from '@/lib/auth-navigation';
-
 interface AuthenticationInterlockValue {
   /** Block the current surface until the person explicitly continues to sign-in. */
   readonly requireAuthentication: (returnPath?: string) => void;
@@ -21,7 +20,6 @@ interface AuthenticationInterlockValue {
   /** Explain that an explicit account-bound sign-out request did not finish. */
   readonly reportSignOutFailure: () => void;
 }
-
 const AuthenticationInterlockContext = createContext<AuthenticationInterlockValue | null>(null);
 
 /** A foreground action that resolves with its successful result or rethrows its original error. */

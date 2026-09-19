@@ -3,7 +3,6 @@ import type { SourceSystemKind } from '@docket/connections/event-contract';
 
 /** Search-document families supported by the shareable search-page URL. */
 export const SEARCH_FAMILY_VALUES = ['work', 'people', 'content', 'activity'] as const;
-
 /** Search-document kinds supported by the shareable search-page URL. */
 export const SEARCH_KIND_VALUES = [
   'organization',
@@ -25,7 +24,6 @@ export const SEARCH_KIND_VALUES = [
   'calendar_event',
   'activity',
 ] as const satisfies readonly SearchDocumentKind[];
-
 /** Source systems supported by the shareable search-page URL. */
 export const SEARCH_SOURCE_VALUES = [
   'docket',

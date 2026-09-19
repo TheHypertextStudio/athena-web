@@ -37,10 +37,8 @@
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
 /** Repo root, resolved from this file's own location so the script is runnable from anywhere. */
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-
 /** The source trees that render product UI. */
 const SOURCE_ROOTS = ['apps/web/src', 'packages/ui/src'] as const;
 

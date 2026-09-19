@@ -6,19 +6,16 @@ export interface OverlapLayoutInterval {
   readonly exactStartMinutes?: number;
   readonly exactEndMinutes?: number;
 }
-
 /** Column and cluster metadata aligned with one input interval. */
 export interface OverlapLayoutResult {
   readonly columnIndex: number;
   readonly columnCount: number;
   readonly clusterId: string;
 }
-
 interface ActiveColumn {
   readonly columnIndex: number;
   readonly endMinutes: number;
 }
-
 /** Minimal binary heap used by the interval sweep without adding a scheduling dependency. */
 class MinHeap<T> {
   private readonly values: T[] = [];

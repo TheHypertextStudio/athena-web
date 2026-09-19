@@ -14,18 +14,14 @@ import {
   EmailSuggestionMeta,
   type SuggestionAcceptBody,
 } from '@docket/athena/email-suggestion-contract';
-
 import { and, eq } from 'drizzle-orm';
-
 import { resolveLandingTarget } from '../task-landing';
 import { emitEvent } from '../../routes/event-emit';
 import { enqueueSearchUpsert } from '../../search/write-through';
-
 /** The selected `email_suggestion` row shape. */
 export type SuggestionRow = typeof emailSuggestion.$inferSelect;
 /** The selected `task` row shape. */
 type TaskRow = typeof task.$inferSelect;
-
 /** Input to {@link acceptSuggestion}. */
 export interface AcceptSuggestionInput {
   readonly organizationId: string;
@@ -35,7 +31,6 @@ export interface AcceptSuggestionInput {
   /** Accept-time field overrides (title/description/priority/dueDate). */
   readonly overrides: SuggestionAcceptBody;
 }
-
 /** The outcome of one accept attempt — data, mapped to HTTP/no-op by each caller. */
 export type AcceptSuggestionResult =
   | {

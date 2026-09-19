@@ -13,7 +13,6 @@ import { RoleCreate, RoleOut, RoleUpdate } from '../contracts/role';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
-
 import type { AppEnv } from '../context';
 import { CapabilityError, ConflictError, NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';

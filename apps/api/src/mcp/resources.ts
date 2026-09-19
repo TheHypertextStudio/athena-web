@@ -25,7 +25,6 @@ import type { McpRegistrar } from './catalog';
 import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
 import { and, eq, isNull } from 'drizzle-orm';
-
 import { NotFoundError } from '../error';
 import { buildTaskViewFilter } from '../routes/task-helpers';
 import { registerApps } from './apps';

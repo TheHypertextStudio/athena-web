@@ -31,7 +31,6 @@ import {
 import { ChevronDown, LayoutTemplate, Settings } from '@docket/ui/icons';
 import Link from '@/components/docket-link';
 import { type JSX, useEffect, useMemo, useRef } from 'react';
-
 import { sectionHref } from '@/components/settings/settings-registry';
 import {
   sortTemplates,
@@ -39,14 +38,12 @@ import {
   templatesOfKindDef,
 } from '@/components/templates/queries';
 import { useApiQuery } from '@/lib/query';
-
 /** How each scope is titled where templates are grouped. */
 const SCOPE_LABEL: Record<TemplateOut['scope'], string> = {
   organization: 'Workspace',
   team: 'Team',
   personal: 'Yours',
 };
-
 /** The order groups appear in — shared before private, since shared is the common case. */
 const SCOPE_ORDER: readonly TemplateOut['scope'][] = ['organization', 'team', 'personal'];
 

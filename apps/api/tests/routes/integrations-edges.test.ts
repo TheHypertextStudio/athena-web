@@ -4,7 +4,6 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-
 import { env } from '../../src/env';
 import {
   appWithActor,
@@ -14,7 +13,6 @@ import {
   seedUserWithHub,
   addMember,
 } from '../support/routes-harness';
-
 /**
  * `env`'s fields are `readonly` at the type level (the fail-fast 12-factor contract), but the
  * underlying object is a plain mutable object at runtime — these tests toggle `APP_MODE`/
@@ -540,7 +538,6 @@ describe('token-resolution failure (env.APP_MODE=production) across /lists, /ver
     const res = await w.request(`/${row.id}/lists`);
     expect(res.status).toBe(409);
   });
-
   it('/verify records status=error with the real reason, returned as 200 (not thrown away)', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const row = await seedGtasksIntegration(orgId, humanActorId);

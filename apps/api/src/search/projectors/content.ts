@@ -10,7 +10,6 @@ import {
   sourceUpdatedAt,
   subjectVisibility,
 } from '../types';
-
 function contentDocument(
   row: OrgScopedRow,
   kind: SearchDocumentDraft['kind'],

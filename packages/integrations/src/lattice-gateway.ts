@@ -30,7 +30,6 @@ import {
   type PersonalLatticeRuntimeResource,
   type PersonalLatticeRuntimeStatus,
 } from './lattice-sdk';
-
 /**
  * Why Athena cannot currently run a turn on the person's own device.
  *
@@ -59,7 +58,6 @@ export type LatticeUnavailableReason =
   | 'insufficient_scopes'
   | 'gateway_unreachable'
   | 'gateway_error';
-
 /** Every {@link LatticeUnavailableReason}, for exhaustive handling and tests. */
 export const LATTICE_UNAVAILABLE_REASONS: readonly LatticeUnavailableReason[] = [
   'not_connected',
@@ -73,7 +71,6 @@ export const LATTICE_UNAVAILABLE_REASONS: readonly LatticeUnavailableReason[] = 
   'gateway_unreachable',
   'gateway_error',
 ];
-
 /**
  * A Lattice operation that could not run, carrying a code a surface can branch on.
  *

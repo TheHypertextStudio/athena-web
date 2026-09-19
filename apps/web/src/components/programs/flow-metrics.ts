@@ -10,14 +10,12 @@ export interface ProgramFlowMetrics {
   readonly done: number;
   readonly activeCycles: number;
 }
-
 /** Derive flow from the same visible program work that the Work tab serves. */
 export function programFlowMetrics(
   work: ProgramWorkOut | undefined,
   categoryOf: CategoryOfState,
 ): ProgramFlowMetrics {
   if (!work) return { inFlight: 0, queued: 0, done: 0, activeCycles: 0 };
-
   let inFlight = 0;
   let queued = 0;
   let done = 0;

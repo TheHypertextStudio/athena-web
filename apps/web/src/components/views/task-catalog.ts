@@ -25,7 +25,6 @@
  */
 import type { TaskOut } from '@docket/work/task-model';
 import type { ViewFilter, ViewGrouping, ViewSort } from '@docket/work/saved-view-contract';
-
 import {
   type WorkStatusDisplay,
   statusFieldOptions,

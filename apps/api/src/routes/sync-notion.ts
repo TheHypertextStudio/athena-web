@@ -19,7 +19,6 @@
  */
 import { auditEvent, db } from '@docket/db';
 import { and, desc, eq, sql } from 'drizzle-orm';
-
 import type { TaskSyncConflict } from './integration-reconcile-plan';
 
 /** The `metadata.kind` discriminator marking an `audit_event` row as a sync-conflict record. */

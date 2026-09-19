@@ -3,7 +3,6 @@
 import type { ProjectOut } from '../../lib/contracts/project';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
-
 import type { ScheduleChange } from '@/components/timeline/cascade';
 import type { TimelineSpan } from '@/components/timeline/timeline-catalog';
 import { api } from '@/lib/api';

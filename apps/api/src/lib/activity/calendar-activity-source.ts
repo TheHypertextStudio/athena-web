@@ -24,17 +24,14 @@ import type { CalendarEventAttendee } from '@docket/db';
 import type { ActivityPullInput, ActivityPullResult, ActivitySource } from '@docket/integrations';
 import type { EventDraft } from '@docket/integrations';
 import { and, eq, gte, isNotNull, lt, ne, sql } from 'drizzle-orm';
-
 /** Response statuses that mean the person said yes. */
 const ACCEPTED = new Set(['accepted']);
-
 /** The person's own attendee entry, when the provider marked one. */
 function selfAttendee(
   attendees: readonly CalendarEventAttendee[],
 ): CalendarEventAttendee | undefined {
   return attendees.find((a) => a.self === true);
 }
-
 /**
  * Whether an elapsed calendar entry is worth recording as something the person did.
  *
@@ -49,12 +46,10 @@ function isAttended(attendees: readonly CalendarEventAttendee[]): boolean {
   if (!own || !ACCEPTED.has((own.responseStatus ?? '').toLowerCase())) return false;
   return attendees.length > 1;
 }
-
 /** Minutes between two instants, floored at zero. */
 function minutesBetween(startsAt: Date, endsAt: Date): number {
   return Math.max(0, Math.round((endsAt.getTime() - startsAt.getTime()) / 60_000));
 }
-
 /**
  * Build the activity source for one person's calendars.
  *

@@ -9,13 +9,10 @@ import {
   serializeDocumentFigure,
   type DocumentFigure,
 } from '@docket/markdown-tree';
-
 /** The ProseMirror node name used by the editor, upload controller, and toolbar. */
 export const DOCUMENT_FIGURE_NODE = 'documentFigure';
-
 /** Upload state stored only in the live editor document. */
 export type DocumentFigureStatus = 'ready' | 'uploading' | 'failed';
-
 /** Attributes carried by one figure node. Its caption is the node's plain-text content. */
 export interface DocumentFigureAttributes {
   readonly src: string;

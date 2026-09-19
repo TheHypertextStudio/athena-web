@@ -29,15 +29,12 @@ import type {
   SubscriptionDiscountInput,
   SubscriptionStatus,
 } from '../contracts';
-
 const FIXED_NOW = '2026-01-01T00:00:00.000Z';
-
 interface BillingLifecycleStep {
   readonly event: BillingEventType;
   readonly status: SubscriptionStatus;
   readonly periodEndOffsetHours: number;
 }
-
 const BILLING_LIFECYCLE: readonly BillingLifecycleStep[] = [
   { event: 'subscription.created', status: 'trialing', periodEndOffsetHours: 24 * 14 },
   { event: 'subscription.updated', status: 'active', periodEndOffsetHours: 24 * 30 },

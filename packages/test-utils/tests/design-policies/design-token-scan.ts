@@ -38,7 +38,6 @@
  * @see `docs/design/design-system.md` for the contract these rules enforce.
  */
 import { readFileSync } from 'node:fs';
-
 import ts from 'typescript';
 
 import { relativeToWorkspaceRoot } from '../workspace';

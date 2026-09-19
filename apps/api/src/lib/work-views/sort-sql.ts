@@ -18,7 +18,6 @@ export interface SortFieldCompiler {
   /** Optional direction for the stored value instead of the requested term direction. */
   readonly valueDirection?: 'term' | 'asc' | 'desc';
 }
-
 /** An exhaustive SQL sort registry for a derived target field-key union. */
 export type SortCompilerMap<TKey extends string> = Readonly<Record<TKey, SortFieldCompiler>>;
 

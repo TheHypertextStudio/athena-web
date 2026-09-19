@@ -23,11 +23,9 @@ import type { NotionParentPageOut } from '@docket/connections/notion/mirror-cont
 import { WriteError } from '../write-error';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
-
 import { SettingsGroup } from '../settings-group';
 import { SETTINGS_NODES } from '../settings-capabilities';
 import { useState } from 'react';
-
 import {
   NO_PAGES_ACTION,
   NO_PAGES_HINT,

@@ -23,11 +23,9 @@
 import { account, db, integration } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-
 import { sealCredential } from '../lib/credentials';
 import { webAppOrigin } from '../lib/github-app';
 import { exchangeSlackCode, verifySlackConnectState } from '../lib/slack-app';
-
 /**
  * Build the redirect back to the org's Connections settings page with a status flag.
  *

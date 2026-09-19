@@ -3,7 +3,6 @@ import type {
   ScheduleComparisonItemOut,
   ScheduleComparisonOut,
 } from '@docket/planning/calendar-contract';
-
 import { shiftISODate } from '@/components/agenda/agenda-context';
 import { formatDay } from '@/components/date-picker';
 import {
@@ -14,7 +13,6 @@ import {
   type ScheduleLane,
 } from '@/components/scheduling';
 import { calendarScheduleItemAppearance } from '@/components/calendar/calendar-schedule-appearance';
-
 const DERIVED_READ_ONLY_KINDS = new Set(['task_timebox', 'availability_block']);
 
 /** The resource dimension rendered by the calendar canvas. */

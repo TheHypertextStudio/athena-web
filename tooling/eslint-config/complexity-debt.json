@@ -433,12 +433,6 @@
       "excess": 3
     }
   },
-  "apps/api/src/lib/object-command-effects.ts": {
-    "max-lines-per-function": {
-      "max": 81,
-      "excess": 1
-    }
-  },
   "apps/api/src/lib/recurrence/advance.ts": {
     "complexity": {
       "max": 15,
@@ -1499,28 +1493,28 @@
   },
   "apps/api/src/routes/object-commands.ts": {
     "complexity": {
-      "max": 103,
-      "excess": 226
+      "max": 128,
+      "excess": 236
     },
     "max-depth": {
       "max": 5,
-      "excess": 8
+      "excess": 9
     },
     "max-lines": {
-      "max": 2522,
-      "excess": 2022
+      "max": 2513,
+      "excess": 2013
     },
     "max-lines-per-function": {
-      "max": 592,
-      "excess": 1862
+      "max": 706,
+      "excess": 2059
     },
     "max-params": {
       "max": 7,
       "excess": 5
     },
     "sonarjs/cognitive-complexity": {
-      "max": 262,
-      "excess": 525
+      "max": 341,
+      "excess": 580
     }
   },
   "apps/api/src/routes/orgs.ts": {
@@ -1682,7 +1676,7 @@
     },
     "max-lines-per-function": {
       "max": 420,
-      "excess": 950
+      "excess": 952
     },
     "sonarjs/cognitive-complexity": {
       "max": 43,
@@ -2937,12 +2931,6 @@
     "max-lines-per-function": {
       "max": 95,
       "excess": 15
-    }
-  },
-  "apps/web/src/app/(app)/calendar/calendar-range-label.ts": {
-    "complexity": {
-      "max": 14,
-      "excess": 2
     }
   },
   "apps/web/src/app/(app)/calendar/calendar-schedule-model.ts": {

@@ -17,7 +17,6 @@ import { SettingRowStatus } from '@/components/settings/setting-row-status';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
-
 /** The signed-in user's profile destination. */
 export default function GlobalProfileSettingsPage(): JSX.Element {
   const { data: session, isPending, refetch } = useSession();
@@ -25,7 +24,6 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
   const [image, setImage] = useState('');
   const [baseline, setBaseline] = useState({ name: '', image: '' });
   const [nameError, setNameError] = useState<string | null>(null);
-
   useEffect(() => {
     if (!session?.user) return;
     const next = { name: session.user.name, image: session.user.image ?? '' };
@@ -33,7 +31,6 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
     setImage(next.image);
     setBaseline(next);
   }, [session?.user]);
-
   const save = useApiMutation<ProfileSettingsOut, ProfileSettingsUpdate>({
     mutationFn: (json) =>
       unwrap(() => api.v1.me.account.profile.$patch({ json }), 'Could not save your profile.'),
@@ -45,7 +42,6 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
       void refetch();
     },
   });
-
   // Autosave replaces the former hand-rolled `commitName` dirty-check: the field persists on a
   // quiet debounce once it differs from what's loaded, and never on mount or for an unchanged
   // value — the same seam every other autosaving field in the app now shares.
@@ -62,7 +58,6 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
       save.mutate({ name: trimmed });
     },
   });
-
   function commitImage(next: string): void {
     if (next.trim() === baseline.image) return;
     save.mutate({ image: next.startsWith('data:image/') ? next : null });

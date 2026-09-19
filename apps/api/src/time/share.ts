@@ -13,7 +13,6 @@
  * share link, and comparison is done on the hash rather than the raw value.
  */
 import { createHash, randomBytes } from 'node:crypto';
-
 import { db, hub, organization, task, timeInterval, timeRecord, timeShareToken } from '@docket/db';
 import type {
   PublicTimerStatusOut,
@@ -22,11 +21,9 @@ import type {
 } from '@docket/planning/time-share-contract';
 import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 import type { z } from 'zod';
-
 import { AuthError, NotFoundError, RateLimitedError } from '../error';
 import { resolveTimeHubId } from './access';
 import { measureIntervals } from './read-models';
-
 type TimeShareTokenInput = z.input<typeof TimeShareTokenOut>;
 type PublicTimerStatusInput = z.input<typeof PublicTimerStatusOut>;
 

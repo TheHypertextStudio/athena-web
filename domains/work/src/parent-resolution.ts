@@ -8,7 +8,6 @@ export const WORK_PARENT_KINDS: readonly WorkParentKind[] = [
   'initiative',
   'program',
 ];
-
 /** One existing container a new task could belong to. */
 export interface ParentCandidate {
   /** The container's Docket id. */

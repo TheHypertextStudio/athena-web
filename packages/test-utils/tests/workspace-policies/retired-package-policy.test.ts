@@ -8,9 +8,7 @@ import {
   collectWorkspaceSourceFiles,
   relativeToWorkspaceRoot,
 } from '../workspace';
-
 const RETIRED_PACKAGE = '@docket/agent-runtime';
-
 function moduleSpecifier(node: ts.Node): ts.StringLiteralLike | undefined {
   if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
     return node.moduleSpecifier && ts.isStringLiteralLike(node.moduleSpecifier)
@@ -31,7 +29,6 @@ function moduleSpecifier(node: ts.Node): ts.StringLiteralLike | undefined {
     ? argument
     : undefined;
 }
-
 function legacyRuntimeSpecifiers(sourceText: string): readonly string[] {
   if (!sourceText.includes(RETIRED_PACKAGE)) return [];
   const sourceFile = ts.createSourceFile(

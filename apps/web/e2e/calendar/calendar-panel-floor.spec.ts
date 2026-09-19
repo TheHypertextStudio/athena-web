@@ -28,7 +28,6 @@
  * appearance band, which this complements rather than replaces.
  */
 import { expect as playwrightExpect, type Page } from '@playwright/test';
-
 import { signUpAndOnboard } from '../helpers/app';
 import {
   CALENDAR_IDS,
@@ -38,7 +37,6 @@ import {
 } from '../helpers/calendar-fixtures';
 import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
 import { expect, test } from '../helpers/fixtures';
-
 const ANCHOR_DATE = '2026-07-13';
 
 /** The contract's own floor. Asserted literally — this is the number the author wrote. */
@@ -177,7 +175,6 @@ for (const viewport of VIEWPORTS) {
         await setRail(page, railExpanded);
         for (const overlay of OVERLAYS) {
           await openOverlay(page, overlay);
-
           const label = `${size} · rail ${railExpanded ? 'docked' : 'collapsed'} · ${overlay} · ${
             syncAlert ? 'sync alert' : 'no alert'
           }`;

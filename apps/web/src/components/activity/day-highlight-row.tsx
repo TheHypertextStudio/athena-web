@@ -19,12 +19,10 @@ import { cn } from '@docket/ui';
 import { EntityListRow, RowMeta } from '@docket/ui/components';
 import { Button, Text } from '@docket/ui/primitives';
 import type { JSX } from 'react';
-
 import { entityGlyph } from '@/components/activity/entity-glyph';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { ProviderBadge } from '@/components/stream/provider-badge';
 import Link from '@/components/docket-link';
-
 import { entryTimeLabel, narrationView } from './highlight-view';
 
 /** What a person may do to one entry. Absent means the entry is a record to read, not to curate. */

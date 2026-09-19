@@ -17,7 +17,6 @@ import type { AppEnv } from '../context';
 import { AuthError } from '../error';
 import { type StreamEvent, subscribe } from '../lib/event-bus';
 import { declareStreaming } from '../lib/sse-headers';
-
 import { canDeliverQueuedStreamEvent } from './stream-helpers';
 
 /** Heartbeat cadence (ms) — a comment-frame ping that keeps the connection warm. */

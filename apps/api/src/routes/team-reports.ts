@@ -20,15 +20,11 @@ import type {
   WorkflowStateType,
 } from '../contracts/team';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-
 import { buildTaskViewFilter } from './task-helpers';
-
 /** How many days of history the throughput series covers. */
 export const THROUGHPUT_WINDOW_DAYS = 30;
-
 /** The state types whose tasks count as still open. */
 const OPEN_STATE_TYPES: readonly WorkflowStateType[] = ['backlog', 'unstarted', 'started'];
-
 /**
  * Map a team's per-team state keys onto their canonical types.
  *

@@ -5,18 +5,14 @@ import { CaptureMailer } from '@docket/mail';
 import type { Capability } from '@docket/identity-access/capabilities';
 import type { WorkStatusEntityType } from '@docket/work/work-status-contract';
 import { and, eq } from 'drizzle-orm';
-
 import type { ActorCtx, AppEnv, AuthSession } from '../../src/context';
 import { getContainer } from '../../src/container';
 import { onError } from '../../src/error';
 import { flushDeferredWork } from '../../src/lib/after-response';
 import './auth-mock';
 import { getMigratedDb } from './db';
-
 type Db = typeof DbModule.db;
-
 let dbmod: typeof DbModule | undefined;
-
 /**
  * Load (once), migrate, and return the shared `@docket/db` module + in-memory PGlite.
  *

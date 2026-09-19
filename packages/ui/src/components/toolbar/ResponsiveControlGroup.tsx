@@ -25,7 +25,6 @@ import {
   useRef,
   useState,
 } from 'react';
-
 /** One control with inline and overflow presentations. */
 export interface ResponsiveControlItem {
   /** Stable key for width caching and visibility. */

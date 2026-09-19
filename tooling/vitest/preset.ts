@@ -66,7 +66,6 @@ export interface DocketVitestOptions {
    */
   include?: string[];
 }
-
 /**
  * The single, standardized Vitest configuration every Docket package uses.
  *

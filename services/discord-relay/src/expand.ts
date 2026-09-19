@@ -10,7 +10,6 @@
  * (you aren't "mentioned" by your own message). No IO — the caller supplies role membership + DM
  * recipients so this stays unit-testable.
  */
-
 /** The subset of a Discord `MESSAGE_CREATE` `d` object the relay reads. */
 export interface DiscordMessage {
   /** The message snowflake (dedup id). */
@@ -30,7 +29,6 @@ export interface DiscordMessage {
   /** The message this one replies to, when it is a reply. */
   readonly referenced_message?: { readonly author?: { readonly id: string } } | null;
 }
-
 /** How the relay resolves the mention kinds it can't read off the message alone. */
 export interface ExpandOptions {
   /** Resolve a role id to its member user ids (from the guild state the relay caches). */

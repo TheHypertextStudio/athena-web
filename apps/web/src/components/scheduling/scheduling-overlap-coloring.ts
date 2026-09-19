@@ -20,7 +20,6 @@ function buildNeighbors(
   }
   return neighbors;
 }
-
 function canonicalGreedyColoring(neighbors: readonly ReadonlySet<number>[]): number[] {
   const colors = new Array<number>(neighbors.length).fill(-1);
   for (let vertex = 0; vertex < neighbors.length; vertex += 1) {
@@ -35,7 +34,6 @@ function canonicalGreedyColoring(neighbors: readonly ReadonlySet<number>[]): num
   }
   return colors;
 }
-
 function oneColoring(neighbors: readonly ReadonlySet<number>[]): number[] | null {
   return neighbors.some((adjacent) => adjacent.size > 0)
     ? null

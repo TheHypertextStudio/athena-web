@@ -17,12 +17,10 @@
 import { InlineBanner } from '@docket/ui/components';
 import { Shield } from '@docket/ui/icons';
 import { type JSX, useEffect, useState } from 'react';
-
 import { sectionHref } from '@/components/settings/settings-registry';
 import { api } from '@/lib/api';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
-
 import { readRecoveryNudgeDismissed, writeRecoveryNudgeDismissed } from './app-shell-utils';
 
 /** At or below this many remaining codes, prompt the user to regenerate. */

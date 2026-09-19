@@ -12,7 +12,6 @@ import type {
 } from '../admin-dto';
 import { LifecycleState } from '../admin-dto';
 import { NotFoundError } from '../error';
-
 /** UserRow is the selected database row shape consumed by these API route serializers. */
 export type UserRow = typeof user.$inferSelect;
 /** OrgRow is the selected database row shape consumed by these API route serializers. */

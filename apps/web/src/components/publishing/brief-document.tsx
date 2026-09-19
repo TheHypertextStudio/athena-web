@@ -26,11 +26,9 @@ import type { BriefSection, BriefWorkItem, PublicBriefOut } from '@docket/work/p
 import { Text } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { documentImageIdFromSource } from '@docket/markdown-tree';
-
 import { parsePersistedMarkdown } from '@/components/editor/parse-markdown';
 import { renderBlocks } from '@/components/editor/render-markdown-tokens';
 import { formatCalendarDate } from '@/lib/format-date';
-
 import {
   briefFactLabel,
   briefFactValue,

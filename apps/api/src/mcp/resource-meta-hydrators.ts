@@ -14,10 +14,8 @@ import {
   update,
 } from '@docket/db';
 import { and, asc, eq, isNull } from 'drizzle-orm';
-
 import { NotFoundError } from '../error';
 import type { TaskViewFilter } from './resource-work-hydrators';
-
 /** Org summary + entity counts. */
 export async function hydrateOrg(orgId: string, id: string): Promise<unknown> {
   const rows = await db.select().from(organization).where(eq(organization.id, orgId)).limit(1);
@@ -37,7 +35,6 @@ export async function hydrateOrg(orgId: string, id: string): Promise<unknown> {
     counts: { teams: teams.length, projects: projects.length, programs: programs.length },
   };
 }
-
 /** Team: workflow states, triage flag, members (human Actors). */
 export async function hydrateTeam(orgId: string, id: string): Promise<unknown> {
   const rows = await db
@@ -47,7 +44,6 @@ export async function hydrateTeam(orgId: string, id: string): Promise<unknown> {
     .limit(1);
   const t = rows[0];
   if (!t) throw new NotFoundError();
-
   const members = await db
     .select({ id: actor.id, displayName: actor.displayName })
     .from(actor)

@@ -4,18 +4,14 @@ import type { CreateDatabaseParameters, UpdateDataSourceParameters } from '@noti
 import type { NotionPropertyKind } from '../mirror-contract';
 import type { MirrorColumnSpec } from '../mirror-port';
 import { ProviderError } from '../../provider-error';
-
 /** The property map accepted when a database creates its initial data source. */
 type SdkPropertySchemaMap = NonNullable<
   NonNullable<CreateDatabaseParameters['initial_data_source']>['properties']
 >;
-
 /** Assert that a narrow shape remains assignable to the SDK's wider shape. */
 type AssertSubset<Narrow extends Wide, Wide> = Narrow;
-
 /** One create-path property shape from the installed Notion SDK. */
 type SdkPropertySchema = SdkPropertySchemaMap[string];
-
 /** The property map accepted when an existing data source is updated. */
 type SdkUpdatePropertySchemaMap = NonNullable<UpdateDataSourceParameters['properties']>;
 

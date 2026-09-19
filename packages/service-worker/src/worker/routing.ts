@@ -19,7 +19,6 @@
  * now lists every emitted asset, under a build-enforced byte budget, and `sw.ts` warms them after
  * activation. See `docs/engineering/specs/offline.md`.
  */
-
 /** What the fetch handler should do with a request. */
 export type CacheStrategy =
   /** Do not call `respondWith` at all — let the request go to the network untouched. */
@@ -30,7 +29,6 @@ export type CacheStrategy =
   | 'stale-while-revalidate'
   /** Try the network, fall back to the offline document. Responses are never cached. */
   | 'navigation';
-
 /**
  * Path prefixes this origin answers on but does not own — each rewritten by `next.config.ts` to a
  * different application, so origin alone cannot exclude them.
@@ -53,7 +51,6 @@ const PROXIED_PREFIXES = [
   '/_mintlify',
   '/mintlify-assets',
 ] as const;
-
 /** The inputs the routing decision depends on. */
 export interface RouteRequest {
   /** HTTP method. */

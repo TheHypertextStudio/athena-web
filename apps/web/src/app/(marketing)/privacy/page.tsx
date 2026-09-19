@@ -18,7 +18,6 @@ function PolicySection({ title, children }: { title: string; children: ReactNode
     </section>
   );
 }
-
 function InformationCollectedSection(): JSX.Element {
   return (
     <PolicySection title="Information we collect">
@@ -41,7 +40,6 @@ function InformationCollectedSection(): JSX.Element {
     </PolicySection>
   );
 }
-
 /** Public privacy policy for Docket, including Google API Limited Use disclosures. */
 export default function PrivacyPage(): JSX.Element {
   return (

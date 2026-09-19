@@ -11,12 +11,10 @@ import type {
   NarrationEpisode,
   Summarizer,
 } from './digest-contracts';
-
 /** Default model for a once-daily per-episode narration pass. */
 export const DEFAULT_SUMMARIZER_MODEL = 'claude-opus-4-8';
 /** Output ceiling for a day's bounded set of short highlights. */
 export const DEFAULT_MAX_TOKENS = 4000;
-
 const SYSTEM_PROMPT =
   'You are Athena, a chief-of-staff assistant inside Docket. You are given the episodes of one ' +
   "person's working day, each with a stable key. Write ONE sentence per episode, in the first " +

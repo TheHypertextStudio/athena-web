@@ -37,10 +37,8 @@ import { actor, auditEvent, cycle, db, genId, milestone, program, project, task 
 import { defaultCycleName } from '@docket/work/cycle-contract';
 import { type TaskActivityChange } from '@docket/connections/activity-contract';
 import { and, eq, inArray } from 'drizzle-orm';
-
 import { emitFieldChange } from '../routes/event-emit';
 import type { TaskRow } from '../routes/task-helpers';
-
 /**
  * How a tracked field's raw column value becomes a display string.
  *

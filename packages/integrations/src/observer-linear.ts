@@ -18,13 +18,11 @@
  * `LINEAR_WEBHOOK_SECRET` is real-shaped; otherwise {@link MockObserver} is used.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
-
 import type {
   CanonicalEntityKind,
   EventDetail,
   EventKind,
 } from '@docket/connections/event-contract';
-
 import { type DetailBuilder, genericDetail, runDetailBuilders } from './event-detail';
 import { asRecord, str } from './json';
 import type {
@@ -37,10 +35,8 @@ import type {
   RawInboundEvent,
   VerifySignatureInput,
 } from './observer';
-
 /** Linear's documented maximum delivery age before a signed request is treated as a replay. */
 const LINEAR_REPLAY_WINDOW_MS = 60_000;
-
 /** Build the external person ref from a Linear user-shaped sub-object. */
 function actorFrom(user: Record<string, unknown> | undefined): EventActorRef | undefined {
   const externalId = str(user, 'id');

@@ -130,7 +130,6 @@ const STOP_WORDS: ReadonlySet<string> = new Set([
   'your',
   'yours',
 ]);
-
 /**
  * Collapse a small set of English inflections without over-stemming unrelated topic words.
  */

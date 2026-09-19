@@ -10,7 +10,6 @@ import {
   menuItemClass,
   menuSupporting,
 } from '../../primitives/menu-styles';
-
 /** Props for a listbox that keeps focus on its associated text input. */
 export interface MenuListboxProps extends React.ComponentProps<'ul'> {
   /** Accessible name for the option collection. */

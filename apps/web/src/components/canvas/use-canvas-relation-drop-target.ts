@@ -5,17 +5,14 @@ import { type ObjectCommandIn } from '../../lib/contracts/object-command';
 import { ProjectId, TaskId } from '@docket/work/ids';
 import type { RelationIntent } from '@docket/work/relation-contract';
 import { useCallback } from 'react';
-
 import {
   type RelationDropExecutionResult,
   type RelationDropTargetBinding,
   useRelationDropTarget,
 } from '@/components/dnd/use-relation-drop-target';
 import type { ObjectRef } from '@/lib/actions';
-
 import { useCanvasCommandContext } from './canvas-command-context';
 import { canvasCommandId } from './use-canvas-command-history';
-
 /** One resolved relation command and the history label shown by Undo and Redo. */
 export interface CanvasRelationCommand {
   /** Atomic object command sent to the canvas command endpoint. */
@@ -23,7 +20,6 @@ export interface CanvasRelationCommand {
   /** User-facing action name stored beside the receipt. */
   readonly label: string;
 }
-
 /**
  * Convert a relation accepted by a canvas node into its receipt-backed object command.
  *

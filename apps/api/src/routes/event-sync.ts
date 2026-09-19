@@ -25,19 +25,15 @@ import { actor, db, inboundEvent, integration } from '@docket/db';
 import type { Observer, ObserverProvider } from '@docket/integrations';
 import { providerSourceSystem } from '@docket/connections/provider-catalog-contract';
 import { and, eq, lt, or } from 'drizzle-orm';
-
 import { buildObserver, toAppRuntimeEnv, type AppRuntimeEnv } from '../container';
 import { EMPTY_DRAFT_TALLY, writeEventDrafts, type DraftWriteTally } from '../events/write-drafts';
 import { processExternalAgentInboxEvent } from '../lib/external-agent-processor';
 import { asObserverProvider } from './integration-provider';
 import { LEASE_STALE_MS, runSync } from './integration-sync';
-
 /** The selected `inbound_event` row shape. */
 type InboundEventRow = typeof inboundEvent.$inferSelect;
-
 /** The number of inbound events one drain invocation will process. */
 const SWEEP_BATCH_LIMIT = 100;
-
 /** The result of one drain sweep. */
 export interface DrainResult {
   /** Candidate events found (received or stale-processing). */
@@ -67,7 +63,6 @@ export interface DrainResult {
   /** Events that errored (recorded + attempts incremented). */
   readonly failed: number;
 }
-
 /** Atomically claim one inbound event for processing. */
 async function claimEvent(id: string, now: Date, staleBefore: Date): Promise<boolean> {
   const claimed = await db

@@ -19,18 +19,15 @@ import type {
 } from '@docket/athena/agent-contract';
 import { and, asc, eq, isNotNull, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
-
 import { ConflictError, NotFoundError } from '../error';
 import { deriveCaptureTitle } from '../lib/capture-title';
 import type { ActivityRow } from '../routes/agent-session-helpers';
-
 /** Return the workspace declared by a stored proposal tool input, when it has one. */
 export function proposalInputOrganizationId(input: unknown): string | null {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
   const value = (input as Record<string, unknown>)['orgId'];
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
-
 /** Return the current authoritative workspace of a stored proposal. */
 export function proposalOrganizationId(row: ActivityRow, fallbackOrganizationId: string): string {
   const call = row.body.action?.toolCall;

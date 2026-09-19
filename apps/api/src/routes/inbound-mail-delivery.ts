@@ -28,7 +28,6 @@ import { actor, agentSession, athenaInboundMessage, db, event } from '@docket/db
 import type { InboundMessage, InboundProviderId } from '@docket/mail';
 import { snippetOf } from '@docket/mail';
 import { and, eq } from 'drizzle-orm';
-
 import { emitInboundEmail } from './event-emit';
 import { resolveCanonicalConversation } from './agent-dispatch';
 import { postReplyAndResume } from './agent-session-runner';
@@ -38,7 +37,6 @@ import {
   type AthenaInboundMessageRow,
   type AthenaMailboxRow,
 } from './athena-mail-store';
-
 /**
  * What delivery concluded.
  *
@@ -52,7 +50,6 @@ export type InboundDeliveryOutcome =
   | { readonly status: 'delivered'; readonly messageId: string; readonly sessionId: string | null }
   | { readonly status: 'duplicate'; readonly messageId: string }
   | { readonly status: 'unroutable' };
-
 /** The title a message with an empty subject gets — application-owned copy, never blank. */
 const NO_SUBJECT_TITLE = '(No subject)';
 

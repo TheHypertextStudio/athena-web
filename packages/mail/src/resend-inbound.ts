@@ -34,10 +34,8 @@ import {
   SVIX_TIMESTAMP_HEADER,
   verifySvixSignature,
 } from './svix-signature';
-
 /** Resend's receiving API base — the `{base}/{email_id}` read that returns a message's content. */
 export const RESEND_RECEIVING_ENDPOINT = 'https://api.resend.com/emails/receiving';
-
 /** The webhook event type that means "a message arrived at one of your inbound domains". */
 export const RESEND_INBOUND_EVENT_TYPE = 'email.received';
 

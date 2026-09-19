@@ -13,12 +13,10 @@
  * is. See {@link titleFromCache} for the case where no request is needed at all.
  */
 import type { QueryClient } from '@tanstack/react-query';
-
 import { api } from '@/lib/api';
 import { initiativeRecordDef, programRecordDef, projectRecordDef } from '@/lib/entity-records';
 import { peekNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
 import { taskDetailDef } from '@/lib/use-task-detail';
-
 import type { TabRef } from './types';
 
 /** A named thing, as far as a tab title is concerned. */

@@ -10,13 +10,11 @@ import {
   type SearchDocumentDraft,
   sourceUpdatedAt,
 } from '../types';
-
 interface EventEntity {
   kind?: string | null;
   title?: string | null;
   url?: string | null;
 }
-
 interface EventRow {
   id: string;
   organizationId: string;

@@ -4,7 +4,6 @@ import { colorAffectedOverlapComponents } from './scheduling-overlap-coloring';
 import { findAffectedOverlapComponents } from './scheduling-overlap-components';
 import { layoutVisualOverlapSweep, type OverlapLayoutInterval } from './scheduling-overlap-sweep';
 import type { ScheduleItem, ScheduleLane } from './scheduling-types';
-
 /** One timed item's bounds after clipping it to a scheduling lane. */
 export interface ScheduleOverlapInput {
   /** Stable item identifier carried into the resulting placement. */
@@ -18,7 +17,6 @@ export interface ScheduleOverlapInput {
   /** Optional exact-instant minute used to detect overlaps hidden by a DST wall-clock gap. */
   readonly exactEndMinutes?: number;
 }
-
 /** One item's deterministic column inside its transitive visual-overlap cluster. */
 export interface ScheduleOverlapPlacement {
   /** Stable item identifier from the corresponding input. */

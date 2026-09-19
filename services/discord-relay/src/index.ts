@@ -22,7 +22,6 @@
  */
 import { forwardMessage } from './relay';
 import type { DiscordMessage } from './expand';
-
 /** Discord Gateway intents this relay needs (privileged: GUILD_MEMBERS, MESSAGE_CONTENT). */
 const INTENTS =
   (1 << 0) | // GUILDS — guild lifecycle (role cache)
@@ -30,9 +29,7 @@ const INTENTS =
   (1 << 9) | // GUILD_MESSAGES
   (1 << 12) | // DIRECT_MESSAGES
   (1 << 15); // MESSAGE_CONTENT — the message body (privileged)
-
 const GATEWAY_URL = 'wss://gateway.discord.gg/?v=10&encoding=json';
-
 /** Read a required env var or exit — no silent defaults (config fail-fast). */
 function requireEnv(name: string): string {
   const value = process.env[name];

@@ -32,7 +32,6 @@ import {
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
-
 import type { AppEnv } from '../context';
 import { AuthError, ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
@@ -49,10 +48,8 @@ import {
   recordLatticeFailure,
   type LatticeConnectionRow,
 } from './lattice-connection';
-
 /** The live states the gateway reports for a paired device. */
 const DeviceStatusEnum = z.enum(['unpaired', 'reachable', 'offline', 'revoked']);
-
 /** Every actionable reason a Lattice operation can report, as a zod enum for the DTOs. */
 const UnavailableReasonEnum = z.enum(
   LATTICE_UNAVAILABLE_REASONS as unknown as [

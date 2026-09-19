@@ -25,7 +25,6 @@ import {
 } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useState } from 'react';
-
 import { userErrorMessage } from '@/lib/problem';
 
 import type { StatusLike } from './status-registry';

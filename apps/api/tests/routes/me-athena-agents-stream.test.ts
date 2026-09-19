@@ -10,9 +10,7 @@
  * database state changes.
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-
 import type * as DbModule from '@docket/db';
-
 import type meAthenaRouter from '../../src/routes/me-athena';
 import type { reportAgentMilestone as ReportAgentMilestone } from '../../src/routes/agent-bus';
 import { appWithSession, fakeSession, getDb, one } from '../support/routes-harness';
@@ -264,7 +262,6 @@ describe('merged agent-updates stream', () => {
       const real = originalNow();
       return real - testStart > 200 ? real + 20_000 : real;
     });
-
     const app = appWithSession(meAthena, fakeSession(assertDefined(owner).id));
     const res = await app.request('/agents/stream', { headers: { accept: 'text/event-stream' } });
     expect(res.status).toBe(200);

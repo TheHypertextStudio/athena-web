@@ -207,6 +207,33 @@ function parseObjectCommandEffectPayload(value: unknown): ObjectCommandEffectPay
   return value as ObjectCommandEffectPayload;
 }
 
+async function handleTaskFieldsEffect(
+  payload: ObjectCommandEffectPayload,
+  taskFields: ObjectCommandTaskFieldsEffect,
+  occurredAt: Date,
+): Promise<void> {
+  await finishTaskChanges(taskFields.change, {
+    occurredAt,
+    dedupeToken: payload.commandId,
+    strict: true,
+  });
+  if (taskFields.change.assignmentChanged) {
+    await emitEventStrict({
+      organizationId: payload.organizationId,
+      kind: 'assignment',
+      actorId: payload.actorId,
+      occurredAt,
+      title: taskFields.change.title,
+      subject: {
+        type: 'task',
+        id: taskFields.change.taskId,
+        title: taskFields.change.title,
+      },
+      dedupeToken: payload.commandId,
+    });
+  }
+}
+
 async function processObjectCommandEffect(
   payload: ObjectCommandEffectPayload,
   effect: unknown,
@@ -233,26 +260,7 @@ async function processObjectCommandEffect(
   }
   if (kind === 'task_fields') {
     const taskFields = effect as ObjectCommandTaskFieldsEffect;
-    await finishTaskChanges(taskFields.change, {
-      occurredAt,
-      dedupeToken: payload.commandId,
-      strict: true,
-    });
-    if (taskFields.change.assignmentChanged) {
-      await emitEventStrict({
-        organizationId: payload.organizationId,
-        kind: 'assignment',
-        actorId: payload.actorId,
-        occurredAt,
-        title: taskFields.change.title,
-        subject: {
-          type: 'task',
-          id: taskFields.change.taskId,
-          title: taskFields.change.title,
-        },
-        dedupeToken: payload.commandId,
-      });
-    }
+    await handleTaskFieldsEffect(payload, taskFields, occurredAt);
     return;
   }
   if (kind === 'project_status') {

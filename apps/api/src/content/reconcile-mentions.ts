@@ -19,10 +19,8 @@ import {
   type MentionRef,
   type MentionSubjectType,
 } from '../contracts/mention';
-
 import { extractMarkdownLinks, type MarkdownLink } from './markdown-links';
 import type { MentionDraft, MentionStorage } from './mention-ports';
-
 /**
  * The Markdown-bearing column of every subject whose prose can hold mentions.
  *
@@ -42,12 +40,10 @@ export const MARKDOWN_FIELDS: Readonly<Record<MentionSubjectType, readonly strin
   // reference there are exactly what its Library should surface without anyone attaching them.
   team: ['description'],
 };
-
 /** Whether a source table carries prose the reconciler knows how to read. */
 function mentionSubjectFor(sourceTable: string): MentionSubjectType | undefined {
   return sourceTable in MARKDOWN_FIELDS ? (sourceTable as MentionSubjectType) : undefined;
 }
-
 /** Re-deriving the references written in an entity's prose. */
 export interface MentionReconciler {
   /** Make the edges for one subject match its committed prose. */

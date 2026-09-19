@@ -9,7 +9,6 @@
  * documentation across the workspace.
  */
 import { readFileSync } from 'node:fs';
-
 import ts from 'typescript';
 
 /** One exported declaration that is missing a TSDoc comment. */

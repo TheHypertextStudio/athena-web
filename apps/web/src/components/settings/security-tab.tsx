@@ -15,11 +15,9 @@ import type { RecoveryCodesStatusOut } from '@docket/identity-access/account-con
 import { LoadFailure } from './load-failure';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
-
 import { api } from '@/lib/api';
 import { formatCalendarDate } from '@/lib/format-date';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
-
 import { ChangeEmailSection } from './change-email-section';
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';

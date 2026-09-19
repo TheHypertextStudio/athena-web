@@ -4,7 +4,6 @@ import { Building, LayoutTemplate } from '@docket/ui/icons';
 import { useVocabulary } from '@docket/ui/hooks';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useMemo } from 'react';
-
 import { useActiveOrg } from '@/components/active-org';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import {
@@ -15,9 +14,7 @@ import {
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery, useApiQuery } from '@/lib/query';
-
 import type { PaletteItem } from './types';
-
 /** Inputs for the palette's dynamic template and workspace commands. */
 interface CommandActionsInput {
   /** Whether the palette is open; dynamic reads are skipped while it is closed. */

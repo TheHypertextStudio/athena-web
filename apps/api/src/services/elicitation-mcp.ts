@@ -31,9 +31,7 @@ import {
 } from '@docket/athena/elicitation';
 import { agentElicitation, db } from '@docket/db';
 import { eq } from 'drizzle-orm';
-
 import { raiseElicitation, type ElicitationRow } from './elicitation-service';
-
 /**
  * The client capability Athena advertises so a connected server will ask her things.
  *
@@ -43,7 +41,6 @@ import { raiseElicitation, type ElicitationRow } from './elicitation-service';
  * degraded path without anyone noticing.
  */
 export const ELICITATION_CLIENT_CAPABILITY = { elicitation: {} } as const;
-
 /** How often a waiting MCP request re-reads the question's state. */
 const DEFAULT_POLL_MS = 500;
 

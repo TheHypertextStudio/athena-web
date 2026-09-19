@@ -10,12 +10,10 @@ import { apiFetch } from '../helpers/net';
 import { seedMentionFixtures } from '../helpers/mentions';
 import { setColorScheme } from '../helpers/ui';
 import { descriptionEditor, taskActivity } from '../helpers/editors';
-
 const SHOT_ROOT = resolve(
   import.meta.dirname,
   '../../../../docs/design/audits/screenshots/2026-08-10-markdown-code',
 );
-
 /** Retry a cold dynamic route when the dev service worker briefly serves its offline fallback. */
 async function openPersistedRoute(page: Page, href: string): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -192,7 +190,6 @@ test.describe('Markdown code visual evidence', () => {
         animations: 'disabled',
       });
     }
-
     await page.setViewportSize({ width: 320, height: 720 });
     await setColorScheme(page, 'light');
     const commentLayout = await comment.evaluate((element) => {

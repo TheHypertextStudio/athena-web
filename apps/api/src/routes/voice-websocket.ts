@@ -28,13 +28,10 @@
 import { createHash } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
-
 /** The GUID RFC 6455 §1.3 mandates in the handshake accept value. */
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
-
 /** Largest message this server will assemble. ConversationRelay messages are a few kilobytes. */
 export const MAX_MESSAGE_BYTES = 256 * 1024;
-
 /** Opcodes this server understands. */
 const OP_CONTINUATION = 0x0;
 const OP_TEXT = 0x1;
@@ -42,12 +39,10 @@ const OP_BINARY = 0x2;
 const OP_CLOSE = 0x8;
 const OP_PING = 0x9;
 const OP_PONG = 0xa;
-
 /** Compute the `Sec-WebSocket-Accept` value for a client's `Sec-WebSocket-Key`. */
 export function acceptKey(key: string): string {
   return createHash('sha1').update(`${key}${WS_GUID}`).digest('base64');
 }
-
 /**
  * Encode one server-to-client frame.
  *

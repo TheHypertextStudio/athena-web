@@ -15,7 +15,6 @@ interface SchedulingCanvasNoticeProps {
   /** The visible width of the scroll viewport, so the notice centres on what is on screen. */
   readonly viewportWidth: number;
 }
-
 /**
  * Keep degraded and empty-state guidance attached to the visible schedule viewport.
  *
@@ -50,7 +49,6 @@ export function SchedulingCanvasNotice({
   // cannot masquerade as an empty calendar after the route has otherwise painted.
   const loading = !hasError && /^Loading\b/i.test(normalizedEmptyMessage);
   if (!hasError && (!isEmpty || normalizedEmptyMessage.length === 0)) return null;
-
   return (
     <div
       className="pointer-events-none sticky bottom-0 left-0 z-40 -mt-20 flex h-20 items-end justify-center px-3 pb-3"

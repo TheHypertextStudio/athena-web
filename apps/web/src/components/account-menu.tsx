@@ -16,14 +16,12 @@ import {
 } from '@docket/ui/primitives';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import type { JSX } from 'react';
-
 import { SignOutCleanupError, signOutAndPurge } from '@/lib/sign-out';
 import { useAuthenticationInterlock } from '@/components/authentication-interlock';
 import {
   DEFAULT_PERSONAL_SETTINGS_SECTION,
   personalSectionHref,
 } from '@/components/settings/settings-registry';
-
 /** The display identity already resolved by the authenticated shell. */
 export interface AccountMenuIdentity {
   /** Better Auth account id captured by destructive session controls. */
@@ -33,7 +31,6 @@ export interface AccountMenuIdentity {
   /** The account email and guaranteed fallback label. */
   readonly email: string;
 }
-
 /**
  * The account control pinned to the foot of the app sidebar.
  *
@@ -67,7 +64,6 @@ export default function AccountMenu({
   const { name, email } = identity;
   const label = name.trim() || email;
   const initial = (label || '?').charAt(0).toUpperCase();
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

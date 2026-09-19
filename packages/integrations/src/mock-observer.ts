@@ -12,7 +12,6 @@
  * detail.
  */
 import { EventKind } from '@docket/connections/event-contract';
-
 import { genericDetail } from './event-detail';
 import { asRecord, str } from './json';
 import type {
@@ -24,7 +23,6 @@ import type {
   RawInboundEvent,
   VerifySignatureInput,
 } from './observer';
-
 /** Construction options for {@link MockObserver}. */
 export interface MockObserverOptions {
   /** The provider this observer reports (defaults to `linear`). */

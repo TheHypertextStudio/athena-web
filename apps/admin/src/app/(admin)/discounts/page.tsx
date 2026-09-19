@@ -5,7 +5,6 @@ import { FileText, Tag } from '@docket/ui/icons';
 import { Badge, Button, ControlGroup, Input, Stack, Surface, Text } from '@docket/ui/primitives';
 import type { InferResponseType } from 'hono/client';
 import { type JSX, useState } from 'react';
-
 import { AsyncContent, ListSkeleton, QueryErrorBanner } from '@/components/admin-feedback';
 import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-page';
 import { AdminList, AdminListRow } from '@/components/admin-table';
@@ -15,7 +14,6 @@ import { api } from '@/lib/api';
 import { creditLine } from '@/lib/money';
 import { discountQueueDef } from '@/lib/use-admin-queues';
 import { apiQueryOptions, queryKeys, useApiMutation, useApiQuery } from '@/lib/query';
-
 /** One application awaiting a finance decision. */
 type Application = InferResponseType<
   (typeof api.admin)['discount-applications']['$get']

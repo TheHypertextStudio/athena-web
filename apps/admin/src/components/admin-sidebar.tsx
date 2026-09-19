@@ -5,10 +5,8 @@ import { LogOut, Shield } from '@docket/ui/icons';
 import { Separator, Stack, Text, TooltipProvider } from '@docket/ui/primitives';
 import Link from 'next/link';
 import type { JSX } from 'react';
-
 import { ADMIN_NAV, type AdminNavItem, isActiveRoute } from '@/components/admin-nav';
 import type { AdminQueueCounts } from '@/lib/use-admin-queues';
-
 /** Props for {@link AdminSidebar}. */
 export interface AdminSidebarProps {
   /** The current route, used to mark the active entry. */
@@ -24,7 +22,6 @@ export interface AdminSidebarProps {
   /** Sign the operator out. */
   readonly onSignOut: () => void;
 }
-
 /**
  * The operator console's navigation.
  *

@@ -22,20 +22,16 @@ import type { ConnectorProvider } from '@docket/integrations';
 import { WRITE_BACK_CAPABLE_PROVIDERS } from '@docket/integrations';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { z } from 'zod';
-
 import { buildConnector } from '../container';
 import { env } from '../env';
 import { decodeIdTokenClaims } from '../lib/id-token';
 import { toOut as serializeTask } from './task-helpers';
-
 /** IntegrationRow is the selected database row shape consumed by these API route serializers. */
 export type IntegrationRow = typeof integration.$inferSelect;
 /** TaskRow is the selected database row shape consumed by these API route serializers. */
 export type TaskRow = typeof task.$inferSelect;
-
 /** The providers the {@link Connector} port can import from. */
 export const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [...CONNECTOR_PROVIDER_IDS];
-
 /**
  * Connectors whose `integration.writeBack` DEFAULTS ON at connect when the caller doesn't specify.
  *

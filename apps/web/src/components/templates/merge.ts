@@ -7,7 +7,6 @@
  * scripts that produce exactly that shape, so {@link templateMerge} needs this instead.
  */
 type PartialWithUndefined<T> = { [K in keyof T]?: T[K] | undefined };
-
 /** How an authored value absorbs a template's fields. */
 export interface TemplateMergeRule<T> {
   /** The long-form Markdown field, which appends rather than replacing authored text. */
@@ -15,7 +14,6 @@ export interface TemplateMergeRule<T> {
   /** Single-line fields that a template fills only while they remain blank. */
   readonly labels?: readonly (keyof T)[];
 }
-
 /** Whether an authored field still contains no meaningful value. */
 function isBlank(value: unknown): boolean {
   return typeof value === 'string' ? value.trim().length === 0 : value === null;

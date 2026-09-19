@@ -29,12 +29,10 @@ import { EntityListRow, RowMeta, StatusIcon } from '@docket/ui/components';
 import { AlarmClock, CircleStop } from '@docket/ui/icons';
 import Link from '@/components/docket-link';
 import type { JSX } from 'react';
-
 import { formatDay } from '@/components/date-picker';
 import { OrgChip } from '@/components/org-chip';
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { todayISODate } from '@/lib/today';
-
 /** Props for {@link HubTaskRow}. */
 export interface HubTaskRowProps {
   /** The task to render. Accepts the accepted-plan shape so the day's rows carry their extras. */
@@ -56,7 +54,6 @@ export interface HubTaskRowProps {
    */
   readonly className?: string;
 }
-
 /** Whether an item carries the accepted-plan enrichment. */
 function isPlanItem(task: HubTaskItem | HubTodayPlanItem): task is HubTodayPlanItem {
   return 'planItemId' in task;

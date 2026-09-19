@@ -26,22 +26,17 @@
  */
 import type { MemberOut } from '@docket/identity-access/member-contract';
 import type { RoleOut } from '../../lib/contracts/role';
-
 import { useSession } from '@/lib/auth-client';
 import { satisfies } from '@docket/identity-access/capabilities';
-
 import { api } from '@/lib/api';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
-
 /** The role keys that confer org-management ability. */
 const MANAGER_ROLE_KEYS = new Set(['owner', 'admin']);
-
 /** Whether a role's capability bundle (plus its org-wide baseline) reaches `contribute`. */
 function reachesContribute(role: RoleOut): boolean {
   const held = [...role.capabilities, ...(role.baseCapability ? [role.baseCapability] : [])];
   return held.some((capability) => satisfies(capability, 'contribute'));
 }
-
 /** The resolution state of a {@link useCanManageOrg} read. */
 export interface CanManageOrg {
   /** Whether the caller holds an `owner` / `admin` role in the org. */

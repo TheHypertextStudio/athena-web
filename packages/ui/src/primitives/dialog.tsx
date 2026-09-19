@@ -10,7 +10,6 @@
  * primitives beside it (button, card, badge, input, separator) genuinely do not need the
  * directive and deliberately do not carry it, so they stay usable from Server Components.
  */
-
 /**
  * `@docket/ui` — Dialog primitive family (focused, Linear-style modal).
  *

@@ -10,7 +10,6 @@ import { signUpAndOnboard } from '../helpers/app';
 import { expect, test } from '../helpers/fixtures';
 import { apiJson } from '../helpers/net';
 import { assertDefined } from '@docket/test-utils';
-
 function testTimezone(): { readonly name: string; readonly offsetHours: number } {
   const utcHour = new Date().getUTCHours();
   let offsetHours = 1 - utcHour;
@@ -23,7 +22,6 @@ function testTimezone(): { readonly name: string; readonly offsetHours: number }
         : `Etc/GMT+${String(Math.abs(offsetHours))}`;
   return { name, offsetHours };
 }
-
 function dateInTimezone(timezone: string): string {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,

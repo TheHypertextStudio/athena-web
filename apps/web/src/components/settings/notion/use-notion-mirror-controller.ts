@@ -28,7 +28,6 @@ import {
   type SyncRunOut,
 } from '@docket/connections/integration-contract';
 import { useState } from 'react';
-
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import {
@@ -40,11 +39,8 @@ import {
   useApiQuery,
 } from '@/lib/query';
 import { useRemoteSearch } from '@/lib/use-remote-search';
-
 import { relativeTime } from '../format-time';
-
 import { SETUP_FAILED, SYNC_FAILED, syncFailureCopy } from './notion-copy';
-
 /**
  * How the mirror is actually doing, as opposed to how the connection is doing.
  *
@@ -70,7 +66,6 @@ export interface NotionMirrorHealth {
   /** When that pass ended, in words, or null. */
   lastRunLabel: string | null;
 }
-
 /** The Notion hub's view model. */
 export interface NotionMirrorModel {
   loading: boolean;

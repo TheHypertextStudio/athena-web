@@ -10,12 +10,10 @@ export interface DocketWorkflowEnv {
   /** Signs this Worker's outbound requests to Docket (verified against the same secret there). */
   readonly CLOUDFLARE_TO_DOCKET_HMAC_SECRET: string;
 }
-
 /** Application secrets intentionally omitted from generated binding interfaces. */
 export type RunnerEnv = Pick<Cloudflare.Env, 'ATHENA_RUN_QUEUE'> & DocketWorkflowEnv;
 /** Per-generation callback deadline; Athena's overall work has no duration cap. */
 export const DEFAULT_GENERATION_REQUEST_TIMEOUT_MS = 15 * 60_000;
-
 /** Injectable Workflow-to-Docket transport. */
 export interface WorkflowHttpDependencies {
   readonly fetch: typeof fetch;

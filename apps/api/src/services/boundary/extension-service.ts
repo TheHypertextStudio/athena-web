@@ -28,13 +28,10 @@
 import type { Database } from '@docket/db';
 import { dayBoundaryExtensionRequest } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
-
 import type { DayContext } from '../scheduling/directive-service';
 import { MAX_EVENING_EXTENSION_MINUTES, assessEveningShortfall } from '../scheduling/day-loop';
 import { loadSchedulingPreferences } from '../scheduling/repository';
-
 import type { DayBoundaryPort } from './port';
-
 /**
  * How long a queued request may go unanswered before it stops being worth polling.
  *
@@ -44,7 +41,6 @@ import type { DayBoundaryPort } from './port';
  * person was away from the machine — from being polled every five minutes until midnight.
  */
 export const REQUEST_EXPIRY_MINUTES = 90;
-
 /** The states that end a request. Nothing re-asks about a deadline that reached one of these. */
 export const RESOLVED_STATES = Object.freeze([
   'approved',

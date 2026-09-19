@@ -26,7 +26,6 @@ const PROTECTED_SEGMENTS: readonly string[] = [
   'orgs',
   'billing',
 ];
-
 /**
  * Whether `pathname` addresses an authenticated application or Focus surface.
  *

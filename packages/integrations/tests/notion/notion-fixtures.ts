@@ -33,10 +33,8 @@
  * above) there is no such queryable object for a public integration to ever see. See
  * `docs/engineering/specs/notion-sync.md` §3 for the write-up this finding fed back into.
  */
-
 /** The real data source id of the LVBT "Tasks Tracker" database. */
 export const TASKS_TRACKER_DATA_SOURCE = '383c7791-208f-802e-9508-000b6d244e57';
-
 /**
  * A synthetic data source id standing in for a differently-named custom database.
  *
@@ -46,7 +44,6 @@ export const TASKS_TRACKER_DATA_SOURCE = '383c7791-208f-802e-9508-000b6d244e57';
  * treat this purely as an arbitrary second id, not as a real database's identity.
  */
 export const MY_TASKS_DATA_SOURCE = '6f60a403-0e08-47a3-8948-9fa25cdf97be';
-
 /**
  * The `properties` map of the LVBT "Tasks Tracker" data source, in Notion REST shape.
  *

@@ -11,7 +11,6 @@
  * incoming work. See `docs/engineering/specs/email-to-task.md` §9.
  */
 'use client';
-
 import type {
   EmailSuggestionOut,
   SuggestionAcceptBody,
@@ -19,7 +18,6 @@ import type {
 import { Sparkles } from '@docket/ui/icons';
 import { Badge, Button, Card, CardContent, DecorativeIcon, Input } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
-
 import { DatePicker } from '@/components/date-picker';
 import { useEmailSuggestionThread, useEmailSuggestions } from '@/lib/use-email-suggestions';
 

@@ -6,7 +6,6 @@ describe('InMemoryBillingGateway', () => {
   describe('customer identity', () => {
     it('creates one addressable customer identity for an organization', async () => {
       const gateway = new InMemoryBillingGateway();
-
       await expect(gateway.listCustomers('org_customer')).resolves.toEqual([]);
       await expect(gateway.createCustomer('org_customer')).resolves.toEqual({
         id: 'cus_org_customer',
@@ -18,7 +17,6 @@ describe('InMemoryBillingGateway', () => {
       await expect(gateway.getCustomerBillingCountry('cus_org_customer')).resolves.toBe('US');
     });
   });
-
   it('starts an existing customer without a second trial when trialDays is zero', async () => {
     const gateway = new InMemoryBillingGateway();
     await gateway.createCheckoutSession({

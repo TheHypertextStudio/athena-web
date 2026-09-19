@@ -17,10 +17,8 @@ export type {
   ScheduleWallTimeCandidate,
   ScheduleWallTimeResolution,
 } from '@docket/planning/wall-time';
-
 const MINIMUM_MAJOR_TICK_SEPARATION = 44;
 const MAJOR_TICK_INTERVALS = [15, 30, 60, 120] as const;
-
 /**
  * How much precision an hour label carries.
  *

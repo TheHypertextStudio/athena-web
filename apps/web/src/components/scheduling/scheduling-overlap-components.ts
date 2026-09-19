@@ -7,15 +7,12 @@ interface ExactInterval {
   readonly index: number;
   readonly startMinutes: number;
 }
-
 /** Compact union-find over visual clusters connected by exact-instant overlap components. */
 class DisjointClusters {
   private readonly parents: number[];
-
   public constructor(size: number) {
     this.parents = Array.from({ length: size }, (_, index) => index);
   }
-
   public find(index: number): number {
     const parent = this.parents[index];
     if (parent === undefined || parent === index) return index;

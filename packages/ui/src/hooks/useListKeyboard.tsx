@@ -24,7 +24,6 @@
  * active row into view through its virtualizer.
  */
 import * as React from 'react';
-
 /** The keyboard event fields {@link useListKeyboard} reads. */
 export interface ListKeyboardEvent {
   /** The pressed key value. */
@@ -39,7 +38,6 @@ export interface ListKeyboardEvent {
   /** Prevent the browser's default key behavior when the hook handles it. */
   preventDefault: () => void;
 }
-
 /** Options for {@link useListKeyboard}. */
 export interface UseListKeyboardOptions {
   /** Total number of navigable (flattened) rows. */

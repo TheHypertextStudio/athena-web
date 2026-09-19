@@ -11,13 +11,11 @@ export interface DenseScheduleOverflowGroup {
   readonly height: number;
   readonly placement: ScheduleOverlapPlacement;
 }
-
 /** Timed items split into directly manipulable cards and accessible overflow disclosures. */
 export interface DenseScheduleArrangement {
   readonly directItems: readonly PositionedScheduleItem[];
   readonly overflowGroups: readonly DenseScheduleOverflowGroup[];
 }
-
 /** Optional user choice that replaces one default visible collision column. */
 export interface DenseScheduleArrangementOptions {
   readonly promotedItemId?: string | undefined;

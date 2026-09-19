@@ -11,11 +11,9 @@
 import { verifyAccessToken } from '@docket/auth';
 import { actor, db, oauthClient, oauthConsent, user as userTable } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
-
 import { env } from '../env';
 import { AuthError, CapabilityError, NotFoundError } from '../error';
 import { assertProductCapability } from '../product-capability';
-
 /**
  * Who an MCP call is executing as: an authenticated human user (cookie/Bearer paths)
  * or an internal agent principal (Athena's in-process loop; see
@@ -50,7 +48,6 @@ export type McpPrincipal =
       /** The agent Actor's display name (e.g. "Athena"). */
       readonly displayName: string;
     };
-
 /**
  * The authenticated MCP caller: who is asking ({@link McpPrincipal}) plus the verified
  * OAuth scopes the call carries.
@@ -86,7 +83,6 @@ export interface McpContext {
    */
   readonly clientId?: string | null;
 }
-
 /**
  * The caller's resolved Actor within one organization, for {@link canActor} checks.
  *

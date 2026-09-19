@@ -38,7 +38,6 @@ import { MCP_UI_MIME_TYPE, parseMcpAppModelContext } from '@docket/integrations/
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
-
 import type { AppEnv } from '../../context';
 import { getContainer } from '../../container';
 import { AuthError, ApiError, NotFoundError } from '../../error';

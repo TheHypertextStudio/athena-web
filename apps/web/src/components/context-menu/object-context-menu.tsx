@@ -59,7 +59,6 @@ import {
   useRef,
   useState,
 } from 'react';
-
 import {
   describeObject,
   OBJECT_TARGET_SELECTOR,
@@ -73,7 +72,6 @@ import { useActionRegistry } from '@/lib/actions/registry-context';
 import { useResolvedActions } from '@/lib/actions/registry-context';
 import type { ActionContext, ResolvedAction } from '@/lib/actions/types';
 import { readSelectionSurfaceFor } from '@/components/selection/selection-registry';
-
 /** Elements whose native context menu is always preserved. */
 const NATIVE_MENU_SELECTOR =
   '[data-native-context-menu="true"], input, textarea, select, [contenteditable=""], [contenteditable="true"]';

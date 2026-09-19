@@ -20,11 +20,9 @@ import type {
   AvailabilityWindow,
   AvailabilityWindowKind,
 } from '@docket/planning/scheduling-contract';
-
 import type { Interval, Span } from '@docket/planning/intervals';
 import { mergeIntervals, spanMinutes, subtractIntervals } from '@docket/planning/intervals';
 import { instantAt, localDateString, weekDates, weekdayOf } from '@docket/planning/zoned-time';
-
 /** A pre-existing commitment the planner must schedule around. */
 export interface BusyItem {
   readonly id: string;
@@ -40,7 +38,6 @@ export interface BusyItem {
   /** Whether this item was placed by a previous scheduler run. */
   readonly schedulerOwned: boolean;
 }
-
 /** The expanded, allocatable shape of one week. */
 export interface ExpandedAvailability {
   /** Free spans by kind, with personal time and busy time already removed. */

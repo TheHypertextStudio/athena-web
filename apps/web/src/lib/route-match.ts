@@ -15,7 +15,6 @@
  * Split from the generated module so the matching rules can be unit-tested against fixture patterns
  * without pulling every route's component into the test's module graph.
  */
-
 /** A route pattern segment, parsed once so matching does not re-parse on every navigation. */
 type Segment =
   | { readonly kind: 'static'; readonly value: string }

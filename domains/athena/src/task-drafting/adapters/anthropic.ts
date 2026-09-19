@@ -11,7 +11,6 @@ import type {
 import type { Priority } from '@docket/work/task-contract';
 import type { TaskDraft, TaskDraftInput, TaskSynthesizer } from '@docket/work/task-drafting';
 import { truncateTitle } from '@docket/work/task-titles';
-
 import {
   constrainTaskExpansion,
   type ExpansionDependency,

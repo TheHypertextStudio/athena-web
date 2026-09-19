@@ -16,7 +16,6 @@
  * this component owns only the transient open state.
  */
 import * as React from 'react';
-
 import { Popover, PopoverContent, PopoverTrigger } from '../../primitives';
 
 import { PickerList } from './PickerList';

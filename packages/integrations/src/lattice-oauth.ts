@@ -26,7 +26,6 @@
  * @see {@link ./lattice-gateway.ts} for what the resulting token is used for.
  */
 import { createHash, randomBytes } from 'node:crypto';
-
 /** Authorization endpoint path on the accounts issuer. */
 export const LOVELACE_AUTHORIZE_PATH = '/oauth/authorize';
 

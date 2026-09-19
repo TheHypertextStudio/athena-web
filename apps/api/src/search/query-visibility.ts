@@ -9,7 +9,6 @@
  */
 import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import type { searchDocument } from '@docket/db';
-
 import {
   resourceAccessKey,
   resolveResourceAccess,
@@ -17,7 +16,6 @@ import {
   type ResourceAccessResult,
 } from '../permissions/resource-access';
 import type { SearchCaller, SearchDocumentRow } from './query-types';
-
 /**
  * The `search_document` WHERE-clause fragment bounding candidate rows to ones this caller could
  * possibly see: personally owned, or in one of their accessible orgs.
@@ -39,7 +37,6 @@ export function documentVisibilityCondition(
     ? or(inArray(table.organizationId, [...orgIds]), ownedByCaller)
     : (ownedByCaller ?? sql`false`);
 }
-
 /** One org the caller can act in, and the Actor/role identity every grant check reads from. */
 export interface CallerOrgAccess {
   organizationId: string;
@@ -47,7 +44,6 @@ export interface CallerOrgAccess {
   roleId: string | null;
   isGuest: boolean;
 }
-
 /** The visibility mode a `search_document` row carries, read from its `visibility` JSON column. */
 export type SearchVisibility =
   | { mode: 'org_members' }

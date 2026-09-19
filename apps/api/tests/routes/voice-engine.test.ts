@@ -8,7 +8,6 @@
  */
 import type { VoiceActionOut, VoiceEndReason, VoiceTurnOut } from '@docket/athena/voice';
 import { describe, expect, it } from 'vitest';
-
 import {
   VoiceSessionEngine,
   type VoiceReplyChunk,
@@ -18,7 +17,6 @@ import {
   type VoiceToolRunner,
   type VoiceTranscriptStore,
 } from '../../src/routes/voice-engine';
-
 const ctx: VoiceSessionContext = {
   voiceSessionId: 'vs_1',
   conversationId: 'conv_1',
@@ -349,7 +347,6 @@ describe('voice session engine', () => {
     expect(store.ended).toBe('caller_hung_up');
     expect(engine.state).toBe('ended');
   });
-
   it('does not persist partial transcripts', async () => {
     const store = new RecordingStore();
     const engineRef: { current: VoiceSessionEngine | null } = { current: null };

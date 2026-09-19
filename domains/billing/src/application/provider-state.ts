@@ -6,15 +6,12 @@ import {
   type Database,
 } from '@docket/db';
 import { and, eq, inArray, isNull, lte } from 'drizzle-orm';
-
 import type { BillingEvent, BillingGateway } from '../contracts';
-
 /** The result of atomically acquiring an organization-product Checkout attempt. */
 export type CheckoutAttemptLease =
   | { readonly kind: 'acquired'; readonly id: string }
   | { readonly kind: 'reusable'; readonly url: string }
   | { readonly kind: 'pending' };
-
 /** The provider identity Docket persisted for one organization. */
 export interface OrganizationBillingAccount {
   /** Docket organization id. */

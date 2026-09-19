@@ -30,7 +30,6 @@ import { ActorAvatar, RelativeTime } from '@docket/ui/components';
 import { focusRingInset } from '@docket/ui/primitives';
 import { cn } from '@docket/ui';
 import type { JSX } from 'react';
-
 import { relativeTime } from '../agents/format-time';
 import { StreamEventDetail } from './stream-event-detail';
 import {
@@ -40,12 +39,10 @@ import {
   type StreamEventRow,
 } from './stream-meta';
 import { SpineCell } from './stream-spine';
-
 /** The disclosure button's id for one event. */
 export function eventLineId(rowId: string): string {
   return `stream-event-${rowId}`;
 }
-
 /** The expanded panel's id for one event. */
 export function eventDetailId(rowId: string): string {
   return `stream-event-detail-${rowId}`;

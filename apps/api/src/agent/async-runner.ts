@@ -15,7 +15,6 @@ import {
   type RunGenerationOptions,
   type RunGenerationTransaction,
 } from './run-generation';
-
 /** Maximum delivery attempts before an intent requires operator attention. */
 export const MAX_DISPATCH_ATTEMPTS = 8;
 /** Short claim lease so a crashed dispatcher becomes recoverable promptly. */
@@ -26,7 +25,6 @@ export const DEFAULT_DISPATCH_SWEEP_SIZE = 25;
 export const DEFAULT_DISPATCH_RECONCILIATION_MS = 20 * 60_000;
 /** Deadline for one API-to-Worker request. */
 export const DEFAULT_RUNNER_REQUEST_TIMEOUT_MS = 10_000;
-
 /** Minimal config needed to choose and authenticate the execution path. */
 export interface AsyncRunnerConfig {
   readonly APP_MODE?: 'local' | 'test' | 'production' | undefined;
@@ -34,19 +32,16 @@ export interface AsyncRunnerConfig {
   readonly CLOUDFLARE_ATHENA_RUNNER_URL?: string | undefined;
   readonly DOCKET_TO_CLOUDFLARE_HMAC_SECRET?: string | undefined;
 }
-
 /** Transport needed after Docket has conditionally claimed a persisted intent. */
 export interface AsyncDispatchDependencies {
   readonly config: AsyncRunnerConfig;
   readonly fetch: (input: URL, init: RequestInit) => Promise<Response>;
   readonly timeoutMs?: number;
 }
-
 /** Injectable effects for deterministic admission tests. */
 export interface AsyncRunnerDependencies extends AsyncDispatchDependencies {
   readonly enqueue: typeof enqueueRunGeneration;
 }
-
 /** Synchronous fallback or accepted asynchronous generation. */
 export type AthenaGenerationAdmission =
   { readonly mode: 'sync' } | { readonly mode: 'async'; readonly queued: QueuedRunGeneration };

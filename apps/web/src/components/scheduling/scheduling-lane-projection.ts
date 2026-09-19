@@ -23,7 +23,6 @@ export function projectInstantRangeToScheduleLane(
   const start = scheduleWallPositionForInstant(range.startsAt, displayTimezone);
   const end = scheduleWallPositionForInstant(range.endsAt, displayTimezone);
   if (!start || !end || end.date < lane.date || start.date > lane.date) return null;
-
   const startMinutes = start.date < lane.date ? 0 : start.wallMinutes;
   const endMinutes = end.date > lane.date ? 24 * 60 : end.wallMinutes;
   const elapsedMinutes = scheduleElapsedMinutes(range.startsAt, range.endsAt);

@@ -9,7 +9,6 @@ import {
   type ScheduleAllDayRange,
 } from './scheduling-all-day-editing';
 import type { ScheduleItem, ScheduleLane, SchedulingCanvasProps } from './scheduling-types';
-
 /** Inputs needed to bind direct manipulation to one rendered all-day segment. */
 export interface UseSchedulingAllDayGestureOptions {
   readonly item: ScheduleItem;
@@ -27,7 +26,6 @@ export interface UseSchedulingAllDayGestureOptions {
   readonly onResizeAllDayItem?: SchedulingCanvasProps['onResizeAllDayItem'];
   readonly onAnnouncementChange: (announcement: string) => void;
 }
-
 /** Compare semantic all-day previews without relying on object identity. */
 export function allDayPreviewsEqual(
   left: ScheduleAllDayGesturePreview | null,
@@ -39,7 +37,6 @@ export function allDayPreviewsEqual(
     left?.endDate === right?.endDate
   );
 }
-
 /** Return whether one segment exposes the callback needed for a gesture mode. */
 export function allDayGestureModeEnabled(
   options: UseSchedulingAllDayGestureOptions,

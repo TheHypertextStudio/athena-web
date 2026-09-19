@@ -3,10 +3,8 @@
 /** Synchronize xyflow node selection with Athena's shared object-selection surface. */
 import { type Node, useOnSelectionChange, useReactFlow, useStore } from '@xyflow/react';
 import { useCallback, useEffect, useMemo } from 'react';
-
 import { useSelection } from '@/components/selection';
 import { objectKey, type ObjectKind } from '@/lib/actions';
-
 const TASK_NODE_TYPES = ['task', 'taskBranch'] as const;
 
 /** Props for {@link CanvasSelectionBridge}. */

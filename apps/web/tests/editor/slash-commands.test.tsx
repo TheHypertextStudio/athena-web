@@ -4,13 +4,10 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
 import { SLASH_COMMANDS, rankSlashCommands } from '@/components/editor/slash-commands';
-
 import { makeQueryWrapper } from '../support/query';
 import { installProseMirrorLayoutShims } from './prosemirror-jsdom';
-
 /**
  * The editor asks the shell which workspace it is in; outside the shell there is nothing to
  * mention. These tests are about the in-workspace behaviour, so the shell answer is stubbed.

@@ -78,6 +78,7 @@ import {
   type SessionRow,
 } from './agent-session-helpers';
 import { toPersonalActivityOut } from './me-athena-activity';
+import { athenaWorkConditions, type AthenaWorkScope } from './me-athena-scope';
 import meAthenaChanges from './me-athena-undo';
 import { runSession } from './agent-session-runner';
 import {
@@ -176,6 +177,7 @@ function historyCursorSchema(scope: HistoryCursorScope) {
 
 /** Independent cursor inputs for the three bounded overview lanes. */
 const overviewQuery = z.object({
+  workspaceId: z.string().min(1).optional().describe('Only work started in this workspace.'),
   limit: z.coerce.number().int().min(1).max(OVERVIEW_LANE_LIMIT).default(OVERVIEW_LANE_LIMIT),
   needsYouCursor: historyCursorSchema('needs_you').optional(),
   workingCursor: historyCursorSchema('working').optional(),
@@ -300,7 +302,7 @@ async function personalSummaryForSession(
 }
 
 /** Count durable queue states without loading any session or activity body. */
-async function pulseCounts(ownerUserId: string): Promise<
+async function pulseCounts(scope: AthenaWorkScope): Promise<
   z.input<typeof AthenaPulseOut> & {
     readonly finished: number;
   }
@@ -308,15 +310,7 @@ async function pulseCounts(ownerUserId: string): Promise<
   const rows = await db
     .select({ status: agentSession.status, total: count() })
     .from(agentSession)
-    .where(
-      and(
-        eq(agentSession.executorKind, 'athena'),
-        eq(agentSession.ownerUserId, ownerUserId),
-        // The caller's own conversation (`kind: 'chat'`) is surfaced separately as `currentChat`,
-        // never as a piece of work — it must not inflate a queue count.
-        ne(agentSession.kind, 'chat'),
-      ),
-    )
+    .where(and(...athenaWorkConditions(scope)))
     .groupBy(agentSession.status);
   const total = (statuses: readonly SessionRow['status'][]): number =>
     rows.filter((row) => statuses.includes(row.status)).reduce((sum, row) => sum + row.total, 0);
@@ -443,7 +437,7 @@ interface SessionLanePage {
 
 /** Load one independently bounded queue lane in stable newest-first order. */
 async function sessionLanePage(
-  ownerUserId: string,
+  owner: AthenaWorkScope,
   statuses: readonly SessionRow['status'][],
   scope: Exclude<HistoryCursorScope, 'activity'>,
   token: string | undefined,
@@ -455,11 +449,7 @@ async function sessionLanePage(
     .from(agentSession)
     .where(
       and(
-        eq(agentSession.executorKind, 'athena'),
-        eq(agentSession.ownerUserId, ownerUserId),
-        // The caller's own conversation (`kind: 'chat'`) is surfaced separately as `currentChat`,
-        // never as a piece of work — it must not land in Needs you, Working, or Finished.
-        ne(agentSession.kind, 'chat'),
+        ...athenaWorkConditions(owner),
         inArray(agentSession.status, [...statuses]),
         cursor
           ? or(
@@ -485,16 +475,11 @@ async function overview(
   ownerUserId: string,
   query: OverviewQuery = DEFAULT_OVERVIEW_QUERY,
 ): Promise<z.input<typeof AthenaOverviewOut>> {
+  const scope: AthenaWorkScope = { ownerUserId, workspaceId: query.workspaceId };
   const [needsYou, working, finished, chats, counts] = await Promise.all([
-    sessionLanePage(
-      ownerUserId,
-      NEEDS_YOU_STATUSES,
-      'needs_you',
-      query.needsYouCursor,
-      query.limit,
-    ),
-    sessionLanePage(ownerUserId, WORKING_STATUSES, 'working', query.workingCursor, query.limit),
-    sessionLanePage(ownerUserId, FINISHED_STATUSES, 'finished', query.finishedCursor, query.limit),
+    sessionLanePage(scope, NEEDS_YOU_STATUSES, 'needs_you', query.needsYouCursor, query.limit),
+    sessionLanePage(scope, WORKING_STATUSES, 'working', query.workingCursor, query.limit),
+    sessionLanePage(scope, FINISHED_STATUSES, 'finished', query.finishedCursor, query.limit),
     db
       .select()
       .from(agentSession)
@@ -507,7 +492,7 @@ async function overview(
       )
       .orderBy(desc(agentSession.createdAt))
       .limit(1),
-    pulseCounts(ownerUserId),
+    pulseCounts(scope),
   ]);
   const rows = [
     ...new Map(
@@ -781,7 +766,7 @@ const meAthena = new Hono<AppEnv>()
       summary: 'Get the personal Athena overview',
       response: AthenaOverviewOut,
       description:
-        'Return only the authenticated user’s Athena work as independently bounded Needs you, Working, and Finished pages with exact all-history counts, lane-specific continuation cursors, and the current persistent chat.',
+        'Return only the authenticated user’s Athena work as independently bounded Needs you, Working, and Finished pages with exact all-history counts, lane-specific continuation cursors, and the current persistent chat. Pass `workspaceId` to narrow the lanes and counts to work started in one workspace.',
     }),
     zQuery(overviewQuery),
     async (c) => ok(c, AthenaOverviewOut, await overview(requestOwner(c), c.req.valid('query'))),
@@ -796,7 +781,7 @@ const meAthena = new Hono<AppEnv>()
         'Return only Needs you and Working counts for the ambient closed-dock pulse without loading private session history or activity.',
     }),
     async (c) => {
-      const counts = await pulseCounts(requestOwner(c));
+      const counts = await pulseCounts({ ownerUserId: requestOwner(c) });
       return ok(c, AthenaPulseOut, { needsYou: counts.needsYou, working: counts.working });
     },
   )
@@ -961,7 +946,7 @@ const meAthena = new Hono<AppEnv>()
       summary: 'List grouped personal Athena work',
       response: AthenaOverviewOut,
       description:
-        'List caller-owned Athena sessions as independently paginated product lanes with exact all-history counts; lane-bound cursors cannot be reused across Needs you, Working, and Finished, and registered agents or other users never appear.',
+        'List caller-owned Athena sessions as independently paginated product lanes with exact all-history counts; lane-bound cursors cannot be reused across Needs you, Working, and Finished, and registered agents or other users never appear. Pass `workspaceId` to narrow the lanes and counts to work started in one workspace.',
     }),
     zQuery(overviewQuery),
     async (c) => ok(c, AthenaOverviewOut, await overview(requestOwner(c), c.req.valid('query'))),

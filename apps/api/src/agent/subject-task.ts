@@ -5,6 +5,9 @@ import type { TurnSubjectTask } from '@docket/athena/turn';
 import { db, sessionActivity, task } from '@docket/db';
 import { and, asc, eq } from 'drizzle-orm';
 
+import { activePlanContext } from '../lib/plan-draft/context';
+import type { ActivePlanContext } from './system-prompt';
+
 /**
  * The task a session's work is about: the task the person asked from, else the task the work was
  * filed as.
@@ -36,4 +39,29 @@ export async function sessionSubjectTask(
     .where(eq(task.id, subjectId))
     .limit(1);
   return rows[0];
+}
+
+/** What a run tells the model about the work before its first turn. */
+export interface PromptContext {
+  /** The plan open on the canvas, when there is one. */
+  readonly activePlan: ActivePlanContext | null;
+  /** The task this work is about, when it has one. */
+  readonly subjectTask: TurnSubjectTask | undefined;
+}
+
+/**
+ * The plan and the task a session's run is about.
+ *
+ * @param sessionId - The session being run.
+ * @param taskId - The session's own task link.
+ */
+export async function promptContext(
+  sessionId: string,
+  taskId: string | null,
+): Promise<PromptContext> {
+  const [activePlan, subjectTask] = await Promise.all([
+    activePlanContext(sessionId),
+    sessionSubjectTask(sessionId, taskId),
+  ]);
+  return { activePlan, subjectTask };
 }

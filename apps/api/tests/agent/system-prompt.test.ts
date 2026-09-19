@@ -55,3 +55,23 @@ describe('buildSystemPrompt user-owned preferences', () => {
     expect(prompt).toContain('RECORDED AS SUGGESTIONS');
   });
 });
+
+describe('buildSystemPrompt subject task', () => {
+  it('names the task and workspace the work is about', () => {
+    const prompt = buildSystemPrompt({
+      ...BASE,
+      personalApprovalMode: 'ask_before_acting',
+      subjectTask: {
+        id: '01J0000000000000000000TASK',
+        organizationId: '01J00000000000000000000ORG',
+      },
+    });
+    expect(prompt).toContain('01J0000000000000000000TASK');
+    expect(prompt).toContain('01J00000000000000000000ORG');
+  });
+
+  it('names no task when the work has none', () => {
+    const prompt = buildSystemPrompt({ ...BASE, personalApprovalMode: 'ask_before_acting' });
+    expect(prompt).not.toContain('01J0000000000000000000TASK');
+  });
+});

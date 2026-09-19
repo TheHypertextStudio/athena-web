@@ -149,7 +149,8 @@ Reads always execute — the dial gates mutation, not observation. No tool-name 
 
 `apps/api/src/agent/loop.ts` — `driveSession(orgId, sessionId)`, **re-entrant**: all state
 is in the DB, so first run, resume-on-approve, resume-on-reply, and restart recovery are one
-code path. Per turn: stream `agentTurn` events → persist activities (thinking→`thought`,
+code path. The system prompt names the task the work is about, by id and workspace: the task the
+person asked from, else the task the work was filed as. Per turn: stream `agentTurn` events → persist activities (thinking→`thought`,
 text→`response`, tool_use→`action`) → on `turn_end` append the assistant message to the
 transcript in the same transaction → dispatch tool calls per the policy engine:
 

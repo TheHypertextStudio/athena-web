@@ -37,7 +37,6 @@ import type { SessionApprovalDecision } from '@docket/athena/agent-contract';
 import { and, asc, desc, eq } from 'drizzle-orm';
 
 import { assertProductCapability } from '../product-capability';
-import { activePlanContext } from '../lib/plan-draft/context';
 import { approvalOutcome, finalStatus, finishedSettlement, hasRun } from './approval-outcome';
 import { summarizeToolCall } from './tool-call-summary';
 import { ConflictError, NotFoundError } from '../error';
@@ -54,7 +53,7 @@ import {
 import { classifyTool, decideUserOwnedToolExecution } from './approval-policy';
 import { assertHostedExecutionSurface } from './execution-surface';
 import { markProvenance } from './provenance';
-import { sessionSubjectTask } from './subject-task';
+import { promptContext } from './subject-task';
 import { buildSystemPrompt } from './system-prompt';
 import {
   ASK_USER_TOOL,
@@ -505,6 +504,7 @@ async function driveSessionWithAdmission(
       );
     }
 
+    const context = await promptContext(sessionId, session.taskId);
     const system = buildSystemPrompt({
       agentName: agentRow.displayName,
       executorKind: session.executorKind,
@@ -513,9 +513,8 @@ async function driveSessionWithAdmission(
       personalApprovalMode: principalPreferences.approvalMode,
       personalInstructions: principalPreferences.instructions,
       guidance: agentRow.guidance,
-      activePlan: await activePlanContext(sessionId),
+      ...context,
     });
-    const subjectTask = await sessionSubjectTask(sessionId, session.taskId);
 
     for (;;) {
       const execution = await executeApprovedActions(orgId, sessionId, lease, deps);
@@ -601,7 +600,7 @@ async function driveSessionWithAdmission(
         system,
         messages,
         tools: openedToolbox.tools,
-        subjectTask,
+        subjectTask: context.subjectTask,
       })) {
         if (event.type === 'thinking') {
           await persistGenerationEffect(lease, deps, 'thought-activity', async (tx) => {

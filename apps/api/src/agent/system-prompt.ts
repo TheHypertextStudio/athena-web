@@ -10,6 +10,7 @@
  * later concern; the column is a single text field today).
  */
 import type { ApprovalPolicy } from '@docket/athena/agent-contract';
+import type { TurnSubjectTask } from '@docket/athena/turn';
 import type { AthenaApprovalMode } from '@docket/planning/hub-preferences-contract';
 
 import { PROVENANCE_SYSTEM_RULE } from './provenance';
@@ -61,6 +62,8 @@ export interface SystemPromptInput {
   readonly guidance: string | null;
   /** The plan draft this conversation is shaping on the canvas, when one is open. */
   readonly activePlan?: ActivePlanContext | null | undefined;
+  /** The task this work is about, when it has one. */
+  readonly subjectTask?: TurnSubjectTask | undefined;
 }
 
 /** What the prompt says about the plan a session is currently shaping. */
@@ -97,6 +100,14 @@ export const PLANNING_SYSTEM_RULE =
   'engineering subtask to someone on the engineering team that owns that area — and set `teamId` ' +
   'to that same team. Leave `assigneeId` unset rather than guessing when the roster names nobody ' +
   'who fits.';
+
+/** The line naming the task this work is about, so Athena acts on that task and not a lookalike. */
+export function subjectTaskLine(subject: TurnSubjectTask): string {
+  return (
+    `This work is about task ${subject.id} in workspace ${subject.organizationId}. ` +
+    'Read it before acting, and change that task when the work asks for a change to it.'
+  );
+}
 
 /** The line naming the open plan, so Athena reads it before drafting. */
 export function activePlanLine(plan: ActivePlanContext): string {
@@ -150,6 +161,7 @@ export function buildSystemPrompt(input: SystemPromptInput): string {
     '',
     'Finish with a short summary of what you did (or proposed) and why.',
   ];
+  if (input.subjectTask) lines.push('', subjectTaskLine(input.subjectTask));
   if (input.activePlan) {
     lines.push('', activePlanLine(input.activePlan));
   }

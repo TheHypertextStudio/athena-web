@@ -12,11 +12,13 @@
  * needs no I/O of its own.
  */
 import type {
+  PlanCommitCounts,
   PlanDocument,
   PlanNode,
   PlanNodeFields,
   PlanNodeKind,
   PlanOp,
+  PlanPlaced,
 } from './contracts/plan-draft';
 import type { TemplateDraft } from './contracts/template';
 
@@ -46,8 +48,19 @@ const ALLOWED_PARENTS: Readonly<Record<PlanNodeKind, readonly PlanNodeKind[]>> =
   initiative: [],
   program: ['initiative'],
   project: ['program', 'initiative'],
-  task: ['project'],
+  task: ['project', 'task'],
 };
+
+/**
+ * How deep a task may sit inside other tasks.
+ *
+ * @remarks
+ * One: a feature task carries its engineering subtasks, and a subtask carries none of its own.
+ * The real task record nests without limit, so the ceiling is a planning rule rather than a
+ * storage one — a canvas row that can hide work three levels down stops being readable, and the
+ * shape the person asked for is exactly two levels.
+ */
+const MAX_TASK_DEPTH = 1;
 
 /** Which fields each kind carries. */
 const FIELDS_BY_KIND: Readonly<Record<PlanNodeKind, ReadonlySet<keyof PlanNodeFields>>> = {
@@ -144,6 +157,39 @@ function assertParent(
   while (cursor) {
     if (cursor.ref === selfRef) throw new PlanOpError(index, path, 'That would make a cycle.');
     cursor = cursor.parentRef === null ? undefined : planNode(document, cursor.parentRef);
+  }
+}
+
+/** How many tasks sit above a node on its way to the root. */
+function taskAncestorCount(document: PlanDocument, node: PlanNode): number {
+  let count = 0;
+  let cursor = node.parentRef === null ? undefined : planNode(document, node.parentRef);
+  while (cursor) {
+    if (cursor.kind === 'task') count += 1;
+    cursor = cursor.parentRef === null ? undefined : planNode(document, cursor.parentRef);
+  }
+  return count;
+}
+
+/**
+ * Reject a task nested deeper than one level, for a node and everything under it.
+ *
+ * @remarks
+ * The whole subtree is checked, not just the node itself, because moving a feature task that
+ * already carries subtasks under another task would push those subtasks past the ceiling without
+ * any op ever naming them.
+ */
+function assertTaskDepth(index: number, document: PlanDocument, ref: string): void {
+  for (const member of subtreeRefs(document, ref)) {
+    const node = planNode(document, member);
+    if (node?.kind !== 'task') continue;
+    if (taskAncestorCount(document, node) > MAX_TASK_DEPTH) {
+      throw new PlanOpError(
+        index,
+        `ops.${index}.parentRef`,
+        'A subtask carries no subtasks of its own.',
+      );
+    }
   }
 }
 
@@ -400,8 +446,9 @@ function applyOne(
  *
  * @remarks
  * Parent rules are checked once the whole batch has applied, so a tree may arrive in any order —
- * a task before the project it names, the project before its initiative. A rejection names the
- * op that placed or moved the offending node.
+ * a task before the project it names, the project before its initiative, an engineering subtask
+ * before the feature task it hangs from. A rejection names the op that placed or moved the
+ * offending node.
  *
  * @param document - The current document; never mutated.
  * @param ops - The batch, applied in order.
@@ -425,6 +472,7 @@ export function applyPlanOps(
     const index = placedBy.get(node.ref);
     if (index === undefined) continue;
     assertParent(index, next, node.kind, node.parentRef, node.ref);
+    assertTaskDepth(index, next, node.ref);
   }
   return { ...next, nodes: parentsFirst(next.nodes) };
 }
@@ -448,6 +496,42 @@ export function planNodeClosure(document: PlanDocument, refs: readonly string[])
   return parentsFirst(document.nodes)
     .filter((node) => wanted.has(node.ref))
     .map((node) => node.ref);
+}
+
+/**
+ * Whether a node is a task filed under another task.
+ *
+ * @remarks
+ * Read off the document rather than off the created record so the count is the same whether the
+ * parent task was created by this commit or was already confirmed on an earlier one.
+ */
+function isSubtask(document: PlanDocument, ref: string): boolean {
+  const node = planNode(document, ref);
+  if (node?.kind !== 'task' || node.parentRef === null) return false;
+  return planNode(document, node.parentRef)?.kind === 'task';
+}
+
+/**
+ * What a commit created, counted for the confirmation line.
+ *
+ * @param document - The plan document the commit ran against, for reading each node's parent.
+ * @param placed - Every node the commit touched; matched nodes are not counted.
+ * @returns the created records per kind, subtasks split out from tasks.
+ */
+export function planCommitCounts(
+  document: PlanDocument,
+  placed: readonly PlanPlaced[],
+): PlanCommitCounts {
+  const counts = { initiatives: 0, projects: 0, tasks: 0, subtasks: 0 };
+  for (const entry of placed) {
+    if (!entry.created) continue;
+    if (entry.kind === 'initiative') counts.initiatives += 1;
+    if (entry.kind === 'project') counts.projects += 1;
+    if (entry.kind !== 'task') continue;
+    if (isSubtask(document, entry.ref)) counts.subtasks += 1;
+    else counts.tasks += 1;
+  }
+  return counts;
 }
 
 /** The counts the app bar shows. */

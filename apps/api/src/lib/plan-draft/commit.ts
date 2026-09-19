@@ -4,7 +4,9 @@
  * @remarks
  * Confirming is the one moment a plan touches the workspace. The selected refs are closed over
  * their unconfirmed ancestors, mapped onto the organize tool's item shape, and placed through the
- * same reconciling create-or-match walk in one serializable transaction. Inside that transaction
+ * same reconciling create-or-match walk in one serializable transaction. A task filed under
+ * another task is created as its subtask, after the parent and in the parent's project, whether
+ * that parent lands in this commit or was confirmed by an earlier one. Inside that transaction
  * the document is rewritten with the real ids, the many-to-many initiative links and the
  * dependency edges whose ends both exist are written, and the whole thing is recorded as a change
  * set the `undo` tool understands. A failure anywhere leaves nothing behind.
@@ -17,13 +19,19 @@ import {
   initiativeProject,
   planDraft,
   projectDependency,
+  task,
   taskDependency,
   type ChangeOrigin,
 } from '@docket/db';
 import { canActor } from '@docket/authz';
-import type { PlanDocument, PlanNode, PlanPlaced } from '@docket/work/plan-draft-contract';
-import { planCounts, planNodeClosure } from '@docket/work/plan-draft';
-import { eq } from 'drizzle-orm';
+import type {
+  PlanCommitCounts,
+  PlanDocument,
+  PlanNode,
+  PlanPlaced,
+} from '@docket/work/plan-draft-contract';
+import { planCommitCounts, planCounts, planNodeClosure } from '@docket/work/plan-draft';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { CapabilityError, NotFoundError, ValidationError } from '../../error';
 import { recordChangeSetInTx, type RecordedChange } from '../../mcp/change-set';
@@ -50,6 +58,8 @@ export interface CommitPlanResult {
   readonly row: PlanDraftRow;
   /** Every node the commit touched, parents first. */
   readonly placed: PlanPlaced[];
+  /** What was created, per kind, for the confirmation line the client renders. */
+  readonly createdCounts: PlanCommitCounts;
   /** The change set `undo` accepts, or null when nothing was created. */
   readonly changeSetId: string | null;
 }
@@ -82,8 +92,71 @@ function existingParentRefs(
     case 'initiative':
       return { initiative: objectId };
     case 'task':
+      // A subtask whose feature task is already real carries no organize descriptor — there is no
+      // "parent task" field on an item — so it is resolved separately by
+      // {@link loadConfirmedParentTasks} and applied straight onto the placement.
       return {};
   }
+}
+
+/** Where a subtask's feature task already lives, once that task is a real record. */
+interface ConfirmedParentTask {
+  /** The real task the subtask hangs from. */
+  readonly taskId: string;
+  /** The project that task sits in, which the subtask inherits. */
+  readonly projectId: string | null;
+}
+
+/** The real task id each subtask in the closure hangs from, for parents outside this commit. */
+function alreadyRealParents(
+  closureRefs: readonly string[],
+  byRef: ReadonlyMap<string, PlanNode>,
+  closure: ReadonlySet<string>,
+): Map<string, string> {
+  const wanted = new Map<string, string>();
+  for (const ref of closureRefs) {
+    const node = byRef.get(ref);
+    if (node?.kind !== 'task' || node.parentRef === null || closure.has(node.parentRef)) continue;
+    const parent = byRef.get(node.parentRef);
+    if (parent?.kind !== 'task' || parent.objectId === null) continue;
+    wanted.set(ref, parent.objectId);
+  }
+  return wanted;
+}
+
+/**
+ * The already-real tasks that draft subtasks in this closure hang from.
+ *
+ * @remarks
+ * A person often confirms a feature task in one pass and its engineering subtasks in the next, so
+ * the parent is not in this commit's closure at all. Read before the transaction opens, like every
+ * other lookup here, so a reference that has gone missing fails before anything is written.
+ *
+ * @param orgId - The workspace the plan writes into.
+ * @param closureRefs - The nodes this commit will create.
+ * @param byRef - Every node of the document, by ref.
+ * @param closure - The same refs as a set, for asking whether a parent lands in this commit.
+ * @returns the parent task per child node ref, for children whose parent is already real.
+ */
+async function loadConfirmedParentTasks(
+  orgId: string,
+  closureRefs: readonly string[],
+  byRef: ReadonlyMap<string, PlanNode>,
+  closure: ReadonlySet<string>,
+): Promise<Map<string, ConfirmedParentTask>> {
+  const wanted = alreadyRealParents(closureRefs, byRef, closure);
+  if (wanted.size === 0) return new Map();
+  const rows = await db
+    .select({ id: task.id, projectId: task.projectId })
+    .from(task)
+    .where(and(eq(task.organizationId, orgId), inArray(task.id, [...new Set(wanted.values())])));
+  const projectByTaskId = new Map(rows.map((row) => [row.id, row.projectId]));
+  const resolved = new Map<string, ConfirmedParentTask>();
+  for (const [ref, taskId] of wanted) {
+    if (!projectByTaskId.has(taskId)) continue;
+    resolved.set(ref, { taskId, projectId: projectByTaskId.get(taskId) ?? null });
+  }
+  return resolved;
 }
 
 /** Everything the link and finalize steps share inside the commit transaction. */
@@ -200,6 +273,58 @@ function confirmDocument(
   };
 }
 
+/** What the placement walk builds up as it goes, and what the steps after it read. */
+interface PlacementLedger {
+  /** Every node placed, in the order it was placed. */
+  readonly placed: Placed[];
+  /** The same placements by plan ref. */
+  readonly placedByRef: Map<string, Placed>;
+  /** The project each placed task landed in, by plan ref. */
+  readonly projectByRef: Map<string, string | null>;
+  /** The creates to record on the change set. */
+  readonly changes: RecordedChange[];
+  /** The parent of every task this commit actually created, for the completion policy. */
+  readonly parentTaskIds: (string | null)[];
+}
+
+/** Where a commit lands work by default, when the item names nothing narrower. */
+interface CommitLanding {
+  readonly orgId: string;
+  readonly actorId: string;
+  readonly landingTeamId: string;
+}
+
+/** Place every prepared item in order, recording what each became on the ledger. */
+async function placePrepared(
+  tx: Tx,
+  landing: CommitLanding,
+  prepared: readonly PreparedItem[],
+  confirmedParents: ReadonlyMap<string, ConfirmedParentTask>,
+  ledger: PlacementLedger,
+): Promise<void> {
+  for (const entry of prepared) {
+    const at = placementFor(entry.item, entry.refs, { ...ledger, confirmedParents });
+    const result = await placeItem(tx, {
+      orgId: landing.orgId,
+      actorId: landing.actorId,
+      item: entry.item,
+      at,
+      teamId: entry.refs.teamId ?? landing.landingTeamId,
+      state: entry.state,
+      assigneeId: entry.refs.assigneeId,
+      ownerId: entry.refs.ownerId,
+      leadId: entry.refs.leadId,
+    });
+    ledger.placed.push(result.placed);
+    ledger.placedByRef.set(entry.item.ref, result.placed);
+    if (result.placed.kind === 'task') ledger.projectByRef.set(entry.item.ref, at.projectId);
+    if (result.change) ledger.changes.push(result.change);
+    if (result.placed.kind === 'task' && result.placed.created) {
+      ledger.parentTaskIds.push(at.parentTaskId);
+    }
+  }
+}
+
 /**
  * Create the named draft nodes, plus their unconfirmed ancestors, as real objects.
  *
@@ -228,34 +353,26 @@ export async function commitPlanNodes(input: CommitPlanInput): Promise<CommitPla
   if (!landing) throw new NotFoundError('No team to plan into');
 
   const prepared = await prepareItems(orgId, ordered, landing);
+  const confirmedParents = await loadConfirmedParentTasks(orgId, closureRefs, byRef, closure);
 
-  const placed: Placed[] = [];
-  const placedByRef = new Map<string, Placed>();
-  const changes: RecordedChange[] = [];
+  const ledger: PlacementLedger = {
+    placed: [],
+    placedByRef: new Map(),
+    projectByRef: new Map(),
+    changes: [],
+    parentTaskIds: [],
+  };
+  const { placed, placedByRef, changes } = ledger;
   let outcome: { readonly row: PlanDraftRow; readonly changeSetId: string | null } | undefined;
 
   const cascades = await serializableTx(async (tx) => {
-    const parentTaskIds: (string | null)[] = [];
-    for (const entry of prepared) {
-      const at = placementFor(entry.item, entry.refs, placedByRef);
-      const result = await placeItem(tx, {
-        orgId,
-        actorId,
-        item: entry.item,
-        at,
-        teamId: entry.refs.teamId ?? landing.teamId,
-        state: entry.state,
-        assigneeId: entry.refs.assigneeId,
-        ownerId: entry.refs.ownerId,
-        leadId: entry.refs.leadId,
-      });
-      placed.push(result.placed);
-      placedByRef.set(entry.item.ref, result.placed);
-      if (result.change) changes.push(result.change);
-      if (result.placed.kind === 'task' && result.placed.created) {
-        parentTaskIds.push(at.parentTaskId);
-      }
-    }
+    await placePrepared(
+      tx,
+      { orgId, actorId, landingTeamId: landing.teamId },
+      prepared,
+      confirmedParents,
+      ledger,
+    );
     const context: CommitContext = {
       tx,
       orgId,
@@ -268,10 +385,10 @@ export async function commitPlanNodes(input: CommitPlanInput): Promise<CommitPla
     await linkDependencies(context);
     outcome = await finalizeCommit(
       context,
-      { row, actorId, origin: input.origin, firstTitle: ordered[0]?.title },
+      { row, actorId, origin: planOrigin(input.origin, row), firstTitle: ordered[0]?.title },
       placed,
     );
-    return applySubtaskCompletionPolicyForParents(tx, orgId, parentTaskIds);
+    return applySubtaskCompletionPolicyForParents(tx, orgId, ledger.parentTaskIds);
   });
 
   for (const entry of placed) {
@@ -281,7 +398,12 @@ export async function commitPlanNodes(input: CommitPlanInput): Promise<CommitPla
 
   /* v8 ignore next -- @preserve defensive: the transaction always sets the outcome */
   if (!outcome) throw new Error('plan commit produced no outcome');
-  return { row: outcome.row, placed, changeSetId: outcome.changeSetId };
+  return {
+    row: outcome.row,
+    placed,
+    createdCounts: planCommitCounts(row.document, placed),
+    changeSetId: outcome.changeSetId,
+  };
 }
 
 /** One item resolved and ready to place: its descriptors and its workflow state. */
@@ -323,21 +445,63 @@ async function prepareItems(
   );
 }
 
-/** Where one item lands: a parent placed in this commit wins over a resolved descriptor. */
+/** What {@link placementFor} reads to resolve one item's parents. */
+interface PlacementContext {
+  /** Nodes already placed in this commit, by plan ref. */
+  readonly placedByRef: ReadonlyMap<string, Placed>;
+  /** The project each placed task landed in, by plan ref, so its subtasks inherit it. */
+  readonly projectByRef: ReadonlyMap<string, string | null>;
+  /** Feature tasks confirmed by an earlier commit, keyed by the subtask's plan ref. */
+  readonly confirmedParents: ReadonlyMap<string, ConfirmedParentTask>;
+}
+
+/** The real task a subtask hangs from: one placed in this commit, or one confirmed earlier. */
+function subtaskParent(
+  item: OrganizeItem,
+  context: PlacementContext,
+): ConfirmedParentTask | undefined {
+  const confirmed = context.confirmedParents.get(item.ref);
+  if (confirmed) return confirmed;
+  const local = item.parent === undefined ? undefined : context.placedByRef.get(item.parent);
+  if (local?.kind !== 'task') return undefined;
+  return { taskId: local.id, projectId: context.projectByRef.get(local.ref) ?? null };
+}
+
+/**
+ * Where one item lands: a parent placed in this commit wins over a resolved descriptor.
+ *
+ * @remarks
+ * A subtask takes its parent's project rather than none at all, so the engineering work under a
+ * feature task shows up in the same project as the feature — the real subtask route does the same
+ * inheritance, and a plan should not be the one path that drops it.
+ */
 function placementFor(
   item: OrganizeItem,
   refs: Awaited<ReturnType<typeof resolveItem>>,
-  placedByRef: ReadonlyMap<string, Placed>,
+  context: PlacementContext,
 ): Placement {
-  const local = item.parent === undefined ? undefined : placedByRef.get(item.parent);
+  const local = item.parent === undefined ? undefined : context.placedByRef.get(item.parent);
   const localId = (kind: Placed['kind']): string | undefined =>
     local?.kind === kind ? local.id : undefined;
+  const parentTask = subtaskParent(item, context);
   return {
-    projectId: localId('project') ?? refs.projectId,
+    projectId: localId('project') ?? parentTask?.projectId ?? refs.projectId,
     programId: localId('program') ?? refs.programId,
     initiativeId: localId('initiative') ?? refs.initiativeId,
-    parentTaskId: localId('task') ?? null,
+    parentTaskId: parentTask?.taskId ?? null,
   };
+}
+
+/**
+ * The caller's origin with the plan and its owner stamped on.
+ *
+ * @remarks
+ * Recorded for both doors, not just Athena's. A commit from the canvas carries no agent session,
+ * and the undo route answers "is this yours?" from the origin alone, so without the plan on it the
+ * person who pressed Confirm would have nothing to undo.
+ */
+function planOrigin(origin: ChangeOrigin, row: PlanDraftRow): ChangeOrigin {
+  return { ...origin, planId: row.id, planOwnerUserId: row.ownerUserId };
 }
 
 /** Who is committing what, for the change set header. */

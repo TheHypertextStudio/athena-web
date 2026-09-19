@@ -136,12 +136,32 @@ function toolAnnotations(
   return tools.find((tool) => tool.name === name)?.annotations ?? {};
 }
 
+interface RosterPerson {
+  actorId: string;
+  name: string;
+  teamIds: string[];
+}
+
+interface RosterTeam {
+  id: string;
+  name: string;
+}
+
 interface StartOut {
   planId: string;
   href: string;
   revision: number;
-  document: { nodes: { ref: string; status: string; objectId: string | null }[] };
+  document: {
+    nodes: {
+      ref: string;
+      status: string;
+      objectId: string | null;
+      fields: { assigneeId?: string | null; teamId?: string | null };
+    }[];
+  };
   templates: { id: string; targetType: string }[];
+  people: RosterPerson[];
+  teams: RosterTeam[];
 }
 
 interface DraftOut {
@@ -158,6 +178,7 @@ interface CommitOut {
   placed: { ref: string; created: boolean }[];
   created: number;
   matched: number;
+  createdCounts: { initiatives: number; projects: number; tasks: number; subtasks: number };
   changeSetId: string | null;
 }
 
@@ -297,6 +318,104 @@ describe('plan tools', () => {
       .from(schema.task)
       .where(eq(schema.task.organizationId, orgId));
     expect(tasks.map((task) => task.title)).toEqual(['Segment donors']);
+  });
+
+  it('plan_start and plan_read return the people and teams to assign work to', async () => {
+    const { ctx, orgId } = await seedOrg();
+    const [engineering] = await db
+      .insert(schema.team)
+      .values({
+        organizationId: orgId,
+        name: 'Engineering',
+        key: `E${Math.random().toString(36).slice(2, 6)}`,
+      })
+      .returning({ id: schema.team.id });
+    const engineeringId = assertDefined(engineering).id;
+    const [engineer] = await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: 'Rin Okada' })
+      .returning({ id: schema.actor.id });
+    const engineerId = assertDefined(engineer).id;
+    await db
+      .insert(schema.teamMember)
+      .values({ organizationId: orgId, teamId: engineeringId, actorId: engineerId });
+    await db.insert(schema.actor).values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'Departed',
+      status: 'suspended',
+      archivedAt: new Date(),
+    });
+
+    const client = await connect(ctx);
+    const started = await start(client, { orgId });
+    expect(started.people.map((person) => person.name)).toEqual(['Ada', 'Rin Okada']);
+    expect(started.people.find((person) => person.name === 'Rin Okada')?.teamIds).toEqual([
+      engineeringId,
+    ]);
+    expect(started.people.find((person) => person.name === 'Ada')?.teamIds).toEqual([]);
+    expect(started.teams.map((team) => team.name)).toEqual(['Core', 'Engineering']);
+
+    const read = structured(
+      await call(client, 'plan_read', { planId: started.planId }),
+    ) as unknown as StartOut;
+    expect(read.people.map((person) => person.actorId).sort()).toEqual(
+      started.people.map((person) => person.actorId).sort(),
+    );
+    expect(read.teams).toEqual(started.teams);
+  });
+
+  it('plan_draft assigns a feature task and its subtask from the roster in one batch', async () => {
+    const { ctx, orgId } = await seedOrg();
+    const client = await connect(ctx);
+    const started = await start(client, { orgId });
+    const person = assertDefined(started.people[0]);
+    const team = assertDefined(started.teams[0]);
+    const drafted = structured(
+      await call(client, 'plan_draft', {
+        planId: started.planId,
+        revision: 0,
+        ops: [
+          ...SEED_OPS,
+          {
+            op: 'upsert_node',
+            node: {
+              ref: 'f1',
+              kind: 'task',
+              parentRef: 'p1',
+              fields: { title: 'Mood entry', assigneeId: person.actorId, teamId: team.id },
+            },
+          },
+          {
+            op: 'upsert_node',
+            node: {
+              ref: 's1',
+              kind: 'task',
+              parentRef: 'f1',
+              fields: { title: 'Add the endpoint', assigneeId: person.actorId, teamId: team.id },
+            },
+          },
+        ],
+      }),
+    ) as unknown as DraftOut;
+    expect(drafted.added).toEqual(['init', 'p1', 't1', 'f1', 's1']);
+
+    const committed = structured(
+      await call(client, 'plan_commit', { planId: started.planId, refs: ['s1'] }),
+    ) as unknown as CommitOut;
+    expect(committed.createdCounts).toEqual({
+      initiatives: 1,
+      projects: 1,
+      tasks: 1,
+      subtasks: 1,
+    });
+    const subtasks = await db
+      .select({ title: schema.task.title, assigneeId: schema.task.assigneeId })
+      .from(schema.task)
+      .where(eq(schema.task.organizationId, orgId));
+    expect(subtasks.find((row) => row.title === 'Add the endpoint')?.assigneeId).toBe(
+      person.actorId,
+    );
   });
 
   it('hides another user’s plan from every plan tool', async () => {

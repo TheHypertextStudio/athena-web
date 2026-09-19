@@ -19,6 +19,8 @@ import {
   program,
   project,
   task,
+  team,
+  teamMember,
   template,
   workStatus,
 } from '@docket/db';
@@ -29,6 +31,7 @@ import type {
   PlanDraftPatch,
   PlanNodeKind,
   PlanObjectSnapshot,
+  PlanRoster,
   PlanTemplateOption,
 } from '@docket/work/plan-draft-contract';
 import {
@@ -39,7 +42,7 @@ import {
   type PlanOpEnvironment,
 } from '@docket/work/plan-draft';
 import type { TemplateDraft } from '@docket/work/template-contract';
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import { NotFoundError, PreconditionFailedError, ValidationError } from '../../error';
 import { seedDefaultTemplates } from '../templates/defaults';
@@ -264,6 +267,63 @@ export async function listPlanTemplates(
     name: entry.name,
     description: entry.description,
   })) as PlanTemplateOption[];
+}
+
+/**
+ * Who the plan may assign its work to: every active person in the workspace, and every live team.
+ *
+ * @remarks
+ * Returned beside the templates so Athena can put a name on a node in the same turn it drafts the
+ * node. Without it the model has no way to reach `assigneeId` at all — the fields take actor and
+ * team ids, and nothing else in a planning conversation ever produces one. Agent and team actors
+ * are left out of `people`: a team is assignable through `teams`, and an agent is not who a
+ * feature task goes to.
+ *
+ * @param row - The plan, for its workspace.
+ * @returns the people with the teams each belongs to, and the workspace's teams, both by name.
+ */
+export async function listPlanRoster(
+  row: Pick<PlanDraftRow, 'organizationId'>,
+): Promise<PlanRoster> {
+  const orgId = row.organizationId;
+  const [people, teams, memberships] = await Promise.all([
+    db
+      .select({ actorId: actor.id, name: actor.displayName })
+      .from(actor)
+      .where(
+        and(
+          eq(actor.organizationId, orgId),
+          eq(actor.kind, 'human'),
+          eq(actor.status, 'active'),
+          isNull(actor.archivedAt),
+        ),
+      )
+      .orderBy(asc(actor.displayName)),
+    db
+      .select({ id: team.id, name: team.name })
+      .from(team)
+      .where(and(eq(team.organizationId, orgId), isNull(team.archivedAt)))
+      .orderBy(asc(team.name)),
+    db
+      .select({ actorId: teamMember.actorId, teamId: teamMember.teamId })
+      .from(teamMember)
+      .where(eq(teamMember.organizationId, orgId)),
+  ]);
+  const live = new Set(teams.map((entry) => entry.id));
+  const teamIdsByActor = new Map<string, string[]>();
+  for (const membership of memberships) {
+    if (!live.has(membership.teamId)) continue;
+    const list = teamIdsByActor.get(membership.actorId) ?? [];
+    list.push(membership.teamId);
+    teamIdsByActor.set(membership.actorId, list);
+  }
+  return {
+    people: people.map((person) => ({
+      ...person,
+      teamIds: teamIdsByActor.get(person.actorId) ?? [],
+    })),
+    teams,
+  } as PlanRoster;
 }
 
 /** Translate a reducer rejection into the API's field-error shape. */

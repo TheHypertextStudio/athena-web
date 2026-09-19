@@ -14,10 +14,13 @@
  */
 import type { PlanDraftRow } from '../lib/plan-draft/store';
 import {
+  PlanCommitCounts,
   PlanDocument,
   PlanNodeKind,
   PlanOp,
   PlanPlaced,
+  PlanRosterPerson,
+  PlanRosterTeam,
   PlanTemplateOption,
   PLAN_TOOL_NAMES,
 } from '@docket/work/plan-draft-contract';
@@ -32,6 +35,7 @@ import { commitPlanNodes } from '../lib/plan-draft/commit';
 import {
   attachPlanSession,
   createOrReopenPlan,
+  listPlanRoster,
   listPlanTemplates,
   loadOwnedPlan,
   patchPlan,
@@ -118,7 +122,7 @@ function registerPlanStart(server: McpRegistrar, ctx: McpContext, sessionId: str
     {
       title: 'Start a plan',
       description:
-        'Open a planning draft on the canvas, or reopen the one on an initiative.\n\nUse it as soon as the person describes initiative-sized work, and say so in a sentence. Returns the document, its link, and the templates each kind may apply. Nothing is created until `plan_commit`.',
+        'Open a planning draft on the canvas, or reopen the one on an initiative.\n\nUse it as soon as the person describes initiative-sized work, and say so in a sentence. Returns the document, its link, the templates each kind may apply, and the workspace roster — `people` and `teams` are where `assigneeId`, `leadId`, `ownerId`, and `teamId` come from, so assign by picking a name from it. Nothing is created until `plan_commit`.',
       inputSchema: {
         orgId: orgIdParam,
         initiative: z
@@ -136,6 +140,8 @@ function registerPlanStart(server: McpRegistrar, ctx: McpContext, sessionId: str
         counts: planCountsSchema,
         document: PlanDocument,
         templates: z.array(PlanTemplateOption),
+        people: z.array(PlanRosterPerson),
+        teams: z.array(PlanRosterTeam),
       },
       _meta: { ...PRIVATE_DRAFT_META },
       annotations: PRIVATE_DRAFT_ANNOTATIONS,
@@ -158,10 +164,12 @@ function registerPlanStart(server: McpRegistrar, ctx: McpContext, sessionId: str
           sessionId: hostSessionId,
         });
         const row = hostSessionId ? await attachPlanSession(created, hostSessionId) : created;
+        const roster = await listPlanRoster(row);
         return jsonResult({
           ...planSummary(row),
           document: row.document,
           templates: await listPlanTemplates(row),
+          ...roster,
         });
       }),
   );
@@ -174,7 +182,7 @@ function registerPlanRead(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Read a plan',
       description:
-        'The plan document and its revision.\n\nRead it at the start of each turn while a plan is active, since the person may have edited the canvas, and pass the revision to `plan_draft`.',
+        'The plan document, its revision, and the workspace roster.\n\nRead it at the start of each turn while a plan is active, since the person may have edited the canvas, and pass the revision to `plan_draft`. `people` and `teams` are the ids to assign work with.',
       inputSchema: { planId: planIdParam },
       outputSchema: {
         planId: z.string(),
@@ -184,6 +192,8 @@ function registerPlanRead(server: McpRegistrar, ctx: McpContext): void {
         revision: z.number().int(),
         counts: planCountsSchema,
         document: PlanDocument,
+        people: z.array(PlanRosterPerson),
+        teams: z.array(PlanRosterTeam),
       },
       annotations: {
         readOnlyHint: true,
@@ -195,7 +205,11 @@ function registerPlanRead(server: McpRegistrar, ctx: McpContext): void {
     (input) =>
       runTool(async () => {
         const row = await loadOwnedPlan(ownerOf(ctx), input.planId);
-        return jsonResult({ ...planSummary(row), document: row.document });
+        return jsonResult({
+          ...planSummary(row),
+          document: row.document,
+          ...(await listPlanRoster(row)),
+        });
       }),
   );
 }
@@ -207,7 +221,7 @@ function registerPlanDraft(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Draft on the canvas',
       description:
-        'Edit the plan in one batch of ops; it applies whole or not at all.\n\nAdd or update nodes (invent a short `ref`, name parents by ref), set fields, move a task, remove a draft node, add or remove a dependency, or apply a template. Write a whole turn in one call so it lands together. Created nodes cannot be edited here; use `update` on the real object.',
+        'Edit the plan in one batch of ops; it applies whole or not at all.\n\nAdd or update nodes (invent a short `ref`, name parents by ref), set fields, move a task, remove a draft node, add or remove a dependency, or apply a template. A task’s parent is its project, or a feature task for an engineering subtask; subtasks go one level deep. Write a whole turn in one call so it lands together — a feature task and its subtasks belong in the same batch. Created nodes cannot be edited here; use `update` on the real object.',
       inputSchema: {
         planId: planIdParam,
         revision: z
@@ -268,6 +282,9 @@ function registerPlanCommit(server: McpRegistrar, ctx: McpContext, sessionId: st
         placed: z.array(PlanPlaced),
         created: z.number().int(),
         matched: z.number().int(),
+        createdCounts: PlanCommitCounts.describe(
+          'What was created, per kind, for the line you say back — subtasks counted apart from tasks.',
+        ),
         changeSetId: z
           .string()
           .nullable()
@@ -311,6 +328,7 @@ function registerPlanCommit(server: McpRegistrar, ctx: McpContext, sessionId: st
           placed: result.placed,
           created,
           matched: result.placed.length - created,
+          createdCounts: result.createdCounts,
           changeSetId: result.changeSetId,
         });
       }),

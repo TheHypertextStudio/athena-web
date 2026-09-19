@@ -216,6 +216,58 @@ chunk, and back or forward all swap instantly.
   20 px one, and Playwright's `animations: 'disabled'` fast-forwards the collapsing header to its
   compact end, so evidence shots of detail pages must not use it.
 - **Blockers**: None.
+### [ATHENA-PLAN-FLOW-001] Athena plans a feature launch and the confirmation is undoable
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-09-18
+- **Priority**: P1
+- **Description**: The owner's ask: "I need Athena to create an initiative along with associated
+  projects for launching a new set of features for a journaling app, along with all tasks for
+  implementing user stories, with their engineering tasks expressed as subtasks of the feature
+  tasks; feature tasks assigned to PMs in the product team and engineering tasks assigned to people
+  in various engineering teams." Three things stopped that sentence from running end to end. A plan
+  document had no way to express a subtask, so engineering work under a feature task had nowhere to
+  go. Nothing in a planning conversation ever produced an actor or team id, so `assigneeId` and
+  `teamId` were unreachable and every node landed unassigned. And a commit made from the canvas
+  recorded no owner the undo route could recognise, so the confirmation line had nothing to put
+  behind Undo.
+
+#### Approach
+
+One slice across the domain contract, the reducer, the commit, the tools, the system prompt, and the
+undo route.
+
+- **Subtasks**: `ALLOWED_PARENTS.task` gains `task`, capped at one level by `assertTaskDepth`, which
+  walks the moved node's whole subtree so a move cannot push existing subtasks past the ceiling.
+  `commitPlanNodes` resolves a subtask's parent either from this commit's placements or, through
+  `loadConfirmedParentTasks`, from a feature task confirmed on an earlier pass, and the subtask
+  inherits that parent's project the way the real subtask route does.
+- **Rosters**: `listPlanRoster` returns the workspace's active human actors with their team ids and
+  its live teams; `plan_start` and `plan_read` return them as `people` and `teams`, and
+  `PLANNING_SYSTEM_RULE` tells Athena to pick a name from that roster and keep a feature and its
+  subtasks in one `plan_draft` batch.
+- **Undo**: `ChangeOrigin` gains `planId` and `planOwnerUserId`, stamped by `commitPlanNodes` for
+  both doors. The undo route authorises a change set that traces back to a caller-owned session OR a
+  caller-owned plan, re-checking each claim against the row it names. `PlanCommitOut` and
+  `plan_commit` gained `createdCounts` so the client can render the one line with Undo.
+- **Running it locally**: a scripted mock, `JOURNALING_PLAN_TURNS`, so the whole flow can be driven
+  against the local mock model.
+
+- **Subtasks**:
+  - [x] Task-under-task in the contract, the reducer, and the commit
+  - [x] `people`/`teams` on `plan_start` and `plan_read`, and the prompt that uses them
+  - [x] Plan-origin undo and `createdCounts` on both commit doors
+  - [ ] `JOURNALING_PLAN_TURNS` and its selection in the mock runtime
+  - [ ] The web half: rendering subtask rows, assignment, and the confirmation line
+- **Blockers**: None.
+
+#### Notes
+
+`undoChangeSetAtomically` understands only tasks and the edges between them — it refuses a project
+or initiative entry outright — so a plan commit reverses through `undoChangeSet`, the reporting path
+Athena's own `undo` tool already runs for `organize`, which produces the same mixed shape. Extending
+the atomic path was the better answer and is not available: `apps/api/src/mcp/change-set.ts` sits
+exactly on its `max-lines` ledger entry at 739, and the ledger may only shrink.
 
 ### [ATHENA-SSE-406-001] A browser can open an Athena activity stream
 

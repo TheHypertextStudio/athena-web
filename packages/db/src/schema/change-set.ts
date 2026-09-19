@@ -27,6 +27,17 @@ export interface ChangeOrigin {
   readonly client?: string;
   /** The MCP session the call arrived on, when it held one. */
   readonly sessionId?: string;
+  /**
+   * The plan draft this change confirmed, when it came from the planning canvas.
+   *
+   * @remarks
+   * A canvas commit has no agent session behind it — the person pressed the button — so the
+   * session is not always there to answer "may this caller take it back". The plan is: it belongs
+   * to exactly one user, and that user is the one offered Undo on the confirmation line.
+   */
+  readonly planId?: string;
+  /** The user who owns {@link ChangeOrigin.planId}, recorded beside it for the same question. */
+  readonly planOwnerUserId?: string;
   /** The tool that produced the change. */
   readonly tool: string;
 }

@@ -224,6 +224,26 @@ the existing peek editors and object commands, Athena through her normal update 
 gate. When a confirmed object is later trashed or renamed in the workspace, the plan read reflects
 it, because the read hydrates confirmed nodes from their real records.
 
+### Subtasks, rosters, and undo
+
+A plan that describes a feature launch needs three things the first slice left out, and they arrive
+together. A task node may name another task as its `parentRef`, one level deep, so a feature task
+carries its engineering subtasks; the reducer refuses a third level, and the commit creates the
+subtask after its parent, with `parentTaskId` set and the parent's project inherited, whether that
+parent lands in the same commit or was confirmed by an earlier one. `plan_start` and `plan_read`
+return the workspace roster beside the templates — `people`, each with the `teamIds` they are on,
+and `teams` — because `assigneeId` and `teamId` take ids and a planning conversation produces only
+names; the system prompt tells Athena to send a feature task to someone on the product team and
+each engineering subtask to someone on the team that owns that area, and to write a feature and its
+subtasks in one `plan_draft` batch. Every commit stamps its plan and that plan's owner onto the
+change set's origin, so `POST /v1/me/athena/changes/{changeSetId}/undo` accepts a commit the person
+made from the canvas as readily as one Athena made in a session: the commit response carries
+`changeSetId` and `createdCounts` (`initiatives`, `projects`, `tasks`, `subtasks`, counting only
+what was created) so the client renders one line — "Created 1 initiative, 3 projects, 24 tasks ·
+Undo" — and the Undo behind it reverses the whole commit. A plan commit reverses through the
+reporting path rather than the all-or-nothing one, because the atomic reversal understands only
+tasks and the edges between them, and a plan commit also creates containers.
+
 ## Entry and navigation
 
 **From the thread.** The Plan card's Open canvas action pushes the plan route and reveals the Athena

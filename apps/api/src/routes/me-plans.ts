@@ -110,7 +110,7 @@ const mePlans = new Hono<AppEnv>()
       tag: 'Me',
       summary: 'Confirm plan nodes',
       response: PlanCommitOut,
-      description: `Create the named draft nodes as real objects in the plan's workspace, in one transaction. Unconfirmed ancestors are included automatically so a task never lands without its project. Nodes that already exist by name in the same place are matched rather than duplicated. Requires \`contribute\` in the plan's workspace at the moment of the call; **403** otherwise, **404** when the caller is no longer a member. Returns {@link PlanCommitOut} with the updated plan, what each node became, and the change set id that \`undo\` accepts.`,
+      description: `Create the named draft nodes as real objects in the plan's workspace, in one transaction. Unconfirmed ancestors are included automatically so a task never lands without its project, and a task filed under another task is created as its subtask in the same project. Nodes that already exist by name in the same place are matched rather than duplicated. Requires \`contribute\` in the plan's workspace at the moment of the call; **403** otherwise, **404** when the caller is no longer a member. Returns {@link PlanCommitOut} with the updated plan, what each node became, \`createdCounts\` for the confirmation line, and the change set id to pass to \`POST /v1/me/athena/changes/{changeSetId}/undo\`.`,
     }),
     zParam(idParam),
     zJson(PlanCommitBody),
@@ -124,6 +124,7 @@ const mePlans = new Hono<AppEnv>()
       return ok(c, PlanCommitOut, {
         plan: await presentPlan(result.row),
         placed: result.placed,
+        createdCounts: result.createdCounts,
         changeSetId: result.changeSetId,
       });
     },

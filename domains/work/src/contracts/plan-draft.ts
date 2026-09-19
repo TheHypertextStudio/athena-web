@@ -4,7 +4,8 @@
  * @remarks
  * A plan draft is a personal, durable document that Athena and its owner edit together on the
  * planning canvas: one initiative at the root, project containers under it, task rows inside
- * those containers, and dependency edges between nodes of the same kind. Nothing in the document
+ * those containers, engineering subtasks one level under a feature task, and dependency edges
+ * between nodes of the same kind. Nothing in the document
  * exists in the workspace until a node is confirmed, and confirming writes the real id back onto
  * the node so draft and created work coexist on one canvas.
  *
@@ -73,7 +74,11 @@ export const PlanNode = z
     parentRef: z
       .string()
       .nullable()
-      .describe('The containing node. Null for an initiative; a task’s parent is its project.'),
+      .describe(
+        'The containing node. Null for an initiative; a task’s parent is its project, or a ' +
+          'feature task when this task is an engineering subtask of it. Subtasks go one level ' +
+          'deep: a task under a task carries no tasks of its own.',
+      ),
     initiativeRefs: z
       .array(z.string())
       .describe('Additional initiative nodes in this document a project also belongs to.'),
@@ -234,16 +239,64 @@ export const PlanPlaced = z.object({
 /** Plan placed value. */
 export type PlanPlaced = z.infer<typeof PlanPlaced>;
 
+/**
+ * How many records of each kind a commit created.
+ *
+ * @remarks
+ * A subtask is counted apart from a task because the confirmation line reads them apart — "24
+ * tasks" means something different when half of them hang off the other half. Matched records are
+ * excluded: the line reports what the commit put into the workspace, and `placed` carries the rest.
+ */
+export const PlanCommitCounts = z
+  .object({
+    initiatives: z.number().int().describe('Initiatives created.'),
+    projects: z.number().int().describe('Projects created.'),
+    tasks: z.number().int().describe('Tasks created that sit directly in a project.'),
+    subtasks: z.number().int().describe('Tasks created under another task.'),
+  })
+  .meta({ id: 'PlanCommitCounts', description: 'What one commit created, by kind.' });
+/** Plan commit counts value. */
+export type PlanCommitCounts = z.infer<typeof PlanCommitCounts>;
+
 /** The result of confirming part of a plan. */
 export const PlanCommitOut = z
   .object({
     plan: PlanDraftOut,
     placed: z.array(PlanPlaced),
+    createdCounts: PlanCommitCounts,
     changeSetId: z.string().nullable(),
   })
   .meta({ id: 'PlanCommitOut', description: 'The result of confirming part of a plan.' });
 /** Plan commit result value. */
 export type PlanCommitOut = z.infer<typeof PlanCommitOut>;
+
+/** One person a plan may assign work to. */
+export const PlanRosterPerson = z
+  .object({
+    actorId: ActorId.describe('Set this as `assigneeId`, `leadId`, or `ownerId` on a node.'),
+    name: z.string().describe('How the person is named in this workspace.'),
+    teamIds: z.array(TeamId).describe('The teams they are on, for picking who does what.'),
+  })
+  .meta({ id: 'PlanRosterPerson', description: 'A person a plan node may name.' });
+/** Plan roster person value. */
+export type PlanRosterPerson = z.infer<typeof PlanRosterPerson>;
+
+/** One team a plan may assign work to. */
+export const PlanRosterTeam = z
+  .object({
+    id: TeamId.describe('Set this as `teamId` on a project or task node.'),
+    name: z.string().describe('What the team is called.'),
+  })
+  .meta({ id: 'PlanRosterTeam', description: 'A team a plan node may name.' });
+/** Plan roster team value. */
+export type PlanRosterTeam = z.infer<typeof PlanRosterTeam>;
+
+/** Who a plan may assign its work to. */
+export const PlanRoster = z
+  .object({ people: z.array(PlanRosterPerson), teams: z.array(PlanRosterTeam) })
+  .meta({ id: 'PlanRoster', description: 'The people and teams a plan may assign work to.' });
+/** Plan roster value. */
+export type PlanRoster = z.infer<typeof PlanRoster>;
 
 /** A template a node may apply. */
 export const PlanTemplateOption = z

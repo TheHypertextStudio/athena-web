@@ -15,15 +15,18 @@ import {
   seedUserWithHub,
 } from '../support/routes-harness';
 import type mePlansRouter from '../../src/routes/me-plans';
+import type meAthenaChangesRouter from '../../src/routes/me-athena-undo';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let router!: typeof mePlansRouter;
+let undoRouter!: typeof meAthenaChangesRouter;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   router = (await import('../../src/routes/me-plans')).default;
+  undoRouter = (await import('../../src/routes/me-athena-undo')).default;
 });
 
 const J = { 'content-type': 'application/json' };
@@ -59,6 +62,8 @@ async function seedOwner() {
     strangerUserId,
     app: appWithSession(router, fakeSession(ownerUserId)),
     strangerApp: appWithSession(router, fakeSession(strangerUserId)),
+    undoApp: appWithSession(undoRouter, fakeSession(ownerUserId)),
+    strangerUndoApp: appWithSession(undoRouter, fakeSession(strangerUserId)),
   };
 }
 
@@ -87,6 +92,71 @@ const SEED_OPS = [
     node: { ref: 't1', kind: 'task', parentRef: 'p1', fields: { title: 'Segment donors' } },
   },
 ];
+
+/** The seed tree plus a feature task carrying one engineering subtask. */
+const SUBTASK_OPS = [
+  ...SEED_OPS,
+  {
+    op: 'upsert_node',
+    node: { ref: 'f1', kind: 'task', parentRef: 'p1', fields: { title: 'Mood entry' } },
+  },
+  {
+    op: 'upsert_node',
+    node: { ref: 's1', kind: 'task', parentRef: 'f1', fields: { title: 'Add the endpoint' } },
+  },
+];
+
+/** Start a plan and draft the subtask tree into it, returning the plan id. */
+async function draftSubtaskPlan(
+  app: ReturnType<typeof appWithSession>,
+  orgId: string,
+): Promise<string> {
+  const plan = await startPlan(app, orgId);
+  await app.request(`/${plan.id}`, {
+    method: 'PATCH',
+    headers: J,
+    body: JSON.stringify({ revision: 0, ops: SUBTASK_OPS }),
+  });
+  return plan.id;
+}
+
+async function commitRefs(
+  app: ReturnType<typeof appWithSession>,
+  planId: string,
+  refs: readonly string[],
+): Promise<PlanCommitOut> {
+  return body<PlanCommitOut>(
+    await app.request(`/${planId}/commit`, {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ refs }),
+    }),
+  );
+}
+
+/** The parent task and project a committed node's real task row carries. */
+async function taskParentage(
+  result: PlanCommitOut,
+  ref: string,
+): Promise<{ parentTaskId: string | null; projectId: string | null } | undefined> {
+  const [row] = await db
+    .select({ parentTaskId: schema.task.parentTaskId, projectId: schema.task.projectId })
+    .from(schema.task)
+    .where(eq(schema.task.id, result.placed.find((item) => item.ref === ref)?.id ?? ''));
+  return row;
+}
+
+/** A work table an undo archives rows in. */
+type ArchivableTable = typeof DbModule.task | typeof DbModule.project | typeof DbModule.initiative;
+
+/** Whether the workspace holds rows of that kind and every one of them is archived. */
+async function allArchived(table: ArchivableTable, orgId: string): Promise<boolean> {
+  const rows = await db
+    .select({ archivedAt: table.archivedAt })
+    .from(table)
+    .where(eq(table.organizationId, orgId));
+  return rows.length > 0 && rows.every((row) => row.archivedAt !== null);
+}
 
 describe('/v1/me/plans', () => {
   it('starts an empty plan in a workspace the caller belongs to', async () => {
@@ -391,6 +461,45 @@ describe('/v1/me/plans', () => {
         body: JSON.stringify({ refs: ['init'] }),
       });
       expect([403, 404]).toContain(res.status);
+    });
+
+    it('creates a task under a task as its subtask, in the parent’s project', async () => {
+      const { app, orgId } = await seedOwner();
+      const planId = await draftSubtaskPlan(app, orgId);
+      const result = await commitRefs(app, planId, ['s1']);
+      expect(result.placed.map((item) => item.ref)).toEqual(['init', 'p1', 'f1', 's1']);
+      expect(result.createdCounts).toEqual({ initiatives: 1, projects: 1, tasks: 1, subtasks: 1 });
+      expect(await taskParentage(result, 's1')).toEqual({
+        parentTaskId: result.placed.find((item) => item.ref === 'f1')?.id,
+        projectId: result.placed.find((item) => item.ref === 'p1')?.id,
+      });
+    });
+
+    it('hangs a subtask off a feature task confirmed by an earlier commit', async () => {
+      const { app, orgId } = await seedOwner();
+      const planId = await draftSubtaskPlan(app, orgId);
+      const first = await commitRefs(app, planId, ['f1']);
+      const second = await commitRefs(app, planId, ['s1']);
+      expect(second.placed.map((item) => item.ref)).toEqual(['s1']);
+      expect(second.createdCounts).toEqual({ initiatives: 0, projects: 0, tasks: 0, subtasks: 1 });
+      expect(await taskParentage(second, 's1')).toEqual({
+        parentTaskId: first.placed.find((item) => item.ref === 'f1')?.id,
+        projectId: first.placed.find((item) => item.ref === 'p1')?.id,
+      });
+    });
+
+    it('lets the owner undo their own commit, and hides it from everyone else', async () => {
+      const { app, undoApp, strangerUndoApp, orgId } = await seedOwner();
+      const planId = await draftSubtaskPlan(app, orgId);
+      const changeSetId = (await commitRefs(app, planId, ['s1'])).changeSetId ?? '';
+      expect(changeSetId).not.toBe('');
+      const refused = await strangerUndoApp.request(`/${changeSetId}/undo`, { method: 'POST' });
+      expect(refused.status).toBe(404);
+      const undone = await undoApp.request(`/${changeSetId}/undo`, { method: 'POST' });
+      expect(undone.status).toBe(200);
+      expect(await allArchived(schema.task, orgId)).toBe(true);
+      expect(await allArchived(schema.project, orgId)).toBe(true);
+      expect(await allArchived(schema.initiative, orgId)).toBe(true);
     });
 
     it('rejects an empty closure', async () => {

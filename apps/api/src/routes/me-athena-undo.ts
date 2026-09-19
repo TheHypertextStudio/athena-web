@@ -5,11 +5,16 @@
  * Split out of `me-athena.ts` (already at its complexity-debt line ceiling): a change set carries
  * no owner column of its own — {@link recordChangeSet} in `../mcp/change-set` stamps the acting
  * session onto `origin.sessionId` (see `openToolbox`) — so ownership here is answered by tracing
- * back to that session, the same way every other personal Athena route does. A change set with no
- * recorded session, or one whose session belongs to someone else, is reported as not found rather
- * than distinguished from a change set that never existed.
+ * back to that session, the same way every other personal Athena route does.
+ *
+ * A plan commit is the second way in. Confirming on the planning canvas is the person's own button
+ * press, with no agent session behind it, so `commitPlanNodes` also stamps `origin.planId`; a
+ * change set is undoable when it traces back to a caller-owned session OR to a caller-owned plan.
+ * Both claims are re-checked against the row they name rather than trusted off the origin. A
+ * change set that traces back to neither is reported as not found rather than distinguished from a
+ * change set that never existed.
  */
-import { agentSession, changeSet, db } from '@docket/db';
+import { agentSession, changeSet, db, planDraft } from '@docket/db';
 import { PhoneCallUndoOut as AthenaUndoOut } from '@docket/athena/voice';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -21,7 +26,7 @@ import { AuthError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zParam } from '../lib/validate';
-import { undoChangeSetAtomically } from '../mcp/change-set';
+import { undoChangeSet, undoChangeSetAtomically } from '../mcp/change-set';
 
 /** Route param for a change-set undo, addressed by the change set alone. */
 const undoParam = z.object({ changeSetId: z.string() });
@@ -33,20 +38,13 @@ function requestOwner(c: Context<AppEnv>): string {
   return userId;
 }
 
-/** Resolve the organization a change set ran in, only for a session the caller owns. */
-async function loadOwnedChangeSet(
+/** Whether the change set's originating Athena session belongs to the caller. */
+async function ownsOriginSession(
   ownerUserId: string,
-  changeSetId: string,
-): Promise<{ organizationId: string }> {
+  sessionId: string | undefined,
+): Promise<boolean> {
+  if (!sessionId) return false;
   const rows = await db
-    .select({ organizationId: changeSet.organizationId, origin: changeSet.origin })
-    .from(changeSet)
-    .where(eq(changeSet.id, changeSetId))
-    .limit(1);
-  const row = rows[0];
-  const sessionId = row?.origin.sessionId;
-  if (!row || !sessionId) throw new NotFoundError('Change set not found');
-  const owned = await db
     .select({ id: agentSession.id })
     .from(agentSession)
     .where(
@@ -57,8 +55,43 @@ async function loadOwnedChangeSet(
       ),
     )
     .limit(1);
-  if (!owned[0]) throw new NotFoundError('Change set not found');
-  return { organizationId: row.organizationId };
+  return rows[0] !== undefined;
+}
+
+/** Whether the plan draft the change set confirmed belongs to the caller. */
+async function ownsOriginPlan(ownerUserId: string, planId: string | undefined): Promise<boolean> {
+  if (!planId) return false;
+  const rows = await db
+    .select({ id: planDraft.id })
+    .from(planDraft)
+    .where(and(eq(planDraft.id, planId), eq(planDraft.ownerUserId, ownerUserId)))
+    .limit(1);
+  return rows[0] !== undefined;
+}
+
+/** An authorized change set: where it ran, and whether it confirmed a plan. */
+interface OwnedChangeSet {
+  readonly organizationId: string;
+  /** True when the change set confirmed plan nodes, which decides how it is reversed. */
+  readonly fromPlan: boolean;
+}
+
+/** Resolve the organization a change set ran in, only for an origin the caller owns. */
+async function loadOwnedChangeSet(
+  ownerUserId: string,
+  changeSetId: string,
+): Promise<OwnedChangeSet> {
+  const rows = await db
+    .select({ organizationId: changeSet.organizationId, origin: changeSet.origin })
+    .from(changeSet)
+    .where(eq(changeSet.id, changeSetId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new NotFoundError('Change set not found');
+  const fromPlan = await ownsOriginPlan(ownerUserId, row.origin.planId);
+  const owned = fromPlan || (await ownsOriginSession(ownerUserId, row.origin.sessionId));
+  if (!owned) throw new NotFoundError('Change set not found');
+  return { organizationId: row.organizationId, fromPlan };
 }
 
 /** Personal Athena undo route. */
@@ -69,14 +102,19 @@ const meAthenaChanges = new Hono<AppEnv>().post(
     summary: 'Undo one Athena change',
     response: AthenaUndoOut,
     description:
-      'Reverse one change Athena made in a caller-owned session, only when nothing later touched the same rows. A change set that belongs to another user’s session, or that carries no session at all, is reported as not found.',
+      'Reverse one change made in a caller-owned Athena session or confirmed from a caller-owned planning draft, only when nothing later touched the same rows. This is what backs the Undo on the line a plan commit writes: pass the `changeSetId` that `POST /v1/me/plans/{id}/commit` returned. A change set that traces back to another user, or to neither a session nor a plan, is reported as not found.',
   }),
   zParam(undoParam),
   async (c) => {
     const owner = requestOwner(c);
     const { changeSetId } = c.req.valid('param');
-    const { organizationId } = await loadOwnedChangeSet(owner, changeSetId);
-    await undoChangeSetAtomically(organizationId, changeSetId);
+    const { organizationId, fromPlan } = await loadOwnedChangeSet(owner, changeSetId);
+    // A plan commit creates initiatives and projects as well as tasks, and the atomic reversal
+    // understands only tasks and the edges between them — it refuses a container outright. The
+    // reporting reversal is the one Athena's own `undo` tool already runs for `organize`, which
+    // produces the same mixed shape, so a plan commit unwinds through the same path.
+    if (fromPlan) await undoChangeSet(organizationId, changeSetId);
+    else await undoChangeSetAtomically(organizationId, changeSetId);
     return ok(c, AthenaUndoOut, { changeSetId, undone: true });
   },
 );

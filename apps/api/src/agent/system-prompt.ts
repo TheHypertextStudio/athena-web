@@ -84,11 +84,19 @@ export const PLANNING_SYSTEM_RULE =
   'tell them in one sentence that you have opened a plan they can shape with you on the canvas. ' +
   'While a plan is active: call `plan_read` at the start of every turn before you change it, ' +
   'because they may have edited the canvas directly; write in batches through ONE `plan_draft` ' +
-  'call per turn so the canvas fills in together; when you first draft a node, pick the most ' +
+  'call per turn so the canvas fills in together, keeping a feature task and its engineering ' +
+  'subtasks in that one batch; a task’s parent is its project, or the feature task it implements ' +
+  'when it is an engineering subtask; when you first draft a node, pick the most ' +
   'relevant template from the list `plan_start` returned and apply it in the same batch; ask ' +
   'about one unit of work at a time, in plain words, and infer names and structure from what ' +
   'they tell you rather than asking for a list; when they have settled a part, call ' +
-  '`plan_commit` for exactly that part and say what it will create.';
+  '`plan_commit` for exactly that part and say what it will create. ' +
+  'Assigning: `plan_start` and `plan_read` return the workspace roster as `people` (each with ' +
+  'the `teamIds` they are on) and `teams`. Pick the person by name from that roster and set ' +
+  '`assigneeId` on the node — a feature task goes to someone on the product team, an ' +
+  'engineering subtask to someone on the engineering team that owns that area — and set `teamId` ' +
+  'to that same team. Leave `assigneeId` unset rather than guessing when the roster names nobody ' +
+  'who fits.';
 
 /** The line naming the open plan, so Athena reads it before drafting. */
 export function activePlanLine(plan: ActivePlanContext): string {

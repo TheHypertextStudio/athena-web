@@ -6,6 +6,7 @@ import {
   EMPTY_PLAN_DOCUMENT,
   PlanOpError,
   applyPlanOps,
+  planCommitCounts,
   planCounts,
   planNodeClosure,
 } from '../src/plan-draft';
@@ -361,6 +362,121 @@ describe('applyPlanOps', () => {
       expect((error as PlanOpError).index).toBe(0);
       expect((error as PlanOpError).path).toBe('ops.0.ref');
     }
+  });
+});
+
+/** The seed plus one engineering subtask under the feature task `t1`. */
+function withSubtask(): PlanDocument {
+  return applyPlanOps(
+    seeded(),
+    [
+      {
+        op: 'upsert_node',
+        node: { ref: 's1', kind: 'task', parentRef: 't1', fields: { title: 'Add the endpoint' } },
+      },
+    ],
+    env,
+  );
+}
+
+describe('subtasks', () => {
+  it('accepts a task whose parent is a task, keeping the document parents-first', () => {
+    const doc = withSubtask();
+    expect(doc.nodes.map((node) => node.ref)).toEqual(['init', 'p1', 't1', 's1']);
+    expect(doc.nodes.find((node) => node.ref === 's1')?.parentRef).toBe('t1');
+  });
+
+  it('places a feature task and its subtasks in one batch, in any order', () => {
+    const doc = applyPlanOps(
+      seeded(),
+      [
+        {
+          op: 'upsert_node',
+          node: { ref: 's2', kind: 'task', parentRef: 'f1', fields: { title: 'Write the schema' } },
+        },
+        {
+          op: 'upsert_node',
+          node: { ref: 'f1', kind: 'task', parentRef: 'p1', fields: { title: 'Mood entry' } },
+        },
+      ],
+      env,
+    );
+    expect(doc.nodes.map((node) => node.ref)).toEqual(['init', 'p1', 't1', 'f1', 's2']);
+  });
+
+  it('refuses a subtask under a subtask', () => {
+    expect(() =>
+      applyPlanOps(
+        withSubtask(),
+        [
+          {
+            op: 'upsert_node',
+            node: { ref: 's1a', kind: 'task', parentRef: 's1', fields: { title: 'Too deep' } },
+          },
+        ],
+        env,
+      ),
+    ).toThrow(PlanOpError);
+  });
+
+  it('refuses a move that would push existing subtasks too deep', () => {
+    const doc = applyPlanOps(
+      withSubtask(),
+      [
+        {
+          op: 'upsert_node',
+          node: { ref: 't2', kind: 'task', parentRef: 'p1', fields: { title: 'Other feature' } },
+        },
+      ],
+      env,
+    );
+    expect(() => applyPlanOps(doc, [{ op: 'move_node', ref: 't1', parentRef: 't2' }], env)).toThrow(
+      PlanOpError,
+    );
+  });
+
+  it('carries the assignee and team a subtask is given', () => {
+    const doc = applyPlanOps(
+      withSubtask(),
+      [
+        {
+          op: 'set_fields',
+          ref: 's1',
+          fields: {
+            assigneeId: '01J0000000000000000000000A' as never,
+            teamId: '01J0000000000000000000000B' as never,
+          },
+        },
+      ],
+      env,
+    );
+    const subtask = doc.nodes.find((node) => node.ref === 's1');
+    expect(subtask?.fields.assigneeId).toBe('01J0000000000000000000000A');
+    expect(subtask?.fields.teamId).toBe('01J0000000000000000000000B');
+  });
+
+  it('pulls the feature task along when a subtask is committed', () => {
+    expect(planNodeClosure(withSubtask(), ['s1'])).toEqual(['init', 'p1', 't1', 's1']);
+  });
+});
+
+describe('planCommitCounts', () => {
+  it('counts a subtask apart from a task and ignores what was matched', () => {
+    const doc = withSubtask();
+    expect(
+      planCommitCounts(doc, [
+        { ref: 'init', kind: 'initiative', id: 'i1', created: true },
+        { ref: 'p1', kind: 'project', id: 'p1id', created: false },
+        { ref: 't1', kind: 'task', id: 't1id', created: true },
+        { ref: 's1', kind: 'task', id: 's1id', created: true },
+      ]),
+    ).toEqual({ initiatives: 1, projects: 0, tasks: 1, subtasks: 1 });
+  });
+
+  it('counts nothing when every node was matched', () => {
+    expect(
+      planCommitCounts(withSubtask(), [{ ref: 't1', kind: 'task', id: 'x', created: false }]),
+    ).toEqual({ initiatives: 0, projects: 0, tasks: 0, subtasks: 0 });
   });
 });
 

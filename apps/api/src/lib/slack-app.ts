@@ -145,6 +145,24 @@ interface SlackAccessResponse {
   };
 }
 
+/** Validate and extract fields from a Slack oauth.v2.access response. */
+function parseSlackGrant(data: SlackAccessResponse, teamId: string): SlackGrant {
+  const team = data.team;
+  const authedUser = data.authed_user;
+  const slackUserId = authedUser?.id;
+  const accessToken = authedUser?.access_token;
+  if (!slackUserId || !accessToken) {
+    throw new Error('Slack token exchange returned no user grant');
+  }
+  return {
+    teamId,
+    teamName: team?.name ?? teamId,
+    slackUserId,
+    accessToken,
+    scope: authedUser.scope ?? '',
+  };
+}
+
 /**
  * Exchange an OAuth `code` for the user grant via `oauth.v2.access`.
  *
@@ -183,19 +201,9 @@ export async function exchangeSlackCode(code: string, userId: string): Promise<S
   });
   const data = (await res.json()) as SlackAccessResponse;
   if (!data.ok) throw new Error(`Slack token exchange failed: ${data.error ?? 'unknown error'}`);
-  const team = data.team;
-  const authedUser = data.authed_user;
-  const teamId = team?.id;
-  const slackUserId = authedUser?.id;
-  const accessToken = authedUser?.access_token;
-  if (!teamId || !slackUserId || !accessToken) {
-    throw new Error('Slack token exchange returned no user grant');
+  const teamId = data.team?.id;
+  if (!teamId) {
+    throw new Error('Slack token exchange returned no workspace');
   }
-  return {
-    teamId,
-    teamName: team.name ?? teamId,
-    slackUserId,
-    accessToken,
-    scope: authedUser.scope ?? '',
-  };
+  return parseSlackGrant(data, teamId);
 }

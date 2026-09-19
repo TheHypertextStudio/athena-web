@@ -188,6 +188,31 @@ const WORK_PARENT_STOP_WORDS: ReadonlySet<string> = new Set([
   'yours',
 ]);
 
+/** Score a single candidate against the request terms. */
+function scoreCandidateMatch(
+  candidate: ParentCandidate,
+  profile: { title: Set<string>; description: Set<string> },
+  context: {
+    requestTerms: Set<string>;
+    documentFrequency: Map<string, number>;
+    openCount: number;
+    descriptionWeight: number;
+  },
+): { candidate: ParentCandidate; score: number; matched: string[] } {
+  let score = 0;
+  const matched: string[] = [];
+  for (const term of context.requestTerms) {
+    const inTitle = profile.title.has(term);
+    const inDescription = profile.description.has(term);
+    if (!inTitle && !inDescription) continue;
+    const documentFrequencyForTerm = context.documentFrequency.get(term) ?? 1;
+    const distinctiveness = 1 + Math.log(context.openCount / documentFrequencyForTerm);
+    score += (inTitle ? 1 : context.descriptionWeight) * distinctiveness;
+    matched.push(term);
+  }
+  return { candidate, score, matched };
+}
+
 /** Normalize a word just enough for ordinary English task phrasing to compare reliably. */
 function stemWorkParentTerm(word: string): string {
   let stem = word;
@@ -276,20 +301,18 @@ export function resolveWorkParent(
   }
 
   const specificity = (kind: WorkParentKind): number => WORK_PARENT_KINDS.indexOf(kind);
-  const scored = profiles.map((profile) => {
-    let score = 0;
-    const matched: string[] = [];
-    for (const term of requestTerms) {
-      const inTitle = profile.title.has(term);
-      const inDescription = profile.description.has(term);
-      if (!inTitle && !inDescription) continue;
-      const documentFrequencyForTerm = documentFrequency.get(term) ?? 1;
-      const distinctiveness = 1 + Math.log(open.length / documentFrequencyForTerm);
-      score += (inTitle ? 1 : descriptionWeight) * distinctiveness;
-      matched.push(term);
-    }
-    return { candidate: profile.candidate, score, matched };
-  });
+  const scored = profiles.map((profile) =>
+    scoreCandidateMatch(
+      profile.candidate,
+      { title: profile.title, description: profile.description },
+      {
+        requestTerms,
+        documentFrequency,
+        openCount: open.length,
+        descriptionWeight,
+      },
+    ),
+  );
 
   scored.sort((left, right) => {
     if (right.score !== left.score) return right.score - left.score;

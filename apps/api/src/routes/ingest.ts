@@ -32,6 +32,98 @@ function asPayload(value: unknown): Record<string, unknown> {
 }
 
 /**
+ * Find integrations matching the external workspace/installation ID.
+ */
+async function findMatchingIntegrations(
+  provider: ObserverProvider,
+  externalWorkspaceId: string,
+  externalEventId: string,
+): Promise<{ organizationId: string; integrationId: string; externalEventId: string }[]> {
+  const matches: { organizationId: string; integrationId: string; externalEventId: string }[] = [];
+  const rows = await db
+    .select({ id: integration.id, organizationId: integration.organizationId })
+    .from(integration)
+    .where(
+      and(
+        eq(integration.provider, provider),
+        sql`${integration.connection}->>'externalWorkspaceId' = ${externalWorkspaceId}`,
+      ),
+    );
+
+  if (provider === 'linear') {
+    const byOrg = new Map<string, string>();
+    for (const row of rows) {
+      if (!byOrg.has(row.organizationId)) byOrg.set(row.organizationId, row.id);
+    }
+    for (const [organizationId, integrationId] of byOrg) {
+      matches.push({
+        organizationId,
+        integrationId,
+        externalEventId: `${externalEventId}:${organizationId}`,
+      });
+    }
+  } else if (rows[0]) {
+    matches.push({
+      organizationId: rows[0].organizationId,
+      integrationId: rows[0].id,
+      externalEventId,
+    });
+  }
+
+  return matches;
+}
+
+/**
+ * Write inbound events to the inbox and handle Notion mirror wake notifications.
+ */
+async function writeInboundEvents(
+  provider: ObserverProvider,
+  matches: { organizationId: string; integrationId: string; externalEventId: string }[],
+  externalEventId: string,
+  eventType: string,
+  payload: Record<string, unknown>,
+): Promise<boolean> {
+  let notionWoke = false;
+  const targets =
+    matches.length > 0 ? matches : [{ organizationId: null, integrationId: null, externalEventId }];
+
+  for (const target of targets) {
+    const woke = await db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(inboundEvent)
+        .values({
+          organizationId: target.organizationId,
+          integrationId: target.integrationId,
+          provider,
+          externalEventId: target.externalEventId,
+          eventType,
+          payload,
+          signatureVerified: true,
+        })
+        .onConflictDoNothing({
+          target: [inboundEvent.provider, inboundEvent.externalEventId],
+        })
+        .returning({ id: inboundEvent.id });
+
+      if (provider === 'notion' && inserted.length > 0 && target.organizationId !== null) {
+        await wakeNotionMirror(
+          {
+            integrationId: target.integrationId,
+            organizationId: target.organizationId,
+          },
+          tx,
+        );
+        return true;
+      }
+      return false;
+    });
+    notionWoke ||= woke;
+  }
+
+  return notionWoke;
+}
+
+/**
  * Handle one inbound provider webhook: verify → route → map to integration → write-ahead → ACK.
  *
  * @remarks
@@ -66,80 +158,17 @@ async function ingestWebhook(c: Context, provider: ObserverProvider): Promise<Re
   // Map the provider workspace/installation to the connected integration(s) (→ orgs). An event
   // for a workspace Docket doesn't have connected is acknowledged (200) but recorded unrouted,
   // so a missing integration never 500s a third-party retry storm.
-  //
-  const matches: { organizationId: string; integrationId: string; externalEventId: string }[] = [];
-  if (routing.externalWorkspaceId) {
-    const rows = await db
-      .select({ id: integration.id, organizationId: integration.organizationId })
-      .from(integration)
-      .where(
-        and(
-          eq(integration.provider, provider),
-          sql`${integration.connection}->>'externalWorkspaceId' = ${routing.externalWorkspaceId}`,
-        ),
-      );
-    if (provider === 'linear') {
-      const byOrg = new Map<string, string>();
-      for (const row of rows) {
-        if (!byOrg.has(row.organizationId)) byOrg.set(row.organizationId, row.id);
-      }
-      for (const [organizationId, integrationId] of byOrg) {
-        matches.push({
-          organizationId,
-          integrationId,
-          // The inbox dedupe index is provider-global, while one Linear workspace may be
-          // intentionally connected by different Docket organizations. Keep one durable inbox
-          // row per routed org so every org's native-task mirror gets the delivery.
-          externalEventId: `${routing.externalEventId}:${organizationId}`,
-        });
-      }
-    } else if (rows[0]) {
-      matches.push({
-        organizationId: rows[0].organizationId,
-        integrationId: rows[0].id,
-        externalEventId: routing.externalEventId,
-      });
-    }
-  }
+  const matches = routing.externalWorkspaceId
+    ? await findMatchingIntegrations(provider, routing.externalWorkspaceId, routing.externalEventId)
+    : [];
 
-  // Write-ahead (one row per routed org; one unrouted row when no org matched), then ACK. The
-  // unique (provider, external_event_id) index makes a retried delivery a no-op insert.
-  const targets =
-    matches.length > 0
-      ? matches
-      : [{ organizationId: null, integrationId: null, externalEventId: routing.externalEventId }];
-  let notionWoke = false;
-  for (const target of targets) {
-    const woke = await db.transaction(async (tx) => {
-      const inserted = await tx
-        .insert(inboundEvent)
-        .values({
-          organizationId: target.organizationId,
-          integrationId: target.integrationId,
-          provider,
-          externalEventId: target.externalEventId,
-          eventType: routing.eventType,
-          payload: asPayload(payload),
-          signatureVerified: true,
-        })
-        .onConflictDoNothing({
-          target: [inboundEvent.provider, inboundEvent.externalEventId],
-        })
-        .returning({ id: inboundEvent.id });
-      if (provider === 'notion' && inserted.length > 0 && target.organizationId !== null) {
-        await wakeNotionMirror(
-          {
-            integrationId: target.integrationId,
-            organizationId: target.organizationId,
-          },
-          tx,
-        );
-        return true;
-      }
-      return false;
-    });
-    notionWoke ||= woke;
-  }
+  const notionWoke = await writeInboundEvents(
+    provider,
+    matches,
+    routing.externalEventId,
+    routing.eventType,
+    asPayload(payload),
+  );
 
   if (notionWoke) requestNotionMirrorSweep();
 

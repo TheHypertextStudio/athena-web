@@ -41,6 +41,25 @@ export interface BillingRuntimeRolloutReport {
   readonly scheduler: BillingRuntimeObservation['scheduler'];
 }
 
+function checkSchedulerAttemptAge(observation: BillingRuntimeObservation): string | null {
+  if (observation.scheduler.lastAttemptTime === null) return 'scheduler_never_run';
+
+  const generatedAt = Date.parse(observation.generatedAt);
+  const lastAttemptAt = Date.parse(observation.scheduler.lastAttemptTime);
+  const attemptAge = generatedAt - lastAttemptAt;
+
+  if (
+    !Number.isFinite(generatedAt) ||
+    !Number.isFinite(lastAttemptAt) ||
+    attemptAge < 0 ||
+    attemptAge > MAX_SCHEDULER_ATTEMPT_AGE_MS
+  ) {
+    return 'scheduler_stale';
+  }
+
+  return null;
+}
+
 /**
  * Compare one normalized runtime observation with Docket's billing rollout contract.
  *
@@ -66,21 +85,9 @@ export function evaluateBillingRuntimeRollout(
     mismatches.push('scheduler_uri');
   }
   if (observation.scheduler.statusCode !== 0) mismatches.push('scheduler_status');
-  if (observation.scheduler.lastAttemptTime === null) {
-    mismatches.push('scheduler_never_run');
-  } else {
-    const generatedAt = Date.parse(observation.generatedAt);
-    const lastAttemptAt = Date.parse(observation.scheduler.lastAttemptTime);
-    const attemptAge = generatedAt - lastAttemptAt;
-    if (
-      !Number.isFinite(generatedAt) ||
-      !Number.isFinite(lastAttemptAt) ||
-      attemptAge < 0 ||
-      attemptAge > MAX_SCHEDULER_ATTEMPT_AGE_MS
-    ) {
-      mismatches.push('scheduler_stale');
-    }
-  }
+
+  const ageCheck = checkSchedulerAttemptAge(observation);
+  if (ageCheck) mismatches.push(ageCheck);
 
   return {
     generatedAt: observation.generatedAt,

@@ -15,6 +15,36 @@ import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 import { useTodayData } from './use-today-data';
 import { useTodayActions } from './use-today-actions';
 
+/** Today's payload, once loaded. */
+type TodayPayload = NonNullable<ReturnType<typeof useTodayData>['data']>;
+
+/** The needs-attention lists Today shows, each without the tasks the plan already carries. */
+interface TodayAttention {
+  readonly approvals: TodayPayload['needsAttention']['approvals'];
+  readonly blocked: TodayPayload['needsAttention']['blocked'];
+  readonly dueToday: TodayPayload['needsAttention']['dueToday'];
+}
+
+/**
+ * Derive the needs-attention lists once per payload rather than once per render: Today re-renders
+ * on every query settle, timer tick and inline mutation, and fresh array identities here would
+ * defeat memoisation downstream.
+ */
+function useTodayAttention(data: TodayPayload | null | undefined): TodayAttention {
+  return useMemo(() => {
+    const planned = new Set((data?.plan ?? []).map((item) => item.id));
+    const needs = data?.needsAttention;
+    return {
+      // Approvals are NOT deduped against the plan. A plan row shows a task's blocked state and
+      // its due date, so repeating those would be noise — but it says nothing about an agent
+      // holding for a signature, so filtering these hid the approval with nowhere else to see it.
+      approvals: needs?.approvals ?? [],
+      blocked: (needs?.blocked ?? []).filter((task) => !planned.has(task.id)),
+      dueToday: (needs?.dueToday ?? []).filter((task) => !planned.has(task.id)),
+    };
+  }, [data]);
+}
+
 /**
  * TodayPage — the daily operating surface, with Athena as its first interaction.
  *
@@ -48,20 +78,7 @@ export default function TodayPage(): JSX.Element {
     useTodayData();
   const actions = useTodayActions(date);
   const { openAthena, railVisible } = useAthenaPanel();
-  // Once per payload rather than once per render: Today re-renders on every query settle, timer
-  // tick and inline mutation, and fresh array identities here would defeat memoisation downstream.
-  const attention = useMemo(() => {
-    const planned = new Set((data?.plan ?? []).map((item) => item.id));
-    const needs = data?.needsAttention;
-    return {
-      // Approvals are NOT deduped against the plan. A plan row shows a task's blocked state and
-      // its due date, so repeating those would be noise — but it says nothing about an agent
-      // holding for a signature, so filtering these hid the approval with nowhere else to see it.
-      approvals: needs?.approvals ?? [],
-      blocked: (needs?.blocked ?? []).filter((task) => !planned.has(task.id)),
-      dueToday: (needs?.dueToday ?? []).filter((task) => !planned.has(task.id)),
-    };
-  }, [data]);
+  const attention = useTodayAttention(data);
   const openTodayAthena = (draft: string): void => {
     if (!activeOrgId) return;
     openAthena({ workspaceId: activeOrgId, workspaceName: orgName(activeOrgId) }, draft);

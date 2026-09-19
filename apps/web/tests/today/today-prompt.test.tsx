@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -269,9 +270,14 @@ describe('TodayPrompt', () => {
     expect(openAthena).not.toHaveBeenCalled();
   });
 
-  it('keeps the yielded field’s text and says why when the capture fails', async () => {
+  it('keeps the yielded field’s text and reports a failed capture as a notice', async () => {
     capturePost.mockRejectedValue(new Error('network down'));
-    render(<TodayPrompt orgId={ORG} orgLabel="Space" captureOnly />);
+    render(
+      <>
+        <TodayPrompt orgId={ORG} orgLabel="Space" captureOnly />
+        <Toaster />
+      </>,
+    );
 
     const field = screen.getByLabelText('Add a task');
     fireEvent.change(field, { target: { value: 'Buy milk' } });
@@ -279,9 +285,10 @@ describe('TodayPrompt', () => {
     if (!form) throw new Error('the field sits in a form');
     fireEvent.submit(form);
 
-    await waitFor(() => {
-      expect(form.parentElement?.querySelector('[aria-live] p')).not.toBeNull();
-    });
+    const notice = await screen.findByRole('alert');
+    expect(notice).not.toHaveTextContent('network down');
+    expect(form.parentElement?.querySelector('[aria-live] p')).toBeNull();
     expect(field).toHaveValue('Buy milk');
+    dismissAllNotices();
   });
 });

@@ -104,6 +104,9 @@ function teamToOut(row: typeof team.$inferSelect): z.input<typeof TeamOut> {
     summary: row.summary,
     workflowStates: row.workflowStates,
     triageEnabled: row.triageEnabled,
+    cycleCadenceDays: row.cycleCadenceDays,
+    cycleCadenceAnchor: row.cycleCadenceAnchor,
+    cycleCadenceRevision: row.cycleCadenceRevision,
     agentGuidance: row.agentGuidance,
     approvalRouting: row.approvalRouting,
   };

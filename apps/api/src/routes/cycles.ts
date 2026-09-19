@@ -116,7 +116,7 @@ const cycles = new Hono<AppEnv>()
       // Auto-roll: lazily ensure the rolling window exists for the team (idempotent), then
       // derive the current cycle by date. The team must belong to the org (404 otherwise).
       const teamRow = await loadTeam(orgId, teamId);
-      const cadenceWeeks = normalizeCadenceWeeks(teamRow.cycleCadenceWeeks);
+      const cadenceWeeks = normalizeCadenceWeeks(teamRow.cycleCadenceDays / 7);
       const rows = await ensureCycleWindow(orgId, teamId, cadenceWeeks, actorId, now);
 
       // The current cycle is whichever window contains today; on the (impossible for

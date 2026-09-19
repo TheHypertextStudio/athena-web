@@ -25,6 +25,7 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   boolean,
   check,
+  date,
   index,
   integer,
   jsonb,
@@ -270,16 +271,14 @@ export const team = pgTable(
       .notNull()
       .default([...defaultWorkflowStates]),
     triageEnabled: boolean('triage_enabled').notNull().default(true),
-    /**
-     * Cycle cadence in weeks for this team's auto-rolled cycles (default 1 = weekly).
-     *
-     * @remarks
-     * Cycles are team-scoped (`work.ts` `cycle.teamId`) and auto-generated on a rolling
-     * window so users never create them by hand (DECISION: configurable cadence, weekly
-     * default; weekly for personal). The Logic phase derives each cycle's
-     * `starts_at`/`ends_at` from a week-aligned anchor stepping by this many weeks.
-     */
-    cycleCadenceWeeks: integer('cycle_cadence_weeks').notNull().default(1),
+    /** Number of calendar days in one native cycle. */
+    cycleCadenceDays: integer('cycle_cadence_days').notNull().default(7),
+    /** Calendar date from which this team's native cycle boundaries advance. */
+    cycleCadenceAnchor: date('cycle_cadence_anchor', { mode: 'string' })
+      .notNull()
+      .default('2024-01-01'),
+    /** Optimistic concurrency token for cadence changes. */
+    cycleCadenceRevision: integer('cycle_cadence_revision').notNull().default(1),
     agentGuidance: text('agent_guidance'),
     approvalRouting: jsonb('approval_routing').$type<ApprovalRouting>(),
     visibility: visibility('visibility').notNull().default('public'),

@@ -59,6 +59,9 @@ function toOut(t: TeamRow, actorId?: string | null): z.input<typeof TeamDetail> 
     description: t.description ?? null,
     workflowStates: t.workflowStates,
     triageEnabled: t.triageEnabled,
+    cycleCadenceDays: t.cycleCadenceDays,
+    cycleCadenceAnchor: t.cycleCadenceAnchor,
+    cycleCadenceRevision: t.cycleCadenceRevision,
     agentGuidance: t.agentGuidance ?? null,
     approvalRouting: t.approvalRouting ?? null,
   };
@@ -89,6 +92,19 @@ async function assertKeyAvailable(orgId: string, key: string, exceptId?: string)
     .limit(2);
   const clash = rows.find((r) => r.id !== exceptId);
   if (clash) throw new ConflictError('A team with this key already exists');
+}
+
+/** Pick only cadence columns supplied by a Team patch. */
+function cadencePatch(body: z.infer<typeof TeamUpdate>): {
+  cycleCadenceDays?: number;
+  cycleCadenceAnchor?: string;
+} {
+  return {
+    ...(body.cycleCadenceDays !== undefined ? { cycleCadenceDays: body.cycleCadenceDays } : {}),
+    ...(body.cycleCadenceAnchor !== undefined
+      ? { cycleCadenceAnchor: body.cycleCadenceAnchor }
+      : {}),
+  };
 }
 
 /** Teams router: org-scoped CRUD over teams; `view` to read, `manage` to mutate. */
@@ -164,6 +180,8 @@ Defaults applied when omitted: \`workflowStates\` seeds the canonical five-state
             description: body.description ?? null,
             workflowStates: body.workflowStates ?? [...defaultWorkflowStates],
             triageEnabled: body.triageEnabled ?? true,
+            cycleCadenceDays: body.cycleCadenceDays ?? 7,
+            cycleCadenceAnchor: body.cycleCadenceAnchor ?? '2024-01-01',
             agentGuidance: body.agentGuidance ?? null,
             approvalRouting: body.approvalRouting ?? null,
           })
@@ -256,6 +274,7 @@ Setting \`workflowStates\` **replaces the entire array** (it is not a merge). \`
         ...(body.description !== undefined ? { description: body.description } : {}),
         ...(body.workflowStates !== undefined ? { workflowStates: body.workflowStates } : {}),
         ...(body.triageEnabled !== undefined ? { triageEnabled: body.triageEnabled } : {}),
+        ...cadencePatch(body),
         ...(body.agentGuidance !== undefined ? { agentGuidance: body.agentGuidance } : {}),
         ...(body.approvalRouting !== undefined ? { approvalRouting: body.approvalRouting } : {}),
       };

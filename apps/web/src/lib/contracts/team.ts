@@ -133,6 +133,17 @@ export const TeamCreate = z
       .describe(
         "Whether the team's Triage queue is enabled (where unsorted incoming tasks land before being assigned to a workflow state). Defaults to true.",
       ),
+    cycleCadenceDays: z
+      .number()
+      .int()
+      .min(1)
+      .max(365)
+      .optional()
+      .describe('Number of calendar days in each native cycle. Defaults to 7.'),
+    cycleCadenceAnchor: z.iso
+      .date()
+      .optional()
+      .describe('Calendar date on which the native cadence is anchored.'),
     agentGuidance: z
       .string()
       .nullable()
@@ -193,6 +204,23 @@ export const TeamUpdate = z
       .boolean()
       .optional()
       .describe("Toggle the team's Triage queue. Optional; omit to leave unchanged."),
+    cycleCadenceDays: z
+      .number()
+      .int()
+      .min(1)
+      .max(365)
+      .optional()
+      .describe('New native cycle length in calendar days.'),
+    cycleCadenceAnchor: z.iso
+      .date()
+      .optional()
+      .describe('New calendar-date anchor for native cycle boundaries.'),
+    cycleCadenceRevision: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Cadence revision read by the editor, used to reject stale writes.'),
     agentGuidance: z
       .string()
       .nullable()
@@ -231,6 +259,23 @@ export const TeamOut = z
         "The team's ordered workflow states. Optional in this list shape; always present (required) in TeamDetail.",
       ),
     triageEnabled: z.boolean().describe("Whether the team's Triage queue is enabled."),
+    cycleCadenceDays: z
+      .number()
+      .int()
+      .min(1)
+      .max(365)
+      .optional()
+      .describe('Native cycle length in days. Present on current API reads.'),
+    cycleCadenceAnchor: z.iso
+      .date()
+      .optional()
+      .describe('Calendar-date anchor for native cycles. Present on current API reads.'),
+    cycleCadenceRevision: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Cadence concurrency revision. Present on current API reads.'),
     agentGuidance: z
       .string()
       .nullable()
@@ -257,6 +302,9 @@ export const TeamDetail = TeamOut.extend({
     .describe(
       "The team's complete ordered workflow-state list (always materialized on a detail read).",
     ),
+  cycleCadenceDays: z.number().int().min(1).max(365),
+  cycleCadenceAnchor: z.iso.date(),
+  cycleCadenceRevision: z.number().int().positive(),
 }).meta({ id: 'TeamDetail', description: 'Full detail for a single team.' });
 /** Team-detail value. */
 export type TeamDetail = z.infer<typeof TeamDetail>;

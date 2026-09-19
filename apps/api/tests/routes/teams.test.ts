@@ -36,6 +36,9 @@ interface TeamBody {
   description: string | null;
   workflowStates: { key: string; name: string; type: string; position: number }[];
   triageEnabled: boolean;
+  cycleCadenceDays: number;
+  cycleCadenceAnchor: string;
+  cycleCadenceRevision: number;
   agentGuidance: string | null;
   archivedAt?: string;
 }
@@ -62,6 +65,9 @@ describe('teams router', () => {
     expect(team.key).toBe(key);
     expect(team.actorId).toBeTruthy();
     expect(team.triageEnabled).toBe(true); // default
+    expect(team.cycleCadenceDays).toBe(7);
+    expect(team.cycleCadenceAnchor).toBe('2024-01-01');
+    expect(team.cycleCadenceRevision).toBe(1);
     expect(team.description).toBeNull();
     expect(team.agentGuidance).toBeNull();
     // Default workflow seeded (5 canonical states, backlog first).
@@ -313,6 +319,15 @@ describe('teams router', () => {
   it('422s on invalid create bodies (missing key, empty name, bad workflow state)', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(teams, orgId, ['manage'], humanActorId);
+
+    for (const cycleCadenceDays of [0, 366, 1.5]) {
+      const invalidCadence = await writer.request('/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Cadence', key: uniqueKey(), cycleCadenceDays }),
+      });
+      expect(invalidCadence.status).toBe(422);
+    }
 
     // Missing key.
     expect(

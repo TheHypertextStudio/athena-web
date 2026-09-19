@@ -63,7 +63,7 @@ async function makeTeam(orgId: string, cadenceWeeks: number): Promise<string> {
       organizationId: orgId,
       name: 'Cadence',
       key: `K${Math.random().toString(36).slice(2, 7)}`,
-      cycleCadenceWeeks: cadenceWeeks,
+      cycleCadenceDays: cadenceWeeks * 7,
     })
     .returning({ id: schema.team.id });
   return assertDefined(row).id;

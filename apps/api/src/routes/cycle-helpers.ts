@@ -231,12 +231,12 @@ export async function ensureOrgCycleWindows(
   now: Date,
 ): Promise<void> {
   const teams = await db
-    .select({ id: team.id, cadenceWeeks: team.cycleCadenceWeeks })
+    .select({ id: team.id, cadenceDays: team.cycleCadenceDays })
     .from(team)
     .where(eq(team.organizationId, orgId));
   await Promise.all(
     teams.map((t) =>
-      ensureCycleWindow(orgId, t.id, normalizeCadenceWeeks(t.cadenceWeeks), actorId, now),
+      ensureCycleWindow(orgId, t.id, normalizeCadenceWeeks(t.cadenceDays / 7), actorId, now),
     ),
   );
 }

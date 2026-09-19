@@ -36,6 +36,19 @@ export interface GenerationAdvanceDependencies {
   readonly recover?: (message: RunGenerationMessage) => Promise<GenerationAdvance | null>;
 }
 
+function getStateFromRunStatus(status: string): { state: 'wait' | 'failed' | 'complete' } | null {
+  if (status === 'waiting') return { state: 'wait' };
+  if (status === 'failed') return { state: 'failed' };
+  if (status === 'canceled') return { state: 'complete' };
+  return null;
+}
+
+function getStateFromSessionStatus(status: string): GenerationAdvance | null {
+  if (status === 'failed') return { state: 'failed' };
+  if (status === 'completed' || status === 'canceled') return { state: 'complete' };
+  return null;
+}
+
 async function recoverPersistedGeneration(
   message: RunGenerationMessage,
 ): Promise<GenerationAdvance | null> {
@@ -52,9 +65,9 @@ async function recoverPersistedGeneration(
   ) {
     return null;
   }
-  if (run.status === 'waiting') return { state: 'wait' };
-  if (run.status === 'failed') return { state: 'failed' };
-  if (run.status === 'canceled') return { state: 'complete' };
+
+  const runState = getStateFromRunStatus(run.status);
+  if (runState) return runState;
 
   const [session] = await db
     .select()
@@ -62,10 +75,9 @@ async function recoverPersistedGeneration(
     .where(eq(agentSession.id, message.sessionId))
     .limit(1);
   if (!session) throw new NotFoundError('Session not found');
-  if (session.status === 'failed') return { state: 'failed' };
-  if (session.status === 'completed' || session.status === 'canceled') {
-    return { state: 'complete' };
-  }
+
+  const sessionState = getStateFromSessionStatus(session.status);
+  if (sessionState) return sessionState;
 
   const [latest] = await db
     .select()

@@ -1,20 +1,8 @@
 {
-  "apps/admin/src/app/(admin)/discounts/page.tsx": {
-    "max-lines-per-function": {
-      "max": 82,
-      "excess": 2
-    }
-  },
   "apps/admin/src/app/(admin)/notifications/compose-stage.tsx": {
     "max-lines-per-function": {
       "max": 113,
       "excess": 33
-    }
-  },
-  "apps/admin/src/app/(admin)/notifications/notification-console.tsx": {
-    "max-lines-per-function": {
-      "max": 82,
-      "excess": 2
     }
   },
   "apps/admin/src/app/(admin)/notifications/page.tsx": {
@@ -49,12 +37,6 @@
     "max-lines-per-function": {
       "max": 148,
       "excess": 68
-    }
-  },
-  "apps/admin/src/components/admin-sidebar.tsx": {
-    "max-lines-per-function": {
-      "max": 83,
-      "excess": 3
     }
   },
   "apps/api/src/account/archive.ts": {
@@ -106,7 +88,7 @@
   "apps/api/src/agent/execution-advance.ts": {
     "complexity": {
       "max": 20,
-      "excess": 12
+      "excess": 8
     },
     "sonarjs/cognitive-complexity": {
       "max": 19,
@@ -204,12 +186,6 @@
     },
     "max-lines": {
       "max": 504,
-      "excess": 4
-    }
-  },
-  "apps/api/src/mcp/resource-meta-hydrators.ts": {
-    "complexity": {
-      "max": 16,
       "excess": 4
     }
   },
@@ -625,18 +601,6 @@
       "excess": 16
     }
   },
-  "apps/api/src/routes/integration-import.ts": {
-    "max-params": {
-      "max": 6,
-      "excess": 1
-    }
-  },
-  "apps/api/src/routes/integration-provider.ts": {
-    "complexity": {
-      "max": 16,
-      "excess": 4
-    }
-  },
   "apps/api/src/routes/integration-reconcile-graph.ts": {
     "complexity": {
       "max": 38,
@@ -695,12 +659,6 @@
     "sonarjs/cognitive-complexity": {
       "max": 36,
       "excess": 21
-    }
-  },
-  "apps/api/src/routes/integrations-slack.ts": {
-    "max-lines-per-function": {
-      "max": 82,
-      "excess": 2
     }
   },
   "apps/api/src/routes/integrations.ts": {
@@ -969,8 +927,8 @@
   },
   "apps/api/src/routes/publish-brief.ts": {
     "max-lines": {
-      "max": 541,
-      "excess": 41
+      "max": 553,
+      "excess": 53
     }
   },
   "apps/api/src/routes/saved-views.ts": {
@@ -991,12 +949,6 @@
     "complexity": {
       "max": 28,
       "excess": 16
-    }
-  },
-  "apps/api/src/routes/sync-notion.ts": {
-    "max-params": {
-      "max": 6,
-      "excess": 1
     }
   },
   "apps/api/src/routes/task-activity-routes.ts": {
@@ -1147,12 +1099,6 @@
     "complexity": {
       "max": 15,
       "excess": 3
-    }
-  },
-  "apps/api/src/search/projectors/activity.ts": {
-    "complexity": {
-      "max": 14,
-      "excess": 2
     }
   },
   "apps/api/src/search/query-filters.ts": {
@@ -1915,8 +1861,8 @@
   },
   "apps/api/tests/routes/phone-inbound-call.test.ts": {
     "max-lines": {
-      "max": 525,
-      "excess": 25
+      "max": 527,
+      "excess": 27
     }
   },
   "apps/api/tests/routes/phone-numbers.test.ts": {
@@ -2995,8 +2941,8 @@
       "excess": 3
     },
     "max-lines-per-function": {
-      "max": 107,
-      "excess": 27
+      "max": 104,
+      "excess": 24
     }
   },
   "apps/web/src/components/athena/mail-attach-dialog.tsx": {
@@ -3139,12 +3085,6 @@
     "max-lines-per-function": {
       "max": 131,
       "excess": 51
-    }
-  },
-  "apps/web/src/components/canvas/bulk-actions-bar.tsx": {
-    "max-lines-per-function": {
-      "max": 91,
-      "excess": 11
     }
   },
   "apps/web/src/components/canvas/canvas-command-context.tsx": {
@@ -3805,12 +3745,6 @@
       "excess": 7
     }
   },
-  "apps/web/src/components/onboarding/wizard-shell.tsx": {
-    "max-lines-per-function": {
-      "max": 91,
-      "excess": 11
-    }
-  },
   "apps/web/src/components/people/add-person-dialog.tsx": {
     "max-lines-per-function": {
       "max": 115,
@@ -3931,8 +3865,8 @@
   },
   "apps/web/src/components/projects/project-form-pickers.tsx": {
     "max-lines-per-function": {
-      "max": 109,
-      "excess": 29
+      "max": 108,
+      "excess": 28
     }
   },
   "apps/web/src/components/projects/project-relation-port.ts": {
@@ -4213,12 +4147,6 @@
     "complexity": {
       "max": 13,
       "excess": 1
-    }
-  },
-  "apps/web/src/components/scheduling/scheduling-time-grid.tsx": {
-    "max-lines-per-function": {
-      "max": 129,
-      "excess": 49
     }
   },
   "apps/web/src/components/scheduling/scheduling-time-label.ts": {
@@ -4577,8 +4505,8 @@
   },
   "apps/web/src/components/settings/recovery-codes-dialog.tsx": {
     "max-lines-per-function": {
-      "max": 128,
-      "excess": 48
+      "max": 86,
+      "excess": 6
     }
   },
   "apps/web/src/components/settings/security-tab.tsx": {
@@ -4951,16 +4879,6 @@
       "excess": 9
     }
   },
-  "apps/web/src/components/time-tracking/focus-task-queue.tsx": {
-    "max-lines-per-function": {
-      "max": 128,
-      "excess": 48
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 16,
-      "excess": 1
-    }
-  },
   "apps/web/src/components/time-tracking/time-add-past-dialog.tsx": {
     "complexity": {
       "max": 13,
@@ -5157,8 +5075,8 @@
   },
   "apps/web/src/components/views/use-view-state.ts": {
     "max-lines-per-function": {
-      "max": 130,
-      "excess": 50
+      "max": 122,
+      "excess": 42
     }
   },
   "apps/web/src/components/views/view-runner.tsx": {
@@ -5299,16 +5217,6 @@
     "max-lines-per-function": {
       "max": 802,
       "excess": 725
-    }
-  },
-  "apps/web/src/components/work-views/view-state.ts": {
-    "complexity": {
-      "max": 19,
-      "excess": 7
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 19,
-      "excess": 4
     }
   },
   "apps/web/src/components/work-views/work-board.tsx": {

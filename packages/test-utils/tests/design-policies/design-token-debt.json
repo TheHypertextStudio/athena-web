@@ -566,9 +566,6 @@
   "apps/web/src/components/time-tracking/focus-task-context.tsx": {
     "ad-hoc-border": 4
   },
-  "apps/web/src/components/time-tracking/focus-task-queue.tsx": {
-    "ad-hoc-border": 2
-  },
   "apps/web/src/components/time-tracking/focus-today.tsx": {
     "ad-hoc-border": 2,
     "raw-radius-utility": 1

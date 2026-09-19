@@ -50,6 +50,54 @@ interface Ref {
   stateType: WorkStatusCategory;
 }
 
+/**
+ * Index the canvas nodes by id so neighbor edges can be resolved to titles and statuses.
+ *
+ * @param nodes - Every node currently on the canvas.
+ * @returns A lookup from node id to the fields the neighbor rows render.
+ */
+function buildRefMap(nodes: readonly Node[]): Map<string, Ref> {
+  return new Map(
+    nodes.map((node) => {
+      const data = node.data as TaskNodeData;
+      return [
+        node.id,
+        {
+          id: node.id,
+          title: data.title,
+          statusName: data.statusName,
+          stateType: data.stateType,
+        },
+      ];
+    }),
+  );
+}
+
+/** Extract related references from edges by kind and direction. */
+function extractReferences(
+  edges: readonly Edge[],
+  nodeId: string,
+  refMap: Map<string, Ref>,
+  kind: string,
+  isSource: boolean,
+): readonly Ref[] {
+  return edges
+    .filter(
+      (e) =>
+        (e.data as { kind?: string }).kind === kind &&
+        (isSource ? e.source === nodeId : e.target === nodeId),
+    )
+    .map(
+      (e) =>
+        refMap.get(isSource ? e.target : e.source) ?? {
+          id: '',
+          title: '',
+          statusName: undefined,
+          stateType: 'backlog',
+        },
+    );
+}
+
 /** A compact list of related tasks with status glyphs. */
 function RefList({
   label,
@@ -92,26 +140,11 @@ export default function NodePeek({
   onClose,
 }: NodePeekProps): React.JSX.Element {
   const data = node.data as TaskNodeData;
-  const byId = new Map(nodes.map((n) => [n.id, n.data as TaskNodeData]));
-  const toRef = (id: string): Ref => {
-    const d = byId.get(id);
-    return {
-      id,
-      title: d?.title ?? 'Task',
-      statusName: d?.statusName,
-      stateType: d?.stateType ?? 'backlog',
-    };
-  };
+  const refMap = buildRefMap(nodes);
 
-  const blockedBy = edges
-    .filter((e) => (e.data as { kind?: string }).kind === 'dependency' && e.target === node.id)
-    .map((e) => toRef(e.source));
-  const blocking = edges
-    .filter((e) => (e.data as { kind?: string }).kind === 'dependency' && e.source === node.id)
-    .map((e) => toRef(e.target));
-  const subtasks = edges
-    .filter((e) => (e.data as { kind?: string }).kind === 'subtask' && e.source === node.id)
-    .map((e) => toRef(e.target));
+  const blockedBy = extractReferences(edges, node.id, refMap, 'dependency', false);
+  const blocking = extractReferences(edges, node.id, refMap, 'dependency', true);
+  const subtasks = extractReferences(edges, node.id, refMap, 'subtask', true);
 
   const isDone = data.stateType === 'completed';
   const assignee: { name: string; kind: ActorKind; avatarUrl?: string | null } | null =

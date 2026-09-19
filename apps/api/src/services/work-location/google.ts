@@ -132,42 +132,74 @@ function projectedProperties(
   };
 }
 
+/** Build schedule timing fields for one-off all-day events. */
+function buildAllDayTiming(schedule: Extract<WorkLocationSchedule, { type: 'one_off_all_day' }>) {
+  return {
+    start: { date: schedule.date },
+    end: { date: addCalendarDays(schedule.date, 1) },
+  };
+}
+
+/** Build schedule timing fields for one-off timed events. */
+function buildTimedTiming(schedule: Extract<WorkLocationSchedule, { type: 'one_off_timed' }>) {
+  return {
+    start: { dateTime: schedule.startsAt, timeZone: schedule.timezone },
+    end: { dateTime: schedule.endsAt, timeZone: schedule.timezone },
+  };
+}
+
+/** Build schedule timing fields for weekly all-day recurrences. */
+function buildWeeklyAllDayTiming(
+  schedule: Extract<WorkLocationSchedule, { type: 'weekly_all_day' }>,
+) {
+  const date = firstOccurrenceDate(schedule.effectiveFrom, schedule.weekdays);
+  return {
+    start: { date },
+    end: { date: addCalendarDays(date, 1) },
+    recurrence: [weeklyRecurrence(schedule)],
+  };
+}
+
+/** Build schedule timing fields for weekly timed recurrences. */
+function buildWeeklyTimedTiming(schedule: Extract<WorkLocationSchedule, { type: 'weekly_timed' }>) {
+  const date = firstOccurrenceDate(schedule.effectiveFrom, schedule.weekdays);
+  return {
+    start: {
+      dateTime: instantAt(date, schedule.startMinute, schedule.timezone).toISOString(),
+      timeZone: schedule.timezone,
+    },
+    end: {
+      dateTime: instantAt(date, schedule.endMinute, schedule.timezone).toISOString(),
+      timeZone: schedule.timezone,
+    },
+    recurrence: [weeklyRecurrence(schedule)],
+  };
+}
+
 /** Map a canonical assertion into one individual Google Calendar working-location request. */
 export function mapGoogleWorkingLocationAssertion(
   assertion: WorkLocationProviderAssertion,
 ): WorkLocationProviderProjection {
   const schedule = assertion.schedule;
-  const body: Record<string, unknown> = {
-    eventType: 'workingLocation',
-    transparency: 'transparent',
-    visibility: 'public',
-    summary: assertion.placeName,
-    workingLocationProperties: projectedProperties(assertion),
+  const timing =
+    schedule.type === 'one_off_all_day'
+      ? buildAllDayTiming(schedule)
+      : schedule.type === 'one_off_timed'
+        ? buildTimedTiming(schedule)
+        : schedule.type === 'weekly_all_day'
+          ? buildWeeklyAllDayTiming(schedule)
+          : buildWeeklyTimedTiming(schedule);
+  return {
+    externalEventId: null,
+    body: {
+      eventType: 'workingLocation',
+      transparency: 'transparent',
+      visibility: 'public',
+      summary: assertion.placeName,
+      workingLocationProperties: projectedProperties(assertion),
+      ...timing,
+    },
   };
-  if (schedule.type === 'one_off_all_day') {
-    body['start'] = { date: schedule.date };
-    body['end'] = { date: addCalendarDays(schedule.date, 1) };
-  } else if (schedule.type === 'one_off_timed') {
-    body['start'] = { dateTime: schedule.startsAt, timeZone: schedule.timezone };
-    body['end'] = { dateTime: schedule.endsAt, timeZone: schedule.timezone };
-  } else {
-    const date = firstOccurrenceDate(schedule.effectiveFrom, schedule.weekdays);
-    if (schedule.type === 'weekly_all_day') {
-      body['start'] = { date };
-      body['end'] = { date: addCalendarDays(date, 1) };
-    } else {
-      body['start'] = {
-        dateTime: instantAt(date, schedule.startMinute, schedule.timezone).toISOString(),
-        timeZone: schedule.timezone,
-      };
-      body['end'] = {
-        dateTime: instantAt(date, schedule.endMinute, schedule.timezone).toISOString(),
-        timeZone: schedule.timezone,
-      };
-    }
-    body['recurrence'] = [weeklyRecurrence(schedule)];
-  }
-  return { externalEventId: null, body };
 }
 
 /** Extract an occurrence identity in the exact form Google uses for recurring exceptions. */

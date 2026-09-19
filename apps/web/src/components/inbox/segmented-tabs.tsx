@@ -60,6 +60,73 @@ export interface SegmentedTabsProps<TId extends string> {
   readonly panelId?: (id: TId) => string;
 }
 
+/** Render a single inline segment tab. */
+function InlineSegment<TId extends string>({
+  segment,
+  selected,
+  setItemRef,
+}: {
+  readonly segment: SegmentDef<TId>;
+  readonly selected: boolean;
+  readonly setItemRef: (id: TId, node: HTMLElement | null) => void;
+}): JSX.Element {
+  return (
+    <span
+      ref={(node) => {
+        setItemRef(segment.id, node);
+      }}
+      data-responsive-item={segment.id}
+      hidden={false}
+      className="shrink-0"
+    >
+      <Tab value={segment.id} disabled={false}>
+        <SegmentLabel segment={segment} selected={selected} />
+      </Tab>
+    </span>
+  );
+}
+
+/** Render overflow menu for hidden segments. */
+function OverflowMenu<TId extends string>({
+  segments,
+  value,
+  onChange,
+}: {
+  readonly segments: readonly SegmentDef<TId>[];
+  readonly value: TId;
+  readonly onChange: (id: TId) => void;
+}): JSX.Element | null {
+  if (segments.length === 0) return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          controlSize="md"
+          aria-label="More inbox feeds"
+          className="shrink-0"
+        >
+          <MoreHorizontal aria-hidden="true" />
+          <span className="sr-only">More inbox feeds</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" width="lg" aria-label="More inbox feeds">
+        {segments.map((segment) => (
+          <DropdownMenuItem
+            key={segment.id}
+            onSelect={() => {
+              onChange(segment.id);
+            }}
+          >
+            <SegmentLabel segment={segment} selected={segment.id === value} />
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /**
  * A roving-tabindex tab control for the Inbox feeds.
  *
@@ -93,6 +160,7 @@ export function SegmentedTabs<TId extends string>({
   );
   const layout = useResponsiveControlLayout(responsiveItems);
   const overflowSegments = segments.filter((segment) => !layout.inlineIds.has(segment.id));
+  const inlineSegments = segments.filter((segment) => layout.inlineIds.has(segment.id));
 
   return (
     <Tabs
@@ -107,53 +175,15 @@ export function SegmentedTabs<TId extends string>({
         className="relative max-w-full min-w-0"
       >
         <TabList label={label} className="max-w-full overflow-hidden">
-          {segments.map((segment) => {
-            const selected = segment.id === value;
-            const inline = layout.inlineIds.has(segment.id);
-            return (
-              <span
-                key={segment.id}
-                ref={(node) => {
-                  layout.setItemRef(segment.id, node);
-                }}
-                data-responsive-item={segment.id}
-                hidden={!inline}
-                className="shrink-0"
-              >
-                <Tab value={segment.id} disabled={!inline}>
-                  <SegmentLabel segment={segment} selected={selected} />
-                </Tab>
-              </span>
-            );
-          })}
-          {overflowSegments.length > 0 ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  controlSize="md"
-                  aria-label="More inbox feeds"
-                  className="shrink-0"
-                >
-                  <MoreHorizontal aria-hidden="true" />
-                  <span className="sr-only">More inbox feeds</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" width="lg" aria-label="More inbox feeds">
-                {overflowSegments.map((segment) => (
-                  <DropdownMenuItem
-                    key={segment.id}
-                    onSelect={() => {
-                      onChange(segment.id);
-                    }}
-                  >
-                    <SegmentLabel segment={segment} selected={segment.id === value} />
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
+          {inlineSegments.map((segment) => (
+            <InlineSegment
+              key={segment.id}
+              segment={segment}
+              selected={segment.id === value}
+              setItemRef={layout.setItemRef}
+            />
+          ))}
+          <OverflowMenu segments={overflowSegments} value={value} onChange={onChange} />
         </TabList>
         <span
           ref={layout.overflowMeasurementRef}

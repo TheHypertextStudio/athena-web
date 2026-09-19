@@ -7,6 +7,7 @@ import {
 } from './linear-agent';
 import type {
   AgentSurfaceAdapter,
+  CanonicalAgentControl,
   CanonicalExternalActor,
   ExternalRef,
   SurfaceTypeFamily,
@@ -127,6 +128,59 @@ function actor(payload: LinearAgentSurfaceWebhook): CanonicalExternalActor {
     email: user.email,
     displayName: user.name,
   };
+}
+
+/**
+ * Translate a canonical control into the Linear signal that renders it.
+ *
+ * @param control - The control attached to the canonical activity, if any.
+ * @returns The matching Linear signal, or `undefined` when the activity carries no control.
+ */
+function buildRenderSignal(
+  control: CanonicalAgentControl | undefined,
+): LinearAgentSurfaceSignal | undefined {
+  switch (control?.type) {
+    case 'approval':
+      return {
+        type: 'select',
+        options: [
+          { label: 'Approve', value: control.approveToken },
+          { label: 'Reject', value: control.rejectToken },
+        ],
+      };
+    case 'authentication':
+      return { type: 'auth', url: control.url, userId: control.externalActorId };
+    case 'stop':
+      return { type: 'stop', value: control.stopToken };
+    default:
+      return undefined;
+  }
+}
+
+/** The `signal` and `signalMetadata` fields Linear's activity-create input expects. */
+interface LinearPublishSignal {
+  readonly signal?: 'auth' | 'select';
+  readonly signalMetadata?: Record<string, unknown>;
+}
+
+/**
+ * Flatten an outbound signal into Linear's activity-create signal fields.
+ *
+ * @param signal - The signal on the outbound activity, if any.
+ * @returns The fields to spread into the activity-create input; empty when nothing is signalled.
+ */
+function extractPublishSignal(signal: LinearAgentSurfaceSignal | undefined): LinearPublishSignal {
+  switch (signal?.type) {
+    case 'select':
+      return { signal: 'select', signalMetadata: { options: signal.options } };
+    case 'auth':
+      return {
+        signal: 'auth',
+        signalMetadata: { url: signal.url, userId: signal.userId, providerName: 'Docket' },
+      };
+    default:
+      return {};
+  }
 }
 
 /** Linear Agent adapter. */
@@ -250,24 +304,7 @@ export const linearAgentSurface: AgentSurfaceAdapter<'linear', LinearSurfaceType
   },
   render(activity) {
     const control = activity.control;
-    const signal =
-      control?.type === 'approval'
-        ? {
-            type: 'select' as const,
-            options: [
-              { label: 'Approve', value: control.approveToken },
-              { label: 'Reject', value: control.rejectToken },
-            ],
-          }
-        : control?.type === 'authentication'
-          ? {
-              type: 'auth' as const,
-              url: control.url,
-              userId: control.externalActorId,
-            }
-          : control?.type === 'stop'
-            ? { type: 'stop' as const, value: control.stopToken }
-            : undefined;
+    const signal = buildRenderSignal(control);
     const common = {
       ...(activity.ephemeral ? { ephemeral: true } : {}),
       ...(signal ? { signal } : {}),
@@ -291,22 +328,7 @@ export const linearAgentSurface: AgentSurfaceAdapter<'linear', LinearSurfaceType
     };
   },
   async publish(install, session, output) {
-    const signal =
-      output.signal?.type === 'select'
-        ? {
-            signal: 'select' as const,
-            signalMetadata: { options: output.signal.options },
-          }
-        : output.signal?.type === 'auth'
-          ? {
-              signal: 'auth' as const,
-              signalMetadata: {
-                url: output.signal.url,
-                userId: output.signal.userId,
-                providerName: 'Docket',
-              },
-            }
-          : {};
+    const signal = extractPublishSignal(output.signal);
     const input =
       output.type === 'action'
         ? {

@@ -186,35 +186,15 @@
     }
   },
   "apps/api/src/agent/toolbox.ts": {
-    "complexity": {
-      "max": 25,
-      "excess": 13
-    },
     "max-lines-per-function": {
-      "max": 198,
-      "excess": 118
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 43,
-      "excess": 28
+      "max": 142,
+      "excess": 62
     }
   },
   "apps/api/src/calendar/calendar-outbox.ts": {
-    "complexity": {
-      "max": 19,
-      "excess": 7
-    },
-    "max-lines-per-function": {
-      "max": 127,
-      "excess": 47
-    },
     "max-params": {
       "max": 6,
-      "excess": 1
-    },
-    "sonarjs/cognitive-complexity": {
-      "max": 16,
-      "excess": 1
+      "excess": 3
     }
   },
   "apps/api/src/calendar/calendar-read.ts": {
@@ -3835,12 +3815,6 @@
       "excess": 3
     }
   },
-  "apps/web/src/components/canvas/node-peek.tsx": {
-    "max-lines-per-function": {
-      "max": 94,
-      "excess": 14
-    }
-  },
   "apps/web/src/components/canvas/project-graph-panel.tsx": {
     "complexity": {
       "max": 15,
@@ -4203,12 +4177,6 @@
     "sonarjs/cognitive-complexity": {
       "max": 22,
       "excess": 7
-    }
-  },
-  "apps/web/src/components/inbox/segmented-tabs.tsx": {
-    "max-lines-per-function": {
-      "max": 94,
-      "excess": 14
     }
   },
   "apps/web/src/components/initiatives/associations-panel.tsx": {
@@ -6595,12 +6563,6 @@
       "excess": 7
     }
   },
-  "domains/work/src/contracts/saved-view.ts": {
-    "max-lines": {
-      "max": 517,
-      "excess": 17
-    }
-  },
   "domains/work/src/contracts/task.ts": {
     "max-lines": {
       "max": 674,
@@ -6794,7 +6756,7 @@
   "packages/integrations/src/agent-surface-linear.ts": {
     "complexity": {
       "max": 18,
-      "excess": 10
+      "excess": 6
     },
     "sonarjs/cognitive-complexity": {
       "max": 19,

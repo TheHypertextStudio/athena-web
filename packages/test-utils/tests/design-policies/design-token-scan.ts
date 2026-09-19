@@ -432,6 +432,17 @@ export function collectDesignSourceFiles(directory: string): string[] {
     .filter((path) => !/\.(?:test|spec)\.tsx?$/.test(path) && !path.endsWith('.d.ts'));
 }
 
+/** Determine which rules apply to a file based on its properties. */
+function getActivePatterns(relativePath: string, shadowAllowed: boolean): typeof RULE_PATTERNS {
+  return RULE_PATTERNS.filter(({ rule }) => {
+    if (rule === 'shadow-outside-overlay') return !shadowAllowed;
+    if (rule === 'raw-shadow-on-overlay') return shadowAllowed;
+    if (rule === 'ad-hoc-border' && BORDER_EARNED_FILES.includes(relativePath)) return false;
+    const roots = RULE_ROOTS[rule];
+    return roots === undefined || roots.some((root) => relativePath.startsWith(root));
+  });
+}
+
 /**
  * Scan one file's source text for design-token violations.
  *
@@ -456,18 +467,7 @@ export function scanDesignTokens(filePath: string, sourceText: string): DesignTo
   );
   const violations: DesignTokenViolation[] = [];
 
-  // Which rules apply to this file, resolved once rather than per string literal. A rule is out
-  // of scope when the file is (or is not) an overlay module, when it is one of the files §8 earns
-  // a border in, or when RULE_ROOTS restricts it to roots this file does not live under.
-  const activePatterns = RULE_PATTERNS.filter(({ rule }) => {
-    if (rule === 'shadow-outside-overlay') return !shadowAllowed;
-    // The mirror of the rule above: inside an overlay a shadow is correct, so what is checked
-    // there is whether it names an MD3 elevation level instead of Tailwind's unnamed scale.
-    if (rule === 'raw-shadow-on-overlay') return shadowAllowed;
-    if (rule === 'ad-hoc-border' && BORDER_EARNED_FILES.includes(relativePath)) return false;
-    const roots = RULE_ROOTS[rule];
-    return roots === undefined || roots.some((root) => relativePath.startsWith(root));
-  });
+  const activePatterns = getActivePatterns(relativePath, shadowAllowed);
 
   function inspect(text: string, node: ts.Node): void {
     for (const { rule, pattern } of activePatterns) {

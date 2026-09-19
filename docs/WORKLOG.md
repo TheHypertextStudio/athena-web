@@ -7,6 +7,60 @@
 
 ## Active Tasks
 
+### [LINT-DEBT-ELIMINATION-001] Phase 1: Eliminate 176 quick-win files (1-10 excess)
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-09-18
+- **Priority**: P0
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,489 entries, 171,109 excess points across 870 files.
+
+#### Analysis Complete
+
+- **46 files** with exactly 1 excess point (easiest)
+- **106 files** with 1-3 excess points
+- **70 files** with 4-10 excess points
+- **Debt distribution**: max-lines (62%), max-lines-per-function (32%), complexity (3.5%), cognitive-complexity (2.9%), max-params (<1%), max-depth (<1%)
+
+#### Remediation Techniques
+
+1. **Helper Extraction**: Break functions → complexity -8→0
+2. **Lookup Maps**: Replace switch → complexity -8→-3
+3. **Parameter Grouping**: Bundle params → max-params
+4. **Early Returns**: Move guards → max-depth
+5. **Function Extraction**: Large functions → max-lines-per-function
+
+#### Subtasks
+
+- [ ] Batch A1: Fix 46 files with 1 excess
+- [ ] Batch A2: Fix 60 files with 1-3 excess
+- [ ] Batch B: Fix 70 files with 4-10 excess
+- [ ] Verify complexity-debt.json reaches 0
+- [ ] Commit all changes with proper co-author attribution
+
+#### Files Identified
+
+Quick-win files to process:
+
+- apps/api/src/calendar/calendar-permissions.ts (1 excess: complexity)
+- apps/api/src/lib/labels.ts (1 excess: max-params) — PASS
+- apps/api/src/lib/work-views/sort-sql.ts (1 excess: max-params)
+- apps/api/src/mcp/apps/host-routes.ts (1 excess: complexity)
+- apps/api/src/mcp/resources.ts (1 excess: complexity)
+- apps/api/src/routes/admin-serializers.ts (1 excess: max-params)
+- apps/api/src/routes/grants.ts (1 excess: complexity)
+- apps/api/src/routes/integration-import.ts (1 excess: max-params)
+- apps/api/src/routes/roles.ts (1 excess: complexity)
+- Plus 37 more across API and web
+
+#### Progress
+
+- [x] Analyzed all 1,489 debt entries
+- [x] Categorized by violation type and excess
+- [x] Identified quick-win files (176 total in Phase 1)
+- [ ] Begin batch processing
+
+---
+
 ### [ATHENA-SSE-406-001] A browser can open an Athena activity stream
 
 - **Completed**: 2026-09-14

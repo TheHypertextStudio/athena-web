@@ -40,6 +40,15 @@ const STAGES = [
 /** One stage of the announcement workflow. */
 type Stage = (typeof STAGES)[number]['value'];
 
+/** Build tab configuration with stage labels and availability. */
+function buildStageTabs(selectedIntent: AdminNotificationIntent | null) {
+  return STAGES.map((entry) => ({
+    value: entry.value,
+    label: entry.label,
+    disabled: entry.value !== 'compose' && !selectedIntent,
+  }));
+}
+
 /** Props for {@link NotificationAnnouncementConsole}. */
 export interface NotificationAnnouncementConsoleProps {
   /** Notification intents shown in the staff side rail. */
@@ -159,11 +168,7 @@ export function NotificationAnnouncementConsole({
             onValueChange={(next) => {
               setStage(next as Stage);
             }}
-            items={STAGES.map((entry) => ({
-              value: entry.value,
-              label: entry.label,
-              disabled: entry.value !== 'compose' && !selectedIntent,
-            }))}
+            items={buildStageTabs(selectedIntent)}
           />
 
           <StagePanel

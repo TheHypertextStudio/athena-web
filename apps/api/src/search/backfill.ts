@@ -57,6 +57,16 @@ export interface RepairSearchIndexResult {
   enqueued: number;
 }
 
+function extractJobParamsFromRow(row: { id: string; organizationId?: unknown; userId?: unknown }): {
+  organizationId: string | null;
+  userId: string | null;
+} {
+  return {
+    organizationId: typeof row.organizationId === 'string' ? row.organizationId : null,
+    userId: typeof row.userId === 'string' ? row.userId : null,
+  };
+}
+
 /** Enqueue search jobs by scanning source tables. */
 export async function backfillSearchIndex(
   options: BackfillSearchIndexOptions = {},
@@ -77,9 +87,10 @@ export async function backfillSearchIndex(
     scanned += rows.length;
     for (const row of rows) {
       if (!isRowWithId(row)) continue;
+      const { organizationId, userId } = extractJobParamsFromRow(row);
       await enqueueSearchIndexJob({
-        organizationId: typeof row.organizationId === 'string' ? row.organizationId : null,
-        userId: typeof row.userId === 'string' ? row.userId : null,
+        organizationId,
+        userId,
         sourceTable,
         entityId: row.id,
         operation: 'upsert',
@@ -130,6 +141,22 @@ export async function repairSearchIndex(
   return { scanned, enqueued };
 }
 
+function isRowStale(
+  row: { createdAt?: unknown; updatedAt?: unknown; occurredAt?: unknown },
+  doc:
+    | {
+        sourceUpdatedAt: Date | null | undefined;
+        indexedAt: Date | null | undefined;
+      }
+    | undefined,
+): boolean {
+  if (!doc) return true;
+  const freshness = sourceFreshness(row);
+  const indexedFreshness = doc.sourceUpdatedAt ?? doc.indexedAt ?? null;
+  if (!freshness || !indexedFreshness || !(indexedFreshness instanceof Date)) return true;
+  return freshness.getTime() > indexedFreshness.getTime();
+}
+
 async function enqueueStaleRows(sourceTable: string, rows: readonly unknown[]): Promise<number> {
   const schema = await import('@docket/db');
   const sourceRows = rows.filter(isRowWithId);
@@ -155,14 +182,11 @@ async function enqueueStaleRows(sourceTable: string, rows: readonly unknown[]): 
 
   for (const row of sourceRows) {
     const doc = docsByEntityId.get(row.id);
-    const freshness = sourceFreshness(row);
-    const indexedFreshness = doc?.sourceUpdatedAt ?? doc?.indexedAt ?? null;
-    if (doc && freshness && indexedFreshness && freshness.getTime() <= indexedFreshness.getTime()) {
-      continue;
-    }
+    if (!isRowStale(row, doc)) continue;
+    const { organizationId, userId } = extractJobParamsFromRow(row);
     await enqueueSearchIndexJob({
-      organizationId: typeof row.organizationId === 'string' ? row.organizationId : null,
-      userId: typeof row.userId === 'string' ? row.userId : null,
+      organizationId,
+      userId,
       sourceTable,
       entityId: row.id,
       operation: 'upsert',
@@ -171,6 +195,41 @@ async function enqueueStaleRows(sourceTable: string, rows: readonly unknown[]): 
     enqueued += 1;
   }
 
+  return enqueued;
+}
+
+async function enqueueEventAndTargetJobs(row: {
+  id: string;
+  organizationId: string;
+  userId: string;
+  entityKind?: unknown;
+  docketEntityId?: unknown;
+}): Promise<number> {
+  let enqueued = 0;
+  await enqueueSearchIndexJob({
+    organizationId: row.organizationId,
+    userId: row.userId,
+    sourceTable: 'event',
+    entityId: row.id,
+    operation: 'upsert',
+    reason: 'repair',
+    sourceEventId: row.id,
+  });
+  enqueued += 1;
+
+  const target = eventSearchReindexTarget(row.entityKind, row.docketEntityId);
+  if (target) {
+    await enqueueSearchIndexJob({
+      organizationId: row.organizationId,
+      userId: row.userId,
+      sourceTable: target.sourceTable,
+      entityId: target.entityId,
+      operation: 'upsert',
+      reason: 'repair',
+      sourceEventId: row.id,
+    });
+    enqueued += 1;
+  }
   return enqueued;
 }
 
@@ -192,29 +251,7 @@ async function repairEventRows(limit: number): Promise<RepairSearchIndexResult> 
   let enqueued = 0;
 
   for (const row of rows) {
-    await enqueueSearchIndexJob({
-      organizationId: row.organizationId,
-      userId: row.userId,
-      sourceTable: 'event',
-      entityId: row.id,
-      operation: 'upsert',
-      reason: 'repair',
-      sourceEventId: row.id,
-    });
-    enqueued += 1;
-
-    const target = eventSearchReindexTarget(row.entityKind, row.docketEntityId);
-    if (!target) continue;
-    await enqueueSearchIndexJob({
-      organizationId: row.organizationId,
-      userId: row.userId,
-      sourceTable: target.sourceTable,
-      entityId: target.entityId,
-      operation: 'upsert',
-      reason: 'repair',
-      sourceEventId: row.id,
-    });
-    enqueued += 1;
+    enqueued += await enqueueEventAndTargetJobs(row);
   }
 
   return { scanned: rows.length, enqueued };
@@ -247,22 +284,24 @@ function encodeSourceScanCursor(cursor: SourceScanCursor): string {
   return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
 }
 
+function isValidSourceScanCursor(parsed: unknown): parsed is SourceScanCursor {
+  if (typeof parsed !== 'object' || parsed === null) return false;
+  const obj = parsed as Record<PropertyKey, unknown>;
+  return (
+    typeof obj.sourceTableIndex === 'number' &&
+    Number.isInteger(obj.sourceTableIndex) &&
+    obj.sourceTableIndex >= 0 &&
+    typeof obj.rowId === 'string'
+  );
+}
+
 function decodeSourceScanCursor(value: string | undefined): SourceScanCursor | null {
   if (!value) return null;
   try {
-    const parsed = JSON.parse(
-      Buffer.from(value, 'base64url').toString('utf8'),
-    ) as Partial<SourceScanCursor>;
-    if (
-      typeof parsed.sourceTableIndex === 'number' &&
-      Number.isInteger(parsed.sourceTableIndex) &&
-      parsed.sourceTableIndex >= 0 &&
-      typeof parsed.rowId === 'string'
-    ) {
-      return { sourceTableIndex: parsed.sourceTableIndex, rowId: parsed.rowId };
-    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+    return isValidSourceScanCursor(parsed) ? parsed : null;
   } catch {
     return null;
   }
-  return null;
 }

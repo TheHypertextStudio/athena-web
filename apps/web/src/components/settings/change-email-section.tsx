@@ -15,13 +15,15 @@
  * confirmation banner.
  */
 import { Button, Input } from '@docket/ui/primitives';
-import { WriteError } from './write-error';
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';
 import { type JSX, useId, useState } from 'react';
 
+import { presentFailure } from '@/components/feedback';
 import { changeEmail, useSession } from '@/lib/auth-client';
-import { userErrorMessage } from '@/lib/problem';
+
+/** What the notice says when the request fails without a more specific reason. */
+const REQUEST_FAILED = 'Could not request the email change.';
 
 /** The change-email card: shows the current address and a request-change form. */
 export function ChangeEmailSection(): JSX.Element {
@@ -29,25 +31,23 @@ export function ChangeEmailSection(): JSX.Element {
   const inputId = useId();
   const [newEmail, setNewEmail] = useState('');
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
 
   const currentEmail = session?.user.email ?? '';
 
   async function requestChange(): Promise<void> {
-    setError(null);
     setPending(true);
     try {
       const callbackURL = `${window.location.pathname}?email-changed=1`;
       const result = await changeEmail({ newEmail, callbackURL });
       if (result.error) {
-        setError(userErrorMessage(result.error, 'Could not request the email change.'));
+        presentFailure(result.error, REQUEST_FAILED);
         return;
       }
       setSent(true);
       setNewEmail('');
-    } catch {
-      setError('Could not request the email change.');
+    } catch (caught) {
+      presentFailure(caught, REQUEST_FAILED);
     } finally {
       setPending(false);
     }
@@ -100,8 +100,6 @@ export function ChangeEmailSection(): JSX.Element {
           </Button>
         </form>
       )}
-
-      {error ? <WriteError message={error} /> : null}
     </SettingsGroup>
   );
 }

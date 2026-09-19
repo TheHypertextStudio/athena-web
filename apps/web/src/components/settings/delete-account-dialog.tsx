@@ -9,10 +9,11 @@
  * and a **passkey re-verification** ({@link useReauth}) triggered the moment the user confirms,
  * so a hijacked or unattended session cannot schedule deletion. On success the account enters the
  * recoverable 14-day grace window (`POST /v1/me/account/deletion`); the user stays signed in and
- * the Danger zone shows the pending banner. Failures surface inline (no toast system exists).
+ * the Danger zone shows the pending banner. The step-up and the write are one attempt, so this
+ * dialog owns their presentation: a failure at either point becomes one notice and the dialog stays
+ * open for another try.
  */
 import { AccountStatusOut } from '@docket/identity-access/account-contract';
-import { WriteError } from './write-error';
 import {
   Button,
   Dialog,
@@ -27,11 +28,14 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX, useId, useState } from 'react';
 
+import { presentFailure } from '@/components/feedback';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
 
 import { useReauth } from './use-reauth';
+
+/** What the notice says when scheduling fails without a more specific reason. */
+const SCHEDULE_FAILED = 'Could not schedule your account for deletion.';
 
 /** Props for {@link DeleteAccountDialog}. */
 export interface DeleteAccountDialogProps {
@@ -52,12 +56,10 @@ export function DeleteAccountDialog({
   const inputId = useId();
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const reauth = useReauth();
 
   const scheduleDeletion = useApiMutation({
-    mutationFn: () =>
-      unwrap(() => api.v1.me.account.$delete(), 'Could not schedule your account for deletion.'),
+    mutationFn: () => unwrap(() => api.v1.me.account.$delete(), SCHEDULE_FAILED),
     invalidateKeys: [queryKeys.account()],
   });
 
@@ -65,30 +67,34 @@ export function DeleteAccountDialog({
 
   function close(next: boolean): void {
     if (busy) return; // don't dismiss mid-request
-    if (!next) {
-      setTyped('');
-      setError(null);
-    }
+    if (!next) setTyped('');
     onOpenChange(next);
   }
 
   async function onConfirm(): Promise<void> {
-    setError(null);
     setBusy(true);
     try {
-      // Step-up: re-verify the passkey so the server's fresh-session gate passes.
+      // Step-up: re-verify the passkey so the server's fresh-session gate passes. The write
+      // below presents its own failure; only the step-up needs a notice from here.
       await reauth();
-      const status = AccountStatusOut.parse(await scheduleDeletion.mutateAsync(undefined));
-      if (status.deletionState !== 'pending_deletion') {
-        throw new Error('Deletion could not be scheduled.');
-      }
-      setTyped('');
-      onOpenChange(false);
-    } catch (err) {
-      setError(userErrorMessage(err, 'Could not schedule your account for deletion.'));
-    } finally {
+    } catch (caught) {
+      presentFailure(caught, 'Could not confirm your passkey.');
       setBusy(false);
+      return;
     }
+    scheduleDeletion.mutate(undefined, {
+      onSuccess: (data) => {
+        if (AccountStatusOut.parse(data).deletionState !== 'pending_deletion') {
+          presentFailure(undefined, SCHEDULE_FAILED);
+          return;
+        }
+        setTyped('');
+        onOpenChange(false);
+      },
+      onSettled: () => {
+        setBusy(false);
+      },
+    });
   }
 
   return (
@@ -117,7 +123,6 @@ export function DeleteAccountDialog({
               setTyped(e.target.value);
             }}
           />
-          {error ? <WriteError message={error} /> : null}
         </DialogBody>
 
         <DialogFooter>

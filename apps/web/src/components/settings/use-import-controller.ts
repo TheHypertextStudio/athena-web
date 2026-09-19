@@ -39,7 +39,7 @@ export interface ImportController {
   canManage: boolean;
   teams: readonly TeamOut[];
   loading: boolean;
-  loadError: string | null;
+  loadError: unknown;
   productRequired: boolean;
   intro: { crossHref: string; crossText: string };
   categories: readonly ImportCategoryModel[];

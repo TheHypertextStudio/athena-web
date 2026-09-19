@@ -2,6 +2,7 @@
 
 /** Searchable parent-task picker shared by task menus, bulk actions, and touch interaction. */
 import { PickerList, type PickerOption } from '@docket/ui/components';
+import { OverlayErrorBanner } from '@/components/pickers/overlay-error-banner';
 import { ListChecks } from '@docket/ui/icons';
 import {
   Popover,
@@ -118,12 +119,7 @@ export function TaskHierarchyPickerOverlay({
         }}
       >
         {readError ? (
-          <div
-            role="alert"
-            className="text-error bg-error/5 border-error/30 text-body-medium m-1 rounded-md border px-3 py-2"
-          >
-            {userErrorMessage(readError, 'Could not load tasks.')}
-          </div>
+          <OverlayErrorBanner title={userErrorMessage(readError, 'Could not load tasks.')} />
         ) : isPending ? (
           <div className="flex flex-col gap-1.5 p-1.5" aria-hidden="true">
             <Skeleton className="h-10 w-full rounded-md" />

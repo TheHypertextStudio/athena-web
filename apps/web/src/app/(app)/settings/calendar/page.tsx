@@ -37,9 +37,9 @@ import {
   useApiMutation,
   useApiQuery,
 } from '@/lib/query';
-import { userErrorMessage } from '@/lib/problem';
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
-import { LoadFailure } from '@/components/settings/load-failure';
+import { LoadFailure } from '@/components/feedback';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
@@ -204,11 +204,13 @@ export default function CalendarSettingsPage(): JSX.Element {
     <SettingsSectionPage sectionKey="calendar" loading={loading}>
       {loadFailed ? (
         <LoadFailure
-          message={userErrorMessage(
-            preferencesQ.error ?? layersQ.error,
-            'Could not load your calendar settings.',
-          )}
-          retrying
+          title="Calendar settings"
+          error={preferencesQ.error ?? layersQ.error}
+          onRetry={() => {
+            void preferencesQ.refetch();
+            void layersQ.refetch();
+          }}
+          retrying={preferencesQ.isFetching || layersQ.isFetching}
         />
       ) : (
         <>
@@ -284,15 +286,9 @@ export default function CalendarSettingsPage(): JSX.Element {
               </Select>
             </label>
 
-            {savePreferences.isError ? (
-              <LoadFailure
-                message={userErrorMessage(savePreferences.error, 'Could not save this preference.')}
-              />
-            ) : (
-              <p aria-live="polite" className="text-on-surface-variant text-body-small h-4">
-                {savePreferences.isPending ? 'Saving…' : savePreferences.isSuccess ? 'Saved' : ''}
-              </p>
-            )}
+            <p aria-live="polite" className="text-on-surface-variant text-body-small h-4">
+              {savePreferences.isPending ? 'Saving…' : savePreferences.isSuccess ? 'Saved' : ''}
+            </p>
           </SettingsGroup>
         </>
       )}
@@ -371,13 +367,8 @@ export default function CalendarSettingsPage(): JSX.Element {
               })}
             </div>
 
-            {sharesQ.isError || replaceShares.isError ? (
-              <LoadFailure
-                message={userErrorMessage(
-                  sharesQ.error ?? replaceShares.error,
-                  'Could not save what coworkers can see.',
-                )}
-              />
+            {sharesQ.isError ? (
+              <QueryLoadFailure size="panel" title="Calendar sharing" query={sharesQ} />
             ) : (
               <p aria-live="polite" className="text-on-surface-variant text-body-small h-4">
                 {replaceShares.isPending ? 'Saving…' : replaceShares.isSuccess ? 'Saved' : ''}

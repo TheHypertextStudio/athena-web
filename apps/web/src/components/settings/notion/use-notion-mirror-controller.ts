@@ -30,7 +30,7 @@ import {
 import { useState } from 'react';
 
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
+import { UserFacingError } from '@/lib/problem';
 import {
   STALE,
   apiQueryOptions,
@@ -74,8 +74,8 @@ export interface NotionMirrorHealth {
 /** The Notion hub's view model. */
 export interface NotionMirrorModel {
   loading: boolean;
-  /** The error to render, or null. Always application-owned copy. */
-  error: string | null;
+  /** The read's failure when the connection or its databases did not arrive; null otherwise. */
+  loadError: unknown;
   /** The Notion connection, or null when this workspace has none. */
   integration: IntegrationOut | null;
   /** The designed databases, in designer order. */
@@ -156,12 +156,11 @@ export function useNotionMirror(orgId: string): NotionMirrorModel {
   });
 
   const databases: readonly NotionMirrorDatabaseOut[] = databasesQ.data?.items ?? [];
-  const loadError = integrationsQ.error ?? databasesQ.error;
   const config = integration?.config;
 
   return {
     loading: integrationsQ.isPending || (integration !== null && databasesQ.isPending),
-    error: loadError ? userErrorMessage(loadError, 'Could not load your Notion setup.') : null,
+    loadError: integrationsQ.error ?? databasesQ.error,
     integration,
     databases,
     provisionedCount: databases.filter((d) => d.provisionedAt !== null).length,
@@ -342,7 +341,6 @@ export function useNotionParentPages(
 
 /** The setup surface's view model: create the databases under a chosen page. */
 export interface NotionSetupModel {
-  error: string | null;
   /** True while the provision run is in flight. */
   creating: boolean;
   /** Create the databases under the chosen page. */
@@ -354,26 +352,29 @@ export interface NotionSetupModel {
  *
  * @remarks
  * The provision route answers 200 carrying the sync run, so a *failed* run is a successful HTTP
- * response describing a failure. This surfaces that as an error rather than as success — the whole
- * point of the never-report-success-when-nothing-happened rule.
+ * response describing a failure. The write rejects on it, so it is presented as a failure rather
+ * than as success — the whole point of the never-report-success-when-nothing-happened rule.
  *
  * Reading the candidate pages is deliberately **not** here: it is a search that reruns as
  * somebody types, and folding it into the model that owns the create mutation would make every
  * keystroke a state change for the button too.
  */
 export function useNotionSetup(orgId: string, integrationId: string): NotionSetupModel {
-  const [error, setError] = useState<string | null>(null);
-
   const create = useApiMutation({
-    mutationFn: (containerPageId: string) =>
-      unwrap(
+    mutationFn: async (containerPageId: string) => {
+      const run = await unwrap(
         () =>
           api.v1.orgs[':orgId'].integrations[':id'].notion.provision.$post({
             param: { orgId, id: integrationId },
             json: { containerPageId },
           }),
         'Could not create your Notion databases.',
-      ),
+      );
+      // A failed run still arrives as a 200. Reporting it as success is exactly the dishonesty
+      // this codebase refuses.
+      if (run.status !== 'succeeded') throw new UserFacingError(SETUP_FAILED);
+      return run;
+    },
     // People too, not just the databases: provisioning is what LEARNS the Notion roster, so a
     // reader who provisions and then opens "Match people" would otherwise be shown the empty list
     // cached before anyone was known.
@@ -386,18 +387,9 @@ export function useNotionSetup(orgId: string, integrationId: string): NotionSetu
       // surface would report success and then fail to show what it just created.
       queryKeys.integrations(orgId),
     ],
-    onSuccess: (run: { status: string }) => {
-      // A failed run still arrives as a 200. Reporting it as success is exactly the dishonesty
-      // this codebase refuses.
-      setError(run.status === 'succeeded' ? null : SETUP_FAILED);
-    },
-    onError: (e: Error) => {
-      setError(userErrorMessage(e, 'Could not create your Notion databases.'));
-    },
   });
 
   return {
-    error,
     creating: create.isPending,
     create: (containerPageId) => {
       create.mutate(containerPageId);
@@ -407,8 +399,6 @@ export function useNotionSetup(orgId: string, integrationId: string): NotionSetu
 
 /** The hub's "run it now" model. */
 export interface NotionMirrorSyncModel {
-  /** The error to render, or null. Always application-owned copy. */
-  error: string | null;
   /** True while a mirror pass is in flight. */
   syncing: boolean;
   /** Run the mirror against the container page already chosen. */
@@ -425,24 +415,28 @@ export interface NotionMirrorSyncModel {
  * one thing a stalled sync needs.
  *
  * Same honesty rule as setup: the route answers 200 carrying the run, so a failed pass is a
- * successful HTTP response describing a failure and has to be read off `status`.
+ * successful HTTP response describing a failure and has to be read off `status`. The write
+ * rejects on it, with the copy for that kind of failure, so it is presented like any other.
  *
  * @param orgId - The workspace.
  * @param integrationId - The Notion connection.
  * @returns the action and its state.
  */
 export function useNotionMirrorSync(orgId: string, integrationId: string): NotionMirrorSyncModel {
-  const [error, setError] = useState<string | null>(null);
-
   const run = useApiMutation({
-    mutationFn: () =>
-      unwrap(
+    mutationFn: async () => {
+      const finished = await unwrap(
         () =>
           api.v1.orgs[':orgId'].integrations[':id'].notion.sync.$post({
             param: { orgId, id: integrationId },
           }),
         SYNC_FAILED,
-      ),
+      );
+      if (finished.status !== 'succeeded') {
+        throw new UserFacingError(syncFailureCopy(finished.errorKind));
+      }
+      return finished;
+    },
     // The people roster is refreshed BY the pass (it is where the Notion workspace members are
     // learned), and the run history is what the hub reads its own health from — so both are as
     // stale as the databases once this returns.
@@ -452,16 +446,9 @@ export function useNotionMirrorSync(orgId: string, integrationId: string): Notio
       queryKeys.integrationRuns(orgId, integrationId),
       queryKeys.integrations(orgId),
     ],
-    onSuccess: (finished: { status: string; errorKind?: SyncFailureKind | null }) => {
-      setError(finished.status === 'succeeded' ? null : syncFailureCopy(finished.errorKind));
-    },
-    onError: (e: Error) => {
-      setError(userErrorMessage(e, SYNC_FAILED));
-    },
   });
 
   return {
-    error,
     syncing: run.isPending,
     sync: () => {
       run.mutate(undefined);
@@ -480,7 +467,8 @@ export interface DesignerColumn {
 /** The table designer's view model for one entity. */
 export interface NotionTableDesignModel {
   loading: boolean;
-  error: string | null;
+  /** The design read's failure when it did not arrive; null otherwise. */
+  loadError: unknown;
   design: NotionMirrorDesignOut | null;
   /** True while a save is in flight. */
   saving: boolean;
@@ -500,7 +488,6 @@ export function useNotionTableDesign(
   integrationId: string,
   entity: NotionMirrorEntity,
 ): NotionTableDesignModel {
-  const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   const designQ = useApiQuery(
@@ -537,22 +524,16 @@ export function useNotionTableDesign(
       queryKeys.notionMirrorDatabases(orgId, integrationId),
     ],
     onSuccess: () => {
-      setError(null);
       setSaved(true);
       setTimeout(() => {
         setSaved(false);
       }, 3000);
     },
-    onError: (e: Error) => {
-      setError(userErrorMessage(e, 'Could not save this table design.'));
-    },
   });
 
   return {
     loading: designQ.isPending,
-    error:
-      error ??
-      (designQ.error ? userErrorMessage(designQ.error, 'Could not load this table design.') : null),
+    loadError: designQ.error,
     design: designQ.data ?? null,
     saving: save.isPending,
     saved,
@@ -571,7 +552,8 @@ export function useNotionTableDesign(
 /** The people surface's view model. */
 export interface NotionPeopleModel {
   loading: boolean;
-  error: string | null;
+  /** The roster read's failure when it did not arrive; null otherwise. */
+  loadError: unknown;
   /** Notion members matched to a Docket actor. */
   matched: readonly NotionWorkspacePerson[];
   /** Notion members nobody has decided about — the only group that needs an answer. */
@@ -617,7 +599,6 @@ export function useNotionPeople(orgId: string, integrationId: string): NotionPeo
   // (hooks run ahead of its early return), and an empty id would request
   // `/integrations//notion/people` — a guaranteed 404 on every render of the not-connected page.
   const enabled = integrationId.length > 0;
-  const [error, setError] = useState<string | null>(null);
   const [resolving, setResolving] = useState<string | null>(null);
   const peopleQ = useApiQuery({
     ...apiQueryOptions(
@@ -662,22 +643,16 @@ export function useNotionPeople(orgId: string, integrationId: string): NotionPeo
         'Could not save that decision.',
       ),
     invalidateKeys: [queryKeys.notionMirrorPeople(orgId, integrationId), queryKeys.members(orgId)],
-    onSuccess: () => {
-      setError(null);
-      setResolving(null);
-    },
-    onError: (e: Error) => {
-      setError(userErrorMessage(e, 'Could not save that decision.'));
+    onSettled: () => {
       setResolving(null);
     },
   });
 
   const people: readonly NotionWorkspacePerson[] = peopleQ.data?.items ?? [];
-  const loadError = peopleQ.error ?? unmatchedQ.error;
 
   return {
     loading: enabled && (peopleQ.isPending || unmatchedQ.isPending),
-    error: error ?? (loadError ? userErrorMessage(loadError, 'Could not load people.') : null),
+    loadError: peopleQ.error ?? unmatchedQ.error,
     roster: (rosterQ.data?.items ?? []).map((m) => ({ id: m.actorId, displayName: m.displayName })),
     resolving,
     resolve: (externalId, decision) => {

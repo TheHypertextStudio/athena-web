@@ -18,7 +18,7 @@ import { type JSX, useEffect, useRef, useState } from 'react';
 
 import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { EditableTitle } from '@/components/editor/editable-title';
-import { LoadFailure } from './load-failure';
+import { LoadFailure } from '@/components/feedback';
 import { SettingRow } from './setting-row';
 import { SettingRowStatus } from './setting-row-status';
 import { SettingsGroup } from './settings-group';
@@ -26,7 +26,7 @@ import { SETTINGS_NODES } from './settings-capabilities';
 import { useAutomationRules } from '@/lib/use-automation-rules';
 
 /** Transient persistence status for an in-place autosave field. */
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+type SaveStatus = 'idle' | 'saving' | 'saved';
 
 /** How long the quiet "Saved" acknowledgement lingers before fading back to idle. */
 const SAVED_LINGER_MS = 2000;
@@ -167,8 +167,9 @@ function RuleRow({
         setStatus('idle');
       }, SAVED_LINGER_MS);
     } catch {
-      // The rule is unchanged server-side; surface a quiet inline error and let the user retry.
-      setStatus('error');
+      // The rule is unchanged server-side and the rename has already presented its failure as a
+      // notice; the row only has to stop saying it is saving.
+      setStatus('idle');
     }
   }
 
@@ -194,11 +195,6 @@ function RuleRow({
       trailing={
         <span className="flex shrink-0 items-center gap-1.5">
           <SettingRowStatus pending={false} saved={status === 'saved'} />
-          {status === 'error' ? (
-            <span className="text-error text-body-small" role="alert">
-              Couldn’t save
-            </span>
-          ) : null}
           {canManage ? (
             <>
               <Button variant="outline" size="sm" onClick={onToggle}>
@@ -236,7 +232,7 @@ export default function AutomationsTab({
   const [confirmDelete, setConfirmDelete] = useState<AutomationRuleOut | null>(null);
   // The empty state names Connections; a name is not a way of getting there.
   const connectionsHref = `/orgs/${orgId}/settings/connections`;
-  const { rules, isPending, loadError, createRule, rename, setEnabled, remove, actionError } =
+  const { rules, isPending, loadError, createRule, rename, setEnabled, remove } =
     useAutomationRules(orgId);
   const [creating, setCreating] = useState(false);
   const [template, setTemplate] = useState<AutomationTemplate>('archive_completed_email');
@@ -321,7 +317,7 @@ export default function AutomationsTab({
       {isPending ? (
         <Skeleton className="m-4 h-20 rounded-xl" />
       ) : loadError ? (
-        <LoadFailure message={loadError} retrying />
+        <LoadFailure size="panel" title="Automation rules" error={loadError} />
       ) : rules.length === 0 ? (
         <EmptyState
           icon={Workflow}
@@ -374,12 +370,6 @@ export default function AutomationsTab({
           setConfirmDelete(null);
         }}
       />
-
-      {actionError ? (
-        <p className="text-error text-body-small px-4 pb-3" role="alert">
-          {actionError}
-        </p>
-      ) : null}
     </SettingsGroup>
   );
 }

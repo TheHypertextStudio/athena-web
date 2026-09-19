@@ -25,12 +25,13 @@
  * Pure presentation — all reads and writes live in `use-notion-mirror-controller.ts`.
  */
 import type { NotionMirrorDatabaseOut } from '@docket/connections/notion/mirror-contract';
-import { WriteError } from '../write-error';
 import { ArrowRight, CheckCircle2, CircleAlert, LayoutTemplate, OpenInNew } from '@docket/ui/icons';
 import { EmptyState } from '@docket/ui/components';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import NextLink from '@/components/docket-link';
 import type { JSX } from 'react';
+
+import { LoadFailure } from '@/components/feedback';
 
 import { CardAlert, CardNote } from '../card-note';
 import { SettingsGroup } from '../settings-group';
@@ -159,8 +160,8 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
     );
   }
 
-  if (model.error !== null) {
-    return <WriteError message={model.error} />;
+  if (model.loadError !== null) {
+    return <LoadFailure title="Notion setup" error={model.loadError} />;
   }
 
   if (model.integration === null) {
@@ -282,9 +283,7 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
         </CardNote>
       ) : null}
 
-      {sync.error !== null ? (
-        <CardNote tone="error">{sync.error}</CardNote>
-      ) : mirrorBroken ? (
+      {mirrorBroken ? (
         <CardNote tone="error">
           {MIRROR_FAILED_TITLE} {syncFailureCopy(health.lastRunErrorKind)}
         </CardNote>

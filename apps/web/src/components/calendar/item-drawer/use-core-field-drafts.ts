@@ -63,8 +63,6 @@ export interface CoreFieldEditor {
   readonly titleError: string | null;
   readonly timeErrorId: string;
   readonly titleErrorId: string;
-  /** Whether the last save failed. */
-  readonly saveFailed: boolean;
   /** Whether a save is in flight. */
   readonly saving: boolean;
   /** Whether the last save succeeded. */
@@ -320,7 +318,6 @@ export function useCoreFieldDrafts({
     titleError,
     timeErrorId,
     titleErrorId,
-    saveFailed: update.isError,
     saving: update.isPending,
     saved: update.isSuccess,
   };

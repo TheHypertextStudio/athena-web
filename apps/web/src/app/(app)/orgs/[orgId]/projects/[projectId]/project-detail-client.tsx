@@ -38,8 +38,10 @@ import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
+import { PartialLoadBanner } from '@/components/entity-detail/partial-load-banner';
 import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
 import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { LatestUpdateSummary } from '@/components/entity-detail/latest-update-summary';
 import {
   AgentActivityFeed,
@@ -173,6 +175,8 @@ export default function ProjectDetailPage(): JSX.Element {
   const queryClient = useQueryClient();
   const accountId = useResolvedAccountId();
   const projectNoun = useVocabulary('project');
+  const refreshTitle = `Could not refresh this ${projectNoun.toLowerCase()}`;
+  const workTitle = `${projectNoun} work could not load`;
   const taskNoun = useVocabulary('task').toLowerCase();
   const subject = ProjectSubjectRef.parse({ subjectType: 'project', subjectId: projectId });
   const navigationSnapshot = useNavigationSnapshot('project', projectId);
@@ -545,19 +549,15 @@ export default function ProjectDetailPage(): JSX.Element {
           snapshot={navigationSnapshot}
         />
         {aggregateQ.isError ? (
-          <p role="alert" className="text-error text-body-medium mx-auto max-w-7xl px-6 pb-6">
-            Could not refresh this {projectNoun.toLowerCase()}.
-          </p>
+          <div className="mx-auto max-w-7xl px-6 pb-6">
+            <PartialLoadBanner title={refreshTitle} onRetry={() => void aggregateQ.refetch()} />
+          </div>
         ) : null}
       </>
     );
   }
   if (aggregateState === 'error') {
-    return (
-      <p role="alert" className="text-error mx-auto max-w-7xl p-6">
-        {userErrorMessage(aggregateQ.error, `Could not load this ${projectNoun.toLowerCase()}.`)}
-      </p>
-    );
+    return <QueryLoadFailure title={`This ${projectNoun.toLowerCase()}`} query={aggregateQ} />;
   }
   if (!project) return <p className="mx-auto max-w-7xl p-6">{projectNoun} not found.</p>;
 
@@ -767,9 +767,7 @@ export default function ProjectDetailPage(): JSX.Element {
       }
     >
       {aggregateQ.isError ? (
-        <p role="alert" className="text-error text-body-medium">
-          Could not refresh this {projectNoun.toLowerCase()}.
-        </p>
+        <PartialLoadBanner title={refreshTitle} onRetry={() => void aggregateQ.refetch()} />
       ) : null}
       {tab === 'overview' ? (
         <section
@@ -802,9 +800,7 @@ export default function ProjectDetailPage(): JSX.Element {
             placeholder="Add the Project brief…"
           />
           {workQ.isError ? (
-            <p role="alert" className="text-error text-body-medium">
-              Could not load Project work.
-            </p>
+            <PartialLoadBanner title={workTitle} onRetry={() => void workQ.refetch()} />
           ) : null}
           <OverviewSummary tasks={milestoneTasks} />
           <ProjectMilestonesPanel
@@ -828,9 +824,7 @@ export default function ProjectDetailPage(): JSX.Element {
           className="flex flex-col gap-2"
         >
           {workQ.isError ? (
-            <p role="alert" className="text-error text-body-medium">
-              Could not load Project work.
-            </p>
+            <PartialLoadBanner title={workTitle} onRetry={() => void workQ.refetch()} />
           ) : null}
           <MilestoneTasks
             orgId={orgId}

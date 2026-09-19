@@ -24,6 +24,8 @@ import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
+import { PartialLoadBanner } from '@/components/entity-detail/partial-load-banner';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { PlanWithAthenaAction } from '@/components/initiatives/plan-with-athena-action';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -103,6 +105,7 @@ export default function InitiativeDetailPage(): JSX.Element {
   const [labelsPickerOpen, setLabelsPickerOpen] = useState(false);
   const [targetPickerOpen, setTargetPickerOpen] = useState(false);
   const initiativeNoun = useVocabulary('initiative');
+  const refreshTitle = `Could not refresh this ${initiativeNoun.toLowerCase()}`;
   const initiativePlural = useVocabulary('initiative', { plural: true });
   const programNoun = useVocabulary('program');
   const projectNoun = useVocabulary('project');
@@ -298,18 +301,14 @@ export default function InitiativeDetailPage(): JSX.Element {
           snapshot={navigationSnapshot}
         />
         {aggregateQ.isError ? (
-          <p role="alert" className="text-error text-body-medium px-6 pb-6">
-            Could not refresh this {initiativeNoun.toLowerCase()}.
-          </p>
+          <div className="px-6 pb-6">
+            <PartialLoadBanner title={refreshTitle} onRetry={() => void aggregateQ.refetch()} />
+          </div>
         ) : null}
       </>
     );
   if (aggregateState === 'error')
-    return (
-      <p role="alert" className="text-error mx-auto max-w-7xl p-6">
-        {userErrorMessage(aggregateQ.error, 'Could not load this initiative.')}
-      </p>
-    );
+    return <QueryLoadFailure title={`This ${initiativeNoun.toLowerCase()}`} query={aggregateQ} />;
   if (!detail) return <p className="mx-auto max-w-7xl p-6">Initiative not found.</p>;
 
   const resolveActor = (actorId: string | null | undefined) => {
@@ -602,9 +601,7 @@ export default function InitiativeDetailPage(): JSX.Element {
       }
     >
       {aggregateQ.isError ? (
-        <p role="alert" className="text-error text-sm">
-          Could not refresh this {initiativeNoun.toLowerCase()}.
-        </p>
+        <PartialLoadBanner title={refreshTitle} onRetry={() => void aggregateQ.refetch()} />
       ) : null}
       <ConfirmDestructiveDialog
         open={confirmDeleteOpen}
@@ -700,9 +697,12 @@ export default function InitiativeDetailPage(): JSX.Element {
       ) : null}
 
       {(tab === 'subinitiatives' || tab === 'work') && relationshipsQ.isError ? (
-        <p role="alert" className="text-error text-sm">
-          Could not load Initiative relationships.
-        </p>
+        <PartialLoadBanner
+          title={`${initiativeNoun} relationships could not load`}
+          onRetry={() => void relationshipsQ.refetch()}
+        >
+          The rest of this {initiativeNoun.toLowerCase()} still works.
+        </PartialLoadBanner>
       ) : (
         <>
           {relationships?.truncated ? (

@@ -24,11 +24,11 @@ import { EmptyState } from '@docket/ui/components';
 import { Plus, Users } from '@docket/ui/icons';
 import { Button, Skeleton, Text, Toolbar } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { type JSX, useMemo, useState } from 'react';
 
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { useApiListQuery } from '@/lib/query';
-import { userErrorMessage } from '@/lib/problem';
 
 import { AddPersonDialog, type PersonRoleOption } from './add-person-dialog';
 import { peopleQuery, rolesQuery } from './people-queries';
@@ -88,9 +88,6 @@ export function PeopleList({ orgId }: PeopleListProps): JSX.Element {
   );
 
   const loading = peopleQ.isPending;
-  const loadError = peopleQ.isError
-    ? userErrorMessage(peopleQ.error, 'Could not load the people in this workspace.')
-    : null;
 
   return (
     <div className="flex w-full flex-col gap-4 px-3 py-4 @2xl:gap-5 @2xl:p-6 @4xl:p-8">
@@ -140,10 +137,8 @@ export function PeopleList({ orgId }: PeopleListProps): JSX.Element {
             <Skeleton key={n} className="h-14 w-full rounded-none" />
           ))}
         </div>
-      ) : loadError ? (
-        <Text as="p" role="alert" token="body-medium" className="text-error p-4">
-          {loadError}
-        </Text>
+      ) : peopleQ.isError ? (
+        <QueryLoadFailure title="People" query={peopleQ} />
       ) : rows.length === 0 ? (
         <EmptyState
           icon={Users}

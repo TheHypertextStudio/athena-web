@@ -20,7 +20,10 @@ export interface SessionDetailState {
   orgName: string | null;
   taskTitle: string | null;
   loading: boolean;
-  loadError: string | null;
+  /** The session read's failure, when it did not arrive; null otherwise. */
+  loadError: unknown;
+  /** Re-issue the session read after a failure. */
+  reload: () => Promise<void>;
   actionError: string | null;
   pendingActivityId: string | null;
   controlPending: boolean;
@@ -56,7 +59,7 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
   const [orgName, setOrgName] = useState<string | null>(null);
   const [taskTitle, setTaskTitle] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingActivityId, setPendingActivityId] = useState<string | null>(null);
   const [controlPending, setControlPending] = useState(false);
@@ -70,12 +73,7 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
         param: { orgId, id: sessionId },
       });
       if (!sessionRes.ok) {
-        setLoadError(
-          userErrorMessage(
-            await readProblemError(sessionRes, 'Could not load this session.'),
-            'Could not load this session.',
-          ),
-        );
+        setLoadError(await readProblemError(sessionRes, 'Could not load this session.'));
         return;
       }
       const detail = await sessionRes.json();
@@ -111,7 +109,7 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
         setTaskTitle(null);
       }
     } catch (caught) {
-      setLoadError(userErrorMessage(caught, 'Something went wrong loading this session.'));
+      setLoadError(caught);
     } finally {
       setLoading(false);
     }
@@ -396,6 +394,7 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
     taskTitle,
     loading,
     loadError,
+    reload: load,
     actionError,
     pendingActivityId,
     controlPending,

@@ -19,7 +19,6 @@
  * back to printing the raw scope identifier for anything it did not recognise.
  */
 import { EmptyState } from '@docket/ui/components';
-import { WriteError } from './write-error';
 import { Link } from '@docket/ui/icons';
 import { Avatar, AvatarFallback, Badge, Button, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useCallback, useState } from 'react';
@@ -37,11 +36,10 @@ import {
 } from '@/lib/query';
 
 import { ConfirmDestructiveDialog } from '@docket/ui/components';
-import { LoadFailure } from './load-failure';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';
 import { ClientSetup } from './mcp-setup-panels';
-import { userErrorMessage } from '@/lib/problem';
 
 /** One authorized MCP client as returned by `GET /v1/me/connected-apps`. */
 interface ConnectedApp {
@@ -77,9 +75,6 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
 
   const apps: readonly ConnectedApp[] = appsQ.data?.items ?? [];
   const loading = appsQ.isPending;
-  const loadError = appsQ.isError
-    ? userErrorMessage(appsQ.error, 'Could not update connected apps.')
-    : null;
 
   const revoke = useApiMutation({
     mutationFn: (clientId: string) =>
@@ -142,8 +137,8 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
               </div>
             ))}
           </div>
-        ) : loadError ? (
-          <LoadFailure message={loadError} retrying />
+        ) : appsQ.isError ? (
+          <QueryLoadFailure size="panel" title="Connected apps" query={appsQ} />
         ) : apps.length === 0 ? (
           <EmptyState
             icon={Link}
@@ -205,12 +200,6 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
             setConfirmRevoke(null);
           }}
         />
-
-        {revoke.isError ? (
-          <WriteError
-            message={userErrorMessage(revoke.error, 'Could not update connected apps.')}
-          />
-        ) : null}
       </SettingsGroup>
     </div>
   );

@@ -141,16 +141,14 @@ export function CalendarItemWorkspace({
   );
 }
 
-/** The quiet line that says whether the last edit reached the server. */
+/**
+ * The quiet line that says whether the last edit reached the server.
+ *
+ * @remarks
+ * A failed save is the update mutation's own notice, so this line only ever says something calm.
+ */
 function SaveState({ editor }: { readonly editor: ReturnType<typeof useCoreFieldDrafts> }) {
   if (!editor.canEdit) return null;
-  if (editor.saveFailed) {
-    return (
-      <p role="alert" className="text-error text-body-small">
-        We couldn&apos;t save these changes. Please try again.
-      </p>
-    );
-  }
   return (
     <p aria-live="polite" className="text-on-surface-variant text-body-small min-h-4">
       {editor.saving ? 'Saving…' : editor.saved ? 'Saved' : ''}

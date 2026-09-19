@@ -10,12 +10,11 @@
  * phase (which warns that regenerating invalidates the previous codes) and a **reveal** phase that
  * shows the freshly generated codes exactly once, with copy + download. Codes are generated via
  * Docket's REST endpoint (`POST /v1/me/recovery-codes`), which replaces any existing set and is
- * gated server-side on the fresh passkey session. Failures surface inline (no toast system exists).
+ * gated server-side on the fresh passkey session. A failed step-up or write becomes a notice.
  * Closing after a successful reveal calls {@link RecoveryCodesDialogProps.onGenerated} so the
  * Security tab refetches the remaining count.
  */
 import { RecoveryCodesOut } from '@docket/identity-access/account-contract';
-import { WriteError } from './write-error';
 import {
   Button,
   Dialog,
@@ -28,11 +27,14 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
+import { presentFailure } from '@/components/feedback';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { unwrap } from '@/lib/query';
 
 import { useReauth } from './use-reauth';
+
+/** What the notice says when generating fails without a more specific reason. */
+const GENERATE_FAILED = 'Could not generate recovery codes.';
 
 /** Whether the user is generating codes for the first time or replacing an existing set. */
 export type RecoveryCodesMode = 'generate' | 'regenerate';
@@ -131,7 +133,6 @@ export function RecoveryCodesDialog({
 }: RecoveryCodesDialogProps): JSX.Element {
   const [codes, setCodes] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const reauth = useReauth();
@@ -141,7 +142,6 @@ export function RecoveryCodesDialog({
     if (!next) {
       const revealed = codes !== null;
       setCodes(null);
-      setError(null);
       setCopied(false);
       setDownloaded(false);
       if (revealed) onGenerated();
@@ -150,15 +150,14 @@ export function RecoveryCodesDialog({
   }
 
   async function onConfirm(): Promise<void> {
-    setError(null);
     setBusy(true);
     try {
       // Step-up: re-verify the passkey (mints a fresh session so the server's fresh-session gate
       // passes), then (re)generate via Docket's REST endpoint.
       await reauth();
       setCodes(await generateCodes());
-    } catch (err) {
-      setError(userErrorMessage(err, 'Could not generate recovery codes.'));
+    } catch (caught) {
+      presentFailure(caught, GENERATE_FAILED);
     } finally {
       setBusy(false);
     }
@@ -189,10 +188,9 @@ export function RecoveryCodesDialog({
         </DialogHeader>
 
         {/* A full set of codes can outrun the panel, so this is the region that scrolls. */}
-        {codes !== null || error !== null ? (
+        {codes !== null ? (
           <DialogBody className="flex flex-col gap-2">
-            {codes !== null ? <RevealedCodes codes={codes} /> : null}
-            {error !== null ? <WriteError message={error} /> : null}
+            <RevealedCodes codes={codes} />
           </DialogBody>
         ) : null}
 

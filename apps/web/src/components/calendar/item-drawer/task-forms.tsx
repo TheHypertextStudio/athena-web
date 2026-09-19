@@ -2,8 +2,8 @@
 
 import { OrganizationId } from '@docket/identity-access/ids';
 import { TaskId } from '@docket/work/ids';
-import { Button, Input, Select, Surface } from '@docket/ui/primitives';
-import { type JSX, type SubmitEventHandler, useState } from 'react';
+import { Button, FieldError, Input, Select, Surface } from '@docket/ui/primitives';
+import { type JSX, type SubmitEventHandler, useId, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 
@@ -57,6 +57,8 @@ export function LinkTaskForm({ itemId, onDone }: LinkTaskFormProps): JSX.Element
   const resolved =
     pasted ??
     (organizationId && parsedTaskId.success ? { organizationId, taskId: parsedTaskId.data } : null);
+  const errorId = useId();
+  const invalid = taskIdInput.length > 0 && !resolved;
 
   const submit: SubmitEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
@@ -75,13 +77,15 @@ export function LinkTaskForm({ itemId, onDone }: LinkTaskFormProps): JSX.Element
           <Input
             value={taskIdInput}
             aria-label="Task ID"
+            aria-invalid={invalid || undefined}
+            aria-describedby={invalid ? errorId : undefined}
             onChange={(event) => {
               setTaskIdInput(event.target.value);
             }}
             placeholder="Paste a task link"
           />
-          {taskIdInput.length > 0 && !resolved ? (
-            <span className="text-error text-body-small">Paste a link to the task, or its id.</span>
+          {invalid ? (
+            <FieldError id={errorId}>Paste a link to the task, or its id.</FieldError>
           ) : null}
         </label>
         {/* A pasted link names its own workspace, so the picker is only for a bare id. */}
@@ -99,11 +103,6 @@ export function LinkTaskForm({ itemId, onDone }: LinkTaskFormProps): JSX.Element
           label="Link task"
           pendingLabel="Linking…"
         />
-        {link.isError ? (
-          <p role="alert" className="text-error text-body-small">
-            We couldn&apos;t link this task. Please try again.
-          </p>
-        ) : null}
       </form>
     </Surface>
   );

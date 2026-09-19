@@ -16,11 +16,9 @@ import { GOOGLE_CONNECTOR_SCOPES } from '@docket/identity-access/google-oauth-co
 import {
   type CalendarConnectionOut,
   type CalendarConnectionStatus,
-  type CalendarListOut,
   type CalendarSourceGroupOut,
 } from '@docket/planning/calendar-contract';
 import { Calendar, ChevronDown, Layers, RefreshCw } from '@docket/ui/icons';
-import { firstWriteError, WriteError } from './write-error';
 import {
   Badge,
   Button,
@@ -36,12 +34,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { calendarSettingsDef } from '@/components/calendar/calendar-data';
 import { CALENDAR_ITEMS_PREFIX } from '@/components/calendar/calendar-mutation-cache';
+import { LoadFailure, presentFailure } from '@/components/feedback';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
-import { EmptyState, RelativeTime } from '@docket/ui/components';
+import { EmptyState, InlineBanner, notifyFailure, RelativeTime } from '@docket/ui/components';
+import { SyncFeedback } from './calendar-sync-feedback';
 import { relativeTime } from './format-time';
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';
@@ -70,39 +69,6 @@ function writeScopeStatus(connection: CalendarConnectionOut): WriteScopeStatus {
   return connection.scopeState.calendarWrite
     ? { label: 'Calendar editing enabled', variant: 'secondary' }
     : { label: 'Calendar read-only', variant: 'outline' };
-}
-
-/** Format a Calendar sync result into compact feedback. */
-function syncSummary(
-  data: {
-    eventsCreated: number;
-    eventsUpdated: number;
-    eventsDeleted: number;
-    errors: readonly string[];
-  },
-  calendars: readonly CalendarListOut[],
-): string {
-  if (data.errors.length > 0) {
-    // Each entry is `<provider calendar id>: <provider message>`. The message half is the
-    // provider's own text and never reaches the screen, but the id half identifies a calendar
-    // already listed below by name — so "2 sync issues found" can say *which two* instead of
-    // leaving someone to guess which of eight calendars is stale.
-    const named = data.errors
-      .map((entry) => {
-        const separator = entry.indexOf(':');
-        return separator === -1 ? entry : entry.slice(0, separator);
-      })
-      .map((id) => calendars.find((calendar) => calendar.externalCalendarId === id)?.title)
-      .filter((title): title is string => title !== undefined);
-    const unique = [...new Set(named)];
-    if (unique.length > 0) {
-      return `Could not sync ${unique.join(', ')}. Everything else is up to date.`;
-    }
-    return `${data.errors.length} calendar${data.errors.length === 1 ? '' : 's'} could not be synced.`;
-  }
-  const changed = data.eventsCreated + data.eventsUpdated + data.eventsDeleted;
-  if (changed === 0) return 'Up to date.';
-  return `Updated ${changed} event${changed === 1 ? '' : 's'}.`;
 }
 
 function connectionLabel(
@@ -289,9 +255,15 @@ function ConnectionSettingsGroup({
       body="rows"
     >
       {connection.status === 'error' ? (
-        <p role="alert" className="text-error bg-surface-container text-body-small px-4 py-2">
-          Google Calendar could not be synced. Reconnect it to restore syncing.
-        </p>
+        <div className="px-4 py-2">
+          <InlineBanner
+            tone="critical"
+            density="compact"
+            title="Google Calendar could not be synced."
+          >
+            Reconnect this account to restore syncing.
+          </InlineBanner>
+        </div>
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
         <Badge variant={scopeStatus.variant}>{scopeStatus.label}</Badge>
@@ -390,7 +362,9 @@ export default function GoogleCalendarSettings(): JSX.Element {
   const router = useRouter();
   const handledOAuthReturn = useRef(false);
   const [oauthPending, setOauthPending] = useState(false);
-  const [oauthError, setOauthError] = useState<string | null>(null);
+  // Seeded from the OAuth return's `?google=error` flag: the full-page redirect has no other way
+  // to report a ceremony that did not finish. Cleared the moment a new attempt starts.
+  const [authorizationIncomplete, setAuthorizationIncomplete] = useState(false);
   const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
   const query = useApiQuery(calendarSettingsDef());
   const identitiesQuery = useApiQuery(
@@ -466,7 +440,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
   });
 
   const startGoogleLink = useCallback(async (): Promise<void> => {
-    setOauthError(null);
+    setAuthorizationIncomplete(false);
     setOauthPending(true);
     try {
       const callbackURL = `${window.location.pathname}?google=connected`;
@@ -477,13 +451,13 @@ export default function GoogleCalendarSettings(): JSX.Element {
         errorCallbackURL: `${window.location.pathname}?google=error`,
       });
     } catch (error: unknown) {
-      setOauthError(userErrorMessage(error, 'Could not start Google Calendar authorization.'));
+      presentFailure(error, 'Could not start Google Calendar authorization.');
       setOauthPending(false);
     }
   }, []);
 
   const startSourceManagementConsent = useCallback(async (layerId: string): Promise<void> => {
-    setOauthError(null);
+    setAuthorizationIncomplete(false);
     setOauthPending(true);
     setExpandedSourceId(layerId);
     try {
@@ -496,7 +470,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
         errorCallbackURL: `${window.location.pathname}?google=error&source=${source}`,
       });
     } catch (error: unknown) {
-      setOauthError(userErrorMessage(error, 'Could not request calendar-list access.'));
+      presentFailure(error, 'Could not request calendar-list access.');
       setOauthPending(false);
     }
   }, []);
@@ -515,7 +489,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
       });
       return;
     }
-    setOauthError('Google authorization was canceled or could not be completed.');
+    setAuthorizationIncomplete(true);
     router.replace(window.location.pathname);
   }, [router, sync]);
 
@@ -527,16 +501,6 @@ export default function GoogleCalendarSettings(): JSX.Element {
     removeSource.isPending,
     sync.isPending,
   ].some(Boolean);
-  const syncFeedback = sync.data ? syncSummary(sync.data, data?.calendars ?? []) : null;
-  // Both writes were fire-and-forget: a refused visibility toggle snapped the checkbox back with
-  // no explanation, and a failed manual sync left the summary line showing the previous run.
-  const writeError = firstWriteError([
-    [updateGroup, 'Could not update calendar visibility.'],
-    [combineGroup, 'Could not combine these calendars.'],
-    [separateGroup, 'Could not separate these calendars.'],
-    [removeSource, 'Could not remove this calendar from the linked account.'],
-    [sync, 'Could not sync Google Calendar.'],
-  ]);
   const googleAvailable = identitiesQuery.data?.googleOAuth?.available === true;
 
   if (query.isPending) {
@@ -547,10 +511,13 @@ export default function GoogleCalendarSettings(): JSX.Element {
 
   if (query.isError) {
     return (
-      <SettingsGroup role="alert">
-        <p className="text-error text-body-medium">
-          {userErrorMessage(query.error, 'Could not load Google Calendar settings.')}
-        </p>
+      <SettingsGroup>
+        <LoadFailure
+          title="Google Calendar settings"
+          error={query.error}
+          onRetry={() => void query.refetch()}
+          retrying={query.isFetching}
+        />
       </SettingsGroup>
     );
   }
@@ -564,20 +531,8 @@ export default function GoogleCalendarSettings(): JSX.Element {
             <p className="text-on-surface text-label-large">
               {data?.connections.length ?? 0} account{data?.connections.length === 1 ? '' : 's'}
             </p>
-            {writeError ? (
-              <p role="alert" className="text-error text-body-small">
-                {writeError}
-              </p>
-            ) : syncFeedback ? (
-              <p
-                className={`text-body-small ${
-                  sync.data && sync.data.errors.length > 0
-                    ? 'text-error'
-                    : 'text-on-surface-variant'
-                }`}
-              >
-                {syncFeedback}
-              </p>
+            {sync.data ? (
+              <SyncFeedback result={sync.data} calendars={data?.calendars ?? []} />
             ) : null}
           </div>
         </div>
@@ -612,7 +567,11 @@ export default function GoogleCalendarSettings(): JSX.Element {
         </div>
       </div>
 
-      {oauthError ? <WriteError message={oauthError} /> : null}
+      {authorizationIncomplete ? (
+        <InlineBanner tone="critical" title="Google authorization did not complete.">
+          It was canceled or could not be finished. Connect the account again to retry.
+        </InlineBanner>
+      ) : null}
 
       {(data?.connections ?? []).length === 0 ? (
         <SettingsGroup>
@@ -672,7 +631,9 @@ export default function GoogleCalendarSettings(): JSX.Element {
             if (connection?.provider === 'google') {
               void startSourceManagementConsent(source.layerId);
             } else {
-              setOauthError('Reconnect this calendar account before removing the source.');
+              notifyFailure({
+                title: 'Reconnect this calendar account before removing the source.',
+              });
             }
             return;
           }

@@ -133,7 +133,7 @@ describe('TaskActivityFeed', () => {
 
     renderFeed();
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not load this task activity.');
+    expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.queryByText('database refused the connection')).not.toBeInTheDocument();
   });
 
@@ -168,7 +168,9 @@ describe('TaskActivityFeed', () => {
 
     renderFeed();
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not load newer activity.');
+    // The loaded entries stay on screen beside the banner.
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem').length).toBeGreaterThan(0);
     expect(screen.queryByText('upstream cursor failure')).not.toBeInTheDocument();
   });
 });

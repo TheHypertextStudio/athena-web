@@ -26,6 +26,8 @@ import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker
 import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { LatestUpdateSummary } from '@/components/entity-detail/latest-update-summary';
+import { PartialLoadBanner } from '@/components/entity-detail/partial-load-banner';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { PageContainer } from '@/components/views/page-layout';
 import { DetailPrintSummary } from '@/components/views/detail-print-summary';
 import { ContainerDetailLoading } from '@/components/views/entity-snapshot-metadata';
@@ -71,6 +73,7 @@ export default function ProgramDetailPage(): JSX.Element {
   const navigationSnapshot = useNavigationSnapshot('program', programId);
 
   const programLabel = useVocabulary('program');
+  const refreshTitle = `Could not refresh this ${programLabel.toLowerCase()}`;
   const cyclesLabel = useVocabulary('cycle', { plural: true });
   const projectNounCased = useVocabulary('project');
 
@@ -235,9 +238,9 @@ export default function ProgramDetailPage(): JSX.Element {
           snapshot={navigationSnapshot}
         />
         {aggregateQ.isError ? (
-          <p role="alert" className="text-error text-body-medium px-6 pb-6">
-            Could not refresh this {programLabel.toLowerCase()}.
-          </p>
+          <div className="px-6 pb-6">
+            <PartialLoadBanner title={refreshTitle} onRetry={() => void aggregateQ.refetch()} />
+          </div>
         ) : null}
       </>
     );
@@ -246,9 +249,7 @@ export default function ProgramDetailPage(): JSX.Element {
   if (aggregateState === 'error') {
     return (
       <PageContainer>
-        <p role="alert" className="text-error text-sm">
-          {userErrorMessage(aggregateQ.error, 'Could not load this program.')}
-        </p>
+        <QueryLoadFailure title={`This ${programLabel.toLowerCase()}`} query={aggregateQ} />
       </PageContainer>
     );
   }
@@ -407,9 +408,7 @@ export default function ProgramDetailPage(): JSX.Element {
       }
     >
       {aggregateQ.isError ? (
-        <p role="alert" className="text-error text-body-medium">
-          Could not refresh this {programLabel.toLowerCase()}.
-        </p>
+        <PartialLoadBanner title={refreshTitle} onRetry={() => void aggregateQ.refetch()} />
       ) : null}
       {tab === 'overview' ? (
         <div
@@ -419,9 +418,12 @@ export default function ProgramDetailPage(): JSX.Element {
           className="flex min-w-0 flex-col gap-8"
         >
           {programWorkQ.isError ? (
-            <p role="alert" className="text-error text-body-medium">
-              Could not load Program flow.
-            </p>
+            <PartialLoadBanner
+              title={`${programLabel} flow could not load`}
+              onRetry={() => void programWorkQ.refetch()}
+            >
+              The rest of this {programLabel.toLowerCase()} still works.
+            </PartialLoadBanner>
           ) : null}
           <FlowSnapshot
             health={health}

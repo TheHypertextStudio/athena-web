@@ -9,12 +9,11 @@
  * scheduled; (2) the **ownership-blocker guide** listing shared workspaces the user solely owns,
  * each linking to that workspace's Members settings to transfer or remove ownership; and (3) the
  * **delete-account card**, whose action is disabled while any blocker remains. The destructive
- * confirmation (email gate + passkey step-up) lives in {@link DeleteAccountDialog}. Errors render
- * inline as `role="alert"` banners (there is no toast system).
+ * confirmation (email gate + passkey step-up) lives in {@link DeleteAccountDialog}. A failed write
+ * is presented as a notice by the mutation that made it.
  */
 import type { AccountStatusOut } from '@docket/identity-access/account-contract';
-import { LoadFailure } from './load-failure';
-import { WriteError } from './write-error';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { type JSX, useState } from 'react';
@@ -35,7 +34,6 @@ import { DeleteAccountDialog } from './delete-account-dialog';
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';
 import { sectionHref } from './settings-registry';
-import { userErrorMessage } from '@/lib/problem';
 
 /** Whole days from now until an ISO instant (floored at 0). */
 function daysUntil(iso: string): number {
@@ -65,6 +63,7 @@ export function DangerZoneTab(): JSX.Element {
         'Could not cancel your scheduled deletion.',
       ),
     invalidateKeys: [queryKeys.account()],
+    failureTitle: 'Could not cancel your scheduled deletion.',
   });
 
   if (statusQ.isPending) {
@@ -79,12 +78,7 @@ export function DangerZoneTab(): JSX.Element {
     );
   }
   if (statusQ.isError) {
-    return (
-      <LoadFailure
-        message={userErrorMessage(statusQ.error, 'Could not load account settings.')}
-        retrying
-      />
-    );
+    return <QueryLoadFailure size="panel" title="Account settings" query={statusQ} />;
   }
 
   const status: AccountStatusOut = statusQ.data;
@@ -105,11 +99,6 @@ export function DangerZoneTab(): JSX.Element {
               everything.
             </p>
           </div>
-          {cancelDeletion.isError ? (
-            <WriteError
-              message={userErrorMessage(cancelDeletion.error, 'Could not update account settings.')}
-            />
-          ) : null}
           <div>
             <Button
               type="button"

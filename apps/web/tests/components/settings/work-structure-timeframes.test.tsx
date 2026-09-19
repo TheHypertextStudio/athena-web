@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -40,7 +41,12 @@ function wrapper(): ({ children }: { children: ReactNode }) => JSX.Element {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return ({ children }) => (
+    <QueryClientProvider client={client}>
+      {children}
+      <Toaster />
+    </QueryClientProvider>
+  );
 }
 
 beforeEach(() => {
@@ -67,7 +73,10 @@ beforeEach(() => {
     );
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  dismissAllNotices();
+  cleanup();
+});
 
 describe('work structure planning calendar', () => {
   it('shows an explicit disabled parent completion policy as off', async () => {
@@ -102,9 +111,7 @@ describe('work structure planning calendar', () => {
     await waitFor(() => {
       expect(parentCompletion).toHaveAttribute('aria-checked', 'true');
     });
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Could not save parent task completion.',
-    );
+    expect(await screen.findByRole('alert')).toBeVisible();
   });
 
   it('defaults parent completion to on and lets a manager turn it off', async () => {

@@ -13,6 +13,7 @@ import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { useTaskPageIdentity } from './use-task-page-identity';
 import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
 import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
@@ -86,8 +87,7 @@ export default function TaskDetailPage(): JSX.Element {
     activityKey,
     terminalFailure,
     isPending,
-    isError,
-    error,
+    taskQuery,
   } = useTaskDetail(orgId, taskId, { aggregateEnabled });
 
   const {
@@ -295,15 +295,10 @@ export default function TaskDetailPage(): JSX.Element {
     );
   }
 
-  if (isError) {
+  if (taskQuery.isError) {
     return (
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p
-          role="alert"
-          className="border-outline-variant text-error text-body-medium rounded-lg border p-4"
-        >
-          {error}
-        </p>
+        <QueryLoadFailure title="This task" query={taskQuery} />
       </div>
     );
   }

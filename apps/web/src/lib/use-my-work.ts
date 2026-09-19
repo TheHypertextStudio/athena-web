@@ -11,7 +11,6 @@ import { useCallback, useMemo } from 'react';
 import { type AgentTaskRowData, type RowActor } from '@/components/my-work/agent-task-row';
 import { type PillStatus, pillStatusOf } from '@/components/my-work/live-session-pill';
 import { api } from './api';
-import { userErrorMessage } from './problem';
 import { useOrgCapability } from './use-org-capability';
 import { useRenameTask } from './use-rename-task';
 import { type CategoryOfState, CATEGORY_LABEL, categoryRank } from './work-category';
@@ -36,7 +35,8 @@ export interface MyWorkState {
   tasks: readonly TaskOut[];
   setTasks: (updater: (prev: readonly TaskOut[]) => readonly TaskOut[]) => void;
   loading: boolean;
-  loadError: string | null;
+  /** The task read's failure, when it did not arrive; null otherwise. */
+  loadError: unknown;
   myActorId: string | null;
   counts: { mine: number; delegated: number };
   pendingApprovals: number;
@@ -111,9 +111,7 @@ export function useMyWork(
     agentsQ.isPending ||
     teamsQ.isPending ||
     sessionsQ.isPending;
-  const loadError = tasksQ.isError
-    ? userErrorMessage(tasksQ.error, 'Could not load your work.')
-    : null;
+  const loadError = tasksQ.isError ? tasksQ.error : null;
 
   /** Optimistically patch the cached task roster (e.g. prepend a just-created task). */
   const setTasks = useCallback(

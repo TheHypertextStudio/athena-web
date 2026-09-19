@@ -33,43 +33,36 @@ export function RelationRow({ sourceItemId, relation, onOpenItem }: RelationRowP
   const kindLabel = relation.targetKind ? CALENDAR_ITEM_KIND_LABEL[relation.targetKind] : null;
 
   return (
-    <div className="hover:bg-surface-container-high group flex flex-col gap-1 rounded-md px-2 py-1.5 transition-colors">
-      <div className="flex items-center gap-2">
-        <span aria-hidden="true" className="text-on-surface-variant shrink-0 [&_svg]:size-4">
-          <ArrowRight />
-        </span>
-        <button
-          type="button"
-          onClick={() => {
-            onOpenItem(relation.targetItemId);
-          }}
-          className="focus-visible:ring-ring text-on-surface text-body-medium min-w-0 flex-1 truncate rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none"
-        >
-          {title}
-        </button>
-        {kindLabel ? (
-          <Badge variant="secondary" className="shrink-0">
-            {kindLabel}
-          </Badge>
-        ) : null}
-        <Button
-          controlSize="xs"
-          variant="ghost"
-          aria-label={`Detach ${title}`}
-          className="opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
-          disabled={detach.isPending}
-          onClick={() => {
-            detach.mutate(undefined);
-          }}
-        >
-          Detach
-        </Button>
-      </div>
-      {detach.isError ? (
-        <p role="alert" className="text-error text-body-small">
-          We couldn&apos;t remove this relationship. Please try again.
-        </p>
+    <div className="hover:bg-surface-container-high group flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors">
+      <span aria-hidden="true" className="text-on-surface-variant shrink-0 [&_svg]:size-4">
+        <ArrowRight />
+      </span>
+      <button
+        type="button"
+        onClick={() => {
+          onOpenItem(relation.targetItemId);
+        }}
+        className="focus-visible:ring-ring text-on-surface text-body-medium min-w-0 flex-1 truncate rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none"
+      >
+        {title}
+      </button>
+      {kindLabel ? (
+        <Badge variant="secondary" className="shrink-0">
+          {kindLabel}
+        </Badge>
       ) : null}
+      <Button
+        controlSize="xs"
+        variant="ghost"
+        aria-label={`Detach ${title}`}
+        className="opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+        disabled={detach.isPending}
+        onClick={() => {
+          detach.mutate(undefined);
+        }}
+      >
+        Detach
+      </Button>
     </div>
   );
 }

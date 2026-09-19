@@ -16,6 +16,7 @@ import {
 import { type JSX, useCallback, useMemo } from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { type TeamCardMember, TeamCard, TeamCardsSkeleton } from '@/components/teams/team-card';
 import { buildTeamCatalog } from '@/components/teams/team-catalog';
 import { type TeamRow, ListSkeleton, TeamRows } from '@/components/teams/team-list-ui';
@@ -26,7 +27,6 @@ import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
 import { useTypedRoute } from '@/lib/app-location';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
-import { userErrorMessage } from '@/lib/problem';
 
 /**
  * The org Teams hub — every team in the workspace, as cards by default.
@@ -111,7 +111,7 @@ export default function TeamsListClient(): JSX.Element {
   const tasks = useMemo(() => tasksQ.data?.items ?? [], [tasksQ.data]);
 
   const loading = teamsQ.isPending;
-  const loadError = teamsQ.isError ? userErrorMessage(teamsQ.error, 'Could not load teams.') : null;
+  const loadError = teamsQ.isError;
 
   /** Per-team project counts (a project belongs via `project.teamId`). */
   const projectCountByTeam = useMemo(() => {
@@ -269,9 +269,7 @@ export default function TeamsListClient(): JSX.Element {
           <TeamCardsSkeleton />
         )
       ) : loadError ? (
-        <p role="alert" className="text-error text-body-medium p-4">
-          {loadError}
-        </p>
+        <QueryLoadFailure title="Teams" query={teamsQ} />
       ) : teams.length === 0 ? (
         <EmptyState
           icon={Users}

@@ -1,13 +1,14 @@
 'use client';
 
+import { InlineBanner } from '@docket/ui/components';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
+import { LoadFailure } from '@/components/feedback';
 import { SectionHeader } from '@/components/settings/section-header';
 import { BillingDiscountsSection } from '@/components/settings/billing-discounts-section';
 import { safeSameOriginPath } from '@/lib/auth-navigation';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 /** One product record returned by the organization billing API. */
@@ -119,6 +120,7 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
           }),
         'Could not open Docket Pro checkout.',
       ),
+    failureTitle: 'Could not open Docket Pro checkout.',
     onSuccess: ({ url }) => {
       window.location.assign(url);
     },
@@ -129,6 +131,7 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
         () => api.v1.orgs[':orgId'].billing.portal.$post({ param: { orgId } }),
         'Could not open billing management.',
       ),
+    failureTitle: 'Could not open billing management.',
     onSuccess: ({ url }) => {
       window.location.assign(url);
     },
@@ -138,9 +141,12 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
   if (billingQ.isPending) return <Skeleton className="h-72 max-w-2xl rounded-lg" />;
   if (billingQ.isError) {
     return (
-      <p role="alert" className="text-error text-body-medium">
-        {userErrorMessage(billingQ.error, 'Could not load billing information.')}
-      </p>
+      <LoadFailure
+        title="Billing"
+        error={billingQ.error}
+        onRetry={() => void billingQ.refetch()}
+        retrying={billingQ.isFetching}
+      />
     );
   }
 
@@ -149,7 +155,6 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
   const complimentary = product?.source === 'complimentary' && product.status === 'active';
   const canOpenPortal = product?.source === 'stripe' && product.status !== 'canceled';
   const mutation = canOpenPortal ? portal : checkout;
-  const mutationError = checkout.error ?? portal.error;
   const displayedPrice = `${formatPrice(summary.listPrice.amount, summary.listPrice.currency)} USD per organization each month, plus tax where required`;
 
   return (
@@ -209,11 +214,11 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
           </p>
         ) : null}
         {product?.status === 'past_due' ? (
-          <p className="text-error text-body-medium" role="status">
-            We could not collect this payment. Update the payment method
+          <InlineBanner tone="critical" title="We could not collect this payment.">
+            Update the payment method
             {product.graceEndsAt ? ` by ${formatDate(product.graceEndsAt)}` : ''} to keep editing
             shared work.
-          </p>
+          </InlineBanner>
         ) : null}
         {product?.status === 'canceled' ? (
           <p className="text-on-surface-variant text-body-medium">
@@ -260,11 +265,6 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
             A workspace administrator can change billing. You can still see the plan and dates.
           </p>
         )}
-        {mutationError ? (
-          <p role="alert" className="text-error text-body-medium">
-            {userErrorMessage(mutationError, 'Could not open billing management.')}
-          </p>
-        ) : null}
       </section>
 
       {!complimentary ? (

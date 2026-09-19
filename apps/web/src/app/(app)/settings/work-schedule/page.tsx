@@ -33,7 +33,7 @@ import { type JSX, useMemo, useState } from 'react';
 
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
-import { LoadFailure } from '@/components/settings/load-failure';
+import { LoadFailure } from '@/components/feedback';
 import { SettingRow } from '@/components/settings/setting-row';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 import {
@@ -48,7 +48,7 @@ import {
   workScheduleSegmentSummary,
 } from '@/components/work-location/work-schedule-editor-dialog';
 import { api } from '@/lib/api';
-import { toUserFacingError, UserFacingError, userErrorMessage } from '@/lib/problem';
+import { toUserFacingError, UserFacingError } from '@/lib/problem';
 import { queryKeys, unwrap, useApiListQuery, useApiMutation, useApiQuery } from '@/lib/query';
 
 function firstPresent(values: readonly unknown[]): unknown {
@@ -331,7 +331,6 @@ function IncomingChangesGroup(props: {
 function ScheduleChangeDialog(props: {
   readonly change: WorkScheduleChangeOut | null;
   readonly pending: boolean;
-  readonly error: string | null;
   readonly onOpenChange: (open: boolean) => void;
   readonly onKeepDocket: () => void;
   readonly onUseProvider: () => void;
@@ -362,11 +361,6 @@ function ScheduleChangeDialog(props: {
               ? 'You can keep the entries unchanged, or replace them by defining one default schedule.'
               : 'Keeping Docket sends your current date schedule back to the connected account. Using the connected-account change replaces this date in Docket.'}
           </p>
-          {props.error ? (
-            <p role="alert" className="text-error text-body-small">
-              {props.error}
-            </p>
-          ) : null}
         </DialogBody>
         <DialogFooter>
           <DialogClose asChild>
@@ -443,16 +437,7 @@ function WorkScheduleContent(props: {
   readonly onRetry: () => void;
 }): JSX.Element {
   if (props.loadError || !props.schedule) {
-    return (
-      <div className="flex flex-col items-start gap-3">
-        <LoadFailure
-          message={userErrorMessage(props.loadError, 'Could not load your work schedule.')}
-        />
-        <Button variant="outline" onClick={props.onRetry}>
-          Try again
-        </Button>
-      </div>
-    );
+    return <LoadFailure title="Work schedule" error={props.loadError} onRetry={props.onRetry} />;
   }
   return (
     <ScheduleGroups
@@ -487,6 +472,7 @@ export default function WorkScheduleSettingsPage(): JSX.Element {
         () => api.v1.me['work-location'].schedule.$put({ json: value }),
         'Could not save your default work schedule.',
       ),
+    failureTitle: 'Could not save your default work schedule.',
     invalidateKeys,
     onSuccess: () => {
       setEditorOpen(false);
@@ -502,6 +488,7 @@ export default function WorkScheduleSettingsPage(): JSX.Element {
           }),
         'Could not save that date change.',
       ),
+    failureTitle: 'Could not save that date change.',
     invalidateKeys,
     onSuccess: () => {
       setDateEditorOpen(false);
@@ -521,6 +508,7 @@ export default function WorkScheduleSettingsPage(): JSX.Element {
           json: { action },
         }),
       ),
+    failureTitle: 'Could not resolve that schedule change.',
     invalidateKeys,
     onSuccess: () => {
       setResolvingChange(null);
@@ -577,11 +565,6 @@ export default function WorkScheduleSettingsPage(): JSX.Element {
         places={places}
         fallbackTimezone={scheduleTimezone(currentPlan)}
         pending={savePlan.isPending}
-        error={
-          savePlan.error
-            ? userErrorMessage(savePlan.error, 'Could not save your default work schedule.')
-            : null
-        }
         onSave={(value) => {
           savePlan.mutate(value);
         }}
@@ -597,11 +580,6 @@ export default function WorkScheduleSettingsPage(): JSX.Element {
             : currentDateIn(Intl.DateTimeFormat().resolvedOptions().timeZone)
         }
         pending={saveDate.isPending}
-        error={
-          saveDate.error
-            ? userErrorMessage(saveDate.error, 'Could not save that date change.')
-            : null
-        }
         onSave={(value) => {
           saveDate.mutate(value);
         }}
@@ -609,11 +587,6 @@ export default function WorkScheduleSettingsPage(): JSX.Element {
       <ScheduleChangeDialog
         change={resolvingChange}
         pending={resolveChange.isPending}
-        error={
-          resolveChange.error
-            ? userErrorMessage(resolveChange.error, 'Could not resolve that schedule change.')
-            : null
-        }
         onOpenChange={(open) => {
           if (!open) setResolvingChange(null);
         }}

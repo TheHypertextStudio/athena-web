@@ -18,7 +18,6 @@ import {
   type NotificationQuietHours,
 } from '@docket/notifications/schemas';
 import { cn } from '@docket/ui';
-import { WriteError } from './write-error';
 import { Schedule } from '@docket/ui/icons';
 import { Checkbox, Badge, Input } from '@docket/ui/primitives';
 import { type JSX, useEffect, useRef, useState } from 'react';
@@ -95,8 +94,6 @@ export interface NotificationPreferencesSectionProps {
   readonly preferences: NotificationPreferenceOut;
   /** Whether a preference mutation is currently in flight. */
   readonly saving: boolean;
-  /** Inline mutation/read error. */
-  readonly error: string | null;
   /** Persist a structured notification preference patch. */
   readonly onPatch: (patch: NotificationPreferencePatch) => Promise<void> | void;
 }
@@ -105,7 +102,6 @@ export interface NotificationPreferencesSectionProps {
 export function NotificationPreferencesSection({
   preferences,
   saving,
-  error,
   onPatch,
 }: NotificationPreferencesSectionProps): JSX.Element {
   const [quietHours, setQuietHours] = useState<NotificationQuietHours>(
@@ -320,8 +316,6 @@ export function NotificationPreferencesSection({
           </table>
         </div>
       </SettingsGroup>
-
-      {error ? <WriteError message={error} /> : null}
     </section>
   );
 }

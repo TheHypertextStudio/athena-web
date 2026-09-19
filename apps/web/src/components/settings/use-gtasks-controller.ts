@@ -21,6 +21,7 @@ import type { TeamOut } from '../../lib/contracts/team';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 
+import { presentFailure } from '@/components/feedback';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiQuery } from '@/lib/query';
@@ -81,7 +82,6 @@ export interface GtasksController {
   canManage: boolean;
   teams: readonly TeamOut[];
   picker: GtasksPickerModel;
-  addError: string | null;
   loading: boolean;
   rows: readonly GtasksRowModel[];
   confirm: ConfirmDisconnectModel;
@@ -112,7 +112,6 @@ export function useGtasksController({
   const [connectingSub, setConnectingSub] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [openConfigId, setOpenConfigId] = useState<string | null>(null);
-  const [addError, setAddError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [confirmDisconnect, setConfirmDisconnect] = useState<{ id: string; label: string } | null>(
@@ -154,7 +153,6 @@ export function useGtasksController({
   /** Create a connection bound to a chosen identity, then validate it. */
   const connectIdentity = useCallback(
     async (externalAccountId: string): Promise<void> => {
-      setAddError(null);
       setConnectingSub(externalAccountId);
       try {
         const created = await unwrap(
@@ -181,7 +179,7 @@ export function useGtasksController({
         await refresh();
         setPickerOpen(false);
       } catch (err) {
-        setAddError(userErrorMessage(err, 'Could not connect this account.'));
+        presentFailure(err, 'Could not connect this account.');
       } finally {
         setConnectingSub(null);
       }
@@ -291,7 +289,6 @@ export function useGtasksController({
     () => ({
       open: pickerOpen,
       toggle: () => {
-        setAddError(null);
         setPickerOpen((o) => !o);
       },
       available,
@@ -336,7 +333,6 @@ export function useGtasksController({
     canManage,
     teams,
     picker,
-    addError,
     loading,
     rows,
     confirm,

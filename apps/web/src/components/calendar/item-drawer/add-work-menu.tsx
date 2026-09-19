@@ -21,7 +21,6 @@ import {
 import { type JSX } from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
-import { UserFacingError, userErrorMessage } from '@/lib/problem';
 import { queuedOfflineWrite } from '@/components/pwa/offline-write';
 
 import { useLinkTaskToItem } from '../calendar-mutations';
@@ -75,6 +74,8 @@ export function AddWorkMenu({
               openCreate({
                 kind: 'task',
                 sameWorkspaceCompletion: 'stay',
+                // The task exists whether or not the link lands, so a failed attach is the link
+                // mutation's own notice (with Try again) and never fails the creation.
                 afterCreate: async (task) => {
                   try {
                     await link.mutateAsync({
@@ -82,12 +83,8 @@ export function AddWorkMenu({
                       taskId: task.id,
                       role,
                     });
-                  } catch (cause) {
-                    if (queuedOfflineWrite(cause)) return;
-                    throw new UserFacingError(
-                      'The task was created, but we could not attach it to this event. Open the created task to copy its ID, then return to Calendar and use Link an existing task.',
-                      { cause },
-                    );
+                  } catch {
+                    return;
                   }
                 },
               });
@@ -106,25 +103,25 @@ export function AddWorkMenu({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <LinkFeedback pending={link.isPending} queued={queued} failed={link.isError} />
+      <LinkFeedback pending={link.isPending} queued={queued !== null} />
     </div>
   );
 }
 
 interface LinkFeedbackProps {
   readonly pending: boolean;
-  readonly queued: unknown;
-  readonly failed: boolean;
+  readonly queued: boolean;
 }
 
 /**
- * Say what happened to a task that was created but may not have reached the event yet.
+ * Say where a task that was just created stands with the event.
  *
  * @remarks
- * Creating a task and attaching it are two writes, and the second can be queued offline or fail on
- * its own. Silence there would leave a person believing work is attached when it is not.
+ * Creating a task and attaching it are two writes, and the second can be queued offline on its
+ * own. A failed attach is presented by the link mutation as a notice; the two states worth a line
+ * here are the ones where nothing has failed.
  */
-function LinkFeedback({ pending, queued, failed }: LinkFeedbackProps): JSX.Element | null {
+function LinkFeedback({ pending, queued }: LinkFeedbackProps): JSX.Element | null {
   if (pending) {
     return (
       <p role="status" className="text-on-surface-variant text-body-small px-2">
@@ -135,18 +132,7 @@ function LinkFeedback({ pending, queued, failed }: LinkFeedbackProps): JSX.Eleme
   if (queued) {
     return (
       <p role="status" className="text-on-surface-variant text-body-small px-2">
-        {userErrorMessage(
-          queued,
-          "Saved on this device. Docket will sync it as soon as you're back online.",
-        )}
-      </p>
-    );
-  }
-  if (failed) {
-    return (
-      <p role="alert" className="text-error text-body-small px-2">
-        The task was created, but we couldn&apos;t attach it to this event. Please try Link an
-        existing task.
+        Saved on this device. Docket will sync it as soon as you&apos;re back online.
       </p>
     );
   }

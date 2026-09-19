@@ -13,12 +13,12 @@ import {
   PopoverAnchor,
   PopoverContent,
   type PopoverVirtualAnchor,
-  Button,
   Skeleton,
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
+import { OverlayErrorBanner } from '@/components/pickers/overlay-error-banner';
 import {
   invalidateInitiativeHierarchyRoute,
   initiativeDragObjectFromRef,
@@ -314,38 +314,27 @@ export function InitiativeHierarchyPickerOverlay({
         }}
       >
         {operation?.phase === 'refresh_failed' ? (
-          <div className="m-1 flex flex-col items-start gap-2">
-            <div
-              role="alert"
-              className="text-error bg-error/5 border-error/30 text-body-medium w-full rounded-md border px-3 py-2"
-            >
-              Could not refresh the initiative hierarchy.
-            </div>
-            <Button type="button" variant="outline" onClick={retryRefresh}>
-              Retry refresh
-            </Button>
-          </div>
-        ) : writeError ? (
-          <div
-            role="alert"
-            className="text-error bg-error/5 border-error/30 text-body-medium m-1 rounded-md border px-3 py-2"
+          <OverlayErrorBanner
+            title="Could not refresh the initiative hierarchy."
+            action={{ label: 'Retry refresh', onSelect: retryRefresh }}
           >
-            {writeError}
-          </div>
+            The change was saved; the list here is the one from before it.
+          </OverlayErrorBanner>
+        ) : writeError ? (
+          <OverlayErrorBanner title={writeError}>
+            The hierarchy shown is the one that last saved.
+          </OverlayErrorBanner>
         ) : null}
         {(overview.isError && overview.data === undefined) ||
         (candidatesQuery.isError && candidatesQuery.data === undefined) ? (
-          <div
-            role="alert"
-            className="text-error bg-error/5 border-error/30 text-body-medium m-1 rounded-md border px-3 py-2"
-          >
-            {userErrorMessage(
+          <OverlayErrorBanner
+            title={userErrorMessage(
               overview.data === undefined && overview.error
                 ? overview.error
                 : candidatesQuery.error,
               'Could not load initiatives.',
             )}
-          </div>
+          />
         ) : overview.isPending || candidatesQuery.isPending ? (
           <div className="flex flex-col gap-1.5 p-1.5" aria-hidden="true">
             <Skeleton className="h-10 w-full rounded-md" />

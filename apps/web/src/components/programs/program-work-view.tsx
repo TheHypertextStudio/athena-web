@@ -25,6 +25,7 @@ import { ListChecks } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import { type JSX, useEffect, useMemo, useRef } from 'react';
 
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { applyView } from '@/components/views/apply-view';
 import { resolveRelationLabel, type FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
@@ -33,7 +34,6 @@ import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery, usePrefetchApi } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { taskDetailDef } from '@/lib/use-task-detail';
@@ -224,11 +224,7 @@ export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX
   }
 
   if (tasksQ.isError) {
-    return (
-      <p role="alert" className="text-error text-body-medium">
-        {userErrorMessage(tasksQ.error, "Could not load this program's work.")}
-      </p>
-    );
+    return <QueryLoadFailure title="This program's work" query={tasksQ} />;
   }
 
   return (

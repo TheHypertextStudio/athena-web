@@ -33,7 +33,7 @@ import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { STALE, apiQueryOptions, queryKeys, useApiListQuery, useLiveApiQuery } from '@/lib/query';
 
-import { LoadFailure } from './load-failure';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';
 import { InviteForm } from './invite-form';
@@ -42,7 +42,6 @@ import { MemberRow } from './member-row';
 import type { RoleOption } from './role-control';
 import { asRoleKey, ROLE_KEY_ORDER, ROLE_PLAIN_LANGUAGE } from './roles';
 import { useMembersMutations } from './use-members-mutations';
-import { userErrorMessage } from '@/lib/problem';
 
 /** Props for {@link MembersTab}. */
 export interface MembersTabProps {
@@ -98,22 +97,9 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
   const roles: readonly RoleOut[] = rolesQ.data?.items ?? [];
   const invitations = invitationsQ.data?.items ?? [];
   const loading = membersQ.isPending;
-  const loadError = membersQ.isError
-    ? userErrorMessage(membersQ.error, 'Could not load workspace members.')
-    : null;
 
-  const {
-    invite,
-    changeRole,
-    remove,
-    revoke,
-    inviting,
-    inviteError,
-    actionError,
-    savingRoleFor,
-    removingFor,
-    revokingFor,
-  } = useMembersMutations(orgId, membersKey, invitationsKey);
+  const { invite, changeRole, remove, revoke, inviting, savingRoleFor, removingFor, revokingFor } =
+    useMembersMutations(orgId, membersKey, invitationsKey);
 
   /** The assignable role options, ordered most-privileged first. */
   const roleOptions = useMemo<readonly RoleOption[]>(() => {
@@ -175,8 +161,8 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
     );
   }
 
-  if (loadError) {
-    return <LoadFailure message={loadError} retrying />;
+  if (membersQ.isError) {
+    return <QueryLoadFailure title="Workspace members" query={membersQ} />;
   }
 
   const pendingInvitations = invitations.map((invitation) => ({
@@ -194,20 +180,10 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
           roleOptions={roleOptions}
           defaultRoleId={memberRoleId}
           sending={inviting}
-          error={inviteError}
           onInvite={(payload) => {
             invite(payload);
           }}
         />
-      ) : null}
-
-      {actionError ? (
-        <p
-          role="alert"
-          className="bg-error-container text-on-error-container text-body-medium rounded-xl p-3"
-        >
-          {actionError}
-        </p>
       ) : null}
 
       <SettingsGroup

@@ -32,8 +32,7 @@ import { EmptyState } from '@docket/ui/components';
 import { Plus, Tag } from '@docket/ui/icons';
 import { type JSX, useState } from 'react';
 
-import { LoadFailure } from '@/components/settings/load-failure';
-import { firstWriteError, WriteError } from '@/components/settings/write-error';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { useActiveOrg } from '@/components/active-org';
 import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { LabelEditorDialog } from '@/components/labels/label-editor-dialog';
@@ -51,7 +50,6 @@ import {
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
 import { useTypedRoute } from '@/lib/app-location';
-import { userErrorMessage } from '@/lib/problem';
 import {
   apiQueryOptions,
   queryKeys,
@@ -139,19 +137,8 @@ export default function LabelsSettingsPage(): JSX.Element {
   const updateGroup = useUpdateLabelGroup(orgId);
   const removeGroup = useDeleteLabelGroup(orgId);
 
-  // Six writes with no failure surface: a refused rename or reorder simply reverted on the next
-  // render, which reads as the product discarding your edit for no reason.
-  const writeError = firstWriteError([
-    [updateLabel, 'Could not save that label.'],
-    [removeLabel, 'Could not delete that label.'],
-    [createGroup, 'Could not create that group.'],
-    [updateGroup, 'Could not save that group.'],
-    [removeGroup, 'Could not dissolve that group.'],
-  ]);
-
   const [editing, setEditing] = useState<EditorTarget | null>(null);
   const [deleting, setDeleting] = useState<LabelOut | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [dissolving, setDissolving] = useState<LabelGroupOut | null>(null);
 
   const labels: readonly LabelOut[] = labelsQ.data?.items ?? [];
@@ -203,7 +190,6 @@ export default function LabelsSettingsPage(): JSX.Element {
       updateLabel.mutate({ id: label.id, teamId: teamId as LabelUpdate['teamId'] });
     },
     onDelete: () => {
-      setDeleteError(null);
       setDeleting(label);
     },
   });
@@ -227,11 +213,10 @@ export default function LabelsSettingsPage(): JSX.Element {
         ) : undefined
       }
     >
-      {writeError ? <WriteError message={writeError} /> : null}
       {labelsQ.isPending ? (
         <Skeleton className="h-96 max-w-3xl rounded-xl" />
       ) : labelsQ.isError ? (
-        <LoadFailure message={userErrorMessage(labelsQ.error, 'Could not load labels.')} retrying />
+        <QueryLoadFailure title="Labels" query={labelsQ} />
       ) : labels.length === 0 ? (
         <EmptyLabels
           canManage={canContribute}
@@ -331,15 +316,11 @@ export default function LabelsSettingsPage(): JSX.Element {
         }
         confirmLabel="Delete label"
         pending={removeLabel.isPending}
-        error={deleteError}
         onConfirm={() => {
           if (!deleting) return;
           removeLabel.mutate(deleting.id, {
             onSuccess: () => {
               setDeleting(null);
-            },
-            onError: (caught) => {
-              setDeleteError(userErrorMessage(caught, 'Could not delete the label.'));
             },
           });
         }}
@@ -358,7 +339,6 @@ export default function LabelsSettingsPage(): JSX.Element {
         }
         confirmLabel="Dissolve group"
         pending={removeGroup.isPending}
-        error={null}
         onConfirm={() => {
           if (!dissolving) return;
           removeGroup.mutate(dissolving.id, {

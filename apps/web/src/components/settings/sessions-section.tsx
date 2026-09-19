@@ -9,11 +9,11 @@
  * else** in one action. This is distinct from passkey management ({@link PasskeysSection}, the
  * credentials that mint a session) and from linked identities (external accounts) — a session is
  * an active login. The current session can't be revoked from this list (the server 409s
- * `current_session`); that's what account sign-out is for. Errors render inline as `role="alert"`
- * banners — there is no toast system.
+ * `current_session`); that's what account sign-out is for. A failed revoke is presented as a
+ * notice by the mutation itself.
  */
 import type { SessionListOut, SessionOut } from '@docket/identity-access/session-contract';
-import { LoadFailure } from './load-failure';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { Computer, Phone } from '@docket/ui/icons';
 import { Badge, Button, DecorativeIcon, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
@@ -23,7 +23,6 @@ import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { api } from '@/lib/api';
 import { formatCalendarDate } from '@/lib/format-date';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
-import { userErrorMessage } from '@/lib/problem';
 import { SettingRow } from './setting-row';
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';
@@ -120,6 +119,7 @@ export function SessionsSection(): JSX.Element {
   const revokeOne = useApiMutation({
     mutationFn: revokeSession,
     invalidateKeys: [queryKeys.activeSessions()],
+    failureTitle: 'Could not revoke that session.',
     onSettled: () => {
       setRevokingId(null);
     },
@@ -128,6 +128,7 @@ export function SessionsSection(): JSX.Element {
   const revokeOthers = useApiMutation({
     mutationFn: revokeOtherSessions,
     invalidateKeys: [queryKeys.activeSessions()],
+    failureTitle: 'Could not sign out other devices.',
   });
 
   if (listQ.isPending) {
@@ -136,12 +137,7 @@ export function SessionsSection(): JSX.Element {
     return <Skeleton className="h-40 w-full rounded-xl" />;
   }
   if (listQ.isError) {
-    return (
-      <LoadFailure
-        message={userErrorMessage(listQ.error, 'Could not load your sessions.')}
-        retrying
-      />
-    );
+    return <QueryLoadFailure size="panel" title="Sessions" query={listQ} />;
   }
 
   const sessions = listQ.data.items;
@@ -167,11 +163,6 @@ export function SessionsSection(): JSX.Element {
           ) : undefined
         }
       >
-        {revokeOne.isError ? (
-          <p role="alert" className="text-error text-body-medium px-4 pb-2">
-            {userErrorMessage(revokeOne.error, 'Could not update your sessions.')}
-          </p>
-        ) : null}
         <ul>
           {sessions.map((s) => {
             const lastActive = formatCalendarDate(s.updatedAt);
@@ -225,9 +216,6 @@ export function SessionsSection(): JSX.Element {
         description="Every other signed-in device is signed out. This device stays signed in."
         confirmLabel="Sign out other devices"
         pending={revokeOthers.isPending}
-        {...(revokeOthers.isError
-          ? { error: userErrorMessage(revokeOthers.error, 'Could not update your sessions.') }
-          : {})}
         onConfirm={() => {
           revokeOthers.mutate(undefined, {
             onSuccess: () => {

@@ -20,7 +20,7 @@
  */
 import type { TaskOut } from '@docket/work/task-model';
 import type { Priority } from '@docket/work/task-contract';
-import { EmptyState, StatusGlyph } from '@docket/ui/components';
+import { EmptyState, InlineBanner, StatusGlyph } from '@docket/ui/components';
 import { ListChecks } from '@docket/ui/icons';
 import { Button, Row, Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueries } from '@tanstack/react-query';
@@ -31,12 +31,12 @@ import { type JSX, useMemo, useState } from 'react';
 import { useActiveOrg } from '@/components/active-org';
 import { formatDay } from '@/components/date-picker';
 import { EditableTitle } from '@/components/editor/editable-title';
+import { LoadFailure } from '@/components/feedback';
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { OrgChip } from '@/components/org-chip';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { myWorkDefs } from '@/lib/my-work-defs';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
 import { useOrgCapability } from '@/lib/use-org-capability';
@@ -119,8 +119,7 @@ export default function AllTasksClient(): JSX.Element {
   // exact moment we could not find out. A read that failed is a failure, not an emptiness.
   const reads = [...taskResults, ...memberResults];
   const failure = reads.find((r) => r.isError)?.error ?? null;
-  const loadError = failure ? userErrorMessage(failure, 'Could not load your tasks.') : null;
-  const partial = loadError !== null && sorted.length > 0;
+  const partial = failure !== null && sorted.length > 0;
   const refetchAll = (): void => {
     for (const r of reads) void r.refetch();
   };
@@ -139,15 +138,13 @@ export default function AllTasksClient(): JSX.Element {
           rows below are then real but incomplete, and silently presenting a short list as the whole
           list is the same lie in a quieter voice. */}
       {partial ? (
-        <div
-          role="alert"
-          className="border-error/40 bg-error/5 text-error text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
+        <InlineBanner
+          tone="critical"
+          title="Some workspaces did not answer"
+          action={{ label: 'Try again', onSelect: refetchAll }}
         >
-          <span>Some workspaces did not answer, so this list may be incomplete.</span>
-          <Button variant="outline" size="sm" onClick={refetchAll}>
-            Try again
-          </Button>
-        </div>
+          This list may be incomplete until they do.
+        </InlineBanner>
       ) : null}
 
       {loading && mine.length === 0 ? (
@@ -156,13 +153,13 @@ export default function AllTasksClient(): JSX.Element {
             <Skeleton key={i} className="h-[72px] w-full rounded-lg" />
           ))}
         </Stack>
-      ) : loadError && sorted.length === 0 ? (
-        <Stack align="center" gap={2} role="alert" className="justify-center p-12 text-center">
-          <p className="text-error text-label-large">{loadError}</p>
-          <Button variant="outline" size="sm" onClick={refetchAll}>
-            Try again
-          </Button>
-        </Stack>
+      ) : failure && sorted.length === 0 ? (
+        <LoadFailure
+          title="Tasks"
+          error={failure}
+          onRetry={refetchAll}
+          retrying={reads.some((r) => r.isFetching)}
+        />
       ) : sorted.length === 0 ? (
         <EmptyState
           icon={ListChecks}

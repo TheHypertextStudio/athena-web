@@ -7,24 +7,11 @@ import type {
 } from '@docket/planning/work-location-contract';
 
 import type { PlaceEditorValue } from '@/components/work-location/place-editor-dialog';
-import { toUserFacingError, UserFacingError, userErrorMessage } from '@/lib/problem';
+import { toUserFacingError, UserFacingError } from '@/lib/problem';
 
 /** Return the first value that represents settled query data. */
 export function firstPresent(values: readonly unknown[]): unknown {
   return values.find((value) => value !== null && value !== undefined);
-}
-
-/** Keep mutation failures absent until a request has produced one. */
-export function mutationMessage(error: unknown, fallback: string): string | null {
-  return error ? userErrorMessage(error, fallback) : null;
-}
-
-/** Hide background resolution failures while an explicit resolution is in progress. */
-export function hiddenResolutionError(
-  resolvingChange: WorkScheduleChangeOut | null,
-  error: unknown,
-): unknown {
-  return resolvingChange ? null : error;
 }
 
 /** Normalize deferred query results for list consumers. */

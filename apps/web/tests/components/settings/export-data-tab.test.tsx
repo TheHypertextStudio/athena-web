@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -77,6 +78,7 @@ function renderTab(focusedExportId?: string): void {
   render(
     <QueryClientProvider client={client}>
       <ExportDataTab focusedExportId={focusedExportId} />
+      <Toaster />
     </QueryClientProvider>,
   );
 }
@@ -99,6 +101,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  dismissAllNotices();
   cleanup();
   vi.unstubAllGlobals();
 });
@@ -131,6 +134,24 @@ describe('ExportDataTab', () => {
     });
   });
 
+  it('ties an empty workspace selection to its error line and blocks the request', async () => {
+    renderTab();
+
+    await screen.findByRole('button', { name: 'Create export' });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Personal' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Design' }));
+
+    const alert = screen.getByRole('alert');
+    const group = alert.closest('fieldset');
+    expect(group).toHaveAttribute('aria-invalid', 'true');
+    expect(group).toHaveAttribute('aria-describedby', alert.id);
+    expect(screen.getByRole('button', { name: 'Create export' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Design' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(group).not.toHaveAttribute('aria-invalid');
+  });
+
   it('pins the export linked from email even when it is absent from recent history', async () => {
     const emailExport = { ...readyExport(), id: '01H00000000000000000000000' };
     exportsGet.mockResolvedValue(okResponse({ items: [] }));
@@ -150,11 +171,30 @@ describe('ExportDataTab', () => {
     });
     renderTab(missingExportId);
 
-    expect(
-      await screen.findByText(
-        'This export is no longer available. You can create a new export below.',
-      ),
-    ).toBeVisible();
+    expect(await screen.findByRole('alert')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Create export' })).toBeVisible();
+  });
+
+  it('presents a failed export request as a notice without server diagnostics', async () => {
+    exportsPost.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () =>
+        Promise.resolve({
+          type: 'about:blank',
+          code: 'internal',
+          title: 'Internal server error',
+          status: 500,
+          detail: 'archive worker crashed',
+        }),
+    });
+    renderTab();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Create export' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).not.toHaveTextContent('archive worker crashed');
+    expect(alert).not.toHaveTextContent('Internal server error');
   });
 
   it('never renders server diagnostics when export history fails', async () => {
@@ -173,7 +213,6 @@ describe('ExportDataTab', () => {
     renderTab();
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('Could not load your export history.');
     expect(alert).not.toHaveTextContent('AGENT_MAX_TURNS');
     expect(alert).not.toHaveTextContent('Internal server error');
   });

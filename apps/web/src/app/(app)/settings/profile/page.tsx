@@ -10,7 +10,6 @@ import { useSession } from '@/lib/auth-client';
 import { ComposerPreferencesSection } from '@/components/settings/composer-preferences-section';
 import { SettingsImagePicker } from '@/components/settings/settings-image-picker';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { unwrap, useApiMutation } from '@/lib/query';
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 import { Field, Input } from '@docket/ui/primitives';
@@ -38,6 +37,7 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
   const save = useApiMutation<ProfileSettingsOut, ProfileSettingsUpdate>({
     mutationFn: (json) =>
       unwrap(() => api.v1.me.account.profile.$patch({ json }), 'Could not save your profile.'),
+    failureTitle: 'Could not save your profile.',
     onSuccess: (profile) => {
       const next = { name: profile.name, image: profile.image ?? '' };
       setName(next.name);
@@ -96,11 +96,6 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
             commitImage(value);
           }}
         />
-        {save.error ? (
-          <p className="text-error text-body-medium" role="alert">
-            {userErrorMessage(save.error, 'Could not save your profile.')}
-          </p>
-        ) : null}
         <div className="pt-4">
           <p className="text-on-surface-variant text-body-small">Email</p>
           <p className="text-on-surface text-label-large">{session.user.email}</p>

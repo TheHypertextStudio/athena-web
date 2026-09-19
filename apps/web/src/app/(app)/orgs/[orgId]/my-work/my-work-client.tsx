@@ -13,6 +13,7 @@ import { useInPageSearchTarget } from '@/components/in-page-search/in-page-searc
 import { useResidentInPageSearch } from '@/components/in-page-search/use-resident-in-page-search';
 import { useSession } from '@/lib/auth-client';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
+import { LoadFailure } from '@/components/feedback';
 import { AgentTaskRow } from '@/components/my-work/agent-task-row';
 import { pillLabelOf } from '@/components/my-work/live-session-pill';
 import { SplitTabs } from '@/components/my-work/split-tabs';
@@ -189,9 +190,7 @@ export default function MyWorkClient(): JSX.Element {
             <Skeleton className="h-8 w-full" />
           </div>
         ) : loadError ? (
-          <p role="alert" className="text-error text-body-medium p-4">
-            {loadError}
-          </p>
+          <LoadFailure title="Your work" error={loadError} />
         ) : visible.length === 0 ? (
           <div className="flex flex-col items-center gap-3 p-10 text-center">
             <span

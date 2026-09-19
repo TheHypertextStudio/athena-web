@@ -10,7 +10,8 @@
  *   `config.listIds`/`defaultListId` (the PATCH endpoint wholesale-replaces `config`);
  * - the two-way write-scope 409: flipping to "Two-way" and saving, when the server rejects with
  *   the write-scope conflict, renders an inline re-auth notice with a "Re-authorize Linear"
- *   button wired to the caller's `onReauthorize`, rather than a bare error string.
+ *   button wired to the caller's `onReauthorize`, rather than the failure notice every other
+ *   rejected save gets.
  *
  * The RPC client is mocked so these assert real behavior without touching the live API.
  */
@@ -18,8 +19,9 @@ import { IntegrationId } from '@docket/connections/ids';
 import { OrganizationId, TeamId } from '@docket/identity-access/ids';
 import { type IntegrationOut } from '@docket/connections/integration-contract';
 import { type TeamOut } from '../../../src/lib/contracts/team';
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Hoisted so the mock factory (lifted above imports) can reference them.
@@ -122,6 +124,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  dismissAllNotices();
   cleanup();
 });
 
@@ -144,6 +147,7 @@ function renderPanel(
         onReauthorize={onReauthorize}
         {...overrides}
       />
+      <Toaster />
     </QueryClientProvider>,
   );
   return { onReauthorize };
@@ -241,9 +245,10 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
     const engSelect = await screen.findByLabelText('Docket team for Engineering');
     fireEvent.change(engSelect, { target: { value: TEAM_ENG_ID } });
 
+    // The failure is presented once, as a notice, and carries no server prose.
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('Could not save settings.');
     expect(alert.textContent).not.toContain('Something else broke.');
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Re-authorize Linear' })).toBeNull();
   });
 
@@ -270,13 +275,12 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
     // Flipping to Two-way autosaves the writeBack: true attempt.
     fireEvent.click(screen.getByRole('radio', { name: /Two-way/ }));
 
+    // The banner owns this failure, so the notice stack stays empty: one alert, with the action.
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain(
-      'Reconnect Linear and approve write access to turn on two-way sync.',
-    );
     expect(alert.textContent).not.toContain('provider diagnostic');
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
 
-    const reauthButton = screen.getByRole('button', { name: 'Re-authorize Linear' });
+    const reauthButton = within(alert).getByRole('button', { name: 'Re-authorize Linear' });
     fireEvent.click(reauthButton);
     await waitFor(() => {
       expect(onReauthorize).toHaveBeenCalledTimes(1);
@@ -314,7 +318,6 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
     fireEvent.click(screen.getByRole('radio', { name: /Two-way/ }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('Could not save settings.');
     expect(alert.textContent).not.toContain('Unknown team id(s)');
     expect(screen.queryByRole('button', { name: 'Re-authorize Linear' })).toBeNull();
   });

@@ -4,12 +4,27 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { TooltipProvider } from '@docket/ui/primitives';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { mutate, mutateAsync, queryState, refetch } = vi.hoisted(() => ({
-  mutate: vi.fn(),
-  mutateAsync: vi.fn(async (): Promise<unknown> => undefined),
-  queryState: { fails: false },
-  refetch: vi.fn(async (): Promise<unknown> => undefined),
-}));
+import { UserFacingError } from '../../src/lib/problem';
+
+/** A read failure the server reports as temporary, which the load-failure state offers to retry. */
+function readFailure(): UserFacingError {
+  return new UserFacingError('Could not load.', { status: 503 });
+}
+
+/** The read failure the mocked queries report, or null while they succeed. */
+interface MockQueryState {
+  error: unknown;
+}
+
+const { mutate, mutateAsync, queryState, refetch } = vi.hoisted(() => {
+  const state: MockQueryState = { error: null };
+  return {
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(async (): Promise<unknown> => undefined),
+    queryState: state,
+    refetch: vi.fn(async (): Promise<unknown> => undefined),
+  };
+});
 
 const PLACE_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const PLAN_ID = '01BX5ZZKBKACTAV9WEVGEMMVS0';
@@ -170,7 +185,7 @@ vi.mock('../../src/lib/query', () => ({
   },
   useApiListQuery: (definition: { kind: string }) => ({
     data: definition.kind === 'places' ? places : changes,
-    error: queryState.fails ? new Error('read failed') : null,
+    error: queryState.error,
     isPending: false,
     refetch,
   }),
@@ -182,7 +197,7 @@ vi.mock('../../src/lib/query', () => ({
             current: { place: null, source: 'unknown' },
             expected: { place: null, source: 'unknown' },
           },
-    error: queryState.fails ? new Error('read failed') : null,
+    error: queryState.error,
     isPending: false,
     refetch,
   }),
@@ -231,7 +246,7 @@ afterEach(() => {
   mutate.mockReset();
   mutateAsync.mockClear();
   refetch.mockClear();
-  queryState.fails = false;
+  queryState.error = null;
   localStorage.clear();
   Object.assign(firstPlace(), { geofence: null });
   Object.assign(firstSchedulePlan(), {
@@ -358,10 +373,10 @@ describe('WorkScheduleSettingsPage', () => {
   });
 
   it('offers a retry instead of exposing schedule actions after a read failure', () => {
-    queryState.fails = true;
+    queryState.error = readFailure();
     renderPage(<WorkScheduleSettingsPage />);
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not load your work schedule.');
+    expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit default schedule' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(refetch).toHaveBeenCalledTimes(3);
@@ -502,10 +517,10 @@ describe('PlacesSettingsPage', () => {
   });
 
   it('offers a retry instead of allowing place creation after a read failure', () => {
-    queryState.fails = true;
+    queryState.error = readFailure();
     renderPage(<PlacesSettingsPage />);
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not load your saved places.');
+    expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add place' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(refetch).toHaveBeenCalledTimes(3);

@@ -34,7 +34,7 @@ import { type JSX, useMemo, useState } from 'react';
 
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { SettingsGroup } from '@/components/settings/settings-group';
-import { LoadFailure } from '@/components/settings/load-failure';
+import { LoadFailure } from '@/components/feedback';
 import { SettingRow } from '@/components/settings/setting-row';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 import { useAutomaticLocation } from '@/components/work-location/automatic-location-provider';
@@ -49,16 +49,13 @@ import {
   workScheduleChangesDef,
 } from '@/components/work-location/work-location-data';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { queryKeys, unwrap, useApiListQuery, useApiMutation, useApiQuery } from '@/lib/query';
 
 import {
   createSavePlaceHandler,
   firstPresent,
-  hiddenResolutionError,
   itemsOrEmpty,
   linkPlaceResolution,
-  mutationMessage,
   noContent,
   valueOrNull,
 } from './place-page-actions';
@@ -328,11 +325,8 @@ function PlacesDialogs(props: {
   readonly resolutionPlaceId: string;
   readonly confirmRetire: WorkPlaceOut | null;
   readonly placePending: boolean;
-  readonly placeError: string | null;
   readonly resolvePending: boolean;
-  readonly resolveError: string | null;
   readonly retirePending: boolean;
-  readonly retireError: string | null;
   readonly onEditorOpenChange: (open: boolean) => void;
   readonly onSavePlace: (value: PlaceEditorValue) => void;
   readonly onResolveOpenChange: (open: boolean) => void;
@@ -356,7 +350,6 @@ function PlacesDialogs(props: {
           ? {}
           : { initialName: props.suggestedPlaceName })}
         pending={props.placePending}
-        error={props.placeError}
         onSave={props.onSavePlace}
       />
       <Dialog open={props.resolvingChange !== null} onOpenChange={props.onResolveOpenChange}>
@@ -385,11 +378,6 @@ function PlacesDialogs(props: {
                 ))}
               </Select>
             </label>
-            {props.resolveError ? (
-              <p role="alert" className="text-error text-body-small">
-                {props.resolveError}
-              </p>
-            ) : null}
           </DialogBody>
           <DialogFooter>
             <Button variant="ghost" disabled={props.resolvePending} onClick={props.onIgnoreName}>
@@ -419,7 +407,6 @@ function PlacesDialogs(props: {
         description="Your schedule must stop using this place before you can retire it. Existing history remains unchanged."
         confirmLabel="Retire place"
         pending={props.retirePending}
-        error={props.retireError}
         onConfirm={props.onRetire}
       />
     </>
@@ -455,6 +442,7 @@ export default function PlacesSettingsPage(): JSX.Element {
           }),
         'Could not add that saved place.',
       ),
+    failureTitle: 'Could not add that saved place.',
     invalidateKeys,
     onSuccess: () => {
       setPlaceEditorOpen(false);
@@ -467,6 +455,7 @@ export default function PlacesSettingsPage(): JSX.Element {
         () => api.v1.me['work-location'].places[':id'].$patch({ param: { id }, json: patch }),
         'Could not update that saved place.',
       ),
+    failureTitle: 'Could not update that saved place.',
     invalidateKeys,
     onSuccess: () => {
       setPlaceEditorOpen(false);
@@ -479,6 +468,7 @@ export default function PlacesSettingsPage(): JSX.Element {
         () => api.v1.me['work-location'].places[':id'].$delete({ param: { id } }),
         'Could not retire that saved place.',
       ),
+    failureTitle: 'Could not retire that saved place.',
     invalidateKeys,
     onSuccess: () => {
       setConfirmRetire(null);
@@ -490,6 +480,7 @@ export default function PlacesSettingsPage(): JSX.Element {
         () => api.v1.me['work-location'].profile.$put({ json: { homePlaceId } }),
         'Could not update your home designation.',
       ),
+    failureTitle: 'Could not update your home designation.',
     invalidateKeys,
   });
   const setCurrent = useApiMutation({
@@ -498,6 +489,7 @@ export default function PlacesSettingsPage(): JSX.Element {
         () => api.v1.me['work-location'].current.$put({ json: { placeId } }),
         'Could not set your current work location.',
       ),
+    failureTitle: 'Could not set your current work location.',
     invalidateKeys,
     onSuccess: () => {
       setPointAt(new Date().toISOString());
@@ -509,6 +501,7 @@ export default function PlacesSettingsPage(): JSX.Element {
         () => api.v1.me['work-location'].current.$delete(),
         'Could not clear your current work location.',
       ),
+    failureTitle: 'Could not clear your current work location.',
     invalidateKeys,
     onSuccess: () => {
       setPointAt(new Date().toISOString());
@@ -530,6 +523,7 @@ export default function PlacesSettingsPage(): JSX.Element {
           }),
         'Could not resolve that provider place name.',
       ),
+    failureTitle: 'Could not resolve that provider place name.',
     invalidateKeys,
     onSuccess: () => {
       setResolvingChange(null);
@@ -580,12 +574,6 @@ export default function PlacesSettingsPage(): JSX.Element {
 
   const loadError = firstPresent([placesQ.error, changesQ.error, pointQ.error]);
   const loading = [placesQ.isPending, changesQ.isPending].some(Boolean);
-  const mutationError = firstPresent([
-    setHome.error,
-    setCurrent.error,
-    clearCurrent.error,
-    hiddenResolutionError(resolvingChange, resolveChange.error),
-  ]);
 
   return (
     <SettingsSectionPage
@@ -601,17 +589,14 @@ export default function PlacesSettingsPage(): JSX.Element {
       }
     >
       {loadError ? (
-        <div className="flex flex-col items-start gap-3">
-          <LoadFailure message={userErrorMessage(loadError, 'Could not load your saved places.')} />
-          <Button
-            variant="outline"
-            onClick={() => {
-              void Promise.all([placesQ.refetch(), changesQ.refetch(), pointQ.refetch()]);
-            }}
-          >
-            Try again
-          </Button>
-        </div>
+        <LoadFailure
+          title="Saved places"
+          error={loadError}
+          onRetry={() => {
+            void Promise.all([placesQ.refetch(), changesQ.refetch(), pointQ.refetch()]);
+          }}
+          retrying={placesQ.isFetching || changesQ.isFetching || pointQ.isFetching}
+        />
       ) : (
         <PlacesContent
           places={places}
@@ -657,17 +642,8 @@ export default function PlacesSettingsPage(): JSX.Element {
         resolutionPlaceId={resolutionPlaceId}
         confirmRetire={confirmRetire}
         placePending={createPlace.isPending || updatePlace.isPending}
-        placeError={mutationMessage(
-          firstPresent([createPlace.error, updatePlace.error]),
-          'Could not save that place.',
-        )}
         resolvePending={resolveChange.isPending}
-        resolveError={mutationMessage(
-          resolveChange.error,
-          'Could not resolve that provider place name.',
-        )}
         retirePending={retirePlace.isPending}
-        retireError={mutationMessage(retirePlace.error, 'Could not retire that saved place.')}
         onEditorOpenChange={(open) => {
           setPlaceEditorOpen(open);
           if (!open) {
@@ -703,12 +679,6 @@ export default function PlacesSettingsPage(): JSX.Element {
           if (confirmRetire) retirePlace.mutate(confirmRetire.id);
         }}
       />
-
-      {mutationError ? (
-        <p role="alert" className="text-error text-body-small">
-          {userErrorMessage(mutationError, 'Could not save that place change.')}
-        </p>
-      ) : null}
     </SettingsSectionPage>
   );
 }

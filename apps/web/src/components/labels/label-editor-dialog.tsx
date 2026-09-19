@@ -28,8 +28,6 @@ import {
 import { LabelChip } from '@docket/ui/components';
 import { type JSX, useEffect, useState } from 'react';
 
-import { userErrorMessage } from '@/lib/problem';
-
 import { LabelColorPicker } from './label-color-picker';
 import { findNameCollision, useCreateLabel, useMergeLabel, useUpdateLabel } from './queries';
 
@@ -69,7 +67,8 @@ export function LabelEditorDialog({
 
   const [name, setName] = useState('');
   const [color, setColor] = useState<LabelColorKey>('blue');
-  const [error, setError] = useState<string | null>(null);
+  // Validation of the name control alone; a refused save is presented by the mutation itself.
+  const [nameError, setNameError] = useState<string | undefined>();
   const [mergeTarget, setMergeTarget] = useState<LabelOut | null>(null);
 
   // Reset when the dialog opens onto a different label, so a previous edit never bleeds into
@@ -78,7 +77,7 @@ export function LabelEditorDialog({
     if (!open) return;
     setName(label?.name ?? '');
     setColor((label?.color as LabelColorKey | undefined) ?? 'blue');
-    setError(null);
+    setNameError(undefined);
     setMergeTarget(null);
   }, [open, label]);
 
@@ -90,9 +89,9 @@ export function LabelEditorDialog({
   }
 
   function submit(): void {
-    setError(null);
+    setNameError(undefined);
     if (trimmed.length === 0) {
-      setError('Give the label a name.');
+      setNameError('Give the label a name.');
       return;
     }
 
@@ -104,46 +103,24 @@ export function LabelEditorDialog({
         setMergeTarget(collision);
         return;
       }
-      setError(`“${collision.name}” already exists.`);
+      setNameError(`“${collision.name}” already exists.`);
       return;
     }
 
     if (label) {
-      update.mutate(
-        { id: label.id, name: trimmed, color },
-        {
-          onSuccess: close,
-          onError: (caught) => {
-            setError(userErrorMessage(caught, 'Could not save the label.'));
-          },
-        },
-      );
+      update.mutate({ id: label.id, name: trimmed, color }, { onSuccess: close });
       return;
     }
 
     create.mutate(
       { name: trimmed, color, ...(groupId ? { groupId: groupId as LabelCreate['groupId'] } : {}) },
-      {
-        onSuccess: close,
-        onError: (caught) => {
-          setError(userErrorMessage(caught, 'Could not create the label.'));
-        },
-      },
+      { onSuccess: close },
     );
   }
 
   function confirmMerge(): void {
     if (!label || !mergeTarget) return;
-    setError(null);
-    merge.mutate(
-      { id: label.id, intoId: mergeTarget.id },
-      {
-        onSuccess: close,
-        onError: (caught) => {
-          setError(userErrorMessage(caught, 'Could not merge the labels.'));
-        },
-      },
-    );
+    merge.mutate({ id: label.id, intoId: mergeTarget.id }, { onSuccess: close });
   }
 
   return (
@@ -166,11 +143,6 @@ export function LabelEditorDialog({
               </span>
               <LabelChip name={mergeTarget.name} color={mergeTarget.color} />
             </div>
-            {error ? (
-              <p role="alert" className="text-error text-body-small">
-                {error}
-              </p>
-            ) : null}
             <DialogFooter>
               <Button
                 type="button"
@@ -199,9 +171,10 @@ export function LabelEditorDialog({
             </DialogHeader>
 
             <div className="flex flex-col gap-4">
-              <Field label="Name">
+              <Field label="Name" {...(nameError === undefined ? {} : { error: nameError })}>
                 <Input
                   value={name}
+                  aria-invalid={nameError !== undefined}
                   autoFocus
                   onChange={(event) => {
                     setName(event.target.value);
@@ -225,12 +198,6 @@ export function LabelEditorDialog({
                 <LabelChip name={trimmed || 'label'} color={color} />
               </div>
             </div>
-
-            {error ? (
-              <p role="alert" className="text-error text-body-small">
-                {error}
-              </p>
-            ) : null}
 
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={close} disabled={pending}>

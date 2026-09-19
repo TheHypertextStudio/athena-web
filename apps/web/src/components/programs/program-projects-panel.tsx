@@ -47,7 +47,7 @@ export function ProgramProjectsPanel({
   const statusOf = useWorkStatusResolver('project');
   const { openCreate } = useCreateObject();
   const options = useComposerOptions(orgId, ['projects'], true);
-  const { attach, detach, pending, mutationError } = useProgramProjects(orgId, programId);
+  const { attach, detach, pending } = useProgramProjects(orgId, programId);
 
   const filed = useMemo<readonly ProjectOut[]>(
     () => options.projects.filter((project) => project.programId === programId),
@@ -166,12 +166,6 @@ export function ProgramProjectsPanel({
           })}
         </ul>
       )}
-
-      {mutationError ? (
-        <p role="alert" className="text-error text-body-medium">
-          {mutationError}
-        </p>
-      ) : null}
     </div>
   );
 }

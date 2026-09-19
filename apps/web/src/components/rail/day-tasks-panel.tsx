@@ -23,11 +23,11 @@ import type { JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { EditableTitle } from '@/components/editor/editable-title';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { OrgChip } from '@/components/org-chip';
 import { api } from '@/lib/api';
 import { formatDay } from '@/components/date-picker';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery, useApiQuery } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
 import { useOrgCapability } from '@/lib/use-org-capability';
@@ -136,7 +136,6 @@ export default function DayTasksPanel(): JSX.Element {
   );
 
   const plan = todayQ.data?.plan ?? [];
-  const error = todayQ.isError ? userErrorMessage(todayQ.error, 'Could not load your day.') : null;
 
   return (
     <section aria-label="Tasks" className="flex h-full min-h-0 flex-col">
@@ -148,7 +147,7 @@ export default function DayTasksPanel(): JSX.Element {
       */}
       <header className="shrink-0 px-3 pt-3 pb-2">
         <h2 className="text-on-surface text-title-small">Today&rsquo;s plan</h2>
-        {!todayQ.isPending && !error ? (
+        {!todayQ.isPending && !todayQ.isError ? (
           <p className="text-on-surface-variant text-body-small">
             {plan.length === 0
               ? 'Nothing planned'
@@ -166,10 +165,8 @@ export default function DayTasksPanel(): JSX.Element {
               <Skeleton key={i} className="h-12 w-full rounded-lg" />
             ))}
           </div>
-        ) : error ? (
-          <p role="alert" className="text-error text-body-medium">
-            {error}
-          </p>
+        ) : todayQ.isError ? (
+          <QueryLoadFailure size="panel" title="Your day" query={todayQ} />
         ) : plan.length === 0 ? (
           <div className="bg-surface-container-low text-on-surface-variant text-body-medium flex flex-col gap-1 rounded-lg p-4">
             <span className="text-on-surface font-medium">Nothing planned for today.</span>

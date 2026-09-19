@@ -17,9 +17,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  FieldError,
   Select,
 } from '@docket/ui/primitives';
-import { type JSX, type SubmitEventHandler, useEffect, useState } from 'react';
+import { type JSX, type SubmitEventHandler, useEffect, useId, useState } from 'react';
 
 import { CalendarTimeField } from '@/components/calendar/calendar-time-field';
 import {
@@ -59,6 +60,54 @@ function minuteInput(value: number): string {
   return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
 }
 
+/** Name the validation message for the date and time controls only while one is showing. */
+function describedBy(error: string | null, id: string): string | undefined {
+  return error ? id : undefined;
+}
+
+/** The one validation line for the date and time range, spanning the dialog's grid. */
+function ScheduleValidationError(props: {
+  readonly id: string;
+  readonly error: string | null;
+}): JSX.Element | null {
+  if (!props.error) return null;
+  return (
+    <div className="@2xl:col-span-2">
+      <FieldError id={props.id}>{props.error}</FieldError>
+    </div>
+  );
+}
+
+function WeekdaysFieldset(props: {
+  readonly weekdays: readonly number[];
+  readonly onChange: (weekdays: number[]) => void;
+}): JSX.Element {
+  return (
+    <fieldset className="flex flex-wrap gap-3 @2xl:col-span-2">
+      <legend className="text-on-surface-variant text-label-medium mb-1">Weekdays</legend>
+      {WEEKDAYS.map((label, day) => (
+        <label
+          key={label}
+          className="text-on-surface text-label-large flex min-h-10 items-center gap-1"
+        >
+          <input
+            type="checkbox"
+            checked={props.weekdays.includes(day)}
+            onChange={(event) => {
+              props.onChange(
+                event.target.checked
+                  ? [...props.weekdays, day].sort()
+                  : props.weekdays.filter((value) => value !== day),
+              );
+            }}
+          />
+          {label}
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
 /** Render a complete schedule editor only while the user creates or edits a series. */
 export function ScheduleEditorDialog({
   open,
@@ -69,6 +118,7 @@ export function ScheduleEditorDialog({
   pending,
   onSave,
 }: ScheduleEditorDialogProps): JSX.Element {
+  const errorId = useId();
   const [placeId, setPlaceId] = useState('');
   const [mode, setMode] = useState<ScheduleMode>('one_off_all_day');
   const [date, setDate] = useState('');
@@ -176,6 +226,11 @@ export function ScheduleEditorDialog({
     onSave({ placeId: selectedPlace.id, schedule });
   };
 
+  const weekly = mode.startsWith('weekly');
+  const dateLabel = weekly ? 'Effective from' : 'Date';
+  const invalid = error !== null;
+  const errorDescribedBy = describedBy(error, errorId);
+
   return (
     <Dialog
       open={open}
@@ -224,13 +279,15 @@ export function ScheduleEditorDialog({
               </Select>
             </label>
             <div className="text-on-surface-variant text-label-medium flex flex-col gap-1">
-              <span>{mode.startsWith('weekly') ? 'Effective from' : 'Date'}</span>
+              <span>{dateLabel}</span>
               <DatePicker
-                ariaLabel={mode.startsWith('weekly') ? 'Effective from' : 'Date'}
+                ariaLabel={dateLabel}
                 placeholder="Pick a day"
                 triggerVariant="outline"
                 value={date || null}
                 max={effectiveUntil || undefined}
+                invalid={invalid}
+                describedBy={errorDescribedBy}
                 onChange={(nextDate) => {
                   setDate(nextDate ?? '');
                   setStartOccurrence(null);
@@ -238,7 +295,7 @@ export function ScheduleEditorDialog({
                 }}
               />
             </div>
-            {mode.startsWith('weekly') ? (
+            {weekly ? (
               <div className="text-on-surface-variant text-label-medium flex flex-col gap-1">
                 <span>Ends</span>
                 <DatePicker
@@ -262,6 +319,8 @@ export function ScheduleEditorDialog({
                   value={startTime}
                   displayTimezone={timezone}
                   occurrence={startOccurrence}
+                  invalid={invalid}
+                  describedBy={errorDescribedBy}
                   onValueChange={(value) => {
                     setStartTime(value);
                     setStartOccurrence(null);
@@ -275,6 +334,8 @@ export function ScheduleEditorDialog({
                   value={endTime}
                   displayTimezone={timezone}
                   occurrence={endOccurrence}
+                  invalid={invalid}
+                  describedBy={errorDescribedBy}
                   onValueChange={(value) => {
                     setEndTime(value);
                     setEndOccurrence(null);
@@ -283,35 +344,8 @@ export function ScheduleEditorDialog({
                 />
               </>
             ) : null}
-            {mode.startsWith('weekly') ? (
-              <fieldset className="flex flex-wrap gap-3 @2xl:col-span-2">
-                <legend className="text-on-surface-variant text-label-medium mb-1">Weekdays</legend>
-                {WEEKDAYS.map((label, day) => (
-                  <label
-                    key={label}
-                    className="text-on-surface text-label-large flex min-h-10 items-center gap-1"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={weekdays.includes(day)}
-                      onChange={(event) => {
-                        setWeekdays((current) =>
-                          event.target.checked
-                            ? [...current, day].sort()
-                            : current.filter((value) => value !== day),
-                        );
-                      }}
-                    />
-                    {label}
-                  </label>
-                ))}
-              </fieldset>
-            ) : null}
-            {error ? (
-              <p role="alert" className="text-error text-body-small @2xl:col-span-2">
-                {error}
-              </p>
-            ) : null}
+            {weekly ? <WeekdaysFieldset weekdays={weekdays} onChange={setWeekdays} /> : null}
+            <ScheduleValidationError id={errorId} error={error} />
           </DialogBody>
           <DialogFooter>
             <DialogClose asChild>

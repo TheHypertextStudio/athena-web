@@ -1,27 +1,45 @@
+import { InlineBanner } from '@docket/ui/components';
 import type { JSX, ReactNode } from 'react';
 
 /** Props for {@link CardNote}. */
 export interface CardNoteProps {
-  /** `error` colors the text destructive and marks it as an alert; `muted` is a quiet notice. */
+  /**
+   * `error` presents the note as a critical banner that announces itself; `muted` is a quiet
+   * notice.
+   */
   tone: 'error' | 'muted';
+  /**
+   * The banner heading for an `error` note. Application-owned copy naming the state the card is
+   * in; the children carry the explanation.
+   */
+  title?: string | undefined;
   children: ReactNode;
 }
 
+/** The heading an `error` note takes when the caller names none. */
+const NEEDS_ATTENTION = 'Needs attention';
+
 /**
- * A footer note beneath an integration card's header (an error or an info notice).
+ * A footer note beneath an integration card's header (a persistent problem or an info notice).
  *
  * @remarks
  * Shared by the generic provider card and the Google Tasks rows so the tonal-step footer
- * (`bg-surface-container`, no divider border) reads identically everywhere. `error` notes announce
- * themselves to assistive tech; `muted` notes don't.
+ * (`bg-surface-container`, no divider border) reads identically everywhere. An `error` note is a
+ * state the card is in rather than a failed action, so it renders as an `InlineBanner` in the
+ * card; a failed write is presented as a notice by the mutation that made it.
  */
-export function CardNote({ tone, children }: CardNoteProps): JSX.Element {
-  const color = tone === 'error' ? 'text-error' : 'text-on-surface-variant';
+export function CardNote({ tone, title, children }: CardNoteProps): JSX.Element {
+  if (tone === 'error') {
+    return (
+      <div className="bg-surface-container px-4 py-2">
+        <InlineBanner tone="critical" density="compact" title={title ?? NEEDS_ATTENTION}>
+          {children}
+        </InlineBanner>
+      </div>
+    );
+  }
   return (
-    <p
-      {...(tone === 'error' ? { role: 'alert' } : {})}
-      className={`${color} bg-surface-container text-body-small px-4 py-2`}
-    >
+    <p className="text-on-surface-variant bg-surface-container text-body-small px-4 py-2">
       {children}
     </p>
   );
@@ -29,27 +47,29 @@ export function CardNote({ tone, children }: CardNoteProps): JSX.Element {
 
 /** Props for {@link CardAlert}. */
 export interface CardAlertProps {
-  /** The primary destructive line. */
+  /** The banner heading: what state the connection is in. */
   message: string;
-  /** A quieter follow-up line (e.g. the recommended recovery action). */
+  /** The explanation and the recommended recovery. */
   detail: ReactNode;
   /** The recovery control, for surfaces that can offer one. */
   action?: ReactNode;
 }
 
 /**
- * A two-line persistent alert footer: a destructive message plus a muted recovery hint.
+ * A persistent alert footer: a critical banner with a heading, an explanation, and a recovery
+ * control.
  *
  * @remarks
  * Used for server-truth connection errors that survive reload (never ephemeral state). The copy
- * differs per surface, so callers pass it in; only the two-tone layout is shared here.
+ * differs per surface, so callers pass it in; only the banner layout is shared here.
  */
 export function CardAlert({ message, detail, action }: CardAlertProps): JSX.Element {
   return (
-    <div role="alert" className="bg-surface-container text-body-small px-4 py-2">
-      <p className="text-error">{message}</p>
-      <p className="text-on-surface-variant mt-1">{detail}</p>
-      {action ? <div className="mt-2 flex flex-wrap items-center gap-2">{action}</div> : null}
+    <div className="bg-surface-container px-4 py-2">
+      <InlineBanner tone="critical" density="compact" title={message}>
+        {detail}
+        {action ? <div className="mt-2 flex flex-wrap items-center gap-2">{action}</div> : null}
+      </InlineBanner>
     </div>
   );
 }

@@ -1,8 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { JSX } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { problemResponse } from '../support/query';
 
 const discountsSummary = {
   applicationsEnabled: true,
@@ -75,9 +79,23 @@ vi.mock('@/lib/auth-client', () => ({
 const { BillingDiscountsSection } = await import('@/components/settings/billing-discounts-section');
 
 afterEach(() => {
+  dismissAllNotices();
   cleanup();
   vi.clearAllMocks();
 });
+
+/** The section under a fresh retry-free query client, with the notice stack mounted. */
+function renderSection(): JSX.Element {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return (
+    <QueryClientProvider client={client}>
+      <BillingDiscountsSection orgId="org-1" isPersonal canManageBilling />
+      <Toaster />
+    </QueryClientProvider>
+  );
+}
 
 describe('BillingDiscountsSection', () => {
   it('uploads replacement evidence before returning the application to finance', async () => {
@@ -86,12 +104,7 @@ describe('BillingDiscountsSection', () => {
     supplementPost.mockResolvedValue(
       jsonResponse({ ...discountsSummary.application, status: 'submitted' }),
     );
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <BillingDiscountsSection orgId="org-1" isPersonal canManageBilling />
-      </QueryClientProvider>,
-    );
+    render(renderSection());
     expect(
       await screen.findByText('Finance requested: Upload a current enrollment record.'),
     ).toBeVisible();
@@ -122,5 +135,32 @@ describe('BillingDiscountsSection', () => {
         institutionalEmail: 'student@unlv.edu',
       },
     });
+  });
+
+  it('presents a refused response as a notice and keeps the form in place', async () => {
+    discountsGet.mockResolvedValue(jsonResponse(discountsSummary));
+    supplementPost.mockResolvedValue(problemResponse('server detail', 500, 'internal'));
+    render(renderSection());
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Response' }), {
+      target: { value: 'This record covers the current semester.' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send information' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).not.toHaveTextContent(/server detail/);
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByRole('textbox', { name: 'Response' })).toHaveValue(
+      'This record covers the current semester.',
+    );
+  });
+
+  it('offers a retry when the discount information could not load', async () => {
+    discountsGet.mockResolvedValue(problemResponse('server detail', 500, 'internal'));
+    render(renderSection());
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).not.toHaveTextContent(/server detail/);
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 });

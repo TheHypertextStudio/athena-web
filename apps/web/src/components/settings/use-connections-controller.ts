@@ -63,7 +63,7 @@ export interface ConnectionsController {
   canManage: boolean;
   teams: readonly TeamOut[];
   loading: boolean;
-  loadError: string | null;
+  loadError: unknown;
   productRequired: boolean;
   intro: { crossHref: string; crossText: string };
   /** Drives the "This workspace" scope header; `linkedAccountsHref` links to identity linking. */

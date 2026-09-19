@@ -8,10 +8,11 @@
  * optional email-linked archive. Selection, history rendering, and secure download behavior live
  * in focused adjacent components so this module remains the data-orchestration boundary.
  */
+import { InlineBanner } from '@docket/ui/components';
 import { Skeleton } from '@docket/ui/primitives';
-import { WriteError } from './write-error';
 import { type JSX } from 'react';
 
+import { LoadFailure } from '@/components/feedback';
 import { api } from '@/lib/api';
 import {
   STALE,
@@ -22,7 +23,6 @@ import {
   useApiMutation,
   useApiQuery,
 } from '@/lib/query';
-import { userErrorMessage } from '@/lib/problem';
 
 import { type ExportRequestInput } from './export-data-model';
 import { ExportHistory } from './export-history';
@@ -79,6 +79,7 @@ export function ExportDataTab({ focusedExportId }: ExportDataTabProps): JSX.Elem
         'Could not start your data export.',
       ),
     invalidateKeys: [queryKeys.account(), queryKeys.accountExports()],
+    failureTitle: 'Could not start your data export.',
   });
 
   const focusedPending = Boolean(focusedExportId) && focusedExportQ.isPending;
@@ -90,12 +91,14 @@ export function ExportDataTab({ focusedExportId }: ExportDataTabProps): JSX.Elem
   }
   if (optionsQ.isError || exportsQ.isError) {
     return (
-      <WriteError
-        message={
-          optionsQ.isError
-            ? userErrorMessage(optionsQ.error, 'Could not load export options.')
-            : userErrorMessage(exportsQ.error, 'Could not load your export history.')
-        }
+      <LoadFailure
+        title="Export data"
+        error={optionsQ.error ?? exportsQ.error}
+        onRetry={() => {
+          void optionsQ.refetch();
+          void exportsQ.refetch();
+        }}
+        retrying={optionsQ.isFetching || exportsQ.isFetching}
       />
     );
   }
@@ -115,9 +118,9 @@ export function ExportDataTab({ focusedExportId }: ExportDataTabProps): JSX.Elem
           anything. Docket captures the selected data when it prepares your export.
         </p>
         {focusedExportQ.isError ? (
-          <p role="alert" className="text-error text-body-medium">
+          <InlineBanner tone="critical" title="Export unavailable">
             This export is no longer available. You can create a new export below.
-          </p>
+          </InlineBanner>
         ) : null}
       </div>
 
@@ -125,11 +128,6 @@ export function ExportDataTab({ focusedExportId }: ExportDataTabProps): JSX.Elem
         options={optionsQ.data}
         hasPendingExport={hasPendingExport}
         creating={requestExport.isPending}
-        error={
-          requestExport.isError
-            ? userErrorMessage(requestExport.error, 'Could not start your data export.')
-            : null
-        }
         onCreate={(input) => {
           requestExport.mutate(input);
         }}

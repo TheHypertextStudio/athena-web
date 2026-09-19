@@ -3,7 +3,13 @@
 /** The workspace Library: full-corpus resource search and work-context browsing. */
 import type { ExternalResourceType } from '@docket/connections/resource-provider-contract';
 import type { SearchDocumentKind, SearchOut, SearchResult } from '../../lib/contracts/search';
-import { type Column, EntityTable, type EntityTableGroup, EmptyState } from '@docket/ui/components';
+import {
+  type Column,
+  EntityTable,
+  type EntityTableGroup,
+  EmptyState,
+  InlineBanner,
+} from '@docket/ui/components';
 import { Info, Library, Link as LinkIcon, RefreshCw, type LucideIcon } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
@@ -19,6 +25,7 @@ import {
 } from 'react';
 
 import { SEARCH_KIND_ICON } from '@/components/command-palette/use-hub-search';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
 import { InPageFindButton } from '@/components/in-page-search/in-page-find-button';
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
@@ -31,7 +38,6 @@ import { ListPageLayout } from '@/components/views/page-layout';
 import { type UseViewStateDefaults, useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
 import { useAppSearchParams } from '@/lib/app-location';
-import { userErrorMessage } from '@/lib/problem';
 import {
   apiInfiniteQueryOptions,
   apiQueryOptions,
@@ -334,22 +340,14 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
         Loading more resources
       </div>
     ) : resourcesQ.isFetchNextPageError ? (
-      <div
-        role="alert"
-        className="text-error text-body-small flex min-h-14 items-center justify-between gap-3 px-3"
+      <InlineBanner
+        tone="critical"
+        density="compact"
+        title="More resources could not load"
+        action={{ label: 'Try again', onSelect: () => void resourcesQ.fetchNextPage() }}
       >
-        <span>Could not load more resources.</span>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            void resourcesQ.fetchNextPage();
-          }}
-        >
-          Retry
-        </Button>
-      </div>
+        The resources above are still current.
+      </InlineBanner>
     ) : undefined;
 
   // placeholder: the library's resources, which the current filters decide, and the fields of
@@ -393,9 +391,7 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
           ))}
         </div>
       ) : initialError ? (
-        <p role="alert" className="text-error text-body-medium">
-          {userErrorMessage(resourcesQ.error, 'Could not load the library.')}
-        </p>
+        <QueryLoadFailure title="Library" query={resourcesQ} />
       ) : applied.rows.length === 0 &&
         !refillingSparsePage &&
         !displayedSearchActive &&

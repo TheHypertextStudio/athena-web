@@ -1,14 +1,17 @@
 'use client';
 
 import { Button } from '@docket/ui/primitives';
-import { WriteError } from './write-error';
 import { type JSX, useState } from 'react';
 
 import { useAuthenticationInterlock } from '@/components/authentication-interlock';
+import { presentFailure } from '@/components/feedback';
 import { AuthenticationRequiredError } from '@/lib/query';
-import { readProblemError, userErrorMessage } from '@/lib/problem';
+import { readProblemError } from '@/lib/problem';
 
 import { useReauth } from './use-reauth';
+
+/** What the notice says when the download fails without a more specific reason. */
+const DOWNLOAD_FAILED = 'Could not download your export.';
 
 /** Read a safe local ZIP filename from a binary download response. */
 function downloadFilename(response: Response): string {
@@ -33,7 +36,7 @@ function downloadFilename(response: Response): string {
 
 /** Convert a failed binary response into the same structured errors used by typed API calls. */
 async function downloadError(response: Response): Promise<Error> {
-  const error = await readProblemError(response, 'Could not download your export.');
+  const error = await readProblemError(response, DOWNLOAD_FAILED);
   if (response.status === 401 && error.code === 'unauthorized') {
     return new AuthenticationRequiredError({
       message: 'Authentication is required. Please sign in again.',
@@ -54,11 +57,9 @@ export function SecureExportDownloadButton({
   const reauth = useReauth();
   const { requireAuthentication } = useAuthenticationInterlock();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function download(): Promise<void> {
     setBusy(true);
-    setError(null);
     try {
       await reauth();
       const response = await fetch(downloadUrl, { credentials: 'include' });
@@ -78,24 +79,21 @@ export function SecureExportDownloadButton({
         requireAuthentication();
         return;
       }
-      setError(userErrorMessage(caught, 'Could not download your export.'));
+      presentFailure(caught, DOWNLOAD_FAILED, { retry: () => void download() });
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="flex flex-col items-start gap-2">
-      <Button
-        type="button"
-        disabled={busy}
-        onClick={() => {
-          void download();
-        }}
-      >
-        {busy ? 'Verifying…' : 'Download your data'}
-      </Button>
-      {error ? <WriteError message={error} /> : null}
-    </div>
+    <Button
+      type="button"
+      disabled={busy}
+      onClick={() => {
+        void download();
+      }}
+    >
+      {busy ? 'Verifying…' : 'Download your data'}
+    </Button>
   );
 }

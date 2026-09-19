@@ -27,7 +27,7 @@ export interface AutomationRulesData {
    * "No automation rules yet" empty state — asserting a fact about the caller's configuration
    * that it had no way to know. An unreadable list and an empty list are different answers.
    */
-  loadError: string | null;
+  loadError: unknown;
   createRule: (input: AutomationRuleCreate) => Promise<void>;
   rename: (id: string, name: string) => Promise<void>;
   setEnabled: (id: string, enabled: boolean) => Promise<void>;
@@ -98,9 +98,7 @@ export function useAutomationRules(orgId: string): AutomationRulesData {
   return {
     rules: listQ.data?.items ?? [],
     isPending: listQ.isPending,
-    loadError: listQ.isError
-      ? userErrorMessage(listQ.error, 'Could not load automation rules.')
-      : null,
+    loadError: listQ.isError ? listQ.error : null,
     createRule: async (input) => void (await createM.mutateAsync(input)),
     rename: async (id, name) => void (await renameM.mutateAsync({ id, name })),
     setEnabled: async (id, enabled) => void (await toggleM.mutateAsync({ id, enabled })),

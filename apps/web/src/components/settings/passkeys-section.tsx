@@ -55,11 +55,10 @@ import { api } from '@/lib/api';
 import { passkey } from '@/lib/auth-client';
 import { formatCalendarDate } from '@/lib/format-date';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
-import { toUserFacingError, userErrorMessage } from '@/lib/problem';
-import { LoadFailure } from './load-failure';
+import { toUserFacingError } from '@/lib/problem';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { SETTINGS_NODES } from './settings-capabilities';
 import { SettingsGroup } from './settings-group';
-import { WriteError } from './write-error';
 
 /** Return the stored label or a neutral fallback for an old unnamed passkey. */
 function passkeyLabel(record: PasskeySummary): string {
@@ -98,6 +97,9 @@ function authenticatorPresentation(record: PasskeySummary): AuthenticatorPresent
   return { ...PRESENTATIONS[kind], label: passkeyAuthenticatorKindLabel(kind) };
 }
 
+/** What the notice says when enrollment fails without a more specific reason. */
+const ADD_FAILED = 'Could not add the passkey.';
+
 /** The Security-tab card that lists and manages the user's passkeys. */
 export function PasskeysSection(): JSX.Element {
   const listQ = useApiQuery(
@@ -112,11 +114,10 @@ export function PasskeysSection(): JSX.Element {
   const add = useApiMutation({
     mutationFn: async () => {
       const result = await passkey.addPasskey();
-      if (result.error) {
-        throw toUserFacingError(result.error, 'Could not add the passkey.');
-      }
+      if (result.error) throw toUserFacingError(result.error, ADD_FAILED);
     },
     invalidateKeys: [queryKeys.passkeys()],
+    failureTitle: ADD_FAILED,
   });
 
   if (listQ.isPending) {
@@ -124,12 +125,7 @@ export function PasskeysSection(): JSX.Element {
     return <Skeleton className="h-40 w-full rounded-xl" />;
   }
   if (listQ.isError) {
-    return (
-      <LoadFailure
-        message={userErrorMessage(listQ.error, 'Could not load your passkeys.')}
-        retrying
-      />
-    );
+    return <QueryLoadFailure size="panel" title="Passkeys" query={listQ} />;
   }
 
   const passkeys = listQ.data.items;
@@ -183,10 +179,6 @@ export function PasskeysSection(): JSX.Element {
         )}
       </SettingsGroup>
 
-      {add.isError ? (
-        <WriteError message={userErrorMessage(add.error, 'Could not add the passkey.')} />
-      ) : null}
-
       {renaming ? (
         <RenamePasskeyDialog
           key={renaming.id}
@@ -238,6 +230,7 @@ function RenamePasskeyDialog({
         'Could not rename the passkey.',
       ),
     invalidateKeys: [queryKeys.passkeys()],
+    failureTitle: 'Could not rename the passkey.',
     onSuccess: onRenamed,
   });
   const trimmedName = name.trim();
@@ -276,11 +269,6 @@ function RenamePasskeyDialog({
                 setName(event.target.value);
               }}
             />
-            {rename.isError ? (
-              <WriteError
-                message={userErrorMessage(rename.error, 'Could not rename the passkey.')}
-              />
-            ) : null}
           </DialogBody>
           <DialogFooter>
             <Button
@@ -376,6 +364,7 @@ function RemovePasskeyDialog({
         'Could not remove the passkey.',
       ),
     invalidateKeys: [queryKeys.passkeys()],
+    failureTitle: 'Could not remove the passkey.',
     onSuccess: () => {
       onOpenChange(false);
     },
@@ -398,11 +387,6 @@ function RemovePasskeyDialog({
               : 'This passkey will no longer be able to sign in to your account. You can add it again later.'}
           </DialogDescription>
         </DialogHeader>
-        {remove.isError ? (
-          <DialogBody>
-            <WriteError message={userErrorMessage(remove.error, 'Could not remove the passkey.')} />
-          </DialogBody>
-        ) : null}
         <DialogFooter>
           <Button
             type="button"

@@ -1,5 +1,6 @@
 'use client';
 
+import { InlineBanner } from '@docket/ui/components';
 import { CheckCircle2, Inbox as InboxIcon } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import type { NotificationOut } from '@docket/notifications/notification-contract';
@@ -82,15 +83,13 @@ export default function InboxClient(): JSX.Element {
       </div>
 
       {error ? (
-        <div
-          role="alert"
-          className="border-error/40 bg-error/5 text-error text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
+        <InlineBanner
+          tone="critical"
+          title="Inbox did not answer"
+          action={{ label: 'Try again', onSelect: refetch }}
         >
-          <span>{error}</span>
-          <Button variant="outline" size="sm" onClick={refetch}>
-            Try again
-          </Button>
-        </div>
+          {error}
+        </InlineBanner>
       ) : null}
 
       {actionError && !error ? (

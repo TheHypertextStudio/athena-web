@@ -12,6 +12,7 @@
  * was never shown again, and each row's `externalUrl` was read from Notion at provision time and
  * dropped on the floor.
  */
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -114,7 +115,14 @@ function database(over: Record<string, unknown> = {}) {
 
 function renderPanel(): void {
   const { wrapper } = makeQueryWrapper();
-  render(<NotionMirrorPanel orgId={ORG_ID} canManage />, { wrapper });
+  // The notice stack is mounted because a rejected sync is presented there.
+  render(
+    <>
+      <NotionMirrorPanel orgId={ORG_ID} canManage />
+      <Toaster />
+    </>,
+    { wrapper },
+  );
 }
 
 /** One sync run as `GET /:id/runs` returns it, newest-first. */
@@ -142,7 +150,10 @@ beforeEach(() => {
   syncPost.mockResolvedValue(okResponse(syncRun()));
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  dismissAllNotices();
+  cleanup();
+});
 
 describe('NotionMirrorPanel — before anything is provisioned', () => {
   beforeEach(() => {

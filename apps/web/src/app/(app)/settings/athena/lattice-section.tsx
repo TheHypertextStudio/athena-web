@@ -8,7 +8,7 @@
  * field anywhere in this section.
  */
 import { CheckCircle2, CircleDashed, CloudOff, Computer, XCircle } from '@docket/ui/icons';
-import { ConfirmDestructiveDialog, EmptyState } from '@docket/ui/components';
+import { ConfirmDestructiveDialog, EmptyState, InlineBanner } from '@docket/ui/components';
 import {
   Button,
   Chip,
@@ -24,12 +24,11 @@ import { type JSX, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
-import { LoadFailure } from '@/components/settings/load-failure';
-import { firstWriteError, WriteError } from '@/components/settings/write-error';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SettingRow } from '@/components/settings/setting-row';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
-import { UserFacingError, userErrorMessage } from '@/lib/problem';
+import { UserFacingError } from '@/lib/problem';
 import {
   apiQueryOptions,
   queryKeys,
@@ -70,6 +69,26 @@ const CEREMONY_ISSUE_MESSAGE: Readonly<
   scopes: 'Approve all the permissions Athena asks for.',
   error: 'That connection attempt failed.',
 };
+
+/** What to do after any ceremony outcome that didn't connect. */
+const CEREMONY_ISSUE_DETAIL = 'Connect again to try once more.';
+
+/**
+ * A ceremony outcome that did not connect, kept in the page beside the control that retries it.
+ *
+ * @remarks
+ * Not a write failure: it arrives from the OAuth redirect's URL flag or from the in-page FedCM
+ * result, and the person needs it next to the Connect button rather than in the notice stack.
+ */
+function CeremonyIssue({ message }: { readonly message: string }): JSX.Element {
+  return (
+    <div className="px-4 pb-4">
+      <InlineBanner tone="critical" title={message}>
+        {CEREMONY_ISSUE_DETAIL}
+      </InlineBanner>
+    </div>
+  );
+}
 
 /** Whether the OAuth callback's `lattice` URL flag is one of the outcomes this section knows how to say. */
 function isLatticeAuthorizationOutcome(value: string | null): value is LatticeAuthorizationOutcome {
@@ -262,13 +281,13 @@ function unconnectedStatusCopy(authorizePending: boolean, authorizationReady: bo
 
 /** Render the connect ceremony before an approved Lovelace grant exists. */
 function UnconnectedLatticeSection({
-  actionError,
+  ceremonyIssue,
   authorizePending,
   authorizationReady,
   fallbackUrl,
   startAuthorization,
 }: {
-  readonly actionError: string | null;
+  readonly ceremonyIssue: string | null;
   readonly authorizePending: boolean;
   readonly authorizationReady: boolean;
   readonly fallbackUrl: string | null;
@@ -295,11 +314,7 @@ function UnconnectedLatticeSection({
         }
       />
       {fallbackUrl ? <AuthorizationFallback authorizationUrl={fallbackUrl} /> : null}
-      {actionError ? (
-        <div className="px-4 pb-4">
-          <WriteError message={actionError} />
-        </div>
-      ) : null}
+      {ceremonyIssue ? <CeremonyIssue message={ceremonyIssue} /> : null}
       <Text token="body-small" tone="muted" role="status" aria-live="polite" className="px-4">
         {unconnectedStatusCopy(authorizePending, authorizationReady)}
       </Text>
@@ -452,17 +467,8 @@ export function LatticeSection(): JSX.Element {
     invalidateKeys: [queryKeys.latticeConnection(), queryKeys.latticeDevices()],
   });
 
-  // One slot for whichever write just failed: they are mutually exclusive in practice (each is
-  // driven by a single control) and separate lines would reserve space that's almost always
-  // empty. Disconnect's failure surfaces inside its own confirmation dialog instead — it is
-  // already the one place a person is looking when that write can fail.
-  const actionError =
-    firstWriteError([
-      [prepare, 'Could not prepare the Lovelace connection.'],
-      [authorize, 'Could not start the Lovelace connection.'],
-      [chooseDevice, 'Could not switch Athena to that computer.'],
-      [setEnabled, 'Could not change where Athena runs.'],
-    ]) ?? ceremonyIssue;
+  // Every write here presents its own failure as a notice through `useApiMutation`; the one thing
+  // the page keeps in flow is a ceremony outcome, because it belongs beside the Connect button.
   const actionStatus = pendingActionCopy({
     preparingAuthorization: prepare.isPending,
     authorizing: authorize.isPending,
@@ -484,10 +490,7 @@ export function LatticeSection(): JSX.Element {
   if (statusQ.isError || !status) {
     return (
       <SettingsGroup capability={SETTINGS_NODES.athenaLattice}>
-        <LoadFailure
-          message={userErrorMessage(statusQ.error, 'Could not load this setting.')}
-          retrying
-        />
+        <QueryLoadFailure size="panel" title="Lovelace connection" query={statusQ} />
       </SettingsGroup>
     );
   }
@@ -511,7 +514,7 @@ export function LatticeSection(): JSX.Element {
   if (!connected) {
     return (
       <UnconnectedLatticeSection
-        actionError={actionError}
+        ceremonyIssue={ceremonyIssue}
         authorizePending={prepare.isPending || authorize.isPending}
         authorizationReady={authorizationReady}
         fallbackUrl={fallbackUrl}
@@ -635,11 +638,7 @@ export function LatticeSection(): JSX.Element {
           </ul>
         )}
 
-        {actionError ? (
-          <div className="px-4 pb-4">
-            <WriteError message={actionError} />
-          </div>
-        ) : null}
+        {ceremonyIssue ? <CeremonyIssue message={ceremonyIssue} /> : null}
 
         <Text token="body-small" tone="muted" role="status" aria-live="polite" className="px-4">
           {actionStatus}
@@ -653,9 +652,6 @@ export function LatticeSection(): JSX.Element {
         description="Athena falls back to Docket's standard models — you'll pick a computer again next time. Lovelace still shows Docket as authorized, so revoke it there too if you want a clean break."
         confirmLabel="Disconnect"
         pending={disconnect.isPending}
-        {...(disconnect.isError
-          ? { error: userErrorMessage(disconnect.error, 'Could not disconnect Lovelace.') }
-          : {})}
         onConfirm={() => {
           disconnect.mutate(undefined, {
             onSuccess: () => {

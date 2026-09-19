@@ -4,10 +4,9 @@ import { Skeleton } from '@docket/ui/primitives';
 import dynamic from 'next/dynamic';
 import { type JSX, useEffect, useState } from 'react';
 
+import { LoadFailure } from '@/components/feedback';
 import { projectOverviewDef } from '@/lib/fetch-project-overview';
 import { useApiQuery } from '@/lib/query';
-
-import { WorkViewLoadFailure } from './work-view-load-failure';
 
 const ProjectGraphPanel = dynamic(
   () =>
@@ -73,11 +72,11 @@ export function ProjectDependencyLens({
   // placeholder: the dependency graph — which projects block which, and in what order.
   if (query.isPending) return <Skeleton className="h-full min-h-80 w-full" />;
   // A failed refresh never blanks a graph the viewer can still read, which is the same contract
-  // `WorkViewLoadFailure` states for roster rows. Only a lens with nothing to show yields the
-  // content area to the recovery state.
+  // the work view states for roster rows. Only a lens with nothing to show yields the content
+  // area to the recovery state.
   if (rows === undefined) {
     return (
-      <WorkViewLoadFailure
+      <LoadFailure
         title={title}
         error={query.error}
         retrying={query.isFetching}

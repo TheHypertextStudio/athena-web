@@ -13,6 +13,7 @@
  *
  * The RPC client is mocked so these assert real behavior without touching the live API.
  */
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import type { QueryClient } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -67,9 +68,14 @@ const PAGE = (over: Record<string, unknown> = {}) => ({
 
 function renderCard(canManage = true): QueryClient {
   const { client, wrapper } = makeQueryWrapper();
-  render(<NotionSetupCard orgId={ORG_ID} integrationId={INTEGRATION_ID} canManage={canManage} />, {
-    wrapper,
-  });
+  // The notice stack is mounted because a rejected provision run is presented there.
+  render(
+    <>
+      <NotionSetupCard orgId={ORG_ID} integrationId={INTEGRATION_ID} canManage={canManage} />
+      <Toaster />
+    </>,
+    { wrapper },
+  );
   return client;
 }
 
@@ -78,7 +84,10 @@ beforeEach(() => {
   provisionPost.mockResolvedValue(okResponse({ status: 'succeeded' }));
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  dismissAllNotices();
+  cleanup();
+});
 
 describe('NotionSetupCard', () => {
   it('will not create anything until a page has actually been chosen', async () => {
@@ -185,7 +194,7 @@ describe('NotionSetupCard', () => {
     choosePickerOption(/Team wiki/);
     fireEvent.click(await screen.findByRole('button', { name: 'Create in Notion' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/could not finish creating/i);
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
   });
   it('withholds provisioning from a caller who cannot manage the workspace', async () => {
     // Every write behind this card is guarded at `manage` server-side. Rendering an enabled

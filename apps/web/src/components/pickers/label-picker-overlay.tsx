@@ -37,6 +37,7 @@ import { useCallback, useMemo, useRef, useState, type JSX } from 'react';
 
 import { objectKey } from '@/lib/actions';
 import { api } from '@/lib/api';
+import { OverlayErrorBanner } from '@/components/pickers/overlay-error-banner';
 import { labelOptions } from '@/components/pickers/options';
 import { labelsDef, useCreateLabel } from '@/components/labels/queries';
 import { taskDetailDef } from '@/lib/use-task-detail';
@@ -57,19 +58,6 @@ const WRITE_ERROR_FALLBACK = 'Could not update labels.';
 const DETAIL_ERROR_FALLBACK = "Could not load these tasks' current labels.";
 /** Copy shown when the org's label list itself failed to load. */
 const LABELS_ERROR_FALLBACK = 'Could not load your labels.';
-
-/** The shared error-banner markup, matching the command palette's own `role="alert"` block. */
-function ErrorBanner({ message }: { readonly message: string }): JSX.Element {
-  return (
-    <div
-      role="alert"
-      className="text-error bg-error/5 border-error/30 text-body-medium m-1 rounded-md border px-3 py-2"
-    >
-      {message}
-    </div>
-  );
-}
-
 /** Variables for one task's label-set write. */
 interface ApplyLabelsVariables {
   readonly taskId: string;
@@ -251,9 +239,9 @@ export function LabelPickerOverlay({ request, onClose }: LabelPickerOverlayProps
           }
         }}
       >
-        {writeError ? <ErrorBanner message={writeError} /> : null}
+        {writeError ? <OverlayErrorBanner title={writeError} /> : null}
         {readError ? (
-          <ErrorBanner message={readError} />
+          <OverlayErrorBanner title={readError} />
         ) : localCurrent === null ? (
           <div className="flex flex-col gap-1.5 p-1.5" aria-hidden="true">
             <Skeleton className="h-8 w-full rounded-md" />

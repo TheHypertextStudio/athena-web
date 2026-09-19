@@ -591,7 +591,6 @@ describe('CalendarItemDrawer', () => {
         "Saved on this device. Docket will sync it as soon as you're back online.",
       ),
     ).toBeVisible();
-    expect(screen.queryByText(/couldn't attach it to this event/)).not.toBeInTheDocument();
   });
 
   it('says a conflicted event kept your version, and offers to send it again', async () => {

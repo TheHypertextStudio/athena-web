@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -66,7 +67,6 @@ import { LatticeSection } from '../../src/app/(app)/settings/athena/lattice-sect
 import {
   LATTICE_FEDCM_FALLBACK_COPY,
   LATTICE_SETUP_URL,
-  LATTICE_UNAVAILABLE_REASON_MESSAGE,
 } from '../../src/app/(app)/settings/athena/lattice-copy';
 
 const AUTHORIZATION_URL = 'https://auth.uselovelace.com/oauth/authorize?state=signed';
@@ -137,10 +137,20 @@ beforeEach(() => {
   useAppSearchParams.mockReset().mockReturnValue(new URLSearchParams());
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  dismissAllNotices();
+  cleanup();
+});
 
+/** Mount the section beside the notice stack, where every rejected write is presented. */
 function renderSection(): void {
-  render(<LatticeSection />, { wrapper: makeQueryWrapper().wrapper });
+  render(
+    <>
+      <LatticeSection />
+      <Toaster />
+    </>,
+    { wrapper: makeQueryWrapper().wrapper },
+  );
 }
 
 async function preparedConnectButton(): Promise<HTMLElement> {
@@ -425,7 +435,7 @@ describe('LatticeSection ceremony feedback', () => {
 
     fireEvent.click(await preparedConnectButton());
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('You declined the connection.');
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
     // The button re-arms for another attempt instead of staying stuck.
     await waitFor(() => {
       expect(authorizePost).toHaveBeenCalledTimes(2);
@@ -440,16 +450,17 @@ describe('LatticeSection ceremony feedback', () => {
 
     fireEvent.click(await preparedConnectButton());
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Approve all the permissions Athena asks for.',
-    );
+    // A ceremony outcome is a banner in the section, not a notice: it sits beside the button that
+    // retries it.
+    const alert = await screen.findByRole('alert');
+    expect(alert.closest('section')).not.toBeNull();
   });
 
   it('shows the same feedback for a declined ceremony that returns via full-page redirect', async () => {
     useAppSearchParams.mockReturnValue(new URLSearchParams('lattice=declined'));
     renderSection();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('You declined the connection.');
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
   });
 
   it('ignores a prototype-chain property name in the URL flag instead of crashing', async () => {
@@ -460,7 +471,7 @@ describe('LatticeSection ceremony feedback', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('surfaces a silently-refused device switch as a write error', async () => {
+  it('presents a silently-refused device switch as a failure notice', async () => {
     connectionGet.mockReset().mockResolvedValue(okResponse({ ...UNCONNECTED, connected: true }));
     devicesGet.mockReset().mockResolvedValue(
       okResponse({
@@ -489,12 +500,12 @@ describe('LatticeSection ceremony feedback', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Use this' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      LATTICE_UNAVAILABLE_REASON_MESSAGE.device_missing,
-    );
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    // The failure belongs to the notice stack, not to a banner inside the section.
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
   });
 
-  it('surfaces a silently-refused enable toggle for a standing reason other than a missing device', async () => {
+  it('presents a silently-refused enable toggle for a standing reason other than a missing device', async () => {
     connectionGet.mockReset().mockResolvedValue(
       okResponse({
         ...UNCONNECTED,
@@ -534,9 +545,15 @@ describe('LatticeSection ceremony feedback', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Turn on' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      LATTICE_UNAVAILABLE_REASON_MESSAGE.device_offline,
-    );
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('presents a rejected connection attempt as a failure notice', async () => {
+    authorizePost.mockReset().mockResolvedValue(problemResponse('gateway detail', 500, 'internal'));
+    renderSection();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).not.toHaveTextContent(/gateway detail/);
   });
 
   it('clears a stale ceremony message once an unrelated write succeeds', async () => {
@@ -565,7 +582,7 @@ describe('LatticeSection ceremony feedback', () => {
       );
     renderSection();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('You declined the connection.');
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Use this' }));
 

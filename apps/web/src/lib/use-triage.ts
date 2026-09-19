@@ -31,7 +31,8 @@ function isUnsorted(task: TaskOut): boolean {
 export interface TriageState {
   queue: readonly TaskOut[];
   loading: boolean;
-  loadError: string | null;
+  /** The queue read's failure, when it did not arrive; null otherwise. */
+  loadError: unknown;
   actionError: string | null;
   pending: ReadonlySet<string>;
   projectDestinations: readonly TriageDestination[];
@@ -318,9 +319,7 @@ export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageSta
   return {
     queue,
     loading: tasksQ.isPending,
-    loadError: tasksQ.error
-      ? userErrorMessage(tasksQ.error, 'Could not load the triage queue.')
-      : null,
+    loadError: tasksQ.error ?? null,
     actionError,
     pending,
     projectDestinations,

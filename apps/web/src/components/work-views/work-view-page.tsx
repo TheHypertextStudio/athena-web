@@ -49,6 +49,7 @@ import {
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { useActiveOrg } from '@/components/active-org';
+import { LoadFailure } from '@/components/feedback';
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
 import { ListPageLayout } from '@/components/views/page-layout';
@@ -76,7 +77,6 @@ import { WorkCards } from './work-cards';
 import { WorkList } from './work-list';
 import { visibleWorkListRows } from './work-list-groups';
 import { SaveViewFailure, WorkViewOperationFailures } from './work-view-failures';
-import { WorkViewLoadFailure } from './work-view-load-failure';
 import { WorkViewTabs } from './work-view-tabs';
 import {
   isRouteOwnedDirectWorkViewRow,
@@ -591,7 +591,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       );
   } else if (contentFailed) {
     content = (
-      <WorkViewLoadFailure
+      <LoadFailure
         title={copy.title}
         error={controller.initialError}
         retrying={controller.retrying}

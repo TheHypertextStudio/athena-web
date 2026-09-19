@@ -8,6 +8,7 @@ import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 
+import { LoadFailure } from '@/components/feedback';
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
 import { InPageFindButton } from '@/components/in-page-search/in-page-find-button';
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
@@ -132,9 +133,7 @@ export default function TriagePage(): JSX.Element {
             <Skeleton className="h-8 w-full" />
           </div>
         ) : loadError ? (
-          <p role="alert" className="text-error text-body-medium p-4">
-            {loadError}
-          </p>
+          <LoadFailure title="Triage queue" error={loadError} />
         ) : queue.length === 0 ? (
           <div className="text-on-surface-variant flex flex-col items-center gap-3 p-12 text-center">
             <Inbox className="h-8 w-8 opacity-50" aria-hidden="true" />

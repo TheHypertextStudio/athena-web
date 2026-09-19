@@ -5,7 +5,6 @@ import type { ProjectOut } from './contracts/project';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from './api';
-import { userErrorMessage } from './problem';
 import { unwrap, useApiMutation } from './query';
 import { invalidateWorkTargetQueries } from './work-target-invalidation';
 
@@ -16,7 +15,6 @@ export interface ProgramProjectsMutations {
   /** Unfile a Project from this Program (clears its `programId`). */
   detach: (projectId: string) => void;
   pending: boolean;
-  mutationError: string | null;
 }
 
 /**
@@ -75,10 +73,5 @@ export function useProgramProjects(orgId: string, programId: string): ProgramPro
       detachMutation.mutate(projectId);
     },
     pending: attachMutation.isPending || detachMutation.isPending,
-    mutationError: attachMutation.error
-      ? userErrorMessage(attachMutation.error, 'Could not add the project.')
-      : detachMutation.error
-        ? userErrorMessage(detachMutation.error, 'Could not remove the project.')
-        : null,
   };
 }

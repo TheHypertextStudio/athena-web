@@ -6,17 +6,20 @@ import { api } from '@/lib/api';
 import { seedListItem, unwrap, useApiMutation } from '@/lib/query';
 
 import type { InvitePayload } from './invite-form';
-import { userErrorMessage } from '@/lib/problem';
 
-/** MembersMutationState describes the settings data contract shared by the hook or component. */
+/**
+ * MembersMutationState describes the settings data contract shared by the hook or component.
+ *
+ * @remarks
+ * A failed write is presented as a notice by the mutation that made it, so the state carries
+ * only what the rows need to show which write is in flight.
+ */
 export interface MembersMutationState {
   invite: (payload: InvitePayload) => void;
   changeRole: (actorId: string, roleId: string) => void;
   remove: (actorId: string) => void;
   revoke: (invitationId: string) => void;
   inviting: boolean;
-  inviteError: string | null;
-  actionError: string | null;
   savingRoleFor: string | null;
   removingFor: string | null;
   revokingFor: string | null;
@@ -55,6 +58,7 @@ export function useMembersMutations(
       seedListItem(queryClient, invitationsKey, created);
     },
     invalidateKeys: [invitationsKey],
+    failureTitle: 'Could not send the invitation.',
   });
 
   const roleMutation = useApiMutation({
@@ -93,6 +97,7 @@ export function useMembersMutations(
       if (context?.previous) queryClient.setQueryData(membersKey as string[], context.previous);
     },
     invalidateKeys: [membersKey],
+    failureTitle: 'Could not change this member’s role.',
   });
 
   const removeMutation = useApiMutation({
@@ -115,6 +120,7 @@ export function useMembersMutations(
       if (context?.previous) queryClient.setQueryData(membersKey as string[], context.previous);
     },
     invalidateKeys: [membersKey],
+    failureTitle: 'Could not remove this member.',
   });
 
   const revokeMutation = useApiMutation({
@@ -140,22 +146,10 @@ export function useMembersMutations(
       if (context?.previous) queryClient.setQueryData(invitationsKey as string[], context.previous);
     },
     invalidateKeys: [invitationsKey],
+    failureTitle: 'Could not revoke the invitation.',
   });
 
   const inviting = inviteMutation.isPending;
-  const inviteError = inviteMutation.isError
-    ? userErrorMessage(inviteMutation.error, 'Could not update workspace members.')
-    : null;
-  const actionError =
-    (roleMutation.isError
-      ? userErrorMessage(roleMutation.error, 'Could not update workspace members.')
-      : null) ??
-    (removeMutation.isError
-      ? userErrorMessage(removeMutation.error, 'Could not update workspace members.')
-      : null) ??
-    (revokeMutation.isError
-      ? userErrorMessage(revokeMutation.error, 'Could not update workspace members.')
-      : null);
   const savingRoleFor = roleMutation.isPending ? roleMutation.variables.actorId : null;
   const removingFor = removeMutation.isPending ? removeMutation.variables : null;
   const revokingFor = revokeMutation.isPending ? revokeMutation.variables : null;
@@ -174,8 +168,6 @@ export function useMembersMutations(
       revokeMutation.mutate(invitationId);
     },
     inviting,
-    inviteError,
-    actionError,
     savingRoleFor,
     removingFor,
     revokingFor,

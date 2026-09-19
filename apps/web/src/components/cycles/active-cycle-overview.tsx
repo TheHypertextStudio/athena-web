@@ -25,6 +25,7 @@ import type { TaskOut } from '@docket/work/task-model';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Skeleton, Surface } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useMemo } from 'react';
 
@@ -34,7 +35,6 @@ import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { resolveRelationLabel } from '@/components/views/field-catalog';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { asNameMap, cycleDetailDef } from '@/lib/fetch-cycle-detail';
-import { userErrorMessage } from '@/lib/problem';
 import { useApiQuery, usePrefetchApi } from '@/lib/query';
 import { taskDetailDef } from '@/lib/use-task-detail';
 
@@ -267,9 +267,7 @@ export function ActiveCycleOverview({
           Loading committed work…
         </p>
       ) : detailQ.isError ? (
-        <p role="alert" className="text-error text-body-medium">
-          {userErrorMessage(detailQ.error, `Could not load this ${cycleNounLower}'s work.`)}
-        </p>
+        <QueryLoadFailure size="panel" title={`This ${cycleNounLower}'s work`} query={detailQ} />
       ) : preview.length === 0 ? (
         <p className="text-on-surface-variant text-body-medium">
           Nothing is committed to this {cycleNounLower} yet.

@@ -9,6 +9,7 @@
  * `AutosaveStatus` component in `work-structure/page.tsx`), each slightly different. This is that
  * seam, given one shared implementation.
  */
+import { Text } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 /** Props for {@link SettingRowStatus}. */
@@ -17,7 +18,13 @@ export interface SettingRowStatusProps {
   readonly pending: boolean;
   /** Whether the mutation's most recent run succeeded. */
   readonly saved: boolean;
-  /** A user-facing error message, if the most recent save failed. */
+  /**
+   * Application-owned copy for a save that did not land, shown in place of the status line.
+   *
+   * @remarks
+   * The mutation's notice is what announces the failure; this line only keeps the row from
+   * claiming "Saved". Callers that let the mutation present itself omit it.
+   */
   readonly error?: string | null;
   /**
    * What to show once settled with no unsaved change in flight (e.g. "Current maximum: 2").
@@ -40,9 +47,9 @@ export function SettingRowStatus({
 }: SettingRowStatusProps): JSX.Element {
   if (error) {
     return (
-      <p role="alert" className="text-error text-body-small">
+      <Text as="p" token="body-small" tone="error">
         {error}
-      </p>
+      </Text>
     );
   }
   return (

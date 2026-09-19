@@ -45,7 +45,8 @@ export interface ViewsPageData {
   views: readonly SavedViewOut[];
   tasks: readonly TaskOut[];
   loading: boolean;
-  loadError: string | null;
+  /** The saved-views read's failure, when it did not arrive; null otherwise. */
+  loadError: unknown;
   viewsLabel: string;
   query: WorkingQuery;
   setQuery: Dispatch<SetStateAction<WorkingQuery>>;
@@ -123,9 +124,7 @@ export function useViewsPage(orgId: string): ViewsPageData {
   const members: readonly MemberOut[] = membersQ.data?.items ?? [];
   const agents: readonly AgentOut[] = agentsQ.data?.items ?? [];
   const loading = viewsQ.isPending;
-  const loadError = viewsQ.isError
-    ? userErrorMessage(viewsQ.error, 'Could not load or save views.')
-    : null;
+  const loadError = viewsQ.isError ? viewsQ.error : null;
 
   const [query, setQuery] = useState<WorkingQuery>(EMPTY_QUERY);
   const [composerOpen, setComposerOpen] = useState(false);

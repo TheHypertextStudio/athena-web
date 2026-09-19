@@ -4,9 +4,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Button, Field, Input, Select, Skeleton, Textarea } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX, type SyntheticEvent } from 'react';
 
+import { LoadFailure } from '@/components/feedback';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 type ProgramKey = 'student' | 'nonprofit';
@@ -76,12 +76,11 @@ export function BillingDiscountsSection({
       'Could not load discount information.',
     ),
   );
-  const refresh = async (): Promise<void> => {
-    await Promise.all([
+  const refresh = (): Promise<unknown> =>
+    Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.billingDiscounts(orgId) }),
       queryClient.invalidateQueries({ queryKey: queryKeys.billing(orgId) }),
     ]);
-  };
   const applicationMutation = useApiMutation<unknown, ApplicationMutationInput>({
     mutationFn: async (input) => {
       const json =
@@ -125,6 +124,7 @@ export function BillingDiscountsSection({
       }
       return application;
     },
+    failureTitle: 'Could not submit the discount application.',
     onSuccess: refresh,
   });
   const withdraw = useApiMutation<unknown, string>({
@@ -136,6 +136,7 @@ export function BillingDiscountsSection({
           }),
         'Could not withdraw the application.',
       ),
+    failureTitle: 'Could not withdraw the application.',
     onSuccess: refresh,
   });
   const supplement = useApiMutation<unknown, SupplementMutationInput>({
@@ -163,6 +164,7 @@ export function BillingDiscountsSection({
         'Could not send the requested information.',
       );
     },
+    failureTitle: 'Could not send the requested information.',
     onSuccess: async () => {
       setNote('');
       setSupplementFile(undefined);
@@ -174,9 +176,13 @@ export function BillingDiscountsSection({
   if (discountsQ.isPending) return <Skeleton className="h-52 max-w-2xl rounded-lg" />;
   if (discountsQ.isError) {
     return (
-      <p role="alert" className="text-error text-body-medium">
-        {userErrorMessage(discountsQ.error, 'Could not load discount information.')}
-      </p>
+      <LoadFailure
+        title="Discounts"
+        error={discountsQ.error}
+        onRetry={() => void discountsQ.refetch()}
+        retrying={discountsQ.isFetching}
+        size="panel"
+      />
     );
   }
 
@@ -189,7 +195,6 @@ export function BillingDiscountsSection({
   const awaitingDecision =
     application && ['submitted', 'needs_information'].includes(application.status);
   const renewableAward = award && ['active', 'ending'].includes(award.status);
-  const error = applicationMutation.error ?? withdraw.error ?? supplement.error;
 
   const submit = (event: SyntheticEvent<HTMLFormElement>, renewal = false): void => {
     event.preventDefault();
@@ -411,11 +416,6 @@ export function BillingDiscountsSection({
       {!canManageBilling ? (
         <p className="text-on-surface-variant text-body-small">
           A workspace administrator can submit or update a discount application.
-        </p>
-      ) : null}
-      {error ? (
-        <p role="alert" className="text-error text-body-medium">
-          {userErrorMessage(error, 'Could not update the discount application.')}
         </p>
       ) : null}
     </section>

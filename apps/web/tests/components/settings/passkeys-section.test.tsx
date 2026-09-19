@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
@@ -60,15 +61,23 @@ function passkeyFixture(overrides: Partial<PasskeyFixture>): PasskeyFixture {
 
 function wrapper(): ({ children }: { children: ReactNode }) => JSX.Element {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return ({ children }) => (
+    <QueryClientProvider client={client}>
+      {children}
+      <Toaster />
+    </QueryClientProvider>
+  );
 }
 
 function renderPasskeys(records: PasskeyFixture[]): void {
-  listPasskeys.mockResolvedValue(
-    new Response(JSON.stringify({ items: records }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    }),
+  // A fresh response per call: a mutation invalidates the list, and a body can be read once.
+  listPasskeys.mockImplementation(() =>
+    Promise.resolve(
+      new Response(JSON.stringify({ items: records }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ),
   );
   render(<PasskeysSection />, { wrapper: wrapper() });
 }
@@ -82,9 +91,26 @@ beforeEach(() => {
   renamePasskey.mockReset().mockResolvedValue(new Response(JSON.stringify(passkeyFixture({}))));
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  dismissAllNotices();
+  cleanup();
+});
 
 describe('PasskeysSection', () => {
+  it('presents a failed enrollment as a notice without diagnostics', async () => {
+    addPasskey.mockResolvedValue({
+      data: null,
+      error: { status: 500, code: 'internal', message: 'authenticator crashed' },
+    });
+    renderPasskeys([passkeyFixture({})]);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add passkey' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).not.toHaveTextContent('authenticator crashed');
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+  });
+
   it('starts the platform ceremony from one Add passkey click without asking for a name', async () => {
     renderPasskeys([passkeyFixture({})]);
 

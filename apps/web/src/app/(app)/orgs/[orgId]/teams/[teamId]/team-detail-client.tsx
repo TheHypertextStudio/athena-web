@@ -29,6 +29,7 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft, Folder } from '@docket/ui/icons';
 import { Button, Skeleton, Tabs } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { type JSX, useMemo, useState } from 'react';
 
 import { EntityDocument } from '@/components/editor/entity-document';
@@ -145,12 +146,7 @@ export default function TeamDetailClient(): JSX.Element {
     return (
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
         <BackToTeams orgId={orgId} />
-        <p
-          role="alert"
-          className="border-outline-variant text-error text-body-medium rounded-xl border p-4"
-        >
-          {userErrorMessage(teamQ.error, 'Could not load this team.')}
-        </p>
+        <QueryLoadFailure title="This team" query={teamQ} />
       </div>
     );
   }
@@ -261,9 +257,7 @@ export default function TeamDetailClient(): JSX.Element {
             // placeholder: the team's open work by state, and its 30-day open/completed trend.
             <Skeleton aria-hidden="true" className="h-40 w-full rounded-xl" />
           ) : activityQ.isError ? (
-            <p role="alert" className="text-error text-body-medium">
-              {userErrorMessage(activityQ.error, 'Could not load this team’s activity.')}
-            </p>
+            <QueryLoadFailure size="panel" title="Team activity" query={activityQ} />
           ) : lens === 'capacity' ? (
             <CapacityChart capacity={activityQ.data.capacity} weightByEstimate={weightByEstimate} />
           ) : (

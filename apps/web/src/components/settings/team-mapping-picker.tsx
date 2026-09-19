@@ -16,6 +16,8 @@ import type { TeamOut } from '../../lib/contracts/team';
 import { Select, Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
+import { LoadFailure } from '@/components/feedback';
+
 /** The mapping value for an external team that is not synced. */
 export const NOT_SYNCED = '';
 
@@ -25,8 +27,8 @@ export interface TeamMappingPickerProps {
   externalTeams: readonly ConnectorResourceRef[];
   /** Whether the external-team fetch is still in flight. */
   loading: boolean;
-  /** The live fetch's error message, when it failed (a broken credential surfaces here). */
-  error: string | null;
+  /** The live fetch's failure when it failed (a broken credential surfaces here); null otherwise. */
+  error: unknown;
   /** Org teams offered as mapping targets. */
   orgTeams: readonly TeamOut[];
   /** The singular noun for one external team ("team"), for empty-state copy. */
@@ -53,7 +55,7 @@ export default function TeamMappingPicker({
     return <Skeleton className="h-16 w-full rounded-xl" />;
   }
   if (error) {
-    return <p className="text-error text-body-small">{error}</p>;
+    return <LoadFailure size="panel" title={`Linked ${containerNoun}s`} error={error} />;
   }
   if (externalTeams.length === 0) {
     return (

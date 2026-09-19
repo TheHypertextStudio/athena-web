@@ -84,7 +84,8 @@ export interface ConfirmDisconnectModel {
 export interface IntegrationsData {
   orgId: string;
   loading: boolean;
-  loadError: string | null;
+  /** The directory read's failure, when it did not arrive; null otherwise. */
+  loadError: unknown;
   /** Whether integrations are available only after the workspace adds Docket Pro. */
   productRequired: boolean;
   directory: readonly IntegrationDirectoryProvider[];
@@ -170,10 +171,7 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
     (error) => error instanceof UserFacingError && error.code === 'product_required',
   );
   const loading = !productRequired && directoryQ.isPending;
-  const loadError =
-    directoryQ.isError && !productRequired
-      ? userErrorMessage(directoryQ.error, 'Could not load integrations.')
-      : null;
+  const loadError = directoryQ.isError && !productRequired ? directoryQ.error : null;
   const { data: config } = usePublicConfig();
 
   const setActionError = useCallback((key: string, message: string | null) => {
@@ -316,6 +314,8 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
 
   // Keep the return marker on failure. It is the durable browser-side evidence that setup still
   // needs repair, and stripping it made the failed ceremony look like it had never happened.
+  // `failure: 'silent'` on the writes below: each provider row presents its own failure in its
+  // footer (`actionError`), so the notice stack would say the same thing twice.
   const verifyReturn = useApiMutation({
     mutationFn: (id: string) =>
       unwrap(
@@ -323,6 +323,7 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
         'Could not validate this connection.',
       ),
     invalidateKeys: [queryKeys.integrations(orgId)],
+    failure: 'silent',
   });
   const verifyReturnId = searchParams.get('verify');
   useEffect(() => {
@@ -374,6 +375,7 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
       if (provider) setActionError(provider, userErrorMessage(err, 'Sync failed.'));
     },
     invalidateKeys: [queryKeys.integrations(orgId)],
+    failure: 'silent',
   });
 
   const disconnectMutation = useApiMutation({
@@ -395,6 +397,7 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
       }
     },
     invalidateKeys: [queryKeys.integrations(orgId)],
+    failure: 'silent',
   });
 
   const byProvider = useMemo(() => {

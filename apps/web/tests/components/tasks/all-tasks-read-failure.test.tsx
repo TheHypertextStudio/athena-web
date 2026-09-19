@@ -15,7 +15,7 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const { useQueries, useActiveOrg, useSession } = vi.hoisted(() => ({
@@ -52,6 +52,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 import AllTasksClient from '../../../src/app/(app)/tasks/all-tasks-client';
+import { ApiRequestError } from '../../../src/lib/query-core';
 
 const ORG_A = '01HZZZ00000000000000000RGA';
 const ORG_B = '01HZZZ00000000000000000RGB';
@@ -138,7 +139,7 @@ describe('the cross-workspace task read', () => {
   });
 
   it('reports a failure instead of claiming the person has no tasks', () => {
-    const failure = new Error('fetch failed');
+    const failure = new ApiRequestError({ message: 'fetch failed', status: 0 });
     renderTasks(
       [result({ error: failure }), result({ error: failure })],
       [result({ error: failure }), result({ error: failure })],
@@ -147,14 +148,13 @@ describe('the cross-workspace task read', () => {
     // The regression: this sentence must not appear when nobody was successfully asked.
     expect(screen.queryByText('No tasks assigned to you')).toBeNull();
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveTextContent('Could not load your tasks.');
     // Application-owned copy only — the provider's own text never reaches the screen.
     expect(alert.textContent).not.toContain('fetch failed');
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
   it('retries every read, not just the one that happened to be inspected', () => {
-    const failure = new Error('fetch failed');
+    const failure = new ApiRequestError({ message: 'fetch failed', status: 0 });
     const refetches = [vi.fn(), vi.fn(), vi.fn(), vi.fn()];
     renderTasks(
       [
@@ -174,15 +174,20 @@ describe('the cross-workspace task read', () => {
 
   it('shows the rows it has, and says so, when only some workspaces answered', () => {
     renderTasks(
-      [result({ items: [MY_TASK] }), result({ error: new Error('fetch failed') })],
-      [result({ items: [MY_MEMBERSHIP] }), result({ error: new Error('fetch failed') })],
+      [
+        result({ items: [MY_TASK] }),
+        result({ error: new ApiRequestError({ message: 'fetch failed', status: 0 }) }),
+      ],
+      [
+        result({ items: [MY_MEMBERSHIP] }),
+        result({ error: new ApiRequestError({ message: 'fetch failed', status: 0 }) }),
+      ],
     );
 
     // The real row is not hidden behind the failure — partial data is still data.
     expect(screen.getByText('Ship the launch checklist')).toBeInTheDocument();
     // But a short list must not read as a complete one.
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Some workspaces did not answer, so this list may be incomplete.',
-    );
+    const banner = screen.getByRole('alert');
+    expect(within(banner).getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 });

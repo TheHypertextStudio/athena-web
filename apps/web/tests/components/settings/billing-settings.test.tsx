@@ -1,9 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 
+import { Toaster, dismissAllNotices } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { problemResponse } from '../../support/query';
 
 const { billingGet, discountsGet, checkoutPost, portalPost } = vi.hoisted(() => ({
   billingGet: vi.fn(),
@@ -53,8 +56,15 @@ function okResponse<T>(body: T) {
 }
 
 function wrapper(): ({ children }: { children: ReactNode }) => JSX.Element {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return ({ children }) => (
+    <QueryClientProvider client={client}>
+      {children}
+      <Toaster />
+    </QueryClientProvider>
+  );
 }
 
 /** Build a current billing response with one optional product override. */
@@ -123,9 +133,35 @@ beforeEach(() => {
   portalPost.mockReset();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  dismissAllNotices();
+  cleanup();
+});
 
 describe('BillingSettings', () => {
+  it('offers a retry when billing could not load', async () => {
+    billingGet.mockResolvedValue(problemResponse('server detail', 500, 'internal'));
+
+    render(<BillingSettings orgId="org-1" isPersonal />, { wrapper: wrapper() });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).not.toHaveTextContent(/server detail/);
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('presents a refused checkout as a notice, leaving the action in place', async () => {
+    billingGet.mockResolvedValue(okResponse(summary(undefined, { accessMode: 'writable' })));
+    checkoutPost.mockResolvedValue(problemResponse('server detail', 500, 'internal'));
+
+    render(<BillingSettings orgId="org-1" isPersonal />, { wrapper: wrapper() });
+    fireEvent.click(await screen.findByRole('button', { name: 'Start Docket Pro trial' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).not.toHaveTextContent(/server detail/);
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Start Docket Pro trial' })).toBeEnabled();
+  });
+
   it('shows free personal access and the US launch price before Checkout', async () => {
     billingGet.mockResolvedValue(okResponse(summary(undefined, { accessMode: 'writable' })));
 
@@ -245,9 +281,7 @@ describe('BillingSettings', () => {
 
     render(<BillingSettings orgId="org-1" isPersonal={false} />, { wrapper: wrapper() });
 
-    expect(await screen.findByText(/We could not collect this payment/)).toHaveTextContent(
-      /by Sep 1, 2026/,
-    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(/by Sep 1, 2026/);
     expect(screen.getByRole('button', { name: 'Update payment method' })).toBeInTheDocument();
   });
 

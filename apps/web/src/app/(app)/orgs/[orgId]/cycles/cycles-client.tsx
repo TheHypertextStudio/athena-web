@@ -45,6 +45,7 @@ import { type JSX, useCallback, useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { ActiveCycleOverview, findActiveCycle } from '@/components/cycles/active-cycle-overview';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { buildCycleCatalog } from '@/components/cycles/cycle-catalog';
 import { type CycleRowProps, CycleRows } from '@/components/cycles/cycle-row';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
@@ -68,7 +69,6 @@ import {
   useApiMutation,
   usePrefetchApi,
 } from '@/lib/query';
-import { userErrorMessage } from '@/lib/problem';
 import { useOrgCapability } from '@/lib/use-org-capability';
 
 /** The default view applied when the URL carries none: group by status (the legacy segments). */
@@ -157,9 +157,7 @@ export default function CyclesClient(): JSX.Element {
   const cycles: readonly CycleOut[] = cyclesQ.data?.cycles ?? EMPTY_CYCLES;
   const statsById: Readonly<Record<string, CycleStats>> = cyclesQ.data?.statsById ?? EMPTY_STATS;
   const loading = cyclesQ.isPending;
-  const loadError = cyclesQ.isError
-    ? userErrorMessage(cyclesQ.error, 'Could not load cycles.')
-    : null;
+  const loadError = cyclesQ.isError;
   const displayByCycleId = useMemo(
     () =>
       new Map<string, EntityDisplayOut>(
@@ -264,9 +262,7 @@ export default function CyclesClient(): JSX.Element {
       {loading ? (
         <ListSkeleton />
       ) : loadError ? (
-        <p role="alert" className="text-error text-body-medium p-4">
-          {loadError}
-        </p>
+        <QueryLoadFailure title={cycleNounPlural} query={cyclesQ} />
       ) : total === 0 ? (
         // Only reachable with no team to roll for — cycles auto-materialize per team cadence.
         <EmptyState icon={RefreshCw} title={`${cycleNounPlural} roll on their own`} />

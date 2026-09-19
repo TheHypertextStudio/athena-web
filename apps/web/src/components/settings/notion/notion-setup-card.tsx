@@ -17,12 +17,13 @@
  *   this is a common first run, not a failure. It now offers to reopen that consent screen rather
  *   than instructing the reader to go use Notion's ••• menu and reload the page.
  * - **A run that failed.** The provision route answers 200 carrying a failed run, so the
- *   controller surfaces that as an error instead of letting it read as success.
+ *   controller rejects the write and it is presented as a failure instead of reading as success.
  */
 import type { NotionParentPageOut } from '@docket/connections/notion/mirror-contract';
-import { WriteError } from '../write-error';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
+
+import { LoadFailure } from '@/components/feedback';
 
 import { SettingsGroup } from '../settings-group';
 import { SETTINGS_NODES } from '../settings-capabilities';
@@ -123,8 +124,8 @@ export function NotionSetupCard({
         </p>
       ) : null}
 
-      {(setup.error ?? search.error) ? (
-        <WriteError message={setup.error ?? search.error ?? ''} />
+      {search.error !== null ? (
+        <LoadFailure size="panel" title="Notion pages" error={search.error} />
       ) : null}
     </SettingsGroup>
   );

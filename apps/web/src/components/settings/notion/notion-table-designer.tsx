@@ -25,10 +25,11 @@ import type {
   NotionPersonRepresentation,
 } from '@docket/connections/notion/mirror-contract';
 import { cn } from '@docket/ui';
-import { WriteError } from '../write-error';
 import { Plus, Settings } from '@docket/ui/icons';
 import { Button, Input, Select, Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
+
+import { LoadFailure } from '@/components/feedback';
 
 import { SettingsGroup } from '../settings-group';
 import { useMemo, useState } from 'react';
@@ -128,7 +129,7 @@ export function NotionTableDesigner({
   }
 
   if (design === null) {
-    return <WriteError message={model.error ?? 'Could not load this table design.'} />;
+    return <LoadFailure title="Table design" error={model.loadError} />;
   }
 
   const commitColumns = (next: DesignerColumn[]): void => {
@@ -372,8 +373,6 @@ export function NotionTableDesigner({
           )}
         </SettingsGroup>
       ) : null}
-
-      {model.error !== null ? <WriteError message={model.error} /> : null}
     </div>
   );
 }

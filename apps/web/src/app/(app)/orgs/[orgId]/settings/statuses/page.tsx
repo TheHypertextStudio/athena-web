@@ -26,9 +26,7 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { Skeleton } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
-import { LoadFailure } from '@/components/settings/load-failure';
-import { firstWriteError, WriteError } from '@/components/settings/write-error';
-import { userErrorMessage } from '@/lib/problem';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { useActiveOrg } from '@/components/active-org';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { DeleteStatusDialog } from '@/components/statuses/delete-status-dialog';
@@ -150,15 +148,6 @@ export default function StatusesSettingsPage(): JSX.Element {
   const forkTeam = useForkTeamStatuses(orgId);
   const resetTeam = useResetTeamStatuses(orgId);
 
-  const writeError = firstWriteError([
-    [createStatus, 'Could not create that status.'],
-    [updateStatus, 'Could not save that status.'],
-    [reorderStatuses, 'Could not reorder statuses.'],
-    [deleteStatus, 'Could not delete that status.'],
-    [forkTeam, 'Could not give this team its own statuses.'],
-    [resetTeam, 'Could not return this team to the workspace statuses.'],
-  ]);
-
   const [editing, setEditing] = useState<EditorTarget | null>(null);
   const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
 
@@ -248,11 +237,10 @@ export default function StatusesSettingsPage(): JSX.Element {
       title="Statuses"
       description="The states work moves through. Rename them to match how your workspace talks."
     >
-      {writeError ? <WriteError message={writeError} /> : null}
       {setsQ.isPending ? (
         <Skeleton className="h-[36rem] max-w-3xl rounded-xl" />
       ) : setsQ.isError ? (
-        <LoadFailure message={userErrorMessage(setsQ.error, 'Could not load statuses.')} retrying />
+        <QueryLoadFailure title="Statuses" query={setsQ} />
       ) : (
         <div className="flex max-w-3xl min-w-0 flex-col gap-10">
           {sections.map((section) => (
@@ -332,7 +320,7 @@ export default function StatusesSettingsPage(): JSX.Element {
             sections.find((section) => section.entityType === editing.entityType)?.one ?? 'work'
           }
           pending={createStatus.isPending || updateStatus.isPending}
-          error={createStatus.error ?? updateStatus.error}
+          error={null}
           onSave={(input) => {
             if (editing.status === null) {
               createStatus.mutate(
@@ -381,7 +369,7 @@ export default function StatusesSettingsPage(): JSX.Element {
             (status) => status.id !== deleting.status.id,
           )}
           pending={deleteStatus.isPending}
-          error={deleteStatus.error}
+          error={null}
           onConfirm={(remapTo) => {
             deleteStatus.mutate(
               { statusId: deleting.status.id, remapTo, entityType: deleting.entityType },

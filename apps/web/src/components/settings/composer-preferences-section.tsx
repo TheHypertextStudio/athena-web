@@ -17,7 +17,7 @@ import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
 
-import { LoadFailure } from './load-failure';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { SettingRow } from './setting-row';
 import { SettingRowStatus } from './setting-row-status';
 import { SETTINGS_NODES } from './settings-capabilities';
@@ -62,7 +62,7 @@ export function ComposerPreferencesSection(): JSX.Element {
       }
     >
       {preferencesQ.isError ? (
-        <LoadFailure message={userErrorMessage(preferencesQ.error, LOAD_FALLBACK)} retrying />
+        <QueryLoadFailure size="panel" title="Creating preferences" query={preferencesQ} />
       ) : (
         <SettingRow
           label="Resume drafts when creating"

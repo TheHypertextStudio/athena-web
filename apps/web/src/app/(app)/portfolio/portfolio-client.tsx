@@ -1,6 +1,6 @@
 'use client';
 
-import { EmptyState } from '@docket/ui/components';
+import { EmptyState, InlineBanner } from '@docket/ui/components';
 import { ChevronDown, LayoutGrid, TuneRounded } from '@docket/ui/icons';
 import {
   Button,
@@ -140,21 +140,18 @@ export default function PortfolioClient(): JSX.Element {
       </header>
 
       {error ? (
-        <div
-          role="alert"
-          className="border-error/40 bg-error/5 text-error text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
-        >
-          <span>{error}</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
+        <InlineBanner
+          tone="critical"
+          title="Portfolio did not answer"
+          action={{
+            label: 'Try again',
+            onSelect: () => {
               void portfolioQ.refetch();
-            }}
-          >
-            Try again
-          </Button>
-        </div>
+            },
+          }}
+        >
+          {error}
+        </InlineBanner>
       ) : null}
 
       {loading ? (

@@ -1,4 +1,6 @@
 /** Focused setup UI for repeating a project-shaped body of work. */
+import '@testing-library/jest-dom/vitest';
+
 import type { MilestoneOut } from '@docket/work/milestone-contract';
 import type { ProjectOut } from '../../src/lib/contracts/project';
 import type { TaskOut } from '@docket/work/task-model';
@@ -96,5 +98,26 @@ describe('RepeatProjectDialog', () => {
     fireEvent.click(whenReady);
     expect((whenReady as HTMLInputElement).checked).toBe(true);
     expect(screen.getByRole('button', { name: /Repeat — Every month/ })).toBeTruthy();
+  });
+
+  it('says why an empty project cannot repeat yet and holds the action', () => {
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <RepeatProjectDialog
+          open
+          onOpenChange={vi.fn()}
+          orgId={PROJECT.organizationId}
+          project={PROJECT}
+          milestones={MILESTONES}
+          tasks={[]}
+          projectNoun="Project"
+          onCreated={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Start repeating/ })).toBeDisabled();
   });
 });

@@ -5,6 +5,7 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft, Sparkles } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
+import { LoadFailure } from '@/components/feedback';
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX } from 'react';
 
@@ -27,6 +28,7 @@ export default function SessionViewPage(): JSX.Element {
     taskTitle,
     loading,
     loadError,
+    reload,
     actionError,
     pendingActivityId,
     controlPending,
@@ -67,12 +69,7 @@ export default function SessionViewPage(): JSX.Element {
   if (loadError) {
     return (
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p
-          role="alert"
-          className="border-outline-variant text-error text-body-medium rounded-lg border p-4"
-        >
-          {loadError}
-        </p>
+        <LoadFailure title="This session" error={loadError} onRetry={() => void reload()} />
       </div>
     );
   }

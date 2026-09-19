@@ -15,7 +15,6 @@ import type { ConnectorConfig, IntegrationOut } from '@docket/connections/integr
 import { useState } from 'react';
 
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 /**
@@ -70,7 +69,6 @@ export interface MailIngestRowModel {
   /** The pending sensitivity selection, honored on enable. */
   threshold: number;
   saving: boolean;
-  error: string | null;
   /** Toggle the workflow on (with the current threshold) or off (removes the key entirely). */
   toggle: () => void;
   /** Change the sensitivity; persists immediately when already enabled. */
@@ -84,7 +82,6 @@ export function useMailIngestRow(orgId: string, integration: IntegrationOut): Ma
   const [threshold, setThreshold] = useState<number>(
     current === undefined ? 50 : current.threshold,
   );
-  const [error, setError] = useState<string | null>(null);
 
   const save = useApiMutation({
     mutationFn: (emailToTask: { enabled: boolean; threshold: number } | undefined) =>
@@ -100,12 +97,7 @@ export function useMailIngestRow(orgId: string, integration: IntegrationOut): Ma
         'Could not save email-to-task settings.',
       ),
     invalidateKeys: [queryKeys.integrations(orgId)],
-    onSuccess: () => {
-      setError(null);
-    },
-    onError: (e: Error) => {
-      setError(userErrorMessage(e, 'Could not save email-to-task settings.'));
-    },
+    failureTitle: 'Could not save email-to-task settings.',
   });
 
   const enabled = current?.enabled === true;
@@ -115,7 +107,6 @@ export function useMailIngestRow(orgId: string, integration: IntegrationOut): Ma
     activeThreshold: current === undefined ? threshold : current.threshold,
     threshold,
     saving: save.isPending,
-    error,
     toggle: () => {
       save.mutate(enabled ? undefined : { enabled: true, threshold });
     },

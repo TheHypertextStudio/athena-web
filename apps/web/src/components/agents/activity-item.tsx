@@ -19,6 +19,7 @@
  * pending/error state; this component is purely presentational beyond firing them.
  */
 import type { SessionActivityOut } from '@docket/athena/agent-contract';
+import { InlineBanner } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
 import { Button } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
@@ -108,9 +109,9 @@ export function ActivityItem({
 
         {/* Body. */}
         {activity.type === 'error' ? (
-          <p role="alert" className="text-error text-body-medium leading-relaxed">
+          <InlineBanner tone="critical" density="compact" title="Step failed">
             {text}
-          </p>
+          </InlineBanner>
         ) : activity.type === 'thought' ? (
           <ThoughtBody text={text} />
         ) : action ? (

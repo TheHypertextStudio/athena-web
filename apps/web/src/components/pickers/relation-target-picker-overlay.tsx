@@ -1,6 +1,7 @@
 'use client';
 
 import { PickerList, type PickerOption } from '@docket/ui/components';
+import { OverlayErrorBanner } from '@/components/pickers/overlay-error-banner';
 import { Calendar, GanttChart, ListChecks, Users } from '@docket/ui/icons';
 import {
   Popover,
@@ -219,12 +220,9 @@ export function RelationTargetPickerOverlay({
         }}
       >
         {activeError ? (
-          <div
-            role="alert"
-            className="text-error bg-error/5 border-error/30 text-body-medium m-1 rounded-md border px-3 py-2"
-          >
-            {userErrorMessage(activeError, `Could not load ${targetNoun}s.`)}
-          </div>
+          <OverlayErrorBanner
+            title={userErrorMessage(activeError, `Could not load ${targetNoun}s.`)}
+          />
         ) : loading ? (
           <div className="flex flex-col gap-1.5 p-1.5" aria-hidden="true">
             <Skeleton className="h-10 w-full rounded-md" />

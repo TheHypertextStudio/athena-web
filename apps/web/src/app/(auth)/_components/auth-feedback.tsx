@@ -7,6 +7,7 @@
  * screen readers announce failures the moment they appear; {@link Spinner} is a decorative,
  * `aria-hidden` indicator paired with visible "…ing" button copy.
  */
+import { InlineBanner } from '@docket/ui/components';
 import { RefreshCw } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
@@ -25,17 +26,15 @@ export interface AuthErrorProps {
  * An assertive error region. Renders nothing when there is no message.
  *
  * @remarks
- * `role="alert"` (implicitly `aria-live="assertive"`) so the failure is announced
- * immediately; styled with the destructive token so it reads as an error visually too.
+ * A critical `InlineBanner` announces as an alert the moment it appears, and keeps the failure
+ * beside the control that retries it rather than in the notice stack, which the auth screens
+ * do not mount.
  */
 export function AuthError({ message }: AuthErrorProps): JSX.Element | null {
   if (!message) return null;
   return (
-    <p
-      role="alert"
-      className="border-error/30 bg-error/5 text-error text-body-medium rounded-md border px-3 py-2"
-    >
-      {message}
-    </p>
+    <InlineBanner tone="critical" density="compact" title={message}>
+      {null}
+    </InlineBanner>
   );
 }

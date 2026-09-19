@@ -5,7 +5,7 @@ import type { MilestoneOut } from '@docket/work/milestone-contract';
 import type { ProcessCreationMode } from '../../lib/contracts/recurrence';
 import type { ProjectOut } from '../../lib/contracts/project';
 import { ProcessDefinitionId } from '@docket/work/ids';
-import { todayIso } from '@docket/ui/components';
+import { InlineBanner, todayIso } from '@docket/ui/components';
 import { Check, FolderKanban, RefreshCw } from '@docket/ui/icons';
 import {
   Button,
@@ -108,6 +108,7 @@ export function RepeatProjectDialog({
       );
     },
     invalidateKeys: [queryKeys.processDefinitions(orgId), queryKeys.recurrenceSeries(orgId)],
+    failureTitle: `Could not start this repeating ${projectNoun.toLowerCase()}.`,
     onSuccess: (series) => {
       onOpenChange(false);
       onCreated(series.id);
@@ -225,14 +226,9 @@ export function RepeatProjectDialog({
           </section>
 
           {tasks.length === 0 ? (
-            <p role="alert" className="text-error text-body-small">
+            <InlineBanner tone="critical" title="Nothing to repeat yet">
               Add at least one task before making this {projectNoun.toLowerCase()} repeatable.
-            </p>
-          ) : null}
-          {create.isError ? (
-            <p role="alert" className="text-error text-body-small">
-              We couldn&apos;t start this repeating {projectNoun.toLowerCase()}. Please try again.
-            </p>
+            </InlineBanner>
           ) : null}
         </DialogBody>
 

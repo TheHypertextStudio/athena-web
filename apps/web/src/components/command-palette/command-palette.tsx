@@ -2,6 +2,7 @@
 
 import { Command, Search, Tag, X } from '@docket/ui/icons';
 import { MenuListbox, MenuSectionLabel } from '@docket/ui/components';
+import { OverlayErrorBanner } from '@/components/pickers/overlay-error-banner';
 import {
   Dialog,
   DialogBody,
@@ -329,12 +330,7 @@ export function CommandPalette({
         {/* Results list */}
         <DialogBody inset="compact" className="flex flex-col gap-1">
           {effectiveError ? (
-            <div
-              role="alert"
-              className="text-error bg-error/5 border-error/30 text-body-medium m-1 rounded-md border px-3 py-2"
-            >
-              {effectiveError}
-            </div>
+            <OverlayErrorBanner title="Search did not answer">{effectiveError}</OverlayErrorBanner>
           ) : null}
 
           {showNoOrgForMode ? (

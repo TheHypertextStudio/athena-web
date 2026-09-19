@@ -17,7 +17,7 @@ export interface MailIngestRowProps {
  * One mail connection's email-to-task toggle + explicit sensitivity row.
  *
  * @remarks
- * The row's behavior (toggle, threshold persistence, error) lives in {@link useMailIngestRow}; this
+ * The row's behavior (toggle, threshold persistence) lives in {@link useMailIngestRow}; this
  * component is the thin per-row binding plus its markup. Enabling submits both `enabled` and an
  * explicit numeric threshold (no hidden default) while preserving sibling config keys.
  */
@@ -72,7 +72,6 @@ export function MailIngestRow({ orgId, integration, canManage }: MailIngestRowPr
           Default rules seeded — see the rules below.
         </p>
       ) : null}
-      {row.error !== null ? <p className="text-error text-body-small">{row.error}</p> : null}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import type {
 } from '../../lib/contracts/search';
 import type { SourceSystemKind } from '@docket/connections/event-contract';
 import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
-import { EmptyState } from '@docket/ui/components';
+import { EmptyState, InlineBanner } from '@docket/ui/components';
 import { Activity, Search, type LucideIcon } from '@docket/ui/icons';
 import { Button, Input, Row, Skeleton, Stack } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
@@ -456,21 +456,18 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
 
         <main className="min-w-0">
           {error ? (
-            <div
-              role="alert"
-              className="border-error/40 bg-error/5 text-error text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
-            >
-              <span>{error}</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
+            <InlineBanner
+              tone="critical"
+              title="Search did not answer"
+              action={{
+                label: 'Try again',
+                onSelect: () => {
                   void searchQ.refetch();
-                }}
-              >
-                Retry
-              </Button>
-            </div>
+                },
+              }}
+            >
+              {error}
+            </InlineBanner>
           ) : loadingInitial ? (
             /* placeholder: the matches for what has been typed — how many, and what each one is.
                Only the first search of a query pays this: `loadingInitial` is false while a

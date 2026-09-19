@@ -13,14 +13,13 @@ import type {
   ContactPointCreate,
   NotificationPreferencePatch,
 } from '@docket/notifications/schemas';
-import { WriteError } from '@/components/settings/write-error';
 import { Skeleton } from '@docket/ui/primitives';
 import { useState, type JSX } from 'react';
 
+import { LoadFailure } from '@/components/feedback';
 import { ContactPointsSection } from '@/components/settings/contact-points-section';
 import { NotificationPreferencesSection } from '@/components/settings/notification-preferences-section';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import {
   apiQueryOptions,
   queryKeys,
@@ -61,6 +60,7 @@ export default function NotificationsSettingsPage(): JSX.Element {
         'Could not save notification preferences.',
       ),
     invalidateKeys: [queryKeys.notificationPreferences()],
+    failureTitle: 'Could not save notification preferences.',
   });
   const addContactPoint = useApiMutation({
     mutationFn: (input: ContactPointCreate) =>
@@ -69,6 +69,7 @@ export default function NotificationsSettingsPage(): JSX.Element {
         'Could not add this contact point.',
       ),
     invalidateKeys: [queryKeys.contactPoints()],
+    failureTitle: 'Could not add this contact point.',
   });
   const verifyContactPoint = useApiMutation({
     mutationFn: (input: { id: string; code: string }) =>
@@ -81,6 +82,7 @@ export default function NotificationsSettingsPage(): JSX.Element {
         'Could not verify this contact point.',
       ),
     invalidateKeys: [queryKeys.contactPoints()],
+    failureTitle: 'Could not verify this contact point.',
   });
   const makePrimary = useApiMutation({
     mutationFn: (id: string) =>
@@ -89,6 +91,7 @@ export default function NotificationsSettingsPage(): JSX.Element {
         'Could not make this contact point primary.',
       ),
     invalidateKeys: [queryKeys.contactPoints()],
+    failureTitle: 'Could not make this contact point primary.',
   });
   const disableContactPoint = useApiMutation({
     mutationFn: (id: string) =>
@@ -97,25 +100,11 @@ export default function NotificationsSettingsPage(): JSX.Element {
         'Could not disable this contact point.',
       ),
     invalidateKeys: [queryKeys.contactPoints()],
+    failureTitle: 'Could not disable this contact point.',
   });
 
   const loading = preferencesQ.isPending || contactPointsQ.isPending;
-  const loadError = preferencesQ.error
-    ? userErrorMessage(preferencesQ.error, 'Could not load notification preferences.')
-    : contactPointsQ.error
-      ? userErrorMessage(contactPointsQ.error, 'Could not load notification contact points.')
-      : null;
-  const mutationError = patchPreferences.error
-    ? userErrorMessage(patchPreferences.error, 'Could not save notification preferences.')
-    : addContactPoint.error
-      ? userErrorMessage(addContactPoint.error, 'Could not add that contact point.')
-      : verifyContactPoint.error
-        ? userErrorMessage(verifyContactPoint.error, 'Could not verify that contact point.')
-        : makePrimary.error
-          ? userErrorMessage(makePrimary.error, 'Could not make that contact point primary.')
-          : disableContactPoint.error
-            ? userErrorMessage(disableContactPoint.error, 'Could not disable that contact point.')
-            : null;
+  const loadError = preferencesQ.error ?? contactPointsQ.error;
 
   return (
     <SettingsSectionPage
@@ -131,7 +120,15 @@ export default function NotificationsSettingsPage(): JSX.Element {
           <Skeleton className="h-64 w-full rounded-xl" />
         </div>
       ) : loadError || !preferencesQ.data || !contactPointsQ.data ? (
-        <WriteError message={loadError ?? 'Could not load notification settings.'} />
+        <LoadFailure
+          title="Notification settings"
+          error={loadError}
+          onRetry={() => {
+            void preferencesQ.refetch();
+            void contactPointsQ.refetch();
+          }}
+          retrying={preferencesQ.isFetching || contactPointsQ.isFetching}
+        />
       ) : (
         <>
           {/* Contact points first: a channel is only choosable once there is somewhere to
@@ -142,41 +139,42 @@ export default function NotificationsSettingsPage(): JSX.Element {
             creating={addContactPoint.isPending}
             savingId={contactActionId}
             verifyingId={verifyActionId}
-            error={mutationError}
-            onAdd={async (input) => {
-              await addContactPoint.mutateAsync(input);
+            onAdd={(input) => {
+              addContactPoint.mutate(input);
             }}
-            onVerify={async (id, code) => {
+            onVerify={(id, code) => {
               setVerifyActionId(id);
-              try {
-                await verifyContactPoint.mutateAsync({ id, code });
-              } finally {
-                setVerifyActionId(null);
-              }
+              verifyContactPoint.mutate(
+                { id, code },
+                {
+                  onSettled: () => {
+                    setVerifyActionId(null);
+                  },
+                },
+              );
             }}
-            onMakePrimary={async (id) => {
+            onMakePrimary={(id) => {
               setContactActionId(id);
-              try {
-                await makePrimary.mutateAsync(id);
-              } finally {
-                setContactActionId(null);
-              }
+              makePrimary.mutate(id, {
+                onSettled: () => {
+                  setContactActionId(null);
+                },
+              });
             }}
-            onDisable={async (id) => {
+            onDisable={(id) => {
               setContactActionId(id);
-              try {
-                await disableContactPoint.mutateAsync(id);
-              } finally {
-                setContactActionId(null);
-              }
+              disableContactPoint.mutate(id, {
+                onSettled: () => {
+                  setContactActionId(null);
+                },
+              });
             }}
           />
           <NotificationPreferencesSection
             preferences={preferencesQ.data}
             saving={patchPreferences.isPending}
-            error={mutationError}
-            onPatch={async (patch) => {
-              await patchPreferences.mutateAsync(patch);
+            onPatch={(patch) => {
+              patchPreferences.mutate(patch);
             }}
           />
         </>

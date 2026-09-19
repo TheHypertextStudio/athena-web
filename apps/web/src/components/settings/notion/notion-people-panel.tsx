@@ -19,13 +19,14 @@
  *   Left unexplained this reads as the sync having dropped somebody.
  */
 import type { NotionWorkspacePerson } from '@docket/connections/notion/mirror-contract';
-import { WriteError } from '../write-error';
 import { CheckCircle2, CircleAlert, User, UserOff, Users } from '@docket/ui/icons';
 import { EmptyState } from '@docket/ui/components';
 import { Avatar, AvatarFallback, Button, Select, Skeleton } from '@docket/ui/primitives';
 import NextLink from '@/components/docket-link';
 import type { JSX, ReactNode } from 'react';
 import { useState } from 'react';
+
+import { LoadFailure } from '@/components/feedback';
 
 import { SettingsGroup } from '../settings-group';
 import { IGNORED_DETAIL, UNIGNORE_ACTION, ignoredTitle } from './notion-copy';
@@ -75,8 +76,8 @@ export function NotionPeoplePanel({
     );
   }
 
-  if (people.error !== null) {
-    return <WriteError message={people.error} />;
+  if (people.loadError !== null) {
+    return <LoadFailure title="Notion people" error={people.loadError} />;
   }
 
   // `ignored` counts too: a workspace whose every Notion member was skipped has still been seen,

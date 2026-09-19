@@ -14,7 +14,6 @@
  * (see {@link AddMcpConnectorForm}), so a connector never has to be added from Settings alone.
  */
 import type { McpIntegrationOut } from '@docket/connections/integration-contract';
-import { WriteError } from './write-error';
 import { Cable } from '@docket/ui/icons';
 import {
   Badge,
@@ -25,6 +24,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  FieldError,
   Input,
   Select,
   Skeleton,
@@ -37,12 +37,11 @@ import {
   connectorReadinessLabel,
   deriveMcpConnectorDraft,
 } from '@/components/settings/mcp-connector-draft';
-import { ConfirmDestructiveDialog } from '@docket/ui/components';
-import { EmptyState } from '@docket/ui/components';
+import { ConfirmDestructiveDialog, EmptyState, InlineBanner } from '@docket/ui/components';
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
+import { UserFacingError } from '@/lib/problem';
 import {
   apiQueryOptions,
   queryKeys,
@@ -98,10 +97,11 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
         <p role="status" className="text-success text-body-medium">
           Tool connected.
         </p>
-      ) : mcpReturn === 'error' ? (
-        <p role="alert" className="text-error text-body-medium">
-          Connection was not approved.
-        </p>
+      ) : null}
+      {mcpReturn === 'error' ? (
+        <InlineBanner tone="critical" title="Connection was not approved.">
+          Connect the server again and approve access when it asks.
+        </InlineBanner>
       ) : null}
 
       {/* placeholder: the MCP tools connected to this workspace — how many and what each one is.
@@ -178,6 +178,7 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
   const [aliasDraft, setAliasDraft] = useState(mcp.alias);
   const [aliasFocused, setAliasFocused] = useState(false);
   const [aliasError, setAliasError] = useState<string | null>(null);
+  const aliasErrorId = useId();
   // Re-sync the draft with the persisted value whenever it changes externally and the field isn't
   // being actively edited (e.g. after a successful save invalidates + refetches the list).
   useEffect(() => {
@@ -283,9 +284,9 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
           </span>
         ) : null}
         {mcp.status === 'error' ? (
-          <span role="alert" className="text-error text-body-small">
-            This server could not be reached.
-          </span>
+          <InlineBanner tone="critical" density="compact" title="This server could not be reached.">
+            Verify the connection or reconnect it below.
+          </InlineBanner>
         ) : null}
       </div>
       <details className="text-on-surface-variant text-body-small">
@@ -305,6 +306,8 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
                       value={aliasDraft}
                       maxLength={21}
                       aria-label="Tool prefix"
+                      aria-invalid={aliasError !== null || undefined}
+                      aria-describedby={aliasError === null ? undefined : aliasErrorId}
                       className="h-8 max-w-[10rem] font-mono"
                       onFocus={() => {
                         setAliasFocused(true);
@@ -316,11 +319,7 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
                     />
                     <span className="font-mono">__*</span>
                   </span>
-                  {aliasError ? (
-                    <span role="alert" className="text-error text-body-small mt-1 block">
-                      {aliasError}
-                    </span>
-                  ) : null}
+                  {aliasError ? <FieldError id={aliasErrorId}>{aliasError}</FieldError> : null}
                 </>
               ) : (
                 <span className="font-mono break-all">{mcp.alias}__*</span>
@@ -376,18 +375,6 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
           </Button>
         </div>
       ) : null}
-      {authorize.isError || verify.isError ? (
-        <p role="alert" className="text-error text-body-small">
-          {authorize.isError
-            ? userErrorMessage(authorize.error, 'Could not start authorization for this server.')
-            : userErrorMessage(verify.error, 'Could not verify this server.')}
-        </p>
-      ) : null}
-      {edit.error ? (
-        <p role="alert" className="text-error text-body-small">
-          {userErrorMessage(edit.error, 'Could not save this connector.')}
-        </p>
-      ) : null}
 
       <ConfirmDestructiveDialog
         open={confirmDisconnect}
@@ -396,9 +383,6 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
         description="Athena loses access to this tool for everyone in the workspace. You can connect it again later."
         confirmLabel="Disconnect"
         pending={disconnect.isPending}
-        {...(disconnect.isError
-          ? { error: userErrorMessage(disconnect.error, 'Could not disconnect this connector.') }
-          : {})}
         onConfirm={() => {
           disconnect.mutate(undefined, {
             onSuccess: () => {
@@ -416,6 +400,13 @@ export interface AddMcpConnectorFormProps {
   orgId: string;
   /** Called after a successful connect (e.g. to close a hosting dialog). */
   onConnected?: (mcp: McpIntegrationOut) => void;
+}
+
+/** What one connect attempt produced: the row, and where to send the browser for OAuth approval. */
+interface McpConnectOutcome {
+  readonly mcp: McpIntegrationOut;
+  /** The provider's approval page, or null when the connector needs no browser approval. */
+  readonly authorizationUrl: string | null;
 }
 
 /**
@@ -441,7 +432,6 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
   const [aliasEdited, setAliasEdited] = useState(false);
   const [bearerToken, setBearerToken] = useState('');
   const [authMode, setAuthMode] = useState<'oauth' | 'bearer' | 'none'>('oauth');
-  const [error, setError] = useState<string | null>(null);
 
   const preview = useApiMutation({
     mutationFn: () =>
@@ -458,9 +448,9 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
     },
   });
 
-  const connect = useApiMutation({
-    mutationFn: () =>
-      unwrap(
+  const connect = useApiMutation<McpConnectOutcome, undefined>({
+    mutationFn: async () => {
+      const mcp = await unwrap(
         () =>
           api.v1.orgs[':orgId'].integrations.mcp.$post({
             param: { orgId },
@@ -475,42 +465,37 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
             },
           }),
         'Could not connect that server.',
-      ),
-    invalidateKeys: [queryKeys.mcpIntegrations(orgId)],
-    onSuccess: async (mcp) => {
+      );
       if (authMode === 'oauth') {
-        try {
-          const authorization = await unwrap(
-            () =>
-              api.v1.orgs[':orgId'].integrations.mcp[':id'].authorize.$post({
-                param: { orgId, id: mcp.id },
-              }),
-            'Could not start secure approval for that server.',
-          );
-          window.location.assign(authorization.authorizationUrl);
-          return;
-        } catch (cause) {
-          setError(userErrorMessage(cause, 'Could not start secure approval for that server.'));
-          return;
-        }
+        const authorization = await unwrap(
+          () =>
+            api.v1.orgs[':orgId'].integrations.mcp[':id'].authorize.$post({
+              param: { orgId, id: mcp.id },
+            }),
+          'Could not start secure approval for that server.',
+        );
+        return { mcp, authorizationUrl: authorization.authorizationUrl };
       }
       // The row is created either way (so it can be retried via "Verify" without re-entering the
       // form) — but the connector only counts as done here when the live health check actually
-      // passed. A failed check keeps the dialog open with safe recovery guidance, not a false
-      // "connected".
+      // passed. A failed check rejects the write, which keeps the dialog open with the failure
+      // presented, not a false "connected".
       if (mcp.status !== 'connected') {
-        setError('Could not verify that server. Check its settings.');
+        throw new UserFacingError('Could not verify that server. Check its settings.');
+      }
+      return { mcp, authorizationUrl: null };
+    },
+    invalidateKeys: [queryKeys.mcpIntegrations(orgId)],
+    onSuccess: ({ mcp, authorizationUrl }) => {
+      if (authorizationUrl !== null) {
+        window.location.assign(authorizationUrl);
         return;
       }
-      setError(null);
       setUrl('');
       setLabel('');
       setAlias('');
       setBearerToken('');
       onConnected?.(mcp);
-    },
-    onError: (e: Error) => {
-      setError(userErrorMessage(e, 'Could not connect that server.'));
     },
   });
 
@@ -633,8 +618,6 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
           </div>
         </details>
       </div>
-
-      {error ? <WriteError message={error} /> : null}
 
       <Button type="submit" disabled={!canSubmit} className="self-start">
         {connect.isPending ? 'Preparing…' : authMode === 'oauth' ? 'Continue' : 'Connect'}

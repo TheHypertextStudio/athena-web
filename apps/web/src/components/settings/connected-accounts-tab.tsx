@@ -15,15 +15,14 @@
  * Runtime/deployment status is never exposed as roadmap copy in production UI.
  */
 import type { IdentityOut, IdentityProvider } from '@docket/identity-access/identity-contract';
-import { WriteError } from './write-error';
 import { Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import NextLink from '@/components/docket-link';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
+import { LoadFailure, presentFailure } from '@/components/feedback';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
-import { userErrorMessage } from '@/lib/problem';
 import { usePublicConfig } from '@/lib/public-config';
 import { STALE, apiQueryOptions, queryKeys, unwrap, useApiQuery } from '@/lib/query';
 
@@ -43,7 +42,6 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
   const reauth = useReauth();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [addingProvider, setAddingProvider] = useState<IdentityProvider | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const { data: config } = usePublicConfig();
   const identitiesQ = useApiQuery(
@@ -56,9 +54,6 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
   );
   const identities: readonly IdentityOut[] = identitiesQ.data?.items ?? [];
   const loading = identitiesQ.isPending;
-  const loadError = identitiesQ.isError
-    ? userErrorMessage(identitiesQ.error, 'Could not load connected accounts.')
-    : null;
   const configured = useMemo(() => {
     const providers = new Set<string>(config?.oauthProviders ?? []);
     if (identitiesQ.data?.googleOAuth?.available !== true) providers.delete('google');
@@ -84,20 +79,18 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
   );
 
   const onAdd = useCallback((provider: IdentityProvider): void => {
-    setError(null);
     setAddingProvider(provider);
     // Redirects to the provider's account chooser; on return this page remounts and refetches.
     authClient
       .linkSocial({ provider, callbackURL: window.location.pathname })
       .catch((err: unknown) => {
-        setError(userErrorMessage(err, 'Could not start linking that account.'));
+        presentFailure(err, 'Could not start linking that account.');
         setAddingProvider(null);
       });
   }, []);
 
   const onRemove = useCallback(
     (provider: IdentityProvider, accountId: string): void => {
-      setError(null);
       setBusyId(accountId);
       reauth()
         .then(() =>
@@ -111,7 +104,7 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
         )
         .then(() => qc.invalidateQueries({ queryKey: queryKeys.identities() }))
         .catch((err: unknown) => {
-          setError(userErrorMessage(err, 'Could not remove this account.'));
+          presentFailure(err, 'Could not remove this account.');
         })
         .finally(() => {
           setBusyId(null);
@@ -134,8 +127,6 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
         .
       </p>
 
-      {error ? <WriteError message={error} /> : null}
-
       {/* placeholder: which identity providers the caller has actually linked, and under which
           account. The "Linked accounts" heading and the provider catalog's own names are static. */}
       {loading ? (
@@ -152,8 +143,14 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
             </li>
           ))}
         </ul>
-      ) : loadError ? (
-        <WriteError message={loadError} />
+      ) : identitiesQ.isError ? (
+        <LoadFailure
+          size="panel"
+          title="Connected accounts"
+          error={identitiesQ.error}
+          onRetry={() => void identitiesQ.refetch()}
+          retrying={identitiesQ.isFetching}
+        />
       ) : (
         <ul className="flex flex-col gap-2">
           {visibleProviders.map((entry) => (

@@ -2,7 +2,7 @@
 
 /** One filterable, chronological task Activity surface. */
 import type { TaskActivityCategory, TaskActivityOut } from '@docket/connections/activity-contract';
-import { ActorAvatar } from '@docket/ui/components';
+import { ActorAvatar, InlineBanner } from '@docket/ui/components';
 import { ChevronDown } from '@docket/ui/icons';
 import {
   Button,
@@ -17,16 +17,14 @@ import type { JSX } from 'react';
 import { useMemo, useState } from 'react';
 
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { StaticMarkdown } from '@/components/editor/static-markdown';
 import { relativeTime } from '@/components/project-detail/format-time';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { apiInfiniteQueryOptions, queryKeys, useInfiniteApiQuery } from '@/lib/query';
 
 import { activityActorName, activitySentence } from './format-activity';
 
-const LOAD_FAILURE = 'Could not load this task activity.';
-const LOAD_NEWER_FAILURE = 'Could not load newer activity.';
 const POST_FAILURE = 'Could not post your comment.';
 const ALL_CATEGORIES = 'all';
 type ActivityFilter = TaskActivityCategory | typeof ALL_CATEGORIES;
@@ -119,7 +117,7 @@ export function TaskActivityFeed({
             { init: { signal } },
           ),
         (page) => page.nextCursor,
-        LOAD_FAILURE,
+        'Could not load this task activity.',
       ),
     [filter, orgId, taskId],
   );
@@ -178,9 +176,7 @@ export function TaskActivityFeed({
           <Skeleton className="h-5 w-2/5 rounded" />
         </div>
       ) : query.isError && entries.length === 0 ? (
-        <p role="alert" className="text-error text-body-medium">
-          {userErrorMessage(query.error, LOAD_FAILURE)}
-        </p>
+        <QueryLoadFailure size="panel" title="Activity" query={query} />
       ) : entries.length === 0 ? (
         <p className="text-on-surface-variant text-body-medium">
           Nothing has happened to this task yet.
@@ -208,9 +204,11 @@ export function TaskActivityFeed({
             {query.isFetchingNextPage ? 'Loading…' : 'Load newer'}
           </Button>
           {query.isFetchNextPageError ? (
-            <p role="alert" className="text-error text-body-medium mt-2">
-              {userErrorMessage(query.error, LOAD_NEWER_FAILURE)}
-            </p>
+            <div className="mt-2">
+              <InlineBanner tone="critical" density="compact" title="Newer activity could not load">
+                The activity above is still current.
+              </InlineBanner>
+            </div>
           ) : null}
         </div>
       ) : null}

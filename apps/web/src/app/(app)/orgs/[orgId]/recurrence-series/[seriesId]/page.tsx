@@ -13,6 +13,7 @@ import { Calendar, CheckCircle2, Pause, Play, RefreshCw, Stop } from '@docket/ui
 import { EmptyState } from '@docket/ui/components';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
@@ -24,7 +25,6 @@ import {
 } from '@/components/recurrence/repeat-task-control';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
-import { userErrorMessage } from '@/lib/problem';
 
 /** Convert a persisted trigger to the editor's task-shaped discriminated value. */
 function repeatDraft(trigger: ProcessTrigger): TaskRepeatDraft | null {
@@ -196,11 +196,7 @@ export default function RecurrenceSeriesPage(): JSX.Element {
     );
   }
   if (detailQ.isError || !detail) {
-    return (
-      <p role="alert" className="text-error mx-auto max-w-5xl p-6">
-        {userErrorMessage(detailQ.error, 'Could not load this repeating work.')}
-      </p>
-    );
+    return <QueryLoadFailure title="This repeating work" query={detailQ} />;
   }
 
   const timezone =

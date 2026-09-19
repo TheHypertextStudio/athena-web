@@ -14,6 +14,7 @@
  * padding itself out with headings and apologies.
  */
 import type { CalendarItemOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
+import { InlineBanner } from '@docket/ui/components';
 import { FileText, MapPin, Maximize, Trash2, Users } from '@docket/ui/icons';
 import { Badge, Button, ControlGroup } from '@docket/ui/primitives';
 import { type JSX, type ReactNode } from 'react';
@@ -29,6 +30,7 @@ import {
 import { eventGuests, guestSummaryLabel } from '../item-presentation/attendee-presentation';
 import { syncNotice } from '../item-presentation/sync-presentation';
 import { canDeleteCalendarItem } from '../item-drawer/status-actions';
+import { syncAttentionTitle } from '../item-drawer/sync-state-notice';
 
 /** Props for {@link CalendarItemPeek}. */
 export interface CalendarItemPeekProps {
@@ -59,7 +61,6 @@ export function CalendarItemPeek({
   onRequestDelete,
 }: CalendarItemPeekProps): JSX.Element {
   const KindIcon = CALENDAR_ITEM_KIND_ICON[item.kind];
-  const notice = syncNotice(item, layer);
 
   return (
     <>
@@ -83,17 +84,7 @@ export function CalendarItemPeek({
       <PeekFact icon={<Users />} text={guestSummaryLabel(eventGuests(item))} />
       <PeekFact icon={<FileText />} text={item.description} clamp />
 
-      {notice ? (
-        <p
-          className={
-            notice.tone === 'attention'
-              ? `text-error text-body-small ${FACT_GUTTER}`
-              : `text-on-surface-variant text-body-small ${FACT_GUTTER}`
-          }
-        >
-          {notice.text}
-        </p>
-      ) : null}
+      <PeekSyncNotice item={item} layer={layer} />
 
       <ControlGroup controlSize="sm" className="pt-1">
         <Button type="button" onClick={onOpenDetail}>
@@ -166,6 +157,33 @@ function PeekBadges({ item, layer }: PeekBadgesProps): JSX.Element | null {
       {item.recurringEventId ? <Badge variant="secondary">Repeats</Badge> : null}
       {readOnlyLabel ? <Badge variant="secondary">{readOnlyLabel}</Badge> : null}
     </div>
+  );
+}
+
+interface PeekSyncNoticeProps {
+  readonly item: CalendarItemOut;
+  readonly layer: CalendarLayerOut | undefined;
+}
+
+/**
+ * Where a local edit stands with the provider, when there is something to say.
+ *
+ * @remarks
+ * A state that needs the person is a persisted fact about the event, not a failed action, so it
+ * stays in the peek as a banner. The recovery lives in the detail, which Open reaches.
+ */
+function PeekSyncNotice({ item, layer }: PeekSyncNoticeProps): JSX.Element | null {
+  const notice = syncNotice(item, layer);
+  if (!notice) return null;
+  if (notice.tone === 'progress') {
+    return (
+      <p className={`text-on-surface-variant text-body-small ${FACT_GUTTER}`}>{notice.text}</p>
+    );
+  }
+  return (
+    <InlineBanner tone="critical" density="compact" title={syncAttentionTitle(layer)}>
+      {notice.text}
+    </InlineBanner>
   );
 }
 

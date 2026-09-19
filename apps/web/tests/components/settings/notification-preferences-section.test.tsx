@@ -22,7 +22,6 @@ describe('NotificationPreferencesSection', () => {
           },
         })}
         saving={false}
-        error={null}
         onPatch={onPatch}
       />,
     );
@@ -53,7 +52,6 @@ describe('NotificationPreferencesSection', () => {
           },
         })}
         saving={false}
-        error={null}
         onPatch={onPatch}
       />,
     );
@@ -93,7 +91,6 @@ describe('NotificationPreferencesSection', () => {
           },
         })}
         saving={false}
-        error={null}
         onPatch={onPatch}
       />,
     );
@@ -121,7 +118,6 @@ describe('NotificationPreferencesSection', () => {
           },
         })}
         saving={false}
-        error={null}
         onPatch={onPatch}
       />,
     );

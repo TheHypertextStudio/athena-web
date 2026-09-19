@@ -37,7 +37,6 @@ import {
   type TerminalDetailFailure,
 } from './detail-aggregate';
 import { useEntityMentions, type EntityMentionsData } from './use-entity-mentions';
-import { userErrorMessage } from './problem';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery, useLiveApiQuery } from './query';
 
 /** Focus-only poll interval (ms) for a task's bound agent-session activity stream. */
@@ -87,8 +86,16 @@ export interface TaskDetailData {
   /** The stable React Query key for the unified Activity history. */
   activityKey: QueryKey;
   isPending: boolean;
-  isError: boolean;
-  error: string | null;
+  /** The task read itself, for presenting its failure and retrying it. */
+  taskQuery: TaskReadState;
+}
+
+/** The parts of the task read a surface needs to present its failure. */
+export interface TaskReadState {
+  readonly isError: boolean;
+  readonly error: unknown;
+  readonly isFetching: boolean;
+  readonly refetch: () => unknown;
 }
 
 /**
@@ -243,7 +250,6 @@ export function useTaskDetail(
     commentsKey,
     activityKey,
     isPending: taskQ.isPending,
-    isError: taskQ.isError,
-    error: taskQ.isError ? userErrorMessage(taskQ.error, 'Could not load this task.') : null,
+    taskQuery: taskQ,
   };
 }

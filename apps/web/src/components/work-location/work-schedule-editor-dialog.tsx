@@ -79,7 +79,7 @@ export interface WorkScheduleEditorDialogProps {
   readonly places: readonly WorkPlaceOut[];
   readonly fallbackTimezone: string;
   readonly pending: boolean;
-  readonly error?: string | null;
+  /** Save the cycle. A failed save is presented by the mutation as a notice. */
   readonly onSave: (value: WorkSchedulePlanCreate) => void;
 }
 
@@ -149,7 +149,6 @@ export function WorkScheduleEditorDialog({
   places,
   fallbackTimezone,
   pending,
-  error,
   onSave,
 }: WorkScheduleEditorDialogProps): JSX.Element {
   const [effectiveFrom, setEffectiveFrom] = useState(today);
@@ -476,11 +475,6 @@ export function WorkScheduleEditorDialog({
                 </Button>
               </section>
             </div>
-            {error ? (
-              <p role="alert" className="text-error text-body-small">
-                {error}
-              </p>
-            ) : null}
           </DialogBody>
           <DialogFooter>
             <DialogClose asChild>
@@ -508,7 +502,7 @@ export interface WorkScheduleDateDialogProps {
   readonly places: readonly WorkPlaceOut[];
   readonly minimumDate: string;
   readonly pending: boolean;
-  readonly error?: string | null;
+  /** Save the date change. A failed save is presented by the mutation as a notice. */
   readonly onSave: (value: WorkScheduleExceptionCreate) => void;
 }
 
@@ -648,7 +642,6 @@ export function WorkScheduleDateDialog({
   places,
   minimumDate,
   pending,
-  error,
   onSave,
 }: WorkScheduleDateDialogProps): JSX.Element {
   const [date, setDate] = useState(minimumDate);
@@ -731,11 +724,6 @@ export function WorkScheduleDateDialog({
               <Plus aria-hidden="true" />
               Add work period
             </Button>
-            {error ? (
-              <p role="alert" className="text-error text-body-small">
-                {error}
-              </p>
-            ) : null}
           </DialogBody>
           <DialogFooter>
             <DialogClose asChild>

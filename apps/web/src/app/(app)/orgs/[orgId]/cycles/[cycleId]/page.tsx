@@ -15,6 +15,7 @@ import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import type { ActorDirectory } from '@/components/agents/actor-directory';
 import { CloseCycleDialog } from '@/components/cycles/close-cycle-dialog';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { CycleMetadata } from '@/components/cycle-detail/cycle-metadata-row';
 import { CyclePacePanel } from '@/components/cycle-detail/cycle-pace-panel';
 import { formatWindow, windowProgress, windowRunway } from '@/components/cycles/format-window';
@@ -38,7 +39,6 @@ import { useCycleMutations } from '@/lib/use-cycle-mutations';
 import { useRenameTask } from '@/lib/use-rename-task';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { categoryRank } from '@/lib/work-category';
-import { userErrorMessage } from '@/lib/problem';
 import { openTaskRecord } from '@/lib/local-first-navigation';
 
 /** The detail page's two sections. */
@@ -287,9 +287,7 @@ export default function CycleDetailPage(): JSX.Element {
   if (detailQ.isError) {
     return (
       <PageContainer>
-        <p role="alert" className="text-error text-body-medium">
-          {userErrorMessage(detailQ.error, `Could not load this ${cycleNounLower}.`)}
-        </p>
+        <QueryLoadFailure title={`This ${cycleNounLower}`} query={detailQ} />
       </PageContainer>
     );
   }

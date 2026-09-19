@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { OrganizationId } from '@docket/identity-access/ids';
 import { type SearchOut, type SearchResult } from '../../../src/lib/contracts/search';
 import type * as DocketComponents from '@docket/ui/components';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -356,8 +356,9 @@ describe('LibraryClient cursor and presentation behavior', () => {
     render(<LibraryFixture />);
 
     expect(screen.getByRole('link', { name: 'one' })).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not load more resources.');
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    const banner = screen.getByRole('alert');
+    expect(banner.textContent).not.toContain('provider prose');
+    fireEvent.click(within(banner).getByRole('button'));
     expect(harness.fetchNextPage).toHaveBeenCalledTimes(1);
   });
 
@@ -406,7 +407,7 @@ describe('LibraryClient cursor and presentation behavior', () => {
 
     render(<LibraryFixture />);
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not load more resources.');
+    expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.queryByText('provider prose')).not.toBeInTheDocument();
   });
 

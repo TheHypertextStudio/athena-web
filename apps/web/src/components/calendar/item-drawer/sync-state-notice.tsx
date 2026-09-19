@@ -12,17 +12,17 @@
  *
  * A conflict here is not a failure to report and move past. Docket kept the local edit rather than
  * discarding it, so the notice says so and offers to send it again against the provider's newer
- * version. Every string is this application's own; provider error text never reaches a person.
+ * version. The state is persisted on the item, so it stays in the page as an `InlineBanner` beside
+ * the fields a person can still read; a retry that itself fails is the retry mutation's own
+ * notice. Every string is this application's own; provider error text never reaches a person.
  */
 import type { CalendarItemOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
-import { CloudSync, RefreshCw } from '@docket/ui/icons';
-import { Button, Surface } from '@docket/ui/primitives';
+import { InlineBanner, type InlineBannerAction } from '@docket/ui/components';
+import { CloudSync } from '@docket/ui/icons';
 import { type JSX } from 'react';
 
-import { userErrorMessage } from '@/lib/problem';
-
 import { useRetryCalendarItemWrite } from '../calendar-mutations';
-import { syncNotice } from '../item-presentation/sync-presentation';
+import { providerLabel, syncNotice } from '../item-presentation/sync-presentation';
 
 /** Props for {@link SyncStateNotice}. */
 export interface SyncStateNoticeProps {
@@ -30,6 +30,31 @@ export interface SyncStateNoticeProps {
   item: CalendarItemOut;
   /** Its owning layer, used to name the provider. */
   layer: CalendarLayerOut | undefined;
+}
+
+/**
+ * The heading over a sync state a person should act on.
+ *
+ * @param layer - The item's owning layer, used to name the provider.
+ * @returns application-owned copy naming what has not happened.
+ */
+export function syncAttentionTitle(layer: CalendarLayerOut | undefined): string {
+  return `Not sent to ${providerLabel(layer)}`;
+}
+
+/** The banner action that re-sends the local version, or nothing when the state has no recovery. */
+function retryAction(
+  label: string | null,
+  retry: ReturnType<typeof useRetryCalendarItemWrite>,
+): InlineBannerAction | undefined {
+  if (!label) return undefined;
+  return {
+    label: retry.isPending ? 'Sending…' : label,
+    onSelect: () => {
+      if (retry.isPending) return;
+      retry.mutate(undefined);
+    },
+  };
 }
 
 /** The provider write state, when there is something worth saying about it. */
@@ -50,34 +75,13 @@ export function SyncStateNotice({ item, layer }: SyncStateNoticeProps): JSX.Elem
   }
 
   return (
-    <Surface
-      tone="well"
-      shape="medium"
-      pad="comfortable"
-      role="status"
-      className="flex flex-col gap-2"
+    <InlineBanner
+      tone="critical"
+      density="compact"
+      title={syncAttentionTitle(layer)}
+      action={retryAction(notice.actionLabel, retry)}
     >
-      <p className="text-on-surface text-body-medium">{notice.text}</p>
-      <div className="flex flex-wrap items-center gap-2">
-        {notice.actionLabel ? (
-          <Button
-            type="button"
-            controlSize="sm"
-            disabled={retry.isPending}
-            onClick={() => {
-              retry.mutate(undefined);
-            }}
-          >
-            <RefreshCw aria-hidden="true" />
-            {retry.isPending ? 'Sending…' : notice.actionLabel}
-          </Button>
-        ) : null}
-      </div>
-      {retry.isError ? (
-        <p role="alert" className="text-error text-body-small">
-          {userErrorMessage(retry.error, "We couldn't send that change. Please try again.")}
-        </p>
-      ) : null}
-    </Surface>
+      {notice.text}
+    </InlineBanner>
   );
 }

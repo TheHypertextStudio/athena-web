@@ -1,19 +1,20 @@
 import { Skeleton } from '@docket/ui/primitives';
 
-import { LoadFailure } from './load-failure';
+import { LoadFailure } from '@/components/feedback';
 import type { JSX, ReactNode } from 'react';
 
 /** Props for {@link IntegrationsStatus}. */
 export interface IntegrationsStatusProps {
   loading: boolean;
-  loadError: string | null;
+  /** The directory read's failure, when it did not arrive; null otherwise. */
+  loadError: unknown;
   /** The resolved content, rendered once neither loading nor errored. */
   children: ReactNode;
 }
 
 /**
  * The shared load shell for the Connections and Import panels: a skeleton while the directory
- * loads, a quiet retry notice on error, else the panel's content.
+ * loads, the classified failure on error, else the panel's content.
  */
 export function IntegrationsStatus({
   loading,
@@ -33,7 +34,7 @@ export function IntegrationsStatus({
     );
   }
   if (loadError) {
-    return <LoadFailure message={loadError} retrying />;
+    return <LoadFailure title="Integrations" error={loadError} />;
   }
   return <>{children}</>;
 }

@@ -43,7 +43,8 @@ describe('detail route ownership', () => {
     expect(source).toContain('enabled: labelsPickerOpen');
     expect(source).toContain('seedNavigationSnapshot(aggregate.snapshot)');
     expect(source).toContain('Could not refresh this');
-    expect(source).toContain('Could not load Initiative relationships.');
+    expect(source).toContain('relationshipsQ.isError');
+    expect(source).toContain('PartialLoadBanner');
     expect(source).toContain('Could not load resources.');
   });
 

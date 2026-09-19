@@ -8,7 +8,7 @@ import {
 } from '../../../../../../lib/contracts/organization';
 import { Field, Select, Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import { LoadFailure } from '@/components/settings/load-failure';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { useTypedRoute } from '@/lib/app-location';
 import { useState, type JSX } from 'react';
 
@@ -153,10 +153,7 @@ export default function WorkStructureSettingsPage(): JSX.Element {
       {settingsQ.isPending ? (
         <Skeleton className="h-96 max-w-2xl rounded-xl" />
       ) : settingsQ.isError ? (
-        <LoadFailure
-          message={userErrorMessage(settingsQ.error, 'Could not load work structure settings.')}
-          retrying
-        />
+        <QueryLoadFailure title="Work structure settings" query={settingsQ} />
       ) : (
         <section aria-labelledby="initiative-depth" className="flex max-w-2xl flex-col gap-5">
           {!permissionLoading && !canManage ? (

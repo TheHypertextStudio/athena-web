@@ -20,8 +20,6 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX, type SubmitEventHandler, useEffect, useRef, useState } from 'react';
 
-import { userErrorMessage } from '@/lib/problem';
-
 import { PlaceAddressAutocomplete } from './place-address-autocomplete';
 import { PlaceMapPicker, type PlaceMapPoint } from './place-map-picker';
 import { usePlaceReverseGeocode } from './use-place-reverse-geocode';
@@ -100,9 +98,7 @@ export interface PlaceEditorDialogProps {
   readonly intent?: PlaceEditorIntent;
   /** Disable dismissal and submission while the canonical mutation is pending. */
   readonly pending: boolean;
-  /** Application-owned failure copy that remains visible beside the form. */
-  readonly error?: string | null;
-  /** Save the normalized editor value. */
+  /** Save the normalized editor value. A failed save is presented by the mutation as a notice. */
   readonly onSave: (value: PlaceEditorValue) => void;
 }
 
@@ -197,7 +193,6 @@ type PlaceEditorController = ReturnType<typeof usePlaceEditorController>;
 function PlaceEditorForm(props: {
   readonly editor: PlaceEditorController;
   readonly pending: boolean;
-  readonly error?: string | null;
   readonly submitText: string;
 }): JSX.Element {
   const { editor } = props;
@@ -239,22 +234,9 @@ function PlaceEditorForm(props: {
           onKeep={editor.dismissSuggestion}
           onUse={editor.resolveAddress}
         />
-        {editor.reverse.error ? (
-          <p role="alert" className="text-error text-body-small">
-            {userErrorMessage(
-              editor.reverse.error,
-              'Docket could not suggest an address for that point.',
-            )}
-          </p>
-        ) : null}
         {editor.pointRequired ? (
           <p className="text-on-surface-variant text-body-small">
             Automatic location needs a point on the map.
-          </p>
-        ) : null}
-        {props.error ? (
-          <p role="alert" className="text-error text-body-small">
-            {props.error}
           </p>
         ) : null}
       </DialogBody>
@@ -290,7 +272,6 @@ export function PlaceEditorDialog(props: PlaceEditorDialogProps): JSX.Element {
         <PlaceEditorForm
           editor={editor}
           pending={props.pending}
-          error={props.error ?? null}
           submitText={submitLabel(intent, props.place)}
         />
       </DialogContent>

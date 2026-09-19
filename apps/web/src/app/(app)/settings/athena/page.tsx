@@ -14,7 +14,7 @@ import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } f
 import { VoicePhoneNumbers } from '@/components/athena/voice-phone-numbers';
 
 import { LatticeSection } from './lattice-section';
-import { LoadFailure } from '@/components/settings/load-failure';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { SettingRowStatus } from '@/components/settings/setting-row-status';
@@ -91,10 +91,7 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
       loading={preferencesQ.isPending}
     >
       {preferencesQ.isError ? (
-        <LoadFailure
-          message={userErrorMessage(preferencesQ.error, 'Could not load Athena preferences.')}
-          retrying
-        />
+        <QueryLoadFailure title="Athena preferences" query={preferencesQ} />
       ) : (
         <SettingsGroup capability={SETTINGS_NODES.athenaWorkingPreferences}>
           <Field label="Instructions for Athena">

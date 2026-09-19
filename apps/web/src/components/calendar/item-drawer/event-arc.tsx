@@ -13,6 +13,7 @@
  * offers exactly one affordance.
  */
 import type { CalendarItemOut } from '@docket/planning/calendar-contract';
+import { InlineBanner } from '@docket/ui/components';
 import { Skeleton, Surface } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
@@ -53,10 +54,21 @@ export function EventArc({ item, onOpenTask, onOpenItem }: EventArcProps): JSX.E
           <Skeleton className="h-8 w-2/3 rounded-md" />
         </div>
       ) : null}
+      {/* Linked tasks arrive on the item itself, so they stay usable while the relations do not. */}
       {relationsQuery.isError ? (
-        <p role="alert" className="text-error text-body-small">
-          We couldn&apos;t load this event&apos;s connections. Please try again.
-        </p>
+        <InlineBanner
+          tone="critical"
+          density="compact"
+          title="Related events did not load"
+          action={{
+            label: 'Try again',
+            onSelect: () => {
+              void relationsQuery.refetch();
+            },
+          }}
+        >
+          The tasks around this event are shown; its related events are not.
+        </InlineBanner>
       ) : null}
 
       {arc.bands.map((band) => (

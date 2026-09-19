@@ -1,7 +1,9 @@
 'use client';
 
-import { Avatar, AvatarFallback, AvatarImage, Button } from '@docket/ui/primitives';
-import { useRef, useState, type ChangeEvent, type JSX } from 'react';
+import { Avatar, AvatarFallback, AvatarImage, Button, FieldError } from '@docket/ui/primitives';
+import { useId, useRef, useState, type ChangeEvent, type JSX } from 'react';
+
+import { presentFailure } from '@/components/feedback';
 
 /** Maximum image size accepted by Settings editors. */
 export const MAX_SETTINGS_IMAGE_BYTES = 1024 * 1024;
@@ -55,6 +57,8 @@ export function SettingsImagePicker({
   disabled = false,
 }: SettingsImagePickerProps): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
+  const errorId = useId();
+  // Validation only: a file the picker will not accept. A read that fails is presented as a notice.
   const [error, setError] = useState<string | null>(null);
 
   async function chooseImage(event: ChangeEvent<HTMLInputElement>): Promise<void> {
@@ -69,8 +73,8 @@ export function SettingsImagePicker({
     try {
       onChange(await readSettingsImage(file));
       setError(null);
-    } catch {
-      setError('Could not read that image.');
+    } catch (caught) {
+      presentFailure(caught, 'Could not read that image.');
     }
   }
 
@@ -89,6 +93,8 @@ export function SettingsImagePicker({
           className="sr-only"
           disabled={disabled}
           aria-label={`Choose ${label.toLowerCase()}`}
+          aria-invalid={error !== null || undefined}
+          aria-describedby={error === null ? undefined : errorId}
           onChange={(event) => {
             void chooseImage(event);
           }}
@@ -117,11 +123,7 @@ export function SettingsImagePicker({
         ) : null}
       </div>
       <p className="text-on-surface-variant text-body-small">JPG, PNG, WebP, or GIF. Up to 1 MB.</p>
-      {error ? (
-        <p className="text-error text-body-small" role="alert">
-          {error}
-        </p>
-      ) : null}
+      {error ? <FieldError id={errorId}>{error}</FieldError> : null}
     </div>
   );
 }

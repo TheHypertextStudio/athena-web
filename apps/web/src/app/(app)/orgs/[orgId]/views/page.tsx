@@ -38,6 +38,7 @@ import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX } from 'react';
 
+import { LoadFailure } from '@/components/feedback';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { SaveViewComposer } from '@/components/views/save-view-composer';
 import { ViewList } from '@/components/views/view-list';
@@ -86,9 +87,7 @@ export default function ViewsPage(): JSX.Element {
           <Skeleton className="h-16 w-full rounded-lg" />
         </div>
       ) : loadError ? (
-        <p role="alert" className="text-error text-body-medium">
-          {loadError}
-        </p>
+        <LoadFailure title="Views" error={loadError} />
       ) : (
         <div className="flex flex-col gap-6">
           <section aria-label="Saved views" className="flex flex-col gap-3">

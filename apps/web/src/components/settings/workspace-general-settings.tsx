@@ -1,16 +1,14 @@
 'use client';
 
 import type { OrgOut, OrgUpdate } from '../../lib/contracts/organization';
-import { WriteError } from './write-error';
 import type { VocabularyPreset } from '@docket/work/vocabulary';
 import { Field, Input, Select, Skeleton, Textarea } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX } from 'react';
 
-import { LoadFailure } from './load-failure';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 
@@ -135,10 +133,7 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
       description="Edit how this workspace appears and how its work is named."
     >
       {workspaceQ.isError ? (
-        <LoadFailure
-          message={userErrorMessage(workspaceQ.error, 'Could not load workspace settings.')}
-          retrying
-        />
+        <QueryLoadFailure title="Workspace settings" query={workspaceQ} />
       ) : workspaceQ.isPending || draft === null ? (
         /* placeholder: this workspace's saved name, purpose and work-vocabulary overrides — the values
            the form's fields are *for*. The section heading and description render above it. */
@@ -151,18 +146,20 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
             : {})}
         >
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Workspace name" className="sm:col-span-2">
+            <Field
+              label="Workspace name"
+              className="sm:col-span-2"
+              {...(nameInvalid ? { error: 'Workspace name is required.' } : {})}
+            >
               <Input
                 value={draft.name}
                 disabled={readOnly}
                 maxLength={120}
+                aria-invalid={nameInvalid || undefined}
                 onChange={(event) => {
                   update('name', event.target.value);
                 }}
               />
-              {nameInvalid ? (
-                <span className="text-error text-body-small">Workspace name is required.</span>
-              ) : null}
             </Field>
 
             <Field label="Purpose" className="sm:col-span-2">
@@ -209,19 +206,13 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
             </div>
           </div>
 
-          {save.error ? (
-            <WriteError
-              message={userErrorMessage(save.error, 'Could not save workspace settings.')}
-            />
-          ) : (
-            <p
-              role="status"
-              aria-live="polite"
-              className="text-on-surface-variant text-body-small h-4"
-            >
-              {save.isPending ? 'Saving…' : save.isSuccess ? 'Saved' : ''}
-            </p>
-          )}
+          <p
+            role="status"
+            aria-live="polite"
+            className="text-on-surface-variant text-body-small h-4"
+          >
+            {save.isPending ? 'Saving…' : save.isSuccess ? 'Saved' : ''}
+          </p>
         </SettingsGroup>
       )}
     </SettingsSectionPage>

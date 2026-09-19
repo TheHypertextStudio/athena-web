@@ -48,7 +48,7 @@ export interface GtasksAccountsSectionProps {
 /** The Google Tasks connections section. */
 export function GtasksAccountsSection(props: GtasksAccountsSectionProps): JSX.Element {
   const controller = useGtasksController(props);
-  const { orgId, canManage, teams, picker, addError, loading, rows, confirm } = controller;
+  const { orgId, canManage, teams, picker, loading, rows, confirm } = controller;
 
   return (
     <SettingsGroup
@@ -71,12 +71,6 @@ export function GtasksAccountsSection(props: GtasksAccountsSectionProps): JSX.El
       }
     >
       {picker.open ? <GtasksIdentityPicker picker={picker} orgId={orgId} /> : null}
-
-      {addError ? (
-        <p role="alert" className="text-error text-body-medium px-4 pb-3">
-          {addError}
-        </p>
-      ) : null}
 
       {/* placeholder: the Google Tasks connections on this workspace — which accounts are
           connected and which task lists they sync. The section heading, the connect action and the

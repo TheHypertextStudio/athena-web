@@ -15,7 +15,7 @@
  */
 import type { CalendarItemOut, CalendarLayerOut } from '@docket/planning/calendar-contract';
 import { OpenInNew } from '@docket/ui/icons';
-import { Badge, Button, DialogTitle, Textarea } from '@docket/ui/primitives';
+import { Badge, Button, DialogTitle, FieldError, Textarea } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import {
@@ -80,7 +80,7 @@ export function EventMasthead({
           className="text-headline-small min-w-0 flex-1 resize-none overflow-hidden"
           value={editor.title.value}
           disabled={!editor.canEdit}
-          aria-invalid={Boolean(editor.titleError)}
+          aria-invalid={editor.titleError ? true : undefined}
           aria-describedby={editor.titleError ? editor.titleErrorId : undefined}
           onChange={(event) => {
             editor.title.onChange(event.target.value);
@@ -90,9 +90,7 @@ export function EventMasthead({
         <CalendarDrawerClose label="Close calendar item" onClick={onClose} />
       </div>
       {editor.titleError ? (
-        <p id={editor.titleErrorId} role="alert" className="text-error text-body-small">
-          {editor.titleError}
-        </p>
+        <FieldError id={editor.titleErrorId}>{editor.titleError}</FieldError>
       ) : null}
 
       <p className="text-on-surface-variant text-body-medium">

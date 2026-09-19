@@ -27,10 +27,9 @@ import { Copy, Edit, Ellipsis, LayoutTemplate, Plus, Trash2 } from '@docket/ui/i
 import { type JSX, useState } from 'react';
 
 import { EmptyState as SharedEmptyState } from '@docket/ui/components';
-import { LoadFailure } from '@/components/settings/load-failure';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { SettingRow } from '@/components/settings/setting-row';
 import { SettingsGroup } from '@/components/settings/settings-group';
-import { firstWriteError, WriteError } from '@/components/settings/write-error';
 import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { TemplateEditorDialog } from '@/components/templates/template-editor';
 import {
@@ -40,7 +39,6 @@ import {
   useDeleteTemplate,
 } from '@/components/templates/queries';
 import { useTypedRoute } from '@/lib/app-location';
-import { userErrorMessage } from '@/lib/problem';
 import { useApiListQuery } from '@/lib/query';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
@@ -77,14 +75,8 @@ export default function TemplatesSettingsPage(): JSX.Element {
   const duplicate = useCreateTemplate(orgId);
   const remove = useDeleteTemplate(orgId);
 
-  const writeError = firstWriteError([
-    [duplicate, 'Could not duplicate that template.'],
-    [remove, 'Could not delete that template.'],
-  ]);
-
   const [editing, setEditing] = useState<EditorTarget | null>(null);
   const [deleting, setDeleting] = useState<TemplateOut | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const templates = query.data?.items ?? [];
 
@@ -115,14 +107,10 @@ export default function TemplatesSettingsPage(): JSX.Element {
         </DropdownMenu>
       }
     >
-      {writeError ? <WriteError message={writeError} /> : null}
       {query.isPending ? (
         <Skeleton className="h-96 max-w-3xl rounded-xl" />
       ) : query.isError ? (
-        <LoadFailure
-          message={userErrorMessage(query.error, 'Could not load templates.')}
-          retrying
-        />
+        <QueryLoadFailure title="Templates" query={query} />
       ) : templates.length === 0 ? (
         <EmptyState
           onCreate={() => {
@@ -152,7 +140,6 @@ export default function TemplatesSettingsPage(): JSX.Element {
                 });
               }}
               onDelete={(template) => {
-                setDeleteError(null);
                 setDeleting(template);
               }}
             />
@@ -188,15 +175,11 @@ export default function TemplatesSettingsPage(): JSX.Element {
         }
         confirmLabel="Delete template"
         pending={remove.isPending}
-        error={deleteError}
         onConfirm={() => {
           if (!deleting) return;
           remove.mutate(deleting.id, {
             onSuccess: () => {
               setDeleting(null);
-            },
-            onError: (caught) => {
-              setDeleteError(userErrorMessage(caught, 'Could not delete the template.'));
             },
           });
         }}

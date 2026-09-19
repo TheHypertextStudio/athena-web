@@ -25,14 +25,16 @@ import {
   type IntegrationOut,
 } from '@docket/connections/integration-contract';
 import { type TeamOut } from '../../lib/contracts/team';
-import { WriteError } from './write-error';
 import { cn } from '@docket/ui';
+import { InlineBanner } from '@docket/ui/components';
 import { Check } from '@docket/ui/icons';
-import { Button, Checkbox, Select, Skeleton, focusRing } from '@docket/ui/primitives';
+import { Checkbox, Select, Skeleton, focusRing } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import type { JSX } from 'react';
 import { useState } from 'react';
 
+import { presentFailure } from '@/components/feedback';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { api } from '@/lib/api';
 import {
   ApiRequestError,
@@ -46,7 +48,6 @@ import {
 
 import { connectorCopy } from './integrations-config';
 import TeamMappingPicker, { NOT_SYNCED } from './team-mapping-picker';
-import { userErrorMessage } from '@/lib/problem';
 
 /** Props for {@link IntegrationConfigPanel}. */
 export interface IntegrationConfigPanelProps {
@@ -124,9 +125,8 @@ export function IntegrationConfigPanel({
     Object.fromEntries((cfg.teamMappings ?? []).map((m) => [m.externalTeamId, m.teamId])),
   );
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   // Set only when a save attempting `writeBack: true` fails for a scope-gated provider (Linear) —
-  // renders the re-auth notice instead of (or alongside) the generic error line.
+  // renders the re-auth banner in place of the failure notice every other rejected save gets.
   const [reauthNeeded, setReauthNeeded] = useState(false);
 
   const listsQ = useApiQuery(
@@ -160,7 +160,6 @@ export function IntegrationConfigPanel({
         ),
       })),
     onSuccess: () => {
-      setError(null);
       setReauthNeeded(false);
       setSaved(true);
       setTimeout(() => {
@@ -169,21 +168,23 @@ export function IntegrationConfigPanel({
     },
     onError: (e: Error, payload, context) => {
       context?.rollback();
-      setError(userErrorMessage(e, 'Could not save integration settings.'));
       // Only the write-scope problem (see `hasLinearWriteScope` on the
-      // server) should show the re-auth notice — this PATCH's OTHER failure mode, a 422 from
+      // server) should show the re-auth banner — this PATCH's OTHER failure mode, a 422 from
       // `validateTeamMappings` running earlier in the same handler, is unrelated (e.g. a stale
-      // team mapping) and must fall through to the generic error line instead. Match the stable
+      // team mapping) and must be presented as a failure notice instead. Match the stable
       // problem code rather than provider prose, rather than just
       // "any error while attempting two-way", which fired the notice for every failure reason.
       const isWriteScopeConflict =
         e instanceof ApiRequestError &&
         e.status === 409 &&
         e.code === 'linear_write_scope_required';
-      setReauthNeeded(
-        integration.provider === 'linear' && payload.writeBack && isWriteScopeConflict,
-      );
+      const needsReauth =
+        integration.provider === 'linear' && payload.writeBack && isWriteScopeConflict;
+      setReauthNeeded(needsReauth);
+      if (!needsReauth) presentFailure(e, 'Could not save integration settings.');
     },
+    // Presented above: the re-auth case owns its banner, everything else goes to the notice stack.
+    failure: 'silent',
     invalidateKeys: [queryKeys.integrations(orgId)],
   });
 
@@ -335,11 +336,7 @@ export function IntegrationConfigPanel({
           <TeamMappingPicker
             externalTeams={lists}
             loading={listsQ.isPending}
-            error={
-              listsQ.isError
-                ? userErrorMessage(listsQ.error, 'Could not update integration settings.')
-                : null
-            }
+            error={listsQ.isError ? listsQ.error : null}
             orgTeams={teams}
             containerNoun={copy.containerNoun}
             mapping={teamMap}
@@ -350,9 +347,11 @@ export function IntegrationConfigPanel({
              only the provider can enumerate. The field's own label and help text are static. */
           <Skeleton className="h-16 w-full rounded-xl" />
         ) : listsQ.isError ? (
-          <p className="text-error text-body-small">
-            {userErrorMessage(listsQ.error, 'Could not update integration settings.')}
-          </p>
+          <QueryLoadFailure
+            size="panel"
+            title={capitalize(copy.containerNounPlural)}
+            query={listsQ}
+          />
         ) : lists.length === 0 ? (
           <p className="text-on-surface-variant text-body-small">
             No {copy.containerNounPlural} found for this account.
@@ -429,29 +428,20 @@ export function IntegrationConfigPanel({
         </div>
       ) : null}
 
-      {error && !reauthNeeded ? <WriteError message={error} /> : null}
-
       {reauthNeeded ? (
-        <div
-          role="alert"
-          className="bg-error-container text-on-error-container flex flex-col items-start gap-2 rounded-xl p-3"
+        <InlineBanner
+          tone="critical"
+          title="Linear needs to grant Docket write access."
+          action={
+            onReauthorize ? { label: 'Re-authorize Linear', onSelect: reauthorize } : undefined
+          }
         >
-          <p className="text-error text-body-medium">
-            {error ?? 'Linear needs to grant Docket write access.'}
-          </p>
-          <p className="text-on-surface-variant text-body-small">
-            Reconnect Linear and approve write access to turn on two-way sync.
-          </p>
-          {onReauthorize ? (
-            <Button controlSize="md" variant="link" onClick={reauthorize}>
-              Re-authorize Linear
-            </Button>
-          ) : null}
-        </div>
+          Reconnect Linear and approve write access to turn on two-way sync.
+        </InlineBanner>
       ) : null}
 
       {/* Autosave status — every field persists on change, so there is no Save button. Kept quiet
-          (text-on-surface-variant, xs); the generic-error and re-auth notices above own failures. */}
+          (text-on-surface-variant, xs); a rejected save is a notice, or the re-auth banner above. */}
       <div
         className="text-on-surface-variant text-body-small flex h-4 items-center"
         aria-live="polite"

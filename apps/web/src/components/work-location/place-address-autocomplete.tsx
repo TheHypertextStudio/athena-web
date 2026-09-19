@@ -10,13 +10,15 @@ import { MenuListbox, MenuOption } from '@docket/ui/components';
 import { Input, Surface } from '@docket/ui/primitives';
 import { type JSX, type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 
+import { presentFailure } from '@/components/feedback';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
 import { useRemoteSearch } from '@/lib/use-remote-search';
 import type { RemoteSearchState } from '@/lib/use-remote-search';
 
 const SEARCH_DEBOUNCE_MS = 400;
+const SEARCH_FAILURE_TITLE = 'Docket could not search addresses. Try again.';
+const RESOLVE_FAILURE_TITLE = 'Docket could not use that address. Try again.';
 
 /** Props for {@link PlaceAddressAutocomplete}. */
 export interface PlaceAddressAutocompleteProps {
@@ -52,61 +54,47 @@ function handleAutocompleteKey(
   }
 }
 
-function AddressSearchFeedback(props: {
+function AddressSuggestions(props: {
   readonly menuVisible: boolean;
   readonly search: RemoteSearchState<WorkPlaceGeocodeSearchOut>;
   readonly candidates: readonly WorkPlaceGeocodeCandidate[];
   readonly activeIndex: number;
   readonly listboxId: string;
-  readonly resolveError: Error | null;
   readonly choose: (candidate: WorkPlaceGeocodeCandidate) => void;
   readonly setActiveIndex: (index: number) => void;
-}): JSX.Element {
+}): JSX.Element | null {
+  if (!props.menuVisible) return null;
   return (
-    <>
-      {props.menuVisible ? (
-        <Surface tone="floating" shape="small" className="max-h-64 overflow-y-auto py-1">
-          {props.search.pending ? (
-            <p className="text-on-surface-variant text-body-small px-4 py-3" role="status">
-              Searching addresses…
-            </p>
-          ) : (
-            <MenuListbox id={props.listboxId} ariaLabel="Address suggestions">
-              {props.candidates.map((candidate, index) => (
-                <MenuOption
-                  id={`${props.listboxId}-${String(index)}`}
-                  key={candidate.id}
-                  active={index === props.activeIndex}
-                  onActiveChange={() => {
-                    props.setActiveIndex(index);
-                  }}
-                  onSelect={() => {
-                    props.choose(candidate);
-                  }}
-                >
-                  {candidate.address}
-                </MenuOption>
-              ))}
-            </MenuListbox>
-          )}
-          {props.search.data?.attribution ? (
-            <p className="text-on-surface-variant text-body-small px-4 py-2">
-              {props.search.data.attribution}
-            </p>
-          ) : null}
-        </Surface>
+    <Surface tone="floating" shape="small" className="max-h-64 overflow-y-auto py-1">
+      {props.search.pending ? (
+        <p className="text-on-surface-variant text-body-small px-4 py-3" role="status">
+          Searching addresses…
+        </p>
+      ) : (
+        <MenuListbox id={props.listboxId} ariaLabel="Address suggestions">
+          {props.candidates.map((candidate, index) => (
+            <MenuOption
+              id={`${props.listboxId}-${String(index)}`}
+              key={candidate.id}
+              active={index === props.activeIndex}
+              onActiveChange={() => {
+                props.setActiveIndex(index);
+              }}
+              onSelect={() => {
+                props.choose(candidate);
+              }}
+            >
+              {candidate.address}
+            </MenuOption>
+          ))}
+        </MenuListbox>
+      )}
+      {props.search.data?.attribution ? (
+        <p className="text-on-surface-variant text-body-small px-4 py-2">
+          {props.search.data.attribution}
+        </p>
       ) : null}
-      {props.search.error ? (
-        <span role="alert" className="text-error text-body-small">
-          {props.search.error}
-        </span>
-      ) : null}
-      {props.resolveError ? (
-        <span role="alert" className="text-error text-body-small">
-          {userErrorMessage(props.resolveError, 'Docket could not use that address. Try again.')}
-        </span>
-      ) : null}
-    </>
+    </Surface>
   );
 }
 
@@ -125,6 +113,20 @@ function useAcceptedAddress(value: string) {
   return { acceptedAddress, setAcceptedAddress, directEditRef };
 }
 
+/**
+ * Present a failed address lookup as a notice, once per settled term.
+ *
+ * The lookup service failing says nothing about the typed text, so the field stays clean and the
+ * failure goes to the notice stack like any other failed action. `useRemoteSearch` reports the
+ * failure as a flag rather than the structured error, so the notice carries this operation's own
+ * title; repeats share one key, so a term that keeps failing shows one card.
+ */
+function useSearchFailureNotice(failed: boolean, term: string): void {
+  useEffect(() => {
+    if (failed) presentFailure(undefined, SEARCH_FAILURE_TITLE);
+  }, [failed, term]);
+}
+
 function useAddressResolution(
   onResolved: (result: WorkPlaceGeocodeResult) => void,
   setAcceptedAddress: (value: string) => void,
@@ -136,8 +138,9 @@ function useAddressResolution(
           api.v1.me['work-location'].places.geocoding.resolutions.$post({
             json: { id: candidate.id, address: candidate.address },
           }),
-        'Docket could not use that address. Try again.',
+        RESOLVE_FAILURE_TITLE,
       ),
+    failureTitle: RESOLVE_FAILURE_TITLE,
     onSuccess: (result) => {
       setAcceptedAddress(result.address);
       onResolved(result);
@@ -164,11 +167,12 @@ export function PlaceAddressAutocomplete({
     key: queryKeys.workLocationGeocoding,
     fetch: (term) =>
       api.v1.me['work-location'].places.geocoding.search.$get({ query: { query: term } }),
-    fallbackMessage: 'Docket could not search addresses. Try again.',
+    fallbackMessage: SEARCH_FAILURE_TITLE,
   });
   const candidates = search.term === searchValue.trim() ? (search.data?.items ?? []) : [];
   const active = candidates[activeIndex] ?? null;
   const resolve = useAddressResolution(onResolved, setAcceptedAddress);
+  useSearchFailureNotice(search.failed, search.term);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -205,13 +209,12 @@ export function PlaceAddressAutocomplete({
           }
         }}
       />
-      <AddressSearchFeedback
+      <AddressSuggestions
         menuVisible={menuVisible}
         search={search}
         candidates={candidates}
         activeIndex={activeIndex}
         listboxId={listboxId}
-        resolveError={resolve.error}
         choose={choose}
         setActiveIndex={setActiveIndex}
       />

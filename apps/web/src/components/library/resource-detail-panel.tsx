@@ -6,11 +6,11 @@ import { formatBytes } from '@docket/ui';
 import { Download, OpenInNew, X } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
+import { QueryLoadFailure } from '@/components/query-load-failure';
 import { type JSX, useEffect, useRef } from 'react';
 
 import { primaryResourceAction } from '@/components/library/resource-actions';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { hrefForSearchResult } from '@/lib/search-route';
 
@@ -194,9 +194,7 @@ export default function ResourceDetailPanel({
               ))}
             </div>
           ) : referencesQ.error ? (
-            <p role="alert" className="text-error text-body-medium">
-              {userErrorMessage(referencesQ.error, 'Could not load where this is used.')}
-            </p>
+            <QueryLoadFailure size="panel" title="Where this is used" query={referencesQ} />
           ) : referencesQ.data.total > 0 ? (
             <div className="flex flex-col gap-3">
               {referencesQ.data.groups.map((group) => (

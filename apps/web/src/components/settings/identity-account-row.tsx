@@ -77,7 +77,9 @@ export function IdentityAccountRow({
           </div>
         ) : null}
         {identity.reauthorizationRequired ? (
-          <span className="text-error text-body-small">Reconnect required</span>
+          <Badge variant="destructive" className="self-start">
+            Reconnect required
+          </Badge>
         ) : null}
       </div>
       <Button

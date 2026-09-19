@@ -20,7 +20,7 @@
  */
 import type { CalendarItemOut } from '@docket/planning/calendar-contract';
 import { FileText, MapPin, Schedule } from '@docket/ui/icons';
-import { Input, Textarea } from '@docket/ui/primitives';
+import { FieldError, Input, Textarea } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
@@ -56,9 +56,7 @@ export function EventCoreFields({
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <EventSchedule item={item} displayTimezone={displayTimezone} editor={editor} />
           {editor.timeError ? (
-            <p id={editor.timeErrorId} role="alert" className="text-error text-body-small">
-              {editor.timeError}
-            </p>
+            <FieldError id={editor.timeErrorId}>{editor.timeError}</FieldError>
           ) : null}
         </div>
       </div>

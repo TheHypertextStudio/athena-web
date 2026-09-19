@@ -9,7 +9,6 @@
  * destinations primary, and disable destinations without deleting delivery history.
  */
 import type { ContactPointCreate, ContactPointOut } from '@docket/notifications/schemas';
-import { WriteError } from './write-error';
 import { cn } from '@docket/ui';
 import { EmptyState } from '@docket/ui/components';
 import { SettingsGroup } from './settings-group';
@@ -27,8 +26,6 @@ export interface ContactPointsSectionProps {
   readonly savingId: string | null;
   /** Contact-point id currently being verified. */
   readonly verifyingId: string | null;
-  /** Inline mutation/read error. */
-  readonly error: string | null;
   /** Create a new contact point. */
   readonly onAdd: (input: ContactPointCreate) => Promise<void> | void;
   /** Verify a pending contact point. */
@@ -47,7 +44,6 @@ export function ContactPointsSection({
   creating,
   savingId,
   verifyingId,
-  error,
   onAdd,
   onVerify,
   onMakePrimary,
@@ -84,8 +80,6 @@ export function ContactPointsSection({
         onMakePrimary={onMakePrimary}
         onDisable={onDisable}
       />
-
-      {error ? <WriteError message={error} /> : null}
     </>
   );
 }

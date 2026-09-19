@@ -8,11 +8,11 @@
  * "Invite as guest" toggle that scopes the new member to a limited outside collaborator. The
  * role picker and the guest toggle are independent — a guest can be invited at any role — but
  * the toggle is the primary signal carried to the API's `asGuest` flag. Submitting posts the
- * invitation and clears the email on success; errors surface inline as `role="alert"`. All
- * controls are styled design-system components (no bare inputs/selects).
+ * invitation and clears the email on success; a failed invitation is presented as a notice by the
+ * mutation that sent it. All controls are styled design-system components (no bare
+ * inputs/selects).
  */
 import { Checkbox, Button, Input } from '@docket/ui/primitives';
-import { WriteError } from './write-error';
 import { Plus } from '@docket/ui/icons';
 import type { JSX } from 'react';
 import { useState } from 'react';
@@ -39,8 +39,6 @@ export interface InviteFormProps {
   defaultRoleId: string | null;
   /** Whether an invitation is currently being sent. */
   sending: boolean;
-  /** A submission error to surface inline, if any. */
-  error: string | null;
   /** Submit the invitation. */
   onInvite: (payload: InvitePayload) => void;
 }
@@ -55,7 +53,6 @@ export function InviteForm({
   roleOptions,
   defaultRoleId,
   sending,
-  error,
   onInvite,
 }: InviteFormProps): JSX.Element {
   const [email, setEmail] = useState('');
@@ -115,8 +112,6 @@ export function InviteForm({
             outside collaborator
           </span>
         </label>
-
-        {error ? <WriteError message={error} /> : null}
       </form>
     </SettingsGroup>
   );

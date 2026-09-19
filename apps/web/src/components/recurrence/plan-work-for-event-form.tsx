@@ -6,6 +6,7 @@ import type {
   CalendarProcessBindingOut,
   ProcessDefinitionSummaryOut,
 } from '../../lib/contracts/recurrence';
+import { InlineBanner } from '@docket/ui/components';
 import { Button, Select } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { type JSX, type SubmitEventHandler, useEffect, useState } from 'react';
@@ -29,12 +30,53 @@ export interface PlanWorkForEventFormProps {
   readonly onDone: () => void;
 }
 
+/** Props for {@link ReusableWorkStatus}. */
+interface ReusableWorkStatusProps {
+  /** The reusable-work list could not be read. */
+  readonly failed: boolean;
+  /** The list was read and holds nothing to choose from. */
+  readonly empty: boolean;
+  /** Re-issue the read. */
+  readonly onRetry: () => void;
+}
+
+/** What sits under the reusable-work select when there is nothing to choose from. */
+function ReusableWorkStatus({
+  failed,
+  empty,
+  onRetry,
+}: ReusableWorkStatusProps): JSX.Element | null {
+  if (failed) {
+    return (
+      <InlineBanner
+        tone="critical"
+        density="compact"
+        title="Reusable work could not load"
+        action={{ label: 'Try again', onSelect: onRetry }}
+      >
+        Docket could not read this workspace&apos;s reusable work.
+      </InlineBanner>
+    );
+  }
+  if (empty) {
+    return (
+      <p className="text-body-small text-on-surface-variant">
+        Repeat a project first to make its work reusable here.
+      </p>
+    );
+  }
+  return null;
+}
+
 /** Choose a workspace process and create one stable event-to-series binding. */
 export function PlanWorkForEventForm({ item, onDone }: PlanWorkForEventFormProps): JSX.Element {
   const { activeOrgId, orgs } = useActiveOrg();
   const [organizationId, setOrganizationId] = useState(activeOrgId ?? orgs[0]?.id ?? '');
   const [definitionId, setDefinitionId] = useState('');
   const [created, setCreated] = useState<CalendarProcessBindingOut | null>(null);
+  const bindFailureTitle = item.recurringEventId
+    ? 'Could not add tasks for each event.'
+    : 'Could not plan work around this event.';
   const definitions = useApiListQuery(
     apiQueryOptions(
       queryKeys.processDefinitions(organizationId),
@@ -67,12 +109,11 @@ export function PlanWorkForEventForm({ item, onDone }: PlanWorkForEventFormProps
               processDefinitionId: selectedDefinition.id,
             },
           }),
-        item.recurringEventId
-          ? 'Could not add tasks for each event.'
-          : 'Could not plan work around this event.',
+        bindFailureTitle,
       );
     },
     invalidateKeys: [queryKeys.calendarItem(item.id), queryKeys.recurrenceSeries(organizationId)],
+    failureTitle: bindFailureTitle,
     onSuccess: setCreated,
   });
 
@@ -150,15 +191,11 @@ export function PlanWorkForEventForm({ item, onDone }: PlanWorkForEventFormProps
           ))}
         </Select>
       </label>
-      {definitions.isError ? (
-        <p role="alert" className="text-error text-body-small">
-          We couldn&apos;t load reusable work. Please try again.
-        </p>
-      ) : options.length === 0 && !definitions.isPending ? (
-        <p className="text-body-small text-on-surface-variant">
-          Repeat a project first to make its work reusable here.
-        </p>
-      ) : null}
+      <ReusableWorkStatus
+        failed={definitions.isError}
+        empty={options.length === 0 && !definitions.isPending}
+        onRetry={() => void definitions.refetch()}
+      />
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" type="button" onClick={onDone}>
           Cancel
@@ -171,13 +208,6 @@ export function PlanWorkForEventForm({ item, onDone }: PlanWorkForEventFormProps
               : 'Plan work around this event'}
         </Button>
       </div>
-      {bind.isError ? (
-        <p role="alert" className="text-error text-body-small">
-          {item.recurringEventId
-            ? 'We couldn’t add tasks for each event. Please try again.'
-            : 'We couldn’t plan work around this event. Please try again.'}
-        </p>
-      ) : null}
     </form>
   );
 }

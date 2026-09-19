@@ -220,7 +220,7 @@ describe('POST /:id/run (agent session via the AgentRuntime port)', () => {
     });
   });
 
-  it('approve resolves the proposed action and advances the session to running', async () => {
+  it('approve resolves the proposed action and settles the session on its outcome', async () => {
     const s = await seedOrg();
     const sessionId = await seedSession(s);
     // `assign` satisfies the `contribute` needed to run and the `assign` needed to approve
@@ -240,15 +240,17 @@ describe('POST /:id/run (agent session via the AgentRuntime port)', () => {
       body: JSON.stringify({ decision: 'approved' }),
     });
     expect(approved.status).toBe(200);
-    expect(((await approved.json()) as { status: string }).status).toBe('completed');
+    // The registered agent holds no grant on the seeded task, so the approved update comes back
+    // not_found: the action settles failed and so does the session, rather than claiming success.
+    expect(((await approved.json()) as { status: string }).status).toBe('failed');
 
-    // The previously proposed action was claimed, applied, and the transcript resumed.
+    // The previously proposed action was claimed, executed, and the transcript resumed.
     const rows = await db
       .select()
       .from(sessionActivity)
       .where(and(eq(sessionActivity.sessionId, sessionId), eq(sessionActivity.type, 'action')))
       .limit(1);
-    expect(rows[0]?.approvalStatus).toBe('applied');
+    expect(rows[0]?.approvalStatus).toBe('failed');
   });
 
   it('GET /:id/stream replays the stored activities as SSE', async () => {

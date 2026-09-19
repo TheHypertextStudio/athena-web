@@ -260,6 +260,7 @@ describe('athena schema additions', () => {
       'executing',
       'rejected',
       'applied',
+      'failed',
     ]);
 
     const [run] = await db

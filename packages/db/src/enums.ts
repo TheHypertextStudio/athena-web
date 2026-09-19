@@ -327,14 +327,7 @@ export const sessionActivityType = pgEnum('session_activity_type', [
   'elicitation',
   'error',
 ]);
-/** Approval state of a gated agent action. */
-export const approvalStatus = pgEnum('approval_status', [
-  'proposed',
-  'approved',
-  'executing',
-  'rejected',
-  'applied',
-]);
+export { approvalStatus } from './approval-status-enum';
 /** Per-agent/per-assignment approval policy (the Docket-owned approval boundary). */
 export const approvalPolicy = pgEnum('approval_policy', [
   'suggest',

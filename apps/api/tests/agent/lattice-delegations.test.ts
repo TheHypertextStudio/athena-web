@@ -715,7 +715,7 @@ describe('durable Lattice assignment delegations', () => {
           .from(schema.sessionActivity)
           .where(eq(schema.sessionActivity.id, proposed.activity.id)),
       ),
-    ).toMatchObject({ approvalStatus: 'applied', body: { action: { result: { isError: true } } } });
+    ).toMatchObject({ approvalStatus: 'failed', body: { action: { result: { isError: true } } } });
     expect(
       await db
         .select()
@@ -750,7 +750,7 @@ describe('durable Lattice assignment delegations', () => {
           { decision: 'approve' },
         ),
       ).resolves.toMatchObject({
-        approvalStatus: 'applied',
+        approvalStatus: 'failed',
         body: { action: { result: { isError: true } } },
       });
     } finally {
@@ -879,7 +879,7 @@ describe('durable Lattice assignment delegations', () => {
             .where(eq(schema.sessionActivity.id, proposed.activity.id)),
         ),
       ).toMatchObject({
-        approvalStatus: 'applied',
+        approvalStatus: 'failed',
         body: { action: { result: { isError: true } } },
       });
       expect(

@@ -25,6 +25,8 @@ import { ConflictError, NotFoundError } from '../error';
 import { deriveCaptureTitle } from '../lib/capture-title';
 import type { ActivityRow } from '../routes/agent-session-helpers';
 
+export { approvalOutcome } from './approval-outcome';
+
 /** Return the workspace declared by a stored proposal tool input, when it has one. */
 export function proposalInputOrganizationId(input: unknown): string | null {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;

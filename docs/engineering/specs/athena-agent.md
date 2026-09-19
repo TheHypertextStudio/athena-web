@@ -156,8 +156,11 @@ transcript in the same transaction → dispatch tool calls per the policy engine
 - `execute`: persist the call as `approved`, conditionally claim it as internal state `executing`,
   then call via the executor toolbox. Athena acts as the owner's current human Actor and a
   registered agent acts as its own Actor. Stamp `approvalStatus:'applied'` +
-  `body.action.result`; write an `audit_event`; feed the `tool_result` back. A recovered
-  `executing` write is never dispatched again automatically; the session parks for attention.
+  `body.action.result`; write an `audit_event`; feed the `tool_result` back. A tool that answers
+  with an error result is stamped `approvalStatus:'failed'` instead and writes no audit event. A
+  run that ends with every executed change `failed` settles the session `failed`, never
+  `completed`. A recovered `executing` write is never dispatched again automatically; the session
+  parks for attention.
 - `propose`: persist with `approvalStatus:'proposed'` + shared `proposalGroupId`; settle the
   session `awaiting_approval`; **stop**. Approval (`decideActivity` + a new
   `executeApprovedActions`) executes the stored `toolCall`, appends paired `tool_result`s,

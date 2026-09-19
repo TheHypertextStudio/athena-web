@@ -166,7 +166,8 @@ export interface CanonicalAgentActivity {
   readonly id: string;
   readonly type: 'thought' | 'action' | 'response' | 'elicitation' | 'error';
   readonly body: CanonicalActivityBody;
-  readonly approvalStatus: 'proposed' | 'approved' | 'executing' | 'rejected' | 'applied' | null;
+  readonly approvalStatus:
+    'proposed' | 'approved' | 'executing' | 'rejected' | 'applied' | 'failed' | null;
   readonly control?: CanonicalAgentControl;
   readonly ephemeral: boolean;
   readonly updatedAt: Date;

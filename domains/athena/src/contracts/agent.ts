@@ -238,9 +238,9 @@ export type SessionActivityType = z.infer<typeof SessionActivityType>;
 
 /** Approval state of a gated agent action. */
 export const ApprovalStatus = z
-  .enum(['proposed', 'approved', 'rejected', 'applied'])
+  .enum(['proposed', 'approved', 'rejected', 'applied', 'failed'])
   .describe(
-    "Where a gated `action` sits in the approval gate: `proposed` (awaiting a human decision — parks the session in `awaiting_approval`); `approved` (a human cleared it — transient before apply, used by the session-level shortcut); `rejected` (a human vetoed it — never applies); `applied` (approved AND its effect has been applied — the gate's terminal success state, set by the activity-scoped approve route).",
+    "Where a gated `action` sits in the approval gate: `proposed` (awaiting a human decision — parks the session in `awaiting_approval`); `approved` (a human cleared it — transient before apply, used by the session-level shortcut); `rejected` (a human vetoed it — never applies); `applied` (approved AND its effect has been applied — the gate's terminal success state, set by the activity-scoped approve route); `failed` (approved and attempted, but the tool reported an error — nothing changed; the action's `result` carries the error).",
   );
 /** Approval-status value. */
 export type ApprovalStatus = z.infer<typeof ApprovalStatus>;

@@ -263,8 +263,8 @@ async function reconcileDecidedProposals(now: Date): Promise<void> {
     .limit(MAX_POLL_BATCH);
 
   for (const row of decided) {
-    if (row.approvalStatus !== 'applied' && row.approvalStatus !== 'rejected') continue;
-    const executionFailed = row.approvalStatus === 'applied' && proposalExecutionFailed(row.body);
+    if (!['applied', 'failed', 'rejected'].includes(row.approvalStatus ?? '')) continue;
+    const executionFailed = row.approvalStatus !== 'rejected' && proposalExecutionFailed(row.body);
     await db.transaction(async (tx) => {
       const delegationUpdate =
         row.approvalStatus === 'rejected'

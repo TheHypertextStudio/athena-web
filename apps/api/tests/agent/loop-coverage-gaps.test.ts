@@ -1277,7 +1277,7 @@ describe('executeApprovedActions — a remote-connection tool call', () => {
       .select({ status: schema.sessionActivity.approvalStatus, body: schema.sessionActivity.body })
       .from(schema.sessionActivity)
       .where(eq(schema.sessionActivity.id, assertDefined(action).id));
-    expect(after?.status).toBe('applied');
+    expect(after?.status).toBe('failed');
     // No live "sunsama" connection exists for this owner, so the unnamespaced remote name never
     // resolves on Docket's own server either — it comes back an error result, not a crash.
     expect(after?.body.action?.result?.isError).toBe(true);

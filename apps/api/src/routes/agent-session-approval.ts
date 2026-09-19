@@ -16,7 +16,7 @@ import { canActor } from '@docket/authz';
 import type { SessionApprovalDecision } from '@docket/athena/agent-contract';
 import { and, asc, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 
-import { proposalOrganizationId } from '../agent/proposals';
+import { approvalOutcome, proposalOrganizationId } from '../agent/proposals';
 import { persistWaitingAthenaWake } from '../agent/async-runner';
 import { ConflictError, NotFoundError } from '../error';
 
@@ -197,7 +197,7 @@ async function settleLatticeDecision(
   const [applied] = await tx
     .update(sessionActivity)
     .set({
-      approvalStatus: 'applied',
+      approvalStatus: approvalOutcome(failureCode !== null),
       body: {
         ...action.body,
         ...(action.body.action

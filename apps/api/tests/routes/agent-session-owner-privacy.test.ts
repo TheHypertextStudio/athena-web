@@ -913,7 +913,7 @@ describe('owner-private Athena compatibility routes', () => {
       approvalStatus: string;
       body: { action?: { result?: { isError?: boolean } } };
     };
-    expect(deniedBody.approvalStatus).toBe('applied');
+    expect(deniedBody.approvalStatus).toBe('failed');
     expect(deniedBody.body.action?.result?.isError).toBe(true);
     const programs = await db
       .select({ id: schema.program.id })

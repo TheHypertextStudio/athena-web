@@ -38,6 +38,7 @@ import { and, asc, desc, eq } from 'drizzle-orm';
 
 import { assertProductCapability } from '../product-capability';
 import { activePlanContext } from '../lib/plan-draft/context';
+import { approvalOutcome, finalStatus, finishedSettlement, hasRun } from './approval-outcome';
 import { summarizeToolCall } from './tool-call-summary';
 import { ConflictError, NotFoundError } from '../error';
 import { env } from '../env';
@@ -332,7 +333,7 @@ async function reconcileToolUse(sessionId: string, use: ToolUse): Promise<Reconc
   /* v8 ignore next 2 -- @preserve defensive: every tool_use gets an action row in the same turn */
   if (!action) return { kind: 'result', result: { content: 'Result unavailable.', isError: true } };
 
-  if (action.approvalStatus === 'applied') {
+  if (hasRun(action.approvalStatus)) {
     const result = action.body.action?.result;
     return {
       kind: 'result',
@@ -555,7 +556,7 @@ async function driveSessionWithAdmission(
           );
         } else {
           // A trailing assistant message with no tool calls is a finished job.
-          return await settleOwned(await finalStatus(sessionId));
+          return await settleOwned(...(await finishedSettlement(sessionId)));
         }
       }
 
@@ -794,22 +795,6 @@ export async function resumeSessionExecution(
   });
 }
 
-/** Whether any still-proposed action remains (suggest-mode leftovers included). */
-async function finalStatus(sessionId: string): Promise<'completed' | 'awaiting_approval'> {
-  const remaining = await db
-    .select({ id: sessionActivity.id })
-    .from(sessionActivity)
-    .where(
-      and(
-        eq(sessionActivity.sessionId, sessionId),
-        eq(sessionActivity.type, 'action'),
-        eq(sessionActivity.approvalStatus, 'proposed'),
-      ),
-    )
-    .limit(1);
-  return remaining.length > 0 ? 'awaiting_approval' : 'completed';
-}
-
 /** Derive the runtime brief: linked task title → seeded prompt → session id. */
 async function deriveBrief(
   orgId: string | null,
@@ -988,10 +973,10 @@ export async function executeApprovedActions(
         !executionFailed && actionOrganizationId
           ? await executionAuditActorId(actionOrganizationId, executor, registeredAgentActorId)
           : null;
-      const applied = await persistGenerationEffect(lease, deps, 'action-result', async (tx) => {
+      const settled = await persistGenerationEffect(lease, deps, 'action-result', async (tx) => {
         const [row] = await tx
           .update(sessionActivity)
-          .set({ approvalStatus: 'applied', body })
+          .set({ approvalStatus: approvalOutcome(executionFailed), body })
           .where(
             and(
               eq(sessionActivity.id, claimed.id),
@@ -1014,7 +999,7 @@ export async function executeApprovedActions(
         }
         return row;
       });
-      if (!applied) return 'needs_attention';
+      if (!settled) return 'needs_attention';
     }
   } finally {
     if (toolbox) await toolbox.close();

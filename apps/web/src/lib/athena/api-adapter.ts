@@ -113,7 +113,7 @@ function toolResultFlags(
   const unavailable =
     result?.['presentationUnavailable'] === true ||
     (rawPresentation !== undefined && !presentation);
-  const failed = result?.['isError'] === true;
+  const failed = result?.['isError'] === true || activity.approvalStatus === 'failed';
   return {
     ...(unavailable ? { presentationUnavailable: true } : {}),
     ...(failed ? { failed: true } : {}),

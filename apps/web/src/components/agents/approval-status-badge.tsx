@@ -28,6 +28,9 @@ interface ApprovalTreatment {
   readonly tone: string;
 }
 
+/** The tone shared by the two states in which nothing was applied. */
+const ERROR_TONE = 'text-error border-error/40';
+
 /** Per-status treatment for every gated-action approval state. */
 const APPROVAL_TREATMENT: Record<
   Exclude<NonNullable<SessionActivityOut['approvalStatus']>, never>,
@@ -51,7 +54,12 @@ const APPROVAL_TREATMENT: Record<
   rejected: {
     label: 'Rejected',
     Glyph: XCircle,
-    tone: 'text-error border-error/40',
+    tone: ERROR_TONE,
+  },
+  failed: {
+    label: 'Failed',
+    Glyph: XCircle,
+    tone: ERROR_TONE,
   },
 };
 

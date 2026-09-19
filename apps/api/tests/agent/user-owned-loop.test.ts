@@ -290,7 +290,8 @@ describe('user-owned Athena loop', () => {
       { decision: 'approve' },
       deps,
     );
-    expect(settled.status).toBe('completed');
+    // The only approved change was refused, so the job reports that nothing happened.
+    expect(settled.status).toBe('failed');
     expect(
       await db.select().from(schema.task).where(eq(schema.task.organizationId, seed.orgId)),
     ).toHaveLength(0);
@@ -298,7 +299,7 @@ describe('user-owned Athena loop', () => {
       .select()
       .from(schema.sessionActivity)
       .where(eq(schema.sessionActivity.id, assertDefined(action).id));
-    expect(applied?.approvalStatus).toBe('applied');
+    expect(applied?.approvalStatus).toBe('failed');
     expect(applied?.body.action?.result?.isError).toBe(true);
   });
 
@@ -1356,7 +1357,7 @@ describe('user-owned Athena loop', () => {
           {
             type: 'tool_use',
             id: `toolu_generation_${index}`,
-            name: 'search',
+            name: 'find',
             input: { orgId: seed.orgId, query: `checkpoint ${index}` },
           },
         ],

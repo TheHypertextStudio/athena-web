@@ -2,6 +2,7 @@
  * A job dispatched through `POST /sessions` on the default mock model proposes a change to a task
  * that exists: the task the person asked from, else the task the work was filed as. Approving the
  * proposal changes that task for real and leaves a change set the personal undo route reverses.
+ * An approved change whose tool errors is recorded as failed, and so is the job.
  */
 import type * as DbModule from '@docket/db';
 import { assertDefined } from '@docket/test-utils';
@@ -226,5 +227,55 @@ describe('a locally dispatched job on the default mock model', () => {
     expect(await taskState(workspace.taskId)).toBe('backlog');
     await undo(workspace.userId, applied.changeSetId);
     expect(await taskState(filedTaskId)).toBe(filedStateBefore);
+  });
+});
+
+describe('an approved change whose tool fails', () => {
+  it('records the action as failed and the job as failed, not completed', async () => {
+    const workspace = await seedWorkspace();
+    // With no team the job files no task, so the mock proposes its placeholder `update_task` call,
+    // which Docket's toolbox answers with an error result.
+    await db.delete(schema.task).where(eq(schema.task.id, workspace.taskId));
+    await db.delete(schema.team).where(eq(schema.team.organizationId, workspace.orgId));
+    const sessionId = await dispatch(workspace.userId, {
+      prompt: 'Start this',
+      context: { workspaceId: workspace.orgId },
+    });
+
+    const approved = await appFor(workspace.userId).request(`/sessions/${sessionId}/decision`, {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ decision: 'approved' }),
+    });
+
+    expect(approved.status).toBe(200);
+    expect((await approved.json()) as { status: string }).toMatchObject({ status: 'failed' });
+    const [action] = await db
+      .select()
+      .from(schema.sessionActivity)
+      .where(
+        and(
+          eq(schema.sessionActivity.sessionId, sessionId),
+          eq(schema.sessionActivity.type, 'action'),
+        ),
+      );
+    expect(action?.approvalStatus).toBe('failed');
+    expect(action?.body.action?.result?.isError).toBe(true);
+    const [session] = await db
+      .select({ status: schema.agentSession.status })
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.id, sessionId));
+    expect(session?.status).toBe('failed');
+
+    // The person's own view reports the stop and the failed action, never a finished success.
+    const detail = await appFor(workspace.userId).request(`/sessions/${sessionId}`);
+    const shown = (await detail.json()) as {
+      status: string;
+      activities: { type: string; approvalStatus: string | null }[];
+    };
+    expect(shown.status).toBe('failed');
+    expect(shown.activities.find((activity) => activity.type === 'action')?.approvalStatus).toBe(
+      'failed',
+    );
   });
 });

@@ -1,6 +1,11 @@
 'use client';
 
 import {
+  PROVIDER_CATALOG,
+  type ConnectorProviderId,
+} from '@docket/connections/provider-catalog-contract';
+
+import {
   defaultEntityDisplay,
   type EntityDisplaySubjectType,
 } from '@docket/work/entity-display-contract';
@@ -135,7 +140,7 @@ export function searchResultToPaletteItem(
     org: hit.organizationId
       ? { id: hit.organizationId, name: input.orgName(hit.organizationId) }
       : undefined,
-    source: hit.source ? sourceLabel(hit.source.system) : undefined,
+    source: searchResultSourceLabel(hit),
     run: () => {
       input.close();
       if (!href) return;
@@ -177,11 +182,23 @@ function searchDisplaySubjectType(kind: SearchDocumentKind): EntityDisplaySubjec
 }
 
 function resultHint(hit: SearchResult): string | undefined {
-  if (hit.subject?.title) return `${SEARCH_KIND_LABEL[hit.subject.kind]}: ${hit.subject.title}`;
-  return hit.summary ?? hit.snippet ?? undefined;
+  const context = hit.subject?.title
+    ? `${SEARCH_KIND_LABEL[hit.subject.kind]}: ${hit.subject.title}`
+    : (hit.summary ?? hit.snippet);
+  return context ? `${SEARCH_KIND_LABEL[hit.kind]} · ${context}` : SEARCH_KIND_LABEL[hit.kind];
 }
 
-function sourceLabel(source: string): string {
+/** Label imported work by its provider even when that provider is not an event source. */
+export function searchResultSourceLabel(hit: SearchResult): string | undefined {
+  const provider = hit.facets['provider'];
+  if (typeof provider === 'string' && Object.hasOwn(PROVIDER_CATALOG, provider)) {
+    return PROVIDER_CATALOG[provider as ConnectorProviderId].name;
+  }
+  return hit.source ? searchSourceLabel(hit.source.system) : undefined;
+}
+
+/** Format a source-system name consistently in search results and filters. */
+export function searchSourceLabel(source: string): string {
   if (source === 'github') return 'GitHub';
   return source
     .split('_')

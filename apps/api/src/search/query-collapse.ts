@@ -1,5 +1,5 @@
 /**
- * `@docket/api` — duplicate-suppression and family diversity for one page of search results.
+ * `@docket/api` — duplicate-suppression and kind diversity for one page of search results.
  */
 import type { SearchDocumentKind } from '../contracts/search';
 import type { ScoredRow } from './query-types';
@@ -110,19 +110,19 @@ export function collapseActivityRows(rows: readonly ScoredRow[]): ScoredRow[] {
   });
 }
 
-/** Cap how many of one family's rows can fill the palette's first page, so a single dominant
- * family (e.g. tasks) can't crowd out every other kind of match. */
+/** Cap how many of one kind's rows can fill the palette's first page, so a single dominant
+ * kind (e.g. tasks) can't crowd out every other kind of match. */
 export function applyPaletteDiversityCap(rows: readonly ScoredRow[], limit: number): ScoredRow[] {
-  const maxPerFamily = Math.max(3, Math.ceil(limit * 0.45));
-  const familyCounts = new Map<string, number>();
+  const maxPerKind = Math.max(3, Math.ceil(limit * 0.45));
+  const kindCounts = new Map<string, number>();
   const selected: ScoredRow[] = [];
   const overflow: ScoredRow[] = [];
 
   for (const row of rows) {
-    const count = familyCounts.get(row.row.family) ?? 0;
-    if (selected.length < limit && count < maxPerFamily) {
+    const count = kindCounts.get(row.row.kind) ?? 0;
+    if (selected.length < limit && count < maxPerKind) {
       selected.push(row);
-      familyCounts.set(row.row.family, count + 1);
+      kindCounts.set(row.row.kind, count + 1);
     } else {
       overflow.push(row);
     }

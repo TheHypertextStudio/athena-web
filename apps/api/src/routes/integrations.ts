@@ -1,3 +1,4 @@
+import { importTaskWork, listTaskSources } from './integration-import-scope';
 /** `@docket/api` — integrations router (mounted at `/v1/orgs/:orgId/integrations`). */
 import { actor, db, externalActor, integration, syncRun, team } from '@docket/db';
 import {
@@ -440,18 +441,13 @@ Requires \`manage\` — it touches live provider credentials and configures sync
 
       // Enumerating the provider's task lists needs a live credential, so a broken connection
       // surfaces here as a real reason (not an empty list that looks like "no lists").
-      const tokenResult = await resolveConnectorToken(
-        row.createdBy,
-        provider,
-        row.externalAccountId,
-      );
-      if (!tokenResult.ok) throw new ConflictError(tokenResult.message);
+      const token = await resolveConnectorToken(row.createdBy, provider, row.externalAccountId);
+      if (!token.ok) throw new ConflictError(token.message);
 
-      const resources =
-        (await connectorFor(provider, tokenResult.token).listContainers?.({
-          connectionId: row.id,
-          provider,
-        })) ?? [];
+      const resources = await listTaskSources(connectorFor(provider, token.token), {
+        connectionId: row.id,
+        provider,
+      });
       return ok(c, ConnectorResourceListOut, { resources });
     },
   )
@@ -829,9 +825,10 @@ Requires \`contribute\` (it creates tasks, the same bar as authoring work direct
 
       let items: ImportedItem[];
       try {
-        items = await connectorFor(provider, tokenResult.token).importWork({
+        items = await importTaskWork(connectorFor(provider, tokenResult.token), {
           connectionId: row.id,
           provider,
+          listIds: ConnectorConfig.parse(row.config).listIds ?? [],
           ...(row.connection.externalWorkspaceId
             ? { externalWorkspaceId: row.connection.externalWorkspaceId }
             : {}),

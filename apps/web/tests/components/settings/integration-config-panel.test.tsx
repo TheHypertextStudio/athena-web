@@ -370,3 +370,23 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
     });
   });
 });
+
+describe('IntegrationConfigPanel — Notion task selection', () => {
+  it('requires explicit task databases and allows clearing the selection', async () => {
+    const integration = linearIntegration({ provider: 'notion', config: { listIds: ['tasks'] } });
+    listsGet.mockResolvedValue(
+      jsonResponse(true, { resources: [{ id: 'tasks', title: 'My tasks' }] }),
+    );
+    integrationPatch.mockResolvedValue(
+      jsonResponse(true, { ...integration, config: { listIds: [] } }),
+    );
+    renderPanel(integration);
+    const checkbox = await screen.findByRole('checkbox', { name: 'My tasks' });
+    expect(screen.queryByText(/Sync all/)).toBeNull();
+    fireEvent.click(checkbox);
+    await waitFor(() => {
+      expect(integrationPatch).toHaveBeenCalled();
+    });
+    expect(nthJson(integrationPatch)).toMatchObject({ config: { listIds: [] } });
+  });
+});

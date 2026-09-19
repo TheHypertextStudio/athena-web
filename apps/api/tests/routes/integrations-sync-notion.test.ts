@@ -11,6 +11,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import { assertDefined } from '@docket/test-utils';
+import { NOTION_TASKS_DATA_SOURCE_ID } from '@docket/integrations';
 
 import type * as IntegrationSyncModule from '../../src/routes/integration-sync';
 import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
@@ -59,8 +60,28 @@ async function storedConfig(id: string): Promise<Record<string, unknown>> {
 }
 
 describe('linked Notion sync', () => {
+  it('retains a versioned mapping profile when a selected Notion database is imported', async () => {
+    const { orgId, humanActorId, row } = await seedNotion({
+      listIds: [NOTION_TASKS_DATA_SOURCE_ID],
+    });
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+    expect((await w.request(`/${row.id}/sync`, { method: 'POST' })).status).toBe(200);
+    expect(await storedConfig(row.id)).toMatchObject({
+      notionMappingProfiles: {
+        [NOTION_TASKS_DATA_SOURCE_ID]: {
+          version: 1,
+          fields: expect.arrayContaining([
+            { field: 'project', property: 'Project', confidence: 'review' },
+          ]),
+        },
+      },
+    });
+  });
+
   it('pushes a description edit on the next scheduled sync even when Notion reports no change', async () => {
-    const { orgId, humanActorId, row } = await seedNotion();
+    const { orgId, humanActorId, row } = await seedNotion({
+      listIds: [NOTION_TASKS_DATA_SOURCE_ID],
+    });
     const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
     const sync = await w.request(`/${row.id}/sync`, {
       method: 'POST',

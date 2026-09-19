@@ -7,6 +7,29 @@
 
 ## Active Tasks
 
+### [SEARCH-020] Stop duplicate imports and repair search discovery
+
+- **Completed**: 2026-09-19
+- **Priority**: P1
+- **Plan and decision**: The user approved the preceding audit's cleanup. Require explicit Notion task databases, exclude Docket-owned mirror databases and pages from generic reads and writes, and preserve provider identity in search. Improve mention candidate retention and kind diversity. Titles alone never establish duplicate identity.
+- **Summary**: Manual imports and scheduled reconciliation now share the same Notion ownership scope. Clearing task database selection pauses generic imports while typed mirror sync continues. Search retains provider provenance and entity labels. Mentions include saved resources, retain all fetched candidates, order groups by their strongest match, and scroll keyboard selection into view.
+- **Files changed**: API integration import/reconcile routes, search projectors and candidate selection, mention search, web search and mention components, integration settings, behavior tests, README, and the linked search audit.
+- **Validation before rebase**: Passed 86 API tests and 38 web tests. Passed all four functional mention journeys and five visual checks, including narrow layouts and 200% text scale. Captured seeded authenticated search at four viewport sizes in both themes. API and web builds and typechecks passed. Web lint passed. API lint reports 23 existing violations, reproduced unchanged in an untouched worktree at `7af690039`; no complexity exemptions were added. A separate code review found no remaining concrete correctness issue in the cleanup.
+- **Verification environment**: Local memory pressure prevented reliable full checks. Verification ran in an isolated WillieStudio worktree containing the same source changes. The temporary local guard increase was restored to 40%. The disposable UI database was reset after verification.
+- **Push preparation**: Replayed only the two search commits onto `7c32363a4`, retaining the newer reconciliation helpers and content tallies. All 57 repository build, typecheck, and lint tasks passed; current main resolves the earlier 23 API lint violations. The full web suite exposed jsdom's missing `scrollIntoView`; a shared browser-method stub fixes both editor regressions, and all 35 editor, mention, and scrolling tests pass. The three existing Notion sync fixtures now select their task database explicitly; all 322 integration tests pass without weakening conflict or writeback assertions. The native pre-push hook remains the final full-suite gate.
+- **Production limits**: No production repair or deployment occurred. Hypertext GCP credentials require interactive reauthentication. Other cached GCP accounts cannot read the database secret, and direct access to the configured Neon project was denied. Exact source-id inventory, reference-preserving data repair, and reindexing remain blocked on production access and deployment.
+- **Learnings and follow-ups**: Database ownership alone is insufficient because a mirror page can move into a selected task database. Page ownership must constrain both imports and writeback. The Updates composer E2E selector was stale; the test now exercises its rich editor and checks plain combobox semantics in Today. Screenshots also exposed full-search filters pushing results below the first screen and raw owner ids. That layout, parent labels, cross-page activity deduplication, typo tolerance, and the unproven write-on-open symptom remain outside this cleanup.
+
+### [SEARCH-019] Investigate duplicate search results and inline mentions
+
+- **Completed**: 2026-09-19
+- **Priority**: P1
+- **Summary**: Confirmed that Tactical Urbanism Launch exists as both an initiative and a Notion-linked task in production. Traced an unguarded generic import path that can read Docket-built Notion tables back as tasks. Audited ranking, provenance, activity deduplication, and mention candidate loss.
+- **Files changed**: `docs/design/audits/2026-09-19-search-duplicates.md`, `docs/WORKLOG.md`.
+- **Validation**: Inspected signed-in production search, duplicate task properties, and Notion configuration. Reviewed source paths. No automated tests ran because this is a source/UI investigation with no implementation changes.
+- **Open work**: Confirm the duplicate's mirror-row association; exclude owned Notion databases from generic task imports; prepare reversible data repair; improve search and mentions with behavior tests. Investigate the description-change activity observed on opening the task.
+- **Learnings**: Search displayed a real imported task. Hiding same-title results would conceal the data defect and risks hiding legitimate work. Provider provenance and typed identity need to survive both import and indexing.
+
 ### [DRAFTS-001] Composers keep autosaved drafts
 
 - **Status**: COMPLETED

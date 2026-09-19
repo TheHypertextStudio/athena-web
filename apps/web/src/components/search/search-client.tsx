@@ -1,5 +1,10 @@
 'use client';
 
+import {
+  searchResultSourceLabel,
+  searchSourceLabel as sourceLabel,
+} from '../command-palette/use-hub-search';
+
 import type {
   SearchDocumentFamily,
   SearchDocumentKind,
@@ -569,9 +574,9 @@ export function SearchResultRow({ result, orgName }: SearchResultRowProps): JSX.
           </p>
         ) : null}
         <Row gap={2} className="mt-2 flex-wrap">
-          {result.source ? (
+          {searchResultSourceLabel(result) ? (
             <span className="text-on-surface-variant text-xs">
-              {sourceLabel(result.source.system)}
+              {searchResultSourceLabel(result)}
             </span>
           ) : null}
           {result.matchedFields.map((field) => (
@@ -740,14 +745,6 @@ function DateInput({
 
 function toggleValue<T extends string>(values: readonly T[], value: T): T[] {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
-}
-
-function sourceLabel(source: string): string {
-  if (source === 'github') return 'GitHub';
-  return source
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
 }
 
 function identityFacetLabel(value: string): string {

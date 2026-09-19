@@ -7,8 +7,8 @@
  * lets whichever kind matched most flood the menu. Grouping by kind means someone looking for a
  * project reads one short section instead of filtering twenty rows in their head.
  *
- * Each group is capped, so a query matching thirty tasks still leaves room for the one project and
- * the two people that also matched.
+ * The server bounds and diversifies the candidate set. Every returned row stays reachable
+ * through keyboard navigation; a second client cap would silently discard valid matches.
  *
  * The highlight rules exist because the local wave lands in tens of milliseconds and the external
  * wave hundreds later, so rows appear while someone is already arrowing. Selection is tracked by a
@@ -16,9 +16,6 @@
  * their choice is pinned.
  */
 import type { MentionEntityKind, MentionItem } from '../../lib/contracts/mention';
-
-/** How many rows one group may contribute before it starts crowding out the others. */
-const PER_GROUP_CAP = 5;
 
 /** The bare-`@` group, which mixes kinds because recency is the only ordering that matters there. */
 const RECENT_GROUP = 'recent';
@@ -57,8 +54,6 @@ export interface MentionGroup {
   readonly key: MentionGroupKey;
   readonly label: string;
   readonly items: readonly MentionItem[];
-  /** How many rows the cap hid, so the menu can say so rather than silently truncating. */
-  readonly hidden: number;
 }
 
 /** Section headings, application-owned and plural. */
@@ -98,7 +93,7 @@ export interface MentionGroupInput {
 }
 
 /**
- * Combine both waves into rendered groups, deduped, capped, and ordered.
+ * Combine both waves into rendered groups, deduped and ordered by their best match.
  *
  * @remarks
  * Local rows are inserted first so that when the same resource arrives from both waves — a Drive
@@ -120,15 +115,21 @@ export function buildMentionGroups(input: MentionGroupInput): MentionGroup[] {
     bucket.push(item);
   }
 
-  return MENTION_GROUP_ORDER.flatMap((key) => {
+  const order = [...MENTION_GROUP_ORDER];
+  if (input.hasQuery)
+    order.sort((a, b) => {
+      if (a === FILES_GROUP) return 1;
+      if (b === FILES_GROUP) return -1;
+      return (buckets.get(b)?.[0]?.score ?? 0) - (buckets.get(a)?.[0]?.score ?? 0);
+    });
+  return order.flatMap((key) => {
     const items = buckets.get(key);
     if (items === undefined || items.length === 0) return [];
     return [
       {
         key,
         label: GROUP_LABEL[key],
-        items: items.slice(0, PER_GROUP_CAP),
-        hidden: Math.max(0, items.length - PER_GROUP_CAP),
+        items,
       },
     ];
   });

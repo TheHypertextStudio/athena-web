@@ -40,6 +40,16 @@ function result(overrides: Partial<SearchResult> = {}): SearchResult {
 }
 
 describe('searchResultToPaletteItem', () => {
+  it('shows imported Notion provenance without changing the task destination', () => {
+    const item = searchResultToPaletteItem(result({ facets: { provider: 'notion' } }), {
+      close: vi.fn(),
+      orgName: () => 'Acme',
+      navigate: vi.fn(),
+    });
+    expect(item.source).toBe('Notion');
+    expect(item.hint).toBe('Task · Release checklist');
+  });
+
   it('maps semantic task results to routable palette rows', () => {
     const push = vi.fn();
     const close = vi.fn();
@@ -54,7 +64,7 @@ describe('searchResultToPaletteItem', () => {
       id: 'hit:doc_1',
       section: 'results',
       label: 'Ship beta',
-      hint: 'Release checklist',
+      hint: 'Task · Release checklist',
       org: { id: ORG, name: 'Acme' },
     });
 
@@ -111,7 +121,7 @@ describe('searchResultToPaletteItem', () => {
       { close: vi.fn(), orgName: () => 'Acme', navigate: vi.fn() },
     );
 
-    expect(item.hint).toBe('Project: Billing');
+    expect(item.hint).toBe('Comment · Project: Billing');
   });
 
   it('preserves source attribution for integration-backed results', () => {

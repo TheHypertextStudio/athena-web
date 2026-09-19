@@ -53,3 +53,12 @@ eval "$(./scripts/dev-stack.sh env)"
 
 Run repository checks with `pnpm check`. Package-specific commands remain available, but `./bootstrap`
 is the required setup and recovery API.
+
+## Search and Notion task imports
+
+Search results show their entity type and linked provider. Inline `@` mentions retain every fetched
+match, group matches by relevance, and include saved Library resources.
+
+Generic Notion task imports require selected task databases in connection settings. An empty
+selection pauses task imports. Docket-owned mirror databases and pages are excluded from generic
+imports and writeback, including disabled mirrors. Typed Notion sync continues independently.

@@ -342,3 +342,62 @@ describe('mention hydrate', () => {
 function eqDocument(schema: Awaited<ReturnType<typeof getDb>>, id: string) {
   return eq(schema.searchDocument.id, id);
 }
+
+describe('mention discovery', () => {
+  it('keeps a project reachable when matching tasks fill the first page', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'MentionDiversity');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+    for (let i = 0; i < 12; i += 1) {
+      await seedDocument(db, schema, { orgId, entityId: `diverse-task-${i}`, title: 'Zephyr' });
+    }
+    await seedDocument(db, schema, {
+      orgId,
+      entityId: 'diverse-project',
+      title: 'Zephyr initiative',
+      kind: 'project',
+    });
+    const app = appWithSession(await mountOrgs(), fakeSession(userId));
+    const res = await app.request(`/${orgId}/mentions/search?q=Zephyr&limit=8`);
+    const body = await json<MentionSearchOut>(res);
+    expect(
+      body.items.some((item) => item.origin === 'local' && item.entityKind === 'project'),
+    ).toBe(true);
+  });
+
+  it('offers a saved Library resource without a provider request', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'MentionLibrary');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+    await seedDocument(db, schema, {
+      orgId,
+      entityId: 'saved-resource',
+      title: 'Zephyr reference',
+      kind: 'external_resource',
+    });
+    await db
+      .update(schema.searchDocument)
+      .set({
+        family: 'content',
+        externalUrl: 'https://example.com/reference',
+        facet: { provider: 'web', resourceType: 'page' },
+      })
+      .where(eq(schema.searchDocument.id, `external_resource:${orgId}:saved-resource`));
+    const app = appWithSession(await mountOrgs(), fakeSession(userId));
+    const res = await app.request(`/${orgId}/mentions/search?q=Zephyr`);
+    const body = await json<MentionSearchOut>(res);
+    expect(body.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          origin: 'external',
+          title: 'Zephyr reference',
+          ref: { kind: 'external', url: 'https://example.com/reference' },
+        }),
+      ]),
+    );
+  });
+});

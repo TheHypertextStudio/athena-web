@@ -49,9 +49,12 @@ test.describe('mentions', () => {
     await page.goto('/today', { waitUntil: 'domcontentloaded' });
     const capture = page.getByLabel('Ask Athena about today');
     await expect(capture).toBeVisible({ timeout: TIMEOUTS.pageReady });
+    await expect(capture).toHaveAttribute('role', 'combobox');
+    await expect(capture).toHaveAttribute('aria-expanded', 'false');
     await capture.click();
     await capture.pressSequentially('Follow up on ');
     await openMentionMenu(capture, taskTitle);
+    await expect(capture).toHaveAttribute('aria-expanded', 'true');
     await expect(page.getByRole('option', { name: new RegExp(taskTitle) })).toBeVisible();
     await page.keyboard.press('Enter');
     await expect(capture).toHaveValue(`Follow up on @${taskTitle} `);
@@ -123,22 +126,16 @@ test.describe('mentions', () => {
     });
     await expect(relatedRecords.getByText(taskTitle)).toBeVisible();
 
-    // The Updates composer is a plain textarea, and prose mode there writes the same link form.
     await page.getByRole('tab', { name: /updates/i }).click();
-    const composer = page.locator('#program-update-body');
+    const composer = page.getByRole('textbox', { name: 'Post an update' });
     await expect(composer).toBeVisible({ timeout: TIMEOUTS.pageReady });
-    // Combobox semantics only where a picker exists, and expanded only once one is on screen.
-    await expect(composer).toHaveAttribute('role', 'combobox');
-    await expect(composer).toHaveAttribute('aria-expanded', 'false');
-
     await composer.click();
     await composer.pressSequentially('Blocked by ');
     await openMentionMenu(composer, 'zep');
-    await expect(composer).toHaveAttribute('aria-expanded', 'true');
     await page.keyboard.press('Enter');
-    await expect(composer).toHaveValue(
-      `Blocked by [${taskTitle}](/orgs/${orgId}/tasks/${taskId} "docket:v1:task:${taskId}") `,
-    );
+    await expect(
+      composer.locator('[data-mention-kind]').filter({ hasText: taskTitle }),
+    ).toHaveCount(1);
   });
 
   test("`@` and `/` stay out of each other's way in the same editor", async ({ page }) => {

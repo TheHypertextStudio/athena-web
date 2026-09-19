@@ -52,4 +52,43 @@ Opening the duplicate task produced a Description changed activity entry marked 
 
 The duplicate task, original initiative URL, linked Notion origin, and enabled typed mirror tables were inspected in the production UI. Source inspection established the import path and search/mention behavior above. No production configuration was changed intentionally, no records were repaired, and no implementation was deployed. The description activity noted above appeared during navigation.
 
-This checkout has no node_modules, and its configured database is local PGlite. No automated tests or production SQL queries were run. This is an investigation report, not a claim that fixes passed validation.
+At the investigation stage, this checkout had no node_modules and no automated tests or production SQL queries had run. The cleanup validation below supersedes that implementation status; production SQL remains unverified.
+
+## Cleanup implementation
+
+The cleanup requires explicit Notion task database selection at manual import and scheduled sync.
+The shared scope excludes owned database ids and page ids across connections, including disabled
+mirrors. Reconciliation applies the same scope to existing linked tasks, incoming records, and
+native-create destinations. This prevents canceling an old false task from archiving its original
+mirror page. Clearing the task selection pauses generic imports without disabling typed sync.
+
+Search projections now retain linked provider identity and external URLs. The palette includes an
+entity-type label. Mention search preserves candidates by kind, retains all fetched rows, ranks
+groups by their strongest match, includes saved external resources, and scrolls keyboard selection
+into view.
+
+Production repair still requires an exact source-id inventory and access to the Docket database.
+The Hypertext Studio GCP credential requires interactive reauthentication. The personal and
+default GCP accounts cannot read the database secret. Direct access to the configured Docket Neon
+project was also denied. No production records or configuration have been changed by this cleanup.
+Existing search documents require reindexing after deployment to gain provider facets.
+
+Cross-page activity deduplication, parent-label hydration, typo tolerance, and the observed
+write-on-open activity remain separate work. This cleanup does not claim to resolve them.
+
+## Cleanup verification
+
+The implementation passed 86 API tests, 38 web tests, four functional mention browser tests,
+and five visual browser checks. API and web builds and typechecks passed. Web lint passed.
+API lint has 23 pre-existing violations, reproduced on the untouched audit commit. Checks ran
+in an isolated WillieStudio worktree after local memory pressure blocked reliable validation.
+
+Seeded authenticated search screenshots at 1440, 390, and 320 pixel widths showed another
+existing usability defect: expanded facets put results below the first viewport and expose raw
+owner identifiers. Fix that layout and resolve person labels in a separate search presentation
+change. The current cleanup changes provenance and discovery, not that filter layout.
+
+Push preparation rebased the cleanup onto `7c32363a4`. All 57 repository build, typecheck,
+and lint tasks passed there, including API lint. The full web suite found that jsdom lacked
+`scrollIntoView`; the shared test setup now supplies that browser method, and both affected
+editor regressions pass. The production-access and data-repair limitations above still apply.

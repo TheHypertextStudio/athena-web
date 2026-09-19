@@ -11,6 +11,7 @@
  * `search_document`.
  */
 import { mentionRefKey, type MentionEntityKind, type MentionItem } from '../contracts/mention';
+import { ExternalResourceType, ResourceProvider } from '@docket/connections/resource-contract';
 import { type SearchDocumentKind, type SearchOut } from '../contracts/search';
 
 import { loadRecentDocuments, searchWorkspace, type SearchCaller } from '../search/query';
@@ -36,6 +37,7 @@ export const MENTIONABLE_KINDS: readonly SearchDocumentKind[] = [
   'agent_session',
   'comment',
   'update',
+  'external_resource',
 ];
 
 /**
@@ -73,6 +75,25 @@ function mentionEntityKindFor(kind: SearchDocumentKind): MentionEntityKind | und
  * @returns The row, or undefined when the hit is not something a mention can point at.
  */
 export function toMentionItem(result: SearchOut['items'][number]): MentionItem | undefined {
+  if (result.kind === 'external_resource' && result.externalUrl) {
+    const ref = { kind: 'external', url: result.externalUrl } as const;
+    const provider = ResourceProvider.safeParse(result.facets['provider']).data ?? 'web';
+    const resourceType =
+      ExternalResourceType.safeParse(result.facets['resourceType']).data ?? 'unknown';
+    return {
+      origin: 'external',
+      id: mentionRefKey(ref),
+      ref,
+      provider,
+      resourceType,
+      title: result.title,
+      subtitle: null,
+      url: result.externalUrl,
+      iconUrl: null,
+      modifiedAt: result.updatedAt,
+      score: result.score,
+    };
+  }
   const route = result.route;
   if (route.type !== 'entity' && route.type !== 'content') return undefined;
 

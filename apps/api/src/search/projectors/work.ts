@@ -1,4 +1,5 @@
 import { defaultCycleName } from '@docket/work/cycle-contract';
+import { SourceSystemKind } from '@docket/connections/event-contract';
 import { type SearchDocumentKind } from '../../contracts/search';
 
 import { markdownToPlainText } from '../../content/markdown-links';
@@ -53,6 +54,9 @@ function displaySummary(
 }
 
 interface TaskRow extends OrgScopedRow {
+  source?: string;
+  sourceProvider?: string | null;
+  externalUrl?: string | null;
   title: string;
   description?: string | null | undefined;
   state: string;
@@ -146,6 +150,7 @@ export const taskSearchProjector = preloadedProjector<TaskRow>('task', (row) => 
     summary: displaySummary(undefined, row.description),
     body: row.description,
     facet: {
+      provider: row.source === 'linked' ? row.sourceProvider : undefined,
       state: row.state,
       priority: row.priority,
       assigneeId: row.assigneeId,
@@ -158,6 +163,11 @@ export const taskSearchProjector = preloadedProjector<TaskRow>('task', (row) => 
     visibility: row.visibility,
   }),
   sourceTable: 'task',
+  sourceSystem:
+    row.source === 'linked'
+      ? (SourceSystemKind.safeParse(row.sourceProvider).data ?? null)
+      : 'docket',
+  externalUrl: row.externalUrl ?? null,
 }));
 
 /** Projector for Docket project search documents. */

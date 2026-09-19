@@ -114,10 +114,13 @@ export function IntegrationConfigPanel({
   const queryClient = useQueryClient();
   const copy = connectorCopy(integration.provider);
   const cfg = integration.config as ConnectorConfig;
+  const requiresSelection = integration.provider === 'notion';
   const [twoWay, setTwoWay] = useState(integration.writeBack);
   const [teamId, setTeamId] = useState(cfg.teamId ?? '');
-  // `allMode` (sync every list) is the default; an explicit subset is stored in `listIds`.
-  const [allMode, setAllMode] = useState(!(cfg.listIds && cfg.listIds.length > 0));
+  // Notion databases can contain any entity type, so task import requires an explicit selection.
+  const [allMode, setAllMode] = useState(
+    !requiresSelection && !(cfg.listIds && cfg.listIds.length > 0),
+  );
   const [listIds, setListIds] = useState<string[]>(cfg.listIds ?? []);
   // Work-graph connectors (Linear): external team id -> Docket team id; a missing entry is "Not synced".
   const [teamMap, setTeamMap] = useState<Record<string, string>>(() =>
@@ -220,19 +223,19 @@ export function IntegrationConfigPanel({
   const persistedPayload = buildPayload({
     twoWay: integration.writeBack,
     teamId: cfg.teamId ?? '',
-    allMode: !(cfg.listIds && cfg.listIds.length > 0),
+    allMode: !requiresSelection && !(cfg.listIds && cfg.listIds.length > 0),
     listIds: cfg.listIds ?? [],
     teamMap: Object.fromEntries((cfg.teamMappings ?? []).map((m) => [m.externalTeamId, m.teamId])),
   });
 
   /**
-   * Autosave a field change: persist the payload unless it's unchanged or would sync nothing.
+   * Autosave field changes while preserving provider-specific empty-selection semantics.
    *
    * @remarks
    * The dirty guard compares against {@link persistedPayload} — both payloads are built by the same
    * {@link buildPayload}, so their JSON encodings share key order and a stable equality check holds.
-   * A flat-checklist subset that selects nothing is held back (it would sync nothing); the inline
-   * hint asks the user to pick a container, and their selection stays on screen and editable.
+   * Notion permits an empty selection to pause generic task imports. Other flat-list providers
+   * interpret an empty selection as all lists, so they require at least one checked list.
    */
   const commit = (payload: SavePayload): void => {
     if (JSON.stringify(payload) === JSON.stringify(persistedPayload)) return;
@@ -240,7 +243,7 @@ export function IntegrationConfigPanel({
       !copy.usesTeamMapping &&
       Array.isArray(payload.config.listIds) &&
       payload.config.listIds.length === 0;
-    if (syncsNothing) return;
+    if (syncsNothing && !requiresSelection) return;
     save.mutate(payload);
   };
 
@@ -275,10 +278,6 @@ export function IntegrationConfigPanel({
     setTeamMap(nextTeamMap);
     commit(buildPayload({ twoWay, teamId, allMode, listIds, teamMap: nextTeamMap }));
   };
-
-  // A subset that selects nothing would sync nothing — block the save until at least one is chosen.
-  // Only applies to the flat-checklist providers; an all-"Not synced" team mapping is a valid state.
-  const emptySubset = !copy.usesTeamMapping && !allMode && listIds.length === 0;
 
   return (
     <div className="bg-surface-container flex flex-col gap-5 p-4">
@@ -356,45 +355,18 @@ export function IntegrationConfigPanel({
             No {copy.containerNounPlural} found for this account.
           </p>
         ) : (
-          <div className="flex flex-col gap-1">
-            {/* The default: sync every container. Turning it off reveals an explicit per-item choice. */}
-            <label className="hover:bg-surface-container-high flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5">
-              <Checkbox
-                checked={allMode}
-                onChange={(e) => {
-                  const nextAllMode = e.target.checked;
-                  setAllMode(nextAllMode);
-                  commit(buildPayload({ twoWay, teamId, allMode: nextAllMode, listIds, teamMap }));
-                }}
-              />
-              <span className="text-on-surface text-label-large">
-                Sync all {copy.checklistNounPlural}
-              </span>
-            </label>
-            {!allMode ? (
-              <ul className="ml-3 flex flex-col gap-1 pl-3">
-                {lists.map((l) => (
-                  <li key={l.id}>
-                    <label className="hover:bg-surface-container-high flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5">
-                      <Checkbox
-                        checked={listIds.includes(l.id)}
-                        onChange={() => {
-                          toggleList(l.id);
-                        }}
-                      />
-                      <span className="text-on-surface text-body-medium">{l.title}</span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            {emptySubset ? (
-              <p className="text-on-surface-variant text-body-small px-2">
-                Select at least one {copy.checklistNoun}, or turn “Sync all{' '}
-                {copy.checklistNounPlural}” back on.
-              </p>
-            ) : null}
-          </div>
+          <TaskDatabaseSelection
+            copy={copy}
+            lists={lists}
+            allMode={allMode}
+            listIds={listIds}
+            requiresSelection={requiresSelection}
+            onToggleList={toggleList}
+            onToggleAll={(nextAllMode) => {
+              setAllMode(nextAllMode);
+              commit(buildPayload({ twoWay, teamId, allMode: nextAllMode, listIds, teamMap }));
+            }}
+          />
         )}
       </fieldset>
 
@@ -447,6 +419,71 @@ export function IntegrationConfigPanel({
       >
         {save.isPending ? 'Saving…' : saved ? 'Saved' : null}
       </div>
+    </div>
+  );
+}
+
+/** Choose flat task sources without offering arbitrary Notion databases as tasks by default. */
+function TaskDatabaseSelection({
+  copy,
+  lists,
+  allMode,
+  listIds,
+  requiresSelection,
+  onToggleAll,
+  onToggleList,
+}: {
+  copy: ReturnType<typeof connectorCopy>;
+  lists: readonly { id: string; title: string }[];
+  allMode: boolean;
+  listIds: readonly string[];
+  requiresSelection: boolean;
+  onToggleAll: (value: boolean) => void;
+  onToggleList: (id: string) => void;
+}): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-1">
+      {requiresSelection ? (
+        <p className="text-on-surface-variant text-body-small px-2">
+          Select databases that contain tasks. Leave them unchecked to pause task imports. Docket’s
+          typed Notion sync runs separately.
+        </p>
+      ) : (
+        <label className="hover:bg-surface-container-high flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5">
+          <Checkbox
+            checked={allMode}
+            onChange={(e) => {
+              onToggleAll(e.target.checked);
+            }}
+          />
+          <span className="text-on-surface text-label-large">
+            Sync all {copy.checklistNounPlural}
+          </span>
+        </label>
+      )}
+      {!allMode ? (
+        <ul className="ml-3 flex flex-col gap-1 pl-3">
+          {lists.map((l) => (
+            <li key={l.id}>
+              <label className="hover:bg-surface-container-high flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5">
+                <Checkbox
+                  checked={listIds.includes(l.id)}
+                  onChange={() => {
+                    onToggleList(l.id);
+                  }}
+                />
+                <span className="text-on-surface text-body-medium">{l.title}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {!allMode && listIds.length === 0 && !requiresSelection ? (
+        <p className="text-on-surface-variant text-body-small px-2">
+          Select at least one {copy.checklistNoun}, or turn “Sync all {copy.checklistNounPlural}”
+          back on.
+        </p>
+      ) : null}
     </div>
   );
 }

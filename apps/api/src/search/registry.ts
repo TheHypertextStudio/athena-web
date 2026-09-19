@@ -73,7 +73,20 @@ async function fetchSearchSourceRow(sourceTable: string, entityId: string) {
     .select({ labelId: schema.taskLabel.labelId })
     .from(schema.taskLabel)
     .where(eq(schema.taskLabel.taskId, entityId));
-  return { ...row, labelIds: labelRows.map((labelRow) => labelRow.labelId) };
+  const sourceIntegrationId = 'sourceIntegrationId' in row ? row.sourceIntegrationId : null;
+  const providers =
+    typeof sourceIntegrationId === 'string'
+      ? await db
+          .select({ provider: schema.integration.provider })
+          .from(schema.integration)
+          .where(eq(schema.integration.id, sourceIntegrationId))
+          .limit(1)
+      : [];
+  return {
+    ...row,
+    sourceProvider: providers[0]?.provider ?? null,
+    labelIds: labelRows.map((labelRow) => labelRow.labelId),
+  };
 }
 
 async function resolveSourceTable(sourceTable: string) {

@@ -11,8 +11,7 @@
  * Opens at `--dur-fast` rather than the palette's `--dur-base`, since an inline autocomplete that
  * takes 180ms to appear reads as lag.
  *
- * Groups are separated by a tonal rule as well as a heading, so the eye can skip a whole kind at
- * once instead of reading every row to find where one section ends.
+ * Group headings let readers skip to the kind they need without scanning every row.
  *
  * ARIA shape: the listbox's children are `role="group"`, each labelled by its own heading, and only
  * the rows carry `role="option"`. A listbox whose direct children are neither is malformed, and a
@@ -22,7 +21,7 @@
  * The pending Files group reserves its heading and two rows at the real row height, so results
  * replace skeletons in place and the popover never re-flips position mid-typing.
  */
-import { MenuDivider, MenuListbox, MenuNote, MenuSectionLabel } from '@docket/ui/components';
+import { MenuListbox, MenuNote, MenuSectionLabel } from '@docket/ui/components';
 import { Popover, PopoverAnchor, PopoverContent, Skeleton } from '@docket/ui/primitives';
 import type { PopoverVirtualAnchorRef } from '@docket/ui/primitives';
 import type { MentionItem } from '../../lib/contracts/mention';
@@ -47,7 +46,6 @@ export interface MentionMenuProps {
   readonly onRows: (items: readonly MentionItem[], resolvedActiveKey: string | undefined) => void;
 }
 
-/** Shared heading treatment for every section of the menu — the menu section label, verbatim. */
 /** Row id for a given item, so `aria-activedescendant` can point at it. */
 export function mentionRowId(listboxId: string, item: MentionItem): string {
   return `${listboxId}-${item.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
@@ -84,12 +82,16 @@ export default function MentionMenu({
     previousItems: previousItems.current,
   });
   previousItems.current = state.items;
+  const activeItem = state.items.find((item) => item.id === resolvedActiveKey);
+  const activeRowId = activeItem ? mentionRowId(listboxId, activeItem) : undefined;
+  useEffect(() => {
+    if (activeRowId) document.getElementById(activeRowId)?.scrollIntoView({ block: 'nearest' });
+  }, [activeRowId]);
 
   useEffect(() => {
     onRows(state.items, resolvedActiveKey);
   }, [onRows, state.items, resolvedActiveKey]);
 
-  // placeholder: files matching the query, searched in connected providers.
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor virtualRef={anchorRef} />
@@ -107,9 +109,8 @@ export default function MentionMenu({
         }}
       >
         <MenuListbox id={listboxId} ariaLabel="Mention a resource">
-          {groups.map((group, index) => (
+          {groups.map((group) => (
             <li key={group.key} role="group" aria-labelledby={`${listboxId}-group-${group.key}`}>
-              {index > 0 ? <MenuDivider as="div" aria-hidden /> : null}
               <MenuSectionLabel as="p" id={`${listboxId}-group-${group.key}`}>
                 {group.label}
               </MenuSectionLabel>
@@ -124,15 +125,11 @@ export default function MentionMenu({
                   />
                 ))}
               </ul>
-              {group.hidden > 0 ? (
-                <MenuNote>{`+${group.hidden} more — keep typing to narrow`}</MenuNote>
-              ) : null}
             </li>
           ))}
 
           {externalPending || externalFailed ? (
             <li aria-hidden role="presentation">
-              {groups.length > 0 ? <MenuDivider as="div" aria-hidden /> : null}
               <MenuSectionLabel as="p">
                 Files
                 {externalPending ? <span className="ml-1 opacity-70">searching…</span> : null}

@@ -38,6 +38,15 @@ function external(id: string, url = `https://x/${id}`): MentionItem {
 }
 
 describe('buildMentionGroups', () => {
+  it('places the strongest matching kind first', () => {
+    const groups = buildMentionGroups({
+      local: [local('task'), { ...local('exact', 'initiative'), score: 200 }],
+      external: [],
+      hasQuery: true,
+    });
+    expect(flattenMentionGroups(groups)[0]?.id).toBe('exact');
+  });
+
   it('always sorts external rows below local ones', () => {
     const groups = buildMentionGroups({
       local: [local('t1')],
@@ -71,7 +80,7 @@ describe('buildMentionGroups', () => {
     expect(groups[0]?.label).toBe('Recent');
   });
 
-  it('caps a group so one flooding kind cannot crowd out the others', () => {
+  it('keeps every fetched result reachable instead of silently hiding matches', () => {
     const many = Array.from({ length: 9 }, (_, i) => local(`t${i}`));
     const groups = buildMentionGroups({
       local: [...many, local('p1', 'project')],
@@ -79,8 +88,7 @@ describe('buildMentionGroups', () => {
       hasQuery: true,
     });
     const tasks = groups.find((g) => g.key === 'task');
-    expect(tasks?.items).toHaveLength(5);
-    expect(tasks?.hidden).toBe(4);
+    expect(tasks?.items).toHaveLength(9);
     // The one project still gets a section, which is the whole point of the cap.
     expect(groups.map((g) => g.key)).toContain('project');
   });

@@ -51,3 +51,10 @@ Object.defineProperty(globalThis, 'ResizeObserver', {
   writable: true,
   value: TestResizeObserver,
 });
+
+// jsdom has no layout engine, so browser scrolling needs an inert default for editor tests.
+Object.defineProperty(Element.prototype, 'scrollIntoView', {
+  configurable: true,
+  writable: true,
+  value: () => undefined,
+});

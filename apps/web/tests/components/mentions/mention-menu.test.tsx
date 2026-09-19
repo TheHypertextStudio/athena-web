@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import type { MentionItem } from '../../../src/lib/contracts/mention';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import MentionMenu from '@/components/mentions/mention-menu';
 import type { MentionSearchState } from '@/components/mentions/use-mention-search';
@@ -13,6 +13,10 @@ vi.mock('@/components/mentions/use-mention-search', () => ({
     return state.current;
   },
 }));
+
+beforeEach(() => {
+  HTMLElement.prototype.scrollIntoView = vi.fn();
+});
 
 afterEach(() => {
   cleanup();
@@ -40,9 +44,9 @@ describe('MentionMenu group layout', () => {
     const team = item('team', 'team_1', 'Public Engagement');
     state.current = {
       groups: [
-        { key: 'task', label: 'Tasks', items: [task], hidden: 0 },
-        { key: 'project', label: 'Projects', items: [project], hidden: 0 },
-        { key: 'team', label: 'Teams', items: [team], hidden: 0 },
+        { key: 'task', label: 'Tasks', items: [task] },
+        { key: 'project', label: 'Projects', items: [project] },
+        { key: 'team', label: 'Teams', items: [team] },
       ],
       items: [task, project, team],
       localPending: false,
@@ -87,7 +91,7 @@ describe('MentionMenu group layout', () => {
   ] as const)('keeps the $label at content height', async ({ stateKey }) => {
     const project = item('project', 'project_1', 'Bus Buddies Pilot Season');
     state.current = {
-      groups: [{ key: 'project', label: 'Projects', items: [project], hidden: 0 }],
+      groups: [{ key: 'project', label: 'Projects', items: [project] }],
       items: [project],
       localPending: false,
       externalPending: stateKey === 'externalPending',
@@ -114,7 +118,7 @@ describe('MentionMenu group layout', () => {
     const section = files.closest('li');
     expect(section).not.toBeNull();
     expect(section).not.toHaveClass('h-px');
-    expect(section?.querySelector(':scope > [aria-hidden].h-px')).not.toBeNull();
+    expect(section?.querySelector(':scope > [aria-hidden].h-px')).toBeNull();
   });
 
   it('reserves the same 40px height while local results load', () => {

@@ -138,3 +138,24 @@ describe('taskSearchProjector summary', () => {
     expect(doc?.summary).toBeNull();
   });
 });
+
+describe('linked task provenance', () => {
+  it('preserves the provider origin instead of labeling imported work Docket', async () => {
+    const doc = await taskSearchProjector.project({
+      entityId: 'linked',
+      row: {
+        ...BASE_ROW,
+        id: 'linked',
+        title: 'Imported project',
+        state: 'todo',
+        teamId: 'team',
+        source: 'linked',
+        externalUrl: 'https://www.notion.so/page',
+        sourceProvider: 'notion',
+      },
+    });
+    expect(doc?.sourceSystem).toBeNull();
+    expect(doc?.facet['provider']).toBe('notion');
+    expect(doc?.externalUrl).toBe('https://www.notion.so/page');
+  });
+});

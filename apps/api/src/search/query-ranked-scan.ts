@@ -43,8 +43,8 @@ interface RankedCandidateScanInput {
  * Exact relevance ordering requires considering the complete visible corpus because relationship
  * and recency boosts are application-owned. The scan therefore keyset-pages the database by id,
  * applies permissions per batch, and keeps at most `limit + 1` scored rows in memory. Palette
- * diversity keeps at most `limit` rows per family, which is sufficient to reproduce the existing
- * cap without retaining the corpus. One extra row per family preserves the continuation signal.
+ * diversity keeps at most `limit` rows per kind, which is sufficient to reproduce the existing
+ * cap without retaining the corpus. One extra row per kind preserves the continuation signal.
  * Facet counts accumulate as numbers rather than result rows.
  */
 export async function scanRankedCandidates(
@@ -91,7 +91,7 @@ export async function scanRankedCandidates(
       });
       if (!scored || (input.cursor && compareCursor(scored, input.cursor) <= 0)) continue;
       addFacetCountRow(facetCounts, scored.row);
-      const key = diverse ? scored.row.family : globalKey;
+      const key = diverse ? scored.row.kind : globalKey;
       const rows = best.get(key) ?? [];
       keepBestScored(rows, scored, input.limit + 1);
       best.set(key, rows);

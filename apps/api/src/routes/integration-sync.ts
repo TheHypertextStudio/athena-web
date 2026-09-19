@@ -41,6 +41,7 @@ import {
   resolveConnectorToken,
 } from './integration-provider';
 import { resolveImportTeam } from './integration-import';
+import { importTaskWork } from './integration-import-scope';
 import { type ReconcileResult, reconcileTasks } from './integration-reconcile';
 import { reconcileWorkGraph } from './integration-reconcile-graph';
 
@@ -528,7 +529,7 @@ export async function runSync(
       now.getTime() - row.lastFullSyncedAt.getTime() > FULL_SYNC_INTERVAL_MS ||
       opts.trigger === 'manual';
 
-    const items: ImportedItem[] = await connector.importWork({
+    const items: ImportedItem[] = await importTaskWork(connector, {
       connectionId: row.id,
       provider,
       ...(row.connection.externalWorkspaceId

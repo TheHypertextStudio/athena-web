@@ -21,7 +21,6 @@
  */
 import { and, eq } from 'drizzle-orm';
 import { db, task, team } from '@docket/db';
-import { ConnectorConfig } from '@docket/connections/integration-contract';
 import { type WorkStatusCategory } from '@docket/work/work-status-contract';
 import type { ExternalWriteResult, ImportedItem } from '@docket/integrations';
 import type { WritableConnector } from '@docket/integrations';
@@ -51,6 +50,7 @@ import {
   pushNativeCreates,
   type ReconcileTally,
 } from './integration-reconcile-push';
+import { loadTaskReconcileInputs } from './integration-import-scope';
 import { wouldCreateSubtaskCycle } from './task-helpers';
 
 export { planTaskReconcile, type ReconcileLocalTask } from './integration-reconcile-plan';
@@ -174,24 +174,13 @@ export async function reconcileTasks(
 
   const writable = options.writable;
   const writeBack = row.writeBack && writable !== null;
-  const config = ConnectorConfig.safeParse(row.config).data ?? {};
-
-  // Load the integration's linked tasks and index them by external id.
-  const localRows = await db
-    .select()
-    .from(task)
-    .where(
-      and(
-        eq(task.organizationId, orgId),
-        eq(task.source, 'linked'),
-        eq(task.sourceIntegrationId, row.id),
-      ),
-    );
+  const { config, defaultListId, localRows, remoteById } = await loadTaskReconcileInputs(
+    row,
+    orgId,
+    items,
+  );
   const localById = new Map<string, (typeof localRows)[number]>();
   for (const t of localRows) if (t.externalId) localById.set(t.externalId, t);
-
-  const remoteById = new Map<string, ImportedItem>();
-  for (const item of items) remoteById.set(item.provenance.externalId, item);
 
   // Parent linkage (`ImportedItem.parentExternalId`) resolves against this map, which starts as
   // the already-linked tasks and grows as inserts land — so a child inserted in the same batch as
@@ -261,10 +250,10 @@ export async function reconcileTasks(
   }
 
   // Optionally push brand-new native tasks in the target team out to the provider.
-  if (writable && row.writeBack && config.pushNativeTasks && config.defaultListId) {
+  if (writable && row.writeBack && config.pushNativeTasks && defaultListId) {
     tally.created = await pushNativeCreates(orgId, row, writable, {
       teamId,
-      defaultListId: config.defaultListId,
+      defaultListId,
       keys,
       countContent,
     });

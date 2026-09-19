@@ -19,7 +19,7 @@ import {
   seedUserWithHub,
 } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
-import { undoChangeSetAtomically } from '../../src/mcp/change-set';
+import { undoChangeSetAtomically } from '../../src/mcp/change-set-undo';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;

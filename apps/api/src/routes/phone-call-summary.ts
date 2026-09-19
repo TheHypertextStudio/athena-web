@@ -4,7 +4,7 @@ import type { PhoneCallSummaryOut } from '@docket/athena/voice';
 import { and, asc, eq, sql } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
-import { undoChangeSetAtomically } from '../mcp/change-set';
+import { undoChangeSetAtomically } from '../mcp/change-set-undo';
 
 type PhoneCallSummary = PhoneCallSummaryOut;
 

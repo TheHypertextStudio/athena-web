@@ -15,8 +15,259 @@ import { DESCRIPTOR_HINT, resolveSubject } from './descriptors';
 import { orgIdParam, subjectTable } from './tools-shared';
 import { landingStatus } from '../lib/work-status';
 
+/** The `comment` tool's validated input. */
+interface CommentInput {
+  readonly orgId: string;
+  readonly subjectType: 'task' | 'project' | 'program' | 'initiative';
+  readonly subjectId: string;
+  readonly body: string;
+  readonly parentCommentId?: string | undefined;
+}
+
+/**
+ * Refuse a reply that does not belong under the comment it names.
+ *
+ * @param orgId - The workspace the comment lives in.
+ * @param input - The validated tool input.
+ * @param subjectId - The resolved subject id.
+ * @throws {NotFoundError} When the parent comment is not this workspace's.
+ * @throws {ValidationError} When it sits on another subject, or is itself a reply.
+ */
+async function assertReplyable(
+  orgId: string,
+  input: CommentInput,
+  subjectId: string,
+): Promise<void> {
+  if (input.parentCommentId === undefined) return;
+  const parentRows = await db
+    .select()
+    .from(comment)
+    .where(and(eq(comment.id, input.parentCommentId), eq(comment.organizationId, orgId)))
+    .limit(1);
+  const parent = parentRows[0];
+  if (!parent) throw new NotFoundError('Parent comment not found');
+  const reject = (message: string): never => {
+    throw new ValidationError(
+      new z.ZodError([
+        { code: 'custom', path: ['parentCommentId'], message, input: input.parentCommentId },
+      ]),
+    );
+  };
+  if (parent.subjectType !== input.subjectType || parent.subjectId !== subjectId) {
+    reject('Parent comment is on a different subject');
+  }
+  if (parent.parentCommentId !== null) {
+    reject('Cannot reply to a reply; replies are single-level');
+  }
+}
+
+/**
+ * Post one comment on a task, project, program, or initiative.
+ *
+ * @param ctx - The authenticated MCP caller.
+ * @param input - The validated tool input.
+ * @returns The created comment's identity.
+ */
+async function postComment(ctx: McpContext, input: CommentInput) {
+  const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
+  // Resolution doubles as the tenant check: a descriptor only matches within this org.
+  const subjectId = await resolveSubject(
+    input.orgId,
+    input.subjectType,
+    input.subjectId,
+    'subjectId',
+  );
+  if (input.subjectType === 'task') {
+    // A task comment changes task-attached discussion, so it follows the same current-task
+    // contribution boundary as the REST route rather than a generic org comment grant.
+    await assertTaskCapability(
+      input.orgId,
+      actorCtx.actorId,
+      await loadTask(input.orgId, subjectId),
+      'contribute',
+    );
+  } else {
+    // Non-task comments retain the existing polymorphic subject capability contract.
+    await authorize(actorCtx, 'comment', {
+      kind: input.subjectType,
+      id: subjectId,
+      orgId: input.orgId,
+    });
+  }
+  await assertReplyable(input.orgId, input, subjectId);
+
+  const inserted = await db
+    .insert(comment)
+    .values({
+      organizationId: input.orgId,
+      authorId: actorCtx.actorId,
+      subjectType: input.subjectType,
+      subjectId,
+      body: input.body,
+      parentCommentId: input.parentCommentId,
+      createdBy: actorCtx.actorId,
+    })
+    .returning();
+  const row = inserted[0];
+  /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+  if (!row) throw new Error('comment insert returned no row');
+  await enqueueSearchUpsert(input.orgId, 'comment', row.id);
+  return jsonResult({ id: row.id, subjectType: row.subjectType, subjectId: row.subjectId });
+}
+
+/** The `report_status` tool's validated input. */
+interface ReportStatusInput {
+  readonly orgId: string;
+  readonly subjectType: 'project' | 'program' | 'initiative';
+  readonly subjectId: string;
+  readonly body: string;
+  readonly health?: z.infer<typeof Health> | undefined;
+}
+
+/**
+ * Post one status update, carrying its health onto the container it is about.
+ *
+ * @remarks
+ * The update and the container's health move together, because a status update that reports a
+ * health the container does not show is a status update nobody trusts.
+ *
+ * @param ctx - The authenticated MCP caller.
+ * @param input - The validated tool input.
+ * @returns The created update's identity.
+ */
+async function reportStatus(ctx: McpContext, input: ReportStatusInput) {
+  const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
+  const subjectId = await resolveSubject(
+    input.orgId,
+    input.subjectType,
+    input.subjectId,
+    'subjectId',
+  );
+  await authorize(actorCtx, 'contribute', {
+    kind: input.subjectType,
+    id: subjectId,
+    orgId: input.orgId,
+  });
+
+  const row = await db.transaction(async (tx) => {
+    const inserted = await tx
+      .insert(update)
+      .values({
+        organizationId: input.orgId,
+        authorId: actorCtx.actorId,
+        subjectType: input.subjectType,
+        subjectId,
+        health: input.health,
+        body: input.body,
+        createdBy: actorCtx.actorId,
+      })
+      .returning();
+    const created = inserted[0];
+    /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+    if (!created) throw new Error('update insert returned no row');
+
+    if (input.health !== undefined) {
+      const tbl = subjectTable[input.subjectType];
+      await tx
+        .update(tbl)
+        .set({ health: input.health })
+        .where(and(eq(tbl.id, subjectId), eq(tbl.organizationId, input.orgId)));
+    }
+    return created;
+  });
+  await enqueueSearchUpsert(input.orgId, 'update', row.id);
+  await enqueueSearchUpsert(input.orgId, row.subjectType, row.subjectId);
+  return jsonResult({ id: row.id, subjectType: row.subjectType, subjectId: row.subjectId });
+}
+
+/** The `link_external` tool's validated input. */
+interface LinkExternalInput {
+  readonly orgId: string;
+  readonly integrationId: string;
+  readonly teamId: string;
+  readonly title: string;
+  readonly externalId: string;
+  readonly description?: string | undefined;
+  readonly externalUrl?: string | undefined;
+}
+
+/**
+ * Materialize one external item as a linked task carrying its provenance.
+ *
+ * @remarks
+ * Idempotent on the provider's own id: a repeat call returns the task that already exists rather
+ * than opening a second one for the same upstream item.
+ *
+ * @param ctx - The authenticated MCP caller.
+ * @param input - The validated tool input.
+ * @returns The linked task's id, and whether it already existed.
+ */
+async function linkExternalItem(ctx: McpContext, input: LinkExternalInput) {
+  const actorCtx = await scopedActor(ctx, input.orgId, 'connectors:link');
+  await authorize(actorCtx, 'contribute', {
+    kind: 'organization',
+    id: input.orgId,
+    orgId: input.orgId,
+  });
+
+  const integrationRows = await db
+    .select({ id: integration.id })
+    .from(integration)
+    .where(
+      and(eq(integration.id, input.integrationId), eq(integration.organizationId, input.orgId)),
+    )
+    .limit(1);
+  if (!integrationRows[0]) throw new NotFoundError('Integration not found');
+
+  const teamRows = await db
+    .select({ workflowStates: team.workflowStates })
+    .from(team)
+    .where(and(eq(team.id, input.teamId), eq(team.organizationId, input.orgId)))
+    .limit(1);
+  if (!teamRows[0]) throw new NotFoundError('Team not found');
+
+  const existing = await db
+    .select({ id: task.id })
+    .from(task)
+    .where(
+      and(
+        eq(task.organizationId, input.orgId),
+        eq(task.source, 'linked'),
+        eq(task.sourceIntegrationId, input.integrationId),
+        eq(task.externalId, input.externalId),
+      ),
+    )
+    .limit(1);
+  if (existing[0]) return jsonResult({ id: existing[0].id, alreadyLinked: true });
+
+  const landing = await landingStatus(input.orgId, 'task', input.teamId);
+  const inserted = await db
+    .insert(task)
+    .values({
+      organizationId: input.orgId,
+      title: input.title,
+      description: input.description ?? null,
+      teamId: input.teamId,
+      statusId: landing.id,
+      state: landing.key,
+      source: 'linked',
+      sourceIntegrationId: input.integrationId,
+      externalId: input.externalId,
+      externalUrl: input.externalUrl ?? null,
+      sourceSyncMode: 'mirror',
+      createdBy: actorCtx.actorId,
+    })
+    .returning();
+  const row = inserted[0];
+  /* v8 ignore next -- @preserve defensive: linked task insert returned no row */
+  if (!row) throw new Error('linked task insert returned no row');
+  await enqueueSearchUpsert(input.orgId, 'task', row.id);
+  return jsonResult({ id: row.id, alreadyLinked: false });
+}
+
 /** Register comment, report_status, link_external on `server`. */
-export function registerContentTools(server: McpRegistrar, ctx: McpContext): void {
+/** Register the `comment` tool. */
+function registerCommentTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'comment',
     {
@@ -54,90 +305,12 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
         openWorldHint: false,
       },
     },
-    (input) =>
-      runTool(async () => {
-        const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
-        // Resolution doubles as the tenant check: a descriptor only matches within this org.
-        const subjectId = await resolveSubject(
-          input.orgId,
-          input.subjectType,
-          input.subjectId,
-          'subjectId',
-        );
-        if (input.subjectType === 'task') {
-          // A task comment changes task-attached discussion, so it follows the same current-task
-          // contribution boundary as the REST route rather than a generic org comment grant.
-          await assertTaskCapability(
-            input.orgId,
-            actorCtx.actorId,
-            await loadTask(input.orgId, subjectId),
-            'contribute',
-          );
-        } else {
-          // Non-task comments retain the existing polymorphic subject capability contract.
-          await authorize(actorCtx, 'comment', {
-            kind: input.subjectType,
-            id: subjectId,
-            orgId: input.orgId,
-          });
-        }
-
-        if (input.parentCommentId !== undefined) {
-          const parentRows = await db
-            .select()
-            .from(comment)
-            .where(
-              and(eq(comment.id, input.parentCommentId), eq(comment.organizationId, input.orgId)),
-            )
-            .limit(1);
-          const parent = parentRows[0];
-          if (!parent) throw new NotFoundError('Parent comment not found');
-          if (parent.subjectType !== input.subjectType || parent.subjectId !== subjectId) {
-            throw new ValidationError(
-              new z.ZodError([
-                {
-                  code: 'custom',
-                  path: ['parentCommentId'],
-                  message: 'Parent comment is on a different subject',
-                  input: input.parentCommentId,
-                },
-              ]),
-            );
-          }
-          if (parent.parentCommentId !== null) {
-            throw new ValidationError(
-              new z.ZodError([
-                {
-                  code: 'custom',
-                  path: ['parentCommentId'],
-                  message: 'Cannot reply to a reply; replies are single-level',
-                  input: input.parentCommentId,
-                },
-              ]),
-            );
-          }
-        }
-
-        const inserted = await db
-          .insert(comment)
-          .values({
-            organizationId: input.orgId,
-            authorId: actorCtx.actorId,
-            subjectType: input.subjectType,
-            subjectId,
-            body: input.body,
-            parentCommentId: input.parentCommentId,
-            createdBy: actorCtx.actorId,
-          })
-          .returning();
-        const row = inserted[0];
-        /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-        if (!row) throw new Error('comment insert returned no row');
-        await enqueueSearchUpsert(input.orgId, 'comment', row.id);
-        return jsonResult({ id: row.id, subjectType: row.subjectType, subjectId: row.subjectId });
-      }),
+    (input) => runTool(() => postComment(ctx, input)),
   );
+}
 
+/** Register the `report_status` tool. */
+function registerReportStatusTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'report_status',
     {
@@ -167,53 +340,12 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
         openWorldHint: false,
       },
     },
-    (input) =>
-      runTool(async () => {
-        const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
-        const subjectId = await resolveSubject(
-          input.orgId,
-          input.subjectType,
-          input.subjectId,
-          'subjectId',
-        );
-        await authorize(actorCtx, 'contribute', {
-          kind: input.subjectType,
-          id: subjectId,
-          orgId: input.orgId,
-        });
-
-        const row = await db.transaction(async (tx) => {
-          const inserted = await tx
-            .insert(update)
-            .values({
-              organizationId: input.orgId,
-              authorId: actorCtx.actorId,
-              subjectType: input.subjectType,
-              subjectId,
-              health: input.health,
-              body: input.body,
-              createdBy: actorCtx.actorId,
-            })
-            .returning();
-          const created = inserted[0];
-          /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-          if (!created) throw new Error('update insert returned no row');
-
-          if (input.health !== undefined) {
-            const tbl = subjectTable[input.subjectType];
-            await tx
-              .update(tbl)
-              .set({ health: input.health })
-              .where(and(eq(tbl.id, subjectId), eq(tbl.organizationId, input.orgId)));
-          }
-          return created;
-        });
-        await enqueueSearchUpsert(input.orgId, 'update', row.id);
-        await enqueueSearchUpsert(input.orgId, row.subjectType, row.subjectId);
-        return jsonResult({ id: row.id, subjectType: row.subjectType, subjectId: row.subjectId });
-      }),
+    (input) => runTool(() => reportStatus(ctx, input)),
   );
+}
 
+/** Register the `link_external` tool. */
+function registerLinkExternalTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'link_external',
     {
@@ -247,72 +379,13 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
         openWorldHint: true,
       },
     },
-    (input) =>
-      runTool(async () => {
-        const actorCtx = await scopedActor(ctx, input.orgId, 'connectors:link');
-        await authorize(actorCtx, 'contribute', {
-          kind: 'organization',
-          id: input.orgId,
-          orgId: input.orgId,
-        });
-
-        const integrationRows = await db
-          .select({ id: integration.id })
-          .from(integration)
-          .where(
-            and(
-              eq(integration.id, input.integrationId),
-              eq(integration.organizationId, input.orgId),
-            ),
-          )
-          .limit(1);
-        if (!integrationRows[0]) throw new NotFoundError('Integration not found');
-
-        const teamRows = await db
-          .select({ workflowStates: team.workflowStates })
-          .from(team)
-          .where(and(eq(team.id, input.teamId), eq(team.organizationId, input.orgId)))
-          .limit(1);
-        const teamRow = teamRows[0];
-        if (!teamRow) throw new NotFoundError('Team not found');
-
-        const existing = await db
-          .select({ id: task.id })
-          .from(task)
-          .where(
-            and(
-              eq(task.organizationId, input.orgId),
-              eq(task.source, 'linked'),
-              eq(task.sourceIntegrationId, input.integrationId),
-              eq(task.externalId, input.externalId),
-            ),
-          )
-          .limit(1);
-        if (existing[0]) return jsonResult({ id: existing[0].id, alreadyLinked: true });
-
-        const landing = await landingStatus(input.orgId, 'task', input.teamId);
-        const inserted = await db
-          .insert(task)
-          .values({
-            organizationId: input.orgId,
-            title: input.title,
-            description: input.description ?? null,
-            teamId: input.teamId,
-            statusId: landing.id,
-            state: landing.key,
-            source: 'linked',
-            sourceIntegrationId: input.integrationId,
-            externalId: input.externalId,
-            externalUrl: input.externalUrl ?? null,
-            sourceSyncMode: 'mirror',
-            createdBy: actorCtx.actorId,
-          })
-          .returning();
-        const row = inserted[0];
-        /* v8 ignore next -- @preserve defensive: linked task insert returned no row */
-        if (!row) throw new Error('linked task insert returned no row');
-        await enqueueSearchUpsert(input.orgId, 'task', row.id);
-        return jsonResult({ id: row.id, alreadyLinked: false });
-      }),
+    (input) => runTool(() => linkExternalItem(ctx, input)),
   );
+}
+
+/** Register the tools that write discussion, status, and external provenance. */
+export function registerContentTools(server: McpRegistrar, ctx: McpContext): void {
+  registerCommentTool(server, ctx);
+  registerReportStatusTool(server, ctx);
+  registerLinkExternalTool(server, ctx);
 }

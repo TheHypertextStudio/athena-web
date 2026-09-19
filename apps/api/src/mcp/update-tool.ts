@@ -44,7 +44,13 @@ import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { recordChangeSet, trackedFields, type ChangeRecord } from './change-set';
 import { resolveOptional } from './descriptors';
-import { isTaskRowVisible, listWork, listWorkFilters, type WorkEntity } from './list-work';
+import {
+  isTaskRowVisible,
+  listWork,
+  listWorkFilters,
+  type ListWorkInput,
+  type WorkEntity,
+} from './list-work';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { resolveStateTransition } from './tools-shared';
 import { entityHref, entityListHref } from './entity-href';
@@ -392,6 +398,32 @@ function diff(
 }
 
 /** Register `update` on `server`. */
+/**
+ * The ids a filter scope selects, capped one over the ceiling so exceeding it is detectable.
+ *
+ * @param orgId - The organization to select within.
+ * @param actorId - The authenticated actor whose task visibility applies.
+ * @param entity - What is being updated.
+ * @param filters - The caller's scope.
+ * @returns the selected ids.
+ */
+async function selectTargetIds(
+  orgId: string,
+  actorId: string,
+  entity: WorkEntity,
+  filters: ListWorkInput,
+): Promise<string[]> {
+  const rows = await listWork({
+    orgId,
+    actorId,
+    entity,
+    input: filters,
+    limit: MAX_TARGETS,
+    after: undefined,
+  });
+  return rows.map((row) => row.id);
+}
+
 export function registerUpdateTool(
   server: McpRegistrar,
   ctx: McpContext,
@@ -438,9 +470,7 @@ export function registerUpdateTool(
       const selected =
         ids !== undefined && ids.length > 0
           ? ids
-          : (
-              await listWork(input.orgId, actorCtx.actorId, entity, filters, MAX_TARGETS, undefined)
-            ).map((row) => row.id);
+          : await selectTargetIds(input.orgId, actorCtx.actorId, entity, filters);
       if (selected.length > MAX_TARGETS) {
         reject(
           'scope',

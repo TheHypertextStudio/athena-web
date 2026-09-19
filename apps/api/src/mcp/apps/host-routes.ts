@@ -209,19 +209,30 @@ function toResourceOut(
     ...(resource.meta?.prefersBorder === undefined
       ? {}
       : { prefersBorder: resource.meta.prefersBorder }),
-    ...(csp
-      ? {
-          csp: {
-            ...(csp.connectDomains ? { connectDomains: [...csp.connectDomains] } : {}),
-            ...(csp.resourceDomains ? { resourceDomains: [...csp.resourceDomains] } : {}),
-            ...(csp.frameDomains ? { frameDomains: [...csp.frameDomains] } : {}),
-            ...(csp.baseUriDomains ? { baseUriDomains: [...csp.baseUriDomains] } : {}),
-          },
-        }
-      : {}),
+    ...(csp ? { csp: toCspOut(csp) } : {}),
     ...(resource.meta?.permissions
       ? { permissions: resource.meta.permissions as Record<string, Record<string, unknown>> }
       : {}),
+  };
+}
+
+/**
+ * Copy the domains a UI resource declares into the response's content-security policy.
+ *
+ * @remarks
+ * Each list is copied rather than passed through, so the response cannot alias an array the
+ * connector still holds, and an absent list stays absent rather than becoming an empty one that
+ * would read as "allow nothing".
+ *
+ * @param csp - The policy the resource declared.
+ * @returns The policy fields to serialize.
+ */
+function toCspOut(csp: NonNullable<NonNullable<RemoteUiResource['meta']>['csp']>) {
+  return {
+    ...(csp.connectDomains ? { connectDomains: [...csp.connectDomains] } : {}),
+    ...(csp.resourceDomains ? { resourceDomains: [...csp.resourceDomains] } : {}),
+    ...(csp.frameDomains ? { frameDomains: [...csp.frameDomains] } : {}),
+    ...(csp.baseUriDomains ? { baseUriDomains: [...csp.baseUriDomains] } : {}),
   };
 }
 

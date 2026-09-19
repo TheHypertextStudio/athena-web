@@ -206,6 +206,64 @@ function shiftRolling(
   return resolveCalendarTarget(target, timeZone, sourceOffset);
 }
 
+/** The calendar period a temporal operand names. */
+type TemporalUnit = 'day' | 'week' | 'month' | 'quarter' | 'year';
+
+/** The period and offset each named preset stands for. */
+const TEMPORAL_PRESETS = {
+  today: ['day', 0],
+  yesterday: ['day', -1],
+  tomorrow: ['day', 1],
+  'this-week': ['week', 0],
+  'next-week': ['week', 1],
+  'last-week': ['week', -1],
+  'this-month': ['month', 0],
+  'next-month': ['month', 1],
+  'last-month': ['month', -1],
+} as const satisfies Record<string, readonly [TemporalUnit, number]>;
+
+/**
+ * The period and offset one symbolic operand names.
+ *
+ * @param symbolic - The validated relative or preset operand.
+ * @returns The unit and how many of them away it is.
+ */
+function periodOf(symbolic: Record<string, unknown>): readonly [TemporalUnit, number] {
+  if (symbolic['kind'] === 'relative') {
+    return [symbolic['unit'] as TemporalUnit, Number(symbolic['offset'])];
+  }
+  return TEMPORAL_PRESETS[symbolic['value'] as keyof typeof TEMPORAL_PRESETS];
+}
+
+/**
+ * The range a `now`-anchored operand names on a timestamp field.
+ *
+ * @remarks
+ * Elapsed-instant arithmetic for a day or a week, because "in the last 24 hours" is a duration
+ * rather than a calendar boundary. Longer units still shift by calendar so that "last month"
+ * lands on the same day number.
+ *
+ * @param now - The frozen clock.
+ * @param timeZone - The viewer's timezone.
+ * @param unit - The period the operand names.
+ * @param offset - How many of them away it is.
+ * @returns The half-open range.
+ */
+function rollingRange(
+  now: Date,
+  timeZone: string,
+  unit: TemporalUnit,
+  offset: number,
+): TemporalRange {
+  if (unit === 'day' || unit === 'week') {
+    const duration = (unit === 'day' ? 1 : 7) * 24 * 60 * 60 * 1000;
+    const start = new Date(now.getTime() + offset * duration);
+    return { start, end: new Date(start.getTime() + duration) };
+  }
+  const start = shiftRolling(now, timeZone, unit, offset);
+  return { start, end: shiftRolling(start, timeZone, unit, 1) };
+}
+
 /**
  * Resolve a request-schema symbolic temporal operand into a half-open range.
  *
@@ -228,36 +286,15 @@ export function resolveTemporalRange(
   if (symbolic['kind'] !== 'relative' && symbolic['kind'] !== 'preset') return null;
   const now = context.now ?? new Date();
   const timeZone = context.timeZone ?? 'UTC';
-  const today = calendarParts(now, timeZone);
-  let unit: 'day' | 'week' | 'month' | 'quarter' | 'year';
-  let offset: number;
-  if (symbolic['kind'] === 'relative') {
-    unit = symbolic['unit'] as typeof unit;
-    offset = Number(symbolic['offset']);
-    if (symbolic['anchor'] === 'now' && field.kind === 'datetime') {
-      if (unit === 'day' || unit === 'week') {
-        const duration = (unit === 'day' ? 1 : 7) * 24 * 60 * 60 * 1000;
-        const start = new Date(now.getTime() + offset * duration);
-        return { start, end: new Date(start.getTime() + duration) };
-      }
-      const start = shiftRolling(now, timeZone, unit, offset);
-      return { start, end: shiftRolling(start, timeZone, unit, 1) };
-    }
-  } else {
-    const presets = {
-      today: ['day', 0],
-      yesterday: ['day', -1],
-      tomorrow: ['day', 1],
-      'this-week': ['week', 0],
-      'next-week': ['week', 1],
-      'last-week': ['week', -1],
-      'this-month': ['month', 0],
-      'next-month': ['month', 1],
-      'last-month': ['month', -1],
-    } as const;
-    [unit, offset] = presets[symbolic['value'] as keyof typeof presets];
+  const [unit, offset] = periodOf(symbolic);
+  if (
+    symbolic['kind'] === 'relative' &&
+    symbolic['anchor'] === 'now' &&
+    field.kind === 'datetime'
+  ) {
+    return rollingRange(now, timeZone, unit, offset);
   }
-  const start = shiftCalendar(periodStart(today, unit), unit, offset);
+  const start = shiftCalendar(periodStart(calendarParts(now, timeZone), unit), unit, offset);
   const end = shiftCalendar(start, unit, 1);
   return field.kind === 'date'
     ? { start: dateString(start), end: dateString(end) }

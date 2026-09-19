@@ -33,7 +33,8 @@ const MUTATION_ANNOTATIONS = {
 } as const;
 
 /** Register reusable-process, scheduled-process, and ordinary repeating-task authoring tools. */
-export function registerRepeatingWorkTools(server: McpRegistrar, ctx: McpContext): void {
+/** Register the `define_process` tool. */
+function registerRepeatTaskTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'define_process',
     {
@@ -73,7 +74,10 @@ export function registerRepeatingWorkTools(server: McpRegistrar, ctx: McpContext
         });
       }),
   );
+}
 
+/** Register the `schedule_process` tool. */
+function registerRepeatProjectTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'schedule_process',
     {
@@ -105,7 +109,10 @@ export function registerRepeatingWorkTools(server: McpRegistrar, ctx: McpContext
         return jsonResult(detail);
       }),
   );
+}
 
+/** Register the `repeat_task` tool. */
+function registerRepeatingWorkReadTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'repeat_task',
     {
@@ -137,4 +144,11 @@ export function registerRepeatingWorkTools(server: McpRegistrar, ctx: McpContext
         return jsonResult(created);
       }),
   );
+}
+
+/** Register the tools that make work repeat and read back what it produced. */
+export function registerRepeatingWorkTools(server: McpRegistrar, ctx: McpContext): void {
+  registerRepeatTaskTool(server, ctx);
+  registerRepeatProjectTool(server, ctx);
+  registerRepeatingWorkReadTool(server, ctx);
 }

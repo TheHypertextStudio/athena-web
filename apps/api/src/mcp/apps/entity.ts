@@ -48,10 +48,15 @@ const BODY = `
 <div class="batch-list" id="batch" hidden></div>
 <p class="muted" id="missing" hidden></p>`;
 
-function scriptFor(entityType?: EntityDocumentType): string {
-  return (
-    `const entityType = ${JSON.stringify(entityType ?? null)};\n` +
-    String.raw`
+/**
+ * The entity document's browser script.
+ *
+ * @remarks
+ * Authored as one raw literal rather than assembled, because it is a complete program the host
+ * iframe runs — breaking it into fragments would make it unreadable in exchange for nothing, and
+ * the only thing that varies per document is the entity type prepended below.
+ */
+const ENTITY_SCRIPT = String.raw`
 (() => {
   const el = (id) => document.getElementById(id);
   let entity = null;
@@ -445,8 +450,16 @@ function scriptFor(entityType?: EntityDocumentType): string {
     renderEdits();
     el('open').hidden = !entity.href;
   });
-})();`
-  );
+})();`;
+
+/**
+ * The script for one entity document, with the type it is dedicated to.
+ *
+ * @param entityType - The type this document renders, or omitted for the generic one.
+ * @returns The browser script.
+ */
+function scriptFor(entityType?: EntityDocumentType): string {
+  return `const entityType = ${JSON.stringify(entityType ?? null)};\n${ENTITY_SCRIPT}`;
 }
 
 /** Build the legacy generic entity document or a document dedicated to one readable entity type. */

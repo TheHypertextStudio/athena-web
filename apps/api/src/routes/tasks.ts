@@ -73,10 +73,10 @@ import { productCapabilityGuard } from '../product-capability';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { planTaskReparents, reparentTasks } from '../services/task-hierarchy';
 import { getContainer } from '../container';
+import { undoChangeSetAtomically } from '../mcp/change-set-undo';
 import {
   recordChangeSetInTransaction,
   trackedFields,
-  undoChangeSetAtomically,
   type RecordedChange,
 } from '../mcp/change-set';
 

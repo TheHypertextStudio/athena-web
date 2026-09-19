@@ -32,7 +32,7 @@ import { resourceAccessKey, resolveResourceAccess } from '../permissions/resourc
 import { buildHubTodayPayload } from '../routes/hub-today';
 import { buildTaskViewFilter, type ViewableTaskParts } from '../routes/task-helpers';
 import { loadDayCandidates, loadDependencyEdges } from '../services/scheduling/day-plan-repository';
-import { planDay } from '../services/scheduling/day-planner';
+import { planDay, type PlannedTask } from '../services/scheduling/day-planner';
 import { loadDayBlocks, loadSchedulingPreferences } from '../services/scheduling/repository';
 import type { McpActor, McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
@@ -99,8 +99,8 @@ export async function callerHub(ctx: McpContext): Promise<{ hubId: string; userI
   return { hubId: row.id, userId: ctx.principal.userId };
 }
 
-/** Register `brief` and `plan_day` on `server`. */
-export function registerPlanTools(server: McpRegistrar, ctx: McpContext): void {
+/** Register the `brief` tool. */
+function registerReadDayTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'brief',
     {
@@ -141,7 +141,10 @@ export function registerPlanTools(server: McpRegistrar, ctx: McpContext): void {
         return jsonResult(await buildHubTodayPayload(ctx.principal.userId, input.date));
       }),
   );
+}
 
+/** Register the `plan_day` tool. */
+function registerPlanDayTool(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
     'plan_day',
     {
@@ -184,49 +187,139 @@ export function registerPlanTools(server: McpRegistrar, ctx: McpContext): void {
         openWorldHint: false,
       },
     },
-    (input) =>
-      runTool(async () => {
-        const writes = input.autoPlan === true || (input.edits?.length ?? 0) > 0;
-        const actorCtx = await scopedActor(ctx, input.orgId, writes ? 'work:write' : 'work:read');
-        await authorize(actorCtx, 'view', {
-          kind: 'organization',
-          id: input.orgId,
-          orgId: input.orgId,
-        });
-        const { hubId, userId } = await callerHub(ctx);
-
-        // Auto-plan runs BEFORE the edits, and that ordering is the whole guarantee that this
-        // adds a capability rather than taking one away: whatever the planner decided, a hand
-        // edit in the same call lands on top of it.
-        const auto =
-          input.autoPlan === true
-            ? await autoPlanDay({
-                hubId,
-                userId,
-                orgId: input.orgId,
-                actorId: actorCtx.actorId,
-                date: input.date,
-              })
-            : { autoPlanned: 0, unplaced: [] };
-
-        let applied = 0;
-        if (input.edits !== undefined && input.edits.length > 0) {
-          const canViewEditedTask = await buildTaskViewFilter(input.orgId, actorCtx.actorId);
-          for (const edit of input.edits) {
-            if (await applyEdit(hubId, actorCtx, input.date, edit, canViewEditedTask)) {
-              applied += 1;
-            }
-          }
-        }
-        return jsonResult({
-          date: input.date,
-          items: await readDay(hubId, userId, input.date),
-          applied,
-          autoPlanned: auto.autoPlanned,
-          unplaced: auto.unplaced,
-        });
-      }),
+    (input) => runTool(() => planOneDay(ctx, input)),
   );
+}
+
+/** The `plan_day` tool's validated input. */
+interface PlanDayInput {
+  readonly orgId: string;
+  readonly date: string;
+  readonly autoPlan?: boolean | undefined;
+  readonly edits?: readonly PlanEdit[] | undefined;
+}
+
+/**
+ * Plan one day: optionally auto-place work, then apply the caller's own edits.
+ *
+ * @remarks
+ * Auto-plan runs BEFORE the edits, and that ordering is the whole guarantee that it adds a
+ * capability rather than taking one away: whatever the planner decided, a hand edit in the same
+ * call lands on top of it.
+ *
+ * @param ctx - The authenticated MCP caller.
+ * @param input - The validated tool input.
+ * @returns The day's plan, plus what this call placed and what it could not.
+ */
+async function planOneDay(ctx: McpContext, input: PlanDayInput) {
+  const writes = input.autoPlan === true || (input.edits?.length ?? 0) > 0;
+  const actorCtx = await scopedActor(ctx, input.orgId, writes ? 'work:write' : 'work:read');
+  await authorize(actorCtx, 'view', { kind: 'organization', id: input.orgId, orgId: input.orgId });
+  const { hubId, userId } = await callerHub(ctx);
+
+  const auto =
+    input.autoPlan === true
+      ? await autoPlanDay({
+          hubId,
+          userId,
+          orgId: input.orgId,
+          actorId: actorCtx.actorId,
+          date: input.date,
+        })
+      : { autoPlanned: 0, unplaced: [] };
+
+  let applied = 0;
+  if (input.edits !== undefined && input.edits.length > 0) {
+    const canViewEditedTask = await buildTaskViewFilter(input.orgId, actorCtx.actorId);
+    for (const edit of input.edits) {
+      if (await applyEdit(hubId, actorCtx, input.date, edit, canViewEditedTask)) applied += 1;
+    }
+  }
+  return jsonResult({
+    date: input.date,
+    items: await readDay(hubId, userId, input.date),
+    applied,
+    autoPlanned: auto.autoPlanned,
+    unplaced: auto.unplaced,
+  });
+}
+
+/** One task the day planner could place, as `loadDayCandidates` returns it. */
+type DayCandidate = Awaited<ReturnType<typeof loadDayCandidates>>[number];
+
+/**
+ * Narrow the day's candidates to the tasks this person may actually edit.
+ *
+ * @remarks
+ * `loadDayCandidates` intentionally answers a scheduling question, not an authorization one.
+ * Before its answer becomes a mutation input, every candidate is resolved in one batch: a plan row
+ * is still a task edit, so an active human needs current task-level `contribute`, not merely a
+ * write token or a non-cascading grant on the organization root.
+ *
+ * @param userId - The person the plan belongs to.
+ * @param candidateRows - Everything the scheduler proposed.
+ * @returns The candidates they may contribute to.
+ */
+async function contributableCandidates(
+  userId: string,
+  candidateRows: readonly DayCandidate[],
+): Promise<DayCandidate[]> {
+  if (candidateRows.length === 0) return [];
+  const access = await resolveResourceAccess(
+    userId,
+    candidateRows.map((candidate) => ({
+      organizationId: candidate.organizationId,
+      kind: 'task' as const,
+      id: candidate.taskId,
+    })),
+  );
+  return candidateRows.filter((candidate) => {
+    const capability = access.get(
+      resourceAccessKey({
+        organizationId: candidate.organizationId,
+        kind: 'task',
+        id: candidate.taskId,
+      }),
+    )?.effectiveCapability;
+    return capability === null || capability === undefined
+      ? false
+      : satisfies(capability, 'contribute');
+  });
+}
+
+/**
+ * Write one planned task onto the day, inserting or moving its existing row.
+ *
+ * @param hubId - The Hub whose day this is.
+ * @param date - The civil date being planned.
+ * @param item - The placement the planner decided.
+ * @param rowId - The plan row this task already has, when it has one.
+ */
+async function writePlanItem(
+  hubId: string,
+  date: string,
+  item: PlannedTask,
+  rowId: string | undefined,
+): Promise<void> {
+  const timebox = {
+    timeboxStartsAt: item.start === null ? null : new Date(item.start),
+    timeboxEndsAt: item.end === null ? null : new Date(item.end),
+  };
+  if (rowId === undefined) {
+    await db.insert(dailyPlanItem).values({
+      hubId,
+      refOrganizationId: item.organizationId,
+      refTaskId: item.taskId,
+      date,
+      sort: item.sort,
+      ...timebox,
+    });
+    return;
+  }
+  await db
+    .update(dailyPlanItem)
+    .set({ sort: item.sort, ...timebox })
+    .where(eq(dailyPlanItem.id, rowId));
 }
 
 /**
@@ -266,31 +359,7 @@ async function autoPlanDay(input: {
     date: input.date,
     timezone: preferences.timezone,
   });
-  if (candidateRows.length === 0) return { autoPlanned: 0, unplaced: [] };
-  // `loadDayCandidates` intentionally answers a scheduling question, not an authorization one.
-  // Before it becomes a mutation input, resolve all candidates in one batch: a plan row is still
-  // a task edit, so an active human needs current task-level `contribute`, not merely a write
-  // token or a non-cascading grant on the organization root.
-  const candidateAccess = await resolveResourceAccess(
-    input.userId,
-    candidateRows.map((candidate) => ({
-      organizationId: candidate.organizationId,
-      kind: 'task' as const,
-      id: candidate.taskId,
-    })),
-  );
-  const candidates = candidateRows.filter((candidate) => {
-    const effectiveCapability = candidateAccess.get(
-      resourceAccessKey({
-        organizationId: candidate.organizationId,
-        kind: 'task',
-        id: candidate.taskId,
-      }),
-    )?.effectiveCapability;
-    return effectiveCapability !== null && effectiveCapability !== undefined
-      ? satisfies(effectiveCapability, 'contribute')
-      : false;
-  });
+  const candidates = await contributableCandidates(input.userId, candidateRows);
   if (candidates.length === 0) return { autoPlanned: 0, unplaced: [] };
 
   const edges = await loadDependencyEdges(
@@ -327,28 +396,8 @@ async function autoPlanDay(input: {
 
   let placed = 0;
   for (const item of result.items) {
-    const timebox = {
-      timeboxStartsAt: item.start === null ? null : new Date(item.start),
-      timeboxEndsAt: item.end === null ? null : new Date(item.end),
-    };
     if (item.start !== null) placed += 1;
-
-    const rowId = existing.get(item.taskId);
-    if (rowId === undefined) {
-      await db.insert(dailyPlanItem).values({
-        hubId: input.hubId,
-        refOrganizationId: item.organizationId,
-        refTaskId: item.taskId,
-        date: input.date,
-        sort: item.sort,
-        ...timebox,
-      });
-      continue;
-    }
-    await db
-      .update(dailyPlanItem)
-      .set({ sort: item.sort, ...timebox })
-      .where(eq(dailyPlanItem.id, rowId));
+    await writePlanItem(input.hubId, input.date, item, existing.get(item.taskId));
   }
 
   return {
@@ -379,20 +428,7 @@ async function applyEdit(
   canViewTask: (task: ViewableTaskParts) => boolean,
 ): Promise<boolean> {
   const orgId = actorCtx.orgId;
-  const taskRows = await db
-    .select({
-      id: task.id,
-      teamId: task.teamId,
-      projectId: task.projectId,
-      programId: task.programId,
-      visibility: task.visibility,
-    })
-    .from(task)
-    .where(and(eq(task.id, edit.taskId), eq(task.organizationId, orgId), isNull(task.archivedAt)))
-    .limit(1);
-  const taskRow = taskRows[0];
-  if (!taskRow || !canViewTask(taskRow)) throw new NotFoundError('Task not found');
-  await authorize(actorCtx, 'contribute', { kind: 'task', id: taskRow.id, orgId });
+  await assertEditableTask(actorCtx, edit.taskId, canViewTask);
 
   const where = and(
     eq(dailyPlanItem.hubId, hubId),
@@ -409,57 +445,128 @@ async function applyEdit(
   )[0];
 
   switch (edit.action) {
-    case 'add': {
-      if (existing) return false;
-      // Server-assigned so a plan holds the order it was built in. Letting `sort` default to 0
-      // meant every item tied, and a read with no tiebreaker returned them in whatever order the
-      // page came back — a plan that scrambles itself between reads.
-      const [top] = await db
-        .select({ highest: max(dailyPlanItem.sort) })
-        .from(dailyPlanItem)
-        .where(and(eq(dailyPlanItem.hubId, hubId), eq(dailyPlanItem.date, date)));
-      await db.insert(dailyPlanItem).values({
-        hubId,
-        refOrganizationId: orgId,
-        refTaskId: edit.taskId,
-        date,
-        sort: (top?.highest ?? 0) + 1,
-      });
-      return true;
-    }
+    case 'add':
+      return existing ? false : appendPlanItem(hubId, orgId, date, edit.taskId);
     case 'remove':
       if (!existing) return false;
       await db.delete(dailyPlanItem).where(where);
       return true;
-    case 'complete':
-      if (!existing || existing.status === 'done') return false;
-      await db.update(dailyPlanItem).set({ status: 'done' }).where(where);
-      return true;
-    case 'reopen':
-      if (!existing || existing.status === 'planned') return false;
-      await db.update(dailyPlanItem).set({ status: 'planned' }).where(where);
-      return true;
-    case 'timebox': {
+    case 'timebox':
       if (!existing) throw new NotFoundError('That task is not on this day’s plan');
-      if (edit.startsAt === undefined || edit.endsAt === undefined) {
-        throw new ValidationError(
-          new z.ZodError([
-            {
-              code: 'custom',
-              path: ['edits'],
-              message: 'A timebox needs both startsAt and endsAt.',
-              input: edit.taskId,
-            },
-          ]),
-        );
-      }
-      await db
-        .update(dailyPlanItem)
-        .set({ timeboxStartsAt: new Date(edit.startsAt), timeboxEndsAt: new Date(edit.endsAt) })
-        .where(where);
+      await applyTimebox(where, edit);
       return true;
-    }
+    default:
+      return setPlanItemStatus(where, existing?.status, edit.action);
   }
+}
+
+/**
+ * Refuse a plan edit on a task the caller cannot see or contribute to.
+ *
+ * @param actorCtx - The authenticated MCP actor.
+ * @param taskId - The task the edit names.
+ * @param canViewTask - The viewer's task visibility predicate.
+ * @throws {NotFoundError} When the task is archived, or invisible to them.
+ */
+async function assertEditableTask(
+  actorCtx: McpActor,
+  taskId: string,
+  canViewTask: (candidate: ViewableTaskParts) => boolean,
+): Promise<void> {
+  const orgId = actorCtx.orgId;
+  const taskRows = await db
+    .select({
+      id: task.id,
+      teamId: task.teamId,
+      projectId: task.projectId,
+      programId: task.programId,
+      visibility: task.visibility,
+    })
+    .from(task)
+    .where(and(eq(task.id, taskId), eq(task.organizationId, orgId), isNull(task.archivedAt)))
+    .limit(1);
+  const taskRow = taskRows[0];
+  if (!taskRow || !canViewTask(taskRow)) throw new NotFoundError('Task not found');
+  await authorize(actorCtx, 'contribute', { kind: 'task', id: taskRow.id, orgId });
+}
+
+/**
+ * Put one task at the end of the day's plan.
+ *
+ * @remarks
+ * `sort` is server-assigned so a plan holds the order it was built in. Letting it default to 0
+ * meant every item tied, and a read with no tiebreaker returned them in whatever order the page
+ * came back — a plan that scrambles itself between reads.
+ *
+ * @param hubId - The Hub whose day this is.
+ * @param orgId - The workspace the task belongs to.
+ * @param date - The civil date being planned.
+ * @param taskId - The task to add.
+ * @returns `true`, because adding always changes the plan.
+ */
+async function appendPlanItem(
+  hubId: string,
+  orgId: string,
+  date: string,
+  taskId: string,
+): Promise<boolean> {
+  const [top] = await db
+    .select({ highest: max(dailyPlanItem.sort) })
+    .from(dailyPlanItem)
+    .where(and(eq(dailyPlanItem.hubId, hubId), eq(dailyPlanItem.date, date)));
+  await db.insert(dailyPlanItem).values({
+    hubId,
+    refOrganizationId: orgId,
+    refTaskId: taskId,
+    date,
+    sort: (top?.highest ?? 0) + 1,
+  });
+  return true;
+}
+
+/**
+ * Move one planned task between done and planned.
+ *
+ * @param where - The predicate selecting that plan row.
+ * @param current - The row's current status, when it is on the plan at all.
+ * @param action - Which way it is moving.
+ * @returns Whether anything changed.
+ */
+async function setPlanItemStatus(
+  where: ReturnType<typeof and>,
+  current: string | undefined,
+  action: 'complete' | 'reopen',
+): Promise<boolean> {
+  const next = action === 'complete' ? 'done' : 'planned';
+  if (current === undefined || current === next) return false;
+  await db.update(dailyPlanItem).set({ status: next }).where(where);
+  return true;
+}
+
+/**
+ * Give one planned task its time window.
+ *
+ * @param where - The predicate selecting that plan row.
+ * @param edit - The timebox edit.
+ * @throws {ValidationError} When only one end of the window was given.
+ */
+async function applyTimebox(where: ReturnType<typeof and>, edit: PlanEdit): Promise<void> {
+  if (edit.startsAt === undefined || edit.endsAt === undefined) {
+    throw new ValidationError(
+      new z.ZodError([
+        {
+          code: 'custom',
+          path: ['edits'],
+          message: 'A timebox needs both startsAt and endsAt.',
+          input: edit.taskId,
+        },
+      ]),
+    );
+  }
+  await db
+    .update(dailyPlanItem)
+    .set({ timeboxStartsAt: new Date(edit.startsAt), timeboxEndsAt: new Date(edit.endsAt) })
+    .where(where);
 }
 
 /**
@@ -558,4 +665,10 @@ async function readDay(
       },
     ];
   });
+}
+
+/** Register the day-planning tools. */
+export function registerPlanTools(server: McpRegistrar, ctx: McpContext): void {
+  registerReadDayTool(server, ctx);
+  registerPlanDayTool(server, ctx);
 }

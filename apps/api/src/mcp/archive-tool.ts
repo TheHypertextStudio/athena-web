@@ -116,145 +116,241 @@ export function registerArchiveTool(
         openWorldHint: false,
       },
     },
-    (input) =>
-      runTool(async () => {
-        const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
-        await authorize(actorCtx, 'view', {
-          kind: 'organization',
-          id: input.orgId,
-          orgId: input.orgId,
-        });
-
-        const restore = input.restore === true;
-        const entity: WorkEntity = input.entity;
-        const { ids, ...filters } = input.scope;
-        const hasNarrowing = NARROWING.some((name) => filters[name] !== undefined);
-        if ((ids === undefined || ids.length === 0) && !hasNarrowing) {
-          reject(
-            'scope',
-            `An unscoped archive would take every ${entity} in the workspace out of view. Name at least one filter, or pass scope.ids.`,
-            NARROWING,
-          );
-        }
-
-        // Restoring reads the archived pool: "un-archive the cancelled ones" must select rows
-        // that are, by definition, invisible to the default query.
-        const selected =
-          ids !== undefined && ids.length > 0
-            ? ids
-            : (
-                await listWork(
-                  input.orgId,
-                  actorCtx.actorId,
-                  entity,
-                  { ...filters, archived: restore },
-                  MAX_TARGETS,
-                  undefined,
-                )
-              ).map((row) => row.id);
-        if (selected.length > MAX_TARGETS) {
-          reject(
-            'scope',
-            `That scope matches more than ${MAX_TARGETS} ${entity}s. Narrow it.`,
-            NARROWING,
-          );
-        }
-
-        const table = TABLES[entity] as PgTable & {
-          id: typeof task.id;
-          organizationId: typeof task.organizationId;
-          archivedAt: typeof task.archivedAt;
-        };
-        const rows: Record<string, unknown>[] =
-          selected.length === 0
-            ? []
-            : await db
-                .select()
-                .from(table)
-                .where(and(inArray(table.id, selected), eq(table.organizationId, input.orgId)));
-        const canViewTask =
-          entity === 'task' ? await buildTaskViewFilter(input.orgId, actorCtx.actorId) : undefined;
-        const visibleRows = canViewTask
-          ? rows.filter((row) => isTaskRowVisible(row, canViewTask))
-          : rows;
-
-        const changes: ChangeRecord[] = [];
-        const items: { id: string; title: string; href: string }[] = [];
-        const skipped: { id: string; title: string; reason: string }[] = [];
-
-        for (const row of visibleRows) {
-          const id = String(row['id']);
-          const named = row['title'] ?? row['name'];
-          const title = typeof named === 'string' && named.length > 0 ? named : id;
-          const alreadyThere = (row['archivedAt'] === null) === restore;
-          if (alreadyThere) {
-            skipped.push({ id, title, reason: restore ? 'not_archived' : 'already_archived' });
-            continue;
-          }
-          try {
-            await authorize(actorCtx, 'contribute', { kind: entity, id, orgId: input.orgId });
-          } catch (err) {
-            if (!(err instanceof ApiError)) throw err;
-            skipped.push({ id, title, reason: 'not_permitted' });
-            continue;
-          }
-
-          const before = trackedFields(entity, row);
-          const updated = await db
-            .update(table)
-            .set({ archivedAt: restore ? null : new Date() })
-            .where(and(eq(table.id, id), eq(table.organizationId, input.orgId)))
-            .returning();
-          const next = updated[0];
-          /* v8 ignore next -- @preserve defensive: the row was just read in this call */
-          if (!next) continue;
-
-          items.push({ id, title, href: entityHref(input.orgId, entity, id) });
-          // Recorded as `update` rather than `archive`, because reversing either direction means
-          // restoring the previous `archivedAt` — and the `archive` op only knows one of them.
-          changes.push({
-            kind: entity,
-            id,
-            op: 'update',
-            before,
-            after: trackedFields(entity, next),
-          });
-          await enqueueSearchUpsert(input.orgId, entity, id);
-          const parentTaskId =
-            entity === 'task' && typeof row['parentTaskId'] === 'string'
-              ? row['parentTaskId']
-              : null;
-          if (parentTaskId !== null) {
-            const cascades = await db.transaction((tx) =>
-              applySubtaskCompletionPolicyForParents(tx, input.orgId, [parentTaskId]),
-            );
-            for (const cascade of cascades) {
-              await finishTaskStateTransition({ actorId: null }, cascade);
-            }
-          }
-        }
-
-        const changeSetId = await recordChangeSet({
-          orgId: input.orgId,
-          actorId: actorCtx.actorId,
-          origin: {
-            tool: 'archive',
-            ...(sessionId ? { sessionId } : {}),
-            ...(ctx.principal.kind === 'agent' ? { client: ctx.principal.displayName } : {}),
-          },
-          summary: `${restore ? 'Restored' : 'Archived'} ${items.length} ${entity}s`,
-          changes,
-        });
-
-        return jsonResult({
-          matched: visibleRows.length,
-          listHref: entityListHref(input.orgId, entity),
-          changed: items.length,
-          entity,
-          items,
-          skipped,
-          changeSetId,
-        });
-      }),
+    (input) => runTool(() => archiveWork(ctx, sessionId, input)),
   );
+}
+
+/** The `archive` tool's validated input. */
+interface ArchiveInput {
+  readonly orgId: string;
+  readonly entity: WorkEntity;
+  readonly scope: Record<string, unknown> & { readonly ids?: readonly string[] | undefined };
+  readonly restore?: boolean | undefined;
+}
+
+/** The archive table for one entity kind, narrowed to the columns this tool writes. */
+type ArchivableTable = PgTable & {
+  id: typeof task.id;
+  organizationId: typeof task.organizationId;
+  archivedAt: typeof task.archivedAt;
+};
+
+/**
+ * Resolve which rows an archive call targets, refusing a scope that is too wide.
+ *
+ * @remarks
+ * Restoring reads the archived pool: "un-archive the cancelled ones" must select rows that are, by
+ * definition, invisible to the default query. An unscoped call is refused outright rather than
+ * defaulted, because the default would take every item of that kind out of view.
+ *
+ * @param orgId - The workspace being archived in.
+ * @param actorId - The acting actor, for visibility.
+ * @param input - The validated tool input.
+ * @param restore - Whether this call restores rather than archives.
+ * @returns The ids to act on.
+ * @throws {ValidationError} When the scope names nothing, or matches too much.
+ */
+async function resolveArchiveTargets(
+  orgId: string,
+  actorId: string,
+  input: ArchiveInput,
+  restore: boolean,
+): Promise<string[]> {
+  const { ids, ...filters } = input.scope;
+  const hasNarrowing = NARROWING.some((name) => filters[name] !== undefined);
+  if ((ids === undefined || ids.length === 0) && !hasNarrowing) {
+    reject(
+      'scope',
+      `An unscoped archive would take every ${input.entity} in the workspace out of view. Name at least one filter, or pass scope.ids.`,
+      NARROWING,
+    );
+  }
+  const selected =
+    ids !== undefined && ids.length > 0
+      ? [...ids]
+      : (
+          await listWork({
+            orgId,
+            actorId,
+            entity: input.entity,
+            input: { ...filters, archived: restore },
+            limit: MAX_TARGETS,
+            after: undefined,
+          })
+        ).map((row) => row.id);
+  if (selected.length > MAX_TARGETS) {
+    reject(
+      'scope',
+      `That scope matches more than ${MAX_TARGETS} ${input.entity}s. Narrow it.`,
+      NARROWING,
+    );
+  }
+  return selected;
+}
+
+/**
+ * Read the targeted rows, dropping any the caller cannot see.
+ *
+ * @param orgId - The workspace being archived in.
+ * @param actorId - The acting actor, for task visibility.
+ * @param entity - The kind being archived.
+ * @param selected - The ids the scope resolved to.
+ * @returns The visible rows.
+ */
+async function loadArchivableRows(
+  orgId: string,
+  actorId: string,
+  entity: WorkEntity,
+  selected: readonly string[],
+): Promise<Record<string, unknown>[]> {
+  if (selected.length === 0) return [];
+  const table = TABLES[entity] as ArchivableTable;
+  const rows: Record<string, unknown>[] = await db
+    .select()
+    .from(table)
+    .where(and(inArray(table.id, [...selected]), eq(table.organizationId, orgId)));
+  if (entity !== 'task') return rows;
+  const canViewTask = await buildTaskViewFilter(orgId, actorId);
+  return rows.filter((row) => isTaskRowVisible(row, canViewTask));
+}
+
+/** What one archive pass did to the rows it touched. */
+interface ArchiveOutcome {
+  readonly items: { id: string; title: string; href: string }[];
+  readonly skipped: { id: string; title: string; reason: string }[];
+  readonly changes: ChangeRecord[];
+}
+
+/**
+ * Archive or restore one row, recording what changed.
+ *
+ * @param actorCtx - The authenticated MCP actor.
+ * @param input - The validated tool input.
+ * @param restore - Whether this call restores rather than archives.
+ * @param row - The row to act on.
+ * @param outcome - The running outcome, appended to in place.
+ */
+async function archiveOneRow(
+  actorCtx: Awaited<ReturnType<typeof scopedActor>>,
+  input: ArchiveInput,
+  restore: boolean,
+  row: Record<string, unknown>,
+  outcome: ArchiveOutcome,
+): Promise<void> {
+  const orgId = input.orgId;
+  const entity = input.entity;
+  const id = String(row['id']);
+  const named = row['title'] ?? row['name'];
+  const title = typeof named === 'string' && named.length > 0 ? named : id;
+  if ((row['archivedAt'] === null) === restore) {
+    outcome.skipped.push({ id, title, reason: restore ? 'not_archived' : 'already_archived' });
+    return;
+  }
+  try {
+    await authorize(actorCtx, 'contribute', { kind: entity, id, orgId });
+  } catch (err) {
+    if (!(err instanceof ApiError)) throw err;
+    outcome.skipped.push({ id, title, reason: 'not_permitted' });
+    return;
+  }
+
+  const table = TABLES[entity] as ArchivableTable;
+  const before = trackedFields(entity, row);
+  const updated = await db
+    .update(table)
+    .set({ archivedAt: restore ? null : new Date() })
+    .where(and(eq(table.id, id), eq(table.organizationId, orgId)))
+    .returning();
+  const next = updated[0];
+  /* v8 ignore next -- @preserve defensive: the row was just read in this call */
+  if (!next) return;
+
+  outcome.items.push({ id, title, href: entityHref(orgId, entity, id) });
+  // Recorded as `update` rather than `archive`, because reversing either direction means
+  // restoring the previous `archivedAt` — and the `archive` op only knows one of them.
+  outcome.changes.push({
+    kind: entity,
+    id,
+    op: 'update',
+    before,
+    after: trackedFields(entity, next),
+  });
+  await enqueueSearchUpsert(orgId, entity, id);
+  await cascadeToParent(orgId, entity, row);
+}
+
+/**
+ * Re-run the subtask completion policy for an archived subtask's parent.
+ *
+ * @param orgId - The workspace the task belongs to.
+ * @param entity - The kind that was archived.
+ * @param row - The row that was archived.
+ */
+async function cascadeToParent(
+  orgId: string,
+  entity: WorkEntity,
+  row: Record<string, unknown>,
+): Promise<void> {
+  const parentTaskId =
+    entity === 'task' && typeof row['parentTaskId'] === 'string' ? row['parentTaskId'] : null;
+  if (parentTaskId === null) return;
+  const cascades = await db.transaction((tx) =>
+    applySubtaskCompletionPolicyForParents(tx, orgId, [parentTaskId]),
+  );
+  for (const cascade of cascades) {
+    await finishTaskStateTransition({ actorId: null }, cascade);
+  }
+}
+
+/**
+ * Take a scoped set of work out of view, or bring it back.
+ *
+ * @param ctx - The authenticated MCP caller.
+ * @param sessionId - The agent session this ran inside, when there is one.
+ * @param input - The validated tool input.
+ * @returns What moved, what did not, and the change set to undo it with.
+ */
+async function archiveWork(ctx: McpContext, sessionId: string | null, input: ArchiveInput) {
+  const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
+  await authorize(actorCtx, 'view', {
+    kind: 'organization',
+    id: input.orgId,
+    orgId: input.orgId,
+  });
+
+  const restore = input.restore === true;
+  const selected = await resolveArchiveTargets(input.orgId, actorCtx.actorId, input, restore);
+  const visibleRows = await loadArchivableRows(
+    input.orgId,
+    actorCtx.actorId,
+    input.entity,
+    selected,
+  );
+
+  const outcome: ArchiveOutcome = { items: [], skipped: [], changes: [] };
+  for (const row of visibleRows) {
+    await archiveOneRow(actorCtx, input, restore, row, outcome);
+  }
+
+  const changeSetId = await recordChangeSet({
+    orgId: input.orgId,
+    actorId: actorCtx.actorId,
+    origin: {
+      tool: 'archive',
+      ...(sessionId ? { sessionId } : {}),
+      ...(ctx.principal.kind === 'agent' ? { client: ctx.principal.displayName } : {}),
+    },
+    summary: `${restore ? 'Restored' : 'Archived'} ${outcome.items.length} ${input.entity}s`,
+    changes: outcome.changes,
+  });
+
+  return jsonResult({
+    matched: visibleRows.length,
+    listHref: entityListHref(input.orgId, input.entity),
+    changed: outcome.items.length,
+    entity: input.entity,
+    items: outcome.items,
+    skipped: outcome.skipped,
+    changeSetId,
+  });
 }

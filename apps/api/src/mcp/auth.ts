@@ -244,21 +244,8 @@ async function resolveBearerContext(token: string): Promise<McpContext> {
 
   const userId = typeof payload.sub === 'string' ? payload.sub : null;
   if (!userId) throw new AuthError();
-
-  // `azp` is the authorized party — the OAuth client the AS minted this token for. Better Auth's
-  // `oauthProvider` stamps it onto every access token it issues, so a token that reaches here
-  // without one did not come from the authorization-code flow and cannot have its grant checked;
-  // refusing is the only answer that keeps revocation meaningful.
-  const clientClaim = payload['azp'];
-  const clientId = typeof clientClaim === 'string' && clientClaim !== '' ? clientClaim : null;
-  if (!clientId) throw new AuthError();
+  const clientId = authorizedPartyOf(payload);
   if (!(await isGrantLive(clientId, userId))) throw new AuthError();
-
-  const scopeClaim = payload['scope'];
-  const scopes = (typeof scopeClaim === 'string' ? scopeClaim : '')
-    .split(/\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
 
   // The user record backs the display name/email the prompts/resources surface — read
   // directly by the token's `sub`, independent of any session cookie (there may be none).
@@ -278,9 +265,42 @@ async function resolveBearerContext(token: string): Promise<McpContext> {
       userName: name === '' ? null : name,
       userEmail: row?.email ?? '',
     },
-    scopes,
+    scopes: scopesOf(payload),
     clientId,
   };
+}
+
+/**
+ * The OAuth client an access token was minted for.
+ *
+ * @remarks
+ * `azp` is the authorized party. Better Auth's `oauthProvider` stamps it onto every access token
+ * it issues, so a token that reaches here without one did not come from the authorization-code
+ * flow and cannot have its grant checked; refusing is the only answer that keeps revocation
+ * meaningful.
+ *
+ * @param payload - The verified token payload.
+ * @returns The client id.
+ * @throws {AuthError} When the token names no authorized party.
+ */
+function authorizedPartyOf(payload: Record<string, unknown>): string {
+  const claim = payload['azp'];
+  if (typeof claim !== 'string' || claim === '') throw new AuthError();
+  return claim;
+}
+
+/**
+ * The scopes an access token carries.
+ *
+ * @param payload - The verified token payload.
+ * @returns The scopes, in the order the token lists them.
+ */
+function scopesOf(payload: Record<string, unknown>): string[] {
+  const claim = payload['scope'];
+  return (typeof claim === 'string' ? claim : '')
+    .split(/\s+/)
+    .map((scope) => scope.trim())
+    .filter(Boolean);
 }
 
 /**

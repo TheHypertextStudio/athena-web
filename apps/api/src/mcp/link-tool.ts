@@ -86,49 +86,67 @@ export function registerLinkTool(
         openWorldHint: false,
       },
     },
-    (input) =>
-      runTool(async () => {
-        const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
-        const remove = input.remove === true;
-        const result = await applyRelation(
-          input.relation,
-          input.orgId,
-          input.from,
-          input.to,
-          remove,
-          async (kind, id) => {
-            await authorize(actorCtx, 'contribute', { kind, id, orgId: input.orgId });
-          },
-        );
-
-        const changeSetId = result.changed
-          ? await recordChangeSet({
-              orgId: input.orgId,
-              actorId: actorCtx.actorId,
-              origin: {
-                tool: 'link',
-                ...(sessionId ? { sessionId } : {}),
-                ...(ctx.principal.kind === 'agent' ? { client: ctx.principal.displayName } : {}),
-              },
-              summary: remove
-                ? `Unlinked ${input.relation.replace(/_/g, ' ')}`
-                : `Linked ${input.relation.replace(/_/g, ' ')}`,
-              changes: result.changes,
-            })
-          : null;
-
-        for (const id of result.reindex) await enqueueSearchUpsert(input.orgId, 'task', id);
-
-        return jsonResult({
-          relation: input.relation,
-          from: result.from,
-          to: result.to,
-          linked: !remove,
-          changed: result.changed,
-          changeSetId,
-        });
-      }),
+    (input) => runTool(() => linkRelation(ctx, sessionId, input)),
   );
+}
+
+/** The `link` tool's validated input. */
+interface LinkInput {
+  readonly orgId: string;
+  readonly relation: Relation;
+  readonly from: string;
+  readonly to: string;
+  readonly remove?: boolean | undefined;
+}
+
+/**
+ * Assert or take back one relation between two pieces of work.
+ *
+ * @param ctx - The authenticated MCP caller.
+ * @param sessionId - The agent session this ran inside, when there is one.
+ * @param input - The validated tool input.
+ * @returns Both endpoints, whether anything changed, and the change set to undo it with.
+ */
+async function linkRelation(ctx: McpContext, sessionId: string | null, input: LinkInput) {
+  const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
+  const remove = input.remove === true;
+  const result = await applyRelation({
+    relation: input.relation,
+    orgId: input.orgId,
+    from: input.from,
+    to: input.to,
+    remove,
+    guard: async (kind, id) => {
+      await authorize(actorCtx, 'contribute', { kind, id, orgId: input.orgId });
+    },
+  });
+
+  const changeSetId = result.changed
+    ? await recordChangeSet({
+        orgId: input.orgId,
+        actorId: actorCtx.actorId,
+        origin: {
+          tool: 'link',
+          ...(sessionId ? { sessionId } : {}),
+          ...(ctx.principal.kind === 'agent' ? { client: ctx.principal.displayName } : {}),
+        },
+        summary: remove
+          ? `Unlinked ${input.relation.replace(/_/g, ' ')}`
+          : `Linked ${input.relation.replace(/_/g, ' ')}`,
+        changes: result.changes,
+      })
+    : null;
+
+  for (const id of result.reindex) await enqueueSearchUpsert(input.orgId, 'task', id);
+
+  return jsonResult({
+    relation: input.relation,
+    from: result.from,
+    to: result.to,
+    linked: !remove,
+    changed: result.changed,
+    changeSetId,
+  });
 }
 
 /** What applying one relation did. */
@@ -144,25 +162,29 @@ interface RelationResult {
 /** Authorize the caller on one endpoint before it is touched. */
 type Guard = (kind: 'task' | 'project' | 'program' | 'initiative', id: string) => Promise<void>;
 
+/** One relation to assert or take back, with the guard that authorizes each endpoint. */
+interface RelationRequest {
+  readonly relation: Relation;
+  /** The organization both endpoints belong to. */
+  readonly orgId: string;
+  /** The subject descriptor or id. */
+  readonly from: string;
+  /** The object descriptor or id. */
+  readonly to: string;
+  /** Whether to take the relation back rather than assert it. */
+  readonly remove: boolean;
+  /** Runs before each endpoint is written. */
+  readonly guard: Guard;
+}
+
 /**
  * Resolve both endpoints, authorize them, and write the relation.
  *
- * @param relation - Which relation.
- * @param orgId - The organization both endpoints belong to.
- * @param from - The subject descriptor or id.
- * @param to - The object descriptor or id.
- * @param remove - Whether to take the relation back rather than assert it.
- * @param guard - Runs before each endpoint is written.
+ * @param request - The relation to apply.
  * @returns what was written.
  */
-async function applyRelation(
-  relation: Relation,
-  orgId: string,
-  from: string,
-  to: string,
-  remove: boolean,
-  guard: Guard,
-): Promise<RelationResult> {
+async function applyRelation(request: RelationRequest): Promise<RelationResult> {
+  const { relation, orgId, from, to, remove, guard } = request;
   if (relation === 'blocks') return applyBlocks(orgId, from, to, remove, guard);
   if (relation === 'subtask_of') return applySubtaskOf(orgId, from, to, remove, guard);
   return applyContributesTo(orgId, from, to, remove, guard);

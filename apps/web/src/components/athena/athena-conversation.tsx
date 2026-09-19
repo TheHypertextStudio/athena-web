@@ -29,7 +29,7 @@ import {
   Skeleton,
   surfaceToneColor,
 } from '@docket/ui/primitives';
-import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
+import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 
@@ -40,10 +40,12 @@ import { AthenaContextChip } from '@/components/athena/athena-context-chip';
 import { ConversationSuggestions } from '@/components/athena/conversation-suggestions';
 import { ElicitationQueue } from '@/components/athena/elicitation-queue';
 import { PartialLoadBanner, presentFailure, QueryLoadFailure } from '@/components/feedback';
+import { AthenaHeadsUpSlot } from '@/components/athena/heads-up-entry';
 import { ThreadEntries } from '@/components/athena/thread-entries';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 import { AddMcpConnectorForm } from '@/components/settings/mcp-connectors-section';
 import { fetchOrgChatThread, sendOrgChatMessage, useOrgChatThread } from '@/lib/athena/chat-defs';
+import { dismissHeadsUp, headsUpsFor } from '@/lib/athena/heads-ups';
 import { mergeThreadEntries, type ThreadEntry } from '@/lib/athena/job-presentation';
 import type {
   PersonalAthenaContext,
@@ -480,6 +482,14 @@ export default function AthenaConversation({
   const thread = query.data ?? null;
   const entries = mergeThreadEntries(thread?.activities ?? [], jobs);
 
+  // Captured once per mount, not on every render: a heads-up's "has been waiting since" reading
+  // should hold steady for the life of this panel rather than creeping forward on each rerender.
+  // `jobs` is re-read on every poll tick the host already runs, which is what lets a heads-up
+  // appear or clear without this component polling anything of its own.
+  const [now] = useState(() => new Date());
+  const headsUps = useMemo(() => headsUpsFor(jobs, now), [jobs, now]);
+  const [closedHeadsUpId, setClosedHeadsUpId] = useState<string | null>(null);
+
   // Called after a proposal group settles (via `ChatProposals`'s `onSettled`), so the group's
   // ghost rows — each carrying a stable `view-transition-name` — morph out in place instead of
   // the list just popping. The fetch happens first and the cache write goes inside the
@@ -521,6 +531,14 @@ export default function AthenaConversation({
   return (
     <div className={cn('flex h-full w-full flex-col', className)}>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-4">
+        <AthenaHeadsUpSlot
+          headsUps={headsUps}
+          closedId={closedHeadsUpId}
+          onDismiss={(id) => {
+            dismissHeadsUp(id);
+            setClosedHeadsUpId(id);
+          }}
+        />
         {/* placeholder: the conversation's own history — how many turns exist, who said what, and
             how long each message is. The composer below it is interactive from the first paint. */}
         <ConversationBody

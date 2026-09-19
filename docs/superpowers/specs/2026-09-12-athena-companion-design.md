@@ -218,7 +218,10 @@ session.
   person, when a proposal has waited longer than a configurable threshold, and when the current
   page has an overdue or blocked item the person owns. Each heads-up is one sentence with one
   action. Thresholds and the on/off switch are per-user settings under Settings › Athena, on by
-  default.
+  default. The first slice ships two of these triggers (a job waiting past a fixed hour, a job
+  that failed) computed client-side from the jobs already on the page, with dismissal kept
+  per-viewer in browser storage; per-user thresholds and the Settings › Athena switch follow in a
+  later slice.
 
 ### 4.6 Delegated work
 

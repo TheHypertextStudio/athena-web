@@ -306,6 +306,32 @@ describe('AthenaConversation page context', () => {
   });
 });
 
+describe('AthenaConversation heads-up', () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it('shows one heads-up with Review and Dismiss, and Dismiss removes it', async () => {
+    chatGet.mockResolvedValue(okResponse(thread([])));
+    const waitingJob = job({
+      id: 'job_waiting',
+      status: 'awaiting_approval',
+      queueState: 'needs_you',
+      updatedAt: '2020-01-01T00:00:00.000Z',
+    });
+    renderConversation({ jobs: [waitingJob], transport: jobTransport(waitingJob) });
+
+    expect(await screen.findByText('Heads-up')).toBeVisible();
+    const review = screen.getByRole('button', { name: 'Review' });
+    const dismiss = screen.getByRole('button', { name: 'Dismiss' });
+    expect(review).toBeVisible();
+
+    fireEvent.click(dismiss);
+
+    expect(screen.queryByText('Heads-up')).not.toBeInTheDocument();
+  });
+});
+
 describe('AthenaConversation delegated work', () => {
   it('renders a job as a card among the thread entries and skips the empty state', async () => {
     chatGet.mockResolvedValue(okResponse(thread([])));

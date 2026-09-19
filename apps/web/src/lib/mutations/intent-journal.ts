@@ -147,7 +147,7 @@ export class IntentJournal<T> {
       const result = entry.deliver(entry.value, entry.version);
       Promise.resolve(result).then(
         (authoritative) => {
-          this.settle(scope, field, entry, true, authoritative, true);
+          this.settle(scope, field, entry, true, { authoritative, hasAuthoritative: true });
         },
         () => {
           this.settle(scope, field, entry, false);
@@ -158,32 +158,36 @@ export class IntentJournal<T> {
     }
   }
 
+  private updateAuthoritativeIfNeeded(
+    scope: string,
+    field: string,
+    entry: Entry<T>,
+    state: FieldState<T>,
+    options?: { authoritative?: T; hasAuthoritative?: boolean },
+  ): void {
+    if (!options?.hasAuthoritative || entry.version < state.authoritativeVersion) return;
+    const authoritative = options.authoritative as T;
+    state.authoritative = authoritative;
+    state.authoritativeVersion = entry.version;
+    this.rememberAuthoritative(identityKey(scope, field), authoritative, entry.version);
+  }
+
   private settle(
     scope: string,
     field: string,
     entry: Entry<T>,
     success: boolean,
-    authoritative?: T,
-    hasAuthoritative = false,
+    options?: { authoritative?: T; hasAuthoritative?: boolean },
   ): void {
     const state = this.fields.get(identityKey(scope, field));
     if (!state?.latest && !state?.inFlight) return;
     if (!entry.active) return;
     entry.active = false;
     if (state.inFlight === entry) state.inFlight = undefined;
-    if (success && hasAuthoritative && entry.version >= state.authoritativeVersion) {
-      state.authoritative = authoritative as T;
-      state.authoritativeVersion = entry.version;
-      const key = identityKey(scope, field);
-      this.rememberAuthoritative(key, state.authoritative, entry.version);
-    }
+    if (success) this.updateAuthoritativeIfNeeded(scope, field, entry, state, options);
     if (state.latest === entry) {
-      if (success) {
-        entry.status = 'settled';
-        state.latest = undefined;
-      } else {
-        entry.status = 'needs_attention';
-      }
+      entry.status = success ? 'settled' : 'needs_attention';
+      if (success) state.latest = undefined;
     }
     this.emit();
     this.dispatch(scope, field, state);

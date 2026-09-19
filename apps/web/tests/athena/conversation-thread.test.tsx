@@ -240,4 +240,41 @@ describe('AthenaConversation thread structure', () => {
       expect(jumpControl()).toBeNull();
     });
   });
+
+  it('stays at the end as entries finish laying out, unless the person scrolled back', async () => {
+    const resized: ResizeObserverCallback[] = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resized.push(callback);
+        }
+        readonly observe = vi.fn();
+        readonly disconnect = vi.fn();
+      },
+    );
+    chatGet.mockResolvedValue(okResponse(thread([])));
+    renderConversation();
+    const scroller = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>('[data-slot="athena-thread"]');
+      if (!found) throw new Error('no thread yet');
+      return found;
+    });
+    const grow = (height: number): void => {
+      Object.defineProperty(scroller, 'scrollHeight', { value: height, configurable: true });
+      act(() => {
+        resized.at(-1)?.([], {} as ResizeObserver);
+      });
+    };
+
+    grow(900);
+    expect(scroller.scrollTop).toBe(900);
+
+    Object.defineProperty(scroller, 'clientHeight', { value: 300, configurable: true });
+    scroller.scrollTop = 100;
+    fireEvent.scroll(scroller);
+    grow(1200);
+    expect(scroller.scrollTop).toBe(100);
+    vi.unstubAllGlobals();
+  });
 });

@@ -1,7 +1,6 @@
 'use client';
 
 import type { RailPanelStatus } from '@docket/ui/components';
-import { Surface } from '@docket/ui/primitives';
 import {
   createContext,
   type JSX,
@@ -262,17 +261,22 @@ export function AthenaRailPanel(): JSX.Element {
   const { railContent, context } = useAthenaPanel();
   const orgId = context?.workspaceId;
   return (
-    <Surface
-      as="section"
-      tone="page"
-      shape="none"
-      className="flex h-full min-h-0 flex-col"
-      aria-label="Athena"
-    >
+    // No surface of its own: the rail host paints the one tonal step the panel sits on.
+    <section className="flex h-full min-h-0 flex-col" aria-label="Athena">
       {railContent ??
         (orgId ? <AthenaRailConversation orgId={orgId} /> : <AthenaRailNoWorkspace />)}
-    </Surface>
+    </section>
   );
+}
+
+/**
+ * Whether the rail is showing the person's conversation right now — the panel is open and no route
+ * has swapped its own content in. A page that also shows delegated work reads this so a job the
+ * thread already holds is not drawn a second time. `false` outside the provider.
+ */
+export function useRailShowsConversation(): boolean {
+  const value = useContext(AthenaPanelContext);
+  return value !== null && value.railVisible && value.railContent === null;
 }
 
 /** Read Athena controls from a contextual surface. */

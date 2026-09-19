@@ -191,10 +191,40 @@ function finishedLine({ detail, summary, now }: StateLineInput): string {
   return detail ? `${when} · ${changesPhrase(detail)}` : when;
 }
 
-/** A stopped job's line: what did not happen, or how many changes landed before it stopped. */
-function stoppedLine({ detail }: StateLineInput): string {
-  if (!detail) return 'Stopped';
-  return `Stopped · ${jobFailureCause(detail) ?? changesPhrase(detail)}`;
+/**
+ * What a stopped job's newest unfinished step would have done: "Did not set state to In Progress".
+ *
+ * @returns the sentence, or `null` when every step either landed or failed.
+ */
+function unfinishedStepSentence(detail: PersonalAthenaSessionDetail): string | null {
+  const unfinished = toolActivities(detail.activities)
+    .filter((activity) => activity.applied !== true && activity.failed !== true)
+    .at(-1);
+  if (!unfinished) return null;
+  const described = describeToolActivity(unfinished);
+  return `Did not ${described.charAt(0).toLowerCase()}${described.slice(1)}`;
+}
+
+/** Where a stopped job got to when no step names what did not happen. */
+function stoppedProgress(detail: PersonalAthenaSessionDetail): string {
+  const count = jobChanges(detail).length;
+  if (count > 0) return `after ${countLabel(count, 'change')}`;
+  const newest = newestActivityLine(detail);
+  return newest ? `at ${newest}` : 'before its first step';
+}
+
+/**
+ * A stopped job's line, always concrete: the step that failed, the step that never ran, or how far
+ * the work got — "Stopped · Could not set state to In Progress", "Canceled · Did not send the
+ * recap", "Stopped after 2 changes", "Canceled before its first step".
+ */
+function stoppedLine({ detail, summary }: StateLineInput): string {
+  const status = detail?.status ?? summary.status;
+  const verb = status === 'canceled' ? 'Canceled' : 'Stopped';
+  if (!detail) return verb;
+  const cause = jobFailureCause(detail) ?? unfinishedStepSentence(detail);
+  if (cause) return `${verb} · ${cause}`;
+  return `${verb} ${stoppedProgress(detail)}`;
 }
 
 const STATE_LINE_BY_TONE: Readonly<Record<JobTone, (input: StateLineInput) => string>> = {

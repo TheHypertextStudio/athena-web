@@ -388,9 +388,39 @@ export interface JobReceiptProps {
   readonly onUndo: (changeSetId: string) => void;
 }
 
+/** Props for {@link ReceiptLines}. */
+type ReceiptLinesProps = Pick<JobReceiptProps, 'changes' | 'failureCause'>;
+
 /**
- * A finished entry's receipt: one line per change, then Undo. When nothing changed it says so, in
- * exactly one line, with what did not happen when a step failed.
+ * The receipt's lines: one per change, or the cause when a step failed and nothing landed.
+ *
+ * @remarks
+ * "Nothing changed" is the state line's to say, so it is never repeated here; a run that changed
+ * nothing and hit no error has no receipt line at all.
+ */
+function ReceiptLines({ changes, failureCause }: ReceiptLinesProps): JSX.Element | null {
+  if (changes.length > 0) {
+    return (
+      <ul className="flex flex-col gap-1">
+        {changes.map((change) => (
+          <li key={change.id} className="text-on-surface-variant text-body-small break-words">
+            {change.text}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  if (!failureCause) return null;
+  return (
+    <p data-slot="athena-job-cause" className="text-on-surface-variant text-body-small break-words">
+      {failureCause}
+    </p>
+  );
+}
+
+/**
+ * A finished entry's receipt: one line per change, then Undo. When nothing changed, the state line
+ * already says so, and the receipt holds only the cause when a step failed.
  */
 export function JobReceipt({
   changes,
@@ -399,22 +429,11 @@ export function JobReceipt({
   undone,
   undoPending,
   onUndo,
-}: JobReceiptProps): JSX.Element {
+}: JobReceiptProps): JSX.Element | null {
+  if (changes.length === 0 && !failureCause && !changeSetId) return null;
   return (
     <div data-slot="athena-job-receipt" className="flex flex-col gap-1">
-      {changes.length > 0 ? (
-        <ul className="flex flex-col gap-1">
-          {changes.map((change) => (
-            <li key={change.id} className="text-on-surface-variant text-body-small break-words">
-              {change.text}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-on-surface-variant text-body-small break-words">
-          {failureCause ? `Nothing changed. ${failureCause}.` : 'Nothing changed.'}
-        </p>
-      )}
+      <ReceiptLines changes={changes} failureCause={failureCause} />
       {changeSetId ? (
         <StepUndo changeSetId={changeSetId} undone={undone} pending={undoPending} onUndo={onUndo} />
       ) : null}

@@ -87,6 +87,44 @@ function useWaitingOutOfView(
   return jobId !== null && visibility.jobId === jobId && visibility.outOfView;
 }
 
+/** How close to the end, in px, still counts as reading the newest entry. */
+const STICK_TO_END_SLACK_PX = 48;
+
+/**
+ * Keep the thread at its end while its content grows, as long as the person was already there.
+ *
+ * @remarks
+ * Entries finish their layout after they first render — a work entry's detail read, a question's
+ * controls — so a single scroll on each new entry left the newest ones below the fold. A
+ * `ResizeObserver` on the content column re-pins the end whenever it grows, and only when the
+ * scroller was at (or within {@link STICK_TO_END_SLACK_PX} of) the end, so someone reading back is
+ * never pulled down.
+ */
+function useStickToEnd(
+  scrollerRef: RefObject<HTMLDivElement | null>,
+  columnRef: RefObject<HTMLDivElement | null>,
+): void {
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    const column = columnRef.current;
+    if (!scroller || !column || typeof ResizeObserver === 'undefined') return;
+    let atEnd = true;
+    const onScroll = (): void => {
+      const remaining = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+      atEnd = remaining <= STICK_TO_END_SLACK_PX;
+    };
+    const observer = new ResizeObserver(() => {
+      if (atEnd) scroller.scrollTop = scroller.scrollHeight;
+    });
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    observer.observe(column);
+    return () => {
+      scroller.removeEventListener('scroll', onScroll);
+      observer.disconnect();
+    };
+  }, [scrollerRef, columnRef]);
+}
+
 /** Props for {@link ChatProposals}. */
 interface ChatProposalsProps {
   readonly orgId: string;
@@ -270,6 +308,7 @@ export function ConversationThread(props: ConversationThreadProps): JSX.Element 
   const { entries, headsUps, closedHeadsUpId, onDismissHeadsUp, waitingJobId } = props;
   const { scrollToJobId, onScrolledToJob, landingQuestionId } = props;
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const columnRef = useRef<HTMLDivElement | null>(null);
   // Keyed on the loading flag too: entries render only once the thread's own read settles.
   const renderedCount = props.query.isPending ? 0 : entries.length;
   const waitingOutOfView = useWaitingOutOfView(scrollerRef, waitingJobId, renderedCount);
@@ -279,6 +318,7 @@ export function ConversationThread(props: ConversationThreadProps): JSX.Element 
     const scroller = scrollerRef.current;
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
   }, [renderedCount]);
+  useStickToEnd(scrollerRef, columnRef);
 
   // Honour a host's request to jump to one job's entry. The entry may not be mounted yet (the
   // thread is still loading); the request then stays pending until `entries` changes.
@@ -301,7 +341,7 @@ export function ConversationThread(props: ConversationThreadProps): JSX.Element 
   return (
     <div className="relative min-h-0 flex-1">
       <div ref={scrollerRef} data-slot="athena-thread" className="absolute inset-0 overflow-y-auto">
-        <div className="flex min-h-full flex-col justify-end gap-8 py-4">
+        <div ref={columnRef} className="flex min-h-full flex-col justify-end gap-8 py-4">
           <ThreadBody {...props} />
           <AthenaHeadsUpSlot
             headsUps={headsUps}

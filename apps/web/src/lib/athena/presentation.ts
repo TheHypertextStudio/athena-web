@@ -209,15 +209,22 @@ export function presentAthenaActivity(
   return {
     id: activity.id,
     kind: activity.type,
-    title:
-      activity.type === 'message' && activity.author === 'user'
-        ? 'You asked'
-        : activity.type === 'question'
-          ? 'Athena asked'
-          : activity.type === 'error'
-            ? 'Athena stopped'
-            : 'Progress',
+    title: stepTitle(activity),
     detail: activity.text,
     createdAt: activity.createdAt,
   };
+}
+
+/** The step kinds that carry no text of their own: tool calls and hidden reasoning. */
+type ToolOrReasoning = 'tool' | 'reasoning';
+
+/** A step that carries its own text rather than a tool call. */
+type NarrativeActivity = Exclude<PersonalAthenaActivity, { readonly type: ToolOrReasoning }>;
+
+/** A non-tool step's label, naming what happened rather than who did it. */
+function stepTitle(activity: NarrativeActivity): string {
+  if (activity.type === 'message' && activity.author === 'user') return 'You asked';
+  if (activity.type === 'question') return 'Asked you';
+  if (activity.type === 'error') return 'Stopped';
+  return 'Progress';
 }

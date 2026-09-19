@@ -7,8 +7,8 @@
  * @remarks
  * Split out of `athena-conversation.tsx` so {@link mergeThreadEntries}'s output has its own home:
  * an activity renders through the chat presentation (your right-aligned bubble, a left-aligned
- * reply with no surface, a quiet work line with its MCP app card, or a plan-start card), a job
- * renders as the flat {@link AthenaJobCard} entry, and a question as its card at the time it was
+ * reply with no surface, a quiet work line with its MCP app card, or a plan entry), a job
+ * renders as the flat {@link AthenaJobCard} entry, and a question as a flat entry at the time it was
  * asked. Every entry is one level deep. See §4.2 and §4.6 of
  * `docs/superpowers/specs/2026-09-12-athena-companion-design.md`.
  */
@@ -20,13 +20,14 @@ import { type JSX } from 'react';
 import { PLAN_TOOL_NAMES } from '@docket/work/plan-draft-contract';
 
 import { McpAppPresentationCard } from '@/components/athena/mcp-app-presentation-card';
-import PlanStartCard, { parsePlanStart } from '@/components/plan-canvas/plan-start-card';
+import { parsePlanStart } from '@/components/plan-canvas/plan-start-card';
 import { capitalizeFirst } from '@/lib/athena/describe-proposal';
 import type { ThreadEntry } from '@/lib/athena/job-presentation';
 import { personalAthenaTransport, type PersonalAthenaTransport } from '@/lib/athena/query-defs';
 
 import { AthenaJobCard } from './athena-job-card';
 import { ThreadQuestion } from './elicitation-queue';
+import { ThreadPlanEntry } from './thread-plan-entry';
 
 /** Props for {@link ThreadEntries}. */
 export interface ThreadEntriesProps {
@@ -213,7 +214,7 @@ interface ActionCardsProps {
 function ActionCards({ presentation, activityId, onWidgetMessage }: ActionCardsProps): JSX.Element {
   return (
     <>
-      {presentation.startedPlan ? <PlanStartCard plan={presentation.startedPlan} /> : null}
+      {presentation.startedPlan ? <ThreadPlanEntry plan={presentation.startedPlan} /> : null}
       {presentation.presentation ? (
         <McpAppPresentationCard
           presentation={presentation.presentation}
@@ -236,7 +237,7 @@ function ActionCards({ presentation, activityId, onWidgetMessage }: ActionCardsP
  * @remarks
  * A `proposal`-mode action already has its record: the `ProposalGroupCard` rendered above the
  * thread. Repeating it here as a chip was the raw tool name shown twice for the same change, so
- * a proposal action renders only whatever durable card the call produced (a plan-start card, an
+ * a proposal action renders only whatever durable record the call produced (a plan entry, an
  * MCP app presentation) and no chip at all.
  */
 function ActionEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element | null {
@@ -250,7 +251,8 @@ function ActionEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element
 
   return (
     <div className="flex w-full flex-col gap-2">
-      {isProposal ? null : <WorkChip summary={presentation.summary} />}
+      {/* A started plan is its own entry, so the chip naming the same call would say it twice. */}
+      {isProposal || startedPlan ? null : <WorkChip summary={presentation.summary} />}
       <ActionCards
         presentation={presentation}
         activityId={activity.id}

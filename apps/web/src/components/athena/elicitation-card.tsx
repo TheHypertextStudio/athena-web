@@ -1,34 +1,28 @@
 'use client';
 
 /**
- * One elicitation, as a card inside the conversation.
+ * One elicitation, as a flat entry in the conversation.
  *
  * @remarks
- * The card leads with the **action** — "Post the sprint update to the Acme project channel" — and
- * puts the question underneath it, because the thing being authorized is what a person needs to
- * decide, and a bare question ("Which channel?") does not tell them what happens next.
+ * The same anatomy as a work entry ({@link AthenaJobCard}), so a question and a piece of work read
+ * as the same kind of thing: an 8px state dot in a 24px gutter, a one-line title, one state line,
+ * then line 3 — the question and its controls while it waits, or the record of how it settled. No
+ * surface, no badge, no chip.
  *
- * Three states, one component: waiting (the controls, submit, cancel, and the deadline), settled
- * (a read-only record of what was answered and by whom), and parked (Athena declined to choose and
- * says so). A settled card stays in place rather than disappearing — the conversation is a record,
- * and a question that vanishes once answered takes its own context with it.
+ * The title is the **action** — "Post the sprint update to the Acme project channel" — because the
+ * thing being authorized is what a person needs to decide, and a bare question ("Which channel?")
+ * does not tell them what happens next. The state line carries the deadline and a link to the task
+ * the question unblocks. A settled question stays in place as a record rather than disappearing.
  */
 import type { ElicitationOut } from '@docket/athena/elicitation-api';
-import { AlarmClock, CircleAlert, HelpCircle, ListChecks, Sparkles } from '@docket/ui/icons';
+import { relativeTime } from '@docket/ui';
+import { RelativeTime } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
-import {
-  Badge,
-  Button,
-  Chip,
-  ControlGroup,
-  FieldError,
-  Surface,
-  Text,
-} from '@docket/ui/primitives';
-import Link from '@/components/docket-link';
-
-import { useNow } from '@/lib/use-now';
+import { Button, ControlGroup, FieldError, surfaceToneColor } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';
+
+import Link from '@/components/docket-link';
+import { useNow } from '@/lib/use-now';
 
 import {
   ElicitationControlView,
@@ -45,7 +39,7 @@ export interface ElicitationCardProps {
   readonly elicitation: ElicitationOut;
   /** The workspace uploads are stored in, when the question lives in one. */
   readonly organizationId?: string | null;
-  /** Scroll this card into view and focus it — used when arriving from a notification. */
+  /** Lift this entry one tonal step — used when arriving from a notification. */
   readonly focused?: boolean;
   /** Extra class names for the root element. */
   readonly className?: string;
@@ -56,9 +50,7 @@ export interface ElicitationCardProps {
  *
  * @remarks
  * Every sentence here is Docket's own, produced by `elicitationFieldMessage` from a Zod issue
- * *code* — no exception text, no provider text, no Problem `detail` ever reaches this map. The
- * local name is `rejection` rather than `error` for exactly that reason: this is validation
- * feedback about a field, not a failure being reported.
+ * *code* — no exception text, no provider text, no Problem `detail` ever reaches this map.
  */
 function toErrorMap(rejections: readonly AnswerRejection[]): ElicitationErrorMap {
   const map: Record<string, string> = {};
@@ -78,20 +70,34 @@ function describeDeadline(expiresAt: string, now: number): string {
   return `${String(Math.round(hours / 24))} days left`;
 }
 
-/** The sentence describing what a settled question ended up as. */
-function describeSettlement(elicitation: ElicitationOut): string {
+/** The state line of a question that is no longer waiting. */
+function settledStateLine(elicitation: ElicitationOut): string {
   if (elicitation.status === 'parked') {
     return elicitation.timeoutPolicy === 'destructive'
-      ? 'Athena did not choose — this cannot be undone. Still waiting on you.'
-      : 'Athena did not choose — either answer was defensible. Still waiting on you.';
+      ? 'On hold · cannot be undone, waiting on you'
+      : 'On hold · either answer works, waiting on you';
   }
-  if (elicitation.status === 'canceled') return 'This question was withdrawn.';
+  if (elicitation.status === 'canceled') return 'Withdrawn';
   if (elicitation.resolver === 'athena') {
     return elicitation.autoResolveReason
-      ? `Athena answered — ${elicitation.autoResolveReason}`
-      : 'Athena answered on your behalf.';
+      ? `Answered for you · ${elicitation.autoResolveReason}`
+      : 'Answered for you';
   }
-  return 'You answered.';
+  return 'You answered';
+}
+
+/** The state line of a question still waiting: the ask, the deadline, and urgency when it is. */
+function pendingStateLine(elicitation: ElicitationOut, now: number): string {
+  const parts = ['Waiting on you', describeDeadline(elicitation.expiresAt, now)];
+  if (elicitation.timeSensitive) parts.push('Time-sensitive');
+  return parts.join(' · ');
+}
+
+/** The state dot's fill: solid primary while waiting, error on hold, muted once settled. */
+function dotClass(status: ElicitationOut['status']): string {
+  if (status === 'pending') return 'bg-primary';
+  if (status === 'parked') return 'bg-error';
+  return 'bg-on-surface-variant/30';
 }
 
 /**
@@ -156,7 +162,123 @@ function renderAnswer(spec: ElicitationOut['spec'], answer: unknown): string {
   }
 }
 
-/** Render one elicitation as a card. */
+/** Props for {@link QuestionStateLine}. */
+interface QuestionStateLineProps {
+  readonly elicitation: ElicitationOut;
+  readonly now: number;
+}
+
+/** Line 2: where the question stands, then the task it unblocks. */
+function QuestionStateLine({ elicitation, now }: QuestionStateLineProps): JSX.Element {
+  const state =
+    elicitation.status === 'pending'
+      ? pendingStateLine(elicitation, now)
+      : settledStateLine(elicitation);
+  return (
+    <p
+      data-slot="athena-question-state"
+      className="text-on-surface-variant text-body-small -mt-1 flex min-w-0 gap-1"
+    >
+      <span className="shrink-0">{state} ·</span>
+      <Link href={elicitation.task.href} className="hover:text-primary min-w-0 truncate">
+        {elicitation.task.title}
+      </Link>
+    </p>
+  );
+}
+
+/** Props for {@link QuestionForm}. */
+interface QuestionFormProps {
+  readonly elicitation: ElicitationOut;
+  readonly organizationId: string | null;
+  readonly answer: ReturnType<typeof useAnswerElicitation>;
+}
+
+/** Line 3 while waiting: the question, its controls, and Send / Clear. */
+function QuestionForm({ elicitation, organizationId, answer }: QuestionFormProps): JSX.Element {
+  const [value, setValue] = useState<unknown>(() => emptyElicitationValue(elicitation.spec));
+  const [errors, setErrors] = useState<ElicitationErrorMap>({});
+  const ready = useMemo(
+    () => isElicitationAnswered(elicitation.spec, value),
+    [elicitation.spec, value],
+  );
+  const rootError = errors[''];
+
+  const submit = (): void => {
+    answer.mutate(
+      { id: elicitation.id, value: coerceElicitationValue(elicitation.spec, value) },
+      {
+        // A rejection keeps the question open and every other field exactly where it was.
+        onSuccess: (result) => {
+          setErrors(result.ok ? {} : toErrorMap(result.errors));
+        },
+      },
+    );
+  };
+
+  return (
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (ready && !answer.isPending) submit();
+      }}
+    >
+      <p className="text-on-surface text-body-medium">{elicitation.question}</p>
+      <ElicitationControlView
+        control={elicitation.spec}
+        value={value}
+        path=""
+        errors={errors}
+        disabled={answer.isPending}
+        {...(organizationId
+          ? { uploadTarget: { orgId: organizationId, taskId: elicitation.task.id } }
+          : {})}
+        onChange={setValue}
+      />
+      {rootError ? <FieldError>{rootError}</FieldError> : null}
+      <ControlGroup controlSize="md">
+        <Button type="submit" controlSize="md" disabled={!ready || answer.isPending}>
+          {answer.isPending ? 'Sending…' : 'Send'}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          controlSize="md"
+          disabled={answer.isPending}
+          onClick={() => {
+            setValue(emptyElicitationValue(elicitation.spec));
+            setErrors({});
+          }}
+        >
+          Clear
+        </Button>
+      </ControlGroup>
+    </form>
+  );
+}
+
+/** Props for {@link QuestionRecord}. */
+interface QuestionRecordProps {
+  readonly elicitation: ElicitationOut;
+}
+
+/** Line 3 once settled: the question, then the answer that was recorded. */
+function QuestionRecord({ elicitation }: QuestionRecordProps): JSX.Element {
+  const answered = elicitation.status === 'answered' || elicitation.status === 'auto_resolved';
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-on-surface-variant text-body-medium">{elicitation.question}</p>
+      {answered ? (
+        <p data-slot="athena-question-answer" className="text-on-surface text-body-medium">
+          {renderAnswer(elicitation.spec, elicitation.answer)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Render one elicitation as a flat thread entry. */
 export function ElicitationCard({
   elicitation: incoming,
   organizationId = null,
@@ -169,168 +291,48 @@ export function ElicitationCard({
   const accepted = answer.data?.ok === true ? answer.data.elicitation : null;
   const elicitation = accepted ?? incoming;
   const pending = elicitation.status === 'pending';
-  const [value, setValue] = useState<unknown>(() => emptyElicitationValue(incoming.spec));
-  const [errors, setErrors] = useState<ElicitationErrorMap>({});
-  // The deadline is on the card, so it has to keep being true while the card is awaiting an answer.
+  // The deadline is on the state line, so it has to keep being true while the question waits.
   const now = useNow(30_000, { enabled: pending }).getTime();
-
-  const ready = useMemo(
-    () => isElicitationAnswered(elicitation.spec, value),
-    [elicitation.spec, value],
-  );
-  const rootError = errors[''];
-
-  const submit = (): void => {
-    answer.mutate(
-      { id: elicitation.id, value: coerceElicitationValue(elicitation.spec, value) },
-      {
-        onSuccess: (result) => {
-          if (result.ok) {
-            setErrors({});
-            return;
-          }
-          // The question stays open and every other field the person typed stays exactly where it
-          // was — that is what makes a rejection recoverable rather than a restart.
-          setErrors(toErrorMap(result.errors));
-        },
-      },
-    );
-  };
+  const titleId = `elicitation-action-${elicitation.id}`;
 
   return (
-    <Surface
-      as="article"
-      tone="canvas"
-      shape="medium"
-      pad="roomy"
+    <article
       data-elicitation={elicitation.id}
       data-elicitation-status={elicitation.status}
-      aria-labelledby={`elicitation-action-${elicitation.id}`}
-      className={cn('flex flex-col gap-4', focused && 'ring-primary ring-2', className)}
+      aria-labelledby={titleId}
+      className={cn(
+        'relative flex w-full max-w-160 flex-col gap-2 pl-6',
+        // A landing from a notification lifts the entry one tonal step; never a ring or outline.
+        focused && cn(surfaceToneColor('floating'), 'rounded-lg'),
+        className,
+      )}
     >
-      <header className="flex flex-col gap-2">
-        <ControlGroup controlSize="xs" wrap>
-          <Chip
-            variant="assist"
-            tone="tonal"
-            icon={<Sparkles aria-hidden="true" />}
-            asChild
-            aria-disabled="true"
-          >
-            <span>Athena needs a decision</span>
-          </Chip>
-          {pending ? (
-            <Chip variant="assist" tone="tonal" icon={<AlarmClock aria-hidden="true" />} asChild>
-              <span>{describeDeadline(elicitation.expiresAt, now)}</span>
-            </Chip>
-          ) : (
-            <Badge variant="secondary">{settlementLabel(elicitation)}</Badge>
-          )}
-          {elicitation.timeSensitive && pending ? (
-            <Badge variant="destructive">Time-sensitive</Badge>
-          ) : null}
-        </ControlGroup>
-
-        {/* The action, first and largest: this is what answering authorizes. */}
-        <Text
-          as="h3"
-          id={`elicitation-action-${elicitation.id}`}
-          token="title-medium"
-          className="text-balance"
+      <span
+        aria-hidden="true"
+        data-slot="athena-question-dot"
+        className={cn('absolute top-3 left-2 size-2 rounded-full', dotClass(elicitation.status))}
+      />
+      <div className="flex min-h-8 items-center gap-2">
+        <h3
+          id={titleId}
+          title={elicitation.actionSummary}
+          className="text-on-surface text-title-small min-w-0 flex-1 truncate"
         >
           {elicitation.actionSummary}
-        </Text>
-        <div className="flex items-start gap-2">
-          <HelpCircle
-            aria-hidden="true"
-            className="text-on-surface-variant mt-0.5 size-4 shrink-0"
-          />
-          <Text token="body-medium" tone="muted">
-            {elicitation.question}
-          </Text>
-        </div>
-        <Link
-          href={elicitation.task.href}
-          className="text-on-surface-variant hover:text-primary flex w-full min-w-0 items-center gap-1.5"
+        </h3>
+        <RelativeTime
+          iso={elicitation.createdAt}
+          className="text-on-surface-variant text-label-small shrink-0"
         >
-          <ListChecks aria-hidden="true" className="size-4 shrink-0" />
-          <Text token="label-medium" truncate className="min-w-0">
-            {elicitation.task.title}
-          </Text>
-        </Link>
-      </header>
-
+          {relativeTime(elicitation.createdAt)}
+        </RelativeTime>
+      </div>
+      <QuestionStateLine elicitation={elicitation} now={now} />
       {pending ? (
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (ready && !answer.isPending) submit();
-          }}
-        >
-          <ElicitationControlView
-            control={elicitation.spec}
-            value={value}
-            path=""
-            errors={errors}
-            disabled={answer.isPending}
-            {...(organizationId
-              ? { uploadTarget: { orgId: organizationId, taskId: elicitation.task.id } }
-              : {})}
-            onChange={setValue}
-          />
-
-          {rootError ? <FieldError>{rootError}</FieldError> : null}
-
-          <ControlGroup controlSize="lg" wrap>
-            <Button type="submit" disabled={!ready || answer.isPending}>
-              {answer.isPending ? 'Sending…' : 'Send to Athena'}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={answer.isPending}
-              onClick={() => {
-                setValue(emptyElicitationValue(elicitation.spec));
-                setErrors({});
-              }}
-            >
-              Clear
-            </Button>
-          </ControlGroup>
-        </form>
+        <QuestionForm elicitation={elicitation} organizationId={organizationId} answer={answer} />
       ) : (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-start gap-2">
-            {elicitation.status === 'parked' ? (
-              <Text token="body-medium" tone="error" className="mt-0.5 inline-flex shrink-0">
-                <CircleAlert aria-hidden="true" className="size-4" />
-              </Text>
-            ) : null}
-            <Text token="body-medium">{describeSettlement(elicitation)}</Text>
-          </div>
-          {elicitation.status === 'answered' || elicitation.status === 'auto_resolved' ? (
-            <Text token="label-large">{renderAnswer(elicitation.spec, elicitation.answer)}</Text>
-          ) : null}
-        </div>
+        <QuestionRecord elicitation={elicitation} />
       )}
-    </Surface>
+    </article>
   );
-}
-
-/** The badge word for a settled question. */
-function settlementLabel(elicitation: ElicitationOut): string {
-  switch (elicitation.status) {
-    case 'answered':
-      return 'Answered';
-    case 'auto_resolved':
-      return 'Answered by Athena';
-    case 'parked':
-      return 'On hold';
-    case 'canceled':
-      return 'Withdrawn';
-    /* v8 ignore next 2 -- @preserve a pending question never reaches this branch */
-    default:
-      return 'Waiting';
-  }
 }

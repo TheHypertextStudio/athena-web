@@ -205,6 +205,26 @@ describe('jobStatusLine', () => {
 
     expect(jobStatusLine(detail, summary, NOW)).toContain(jobFailureCause(detail) ?? '—');
   });
+
+  it('names the step a stopped job never ran, instead of a bare outcome', () => {
+    const detail = detailWith({ status: 'canceled', activities: [updateStep('pending_1', {})] });
+
+    const line = jobStatusLine(detail, summary, NOW);
+    expect(line).toContain('set state to In Progress');
+    expect(line).not.toBe(jobStatusLine(detailWith({ status: 'failed' }), summary, NOW));
+  });
+
+  it('says how far a stopped job got when no step names what did not happen', () => {
+    const landed = detailWith({
+      status: 'failed',
+      activities: [updateStep('applied_1', { applied: true })],
+    });
+    const empty = detailWith({ status: 'canceled', activities: [] });
+
+    expect(jobStatusLine(landed, summary, NOW)).toMatch(/1 change$/);
+    expect(jobStatusLine(empty, summary, NOW)).not.toMatch(/nothing changed/i);
+    expect(jobStatusLine(empty, summary, NOW)).not.toBe(jobStatusLine(landed, summary, NOW));
+  });
 });
 
 describe('decisionSentence', () => {

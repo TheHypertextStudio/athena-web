@@ -311,10 +311,25 @@ describe('AthenaJobCard', () => {
       return block;
     });
     expect(receipt.querySelector('ul')).toBeNull();
-    expect(receipt).toHaveTextContent('set state to In Progress');
+    // The receipt holds only the cause: the state line is the one place "nothing changed" is said.
+    const cause = receipt.querySelector('[data-slot="athena-job-cause"]');
+    expect(cause).toHaveTextContent('set state to In Progress');
+    expect(receipt.textContent).toBe(cause?.textContent);
     expect(screen.getByRole('article')).not.toHaveTextContent('Moved the task to In Progress.');
     expect(screen.getByRole('article')).not.toHaveTextContent('could not be completed');
     expect(stateLine()).not.toHaveTextContent(/\d+ change/);
+  });
+
+  it('renders no receipt when a finished run changed nothing and nothing failed', async () => {
+    renderCard(
+      job({ status: 'completed', queueState: 'finished' }),
+      detailWith({ status: 'completed', queueState: 'finished', activities: [] }),
+    );
+
+    await waitFor(() => {
+      expect(stateLine()).toHaveTextContent(/·/);
+    });
+    expect(document.querySelector('[data-slot="athena-job-receipt"]')).toBeNull();
   });
 
   it('lists one receipt line per change that landed', async () => {

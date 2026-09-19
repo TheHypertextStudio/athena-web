@@ -19,6 +19,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { relativeTime } from '@docket/ui';
 import { RelativeTime } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
+import { focusRing } from '@docket/ui/primitives';
 import { type JSX, useId, useState } from 'react';
 
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
@@ -65,6 +66,15 @@ const DOT_CLASS_BY_TONE: Readonly<Record<JobTone, string>> = {
   done: 'bg-on-surface-variant/30',
   stopped: 'bg-error',
 };
+
+/**
+ * The entry's root: a 24px gutter for the dot and a 640px measure. No vertical padding — the
+ * host's 32px gap is the whole space between two entries.
+ */
+const ENTRY_CLASS = cn(
+  'relative flex w-full max-w-160 flex-col gap-2 pl-6 outline-none',
+  focusRing,
+);
 
 /** The overflow menu's permissions, derived from a job's current status. */
 interface JobPermissions {
@@ -203,12 +213,14 @@ export function AthenaJobCard({
       aria-labelledby={titleId}
       data-athena-job={job.id}
       data-state={tone}
-      className={cn('relative flex w-full max-w-160 flex-col gap-2 py-3 pl-6', className)}
+      // Focusable by script only, so a one-line mention elsewhere on the page can hand focus here.
+      tabIndex={-1}
+      className={cn(ENTRY_CLASS, className)}
     >
       <span
         aria-hidden="true"
         data-slot="athena-job-dot"
-        className={cn('absolute top-6 left-2 size-2 rounded-full', DOT_CLASS_BY_TONE[tone])}
+        className={cn('absolute top-3 left-2 size-2 rounded-full', DOT_CLASS_BY_TONE[tone])}
       />
       <JobTitleLine
         titleId={titleId}

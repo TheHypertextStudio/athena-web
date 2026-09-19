@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import type { ProjectOverviewItem } from '../../../src/lib/contracts/project';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen } from '@testing-library/react';
+import type { ObjectCommandReceipt } from '../../../src/lib/contracts/object-command';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +14,7 @@ const { bridgeState, canvasState, commandState, fitView } = vi.hoisted(() => ({
     props: null as null | Record<string, unknown>,
   },
   commandState: {
+    historyArgs: null as null | readonly unknown[],
     providerProps: null as null | Record<string, unknown>,
     history: {
       execute: vi.fn().mockResolvedValue({
@@ -65,7 +67,10 @@ vi.mock('../../../src/components/canvas/canvas-command-context', () => ({
 vi.mock('../../../src/components/canvas/use-canvas-command-history', () => ({
   canvasCommandId: () =>
     `project-command-${String(commandState.history.execute.mock.calls.length + 1)}`,
-  useCanvasCommandHistory: () => commandState.history,
+  useCanvasCommandHistory: (...args: readonly unknown[]) => {
+    commandState.historyArgs = args;
+    return commandState.history;
+  },
 }));
 
 vi.mock('../../../src/components/canvas/canvas-selection-frame', () => ({
@@ -276,5 +281,165 @@ describe('Project graph creation continuity', () => {
         'Created Project no longer depends on Existing Project',
       ],
     );
+  });
+  describe('optimistic dependency edges', () => {
+    const OVERVIEW_KEY = ['orgs', 'org_1', 'projects', 'overview'];
+
+    function setup(items: ProjectOverviewItem[]) {
+      commandState.history.execute.mockReset();
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      });
+      client.setQueryData(OVERVIEW_KEY, { items });
+      render(
+        <QueryClientProvider client={client}>
+          <ProjectGraphPanel rows={items} orgId="org_1" />
+        </QueryClientProvider>,
+      );
+      const canvas = canvasState.props as {
+        onConnectEdge: (source: string, target: string) => void;
+        onDeleteEdge: (edge: { source: string; target: string }) => void;
+      };
+      const row = (id: string) =>
+        client
+          .getQueryData<{ items: ProjectOverviewItem[] }>(OVERVIEW_KEY)
+          ?.items.find((item) => item.id === id);
+      return { client, canvas, row };
+    }
+
+    const rows = () => [
+      project(EXISTING_ID, 'Existing Project'),
+      project(CREATED_ID, 'Created Project'),
+    ];
+
+    it('draws the edge in the overview before the command resolves, then keeps it', async () => {
+      const { canvas, row } = setup(rows());
+      let resolveCommand: (value: unknown) => void = () => undefined;
+      let blockedByAtPost: readonly string[] | undefined;
+      commandState.history.execute.mockImplementationOnce(() => {
+        blockedByAtPost = row(CREATED_ID)?.blockedByIds;
+        return new Promise((resolve) => {
+          resolveCommand = resolve;
+        });
+      });
+
+      canvas.onConnectEdge(EXISTING_ID, CREATED_ID);
+
+      expect(blockedByAtPost).toEqual([EXISTING_ID]);
+      expect(row(CREATED_ID)?.blockedByIds).toEqual([EXISTING_ID]);
+      expect(row(EXISTING_ID)?.blocksIds).toEqual([CREATED_ID]);
+
+      await act(async () => {
+        resolveCommand({ appliedIds: [], conflictingIds: [], deniedIds: [], receipt: {} });
+        await Promise.resolve();
+      });
+
+      expect(row(CREATED_ID)?.blockedByIds).toEqual([EXISTING_ID]);
+    });
+
+    it('removes the edge from the overview before the command resolves', () => {
+      const linked = rows();
+      linked[1] = { ...linked[1], blockedByIds: [EXISTING_ID] } as unknown as ProjectOverviewItem;
+      const { canvas, row } = setup(linked);
+      commandState.history.execute.mockReturnValueOnce(new Promise(() => undefined));
+
+      canvas.onDeleteEdge({ source: EXISTING_ID, target: CREATED_ID });
+
+      expect(row(CREATED_ID)?.blockedByIds).toEqual([]);
+    });
+
+    it('restores the overview when the command is refused', async () => {
+      const { canvas, row } = setup(rows());
+      let refuse: (value: null) => void = () => undefined;
+      commandState.history.execute.mockReturnValueOnce(
+        new Promise((resolve) => {
+          refuse = resolve;
+        }),
+      );
+
+      canvas.onConnectEdge(EXISTING_ID, CREATED_ID);
+      expect(row(CREATED_ID)?.blockedByIds).toEqual([EXISTING_ID]);
+
+      await act(async () => {
+        refuse(null);
+        await Promise.resolve();
+      });
+
+      expect(row(CREATED_ID)?.blockedByIds).toEqual([]);
+      expect(row(EXISTING_ID)?.blocksIds).toEqual([]);
+    });
+
+    it('keeps a fresher overview when the refusal arrives after a refetch replaced the patch', async () => {
+      const { client, canvas, row } = setup(rows());
+      let refuse: (value: null) => void = () => undefined;
+      commandState.history.execute.mockReturnValueOnce(
+        new Promise((resolve) => {
+          refuse = resolve;
+        }),
+      );
+
+      canvas.onConnectEdge(EXISTING_ID, CREATED_ID);
+      const refetched = [project(EXISTING_ID, 'Existing Project'), project(CREATED_ID, 'Renamed')];
+      client.setQueryData(OVERVIEW_KEY, { items: refetched });
+      await act(async () => {
+        refuse(null);
+        await Promise.resolve();
+      });
+
+      expect(row(CREATED_ID)?.name).toBe('Renamed');
+    });
+
+    it('patches the overview for undone and redone dependency receipts', () => {
+      const { row } = setup(rows());
+      const receipt = {
+        commandId: 'command',
+        objectKind: 'project',
+        action: 'add_dependency',
+        entries: [
+          {
+            kind: 'relation',
+            objectId: EXISTING_ID,
+            relation: 'dependency',
+            relatedId: CREATED_ID,
+            before: false,
+            after: true,
+          },
+        ],
+      } as ObjectCommandReceipt;
+      const onReceipt = commandState.historyArgs?.[3] as (
+        receipt: ObjectCommandReceipt,
+        direction: 'forward' | 'undo' | 'redo',
+      ) => void;
+
+      act(() => {
+        onReceipt(receipt, 'redo');
+      });
+      expect(row(CREATED_ID)?.blockedByIds).toEqual([EXISTING_ID]);
+
+      act(() => {
+        onReceipt(receipt, 'undo');
+      });
+      expect(row(CREATED_ID)?.blockedByIds).toEqual([]);
+      expect(row(EXISTING_ID)?.blocksIds).toEqual([]);
+    });
+
+    it('still posts the command when the overview is not cached yet', () => {
+      commandState.history.execute.mockReset();
+      commandState.history.execute.mockResolvedValue(null);
+      const client = new QueryClient();
+      render(
+        <QueryClientProvider client={client}>
+          <ProjectGraphPanel rows={rows()} orgId="org_1" />
+        </QueryClientProvider>,
+      );
+      const canvas = canvasState.props as {
+        onConnectEdge: (source: string, target: string) => void;
+      };
+
+      canvas.onConnectEdge(EXISTING_ID, CREATED_ID);
+
+      expect(commandState.history.execute).toHaveBeenCalledTimes(1);
+      expect(client.getQueryData(OVERVIEW_KEY)).toBeUndefined();
+    });
   });
 });

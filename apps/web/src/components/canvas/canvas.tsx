@@ -46,6 +46,8 @@ import {
   availableCanvasHeight,
   availableCanvasWidth,
   fitPaddingFor,
+  CANVAS_OVERLAY_GUTTER,
+  insetBottom,
   insetRight,
   insetTop,
 } from './canvas-viewport-insets';
@@ -74,9 +76,7 @@ import { LodProvider, useLodValue } from './use-lod';
 import { isCanvasEditableTarget } from './canvas-keyboard';
 
 const READABLE_INITIAL_ZOOM = 0.5;
-const BOTTOM_CHROME_EDGE_GAP = 30;
-const BOTTOM_CHROME_FALLBACK_HEIGHT = 78;
-const BOTTOM_CHROME_NOTICE_FALLBACK_HEIGHT = 190;
+/** What the bottom chrome covers before it has been measured, when the minimap is showing. */
 const BOTTOM_CHROME_MINIMAP_HEIGHT = 150;
 const MOBILE_CANVAS_QUERY = '(max-width: 39.999rem)';
 /** No floating chrome covers the canvas unless a host says so. */
@@ -222,27 +222,32 @@ function CanvasInner({
   const [measuredBottomChromeHeight, setMeasuredBottomChromeHeight] = useState(0);
   const isMobileCanvas = useMediaQuery(MOBILE_CANVAS_QUERY);
   const showMinimap = (minimap ?? density === 'full') && !isMobileCanvas;
-  const bottomChromeFallbackHeight = showMinimap
-    ? BOTTOM_CHROME_MINIMAP_HEIGHT
-    : bottomNotice === undefined
-      ? BOTTOM_CHROME_FALLBACK_HEIGHT
-      : BOTTOM_CHROME_NOTICE_FALLBACK_HEIGHT;
-  const bottomChromeHeight =
-    Math.max(bottomChromeFallbackHeight, measuredBottomChromeHeight) + BOTTOM_CHROME_EDGE_GAP;
+  // The bottom chrome overlays the viewport rather than shrinking it; what it covers becomes a
+  // bottom inset so the fit padding and the first frame keep the graph clear of it.
+  const bottomChromeInset =
+    Math.max(measuredBottomChromeHeight, showMinimap ? BOTTOM_CHROME_MINIMAP_HEIGHT : 0) +
+    CANVAS_OVERLAY_GUTTER * 2;
+  const effectiveInsets = useMemo<CanvasOverlayInsets>(
+    () => ({ ...overlayInsets, bottom: insetBottom(overlayInsets) + bottomChromeInset }),
+    [bottomChromeInset, overlayInsets],
+  );
   const framed = useRef(false);
   // Grouped/swimlane layouts arrive pre-positioned; otherwise dagre lays the flat graph out.
   const dagreLaidOut = useDagreLayout(rawNodes, rawEdges, density, layoutDirection);
   const laidOut = disableLayout ? rawNodes : dagreLaidOut;
+  // Positions tween in place once the graph has been framed; before that the first measured layout
+  // lands at once so framing is not held for a 240ms animation nobody can see yet.
   const { nodes, edges, onNodesChange, onEdgesChange, layoutApplied } = useControlledFlow(
     laidOut,
     rawEdges,
+    { animate: framed.current },
   );
 
   const interactions = useGraphInteractions({ onConnectEdge, onDeleteEdge, onReparentEdge });
   const highlight = useGraphHighlight(nodes, edges, highlightIds, highlightChains);
   const fitPadding = useMemo(
-    () => fitPaddingFor(overlayInsets, WORKING_AREA_PADDING),
-    [overlayInsets],
+    () => fitPaddingFor(effectiveInsets, WORKING_AREA_PADDING),
+    [effectiveInsets],
   );
   useFitViewOnChange(focusOn, fitMaxZoom, layoutReady && layoutApplied, fitPadding);
   const selectionChanged = useSelectionReporter(onSelectionChange);
@@ -371,17 +376,17 @@ function CanvasInner({
         .map(({ id }) => id);
       const availableWidth = availableCanvasWidth(
         element.clientWidth,
-        overlayInsets,
+        effectiveInsets,
         WORKING_AREA_PADDING,
       );
       const availableHeight = availableCanvasHeight(
         element.clientHeight,
-        overlayInsets,
+        effectiveInsets,
         WORKING_AREA_PADDING,
       );
       const frameSpec: FirstFrameSpec = {
         anchor: frameAnchor,
-        insets: overlayInsets,
+        insets: effectiveInsets,
         viewport: { width: element.clientWidth, height: element.clientHeight },
         minZoom: READABLE_INITIAL_ZOOM,
         maxZoom: fitMaxZoom,
@@ -414,7 +419,7 @@ function CanvasInner({
       const position = anchor.internals.positionAbsolute;
       void flowInstance.setViewport({
         x: WORKING_AREA_PADDING - position.x * READABLE_INITIAL_ZOOM,
-        y: WORKING_AREA_PADDING + insetTop(overlayInsets) - position.y * READABLE_INITIAL_ZOOM,
+        y: WORKING_AREA_PADDING + insetTop(effectiveInsets) - position.y * READABLE_INITIAL_ZOOM,
         zoom: READABLE_INITIAL_ZOOM,
       });
     };
@@ -424,6 +429,7 @@ function CanvasInner({
       cancelAnimationFrame(frameId);
     };
   }, [
+    effectiveInsets,
     fitMaxZoom,
     flowInstance,
     focusOn,
@@ -431,7 +437,6 @@ function CanvasInner({
     initialFrame,
     layoutApplied,
     layoutReady,
-    overlayInsets,
   ]);
 
   return (
@@ -442,12 +447,7 @@ function CanvasInner({
         onKeyDown={handleCanvasKeyDown}
         className={cn('relative h-full min-h-0 w-full focus:outline-none', className)}
       >
-        <div
-          ref={viewportRef}
-          data-testid="canvas-viewport"
-          className="absolute inset-x-0 top-0 min-h-0"
-          style={{ bottom: bottomChromeHeight }}
-        >
+        <div ref={viewportRef} data-testid="canvas-viewport" className="absolute inset-0 min-h-0">
           <ReactFlow
             nodes={highlight.nodes}
             edges={highlight.edges}

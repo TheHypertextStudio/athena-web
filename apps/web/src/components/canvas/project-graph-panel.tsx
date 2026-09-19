@@ -25,7 +25,6 @@
  *   workspace to twice life size, so the canvas is capped at 1:1 — fitting means fitting, never
  *   enlarging.
  */
-import { type ObjectCommandIn } from '../../lib/contracts/object-command';
 import { type ProjectOverviewItem } from '../../lib/contracts/project';
 import { type Edge, type Node, type ReactFlowInstance } from '@xyflow/react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -39,7 +38,12 @@ import CanvasSelectionBridge from '@/components/canvas/canvas-selection-bridge';
 import CanvasSelectionFrame from '@/components/canvas/canvas-selection-frame';
 import { useProjectGraphLayout } from '@/components/canvas/project-graph-layout';
 import ProjectNode, { type ProjectNodeData } from '@/components/canvas/project-node';
-import ProjectPeek, { type ProjectPeekNeighbor } from '@/components/canvas/project-peek';
+import ProjectPeek from '@/components/canvas/project-peek';
+import {
+  useProjectGraphCommands,
+  useProjectOverviewReceiptApplier,
+  useProjectPeekModel,
+} from '@/components/canvas/project-graph-panel-support';
 import { useCanvasAspectRatio } from '@/components/canvas/use-canvas-aspect-ratio';
 import { api } from '@/lib/api';
 import { useAppPathname } from '@/lib/app-location';
@@ -50,10 +54,7 @@ import type { ObjectRef } from '@/lib/actions';
 import { focusCanvasNode } from '@/components/canvas/focus-canvas-node';
 import { projectRowsToPropertySnapshots } from '@/components/canvas/canvas-properties-model';
 import { CanvasSelectionRetentionProvider } from '@/components/canvas/canvas-selection-retention';
-import {
-  canvasCommandId,
-  useCanvasCommandHistory,
-} from '@/components/canvas/use-canvas-command-history';
+import { useCanvasCommandHistory } from '@/components/canvas/use-canvas-command-history';
 import CanvasOverlayPanel from '@/components/canvas/canvas-overlay-panel';
 import { GraphInspectorHost } from '@/components/canvas/graph-inspector-host';
 
@@ -152,48 +153,21 @@ export function ProjectGraphPanel({
     rolesQ.data?.items ?? [],
     'manage',
   );
-  const history = useCanvasCommandHistory(orgId, commandScopeKey, [
-    queryKeys.projects(orgId),
+  // Every settled receipt (forward, undo, redo) patches the overview's dependency lists so the
+  // canvas reflects it at once; the invalidation that follows confirms against the server.
+  const patchOverview = useProjectOverviewReceiptApplier(queryClient, overviewKey);
+  const history = useCanvasCommandHistory(
+    orgId,
+    commandScopeKey,
+    [queryKeys.projects(orgId), overviewKey],
+    patchOverview,
+  );
+  const { addDependency, removeDependency } = useProjectGraphCommands({
+    rows,
+    history,
+    queryClient,
     overviewKey,
-  ]);
-  const executeDependency = useCallback(
-    (type: 'add_dependency' | 'remove_dependency', source: string, target: string) => {
-      const command = {
-        commandId: canvasCommandId(),
-        objectKind: 'project',
-        objectIds: [source, target],
-        operation: { type, blockingId: source, blockedId: target },
-      } as ObjectCommandIn;
-      const blockingName = rows.find(({ id }) => id === source)?.name ?? 'Project';
-      const blockedName = rows.find(({ id }) => id === target)?.name ?? 'Project';
-      void history.execute(command, {
-        historyLabel: type === 'add_dependency' ? 'Add dependency' : 'Remove dependency',
-        title: type === 'add_dependency' ? 'Dependency added' : 'Dependency removed',
-        detail:
-          type === 'add_dependency'
-            ? `${blockedName} depends on ${blockingName}`
-            : `${blockedName} no longer depends on ${blockingName}`,
-        unchangedTitle: 'Dependency unchanged',
-        unchangedDetail:
-          type === 'add_dependency'
-            ? `${blockedName} already depends on ${blockingName}`
-            : `${blockedName} did not depend on ${blockingName}`,
-      });
-    },
-    [history, rows],
-  );
-  const addDependency = useCallback(
-    (source: string, target: string) => {
-      executeDependency('add_dependency', source, target);
-    },
-    [executeDependency],
-  );
-  const removeDependency = useCallback(
-    (edge: Edge) => {
-      executeDependency('remove_dependency', edge.source, edge.target);
-    },
-    [executeDependency],
-  );
+  });
 
   const nodes = useMemo<Node[]>(() => {
     const rowIds = new Set(rows.map((item) => item.id));
@@ -215,46 +189,13 @@ export function ProjectGraphPanel({
     });
   }, [rows, orgId]);
 
-  /**
-   * The selected row, and the two directions of its dependencies.
-   *
-   * @remarks
-   * Resolved from `rows` — the same array the canvas is drawn from — so the panel can never
-   * disagree with the graph, and an optimistic edge write shows up in both at once with no second
-   * request. A neighbour that the current filter has excluded is still listed (a blocker you
-   * cannot see is the one that hurts) but is marked as off-canvas, because there is no node for
-   * the selection to move to.
-   */
-  const selected = useMemo(
-    () => rows.find((item) => item.id === selectedId) ?? null,
-    [rows, selectedId],
+  // The peek resolves from `rows`, the same array the canvas is drawn from, so an optimistic edge
+  // shows up in both at once with no second request.
+  const { selected, selectedLeadName, neighbors } = useProjectPeekModel(
+    rows,
+    selectedId,
+    membersQ.data,
   );
-  const selectedLeadName = useMemo(() => {
-    if (!selected?.leadId) return null;
-    return (
-      membersQ.data?.items.find((member) => member.actorId === selected.leadId)?.displayName ?? null
-    );
-  }, [membersQ.data, selected]);
-  const neighbors = useMemo(() => {
-    const empty: readonly ProjectPeekNeighbor[] = [];
-    if (!selected) return { blockedBy: empty, blocks: empty };
-    const onCanvas = new Set(rows.map((item) => item.id));
-    const byId = new Map(rows.map((item) => [item.id, item] as const));
-    const resolve = (ids: readonly string[]): readonly ProjectPeekNeighbor[] =>
-      ids.map((id) => {
-        const row = byId.get(id as (typeof rows)[number]['id']);
-        return {
-          id,
-          name: row?.name ?? 'Filtered out',
-          status: row?.status ?? '',
-          onCanvas: onCanvas.has(id as (typeof rows)[number]['id']),
-        };
-      });
-    return {
-      blockedBy: resolve(selected.blockedByIds),
-      blocks: resolve(selected.blocksIds),
-    };
-  }, [rows, selected]);
 
   const edges = useMemo<Edge[]>(() => {
     const rowIds = new Set(rows.map((item) => item.id));

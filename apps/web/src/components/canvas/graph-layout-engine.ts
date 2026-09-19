@@ -4,7 +4,8 @@ import dagre from 'dagre';
 
 import type { LayoutDirection } from './use-dagre-layout';
 
-const COMPONENT_GAP = 96;
+/** Canvas units kept clear between packed components, horizontally and vertically. */
+export const COMPONENT_GAP = 96;
 
 /** A top-level object and the rectangle its host-specific renderer needs. */
 export interface MeasuredGraphNode {
@@ -36,11 +37,43 @@ export interface GraphLayoutRect {
   readonly height: number;
 }
 
+/** A canvas point. */
+export interface GraphLayoutPoint {
+  /** Horizontal canvas coordinate. */
+  readonly x: number;
+  /** Vertical canvas coordinate. */
+  readonly y: number;
+}
+
 /** One weakly connected component in stable source order. */
 export interface GraphLayoutComponent {
   /** Member ids in stable source order. */
   readonly nodeIds: readonly string[];
   /** Packed component bounds. */
+  readonly bounds: GraphLayoutRect;
+  /** The first member in source order; the component's identity across incremental layouts. */
+  readonly anchorId: string;
+  /** Direction plus the sorted induced edges, so an unchanged component can reuse its geometry. */
+  readonly edgeSignature: string;
+  /** Member positions relative to the component's own origin. */
+  readonly localPositions: ReadonlyMap<string, GraphLayoutPoint>;
+}
+
+/** The row packing a layout settled on, kept so an incremental layout can hold it fixed. */
+export interface GraphLayoutPacking {
+  /** Components per packed row. */
+  readonly perRow: number;
+  /** Component anchor ids in packed order. */
+  readonly order: readonly string[];
+}
+
+/** The largest component and the root to anchor when it cannot fit at readable zoom. */
+export interface GraphLayoutPrimary {
+  /** Member ids of the largest component. */
+  readonly nodeIds: readonly string[];
+  /** The best-connected member, or null for an empty graph. */
+  readonly anchorNodeId: string | null;
+  /** Packed bounds of the largest component, or the whole graph when it is empty. */
   readonly bounds: GraphLayoutRect;
 }
 
@@ -75,13 +108,11 @@ export interface GraphLayoutResult {
   /** Whole-graph bounds. */
   readonly bounds: GraphLayoutRect;
   /** Largest component and the root to anchor when it cannot fit at readable zoom. */
-  readonly primary: {
-    readonly nodeIds: readonly string[];
-    readonly anchorNodeId: string | null;
-    readonly bounds: GraphLayoutRect;
-  };
+  readonly primary: GraphLayoutPrimary;
   /** Timing and packing diagnostics. */
   readonly diagnostics: GraphLayoutDiagnostics;
+  /** The row packing this result used. */
+  readonly packing: GraphLayoutPacking;
 }
 
 /** Reduce resize churn to portrait, square, or landscape packing targets. */
@@ -122,8 +153,22 @@ export function projectGraphEdges(
   return projected;
 }
 
+/** Sort a component's induced edges into one comparable string, prefixed by rank direction. */
+export function componentEdgeSignature(
+  nodeIds: readonly string[],
+  edges: readonly ProjectedGraphEdge[],
+  direction: LayoutDirection,
+): string {
+  const members = new Set(nodeIds);
+  const induced = edges
+    .filter((edge) => members.has(edge.source) && members.has(edge.target))
+    .map((edge) => `${edge.source}>${edge.target}`)
+    .sort();
+  return `${direction}|${induced.join(',')}`;
+}
+
 /** Find weak components while preserving node source order. */
-function weakComponents(
+export function weakComponents(
   nodes: readonly MeasuredGraphNode[],
   edges: readonly ProjectedGraphEdge[],
 ): string[][] {
@@ -156,18 +201,24 @@ function weakComponents(
   return components;
 }
 
-interface LocalComponent {
+/** One component laid out on its own, with its origin normalized to zero. */
+export interface LocalComponent {
+  /** Member ids in stable source order. */
   readonly nodeIds: readonly string[];
-  readonly positions: ReadonlyMap<string, { readonly x: number; readonly y: number }>;
+  /** Member positions relative to the component origin. */
+  readonly positions: ReadonlyMap<string, GraphLayoutPoint>;
+  /** Component width in canvas units. */
   readonly width: number;
+  /** Component height in canvas units. */
   readonly height: number;
 }
 
 interface PackedComponents {
-  readonly origins: readonly { readonly x: number; readonly y: number }[];
+  readonly origins: readonly GraphLayoutPoint[];
   readonly width: number;
   readonly height: number;
   readonly density: number;
+  readonly perRow: number;
 }
 
 /** Score every stable row packing by wasted area and distance from the viewport aspect. */
@@ -175,7 +226,7 @@ function packComponents(
   components: readonly LocalComponent[],
   targetAspectRatio: number,
 ): PackedComponents {
-  if (components.length === 0) return { origins: [], width: 0, height: 0, density: 0 };
+  if (components.length === 0) return { origins: [], width: 0, height: 0, density: 0, perRow: 0 };
   const occupiedArea = components.reduce(
     (area, component) => area + component.width * component.height,
     0,
@@ -203,14 +254,16 @@ function packComponents(
     const aspect = height === 0 ? targetAspectRatio : width / height;
     const aspectError = Math.abs(Math.log(aspect / Math.max(targetAspectRatio, 0.1)));
     const score = 1 - density + aspectError;
-    if (best === null || score < best.score) best = { origins, width, height, density, score };
+    if (best === null || score < best.score) {
+      best = { origins, width, height, density, score, perRow };
+    }
   }
-  if (best === null) return { origins: [], width: 0, height: 0, density: 0 };
+  if (best === null) return { origins: [], width: 0, height: 0, density: 0, perRow: 0 };
   return best;
 }
 
 /** Run Dagre over one component and normalize its origin to zero. */
-function layoutComponent(
+export function layoutComponent(
   members: readonly MeasuredGraphNode[],
   edges: readonly ProjectedGraphEdge[],
   direction: LayoutDirection,
@@ -259,6 +312,39 @@ function layoutComponent(
   };
 }
 
+/**
+ * Pick the largest component and its best-connected member as the readable-zoom anchor.
+ *
+ * @param components - Packed components.
+ * @param edges - Projected edges; degree within the largest component picks the anchor.
+ * @param bounds - Whole-graph bounds, used when the graph is empty.
+ */
+export function primaryComponentOf(
+  components: readonly GraphLayoutComponent[],
+  edges: readonly ProjectedGraphEdge[],
+  bounds: GraphLayoutRect,
+): GraphLayoutPrimary {
+  const primary = components.reduce<GraphLayoutComponent | undefined>(
+    (largest, component) =>
+      largest === undefined || component.nodeIds.length > largest.nodeIds.length
+        ? component
+        : largest,
+    undefined,
+  ) ?? { nodeIds: [], bounds };
+  const primaryIds = new Set(primary.nodeIds);
+  const degree = new Map(primary.nodeIds.map((id) => [id, 0]));
+  for (const edge of edges) {
+    if (!primaryIds.has(edge.source) || !primaryIds.has(edge.target)) continue;
+    degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
+    degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
+  }
+  const anchorNodeId = primary.nodeIds.reduce<string | null>((best, id) => {
+    if (best === null) return id;
+    return (degree.get(id) ?? 0) > (degree.get(best) ?? 0) ? id : best;
+  }, null);
+  return { nodeIds: primary.nodeIds, anchorNodeId, bounds: primary.bounds };
+}
+
 /** Lay out measured objects as independent weak components. */
 export function layoutMeasuredGraph(
   nodes: readonly MeasuredGraphNode[],
@@ -290,7 +376,13 @@ export function layoutMeasuredGraph(
     for (const [id, position] of component.positions) {
       positions.set(id, { x: position.x + origin.x, y: position.y + origin.y });
     }
-    return { nodeIds: component.nodeIds, bounds };
+    return {
+      nodeIds: component.nodeIds,
+      bounds,
+      anchorId: component.nodeIds[0] ?? '',
+      edgeSignature: componentEdgeSignature(component.nodeIds, edges, _options.direction),
+      localPositions: component.positions,
+    };
   });
   const bounds = {
     x: 0,
@@ -298,24 +390,7 @@ export function layoutMeasuredGraph(
     width: packed.width,
     height: packed.height,
   };
-  const primary = components.reduce<GraphLayoutComponent | undefined>(
-    (largest, component) =>
-      largest === undefined || component.nodeIds.length > largest.nodeIds.length
-        ? component
-        : largest,
-    undefined,
-  ) ?? { nodeIds: [], bounds };
-  const primaryIds = new Set(primary.nodeIds);
-  const degree = new Map(primary.nodeIds.map((id) => [id, 0]));
-  for (const edge of edges) {
-    if (!primaryIds.has(edge.source) || !primaryIds.has(edge.target)) continue;
-    degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
-    degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
-  }
-  const anchorNodeId = primary.nodeIds.reduce<string | null>((best, id) => {
-    if (best === null) return id;
-    return (degree.get(id) ?? 0) > (degree.get(best) ?? 0) ? id : best;
-  }, null);
+  const primary = primaryComponentOf(components, edges, bounds);
   const diagnostics: GraphLayoutDiagnostics = {
     nodeCount: nodes.length,
     componentCount: components.length,
@@ -330,7 +405,8 @@ export function layoutMeasuredGraph(
     positions,
     components,
     bounds,
-    primary: { ...primary, anchorNodeId },
+    primary,
     diagnostics,
+    packing: { perRow: packed.perRow, order: components.map(({ anchorId }) => anchorId) },
   };
 }

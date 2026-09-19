@@ -835,6 +835,17 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+
+    /*
+     * The universal selector never reaches the View Transition pseudo-tree, so a snapshot morph
+     * would still play at full length. Collapse it the same way.
+     */
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
   }
 
   /*
@@ -850,6 +861,20 @@
     :root[data-shell-navigation-transition='true']::view-transition-group(*) {
       animation-duration: 200ms;
       animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    /*
+     * A named-scope transition (`startViewTransition(update, { scope: 'named' })`) animates only
+     * elements with a stable `view-transition-name`; the root's own snapshot is withheld so the
+     * rest of the page keeps rendering and taking input while, say, canvas cards move.
+     */
+    :root[data-view-transition-scope='named'] {
+      view-transition-name: none;
+    }
+
+    :root[data-view-transition-scope='named']::view-transition-group(*) {
+      animation-duration: var(--dur-slow);
+      animation-timing-function: var(--ease-emphasized-decel);
     }
   }
 

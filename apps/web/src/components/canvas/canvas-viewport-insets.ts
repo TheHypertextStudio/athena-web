@@ -14,6 +14,8 @@ export interface CanvasOverlayInsets {
   readonly top?: number;
   /** Covered from the right, e.g. by a floating inspector or conversation. */
   readonly right?: number;
+  /** Covered from the bottom, by the viewport toolbar, a notice, and the minimap. */
+  readonly bottom?: number;
 }
 
 /**
@@ -52,6 +54,11 @@ export function insetRight(insets: CanvasOverlayInsets): number {
   return insets.right ?? 0;
 }
 
+/** What floating chrome covers from the bottom, 0 when nothing does. */
+export function insetBottom(insets: CanvasOverlayInsets): number {
+  return insets.bottom ?? 0;
+}
+
 /** One floating part on the right edge: whether it is open, and how wide it is when open. */
 export interface OccludingPart {
   readonly open: boolean;
@@ -60,7 +67,7 @@ export interface OccludingPart {
 
 /**
  * The fit padding for a canvas with these insets: the base gutter on every side, plus the covered
- * distance on the top and right.
+ * distance on the top, right, and bottom.
  *
  * @param insets - What floating chrome covers.
  * @param base - The gutter kept clear inside the visible area on every side.
@@ -70,7 +77,7 @@ export function fitPaddingFor(insets: CanvasOverlayInsets = {}, base = 24): FitP
   return {
     top: px(base + insetTop(insets)),
     right: px(base + insetRight(insets)),
-    bottom: px(base),
+    bottom: px(base + insetBottom(insets)),
     left: px(base),
   };
 }
@@ -84,13 +91,13 @@ export function availableCanvasWidth(
   return Math.max(1, clientWidth - pad * 2 - insetRight(insets));
 }
 
-/** The height left for the graph once the gutter and the top chrome are taken. */
+/** The height left for the graph once the gutter and the top and bottom chrome are taken. */
 export function availableCanvasHeight(
   clientHeight: number,
   insets: CanvasOverlayInsets = {},
   pad = 24,
 ): number {
-  return Math.max(1, clientHeight - pad * 2 - insetTop(insets));
+  return Math.max(1, clientHeight - pad * 2 - insetTop(insets) - insetBottom(insets));
 }
 
 /**

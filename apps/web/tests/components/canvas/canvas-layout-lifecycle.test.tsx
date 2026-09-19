@@ -267,10 +267,14 @@ describe('Canvas measured layout lifecycle', () => {
       expect.objectContaining({
         minZoom: 0.5,
         maxZoom: 1,
-        padding: { top: '24px', right: '24px', bottom: '24px', left: '24px' },
+        // The bottom chrome overlays the viewport; what it covers (150px measured plus two
+        // gutters) is fit padding, not a shorter viewport.
+        padding: { top: '24px', right: '24px', bottom: '190px', left: '24px' },
       }),
     );
-    expect(screen.getByTestId('canvas-viewport')).toHaveStyle({ bottom: '180px' });
+    const viewport = screen.getByTestId('canvas-viewport');
+    expect(viewport).toHaveClass('inset-0');
+    expect(viewport.style.bottom).toBe('');
   });
 
   it('docks command feedback above the viewport toolbar in the top overlay layer', () => {
@@ -288,7 +292,7 @@ describe('Canvas measured layout lifecycle', () => {
     expect(screen.getByTestId('canvas-bottom-notice')).toHaveTextContent('Dependency added');
   });
 
-  it('measures no-minimap feedback and keeps the graph viewport above the complete dock', () => {
+  it('measures no-minimap feedback without taking height from the graph viewport', () => {
     chromeHeight = 196;
     render(
       <Canvas
@@ -302,7 +306,7 @@ describe('Canvas measured layout lifecycle', () => {
     notifyResize();
 
     expect(screen.queryByTestId('minimap')).not.toBeInTheDocument();
-    expect(screen.getByTestId('canvas-viewport')).toHaveStyle({ bottom: '226px' });
+    expect(screen.getByTestId('canvas-viewport').style.bottom).toBe('');
     expect(screen.getByTestId('canvas-bottom-chrome')).toContainElement(
       screen.getByTestId('command-feedback'),
     );

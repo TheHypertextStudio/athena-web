@@ -18,9 +18,26 @@ import {
   type CanvasHistoryEntry,
   narrowReceiptToResult,
 } from './canvas-command-history';
-import { useOptionalCanvasSnapshotReceiptApplier } from './canvas-selection-retention';
+import { type CanvasReceiptListener, useCanvasReceiptApplier } from './use-canvas-receipt-applier';
 
 const commandHistory = new CanvasCommandHistory();
+
+/** The slice of a replay-access query that decides whether Undo or Redo is offered. */
+interface ReplayAccessState {
+  readonly isFetching: boolean;
+  readonly isError: boolean;
+  readonly data: ObjectCommandReplayAccessResult | undefined;
+}
+
+/** Whether a history entry exists and the server has confirmed the actor may replay it. */
+function replayAvailable(
+  entry: CanvasHistoryEntry | undefined,
+  access: ReplayAccessState,
+): boolean {
+  return (
+    entry !== undefined && !access.isFetching && !access.isError && access.data?.allowed === true
+  );
+}
 
 /** Transient application-owned feedback shown over a canvas. */
 export interface CanvasCommandNotice {
@@ -181,17 +198,19 @@ function replayAccessDef(
  * @param orgId - Workspace that owns every command.
  * @param scopeKey - Stable route-and-scope history boundary.
  * @param invalidateKeys - Graph query keys reconciled after each request.
+ * @param onReceipt - Host listener for every settled receipt, forward or replayed.
  * @returns Command, replay, keyboard, history-label, and notice controls.
  */
 export function useCanvasCommandHistory(
   orgId: string,
   scopeKey: string,
   invalidateKeys: readonly QueryKey[],
+  onReceipt?: CanvasReceiptListener,
 ): CanvasCommandHistoryControls {
   const [version, setVersion] = useState(0);
   const [notice, setNotice] = useState<CanvasCommandNotice | null>(null);
   const replayInFlight = useRef(false);
-  const applyReceipt = useOptionalCanvasSnapshotReceiptApplier();
+  const applyReceipt = useCanvasReceiptApplier(onReceipt);
   const mutation = useApiMutation<ObjectCommandResult, ObjectCommandRequest>({
     mutationFn: (request) =>
       unwrap(
@@ -343,16 +362,8 @@ export function useCanvasCommandHistory(
     execute,
     undo,
     redo,
-    canUndo:
-      newestUndo !== undefined &&
-      !undoAccess.isFetching &&
-      !undoAccess.isError &&
-      undoAccess.data?.allowed === true,
-    canRedo:
-      newestRedo !== undefined &&
-      !redoAccess.isFetching &&
-      !redoAccess.isError &&
-      redoAccess.data?.allowed === true,
+    canUndo: replayAvailable(newestUndo, undoAccess),
+    canRedo: replayAvailable(newestRedo, redoAccess),
     undoLabel: newestUndo?.label ?? null,
     redoLabel: newestRedo?.label ?? null,
     pending: mutation.isPending || replayInFlight.current,

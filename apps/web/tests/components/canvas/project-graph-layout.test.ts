@@ -104,4 +104,54 @@ describe('layoutProjectGraph', () => {
     expect(result.current.nodes.map(({ position }) => position)).toEqual(firstPositions);
     expect(result.current.nodes[0]?.data).toMatchObject({ name: 'After' });
   });
+  describe('when the dependency edges change', () => {
+    const projects: Node[] = Array.from({ length: 10 }, (_, index) => ({
+      id: `project-${index}`,
+      position: { x: 0, y: 0 },
+      data: { name: `Project ${index}` },
+    }));
+    const link = (source: number, target: number): Edge => ({
+      id: `project-${source}->project-${target}`,
+      source: `project-${source}`,
+      target: `project-${target}`,
+    });
+    const render = () =>
+      renderHook(
+        ({ edges, aspectRatio, epoch }: { edges: Edge[]; aspectRatio: number; epoch: number }) =>
+          useProjectGraphLayout(projects, edges, aspectRatio, epoch),
+        { initialProps: { edges: [link(0, 1)], aspectRatio: 16 / 9, epoch: 0 } },
+      );
+
+    it('keeps the previous packing when one edge changes', () => {
+      const { result, rerender } = render();
+      const before = result.current;
+
+      rerender({ edges: [link(0, 1), link(8, 9)], aspectRatio: 16 / 9, epoch: 0 });
+
+      expect(layoutMeasuredGraphSpy).toHaveBeenCalledTimes(1);
+      expect(result.current.layout.packing.perRow).toBe(before.layout.packing.perRow);
+      const untouched = projects.slice(0, 8).map(({ id }) => id);
+      expect(untouched.map((id) => result.current.layout.positions.get(id))).toEqual(
+        untouched.map((id) => before.layout.positions.get(id)),
+      );
+    });
+
+    it('runs the full layout again when the re-layout epoch changes', () => {
+      const { rerender } = render();
+
+      rerender({ edges: [link(0, 1)], aspectRatio: 16 / 9, epoch: 1 });
+
+      expect(layoutMeasuredGraphSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('runs the full layout again when the coarse aspect bucket changes', () => {
+      const { rerender } = render();
+
+      rerender({ edges: [link(0, 1)], aspectRatio: 3 / 4, epoch: 0 });
+      expect(layoutMeasuredGraphSpy).toHaveBeenCalledTimes(2);
+
+      rerender({ edges: [link(0, 1), link(2, 3)], aspectRatio: 0.7, epoch: 0 });
+      expect(layoutMeasuredGraphSpy).toHaveBeenCalledTimes(2);
+    });
+  });
 });

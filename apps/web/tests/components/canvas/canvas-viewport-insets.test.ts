@@ -9,12 +9,12 @@ import {
 } from '@/components/canvas/canvas-viewport-insets';
 
 describe('canvas viewport insets', () => {
-  it('pads the base gutter on every side and adds what chrome covers on top and right', () => {
+  it('pads the base gutter on every side and adds what chrome covers on top, right, and bottom', () => {
     expect(fitPaddingFor()).toEqual({ top: '24px', right: '24px', bottom: '24px', left: '24px' });
-    expect(fitPaddingFor({ top: 56, right: 300 }, 24)).toEqual({
+    expect(fitPaddingFor({ top: 56, right: 300, bottom: 166 }, 24)).toEqual({
       top: '80px',
       right: '324px',
-      bottom: '24px',
+      bottom: '190px',
       left: '24px',
     });
   });
@@ -22,6 +22,7 @@ describe('canvas viewport insets', () => {
   it('subtracts the covered edges from the available area, never below one pixel', () => {
     expect(availableCanvasWidth(1000, { right: 300 })).toBe(652);
     expect(availableCanvasHeight(600, { top: 56 })).toBe(496);
+    expect(availableCanvasHeight(600, { top: 56, bottom: 166 })).toBe(330);
     expect(availableCanvasWidth(100, { right: 300 })).toBe(1);
   });
 

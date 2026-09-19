@@ -22,10 +22,10 @@ import { formatCalendarDate } from '@/lib/format-date';
 import type { TaskPatch } from '@/lib/use-task-mutations';
 
 /** The task page's sections, Overview first. */
-export type TaskTab = 'overview' | 'resources';
+export type TaskTab = 'overview' | 'resources' | 'graph';
 
 /** The section ids in tab order, as `useDetailTab` reads them. */
-export const TASK_TABS = ['overview', 'resources'] as const;
+export const TASK_TABS = ['overview', 'resources', 'graph'] as const;
 
 /** Props for {@link TaskIcon}. */
 export interface TaskIconProps {
@@ -115,6 +115,7 @@ export function TaskTabs({ tab, onTabChange }: TaskTabsProps): JSX.Element {
       items={[
         { value: 'overview', label: 'Overview', priority: 0 },
         { value: 'resources', label: 'Resources', priority: 1 },
+        { value: 'graph', label: 'Graph', priority: 2 },
       ]}
     />
   );

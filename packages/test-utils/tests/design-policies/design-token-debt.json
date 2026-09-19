@@ -516,7 +516,6 @@
     "raw-radius-utility": 1
   },
   "apps/web/src/components/task-detail/task-activity-feed.tsx": {
-    "ad-hoc-border": 2,
     "raw-radius-utility": 2
   },
   "apps/web/src/components/tasks/task-hierarchy-drop.ts": {

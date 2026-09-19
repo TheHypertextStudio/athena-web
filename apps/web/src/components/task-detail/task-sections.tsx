@@ -14,9 +14,11 @@ import type { JSX } from 'react';
 import type { EntityMentionsData } from '@/lib/use-entity-mentions';
 import type { TaskMutations } from '@/lib/use-task-mutations';
 
+import { TaskGraphTab } from './task-graph-tab';
 import type { TaskTab } from './task-masthead-slots';
 import { TaskOverviewPanel } from './task-overview-panel';
 import { TaskResourcesPanel } from './task-resources-panel';
+import type { DescriptionExpansion } from './use-description-expansion';
 
 /** Props for {@link TaskSections}. */
 export interface TaskSectionsProps {
@@ -34,8 +36,28 @@ export interface TaskSectionsProps {
     TaskMutations,
     'patchTask' | 'addSubtask' | 'toggleSubtask' | 'addComment'
   >;
-  readonly linkedContentOpen: boolean;
-  readonly onOpenLinkedContent: () => void;
+  readonly expansion: DescriptionExpansion;
+}
+
+/** The section a tab id names, given what the page knows. */
+function ActiveSection({ tab, mentions, ...section }: TaskSectionsProps): JSX.Element {
+  const { orgId, task, canEdit } = section;
+  switch (tab) {
+    case 'resources':
+      return (
+        <TaskResourcesPanel
+          orgId={orgId}
+          taskId={task.id}
+          canEdit={canEdit}
+          description={task.description}
+          mentions={mentions}
+        />
+      );
+    case 'graph':
+      return <TaskGraphTab orgId={orgId} taskId={task.id} />;
+    case 'overview':
+      return <TaskOverviewPanel taskId={task.id} {...section} />;
+  }
 }
 
 /**
@@ -44,24 +66,15 @@ export interface TaskSectionsProps {
  * @param props - See {@link TaskSectionsProps}.
  * @returns the section's tab panel.
  */
-export function TaskSections({ tab, mentions, ...section }: TaskSectionsProps): JSX.Element {
-  const { orgId, task, canEdit } = section;
-  if (tab === 'resources') {
-    return (
-      <section role="tabpanel" id="tabpanel-resources" aria-labelledby="tab-resources">
-        <TaskResourcesPanel
-          orgId={orgId}
-          taskId={task.id}
-          canEdit={canEdit}
-          description={task.description}
-          mentions={mentions}
-        />
-      </section>
-    );
-  }
+export function TaskSections(props: TaskSectionsProps): JSX.Element {
   return (
-    <section role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview">
-      <TaskOverviewPanel taskId={task.id} {...section} />
+    <section
+      role="tabpanel"
+      id={`tabpanel-${props.tab}`}
+      aria-labelledby={`tab-${props.tab}`}
+      className="min-w-0"
+    >
+      <ActiveSection {...props} />
     </section>
   );
 }

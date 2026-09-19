@@ -3,6 +3,7 @@
 import type { TaskRef } from '@docket/work/task-model';
 import { StatusIcon } from '@docket/ui/components';
 import { ChevronLeft, ChevronRight } from '@docket/ui/icons';
+import { Surface } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -122,8 +123,14 @@ export function Dependencies({
   const empty = blocking.length === 0 && blockedBy.length === 0;
 
   return (
-    <section aria-labelledby="dependencies-heading" className="flex flex-col gap-3">
-      <h2 id="dependencies-heading" className="text-label-large">
+    <Surface
+      as="section"
+      tone="card"
+      pad="roomy"
+      aria-labelledby="dependencies-heading"
+      className="flex flex-col gap-3"
+    >
+      <h2 id="dependencies-heading" className="text-title-small text-on-surface">
         Dependencies
       </h2>
 
@@ -176,6 +183,6 @@ export function Dependencies({
           ) : null}
         </div>
       )}
-    </section>
+    </Surface>
   );
 }

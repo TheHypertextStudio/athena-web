@@ -90,18 +90,6 @@ describe('detail route ownership', () => {
     expect(source).toContain('enabled: options.activityOpen ?? false');
   });
 
-  it('defers task-linked request owners until the user asks for them', () => {
-    const page = readFileSync(join(root, details[0]), 'utf8');
-    const overview = readFileSync(
-      join(root, 'src/components/task-detail/task-overview-panel.tsx'),
-      'utf8',
-    );
-
-    expect(page).toContain('const [linkedContentOpen, setLinkedContentOpen] = useState(false)');
-    expect(overview).toContain('linkedContentOpen ? <TaskRepeatingWorkBacklink');
-    expect(overview).toContain('Load attachments and dependency map');
-  });
-
   it('never renders a partial navigation snapshot as an entity document', () => {
     for (const file of details) {
       const source = readFileSync(join(root, file), 'utf8');

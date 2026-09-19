@@ -3,7 +3,7 @@
 import type { TaskRef } from '@docket/work/task-model';
 import { StatusIcon } from '@docket/ui/components';
 import { Plus } from '@docket/ui/icons';
-import { Button, Input } from '@docket/ui/primitives';
+import { Button, Input, Surface } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useMemo, useState } from 'react';
 
@@ -57,8 +57,6 @@ export function Subtasks({
   onRename,
   canEdit,
 }: SubtasksProps): JSX.Element {
-  const [title, setTitle] = useState('');
-  const [adding, setAdding] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const categoryOf = useCategoryOf('task');
 
@@ -66,18 +64,6 @@ export function Subtasks({
     () => subtasks.filter((s) => categoryOf(s.state) === 'completed').length,
     [subtasks, categoryOf],
   );
-
-  async function add(): Promise<void> {
-    const trimmed = title.trim();
-    if (trimmed.length === 0) return;
-    setAdding(true);
-    try {
-      await onAdd(trimmed);
-      setTitle('');
-    } finally {
-      setAdding(false);
-    }
-  }
 
   async function toggle(subtask: TaskRef): Promise<void> {
     const isDone = categoryOf(subtask.state) === 'completed';
@@ -90,9 +76,15 @@ export function Subtasks({
   }
 
   return (
-    <section aria-labelledby="subtasks-heading" className="flex flex-col gap-2">
+    <Surface
+      as="section"
+      tone="card"
+      pad="roomy"
+      aria-labelledby="subtasks-heading"
+      className="flex flex-col gap-2"
+    >
       <div className="flex items-baseline justify-between">
-        <h2 id="subtasks-heading" className="text-label-large">
+        <h2 id="subtasks-heading" className="text-title-small text-on-surface">
           Subtasks
         </h2>
         {subtasks.length > 0 ? (
@@ -134,36 +126,60 @@ export function Subtasks({
         </ul>
       )}
 
-      {canEdit ? (
-        <form
-          className="flex gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void add();
-          }}
-        >
-          <Input
-            aria-label="New subtask title"
-            placeholder="Add a subtask…"
-            value={title}
-            onChange={(event) => {
-              setTitle(event.target.value);
-            }}
-            className="h-8"
-          />
-          <Button
-            type="submit"
-            size="sm"
-            variant="secondary"
-            disabled={adding || title.trim().length === 0}
-            className="gap-1"
-          >
-            <Plus className="size-4" />
-            {adding ? 'Adding…' : 'Add'}
-          </Button>
-        </form>
-      ) : null}
-    </section>
+      {canEdit ? <SubtaskComposer onAdd={onAdd} /> : null}
+    </Surface>
+  );
+}
+
+/** The composer at the foot of the list: a title and an Add button. */
+function SubtaskComposer({
+  onAdd,
+}: {
+  readonly onAdd: (title: string) => Promise<void>;
+}): JSX.Element {
+  const [title, setTitle] = useState('');
+  const [adding, setAdding] = useState(false);
+
+  async function add(): Promise<void> {
+    const trimmed = title.trim();
+    if (trimmed.length === 0) return;
+    setAdding(true);
+    try {
+      await onAdd(trimmed);
+      setTitle('');
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  return (
+    <form
+      className="flex gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void add();
+      }}
+    >
+      <Input
+        aria-label="New subtask title"
+        placeholder="Add a subtask…"
+        value={title}
+        onChange={(event) => {
+          setTitle(event.target.value);
+        }}
+        className="h-8"
+      />
+      <Button
+        type="submit"
+        size="sm"
+        variant="secondary"
+        disabled={adding || title.trim().length === 0}
+        className="gap-1"
+      >
+        <Plus className="size-4" />
+        {adding ? 'Adding…' : 'Add'}
+      </Button>
+    </form>
   );
 }
 

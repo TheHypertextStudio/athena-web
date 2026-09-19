@@ -1,118 +1,45 @@
 'use client';
 
 import type { TaskDetail } from '@docket/work/task-model';
-import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
-import { useState } from 'react';
 
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
-import { api } from '@/lib/api';
-import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
 
-/** Props for the description and secondary task details. */
+import type { DescriptionExpansion } from './use-description-expansion';
+
+/** Props for the task's description. */
 export interface TaskDetailsProps {
   readonly orgId: string;
-  readonly taskId: string;
   readonly task: TaskDetail;
   readonly currentActorId?: string | null;
   readonly canEdit: boolean;
   readonly onSave: (description: string | null) => void;
+  /** The expansion state, whose outcome and undo the strip under the description reports. */
+  readonly expansion: DescriptionExpansion;
 }
 
-/** Keep one task's description, and the expansion that rewrites it, in the document flow. */
+/**
+ * The task's description, edited in place, with the outcome of an expansion beneath it.
+ *
+ * @remarks
+ * The description carries no heading and no expand button of its own: it sits directly under the
+ * masthead as the body of the task, and expanding it is an action in the masthead's overflow
+ * menu. Only the result of an expansion, and the one undo, appear here.
+ *
+ * @param props - See {@link TaskDetailsProps}.
+ * @returns the description editor and, after an expansion, its undo strip.
+ */
 export function TaskDetails({
   orgId,
-  taskId,
   task,
   currentActorId,
   canEdit,
   onSave,
+  expansion,
 }: TaskDetailsProps): JSX.Element {
-  const queryClient = useQueryClient();
-  const [undoToken, setUndoToken] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const invalidateKeys = [
-    queryKeys.task(orgId, taskId),
-    queryKeys.tasks(orgId),
-    queryKeys.taskActivity(orgId, taskId),
-    queryKeys.entityMentions(orgId, 'task', taskId),
-  ];
-  const expandMutation = useApiMutation({
-    mutationFn: () =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].tasks[':id'].expand.$post({
-            param: { orgId, id: taskId },
-            json: {},
-          }),
-        'Could not expand the description.',
-      ),
-    invalidateKeys,
-  });
-  const undoMutation = useApiMutation({
-    mutationFn: (token: string) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].tasks[':id'].expand.undo.$post({
-            param: { orgId, id: taskId },
-            json: { undoToken: token },
-          }),
-        'Could not undo the expansion.',
-      ),
-    invalidateKeys,
-  });
-
-  function expand(): void {
-    setError(null);
-    setNotice(null);
-    expandMutation.mutate(undefined, {
-      onSuccess: (result) => {
-        queryClient.setQueryData<TaskDetail>(queryKeys.task(orgId, taskId), result.task);
-        setUndoToken(result.undoToken);
-        setNotice(result.undoToken ? 'Description expanded.' : 'No changes needed.');
-      },
-      onError: () => {
-        setError('Could not expand the description. Try again.');
-      },
-    });
-  }
-
-  function undo(): void {
-    if (undoToken === null) return;
-    setError(null);
-    setNotice(null);
-    undoMutation.mutate(undoToken, {
-      onSuccess: (result) => {
-        queryClient.setQueryData<TaskDetail>(queryKeys.task(orgId, taskId), result.task);
-        setUndoToken(null);
-        setNotice('Expansion undone.');
-      },
-      onError: () => {
-        setError('Could not undo the expansion. Try again.');
-      },
-    });
-  }
-
   return (
-    <section aria-labelledby="description-heading" className="flex flex-col gap-3">
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <h2 id="description-heading" className="text-on-surface text-title-small">
-          Description
-        </h2>
-        {canEdit ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={expandMutation.isPending || undoMutation.isPending}
-            onClick={expand}
-          >
-            {expandMutation.isPending ? 'Expanding…' : 'Expand'}
-          </Button>
-        ) : null}
-      </div>
+    <section aria-label="Description" className="flex flex-col gap-3">
       <TemplateAwareEntityDocument
         orgId={orgId}
         kind="task"
@@ -123,20 +50,21 @@ export function TaskDetails({
         onSave={onSave}
         placeholder="Add a description…"
       />
-      {notice ? (
+      {expansion.notice ? (
         <div className="flex flex-wrap items-center gap-2" role="status" aria-live="polite">
-          <p className="text-on-surface-variant text-body-medium">{notice}</p>
-          {undoToken ? (
-            <Button type="button" size="sm" variant="link" onClick={undo}>
+          <p className="text-on-surface-variant text-body-medium">{expansion.notice}</p>
+          {expansion.undoToken ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="link"
+              disabled={expansion.pending}
+              onClick={expansion.undo}
+            >
               Undo expansion
             </Button>
           ) : null}
         </div>
-      ) : null}
-      {error ? (
-        <p role="alert" className="text-error text-body-medium">
-          {error}
-        </p>
       ) : null}
     </section>
   );

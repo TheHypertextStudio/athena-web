@@ -5503,34 +5503,22 @@
   },
   "apps/web/src/components/task-detail/Subtasks.tsx": {
     "max-lines-per-function": {
-      "max": 113,
-      "excess": 47
+      "max": 94,
+      "excess": 14
     }
   },
   "apps/web/src/components/task-detail/task-activity-feed.tsx": {
     "complexity": {
-      "max": 16,
-      "excess": 4
+      "max": 15,
+      "excess": 3
     },
     "max-lines-per-function": {
-      "max": 149,
-      "excess": 69
+      "max": 148,
+      "excess": 68
     },
     "sonarjs/cognitive-complexity": {
-      "max": 18,
-      "excess": 3
-    }
-  },
-  "apps/web/src/components/task-detail/task-details.tsx": {
-    "max-lines-per-function": {
-      "max": 117,
-      "excess": 37
-    }
-  },
-  "apps/web/src/components/task-detail/task-header-controls.tsx": {
-    "max-lines-per-function": {
-      "max": 86,
-      "excess": 6
+      "max": 16,
+      "excess": 1
     }
   },
   "apps/web/src/components/tasks/create-task.tsx": {

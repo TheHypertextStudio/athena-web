@@ -7,7 +7,6 @@ import { type JSX, useEffect, useState } from 'react';
 
 import { TaskActions } from '@/components/task-detail/task-actions';
 import { TaskBreadcrumb } from '@/components/task-detail/task-breadcrumb';
-import { TaskDeleteDialog, useTaskDeletePrompt } from '@/components/task-detail/task-delete-dialog';
 import {
   TaskDetailFallback,
   resolveTaskDetailView,
@@ -23,6 +22,7 @@ import {
 } from '@/components/task-detail/task-masthead-slots';
 import { TaskMetadataRow } from '@/components/task-detail/task-masthead-properties';
 import { TaskSections } from '@/components/task-detail/task-sections';
+import { useDescriptionExpansion } from '@/components/task-detail/use-description-expansion';
 import { useTaskPropertyModel } from '@/components/task-detail/use-task-property-model';
 import { useTaskRosters } from '@/components/task-detail/use-task-rosters';
 import { EntityDetailLayout } from '@/components/views/entity-detail-layout';
@@ -45,24 +45,20 @@ interface TaskDetailReadyProps {
   readonly detail: TaskDetailData;
   readonly tab: TaskTab;
   readonly onTabChange: (tab: TaskTab) => void;
-  readonly linkedContentOpen: boolean;
-  readonly onOpenLinkedContent: () => void;
 }
 
-/** The task page once its task has loaded: masthead, tabs, the active section, and the delete prompt. */
+/** The task page once its task has loaded: masthead, tabs, and the active section. */
 function TaskDetailReady({
   orgId,
   task,
   detail,
   tab,
   onTabChange,
-  linkedContentOpen,
-  onOpenLinkedContent,
 }: TaskDetailReadyProps): JSX.Element {
   const projectLabel = useVocabulary('project');
   const canEdit = detail.capabilities?.contribute ?? false;
   const mutations = useTaskMutations(orgId, task.id, detail.detailKey, detail.activityKey);
-  const deletePrompt = useTaskDeletePrompt(mutations.resetDelete);
+  const expansion = useDescriptionExpansion(orgId, task.id);
   const rosters = useTaskRosters(orgId, task);
   const { model, projectName } = useTaskPropertyModel({
     orgId,
@@ -75,54 +71,50 @@ function TaskDetailReady({
   const project = task.projectId ? projectName(task.projectId) : null;
 
   return (
-    <>
-      <EntityDetailLayout
-        object={{ kind: 'task', id: task.id, organizationId: orgId, title: task.title }}
-        printSummary={
-          <TaskPrintSummary task={task} members={rosters.members} projectName={project} />
-        }
-        eyebrow={
-          <TaskBreadcrumb
-            orgId={orgId}
-            projectId={task.projectId ?? null}
-            projectName={project ?? projectLabel}
-            projectLabel={projectLabel}
-            parentTaskId={task.parentTaskId ?? null}
-          />
-        }
-        icon={<TaskIcon orgId={orgId} taskId={task.id} title={task.title} canEdit={canEdit} />}
-        title={<TaskTitle title={task.title} canEdit={canEdit} onPatch={mutations.patchTask} />}
-        metadata={<TaskMetadataRow model={model} />}
-        actions={
-          <TaskActions
-            task={task}
-            memberOptions={model.memberOptions}
-            canEdit={canEdit}
-            canManage={detail.capabilities?.manage ?? false}
-            mutations={mutations}
-            deletePrompt={deletePrompt}
-          />
-        }
-        tabs={<TaskTabs tab={tab} onTabChange={onTabChange} />}
-      >
-        <TaskSections
-          tab={tab}
+    <EntityDetailLayout
+      object={{ kind: 'task', id: task.id, organizationId: orgId, title: task.title }}
+      printSummary={
+        <TaskPrintSummary task={task} members={rosters.members} projectName={project} />
+      }
+      eyebrow={
+        <TaskBreadcrumb
+          orgId={orgId}
+          projectId={task.projectId ?? null}
+          projectName={project ?? projectLabel}
+          projectLabel={projectLabel}
+          parentTaskId={task.parentTaskId ?? null}
+        />
+      }
+      icon={<TaskIcon orgId={orgId} taskId={task.id} title={task.title} canEdit={canEdit} />}
+      title={<TaskTitle title={task.title} canEdit={canEdit} onPatch={mutations.patchTask} />}
+      metadata={<TaskMetadataRow model={model} />}
+      actions={
+        <TaskActions
           orgId={orgId}
           task={task}
-          detailKey={detail.detailKey}
-          currentActorId={detail.currentActorId}
           canEdit={canEdit}
-          canComment={detail.capabilities?.comment ?? false}
-          mentions={detail.entityMentions}
-          projectName={projectName}
-          projectLabel={projectLabel}
+          canManage={detail.capabilities?.manage ?? false}
           mutations={mutations}
-          linkedContentOpen={linkedContentOpen}
-          onOpenLinkedContent={onOpenLinkedContent}
+          expansion={expansion}
         />
-      </EntityDetailLayout>
-      <TaskDeleteDialog orgId={orgId} prompt={deletePrompt} mutations={mutations} />
-    </>
+      }
+      tabs={<TaskTabs tab={tab} onTabChange={onTabChange} />}
+    >
+      <TaskSections
+        tab={tab}
+        orgId={orgId}
+        task={task}
+        detailKey={detail.detailKey}
+        currentActorId={detail.currentActorId}
+        canEdit={canEdit}
+        canComment={detail.capabilities?.comment ?? false}
+        mentions={detail.entityMentions}
+        projectName={projectName}
+        projectLabel={projectLabel}
+        mutations={mutations}
+        expansion={expansion}
+      />
+    </EntityDetailLayout>
   );
 }
 
@@ -135,7 +127,6 @@ export default function TaskDetailPage(): JSX.Element {
   const navigationSnapshot = useNavigationSnapshot('task', taskId);
   const [aggregateEnabled, setAggregateEnabled] = useState(true);
   const [terminalState, setTerminalState] = useState<TaskTerminalState | null>(null);
-  const [linkedContentOpen, setLinkedContentOpen] = useState(false);
   const detail = useTaskDetail(orgId, taskId, {
     aggregateEnabled,
     resourcesOpen: tab === 'resources',
@@ -147,7 +138,6 @@ export default function TaskDetailPage(): JSX.Element {
   useEffect(() => {
     setAggregateEnabled(true);
     setTerminalState(null);
-    setLinkedContentOpen(false);
   }, [taskId]);
 
   useEffect(() => {
@@ -170,17 +160,7 @@ export default function TaskDetailPage(): JSX.Element {
   });
   if (view === 'ready' && task !== null) {
     return (
-      <TaskDetailReady
-        orgId={orgId}
-        task={task}
-        detail={detail}
-        tab={tab}
-        onTabChange={setTab}
-        linkedContentOpen={linkedContentOpen}
-        onOpenLinkedContent={() => {
-          setLinkedContentOpen(true);
-        }}
-      />
+      <TaskDetailReady orgId={orgId} task={task} detail={detail} tab={tab} onTabChange={setTab} />
     );
   }
   return (

@@ -1,30 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 
 import type { TaskDetail } from '@docket/work/task-model';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { expandPost, undoPost } = vi.hoisted(() => ({
-  expandPost: vi.fn(),
-  undoPost: vi.fn(),
-}));
-
-vi.mock('../../src/lib/api', () => ({
-  api: {
-    v1: {
-      orgs: {
-        ':orgId': {
-          tasks: {
-            ':id': {
-              expand: { $post: expandPost, undo: { $post: undoPost } },
-            },
-          },
-        },
-      },
-    },
-  },
-}));
+import type { DescriptionExpansion } from '../../src/components/task-detail/use-description-expansion';
 
 vi.mock('../../src/components/editor/apply-description-template', () => ({
   TemplateAwareEntityDocument: ({ value }: { readonly value: string | null | undefined }) => (
@@ -35,19 +15,6 @@ vi.mock('../../src/components/editor/apply-description-template', () => ({
 const { TaskDetails } = await import('../../src/components/task-detail/task-details');
 
 afterEach(cleanup);
-
-beforeEach(() => {
-  expandPost.mockReset();
-  undoPost.mockReset();
-});
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return {
-    ok: status < 400,
-    status,
-    json: () => Promise.resolve(body),
-  } as unknown as Response;
-}
 
 function task(overrides: Partial<TaskDetail> = {}): TaskDetail {
   return {
@@ -68,78 +35,64 @@ function task(overrides: Partial<TaskDetail> = {}): TaskDetail {
   } as TaskDetail;
 }
 
-function renderDetails(
-  options: Partial<React.ComponentProps<typeof TaskDetails>> = {},
-): QueryClient {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
+/** An idle expansion with every action observable; `overrides` reports an outcome. */
+function expansionFor(overrides: Partial<DescriptionExpansion> = {}): DescriptionExpansion {
+  return {
+    pending: false,
+    notice: null,
+    undoToken: null,
+    expand: vi.fn(),
+    undo: vi.fn(),
+    ...overrides,
+  };
+}
+
+function renderDetails(expansion: DescriptionExpansion = expansionFor()): void {
   render(
-    <QueryClientProvider client={client}>
-      <TaskDetails
-        orgId="org_1"
-        taskId="task_1"
-        task={task()}
-        canEdit
-        onSave={() => undefined}
-        {...options}
-      />
-    </QueryClientProvider>,
+    <TaskDetails
+      orgId="org_1"
+      task={task()}
+      canEdit
+      onSave={() => undefined}
+      expansion={expansion}
+    />,
   );
-  return client;
 }
 
 describe('TaskDetails', () => {
-  it('renders the description as the whole section, with no properties disclosure or aside', () => {
+  it('renders the description as the whole section, with no heading, button, or disclosure', () => {
     renderDetails();
 
     expect(screen.getByTestId('task-description')).toHaveTextContent('The current definition.');
+    expect(screen.getByRole('region', { name: 'Description' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(document.querySelector('details')).toBeNull();
     expect(document.querySelector('aside')).toBeNull();
   });
 
-  it('expands the existing description in place and offers one undo', async () => {
-    expandPost.mockResolvedValue(
-      jsonResponse({
-        task: task({ description: '## Goal\n\nThe expanded definition.' }),
-        undoToken: 'undo_1',
-      }),
-    );
-    undoPost.mockResolvedValue(jsonResponse({ task: task(), undoToken: null }));
-    const client = renderDetails();
+  it('reports an expansion and offers its one undo', () => {
+    const expansion = expansionFor({ notice: 'Description expanded.', undoToken: 'undo_1' });
+    renderDetails(expansion);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand' }));
-
-    await waitFor(() => {
-      expect(expandPost).toHaveBeenCalledWith({
-        param: { orgId: 'org_1', id: 'task_1' },
-        json: {},
-      });
-    });
-    expect(await screen.findByRole('status')).toHaveTextContent('Description expanded.');
-    expect(client.getQueryData<TaskDetail>(['org', 'org_1', 'tasks', 'task_1'])?.description).toBe(
-      '## Goal\n\nThe expanded definition.',
-    );
+    expect(screen.getByRole('status')).toHaveTextContent('Description expanded.');
     fireEvent.click(screen.getByRole('button', { name: 'Undo expansion' }));
-    await waitFor(() => {
-      expect(undoPost).toHaveBeenCalledWith({
-        param: { orgId: 'org_1', id: 'task_1' },
-        json: { undoToken: 'undo_1' },
-      });
-    });
+
+    expect(expansion.undo).toHaveBeenCalledOnce();
   });
 
-  it('keeps the description in place and gives owned retry feedback when expansion fails', async () => {
-    expandPost.mockResolvedValue(jsonResponse({ code: 'conflict' }, 409));
-    renderDetails();
+  it('reports an expansion that changed nothing without offering an undo', () => {
+    renderDetails(expansionFor({ notice: 'No changes needed.' }));
 
-    const button = screen.getByRole('button', { name: 'Expand' });
-    fireEvent.click(button);
+    expect(screen.getByRole('status')).toHaveTextContent('No changes needed.');
+    expect(screen.queryByRole('button', { name: 'Undo expansion' })).not.toBeInTheDocument();
+  });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Could not expand the description. Try again.',
+  it('holds the undo while a request is in flight', () => {
+    renderDetails(
+      expansionFor({ notice: 'Description expanded.', undoToken: 'undo_1', pending: true }),
     );
-    expect(button).not.toBeDisabled();
-    expect(screen.getByTestId('task-description')).toHaveTextContent('The current definition.');
+
+    expect(screen.getByRole('button', { name: 'Undo expansion' })).toBeDisabled();
   });
 });

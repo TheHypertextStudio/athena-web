@@ -18,7 +18,7 @@ describe('ambient Athena entry points', () => {
   });
 
   it('keeps task controls free of anthropomorphic agent actions', () => {
-    const controls = read('apps/web/src/components/task-detail/task-header-controls.tsx');
+    const controls = read('apps/web/src/components/task-detail/task-actions.tsx');
     const detail = read(
       'apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx',
     );

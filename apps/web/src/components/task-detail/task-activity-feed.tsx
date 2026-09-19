@@ -12,6 +12,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
   Skeleton,
+  Surface,
 } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useMemo, useState } from 'react';
@@ -25,7 +26,6 @@ import { apiInfiniteQueryOptions, queryKeys, useInfiniteApiQuery } from '@/lib/q
 
 import { activityActorName, activitySentence } from './format-activity';
 
-const POST_FAILURE = 'Could not post your comment.';
 const ALL_CATEGORIES = 'all';
 type ActivityFilter = TaskActivityCategory | typeof ALL_CATEGORIES;
 
@@ -100,7 +100,6 @@ export function TaskActivityFeed({
   const [filter, setFilter] = useState<ActivityFilter>(ALL_CATEGORIES);
   const [body, setBody] = useState('');
   const [posting, setPosting] = useState(false);
-  const [postError, setPostError] = useState<string | null>(null);
   const activityQuery = useMemo(
     () =>
       apiInfiniteQueryOptions(
@@ -128,12 +127,12 @@ export function TaskActivityFeed({
     const text = body.trim();
     if (!onComment || !canComment || posting || text.length === 0) return;
     setPosting(true);
-    setPostError(null);
     try {
       await onComment(text);
       setBody('');
     } catch {
-      setPostError(POST_FAILURE);
+      // The failed write reaches the person as a notice, raised by the mutation layer, and the
+      // draft stays in the composer so posting again is one press.
     } finally {
       setPosting(false);
     }
@@ -141,7 +140,13 @@ export function TaskActivityFeed({
 
   // placeholder: this task's comments and activity, at the chosen filter.
   return (
-    <section aria-labelledby="activity-heading" className="flex flex-col gap-4">
+    <Surface
+      as="section"
+      tone="card"
+      pad="roomy"
+      aria-labelledby="activity-heading"
+      className="flex flex-col gap-4"
+    >
       <div className="flex items-center justify-between gap-3">
         <h2 id="activity-heading" className="text-title-small text-on-surface">
           Activity
@@ -215,34 +220,30 @@ export function TaskActivityFeed({
 
       {canComment && onComment ? (
         <form
-          className="border-outline-variant bg-surface-container-low flex flex-col gap-2 rounded-xl border p-3"
           onSubmit={(event) => {
             event.preventDefault();
             void post();
           }}
         >
-          <FreeformTextEditor
-            value={body}
-            onChange={setBody}
-            placeholder="Leave a comment…"
-            ariaLabel="Add a comment"
-            onSubmit={() => {
-              void post();
-            }}
-            className="bg-surface-container rounded-md p-3"
-          />
-          <div className="flex items-center justify-end">
-            <Button type="submit" size="sm" disabled={posting || body.trim().length === 0}>
-              {posting ? 'Posting…' : 'Comment'}
-            </Button>
-          </div>
-          {postError ? (
-            <p role="alert" className="text-error text-body-medium">
-              {postError}
-            </p>
-          ) : null}
+          <Surface tone="floating" pad="comfortable" className="flex flex-col gap-2">
+            <FreeformTextEditor
+              value={body}
+              onChange={setBody}
+              placeholder="Leave a comment…"
+              ariaLabel="Add a comment"
+              onSubmit={() => {
+                void post();
+              }}
+              className="rounded-md p-3"
+            />
+            <div className="flex items-center justify-end">
+              <Button type="submit" size="sm" disabled={posting || body.trim().length === 0}>
+                {posting ? 'Posting…' : 'Comment'}
+              </Button>
+            </div>
+          </Surface>
         </form>
       ) : null}
-    </section>
+    </Surface>
   );
 }

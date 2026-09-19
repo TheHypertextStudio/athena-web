@@ -102,74 +102,7 @@ export function ComposeStage({
 
       <Audience draft={draft} recipientCount={recipientCount} onDraftChange={onDraftChange} />
 
-      <div className="grid gap-4 @lg:grid-cols-2">
-        <FieldGroup label="Channels">
-          <div className="flex flex-wrap gap-3">
-            {CHANNELS.map((channel) => (
-              <label key={channel} className="flex items-center gap-1.5">
-                <Checkbox
-                  checked={draft.channels.includes(channel)}
-                  onChange={() => {
-                    onDraftChange('channels', toggleChannel(draft.channels, channel));
-                  }}
-                />
-                <Text as="span" token="body-small">
-                  {channel}
-                </Text>
-              </label>
-            ))}
-          </div>
-        </FieldGroup>
-
-        <Field label="Send at" htmlFor="announcement-schedule">
-          <Input
-            id="announcement-schedule"
-            type="datetime-local"
-            value={draft.scheduledAt}
-            onChange={(event) => {
-              onDraftChange('scheduledAt', event.target.value);
-            }}
-          />
-        </Field>
-
-        <Field label="Priority" htmlFor="announcement-priority">
-          <Select
-            id="announcement-priority"
-            value={draft.priority}
-            onChange={(event) => {
-              onDraftChange(
-                'priority',
-                event.target.value as NotificationAnnouncementDraft['priority'],
-              );
-            }}
-          >
-            {(['low', 'normal', 'high', 'urgent'] as const).map((priority) => (
-              <option key={priority} value={priority}>
-                {priority}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        <Field label="Replies go to" htmlFor="announcement-reply-policy">
-          <Select
-            id="announcement-reply-policy"
-            value={draft.replyPolicy}
-            onChange={(event) => {
-              onDraftChange(
-                'replyPolicy',
-                event.target.value as NotificationAnnouncementDraft['replyPolicy'],
-              );
-            }}
-          >
-            {(['none', 'staff_inbox', 'org_admins', 'automation'] as const).map((policy) => (
-              <option key={policy} value={policy}>
-                {policy.replaceAll('_', ' ')}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      </div>
+      <DeliverySettings draft={draft} onDraftChange={onDraftChange} />
 
       <ControlGroup controlSize="md">
         <Button type="submit" disabled={pending || incomplete}>
@@ -181,6 +114,122 @@ export function ComposeStage({
         previews you review before sending.
       </Text>
     </form>
+  );
+}
+
+/** Channels, schedule, priority, and reply settings. */
+function DeliverySettings({
+  draft,
+  onDraftChange,
+}: {
+  readonly draft: NotificationAnnouncementDraft;
+  readonly onDraftChange: ComposeStageProps['onDraftChange'];
+}): JSX.Element {
+  return (
+    <div className="grid gap-4 @lg:grid-cols-2">
+      <ChannelsField draft={draft} onDraftChange={onDraftChange} />
+      <Field label="Send at" htmlFor="announcement-schedule">
+        <Input
+          id="announcement-schedule"
+          type="datetime-local"
+          value={draft.scheduledAt}
+          onChange={(event) => {
+            onDraftChange('scheduledAt', event.target.value);
+          }}
+        />
+      </Field>
+      <PriorityField draft={draft} onDraftChange={onDraftChange} />
+      <ReplyPolicyField draft={draft} onDraftChange={onDraftChange} />
+    </div>
+  );
+}
+
+/** Checkbox controls for delivery channels. */
+function ChannelsField({
+  draft,
+  onDraftChange,
+}: {
+  readonly draft: NotificationAnnouncementDraft;
+  readonly onDraftChange: ComposeStageProps['onDraftChange'];
+}): JSX.Element {
+  return (
+    <FieldGroup label="Channels">
+      <div className="flex flex-wrap gap-3">
+        {CHANNELS.map((channel) => (
+          <label key={channel} className="flex items-center gap-1.5">
+            <Checkbox
+              checked={draft.channels.includes(channel)}
+              onChange={() => {
+                onDraftChange('channels', toggleChannel(draft.channels, channel));
+              }}
+            />
+            <Text as="span" token="body-small">
+              {channel}
+            </Text>
+          </label>
+        ))}
+      </div>
+    </FieldGroup>
+  );
+}
+
+/** Priority level selector. */
+function PriorityField({
+  draft,
+  onDraftChange,
+}: {
+  readonly draft: NotificationAnnouncementDraft;
+  readonly onDraftChange: ComposeStageProps['onDraftChange'];
+}): JSX.Element {
+  return (
+    <Field label="Priority" htmlFor="announcement-priority">
+      <Select
+        id="announcement-priority"
+        value={draft.priority}
+        onChange={(event) => {
+          onDraftChange(
+            'priority',
+            event.target.value as NotificationAnnouncementDraft['priority'],
+          );
+        }}
+      >
+        {(['low', 'normal', 'high', 'urgent'] as const).map((priority) => (
+          <option key={priority} value={priority}>
+            {priority}
+          </option>
+        ))}
+      </Select>
+    </Field>
+  );
+}
+
+/** Reply destination policy selector. */
+function ReplyPolicyField({
+  draft,
+  onDraftChange,
+}: {
+  readonly draft: NotificationAnnouncementDraft;
+  readonly onDraftChange: ComposeStageProps['onDraftChange'];
+}): JSX.Element {
+  return (
+    <Field label="Replies go to" htmlFor="announcement-reply-policy">
+      <Select
+        id="announcement-reply-policy"
+        value={draft.replyPolicy}
+        onChange={(event) => {
+          onDraftChange(
+            'replyPolicy',
+            event.target.value as NotificationAnnouncementDraft['replyPolicy'],
+          );
+        }}
+      >
+        {(['none', 'staff_inbox', 'org_admins', 'automation'] as const).map((policy) => (
+          <option key={policy} value={policy}>
+            {policy.replaceAll('_', ' ')}
+          </option>
+        ))}
+      </Select>
+    </Field>
   );
 }
 

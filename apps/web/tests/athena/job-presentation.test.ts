@@ -195,6 +195,54 @@ describe('jobStatusLine', () => {
 
     expect(jobStatusLine(detail, summary)).toBe('Set state to In Progress');
   });
+
+  it('shows the result summary for a finished job, ahead of any activity', () => {
+    const finished: PersonalAthenaSessionSummary = { ...summary, status: 'completed' };
+    const detail = detailWith({
+      status: 'completed',
+      activities: [
+        {
+          id: 'activity_1',
+          type: 'progress',
+          createdAt: '2026-07-15T16:01:00.000Z',
+          text: 'Checked the calendar',
+        },
+      ],
+      result: { title: 'Done', summary: 'Moved the review to Thursday' },
+    });
+
+    expect(jobStatusLine(detail, finished)).toBe('Moved the review to Thursday');
+  });
+
+  it("shows the newest step's own text, untruncated, when a finished job left no result", () => {
+    const stopped: PersonalAthenaSessionSummary = { ...summary, status: 'canceled' };
+    const longText =
+      'Athena stopped after the calendar API returned an error that took more than sixty ' +
+      'characters to describe in full';
+    const detail = detailWith({
+      status: 'canceled',
+      activities: [
+        {
+          id: 'activity_1',
+          type: 'progress',
+          createdAt: '2026-07-15T16:01:00.000Z',
+          text: longText,
+        },
+      ],
+    });
+
+    expect(jobStatusLine(detail, stopped)).toBe(longText);
+  });
+
+  it('never falls back to the bare state label for a finished job that left a result', () => {
+    const done: PersonalAthenaSessionSummary = { ...summary, status: 'completed' };
+    const detail = detailWith({
+      status: 'completed',
+      result: { title: 'Done', summary: 'Booked the inspection.' },
+    });
+
+    expect(jobStatusLine(detail, done)).toBe('Booked the inspection.');
+  });
 });
 
 describe('decisionSentence', () => {

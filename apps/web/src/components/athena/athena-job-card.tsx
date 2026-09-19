@@ -39,8 +39,6 @@ export interface AthenaJobCardProps {
   /** The queue row this card renders and keeps live. */
   readonly job: PersonalAthenaSessionSummary;
   readonly transport?: PersonalAthenaTransport;
-  /** Open the steps disclosure from the start, instead of collapsed behind its "N steps" trigger. */
-  readonly expanded?: boolean;
   /** Override the `<article>` id, for a host that anchors scroll-to. */
   readonly id?: string;
 }
@@ -93,7 +91,6 @@ function lifecyclePermissions(
 export function AthenaJobCard({
   job,
   transport = personalAthenaTransport,
-  expanded = false,
   id,
 }: AthenaJobCardProps): JSX.Element {
   const queryClient = useQueryClient();
@@ -153,7 +150,6 @@ export function AthenaJobCard({
         job={job}
         detail={detail.data}
         isFinished={permissions.isFinished}
-        expanded={expanded}
         mentionOrgId={mentionOrgId}
         pending={actions.pending}
         undoPending={actions.undoPending}

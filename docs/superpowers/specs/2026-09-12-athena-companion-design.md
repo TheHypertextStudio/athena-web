@@ -60,7 +60,7 @@ speaks to.
    "I moved two tasks" is never the only evidence.
 5. **Human words only.** No session, job, tool, execute, or run in anything a person reads. The
    surfaces say what Athena did, what she is doing, what needs you, and what she used. Raw tool
-   detail stays behind a disclosure labelled "What Athena used".
+   detail stays behind a disclosure labelled "Details".
 6. **Reversible by default, gated when it matters.** Changes inside Docket carry Undo on the
    receipt. Actions that leave Docket (send, post, pay) get a Review step with the real content
    before anything goes out. Two classes, two treatments, and the approval dial moves toward
@@ -93,7 +93,7 @@ speaks to.
 - Receipts had no Undo. Principle 6 adds it to every in-Docket change, using the API's existing
   undo.
 - "Job" and "Technical details" appeared in UI copy. Principle 5 renames them: the card has no
-  type label, and the disclosure reads "What Athena used".
+  type label, and the disclosure reads "Details".
 - Status lines said "Started 2 min ago". Principle 12 makes them name the object and the
   progress.
 - Home could show two composers at once. Principle 10 demotes the page prompt while the panel
@@ -160,7 +160,7 @@ with the thread, which is the one place work actually shows.
      objective as an `h3`, the overflow menu), one status line (the single place running progress
      shows), the decision as one row of buttons (`Approve` / `Reject`, or `Review` then `Approve`
      for a change that would leave Docket), and the steps collapsed behind a `Collapsible` trigger
-     reading "N steps" — expanded, each step is its own flat row, and "What Athena used" stays a
+     reading "N steps" — expanded, each step is its own flat row, and "Details" stays a
      disclosure inside the step it belongs to. A finished job's receipt is the same flat shape:
      title line, receipt rows, Undo — never a box;
    - a **proposal group** (`ProposalGroupCard`): a flat entry — a heading line ("N changes
@@ -230,7 +230,7 @@ session.
   in the Working strip. Nothing about it lives on a separate surface.
 - The card updates over the existing personal session SSE stream. The step list uses the
   existing presenter, which already strips model reasoning and folds tool payloads under a
-  disclosure, relabelled "What Athena used".
+  disclosure, relabelled "Details".
 - While a proposal waits, the affected items render as ghost rows on the page they belong to,
   and settle into real rows when approved. The card is where the decision is made; the page is
   where its consequence shows.

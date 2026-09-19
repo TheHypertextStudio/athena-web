@@ -258,7 +258,7 @@ describe('AthenaJobCard', () => {
     });
   });
 
-  it('names the technical disclosure "What Athena used", inside the expanded steps', async () => {
+  it('names the technical disclosure inside the expanded steps', async () => {
     renderCard(
       job(),
       detailWith({
@@ -277,7 +277,7 @@ describe('AthenaJobCard', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: '1 steps' }));
-    fireEvent.click(await screen.findByText('What Athena used'));
+    fireEvent.click(await screen.findByText('Details'));
     expect(screen.getByText(/sunsama_create_task/)).toBeVisible();
   });
 
@@ -300,12 +300,21 @@ describe('AthenaJobCard', () => {
     expect(steps.getByText(/Step 4/)).toBeInTheDocument();
   });
 
-  it('shows a receipt when the work is finished, with no lifecycle menu or Reply', async () => {
+  it('shows one result line and the receipt rows when the work is finished, with no lifecycle menu, Reply, or repeated summary', async () => {
     renderCard(
       job({ status: 'completed', queueState: 'finished' }),
       detailWith({
         status: 'completed',
         queueState: 'finished',
+        activities: [
+          {
+            id: 'tool_1',
+            type: 'tool',
+            createdAt: '2026-07-15T16:02:00.000Z',
+            service: 'Docket',
+            action: 'Moved the review',
+          },
+        ],
         result: {
           title: 'Launch review moved',
           summary: 'Thursday at 2:00 PM is confirmed.',
@@ -314,10 +323,30 @@ describe('AthenaJobCard', () => {
       }),
     );
 
-    expect(await screen.findByText('Launch review moved')).toBeVisible();
+    expect(await screen.findAllByText('Thursday at 2:00 PM is confirmed.')).toHaveLength(1);
     expect(screen.getByText('Thu 2:00 PM')).toBeVisible();
+    expect(screen.queryByText('Launch review moved')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reply' })).not.toBeInTheDocument();
+
+    // The steps stay collapsed behind their trigger even though the job is finished — nothing
+    // forces them open on its own.
+    expect(screen.queryByRole('list', { name: 'What Athena did' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1 steps' })).toBeInTheDocument();
+  });
+
+  it('shows only the result line when a finished job left no receipt rows and nothing to undo', async () => {
+    renderCard(
+      job({ status: 'completed', queueState: 'finished' }),
+      detailWith({
+        status: 'completed',
+        queueState: 'finished',
+        result: { title: 'Launch review moved', summary: 'Thursday at 2:00 PM is confirmed.' },
+      }),
+    );
+
+    expect(await screen.findAllByText('Thursday at 2:00 PM is confirmed.')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
   });
 
   it('offers Undo on a finished step and its receipt, marking both Undone once reversed', async () => {
@@ -340,6 +369,10 @@ describe('AthenaJobCard', () => {
       },
     });
     const api = renderCard(job({ status: 'completed', queueState: 'finished' }), detail);
+
+    // The step's own Undo sits behind the collapsed "N steps" trigger; the receipt's copy sits
+    // in the open, so opening the steps is what brings both into view.
+    fireEvent.click(await screen.findByRole('button', { name: '1 steps' }));
 
     const undoButtons = await screen.findAllByRole('button', { name: 'Undo' });
     expect(undoButtons).toHaveLength(2);

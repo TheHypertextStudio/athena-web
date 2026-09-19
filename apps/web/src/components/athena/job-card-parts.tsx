@@ -303,9 +303,16 @@ export function JobDecision({
   );
 }
 
+/** One row of a finished job's receipt. */
+export interface JobReceiptRow {
+  readonly label: string;
+  readonly value: string;
+}
+
 /** Props for {@link JobReceipt}. */
 export interface JobReceiptProps {
-  readonly result: NonNullable<PersonalAthenaSessionDetail['result']>;
+  /** The finished result's own receipt rows — only ever passed once there is at least one. */
+  readonly receipt: readonly JobReceiptRow[];
   /** The newest step's change set, when the finished work left one to undo. */
   readonly changeSetId: string | null;
   readonly undone: boolean;
@@ -313,9 +320,12 @@ export interface JobReceiptProps {
   readonly onUndo: (changeSetId: string) => void;
 }
 
-/** The finished job's receipt: title, summary, the receipt rows as a `dt`/`dd` list, and Undo. */
+/**
+ * The finished job's receipt: the rows as a `dt`/`dd` list, and Undo — no title or summary of
+ * its own, since the card's single status line above already carries the result's summary.
+ */
 export function JobReceipt({
-  result,
+  receipt,
   changeSetId,
   undone,
   undoPending,
@@ -323,11 +333,9 @@ export function JobReceipt({
 }: JobReceiptProps): JSX.Element {
   return (
     <div className="flex flex-col gap-2">
-      <h4 className="text-on-surface text-title-small">{result.title}</h4>
-      <p className="text-on-surface-variant text-body-medium">{result.summary}</p>
-      {result.receipt && result.receipt.length > 0 ? (
+      {receipt.length > 0 ? (
         <dl>
-          {result.receipt.map((item) => (
+          {receipt.map((item) => (
             <div
               key={`${item.label}-${item.value}`}
               className="text-body-medium grid gap-1 py-1 sm:grid-cols-[10rem_1fr]"
@@ -420,8 +428,6 @@ export interface JobCardBodyProps {
   readonly detail: PersonalAthenaSessionDetail | undefined;
   /** The job has left every lifecycle state: no more steps grow, and Reply is hidden. */
   readonly isFinished: boolean;
-  /** Show every step even before the job finishes. */
-  readonly expanded: boolean;
   readonly mentionOrgId: string | undefined;
   readonly pending: boolean;
   /** Whether an undo request is in flight, disabling every Undo control while it settles. */
@@ -447,6 +453,28 @@ interface JobCardDecisionAndReceiptProps {
   readonly onUndo: (changeSetId: string) => void;
 }
 
+/** What the finished receipt block should render, and whether it should render at all. */
+interface JobReceiptPresentation {
+  readonly receipt: readonly JobReceiptRow[];
+  readonly changeSetId: string | null;
+  readonly undone: boolean;
+  /** Whether the block has anything the status line above does not already say. */
+  readonly show: boolean;
+}
+
+/** Derive the finished receipt's rows, change set, and whether it earns a place on the card. */
+function jobReceiptPresentation(
+  detail: PersonalAthenaSessionDetail | undefined,
+  activities: readonly AthenaActivityPresentation[],
+  isFinished: boolean,
+  undoneChangeSetIds: ReadonlySet<string>,
+): JobReceiptPresentation {
+  const receipt = detail?.result?.receipt ?? [];
+  const changeSetId = isFinished ? newestChangeSetId(activities) : null;
+  const undone = changeSetId !== null && undoneChangeSetIds.has(changeSetId);
+  return { receipt, changeSetId, undone, show: receipt.length > 0 || changeSetId !== null };
+}
+
 /** The card's pending decision or finished receipt, whichever the loaded detail carries. */
 function JobCardDecisionAndReceipt({
   detail,
@@ -461,9 +489,7 @@ function JobCardDecisionAndReceipt({
   onUndo,
 }: JobCardDecisionAndReceiptProps): JSX.Element {
   const decision = detail?.decision ?? null;
-  const result = detail?.result ?? null;
-  const receiptChangeSetId = isFinished ? newestChangeSetId(activities) : null;
-  const receiptUndone = receiptChangeSetId !== null && undoneChangeSetIds.has(receiptChangeSetId);
+  const receipt = jobReceiptPresentation(detail, activities, isFinished, undoneChangeSetIds);
 
   return (
     <>
@@ -484,11 +510,11 @@ function JobCardDecisionAndReceipt({
         />
       ) : null}
 
-      {result ? (
+      {receipt.show ? (
         <JobReceipt
-          result={result}
-          changeSetId={receiptChangeSetId}
-          undone={receiptUndone}
+          receipt={receipt.receipt}
+          changeSetId={receipt.changeSetId}
+          undone={receipt.undone}
           undoPending={undoPending}
           onUndo={onUndo}
         />
@@ -510,7 +536,6 @@ export function JobCardBody({
   job,
   detail,
   isFinished,
-  expanded,
   mentionOrgId,
   pending,
   undoPending,
@@ -543,7 +568,6 @@ export function JobCardBody({
 
       <JobSteps
         activities={activities}
-        forceExpanded={expanded || isFinished}
         isFinished={isFinished}
         undoneChangeSetIds={undoneChangeSetIds}
         undoPending={undoPending}

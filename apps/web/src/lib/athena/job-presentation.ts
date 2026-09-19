@@ -15,6 +15,7 @@ import type { PersonalAthenaQueuePayload } from './query-defs';
 import {
   athenaQueueState,
   presentAthenaActivity,
+  type AthenaActivityPresentation,
   type PersonalAthenaActivity,
   type PersonalAthenaSessionDetail,
   type PersonalAthenaSessionSummary,
@@ -91,37 +92,66 @@ export function decisionSentence(detail: PersonalAthenaSessionDetail): string {
 /** The longest an activity's detail can be before it is dropped from the status line. */
 const STATUS_LINE_DETAIL_LIMIT = 60;
 
-/** Find the most recent non-reasoning activity's rendered status line, or `null` when there is none. */
-function newestActivityLine(detail: PersonalAthenaSessionDetail): string | null {
-  let newestTitle: string | null = null;
-  let newestDetail: string | undefined;
-  let newestCreatedAt: string | null = null;
-
+/** The most recent non-reasoning activity's own presentation, or `null` when there is none. */
+function newestActivity(detail: PersonalAthenaSessionDetail): AthenaActivityPresentation | null {
+  let newest: AthenaActivityPresentation | null = null;
   for (const activity of detail.activities) {
     const presented = presentAthenaActivity(activity);
     if (!presented) continue;
-    if (newestCreatedAt !== null && presented.createdAt <= newestCreatedAt) continue;
-    newestTitle = presented.title;
-    newestDetail = presented.detail;
-    newestCreatedAt = presented.createdAt;
+    if (newest && presented.createdAt <= newest.createdAt) continue;
+    newest = presented;
   }
+  return newest;
+}
 
-  if (newestTitle === null) return null;
-  if (newestDetail !== undefined && newestDetail.length <= STATUS_LINE_DETAIL_LIMIT) {
-    return `${newestTitle} · ${newestDetail}`;
+/** Find the most recent non-reasoning activity's rendered status line, or `null` when there is none. */
+function newestActivityLine(detail: PersonalAthenaSessionDetail): string | null {
+  const newest = newestActivity(detail);
+  if (!newest) return null;
+  if (newest.detail !== undefined && newest.detail.length <= STATUS_LINE_DETAIL_LIMIT) {
+    return `${newest.title} · ${newest.detail}`;
   }
-  return newestTitle;
+  return newest.title;
 }
 
 /**
- * The single line that says what a job is doing right now.
+ * The most recent non-reasoning activity's own text, with no length limit — its detail when it
+ * has one, its title otherwise — for a finished job's one status line.
  *
  * @remarks
- * Prefers a decision awaiting the owner, then the newest non-reasoning activity, then the
- * finished result's summary. When the detail has not loaded yet, or has none of those to show,
- * falls back to the job's plain-language state label so the line is never blank.
+ * Unlike {@link newestActivityLine}, this never drops a long detail: a finished entry shows this
+ * text in place of both the old running-status line and the receipt's own summary, so it needs
+ * to carry the full sentence rather than the trimmed one a still-open job can afford to shorten.
  */
-export function jobStatusLine(
+function newestActivityText(detail: PersonalAthenaSessionDetail): string | null {
+  const newest = newestActivity(detail);
+  if (!newest) return null;
+  return newest.detail ?? newest.title;
+}
+
+/**
+ * A finished job's one status line: the result's own summary, or — when it left no result — the
+ * newest step's own text.
+ *
+ * @remarks
+ * Never falls back to the bare state label for a finished job that left either one, since the
+ * heading badge already says "Done" or "Stopped" and repeating a generic "Progress" line
+ * duplicates nothing useful.
+ */
+function finishedStatusLine(
+  detail: PersonalAthenaSessionDetail | null,
+  liveStatus: PersonalAthenaStatus,
+): string {
+  if (detail?.result) return detail.result.summary;
+  const stepText = detail ? newestActivityText(detail) : null;
+  return stepText ?? jobStateLabel(liveStatus);
+}
+
+/**
+ * A still-open job's one status line: a decision awaiting the owner, then the newest
+ * non-reasoning activity, then the result, then the state label so the line is never blank.
+ */
+function openStatusLine(
   detail: PersonalAthenaSessionDetail | null,
   summary: PersonalAthenaSessionSummary,
 ): string {
@@ -133,6 +163,22 @@ export function jobStatusLine(
   if (detail?.result) return detail.result.summary;
 
   return jobStateLabel(summary.status);
+}
+
+/**
+ * The single line that says what a job is doing right now — {@link finishedStatusLine} once the
+ * job is `done` or `stopped`, {@link openStatusLine} while it is still open.
+ */
+export function jobStatusLine(
+  detail: PersonalAthenaSessionDetail | null,
+  summary: PersonalAthenaSessionSummary,
+): string {
+  const liveStatus = detail?.status ?? summary.status;
+  const tone = jobTone(liveStatus);
+
+  if (tone === 'done' || tone === 'stopped') return finishedStatusLine(detail, liveStatus);
+
+  return openStatusLine(detail, summary);
 }
 
 /**

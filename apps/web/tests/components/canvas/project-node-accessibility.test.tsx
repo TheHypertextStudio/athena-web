@@ -87,7 +87,7 @@ describe('ProjectNode selection semantics', () => {
       'Connect from Project Alpha',
     ]);
     for (const handle of handles) {
-      expect(handle).toHaveClass('!size-8', '!border-none', '!bg-transparent');
+      expect(handle).toHaveClass('!size-8', '!border-0', '!bg-transparent');
       expect(handle).toHaveAttribute('tabindex', '0');
       expect(handle.querySelector('[data-canvas-handle-marker]')).toHaveClass('size-3');
     }

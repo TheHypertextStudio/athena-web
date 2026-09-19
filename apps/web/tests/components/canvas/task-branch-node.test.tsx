@@ -99,7 +99,7 @@ describe('TaskBranchNode', () => {
       'Connect from Parent task',
     ]);
     for (const handle of handles) {
-      expect(handle).toHaveClass('!size-8', '!border-none', '!bg-transparent');
+      expect(handle).toHaveClass('!size-8', '!border-0', '!bg-transparent');
       expect(handle).toHaveAttribute('tabindex', '0');
       expect(handle.querySelector('[data-canvas-handle-marker]')).toHaveClass('size-3');
     }

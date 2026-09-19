@@ -52,16 +52,12 @@ button semantics, no keyboard activation, and no explicit `connectOnClick` contr
 - Modify: `apps/web/src/components/canvas/project-node.tsx`
 - Modify: `apps/web/src/components/canvas/task-node.tsx`
 - Modify: `apps/web/src/components/canvas/canvas.tsx`
-- Modify: `packages/test-utils/tests/design-policies/design-token-scan.ts`
 
 **Step 1: Replace the pseudo-element target**
 
 Make the React Flow handle itself 32px and transparent. Render a pointer-transparent 12px child
 marker at its center. Grow and color the marker on hover, keyboard focus, and active connection
 states while keeping the resting graph quiet.
-
-The marker's surface-colored outline is the control boundary that keeps it distinct over every
-node tone. Record that earned control outline in the design-token policy allow-set.
 
 **Step 2: Add semantics and keyboard operation**
 

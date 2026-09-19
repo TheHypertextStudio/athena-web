@@ -53,7 +53,7 @@ export function CanvasConnectionHandle({
       tabIndex={isConnectable ? 0 : -1}
       onKeyDown={handleKeyDown}
       className={cn(
-        'group/connection !flex !size-8 !items-center !justify-center !border-none !bg-transparent !outline-none',
+        'group/connection !flex !size-8 !items-center !justify-center !border-0 !bg-transparent !outline-none',
         !isConnectable && '!pointer-events-none',
       )}
     >
@@ -61,7 +61,7 @@ export function CanvasConnectionHandle({
         aria-hidden="true"
         data-canvas-handle-marker
         className={cn(
-          'bg-outline-variant border-surface pointer-events-none size-3 rounded-full border-2',
+          'bg-outline-variant pointer-events-none size-3 rounded-full',
           'transition-[width,height,background-color,box-shadow] duration-150',
           'group-hover/connection:bg-primary group-hover/connection:size-4',
           'group-focus-visible/connection:bg-primary group-focus-visible/connection:size-4',

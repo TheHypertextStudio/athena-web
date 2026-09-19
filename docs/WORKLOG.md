@@ -2,11 +2,38 @@
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
 > **Last Updated**: 2026-09-19
-> **Last Updated**: 2026-09-14
 
 ---
 
 ## Active Tasks
+
+### [CANVAS-HANDLE-TARGET-001] Make canvas connection handles usable
+
+- **Status**: REVIEW
+- **Started**: 2026-09-19
+- **Priority**: P1
+- **Description**: Give Project and Task connection handles a visible 12px marker, a 32px pointer
+  target, clear hover/focus feedback, and non-dragging click and keyboard operation.
+- **Subtasks**:
+  - [x] Add failing behavior tests for visual size, target size, naming, and keyboard activation.
+  - [x] Implement the shared handle and make click-to-connect an explicit Canvas contract.
+  - [x] Run repository checks and the authenticated production-build browser acceptance.
+  - [ ] Deploy and verify production.
+- **Validation**: The three focused suites failed in five expected assertions before the
+  implementation. They now pass all 14 tests, and the design-token policy passes all nine tests.
+  CI passed the full build, typecheck, lint, secret-scan, deploy-image, and authenticated core-screen
+  gates. The first Web coverage run passed 4,441 of 4,442 tests and caught a stale no-border
+  assertion; the handle now keeps the established `border-0` override and draws no marker stroke.
+- **Local limit**: The standard dev stack cannot reach the web app because its prerequisite API
+  contract build exceeds the shared machine resource guard. The bounded Web typecheck hit the same
+  limit locally, so GitHub's isolated release runners supplied the full typecheck, lint, build, and
+  authenticated browser evidence.
+- **Notes**: The first pass met only the 24px pointer-target rule. It left an 8px visual affordance
+  and did not prove a keyboard path. The approved design uses React Flow's built-in click connection
+  state, a focusable shared handle, and a small centered marker so accessibility does not require a
+  32px visible control on every card.
+
+---
 
 ### [SEARCH-020] Stop duplicate imports and repair search discovery
 

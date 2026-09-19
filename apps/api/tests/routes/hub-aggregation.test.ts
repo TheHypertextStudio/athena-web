@@ -24,6 +24,14 @@ import { assertDefined } from '@docket/test-utils';
 import { materializeOccurrence } from '../../src/lib/recurrence/materialize';
 import { createPublishedProcessDefinition } from '../../src/lib/recurrence/process-definition';
 import { createRecurrenceSeries } from '../../src/lib/recurrence/series';
+import {
+  body,
+  nextMonday,
+  seedUserWithHub,
+  joinOrg,
+  joinContributingOrg,
+  searchRoute,
+} from './hub-aggregation-test-helpers';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -35,70 +43,6 @@ beforeAll(async () => {
   hub = (await import('../../src/routes/hub')).default;
 });
 
-async function body<T>(res: Response): Promise<T> {
-  return (await res.json()) as T;
-}
-
-/**
- * The next Monday (`YYYY-MM-DD`, UTC), never today.
- *
- * @remarks
- * `selectMomentum`'s capacity check needs a day with real desk-hours to draw on — the default
- * availability model (`defaultAvailabilityWindows`) protects Saturday evenings and all of Sunday,
- * so a target day computed as merely "tomorrow" intermittently landed on a day with zero
- * suggestable capacity, one day in seven. It also has to stay strictly in the future: capacity
- * is clipped to spans that have not yet ended relative to the real clock, so a past date always
- * reads as zero capacity too.
- */
-function nextMonday(): string {
-  const now = new Date();
-  const daysUntilMonday = (1 - now.getUTCDay() + 7) % 7 || 7;
-  return new Date(now.getTime() + daysUntilMonday * 24 * 60 * 60 * 1_000)
-    .toISOString()
-    .slice(0, 10);
-}
-
-/** Insert a user + its hub; returns ids. */
-async function seedUserWithHub(): Promise<{ userId: string; hubId: string }> {
-  const [user] = await db
-    .insert(schema.user)
-    .values({ name: 'Ada', email: `hub-${Math.random().toString(36).slice(2)}@e.com` })
-    .returning({ id: schema.user.id });
-  const [h] = await db
-    .insert(schema.hub)
-    .values({ userId: assertDefined(user).id })
-    .returning({ id: schema.hub.id });
-  return { userId: assertDefined(user).id, hubId: assertDefined(h).id };
-}
-
-/** Make `userId` an active human Actor in `orgId`; returns the actor id. */
-async function joinOrg(
-  userId: string,
-  orgId: string,
-  status: 'active' | 'suspended' = 'active',
-  roleId: string | null = null,
-) {
-  const [a] = await db
-    .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId, status, roleId })
-    .returning({ id: schema.actor.id });
-  return assertDefined(a).id;
-}
-
-/** Join through a role that matches the normal Member write capability. */
-async function joinContributingOrg(userId: string, orgId: string): Promise<string> {
-  const [memberRole] = await db
-    .insert(schema.role)
-    .values({
-      organizationId: orgId,
-      key: `member-${Math.random().toString(36).slice(2)}`,
-      name: `Member ${Math.random().toString(36).slice(2)}`,
-      capabilities: ['contribute'],
-    })
-    .returning({ id: schema.role.id });
-  return joinOrg(userId, orgId, 'active', assertDefined(memberRole).id);
-}
-
 describe('hub /activity (cross-org audit feed)', () => {
   it('401 without a session', async () => {
     const noSession = appWithSession(hub, null);
@@ -106,11 +50,11 @@ describe('hub /activity (cross-org audit feed)', () => {
   });
 
   it('aggregates events across the caller orgs, paginates, and respects order', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const a = await seedBaseOrg(db, schema);
     const b = await seedBaseOrg(db, schema);
-    await joinOrg(userId, a.orgId);
-    await joinOrg(userId, b.orgId);
+    await joinOrg(schema, db, userId, a.orgId);
+    await joinOrg(schema, db, userId, b.orgId);
 
     // Three events in org A, one in org B — all in the caller's scope.
     for (let i = 0; i < 3; i++) {
@@ -158,10 +102,10 @@ describe('hub /activity (cross-org audit feed)', () => {
   });
 
   it('tenant isolation: never surfaces events from an org the caller is not in', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const mine = await seedBaseOrg(db, schema);
     const foreign = await seedBaseOrg(db, schema);
-    await joinOrg(userId, mine.orgId);
+    await joinOrg(schema, db, userId, mine.orgId);
     // The caller is NOT a member of `foreign`.
 
     await db.insert(schema.auditEvent).values({
@@ -180,9 +124,9 @@ describe('hub /activity (cross-org audit feed)', () => {
   });
 
   it('a suspended membership does not grant cross-org scope', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    await joinOrg(userId, org.orgId, 'suspended');
+    await joinOrg(schema, db, userId, org.orgId, 'suspended');
     await db.insert(schema.auditEvent).values({
       organizationId: org.orgId,
       subjectType: 'task',
@@ -196,7 +140,7 @@ describe('hub /activity (cross-org audit feed)', () => {
   });
 
   it('rejects an invalid limit (422)', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const app = appWithSession(hub, fakeSession(userId));
     expect((await app.request('/activity?limit=0')).status).toBe(422);
     expect((await app.request('/activity?limit=500')).status).toBe(422);
@@ -205,9 +149,9 @@ describe('hub /activity (cross-org audit feed)', () => {
 
 describe('hub /today (daily operating projection)', () => {
   it('separates accepted plan work from attention and grounds focus in larger work', async () => {
-    const { userId, hubId } = await seedUserWithHub();
+    const { userId, hubId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    const myActorId = await joinOrg(userId, org.orgId);
+    const myActorId = await joinOrg(schema, db, userId, org.orgId);
     const date = nextMonday();
 
     // dueToday task.
@@ -425,9 +369,9 @@ describe('hub /today (daily operating projection)', () => {
   });
 
   it('filters private tasks and larger work with the shared resource resolver', async () => {
-    const { userId, hubId } = await seedUserWithHub();
+    const { userId, hubId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    await joinOrg(userId, org.orgId);
+    await joinOrg(schema, db, userId, org.orgId);
     const date = '2026-08-04';
 
     const [privateProject] = await db
@@ -501,9 +445,9 @@ describe('hub /today (daily operating projection)', () => {
   });
 
   it('a completed blocker does not mark the dependent task as blocked', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    const myActorId = await joinOrg(userId, org.orgId);
+    const myActorId = await joinOrg(schema, db, userId, org.orgId);
 
     const [blocker] = await db
       .insert(schema.task)
@@ -545,15 +489,15 @@ describe('hub /today (daily operating projection)', () => {
   });
 
   it('rejects a malformed date (422)', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const app = appWithSession(hub, fakeSession(userId));
     expect((await app.request('/today?date=not-a-date')).status).toBe(422);
   });
 
   it('normalizes tied plan sort values into one honest Now and After sequence', async () => {
-    const { userId, hubId } = await seedUserWithHub();
+    const { userId, hubId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    await joinOrg(userId, org.orgId);
+    await joinOrg(schema, db, userId, org.orgId);
     const date = '2026-08-06';
     const work = await db
       .insert(schema.task)
@@ -601,9 +545,9 @@ describe('hub /today (daily operating projection)', () => {
   });
 
   it('treats work completed outside Today as cleared instead of offering it as Now', async () => {
-    const { userId, hubId } = await seedUserWithHub();
+    const { userId, hubId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    await joinOrg(userId, org.orgId);
+    await joinOrg(schema, db, userId, org.orgId);
     const date = '2026-08-06';
     const [work] = await db
       .insert(schema.task)
@@ -638,9 +582,9 @@ describe('hub /today (daily operating projection)', () => {
   });
 
   it('completes the real task workflow and personal plan row together', async () => {
-    const { userId, hubId } = await seedUserWithHub();
+    const { userId, hubId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    await joinContributingOrg(userId, org.orgId);
+    await joinContributingOrg(schema, db, userId, org.orgId);
     const [work] = await db
       .insert(schema.task)
       .values({
@@ -700,9 +644,9 @@ describe('hub /today (daily operating projection)', () => {
   ] as const)(
     'keeps a shared %s workspace readable but refuses Today completion',
     async (_label, status, expectedCode) => {
-      const { userId, hubId } = await seedUserWithHub();
+      const { userId, hubId } = await seedUserWithHub(schema, db);
       const org = await seedBaseOrg(db, schema, false);
-      await joinContributingOrg(userId, org.orgId);
+      await joinContributingOrg(schema, db, userId, org.orgId);
       if (status !== null) {
         await db.insert(schema.organizationProductEntitlement).values({
           organizationId: org.orgId,
@@ -760,13 +704,13 @@ describe('hub /today (daily operating projection)', () => {
   );
 
   it('keeps Today completion writable in a free personal workspace', async () => {
-    const { userId, hubId } = await seedUserWithHub();
+    const { userId, hubId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema, false);
     await db
       .update(schema.organization)
       .set({ isPersonal: true })
       .where(eq(schema.organization.id, org.orgId));
-    await joinContributingOrg(userId, org.orgId);
+    await joinContributingOrg(schema, db, userId, org.orgId);
     const [work] = await db
       .insert(schema.task)
       .values({
@@ -796,9 +740,9 @@ describe('hub /today (daily operating projection)', () => {
   });
 
   it('advances completion-driven process work when Today completes a generated task', async () => {
-    const { userId, hubId } = await seedUserWithHub();
+    const { userId, hubId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    await joinContributingOrg(userId, org.orgId);
+    await joinContributingOrg(schema, db, userId, org.orgId);
     const definition: ProcessDefinitionCreate = {
       name: 'Today process advancement',
       creationMode: 'when_ready',
@@ -887,11 +831,11 @@ describe('hub /today (daily operating projection)', () => {
   });
 
   it('cannot complete another user plan row, and completing your own lands in the workspace’s Done', async () => {
-    const owner = await seedUserWithHub();
-    const caller = await seedUserWithHub();
+    const owner = await seedUserWithHub(schema, db);
+    const caller = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    await joinContributingOrg(owner.userId, org.orgId);
-    await joinOrg(caller.userId, org.orgId);
+    await joinContributingOrg(schema, db, owner.userId, org.orgId);
+    await joinOrg(schema, db, caller.userId, org.orgId);
     const [work] = await db
       .insert(schema.task)
       .values({
@@ -947,7 +891,7 @@ describe('hub /today (daily operating projection)', () => {
   });
 
   it('requires contribute capability to complete a visible task from a personal plan', async () => {
-    const { userId, hubId } = await seedUserWithHub();
+    const { userId, hubId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
     const [viewerRole] = await db
       .insert(schema.role)
@@ -958,7 +902,7 @@ describe('hub /today (daily operating projection)', () => {
         capabilities: ['view'],
       })
       .returning({ id: schema.role.id });
-    await joinOrg(userId, org.orgId, 'active', assertDefined(viewerRole).id);
+    await joinOrg(schema, db, userId, org.orgId, 'active', assertDefined(viewerRole).id);
     const [work] = await db
       .insert(schema.task)
       .values({
@@ -1001,9 +945,9 @@ describe('hub /today (daily operating projection)', () => {
 
 describe('hub /portfolio (org swimlanes → program lanes → project bars)', () => {
   it('builds swimlanes with program lanes, unassigned bars, and milestone diamonds', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    await joinOrg(userId, org.orgId);
+    await joinOrg(schema, db, userId, org.orgId);
 
     const [prog] = await db
       .insert(schema.program)
@@ -1098,9 +1042,9 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
   });
 
   it('the from/to window excludes projects entirely outside the range', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    await joinOrg(userId, org.orgId);
+    await joinOrg(schema, db, userId, org.orgId);
 
     // A project that ends before the window opens.
     await db.insert(schema.project).values({
@@ -1136,10 +1080,10 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
   });
 
   it('tenant isolation: a foreign org never appears as a swimlane', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const mine = await seedBaseOrg(db, schema);
     const foreign = await seedBaseOrg(db, schema);
-    await joinOrg(userId, mine.orgId);
+    await joinOrg(schema, db, userId, mine.orgId);
     await db.insert(schema.project).values({
       organizationId: foreign.orgId,
       name: 'Hidden',
@@ -1156,9 +1100,9 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
   });
 
   it('the initiativeId chip filters swimlanes to the initiative’s associated programs/projects', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    await joinOrg(userId, org.orgId);
+    await joinOrg(schema, db, userId, org.orgId);
 
     // An initiative the user filters by, plus a program + two projects.
     const [init] = await db
@@ -1265,10 +1209,10 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
   });
 
   it('an initiativeId in a foreign org yields empty swimlane content (tenant isolation)', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const mine = await seedBaseOrg(db, schema);
     const foreign = await seedBaseOrg(db, schema);
-    await joinOrg(userId, mine.orgId);
+    await joinOrg(schema, db, userId, mine.orgId);
 
     // An in-flight project in MY org, but the filter names a FOREIGN initiative.
     await db.insert(schema.project).values({
@@ -1313,9 +1257,9 @@ describe('hub /search (cross-org typed hits)', () => {
   }
 
   it('returns org-chipped semantic hits and honors the limit', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    await joinOrg(userId, org.orgId);
+    await joinOrg(schema, db, userId, org.orgId);
 
     await db.insert(schema.searchDocument).values([
       {
@@ -1377,10 +1321,10 @@ describe('hub /search (cross-org typed hits)', () => {
   });
 
   it('tenant isolation: never matches entities in a non-member org', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const mine = await seedBaseOrg(db, schema);
     const foreign = await seedBaseOrg(db, schema);
-    await joinOrg(userId, mine.orgId);
+    await joinOrg(schema, db, userId, mine.orgId);
     await db.insert(schema.searchDocument).values({
       id: `task:${foreign.orgId}:quasar_secret`,
       organizationId: foreign.orgId,
@@ -1399,7 +1343,7 @@ describe('hub /search (cross-org typed hits)', () => {
   });
 
   it('treats an empty query as browse rather than rejecting it', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const app = appWithSession(hub, fakeSession(userId));
 
     // `q` is optional by design (see SearchQuery in domain packages): omitting it — or sending it
@@ -1411,7 +1355,7 @@ describe('hub /search (cross-org typed hits)', () => {
   });
 
   it('still rejects a query it cannot parse (422)', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const app = appWithSession(hub, fakeSession(userId));
 
     // `q` going optional did not make the whole query bag permissive. `limit` is still bounded,
@@ -1422,9 +1366,9 @@ describe('hub /search (cross-org typed hits)', () => {
   });
 
   it('a deactivated membership row is excluded from search scope', async () => {
-    const { userId } = await seedUserWithHub();
+    const { userId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    await joinOrg(userId, org.orgId, 'suspended');
+    await joinOrg(schema, db, userId, org.orgId, 'suspended');
     await db.insert(schema.searchDocument).values({
       id: `task:${org.orgId}:nebula_item`,
       organizationId: org.orgId,

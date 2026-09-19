@@ -93,6 +93,8 @@ export type PersonalAthenaActivity =
         readonly toolName?: string;
         readonly input?: unknown;
         readonly output?: unknown;
+        /** The change set the call wrote, which Undo reverses. */
+        readonly changeSetId?: string;
       };
     };
 
@@ -126,6 +128,8 @@ export interface AthenaActivityPresentation {
     readonly toolName?: string;
     readonly input?: unknown;
     readonly output?: unknown;
+    /** The change set the call wrote, which Undo reverses. */
+    readonly changeSetId?: string;
   };
 }
 

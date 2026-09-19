@@ -27,14 +27,11 @@ import { countLabel } from '@/lib/athena/job-presentation';
 import type { AthenaActivityPresentation } from '@/lib/athena/presentation';
 import { postWidgetMessage } from '@/lib/athena/mcp-app-defs';
 
-/** Read the change set a step's tool output recorded, when it recorded one. */
+/** Read the change set a step's tool call recorded, when it recorded one. */
 function changeSetIdFromTechnical(
   technical: AthenaActivityPresentation['technical'],
 ): string | null {
-  const output = technical?.output;
-  if (!output || typeof output !== 'object') return null;
-  const candidate = (output as Record<string, unknown>)['changeSetId'];
-  return typeof candidate === 'string' ? candidate : null;
+  return technical?.changeSetId ?? null;
 }
 
 /** The newest step's change set, for the receipt's own Undo — the same rule a work log reads. */

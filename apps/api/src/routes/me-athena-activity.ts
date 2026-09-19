@@ -55,6 +55,30 @@ function boundedTechnicalValue(value: unknown): unknown {
     : { notice: 'Technical input omitted because it was too large.' };
 }
 
+/** The change set a successful tool call recorded, so the person can undo it. */
+interface RecordedChangeSet {
+  readonly changeSetId?: string;
+}
+
+/**
+ * Read the change set id a successful tool result recorded in its JSON output.
+ *
+ * @param result - The stored tool result, when the action ran.
+ * @returns `{ changeSetId }` when the call succeeded and wrote a change set, else `{}`.
+ */
+function recordedChangeSet(result: Record<string, unknown> | null): RecordedChangeSet {
+  const content = result?.['content'];
+  if (result?.['isError'] === true || typeof content !== 'string') return {};
+  let output: unknown;
+  try {
+    output = JSON.parse(content);
+  } catch {
+    return {};
+  }
+  const changeSetId = record(output)?.['changeSetId'];
+  return typeof changeSetId === 'string' ? { changeSetId } : {};
+}
+
 function personalBody(activity: ActivityRow): Record<string, unknown> {
   if (activity.type === 'error') return { text: FAILURE_COPY };
   if (activity.type === 'response') {
@@ -114,6 +138,7 @@ function personalBody(activity: ActivityRow): Record<string, unknown> {
               result: {
                 content: isError ? FAILED_ACTION_COPY : `Completed: ${summary}`,
                 isError,
+                ...recordedChangeSet(result),
                 ...(presentation ? { presentation } : {}),
                 ...(presentationUnavailable ? { presentationUnavailable: true } : {}),
               },

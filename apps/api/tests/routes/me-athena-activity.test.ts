@@ -163,6 +163,23 @@ describe('toPersonalActivityOut', () => {
     });
   });
 
+  it('names the change set a successful call wrote, and never one from a failed call', () => {
+    const project = (content: string, isError: boolean) =>
+      toPersonalActivityOut(
+        row({
+          type: 'action',
+          body: { action: { kind: 'update', summary: 'update', result: { content, isError } } },
+        }),
+      ).body as { action: { result: Record<string, unknown> } };
+    const written = JSON.stringify({ changed: 1, changeSetId: 'cs_1' });
+
+    expect(project(written, false).action.result).toMatchObject({ changeSetId: 'cs_1' });
+    expect(project(written, true).action.result).not.toHaveProperty('changeSetId');
+    expect(project(JSON.stringify({ changeSetId: null }), false).action.result).not.toHaveProperty(
+      'changeSetId',
+    );
+  });
+
   it('allowlists a valid persisted app presentation while retaining application-owned text', () => {
     const presentation = {
       connectionId: 'connection-1',

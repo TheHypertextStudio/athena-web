@@ -46,6 +46,17 @@ function string(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+/** The change set a tool beat can be undone by. */
+interface RecordedChangeSet {
+  readonly changeSetId?: string;
+}
+
+/** Read the change set id the API reports on a successful tool result, when it wrote one. */
+function recordedChangeSet(result: Readonly<Record<string, unknown>> | null): RecordedChangeSet {
+  const changeSetId = string(result?.['changeSetId']);
+  return changeSetId ? { changeSetId } : {};
+}
+
 /** Turn a connection identifier into a restrained service label. */
 function serviceLabel(value: string | null): string {
   if (!value) return 'Docket';
@@ -137,6 +148,7 @@ export function adaptAthenaActivity(activity: AthenaApiActivity): PersonalAthena
               ...(toolName ? { toolName } : {}),
               ...('input' in toolCall ? { input: toolCall['input'] } : {}),
               ...('content' in (result ?? {}) ? { output: result?.['content'] } : {}),
+              ...recordedChangeSet(result),
             },
           }
         : {}),

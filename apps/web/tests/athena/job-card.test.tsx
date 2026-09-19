@@ -401,7 +401,7 @@ describe('AthenaJobCard', () => {
           service: 'Docket',
           action: 'Created task',
           applied: true,
-          technical: { toolName: 'create_task', output: { changeSetId: 'cs_1' } },
+          technical: { toolName: 'create_task', changeSetId: 'cs_1' },
         },
       ],
     });

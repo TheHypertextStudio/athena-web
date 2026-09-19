@@ -179,6 +179,44 @@ describe('personal Athena API adapter', () => {
     expect(detail.activities[1]).not.toHaveProperty('failed');
   });
 
+  it('carries the change set a successful call wrote onto its tool beat', () => {
+    const action = (id: string, result: Record<string, unknown>) => ({
+      id,
+      sessionId: '01J00000000000000000000000',
+      organizationId: null,
+      type: 'action',
+      approvalStatus: 'applied',
+      createdAt: '2026-07-15T16:00:00.000Z',
+      body: {
+        action: {
+          summary: 'update',
+          toolCall: { connection: 'docket', tool: 'update', input: { entity: 'task' } },
+          result,
+        },
+      },
+    });
+    const detail = adaptAthenaDetail(
+      AthenaSessionDetailOut.parse({
+        ...base,
+        status: 'completed',
+        queueState: 'finished',
+        activities: [
+          action('01J55555555555555555555555', {
+            content: 'Completed: update',
+            isError: false,
+            changeSetId: 'cs_1',
+          }),
+          action('01J66666666666666666666666', { content: 'Completed: update', isError: false }),
+        ],
+      }),
+    );
+
+    expect(detail.activities[0]).toMatchObject({ technical: { changeSetId: 'cs_1' } });
+    expect(detail.activities[1]).not.toMatchObject({
+      technical: { changeSetId: expect.anything() },
+    });
+  });
+
   it('converts an existing action into a service outcome while filtering thought rows', () => {
     const detail = adaptAthenaDetail(
       AthenaSessionDetailOut.parse({

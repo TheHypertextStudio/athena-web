@@ -153,18 +153,55 @@ export function projectGraphEdges(
   return projected;
 }
 
-/** Sort a component's induced edges into one comparable string, prefixed by rank direction. */
-export function componentEdgeSignature(
-  nodeIds: readonly string[],
+/** A component's induced edges and the comparable signature they produce. */
+export interface ComponentEdges {
+  /** Edges with both endpoints inside the component, in source order. */
+  readonly induced: readonly ProjectedGraphEdge[];
+  /** Rank direction plus the sorted induced edges, so an unchanged component can reuse geometry. */
+  readonly signature: string;
+}
+
+/**
+ * Bucket every edge into the component that holds both its endpoints, in one pass over the edges.
+ *
+ * @param components - Member ids of each component; a node belongs to one component at most.
+ * @param edges - Projected edges; an edge that spans two components belongs to neither.
+ * @param direction - The rank direction the signature is prefixed with.
+ * @returns one entry per component, in the order given.
+ */
+export function componentEdgesOf(
+  components: readonly (readonly string[])[],
   edges: readonly ProjectedGraphEdge[],
   direction: LayoutDirection,
-): string {
-  const members = new Set(nodeIds);
-  const induced = edges
-    .filter((edge) => members.has(edge.source) && members.has(edge.target))
-    .map((edge) => `${edge.source}>${edge.target}`)
-    .sort();
-  return `${direction}|${induced.join(',')}`;
+): ComponentEdges[] {
+  const owner = new Map<string, number>();
+  components.forEach((nodeIds, index) => {
+    for (const id of nodeIds) owner.set(id, index);
+  });
+  const buckets = components.map(() => [] as ProjectedGraphEdge[]);
+  for (const edge of edges) {
+    const index = owner.get(edge.source);
+    if (index === undefined || index !== owner.get(edge.target)) continue;
+    buckets[index]?.push(edge);
+  }
+  return buckets.map((induced) => ({
+    induced,
+    signature: `${direction}|${induced
+      .map((edge) => `${edge.source}>${edge.target}`)
+      .sort()
+      .join(',')}`,
+  }));
+}
+
+/** The measured objects behind a list of ids, skipping ids with no measurement. */
+export function membersOf(
+  nodeIds: readonly string[],
+  byId: ReadonlyMap<string, MeasuredGraphNode>,
+): MeasuredGraphNode[] {
+  return nodeIds.flatMap((id) => {
+    const node = byId.get(id);
+    return node === undefined ? [] : [node];
+  });
 }
 
 /** Find weak components while preserving node source order. */
@@ -213,11 +250,48 @@ export interface LocalComponent {
   readonly height: number;
 }
 
-interface PackedComponents {
+/** Component origins from one fixed-row walk and the bounds they span. */
+export interface PackedRows {
+  /** Top-left origin of each component, in the order given. */
   readonly origins: readonly GraphLayoutPoint[];
+  /** Width of the widest row. */
   readonly width: number;
+  /** Height of all rows plus the gaps between them. */
   readonly height: number;
-  readonly density: number;
+}
+
+/** Occupied fraction of a packed rectangle; an empty rectangle has none. */
+function densityOf(occupiedArea: number, width: number, height: number): number {
+  const area = width * height;
+  return area === 0 ? 0 : occupiedArea / area;
+}
+
+/**
+ * Walk rows holding `perRow` components each, separated by {@link COMPONENT_GAP}.
+ *
+ * @param components - Component sizes in packed order.
+ * @param perRow - Components per row.
+ */
+export function packRows(components: readonly LocalComponent[], perRow: number): PackedRows {
+  const origins: GraphLayoutPoint[] = [];
+  let y = 0;
+  let width = 0;
+  for (let start = 0; start < components.length; start += perRow) {
+    const row = components.slice(start, start + perRow);
+    let x = 0;
+    let rowHeight = 0;
+    for (const component of row) {
+      origins.push({ x, y });
+      x += component.width + COMPONENT_GAP;
+      rowHeight = Math.max(rowHeight, component.height);
+    }
+    width = Math.max(width, x - COMPONENT_GAP);
+    y += rowHeight + COMPONENT_GAP;
+  }
+  return { origins, width: Math.max(width, 0), height: Math.max(y - COMPONENT_GAP, 0) };
+}
+
+interface ScoredPacking extends PackedRows {
   readonly perRow: number;
 }
 
@@ -225,41 +299,22 @@ interface PackedComponents {
 function packComponents(
   components: readonly LocalComponent[],
   targetAspectRatio: number,
-): PackedComponents {
-  if (components.length === 0) return { origins: [], width: 0, height: 0, density: 0, perRow: 0 };
+): ScoredPacking {
+  if (components.length === 0) return { origins: [], width: 0, height: 0, perRow: 0 };
   const occupiedArea = components.reduce(
     (area, component) => area + component.width * component.height,
     0,
   );
-  let best: (PackedComponents & { readonly score: number }) | null = null;
+  let best: (ScoredPacking & { readonly score: number }) | null = null;
   for (let perRow = 1; perRow <= components.length; perRow += 1) {
-    const origins: { x: number; y: number }[] = [];
-    let y = 0;
-    let width = 0;
-    for (let start = 0; start < components.length; start += perRow) {
-      const row = components.slice(start, start + perRow);
-      let x = 0;
-      let rowHeight = 0;
-      for (const component of row) {
-        origins.push({ x, y });
-        x += component.width + COMPONENT_GAP;
-        rowHeight = Math.max(rowHeight, component.height);
-      }
-      width = Math.max(width, x - COMPONENT_GAP);
-      y += rowHeight + COMPONENT_GAP;
-    }
-    const height = y - COMPONENT_GAP;
-    const area = width * height;
-    const density = area === 0 ? 0 : occupiedArea / area;
-    const aspect = height === 0 ? targetAspectRatio : width / height;
+    const rows = packRows(components, perRow);
+    const density = densityOf(occupiedArea, rows.width, rows.height);
+    const aspect = rows.height === 0 ? targetAspectRatio : rows.width / rows.height;
     const aspectError = Math.abs(Math.log(aspect / Math.max(targetAspectRatio, 0.1)));
     const score = 1 - density + aspectError;
-    if (best === null || score < best.score) {
-      best = { origins, width, height, density, score, perRow };
-    }
+    if (best === null || score < best.score) best = { ...rows, perRow, score };
   }
-  if (best === null) return { origins: [], width: 0, height: 0, density: 0, perRow: 0 };
-  return best;
+  return best ?? { origins: [], width: 0, height: 0, perRow: 0 };
 }
 
 /** Run Dagre over one component and normalize its origin to zero. */
@@ -345,68 +400,99 @@ export function primaryComponentOf(
   return { nodeIds: primary.nodeIds, anchorNodeId, bounds: primary.bounds };
 }
 
-/** Lay out measured objects as independent weak components. */
-export function layoutMeasuredGraph(
-  nodes: readonly MeasuredGraphNode[],
-  edges: readonly ProjectedGraphEdge[],
-  _options: GraphLayoutOptions,
-): GraphLayoutResult {
-  const started = performance.now();
-  const byId = new Map(nodes.map((node) => [node.id, node]));
-  const localComponents = weakComponents(nodes, edges).map((nodeIds) =>
-    layoutComponent(
-      nodeIds.flatMap((id) => {
-        const node = byId.get(id);
-        return node === undefined ? [] : [node];
-      }),
-      edges,
-      _options.direction,
-    ),
-  );
-  const packed = packComponents(localComponents, coarseGraphAspectRatio(_options.aspectRatio));
-  const positions = new Map<string, { x: number; y: number }>();
-  const components = localComponents.map((component, index) => {
+/** A component laid out on its own, with the identity a layout result records for it. */
+export interface StagedLayoutComponent {
+  /** The component's own geometry. */
+  readonly local: LocalComponent;
+  /** The first member in source order. */
+  readonly anchorId: string;
+  /** Direction plus the sorted induced edges. */
+  readonly edgeSignature: string;
+}
+
+/** Everything {@link assembleLayoutResult} needs to turn packed components into a result. */
+export interface LayoutAssembly {
+  /** Number of measured top-level objects. */
+  readonly nodeCount: number;
+  /** Components in packed order. */
+  readonly staged: readonly StagedLayoutComponent[];
+  /** The row packing that positioned `staged`. */
+  readonly packed: PackedRows;
+  /** Components per packed row. */
+  readonly perRow: number;
+  /** Projected edges; degree within the largest component picks the readable-zoom anchor. */
+  readonly edges: readonly ProjectedGraphEdge[];
+  /** `performance.now()` when the layout began. */
+  readonly startedAt: number;
+}
+
+/** Place each staged component at its packed origin and gather positions, bounds, and diagnostics. */
+export function assembleLayoutResult(assembly: LayoutAssembly): GraphLayoutResult {
+  const { staged, packed, perRow, edges } = assembly;
+  const positions = new Map<string, GraphLayoutPoint>();
+  const components = staged.map(({ local, anchorId, edgeSignature }, index) => {
     const origin = packed.origins[index] ?? { x: 0, y: 0 };
-    const bounds = {
-      x: origin.x,
-      y: origin.y,
-      width: component.width,
-      height: component.height,
-    };
-    for (const [id, position] of component.positions) {
+    for (const [id, position] of local.positions) {
       positions.set(id, { x: position.x + origin.x, y: position.y + origin.y });
     }
     return {
-      nodeIds: component.nodeIds,
-      bounds,
-      anchorId: component.nodeIds[0] ?? '',
-      edgeSignature: componentEdgeSignature(component.nodeIds, edges, _options.direction),
-      localPositions: component.positions,
+      nodeIds: local.nodeIds,
+      bounds: { x: origin.x, y: origin.y, width: local.width, height: local.height },
+      anchorId,
+      edgeSignature,
+      localPositions: local.positions,
     };
   });
-  const bounds = {
-    x: 0,
-    y: 0,
-    width: packed.width,
-    height: packed.height,
-  };
-  const primary = primaryComponentOf(components, edges, bounds);
-  const diagnostics: GraphLayoutDiagnostics = {
-    nodeCount: nodes.length,
-    componentCount: components.length,
-    durationMs: performance.now() - started,
-    bounds,
-    packingDensity: packed.density,
-  };
-  if (process.env.NODE_ENV === 'development') {
-    console.debug('[canvas-layout]', diagnostics);
-  }
+  const bounds = { x: 0, y: 0, width: packed.width, height: packed.height };
+  const occupiedArea = staged.reduce((area, { local }) => area + local.width * local.height, 0);
   return {
     positions,
     components,
     bounds,
-    primary,
-    diagnostics,
-    packing: { perRow: packed.perRow, order: components.map(({ anchorId }) => anchorId) },
+    primary: primaryComponentOf(components, edges, bounds),
+    diagnostics: {
+      nodeCount: assembly.nodeCount,
+      componentCount: components.length,
+      durationMs: performance.now() - assembly.startedAt,
+      bounds,
+      packingDensity: densityOf(occupiedArea, packed.width, packed.height),
+    },
+    packing: { perRow, order: components.map(({ anchorId }) => anchorId) },
   };
+}
+
+/** Lay out measured objects as independent weak components. */
+export function layoutMeasuredGraph(
+  nodes: readonly MeasuredGraphNode[],
+  edges: readonly ProjectedGraphEdge[],
+  options: GraphLayoutOptions,
+): GraphLayoutResult {
+  const startedAt = performance.now();
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const components = weakComponents(nodes, edges);
+  const componentEdges = componentEdgesOf(components, edges, options.direction);
+  const staged = components.map((nodeIds, index): StagedLayoutComponent => {
+    const { induced, signature } = componentEdges[index] ?? { induced: [], signature: '' };
+    return {
+      local: layoutComponent(membersOf(nodeIds, byId), induced, options.direction),
+      anchorId: nodeIds[0] ?? '',
+      edgeSignature: signature,
+    };
+  });
+  const packed = packComponents(
+    staged.map(({ local }) => local),
+    coarseGraphAspectRatio(options.aspectRatio),
+  );
+  const result = assembleLayoutResult({
+    nodeCount: nodes.length,
+    staged,
+    packed,
+    perRow: packed.perRow,
+    edges,
+    startedAt,
+  });
+  if (process.env.NODE_ENV === 'development') {
+    console.debug('[canvas-layout]', result.diagnostics);
+  }
+  return result;
 }

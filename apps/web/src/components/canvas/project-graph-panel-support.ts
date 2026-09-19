@@ -22,11 +22,8 @@ import {
   type ProjectDependencyChange,
   projectDependencyChangesFromReceipt,
 } from './project-overview-optimistic';
-import {
-  type CanvasCommandFeedback,
-  type CanvasCommandHistoryControls,
-  canvasCommandId,
-} from './use-canvas-command-history';
+import { dependencyFeedback } from './dependency-feedback';
+import { type CanvasCommandHistoryControls, canvasCommandId } from './use-canvas-command-history';
 import type { CanvasReceiptListener } from './use-canvas-receipt-applier';
 
 /** Inputs for {@link useProjectGraphCommands}. */
@@ -123,29 +120,6 @@ export function useProjectOverviewReceiptApplier(
     },
     [overviewKey, queryClient],
   );
-}
-
-function dependencyFeedback(
-  type: ProjectDependencyChange['type'],
-  blockingName: string,
-  blockedName: string,
-): CanvasCommandFeedback {
-  if (type === 'add_dependency') {
-    return {
-      historyLabel: 'Add dependency',
-      title: 'Dependency added',
-      detail: `${blockedName} depends on ${blockingName}`,
-      unchangedTitle: 'Dependency unchanged',
-      unchangedDetail: `${blockedName} already depends on ${blockingName}`,
-    };
-  }
-  return {
-    historyLabel: 'Remove dependency',
-    title: 'Dependency removed',
-    detail: `${blockedName} no longer depends on ${blockingName}`,
-    unchangedTitle: 'Dependency unchanged',
-    unchangedDetail: `${blockedName} did not depend on ${blockingName}`,
-  };
 }
 
 /**

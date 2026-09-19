@@ -30,7 +30,7 @@ import type { Health } from '@docket/work/capability-contract';
 import type { ProjectStatus } from '../../lib/contracts/project';
 import { ArrowRight } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { surfaceToneColor } from '@docket/ui/primitives';
+import { CRITICAL_PAINT, surfaceToneColor } from '@docket/ui/primitives';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import Link from '@/components/docket-link';
 import { memo } from 'react';
@@ -152,7 +152,7 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
           (selected || selection.selected) && 'ring-primary ring-2',
           relation.dropProps.className,
           relation.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
-          relation.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-2 ring-inset',
+          relation.dropState === 'reject' && `${CRITICAL_PAINT.rejectedDrop} ring-2 ring-inset`,
         )}
       >
         {/*

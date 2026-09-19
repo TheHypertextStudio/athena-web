@@ -10,12 +10,22 @@
  * floats its chrome, the Task graph and the Project dependencies page among them, reads the same
  * numbers from this hook.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useShellSidebar } from '@docket/ui/components';
+import { useEffect, useMemo, useState } from 'react';
 
 import { CANVAS_OVERLAY_GUTTER, type CanvasOverlayInsets } from './canvas-viewport-insets';
 
 /** The window width from which the sidebar keeps its full width beside a canvas page. */
 export const CANVAS_COMPACT_SIDEBAR_BELOW_PX = 1920;
+
+/** Drop the sidebar to its icon rail while the calling canvas page is mounted on a narrower window. */
+export function useCompactSidebarWhileMounted(): void {
+  const { requestCompact } = useShellSidebar();
+  useEffect(() => {
+    if (window.innerWidth >= CANVAS_COMPACT_SIDEBAR_BELOW_PX) return undefined;
+    return requestCompact();
+  }, [requestCompact]);
+}
 
 /** What a canvas host reads to frame its graph around floating chrome. */
 export interface CanvasFloatingChrome {
@@ -45,12 +55,6 @@ export interface CanvasFloatingChrome {
 export function useCanvasFloatingChrome(floating: boolean, banded = false): CanvasFloatingChrome {
   const [barHeight, setBarHeight] = useState(0);
   const [inspectorRight, setInspectorRight] = useState(0);
-  const onHeightChange = useCallback((height: number) => {
-    setBarHeight(height);
-  }, []);
-  const onInspectorOcclusion = useCallback((rightPx: number) => {
-    setInspectorRight(rightPx);
-  }, []);
   const insets = useMemo<CanvasOverlayInsets | undefined>(
     () =>
       floating
@@ -67,7 +71,7 @@ export function useCanvasFloatingChrome(floating: boolean, banded = false): Canv
     insets,
     noticeClass: floating ? '!top-12' : undefined,
     inspectorRight,
-    onHeightChange,
-    onInspectorOcclusion,
+    onHeightChange: setBarHeight,
+    onInspectorOcclusion: setInspectorRight,
   };
 }

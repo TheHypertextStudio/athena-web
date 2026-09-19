@@ -7,10 +7,11 @@
  * The shell requests the route makes while mounted, and the plan with its editing controllers.
  * `plan-client.tsx` composes these with the rail conversation into the panel.
  */
-import { useShellRail, useShellSidebar } from '@docket/ui/components';
+import { useShellRail } from '@docket/ui/components';
 import type { PlanCommitOut, PlanDraftOut, PlanOp } from '@docket/work/plan-draft-contract';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useCompactSidebarWhileMounted } from '@/components/canvas/canvas-floating-chrome';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { usePlanActorResolver } from '@/components/plan-canvas/plan-actors';
 import type { PlanCanvasPanelProps } from '@/components/plan-canvas/plan-canvas-panel';
@@ -24,19 +25,12 @@ import { useOrgCapability } from '@/lib/use-org-capability';
 
 const OPTION_KINDS = ['actors', 'initiatives'] as const;
 
-/** The sidebar drops to its icon rail on any window narrower than this while a plan is open. */
-const COMPACT_SIDEBAR_BELOW_PX = 1920;
-
 /**
  * Ask the shell for room while the route is mounted: the sidebar drops to its icon rail, and on a
  * narrower window the right rail rests collapsed until the conversation is asked for.
  */
 export function usePlanShellRequests(): void {
-  const { requestCompact } = useShellSidebar();
-  useEffect(() => {
-    if (window.innerWidth >= COMPACT_SIDEBAR_BELOW_PX) return undefined;
-    return requestCompact();
-  }, [requestCompact]);
+  useCompactSidebarWhileMounted();
   const { requestCollapsed } = useShellRail();
   useEffect(() => {
     if (window.innerWidth >= PLAN_RAIL_WIDE_PX) return undefined;

@@ -6,32 +6,26 @@
  * @remarks
  * One row carries the title, the way back, the List and Dependencies switch, the live counts, and
  * the New project action. While something is selected the same row becomes the selection's bar,
- * so nothing floats over a card. Rendered inside the command provider so the selection's actions
- * can read the canvas commands.
+ * so nothing floats over a card. The bar composes its fixed pieces from the workspace id, so the
+ * loading and failure states render the same bar the canvas does. Rendered inside the command
+ * provider once a canvas exists, so the selection's actions can read the canvas commands.
  */
-import { Plus } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
-import type { JSX, ReactNode } from 'react';
+import { ChevronLeft, Plus } from '@docket/ui/icons';
+import { Button, Tooltip, TooltipContent, TooltipTrigger } from '@docket/ui/primitives';
+import type { JSX } from 'react';
 
+import DocketLink from '@/components/docket-link';
+import {
+  PROJECT_LENS_COPY,
+  PROJECT_LENS_TRANSITION,
+  ProjectLensSwitch,
+  projectRosterHref,
+} from '@/components/work-views/project-lens-frame';
 import { transitionNameStyle } from '@/lib/view-transition';
 
 import { BulkSelectionActions } from './bulk-actions-bar';
 import { useCanvasCommandContext } from './canvas-command-context';
 import CanvasFloatingBar from './canvas-floating-bar';
-
-/** The chrome a Project dependencies host names for the bar. */
-export interface ProjectGraphChrome {
-  /** The vocabulary title the bar carries. */
-  readonly title: string;
-  /** A `view-transition-name` on the title, so the page that names the same text morphs into it. */
-  readonly titleTransitionName?: string | undefined;
-  /** A `view-transition-name` on New project, so the page's own button morphs into it. */
-  readonly createTransitionName?: string | undefined;
-  /** The way back: an icon button before the title. */
-  readonly navigation?: ReactNode;
-  /** The List and Dependencies switch beside the title. */
-  readonly lensSwitch?: ReactNode;
-}
 
 /** What the bar counts. */
 export interface ProjectGraphCounts {
@@ -41,13 +35,33 @@ export interface ProjectGraphCounts {
 
 /** Props for {@link ProjectGraphBar}. */
 export interface ProjectGraphBarProps {
-  readonly chrome: ProjectGraphChrome;
-  readonly counts: ProjectGraphCounts;
+  /** The workspace whose roster the way back and the List segment open. */
+  readonly orgId: string;
+  /** The live counts; omitted while there is no graph to count. */
+  readonly counts?: ProjectGraphCounts;
   /** Open Project creation; omitted for a viewer who cannot contribute. */
   readonly onCreate?: ((returnFocusTo: HTMLElement) => void) | undefined;
   /** Pixels a floating inspector covers at the right edge. */
-  readonly insetRight: number;
-  readonly onHeightChange: (height: number) => void;
+  readonly insetRight?: number;
+  /** Receives the bar's measured height. */
+  readonly onHeightChange?: (height: number) => void;
+}
+
+/** The way back to the roster. */
+function BackToProjects({ orgId }: { readonly orgId: string }): JSX.Element {
+  const label = `Back to ${PROJECT_LENS_COPY.title.toLowerCase()}`;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="sm" iconOnly asChild aria-label={label}>
+          <DocketLink href={projectRosterHref(orgId)} transition="shared-element">
+            <ChevronLeft aria-hidden="true" />
+          </DocketLink>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 /**
@@ -68,10 +82,10 @@ function ProjectGraphCountsLabel({ counts }: { readonly counts: ProjectGraphCoun
 
 /** The floating chrome row over the Project dependencies canvas. */
 export function ProjectGraphBar({
-  chrome,
+  orgId,
   counts,
   onCreate,
-  insetRight,
+  insetRight = 0,
   onHeightChange,
 }: ProjectGraphBarProps): JSX.Element {
   const commands = useCanvasCommandContext();
@@ -81,12 +95,12 @@ export function ProjectGraphBar({
     ) : null;
   return (
     <CanvasFloatingBar
-      title={chrome.title}
-      titleTransitionName={chrome.titleTransitionName}
+      title={PROJECT_LENS_COPY.title}
+      titleTransitionName={PROJECT_LENS_TRANSITION.title}
       ariaLabel="Project dependencies"
-      navigation={chrome.navigation}
-      controls={chrome.lensSwitch}
-      trailing={<ProjectGraphCountsLabel counts={counts} />}
+      navigation={<BackToProjects orgId={orgId} />}
+      controls={<ProjectLensSwitch orgId={orgId} />}
+      trailing={counts === undefined ? undefined : <ProjectGraphCountsLabel counts={counts} />}
       selection={selection}
       actions={
         onCreate === undefined ? undefined : (
@@ -95,7 +109,7 @@ export function ProjectGraphBar({
             size="sm"
             variant="secondary"
             aria-label="New project"
-            style={transitionNameStyle(chrome.createTransitionName)}
+            style={transitionNameStyle(PROJECT_LENS_TRANSITION.create)}
             onClick={(event) => {
               onCreate(event.currentTarget);
             }}

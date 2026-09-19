@@ -6,47 +6,39 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as WorkBoardModule from '../../src/components/work-views/work-board';
 
-const { boardState, controller, createState, orderState, prefetchAuthenticatedRoute } = vi.hoisted(
-  () => ({
-    prefetchAuthenticatedRoute: vi.fn(() => Promise.resolve(true)),
-    boardState: {
-      drop: null as null | {
-        readonly item: {
-          readonly id: string;
-          readonly organizationId: string;
-          readonly isContext: boolean;
-        };
-        readonly sourcePath: readonly string[];
-        readonly destinationPath: readonly string[];
-        readonly beforeId: string | null;
-        readonly afterId: string | null;
+const { boardState, controller, createState, orderState } = vi.hoisted(() => ({
+  boardState: {
+    drop: null as null | {
+      readonly item: {
+        readonly id: string;
+        readonly organizationId: string;
+        readonly isContext: boolean;
+      };
+      readonly sourcePath: readonly string[];
+      readonly destinationPath: readonly string[];
+      readonly beforeId: string | null;
+      readonly afterId: string | null;
+    },
+  },
+  controller: {
+    definition: {
+      version: 2,
+      target: 'project',
+      filter: { field: 'status', operator: 'eq', value: 'active' },
+      arrangement: { groupBy: null as string | null, subGroupBy: null, orderBy: [] },
+      presentation: {
+        layout: 'list',
+        properties: ['status'],
+        density: 'compact',
+        showEmptyGroups: false,
       },
     },
-    controller: {
-      definition: {
-        version: 2,
-        target: 'project',
-        filter: { field: 'status', operator: 'eq', value: 'active' },
-        arrangement: { groupBy: null as string | null, subGroupBy: null, orderBy: [] },
-        presentation: {
-          layout: 'list',
-          properties: ['status'],
-          density: 'compact',
-          showEmptyGroups: false,
-        },
-      },
-      setDefinition: vi.fn(),
-    },
-    createState: {
-      request: null as null | Record<string, unknown>,
-    },
-    orderState: { mutate: vi.fn() },
-  }),
-);
-
-vi.mock('../../src/lib/authenticated-route', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  prefetchAuthenticatedRoute,
+    setDefinition: vi.fn(),
+  },
+  createState: {
+    request: null as null | Record<string, unknown>,
+  },
+  orderState: { mutate: vi.fn() },
 }));
 
 vi.mock('../../src/components/docket-link', () => ({
@@ -296,21 +288,5 @@ describe('WorkViewPage creation continuity', () => {
     render(<WorkViewPage organizationId={ALPHA_ID} target="task" />);
 
     expect(screen.getByRole('button', { name: 'New task' }).style.viewTransitionName).toBeFalsy();
-  });
-
-  it('loads the dependencies page while the Projects roster is open', () => {
-    prefetchAuthenticatedRoute.mockClear();
-    render(<WorkViewPage organizationId={ALPHA_ID} target="project" />);
-
-    expect(prefetchAuthenticatedRoute).toHaveBeenCalledWith(
-      `/orgs/${ALPHA_ID}/projects/dependencies`,
-    );
-  });
-
-  it('loads no second page for a roster without one', () => {
-    prefetchAuthenticatedRoute.mockClear();
-    render(<WorkViewPage organizationId={ALPHA_ID} target="task" />);
-
-    expect(prefetchAuthenticatedRoute).not.toHaveBeenCalled();
   });
 });

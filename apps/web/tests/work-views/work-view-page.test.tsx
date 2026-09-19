@@ -148,7 +148,6 @@ vi.mock('../../src/components/work-views/use-work-view', () => ({
     rootContinuationError: null,
     facetError: null,
     preferencesError: failures.preferencesError,
-    saveError: null,
     defaultError: null,
     saving: false,
     settingDefault: false,

@@ -5,7 +5,6 @@ import type { ObjectCommandReceipt } from '../../../src/lib/contracts/object-com
 import type { ProjectOverviewItem } from '../../../src/lib/contracts/project';
 import {
   applyProjectDependencyChange,
-  invertProjectDependencyChange,
   projectDependencyChangesFromReceipt,
   type ProjectDependencyChange,
 } from '../../../src/components/canvas/project-overview-optimistic';
@@ -73,28 +72,6 @@ describe('applyProjectDependencyChange', () => {
 
     expect(next[0]?.blocksIds).toEqual(['b']);
     expect(next).toHaveLength(1);
-  });
-});
-
-describe('invertProjectDependencyChange', () => {
-  it('swaps add and remove and keeps the endpoints', () => {
-    expect(invertProjectDependencyChange(ADD)).toEqual({
-      type: 'remove_dependency',
-      blockingId: 'a',
-      blockedId: 'b',
-    });
-    expect(invertProjectDependencyChange(invertProjectDependencyChange(ADD))).toEqual(ADD);
-  });
-
-  it('restores the original rows when applied after the change', () => {
-    const items = [row('a'), row('b')];
-
-    const restored = applyProjectDependencyChange(
-      applyProjectDependencyChange(items, ADD),
-      invertProjectDependencyChange(ADD),
-    );
-
-    expect(restored).toEqual(items);
   });
 });
 

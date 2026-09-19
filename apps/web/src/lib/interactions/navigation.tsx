@@ -24,7 +24,7 @@ export type NavigationTransition = 'shared-element';
 /** Options supported by a responsive in-app navigation request. */
 export interface ResponsiveNavigationOptions {
   /** Preserve the current scroll position when Next commits the destination. */
-  readonly scroll?: boolean;
+  readonly scroll?: boolean | undefined;
   /**
    * Morph the elements both pages name into place instead of swapping the page.
    *
@@ -32,7 +32,7 @@ export interface ResponsiveNavigationOptions {
    * Only the local history transport animates. A destination whose module has not loaded, a
    * browser without View Transitions, and a viewer who prefers reduced motion all swap instantly.
    */
-  readonly transition?: NavigationTransition;
+  readonly transition?: NavigationTransition | undefined;
 }
 
 /** The navigation contract shared by links and imperative owners. */
@@ -123,6 +123,14 @@ export function ResponsiveNavigationProvider({
     [receipts],
   );
 
+  /**
+   * Hand the navigation to Next's router.
+   *
+   * @remarks
+   * Next's router takes `scroll` only. `transition` is dropped here on purpose: the shared-element
+   * morph belongs to the local history transport, and a route that Next navigates swaps in its own
+   * transition.
+   */
   const navigateWithRouter = useCallback(
     (href: string, replace: boolean, options?: ResponsiveNavigationOptions): void => {
       const nextOptions = options?.scroll === undefined ? undefined : { scroll: options.scroll };

@@ -29,6 +29,7 @@ import { useEstimationScale } from '@/lib/use-estimation-scale';
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 
 import { useCanvasCommandContext } from './canvas-command-context';
+import { SelectionIssue, SourceError } from './canvas-properties-feedback';
 import {
   aggregateAssociation,
   aggregateScalar,
@@ -72,27 +73,6 @@ function Field({
     <div role="group" aria-label={`${label} property`} className="grid gap-1 py-1">
       <span className="text-label-medium text-on-surface-variant">{label}</span>
       {children}
-    </div>
-  );
-}
-
-function SourceError({
-  message,
-  retryLabel,
-  onRetry,
-}: {
-  readonly message: string;
-  readonly retryLabel: string;
-  readonly onRetry: () => void;
-}): React.JSX.Element {
-  return (
-    <div className="bg-error-container text-on-error-container flex items-center justify-between gap-2 rounded-lg px-3 py-2">
-      <p className="text-body-small" role="alert">
-        {message}
-      </p>
-      <Button type="button" size="sm" variant="ghost" onClick={onRetry}>
-        {retryLabel}
-      </Button>
     </div>
   );
 }
@@ -433,9 +413,7 @@ export default function CanvasPropertiesEditor({
     );
     return (
       <>
-        {selectionIssue !== null ? (
-          <p className="text-body-medium text-error">{selectionIssue}</p>
-        ) : null}
+        <SelectionIssue message={selectionIssue} />
         {options.error != null ? (
           <SourceError
             message={options.error}
@@ -652,9 +630,7 @@ export default function CanvasPropertiesEditor({
   const target = aggregateScalar(projects, (project) => project.targetTimeframe, sameTimeframe);
   return (
     <>
-      {selectionIssue !== null ? (
-        <p className="text-body-medium text-error">{selectionIssue}</p>
-      ) : null}
+      <SelectionIssue message={selectionIssue} />
       {options.error != null ? (
         <SourceError
           message={options.error}

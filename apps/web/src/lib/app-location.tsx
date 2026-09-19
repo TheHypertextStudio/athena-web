@@ -16,6 +16,7 @@ import {
   buildAuthenticatedHref,
   loadedAuthenticatedRoute,
   parseAuthenticatedRoute,
+  pathnameOf,
   type AuthenticatedRoute,
   type AuthenticatedRouteParams,
 } from './authenticated-route';
@@ -185,8 +186,7 @@ export function navigateWithoutRouter(href: string): void {
  * that frame would animate toward the wrong picture; the navigation swaps instantly instead.
  */
 function canShareElements(href: string): boolean {
-  const queryAt = href.indexOf('?');
-  return loadedAuthenticatedRoute(queryAt === -1 ? href : href.slice(0, queryAt)) !== undefined;
+  return loadedAuthenticatedRoute(pathnameOf(href)) !== undefined;
 }
 
 function navigateHistory(
@@ -220,13 +220,9 @@ function navigateHistory(
 }
 
 /** Options for one validated browser-history navigation. */
-export interface AuthenticatedNavigationOptions {
+export interface AuthenticatedNavigationOptions extends ResponsiveNavigationOptions {
   /** Replace the current history entry instead of pushing a new one. */
   readonly replace?: boolean;
-  /** Scroll the destination to the top. Defaults to true. */
-  readonly scroll?: boolean;
-  /** Morph the elements both pages name into place instead of swapping the page. */
-  readonly transition?: NavigationTransition;
 }
 
 /**
@@ -327,9 +323,7 @@ export function AppLocationProvider({
 
   const navigate = useCallback(
     (href: string, replace: boolean, options?: ResponsiveNavigationOptions): boolean => {
-      const queryAt = href.indexOf('?');
-      const pathname = queryAt === -1 ? href : href.slice(0, queryAt);
-      if (parseAuthenticatedRoute(pathname).kind !== 'matched') return false;
+      if (parseAuthenticatedRoute(pathnameOf(href)).kind !== 'matched') return false;
       navigateHistory(href, replace, options?.scroll !== false, options?.transition);
       return true;
     },
@@ -384,9 +378,8 @@ export function useAppLocation(): AppLocation {
   const href = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   const location = useMemo(() => {
-    const queryAt = href.indexOf('?');
-    const pathname = queryAt === -1 ? href : href.slice(0, queryAt);
-    const search = queryAt === -1 ? '' : href.slice(queryAt + 1);
+    const pathname = pathnameOf(href);
+    const search = href.slice(pathname.length + 1);
     return {
       pathname,
       params: matchRoutes(ROUTE_PATTERNS, pathname)?.params ?? {},

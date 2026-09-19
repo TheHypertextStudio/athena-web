@@ -62,6 +62,7 @@ vi.mock('../../src/lib/authenticated-route', () => ({
           : { params: {}, pattern: '/tasks' },
     };
   },
+  pathnameOf: (href: string) => href.split('?')[0],
   prefetchAuthenticatedRoute,
 }));
 vi.mock('../../src/lib/offline-availability', () => ({
@@ -218,6 +219,30 @@ describe('DocketLink', () => {
 
     fireEvent.click(screen.getByRole('link', { name: 'Tasks' }));
 
-    expect(responsiveRouter.current.push).toHaveBeenCalledWith('/tasks', undefined);
+    expect(responsiveRouter.current.push).toHaveBeenCalledWith('/tasks', {});
+  });
+
+  it('warms a shared-element destination once the browser is idle, with no hover', async () => {
+    vi.useFakeTimers();
+    render(
+      <DocketLink href="/orgs/org-1/projects/dependencies" transition="shared-element">
+        Dependencies
+      </DocketLink>,
+    );
+    expect(prefetchAuthenticatedRoute).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(prefetchAuthenticatedRoute).toHaveBeenCalledTimes(1);
+    expect(prefetchAuthenticatedRoute).toHaveBeenCalledWith('/orgs/org-1/projects/dependencies');
+  });
+
+  it('leaves an ordinary link cold until someone shows intent', async () => {
+    vi.useFakeTimers();
+    render(<DocketLink href="/tasks">Tasks</DocketLink>);
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(prefetchAuthenticatedRoute).not.toHaveBeenCalled();
   });
 });

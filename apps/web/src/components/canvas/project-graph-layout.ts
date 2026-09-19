@@ -83,8 +83,13 @@ export function useProjectGraphLayout(
   aspectRatio: number,
   layoutEpoch = 0,
 ): ProjectGraphLayout {
-  const measured = nodes.map(({ id }) => ({ id, ...PROJECT_NODE_SIZE.full }));
-  const structureKey = graphLayoutStructureKey(measured, edges, 'LR', aspectRatio);
+  const { measured, structureKey } = useMemo(() => {
+    const sized = nodes.map(({ id }) => ({ id, ...PROJECT_NODE_SIZE.full }));
+    return {
+      measured: sized,
+      structureKey: graphLayoutStructureKey(sized, edges, 'LR', aspectRatio),
+    };
+  }, [nodes, edges, aspectRatio]);
   const previous = useRef<GraphLayoutResult | null>(null);
   const frame = useRef<LayoutFrame | null>(null);
   const layout = useMemo(() => {

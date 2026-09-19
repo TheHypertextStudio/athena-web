@@ -12,8 +12,8 @@
  * named elements. The `named` scope marks `<html>` with `data-view-transition-scope="named"` for
  * the transition's lifetime; `globals.css` removes the root's own transition name under that flag,
  * so only elements carrying a stable `view-transition-name` animate and the rest of the page keeps
- * rendering and taking input. A named transition also honours `prefers-reduced-motion` by applying
- * the update at once, the same contract the shell navigation transition keeps.
+ * rendering and taking input. Both scopes honour `prefers-reduced-motion` by applying the update at
+ * once, the same contract the shell navigation transition keeps.
  *
  * Where the API is unsupported the update still happens, just instantly — shared-element transitions
  * are "possible, even if not perfect". A transition the browser skips, because the next one started
@@ -22,6 +22,8 @@
  */
 import type { CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
+
+import { prefersReducedMotion } from '@/lib/motion';
 
 /**
  * The inline style that gives an element a stable `view-transition-name`.
@@ -44,15 +46,6 @@ function settle(promise: Promise<unknown>): void {
   promise.catch(() => undefined);
 }
 
-/** Whether the viewer has asked the application not to animate state changes. */
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
-
 /** Whether the document can start a View Transition at all. */
 function supportsViewTransitions(): boolean {
   // `in` is a runtime feature-detect: the type exists in the DOM lib, but the method is absent in
@@ -60,11 +53,17 @@ function supportsViewTransitions(): boolean {
   return typeof document !== 'undefined' && 'startViewTransition' in document;
 }
 
+/** Counts named transitions so only the newest one clears the document's scope flag. */
+let namedGeneration = 0;
+
 function startNamedViewTransition(update: () => void): void {
   const root = document.documentElement;
+  namedGeneration += 1;
+  const generation = namedGeneration;
   root.dataset['viewTransitionScope'] = 'named';
+  // A newer named transition owns the flag once it starts; the skipped one settles afterwards.
   const clear = (): void => {
-    delete root.dataset['viewTransitionScope'];
+    if (generation === namedGeneration) delete root.dataset['viewTransitionScope'];
   };
   try {
     const transition = document.startViewTransition(() => {
@@ -86,15 +85,11 @@ function startNamedViewTransition(update: () => void): void {
  * @param options - The capture scope; see {@link ViewTransitionOptions}.
  */
 export function startViewTransition(update: () => void, options: ViewTransitionOptions = {}): void {
-  if (!supportsViewTransitions()) {
+  if (!supportsViewTransitions() || prefersReducedMotion()) {
     update();
     return;
   }
   if (options.scope === 'named') {
-    if (prefersReducedMotion()) {
-      update();
-      return;
-    }
     startNamedViewTransition(update);
     return;
   }

@@ -39,11 +39,11 @@ function stubReducedMotion(reduced: boolean): void {
   });
 }
 
-function renderAnimator(initial: Node[], options?: Parameters<typeof useAnimatedNodePositions>[1]) {
+function renderAnimator(initial: Node[]) {
   return renderHook(() => {
     const [nodes, setNodes] = useState(initial);
-    const animate = useAnimatedNodePositions(setNodes, options);
-    return { nodes, setNodes, animate };
+    const { animate, cancel } = useAnimatedNodePositions(setNodes);
+    return { nodes, setNodes, animate, cancel };
   });
 }
 
@@ -246,20 +246,37 @@ describe('useAnimatedNodePositions', () => {
     expect(result.current.nodes[0]).toMatchObject({ position: { x: 200, y: 0 }, selected: true });
   });
 
-  it('honours a custom duration and easing', () => {
+  it('does not re-apply the start positions on the frame that records the start time', () => {
     const from = [node('a', 0, 0)];
-    const to = [node('a', 100, 0)];
-    const { result } = renderAnimator(from, { durationMs: 100, easing: (t) => t });
-
+    const { result } = renderAnimator(from);
     act(() => {
-      result.current.animate(from, to);
+      result.current.animate(from, [node('a', 200, 0)]);
+    });
+    const settled = result.current.nodes;
+
+    runFrame(1000);
+
+    expect(result.current.nodes).toBe(settled);
+    expect(queue.size).toBe(1);
+  });
+
+  it('stops a tween once cancelled, leaving the nodes where it last placed them', () => {
+    const from = [node('a', 0, 0)];
+    const { result } = renderAnimator(from);
+    act(() => {
+      result.current.animate(from, [node('a', 200, 0)]);
     });
     runFrame(0);
-    runFrame(50);
-    expect(result.current.nodes[0]?.position.x).toBeCloseTo(50, 6);
-    runFrame(100);
+    runFrame(80);
+    const placed = result.current.nodes;
 
-    expect(result.current.nodes[0]?.position.x).toBe(100);
+    act(() => {
+      result.current.cancel();
+    });
+    runFrame(1000);
+
+    expect(queue.size).toBe(0);
+    expect(result.current.nodes).toBe(placed);
   });
 
   it('cancels the pending frame on unmount', () => {

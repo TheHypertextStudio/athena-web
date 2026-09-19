@@ -174,63 +174,61 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
           className="w-full flex-nowrap overflow-hidden"
         >
           {leading}
-          <>
-            <FilterBuilder
-              key={`${editingFilterIndex === null ? 'all' : String(editingFilterIndex)}:${JSON.stringify(filterToEdit)}`}
-              target={target}
-              filter={filterToEdit}
-              {...(timezone ? { timezone } : {})}
-              open={filterOpen}
-              onOpenChange={(next) => {
-                setFilterOpen(next);
-                if (!next) setEditingFilterIndex(null);
-              }}
-              facetResponse={facetResponse}
-              facetLoading={facetLoading}
-              facetHasMore={facetHasMore}
-              facetLoadingMore={facetLoadingMore}
-              facetError={facetError}
-              onFacetLoadMore={onFacetLoadMore}
-              onFacetRetry={onFacetRetry}
-              onFacetRequest={onFacetRequest}
-              onApply={(nextFilter) => {
-                if (editingFilterIndex === null) {
-                  commit({ ...definition, filter: nextFilter });
-                  return;
-                }
-                const replacement = formulaNodes(nextFilter);
-                const nextNodes = nodes.flatMap((node, index) =>
-                  index === editingFilterIndex ? replacement : [node],
-                );
-                commit({ ...definition, filter: combineWorkViewFilters(target, nextNodes) });
-              }}
-              trigger={
-                <Button
-                  variant={filter !== null ? 'secondary' : 'ghost'}
-                  iconOnly
-                  aria-label="Filter"
-                  className="rounded-full"
-                >
-                  <Filter aria-hidden />
-                </Button>
+          <FilterBuilder
+            key={`${editingFilterIndex === null ? 'all' : String(editingFilterIndex)}:${JSON.stringify(filterToEdit)}`}
+            target={target}
+            filter={filterToEdit}
+            {...(timezone ? { timezone } : {})}
+            open={filterOpen}
+            onOpenChange={(next) => {
+              setFilterOpen(next);
+              if (!next) setEditingFilterIndex(null);
+            }}
+            facetResponse={facetResponse}
+            facetLoading={facetLoading}
+            facetHasMore={facetHasMore}
+            facetLoadingMore={facetLoadingMore}
+            facetError={facetError}
+            onFacetLoadMore={onFacetLoadMore}
+            onFacetRetry={onFacetRetry}
+            onFacetRequest={onFacetRequest}
+            onApply={(nextFilter) => {
+              if (editingFilterIndex === null) {
+                commit({ ...definition, filter: nextFilter });
+                return;
               }
-            />
-            <DisplayControls
-              target={target}
-              definition={definition}
-              onChange={commit}
-              onFind={
-                onFind
-                  ? () => {
-                      onFind(displayTriggerRef.current);
-                    }
-                  : undefined
-              }
-              trigger={
-                <DisplayControlsTrigger ref={displayTriggerRef} iconOnly className="rounded-full" />
-              }
-            />
-          </>
+              const replacement = formulaNodes(nextFilter);
+              const nextNodes = nodes.flatMap((node, index) =>
+                index === editingFilterIndex ? replacement : [node],
+              );
+              commit({ ...definition, filter: combineWorkViewFilters(target, nextNodes) });
+            }}
+            trigger={
+              <Button
+                variant={filter !== null ? 'secondary' : 'ghost'}
+                iconOnly
+                aria-label="Filter"
+                className="rounded-full"
+              >
+                <Filter aria-hidden />
+              </Button>
+            }
+          />
+          <DisplayControls
+            target={target}
+            definition={definition}
+            onChange={commit}
+            onFind={
+              onFind
+                ? () => {
+                    onFind(displayTriggerRef.current);
+                  }
+                : undefined
+            }
+            trigger={
+              <DisplayControlsTrigger ref={displayTriggerRef} iconOnly className="rounded-full" />
+            }
+          />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

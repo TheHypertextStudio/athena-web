@@ -16,16 +16,27 @@
 import type { Node } from '@xyflow/react';
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef } from 'react';
 
-/** Tuning for {@link useAnimatedNodePositions}. */
-export interface AnimatedNodePositionsOptions {
-  /** Tween length; defaults to the design system's `--dur-slow` (240 ms). */
-  readonly durationMs?: number;
-  /** Progress curve over `[0, 1]`; defaults to {@link emphasizedDecelerate}. */
-  readonly easing?: (t: number) => number;
-}
+import { prefersReducedMotion } from '@/lib/motion';
 
-/** Move xyflow state from one arrangement to another. */
-export type AnimateNodePositions = (from: readonly Node[], to: readonly Node[]) => void;
+/**
+ * Move xyflow state from one arrangement to another.
+ *
+ * `onSettled` runs once the nodes sit on `to`: at the end of the tween, or at once when nothing
+ * needed to move. A tween that is cancelled or superseded never calls it.
+ */
+export type AnimateNodePositions = (
+  from: readonly Node[],
+  to: readonly Node[],
+  onSettled?: () => void,
+) => void;
+
+/** The controls {@link useAnimatedNodePositions} returns. */
+export interface NodePositionAnimator {
+  /** Tween from one arrangement to another; nodes present only in `to` land immediately. */
+  readonly animate: AnimateNodePositions;
+  /** Stop the tween in flight, leaving the nodes wherever it last placed them. */
+  readonly cancel: () => void;
+}
 
 /** A canvas point. */
 interface Point {
@@ -46,7 +57,7 @@ interface Flight {
 }
 
 /** Mirrors the design system's `--dur-slow` token. */
-const DEFAULT_DURATION_MS = 240;
+const DURATION_MS = 240;
 
 /**
  * Build a CSS `cubic-bezier(x1, y1, x2, y2)` timing function as a JS easing.
@@ -98,15 +109,6 @@ export function cubicBezierEasing(
 
 /** MD3 emphasized-decelerate, the design system's `--ease-emphasized-decel`. */
 export const emphasizedDecelerate = cubicBezierEasing(0.05, 0.7, 0.1, 1);
-
-/** Whether the viewer has asked the application not to animate state changes. */
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
 
 function samePoint(left: Point, right: Point): boolean {
   return left.x === right.x && left.y === right.y;
@@ -203,19 +205,15 @@ function advanceLive(
  * Tween node positions toward a new arrangement through xyflow's `setNodes`.
  *
  * @param setNodes - The controlled-state setter from `useNodesState`.
- * @param options - Duration and easing; both default to the design system's slow, emphasized
- *   decelerate motion.
- * @returns A stable `(from, to)` callback. Nodes present only in `to` land immediately.
+ * @returns A stable animator: `animate(from, to)` runs the design system's slow, emphasized
+ *   decelerate motion, and `cancel()` stops a tween whose target has gone stale.
  */
 export function useAnimatedNodePositions(
   setNodes: Dispatch<SetStateAction<Node[]>>,
-  options: AnimatedNodePositionsOptions = {},
-): AnimateNodePositions {
-  const durationMs = options.durationMs ?? DEFAULT_DURATION_MS;
-  const easing = options.easing ?? emphasizedDecelerate;
+): NodePositionAnimator {
   const flight = useRef<Flight | null>(null);
 
-  const cancel = useCallback((): ReadonlyMap<string, Point> | undefined => {
+  const stop = useCallback((): ReadonlyMap<string, Point> | undefined => {
     const active = flight.current;
     if (active === null) return undefined;
     cancelAnimationFrame(active.frame);
@@ -223,41 +221,45 @@ export function useAnimatedNodePositions(
     return active.current;
   }, []);
 
-  useEffect(
-    () => () => {
-      cancel();
-    },
-    [cancel],
-  );
+  const cancel = useCallback((): void => {
+    stop();
+  }, [stop]);
 
-  return useCallback(
-    (from, to) => {
-      const inFlight = cancel();
-      const canAnimate =
-        typeof requestAnimationFrame === 'function' && durationMs > 0 && !prefersReducedMotion();
+  useEffect(() => cancel, [cancel]);
+
+  const animate = useCallback<AnimateNodePositions>(
+    (from, to, onSettled) => {
+      const inFlight = stop();
+      const canAnimate = typeof requestAnimationFrame === 'function' && !prefersReducedMotion();
       const tracks = canAnimate ? buildTracks(from, to, inFlight) : new Map<string, Track>();
       if (tracks.size === 0) {
         setNodes((live) => keepLiveInteraction(to, live));
+        onSettled?.();
         return;
       }
       const current = new Map<string, Point>();
       setNodes((live) => keepLiveInteraction(targetAt(to, tracks, 0, current), live));
-      // The first frame's own timestamp is the start, so the loop never mixes two clocks.
+      // The first frame's own timestamp is the start, so the loop never mixes two clocks. That
+      // frame only records the start: progress is zero and the nodes already sit at the start.
       let startedAt: number | null = null;
       const step = (now: number): void => {
         startedAt ??= now;
-        const progress = Math.min(1, (now - startedAt) / durationMs);
+        const progress = Math.min(1, (now - startedAt) / DURATION_MS);
         if (progress >= 1) {
           flight.current = null;
           setNodes((live) => keepLiveInteraction(to, live));
+          onSettled?.();
           return;
         }
-        const eased = easing(progress);
-        setNodes((live) => advanceLive(live, tracks, eased, current));
+        if (progress > 0) {
+          setNodes((live) => advanceLive(live, tracks, emphasizedDecelerate(progress), current));
+        }
         flight.current = { frame: requestAnimationFrame(step), current };
       };
       flight.current = { frame: requestAnimationFrame(step), current };
     },
-    [cancel, durationMs, easing, setNodes],
+    [stop, setNodes],
   );
+
+  return { animate, cancel };
 }

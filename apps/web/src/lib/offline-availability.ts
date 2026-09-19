@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { pathnameOf } from './authenticated-route';
 import { OFFLINE_ROUTES, ROUTE_PATTERNS } from './offline-routes.generated';
 import { matchRoutes } from './route-match';
 
@@ -44,11 +45,9 @@ const settled = new Map<string, boolean>();
 
 /** The route pattern that claims a path, or `null` when none does. */
 export function patternForHref(href: string): string | null {
-  const queryAt = href.indexOf('?');
-  const pathname = queryAt === -1 ? href : href.slice(0, queryAt);
   // The generated constant, not a fresh `.map()`: `matchRoutes` memoises its sort on the array
   // identity, and every row of a list surface asks this question.
-  return matchRoutes(ROUTE_PATTERNS, pathname)?.pattern ?? null;
+  return matchRoutes(ROUTE_PATTERNS, pathnameOf(href))?.pattern ?? null;
 }
 
 /**

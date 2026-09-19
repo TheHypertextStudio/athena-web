@@ -11,26 +11,24 @@
  * re-layout, or a coarse aspect-bucket change).
  */
 import {
-  COMPONENT_GAP,
-  componentEdgeSignature,
+  assembleLayoutResult,
+  type ComponentEdges,
+  componentEdgesOf,
   type GraphLayoutComponent,
-  type GraphLayoutDiagnostics,
   type GraphLayoutOptions,
-  type GraphLayoutPoint,
   type GraphLayoutResult,
   layoutComponent,
   type LocalComponent,
   type MeasuredGraphNode,
-  primaryComponentOf,
+  membersOf,
+  packRows,
   type ProjectedGraphEdge,
+  type StagedLayoutComponent,
   weakComponents,
 } from './graph-layout-engine';
 
 /** A component classified against the previous layout and positioned in the packing order. */
-interface StagedComponent {
-  readonly local: LocalComponent;
-  readonly anchorId: string;
-  readonly edgeSignature: string;
+interface StagedComponent extends StagedLayoutComponent {
   /** Previous packing slot inherited from the earliest parent, or `Infinity` for a new component. */
   readonly slot: number;
   /** Whether the component carries the anchor of the parent whose slot it inherited. */
@@ -46,23 +44,10 @@ interface PreviousIndex {
   readonly slotByAnchor: ReadonlyMap<string, number>;
 }
 
-/** A component's own geometry and the signature that decided whether it was reused. */
-interface ClassifiedComponent {
-  readonly local: LocalComponent;
-  readonly edgeSignature: string;
-}
-
 /** The packing slot a component inherits from the previous layout. */
 interface InheritedSlot {
   readonly slot: number;
   readonly holdsParentAnchor: boolean;
-}
-
-/** Component origins from one fixed-row walk and the bounds they span. */
-interface FixedRowPacking {
-  readonly origins: readonly GraphLayoutPoint[];
-  readonly width: number;
-  readonly height: number;
 }
 
 function memberKey(nodeIds: readonly string[]): string {
@@ -82,28 +67,20 @@ function indexPrevious(previous: GraphLayoutResult): PreviousIndex {
 /** Reuse the previous geometry when nothing inside the component changed; otherwise run Dagre. */
 function localComponentFor(
   nodeIds: readonly string[],
-  edges: readonly ProjectedGraphEdge[],
+  componentEdges: ComponentEdges,
   options: GraphLayoutOptions,
   byId: ReadonlyMap<string, MeasuredGraphNode>,
   prior: GraphLayoutComponent | undefined,
-): ClassifiedComponent {
-  const edgeSignature = componentEdgeSignature(nodeIds, edges, options.direction);
-  if (prior?.edgeSignature === edgeSignature) {
+): LocalComponent {
+  if (prior?.edgeSignature === componentEdges.signature) {
     return {
-      edgeSignature,
-      local: {
-        nodeIds,
-        positions: prior.localPositions,
-        width: prior.bounds.width,
-        height: prior.bounds.height,
-      },
+      nodeIds,
+      positions: prior.localPositions,
+      width: prior.bounds.width,
+      height: prior.bounds.height,
     };
   }
-  const members = nodeIds.flatMap((id) => {
-    const node = byId.get(id);
-    return node === undefined ? [] : [node];
-  });
-  return { edgeSignature, local: layoutComponent(members, edges, options.direction) };
+  return layoutComponent(membersOf(nodeIds, byId), componentEdges.induced, options.direction);
 }
 
 /**
@@ -135,26 +112,6 @@ function compareStaged(left: StagedComponent, right: StagedComponent): number {
   return left.sourceIndex - right.sourceIndex;
 }
 
-/** Walk rows with a fixed count per row; the same walk as the engine's packer without scoring. */
-function packFixedRows(components: readonly LocalComponent[], perRow: number): FixedRowPacking {
-  const origins: GraphLayoutPoint[] = [];
-  let y = 0;
-  let width = 0;
-  for (let start = 0; start < components.length; start += perRow) {
-    const row = components.slice(start, start + perRow);
-    let x = 0;
-    let rowHeight = 0;
-    for (const component of row) {
-      origins.push({ x, y });
-      x += component.width + COMPONENT_GAP;
-      rowHeight = Math.max(rowHeight, component.height);
-    }
-    width = Math.max(width, x - COMPONENT_GAP);
-    y += rowHeight + COMPONENT_GAP;
-  }
-  return { origins, width: Math.max(width, 0), height: Math.max(y - COMPONENT_GAP, 0) };
-}
-
 function stageComponents(
   nodes: readonly MeasuredGraphNode[],
   edges: readonly ProjectedGraphEdge[],
@@ -163,13 +120,15 @@ function stageComponents(
 ): StagedComponent[] {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const index = indexPrevious(previous);
-  return weakComponents(nodes, edges)
-    .map((nodeIds, sourceIndex) => {
+  const components = weakComponents(nodes, edges);
+  const componentEdges = componentEdgesOf(components, edges, options.direction);
+  return components
+    .map((nodeIds, sourceIndex): StagedComponent => {
+      const edgesOfComponent = componentEdges[sourceIndex] ?? { induced: [], signature: '' };
       const prior = index.byMemberKey.get(memberKey(nodeIds));
-      const { local, edgeSignature } = localComponentFor(nodeIds, edges, options, byId, prior);
       return {
-        local,
-        edgeSignature,
+        local: localComponentFor(nodeIds, edgesOfComponent, options, byId, prior),
+        edgeSignature: edgesOfComponent.signature,
         anchorId: nodeIds[0] ?? '',
         sourceIndex,
         ...inheritedSlot(nodeIds, index),
@@ -193,43 +152,19 @@ export function layoutMeasuredGraphIncrementally(
   options: GraphLayoutOptions,
   previous: GraphLayoutResult,
 ): GraphLayoutResult {
-  const started = performance.now();
+  const startedAt = performance.now();
   const staged = stageComponents(nodes, edges, options, previous);
   const perRow = Math.max(1, previous.packing.perRow);
-  const packed = packFixedRows(
+  const packed = packRows(
     staged.map(({ local }) => local),
     perRow,
   );
-  const positions = new Map<string, GraphLayoutPoint>();
-  const components = staged.map(({ local, anchorId, edgeSignature }, index) => {
-    const origin = packed.origins[index] ?? { x: 0, y: 0 };
-    for (const [id, position] of local.positions) {
-      positions.set(id, { x: position.x + origin.x, y: position.y + origin.y });
-    }
-    return {
-      nodeIds: local.nodeIds,
-      bounds: { x: origin.x, y: origin.y, width: local.width, height: local.height },
-      anchorId,
-      edgeSignature,
-      localPositions: local.positions,
-    };
-  });
-  const bounds = { x: 0, y: 0, width: packed.width, height: packed.height };
-  const occupiedArea = staged.reduce((area, { local }) => area + local.width * local.height, 0);
-  const packedArea = packed.width * packed.height;
-  const diagnostics: GraphLayoutDiagnostics = {
+  return assembleLayoutResult({
     nodeCount: nodes.length,
-    componentCount: components.length,
-    durationMs: performance.now() - started,
-    bounds,
-    packingDensity: packedArea === 0 ? 0 : occupiedArea / packedArea,
-  };
-  return {
-    positions,
-    components,
-    bounds,
-    primary: primaryComponentOf(components, edges, bounds),
-    diagnostics,
-    packing: { perRow, order: components.map(({ anchorId }) => anchorId) },
-  };
+    staged,
+    packed,
+    perRow,
+    edges,
+    startedAt,
+  });
 }

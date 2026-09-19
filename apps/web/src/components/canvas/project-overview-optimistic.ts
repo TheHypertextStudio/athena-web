@@ -60,16 +60,6 @@ export function applyProjectDependencyChange(
   });
 }
 
-/** The change that restores the overview after `change` was applied. */
-export function invertProjectDependencyChange(
-  change: ProjectDependencyChange,
-): ProjectDependencyChange {
-  return {
-    ...change,
-    type: change.type === 'add_dependency' ? 'remove_dependency' : 'add_dependency',
-  };
-}
-
 function isDependencyEntry(
   entry: ObjectCommandReceipt['entries'][number],
 ): entry is ObjectCommandRelationReceiptEntry {

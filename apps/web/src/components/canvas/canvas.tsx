@@ -233,8 +233,7 @@ function CanvasInner({
   );
   const framed = useRef(false);
   // Grouped/swimlane layouts arrive pre-positioned; otherwise dagre lays the flat graph out.
-  const dagreLaidOut = useDagreLayout(rawNodes, rawEdges, density, layoutDirection);
-  const laidOut = disableLayout ? rawNodes : dagreLaidOut;
+  const laidOut = useDagreLayout(rawNodes, rawEdges, density, layoutDirection, !disableLayout);
   // Positions tween in place once the graph has been framed; before that the first measured layout
   // lands at once so framing is not held for a 240ms animation nobody can see yet.
   const { nodes, edges, onNodesChange, onEdgesChange, layoutApplied } = useControlledFlow(

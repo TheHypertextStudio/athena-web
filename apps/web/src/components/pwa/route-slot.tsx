@@ -4,6 +4,7 @@ import type { JSX, ReactNode } from 'react';
 
 import OfflineRouteOutlet from '@/components/pwa/offline-route-outlet';
 import { useAppLocation } from '@/lib/app-location';
+import { pathnameOf } from '@/lib/authenticated-route';
 
 /**
  * Renders the page this document was built for, or — when the worker replayed this document under
@@ -62,13 +63,7 @@ export interface RouteSlotProps {
  */
 export default function RouteSlot({ serverPath, children }: RouteSlotProps): JSX.Element {
   const { pathname } = useAppLocation();
-  const routedLocally = serverPath !== null && pathOf(serverPath) !== pathname;
+  const routedLocally = serverPath !== null && pathnameOf(serverPath) !== pathname;
 
   return routedLocally ? <OfflineRouteOutlet /> : <>{children}</>;
-}
-
-/** The path part of a value that may carry a query string. */
-function pathOf(value: string): string {
-  const queryAt = value.indexOf('?');
-  return queryAt === -1 ? value : value.slice(0, queryAt);
 }

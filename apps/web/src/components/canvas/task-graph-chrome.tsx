@@ -13,8 +13,7 @@ import BulkActionsBar, { BulkPropertiesDialogHost, BulkSelectionActions } from '
 import { useCanvasCommandContext } from './canvas-command-context';
 import CanvasCreatedHiddenNotice from './canvas-created-hidden-notice';
 import CanvasFloatingBar from './canvas-floating-bar';
-import { useCanvasFloatingChrome } from './canvas-floating-chrome';
-import type { CanvasOverlayInsets } from './canvas-viewport-insets';
+import { type CanvasFloatingChrome, useCanvasFloatingChrome } from './canvas-floating-chrome';
 import { type GraphCounts, GraphCountsLabel } from './graph-view-bar';
 
 /** The chrome a floating host names: the title and the way back. */
@@ -30,15 +29,11 @@ export interface TaskGraphChromeSlotProps {
   readonly onHeightChange: (height: number) => void;
 }
 
-/** What {@link useTaskGraphChrome} returns. */
-export interface TaskGraphChrome {
-  /** Whether a host asked for the view bar, in a band or floating. */
-  readonly chromed: boolean;
-  /** Whether the bar floats, which also compacts the view bar's search. */
-  readonly compact: boolean;
-  readonly insets: CanvasOverlayInsets | undefined;
-  /** Extra classes on the created-but-hidden notices, to sit below the bar. */
-  readonly noticeClass: string | undefined;
+/** What {@link useTaskGraphChrome} returns: the shared floating-chrome frame plus the bar's slot. */
+export interface TaskGraphChrome extends Pick<
+  CanvasFloatingChrome,
+  'chromed' | 'compact' | 'insets' | 'noticeClass'
+> {
   readonly slot: TaskGraphChromeSlotProps;
 }
 

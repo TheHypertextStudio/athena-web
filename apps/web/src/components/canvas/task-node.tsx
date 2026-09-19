@@ -14,7 +14,7 @@ import type { WorkStatusCategory } from '@docket/work/work-status-contract';
 import type { Priority } from '@docket/work/task-contract';
 import { type ActorKind, ActorAvatar, StatusIcon } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
-import { surfaceToneColor } from '@docket/ui/primitives';
+import { CRITICAL_PAINT, surfaceToneColor } from '@docket/ui/primitives';
 import { Handle, type NodeProps, NodeToolbar, Position } from '@xyflow/react';
 import { memo } from 'react';
 
@@ -28,6 +28,9 @@ import { useCanvasActions } from './canvas-actions-context';
 import { taskNodeTransitionName } from './transition-name';
 import { useCanvasRelationDropTarget } from './use-canvas-relation-drop-target';
 import { useLod } from './use-lod';
+
+/** The ring and wash a node shows while a drop onto it is refused. */
+const REJECTED_DROP_CLASS = `${CRITICAL_PAINT.rejectedDrop} ring-2 ring-inset`;
 
 /** Whether an ISO `dueDate` is in the past relative to now (start of today). */
 function isOverdue(dueDate: string | null): boolean {
@@ -170,9 +173,9 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
           (selected || selection.selected) && 'ring-primary ring-2',
           relation.dropProps.className,
           relation.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
-          relation.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-2 ring-inset',
+          relation.dropState === 'reject' && REJECTED_DROP_CLASS,
           data['hierarchyDropState'] === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
-          data['hierarchyDropState'] === 'reject' && 'ring-error/60 bg-error/5 ring-2 ring-inset',
+          data['hierarchyDropState'] === 'reject' && REJECTED_DROP_CLASS,
           data['hierarchyDragOrigin'] === true && 'opacity-40',
         )}
       >

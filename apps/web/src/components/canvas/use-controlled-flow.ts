@@ -28,7 +28,7 @@ import {
   useNodesState,
   useReactFlow,
 } from '@xyflow/react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { startViewTransition } from '@/lib/view-transition';
 
@@ -99,7 +99,7 @@ export function useControlledFlow(
 ): ControlledFlow {
   const [nodes, setNodes, onNodesChange] = useNodesState(laidOut);
   const [edges, setEdges, onEdgesChange] = useEdgesState(rawEdges);
-  const animate = useAnimatedNodePositions(setNodes);
+  const { animate, cancel: cancelTween } = useAnimatedNodePositions(setNodes);
   const animateEnabled = options.animate ?? true;
 
   // Declared before the sync effect so the sync always reads the nodes of the latest commit.
@@ -109,30 +109,43 @@ export function useControlledFlow(
   }, [nodes]);
   const signature = useMemo(() => graphSignature(laidOut, rawEdges), [laidOut, rawEdges]);
   const prevSignature = useRef(signature);
+  // The signature whose nodes and edges xyflow state holds in full, or null while a tween is still
+  // carrying the nodes there. It advances when a sync lands (or its tween ends), so the render body
+  // never re-serializes the graph.
+  const [appliedSignature, setAppliedSignature] = useState<string | null>(signature);
   useEffect(() => {
     if (prevSignature.current === signature) return;
     prevSignature.current = signature;
     const current = liveNodes.current;
     const next = withRetainedSelection(current, laidOut);
+    const markApplied = (): void => {
+      setAppliedSignature(signature);
+    };
     if (sameNodeIds(current, laidOut)) {
       setEdges(rawEdges);
       if (animateEnabled) {
-        animate(current, next);
+        setAppliedSignature(null);
+        animate(current, next, markApplied);
         return;
       }
+      cancelTween();
       setNodes(next);
+      markApplied();
       return;
     }
+    // A tween toward the old node set would otherwise keep writing its target over these nodes.
+    cancelTween();
     startViewTransition(
       () => {
         setNodes(next);
         setEdges(rawEdges);
+        markApplied();
       },
       { scope: 'named' },
     );
-  }, [animate, animateEnabled, signature, laidOut, rawEdges, setNodes, setEdges]);
+  }, [animate, animateEnabled, cancelTween, signature, laidOut, rawEdges, setNodes, setEdges]);
 
-  const layoutApplied = graphSignature(nodes, edges) === signature;
+  const layoutApplied = appliedSignature === signature;
   return { nodes, edges, onNodesChange, onEdgesChange, layoutApplied };
 }
 

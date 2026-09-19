@@ -253,8 +253,13 @@ export function buildEntityHref(snapshot: EntityNavigationSnapshot): string {
   }
 }
 
-/** The path part of an href that may carry a query string. */
-function pathnameOf(href: string): string {
+/**
+ * The path part of an href that may carry a query string.
+ *
+ * @param href - A path, optionally followed by `?query`.
+ * @returns the path without its query string.
+ */
+export function pathnameOf(href: string): string {
   const queryAt = href.indexOf('?');
   return queryAt === -1 ? href : href.slice(0, queryAt);
 }

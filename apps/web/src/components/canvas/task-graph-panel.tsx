@@ -58,6 +58,7 @@ import CanvasSelectionBridge from './canvas-selection-bridge';
 import CanvasSelectionFrame from './canvas-selection-frame';
 import { type CanvasActions, CanvasActionsProvider } from './canvas-actions-context';
 import DependencyEdge from './dependency-edge';
+import { dependencyFeedback } from './dependency-feedback';
 import { DEFAULT_GRAPH_DISPLAY, type GraphDisplayState } from './graph-display';
 import { buildGraphCatalog, UNSET } from './graph-catalog';
 import GraphViewBar from './graph-view-bar';
@@ -338,19 +339,10 @@ export default function TaskGraphPanel({
         objectIds: [blockingId, blockedId],
         operation: { type, blockingId, blockedId },
       } as ObjectCommandIn;
-      return history.execute(command, {
-        historyLabel: type === 'add_dependency' ? 'Add dependency' : 'Remove dependency',
-        title: type === 'add_dependency' ? 'Dependency added' : 'Dependency removed',
-        detail:
-          type === 'add_dependency'
-            ? `${resolveTaskTitle(blockedId)} depends on ${resolveTaskTitle(blockingId)}`
-            : `${resolveTaskTitle(blockedId)} no longer depends on ${resolveTaskTitle(blockingId)}`,
-        unchangedTitle: 'Dependency unchanged',
-        unchangedDetail:
-          type === 'add_dependency'
-            ? `${resolveTaskTitle(blockedId)} already depends on ${resolveTaskTitle(blockingId)}`
-            : `${resolveTaskTitle(blockedId)} did not depend on ${resolveTaskTitle(blockingId)}`,
-      });
+      return history.execute(
+        command,
+        dependencyFeedback(type, resolveTaskTitle(blockingId), resolveTaskTitle(blockedId)),
+      );
     },
     [history, resolveTaskTitle],
   );

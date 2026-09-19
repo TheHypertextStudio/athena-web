@@ -40,7 +40,7 @@ import { CanvasCommandProviderWithHistory } from '@/components/canvas/canvas-com
 import { useCanvasFloatingChrome } from '@/components/canvas/canvas-floating-chrome';
 import CanvasSelectionBridge from '@/components/canvas/canvas-selection-bridge';
 import CanvasSelectionFrame from '@/components/canvas/canvas-selection-frame';
-import { ProjectGraphBar, type ProjectGraphChrome } from '@/components/canvas/project-graph-bar';
+import { ProjectGraphBar } from '@/components/canvas/project-graph-bar';
 import { useProjectGraphLayout } from '@/components/canvas/project-graph-layout';
 import ProjectNode, { type ProjectNodeData } from '@/components/canvas/project-node';
 import ProjectPeek from '@/components/canvas/project-peek';
@@ -83,8 +83,6 @@ export interface ProjectGraphPanelProps {
   rows: readonly ProjectOverviewItem[];
   /** The owning org id, used to build project navigation hrefs and scope dependency writes. */
   orgId: string;
-  /** What the floating bar carries: the title, the way back, and the lens switch. */
-  chrome: ProjectGraphChrome;
 }
 
 /**
@@ -93,7 +91,7 @@ export interface ProjectGraphPanelProps {
  *
  * @param props - See {@link ProjectGraphPanelProps}.
  */
-export function ProjectGraphPanel({ rows, orgId, chrome }: ProjectGraphPanelProps): JSX.Element {
+export function ProjectGraphPanel({ rows, orgId }: ProjectGraphPanelProps): JSX.Element {
   const queryClient = useQueryClient();
   const pathname = useAppPathname();
   const { openCreate } = useCreateObject();
@@ -244,8 +242,7 @@ export function ProjectGraphPanel({ rows, orgId, chrome }: ProjectGraphPanelProp
   );
 
   return (
-    // The full-bleed page body owns the canvas edge. This panel fills its parent and no longer
-    // cancels a document gutter with negative margins.
+    // The full-bleed page body owns the canvas edge; this panel fills its parent.
     <CanvasSelectionRetentionProvider
       scopeKey={commandScopeKey}
       items={selectionItems}
@@ -291,7 +288,7 @@ export function ProjectGraphPanel({ rows, orgId, chrome }: ProjectGraphPanelProp
             }}
           >
             <ProjectGraphBar
-              chrome={chrome}
+              orgId={orgId}
               counts={{ projects: rows.length, dependencies: edges.length }}
               onCreate={canEditDependencies ? createProject : undefined}
               insetRight={floating.inspectorRight}

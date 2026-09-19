@@ -104,6 +104,31 @@ describe('startViewTransition', () => {
       expect(document.documentElement.dataset['viewTransitionScope']).toBeUndefined();
     });
 
+    it('keeps the flag for a newer transition when an older one is skipped', async () => {
+      const settlers: { resolve: () => void; reject: (reason: Error) => void }[] = [];
+      (document as { startViewTransition?: StartViewTransition }).startViewTransition = (
+        callback,
+      ) => {
+        callback();
+        const finished = new Promise<void>((resolve, reject) => {
+          settlers.push({ resolve, reject });
+        });
+        return { ready: Promise.resolve(), finished, updateCallbackDone: Promise.resolve() };
+      };
+
+      startViewTransition(vi.fn(), { scope: 'named' });
+      startViewTransition(vi.fn(), { scope: 'named' });
+      settlers[0]?.reject(new Error('Transition was skipped'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(document.documentElement.dataset['viewTransitionScope']).toBe('named');
+
+      settlers[1]?.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(document.documentElement.dataset['viewTransitionScope']).toBeUndefined();
+    });
+
     it('applies the update at once and never starts a transition under reduced motion', () => {
       stubReducedMotion(true);
       const seen = stubTransition(Promise.resolve());
@@ -136,6 +161,19 @@ describe('startViewTransition', () => {
       expect(update).toHaveBeenCalledTimes(1);
       expect(document.documentElement.dataset['viewTransitionScope']).toBeUndefined();
     });
+  });
+
+  it('applies a root-scope update at once under reduced motion', () => {
+    stubReducedMotion(true);
+    const start = vi.fn();
+    (document as { startViewTransition?: StartViewTransition }).startViewTransition =
+      start as never;
+    const update = vi.fn();
+
+    startViewTransition(update);
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(start).not.toHaveBeenCalled();
   });
 
   it('leaves the document unmarked for the default root scope', () => {

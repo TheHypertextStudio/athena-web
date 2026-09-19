@@ -63,32 +63,31 @@ function computePositions(
  * @param nodes - The unpositioned nodes.
  * @param edges - The directed edges driving the layout.
  * @param density - The canvas density.
+ * @param direction - The flow direction.
+ * @param enabled - Pass `false` when the nodes arrive positioned; the nodes are returned as given
+ *   and no layout, structure key, or node map is built.
  * @returns the nodes with `position`/`sourcePosition`/`targetPosition` set.
  */
 export function useDagreLayout(
-  nodes: readonly Node[],
+  nodes: Node[],
   edges: readonly Edge[],
   density: CanvasDensity,
   direction: LayoutDirection = 'LR',
+  enabled = true,
 ): Node[] {
   // Structure key: only re-run dagre when the graph shape (not node data) changes.
-  const structureKey = useMemo(
-    () =>
-      `${density}|${direction}|${nodes
-        .map((n) => n.id)
-        .sort()
-        .join(',')}|${edges
-        .map((e) => `${e.source}>${e.target}`)
-        .sort()
-        .join(',')}`,
-    [nodes, edges, density, direction],
-  );
+  const structureKey = useMemo(() => {
+    if (!enabled) return '';
+    const nodeIds = nodes.map((n) => n.id).sort();
+    const edgeKeys = edges.map((e) => `${e.source}>${e.target}`).sort();
+    return `${density}|${direction}|${nodeIds.join(',')}|${edgeKeys.join(',')}`;
+  }, [enabled, nodes, edges, density, direction]);
 
   // Keyed on `structureKey` (not the raw arrays) on purpose: re-running dagre on node-data
   // churn would needlessly reshuffle the canvas. `structureKey` is derived from `nodes`,
   // `edges`, `density`, and `direction`, so it captures every layout-relevant input.
   const positions = useMemo(
-    () => computePositions(nodes, edges, density, direction),
+    () => (enabled ? computePositions(nodes, edges, density, direction) : {}),
     [structureKey],
   );
 
@@ -96,14 +95,13 @@ export function useDagreLayout(
   const [sourcePos, targetPos] =
     direction === 'TB' ? [Position.Bottom, Position.Top] : [Position.Right, Position.Left];
 
-  return useMemo(
-    () =>
-      nodes.map((n) => ({
-        ...n,
-        position: positions[n.id] ?? { x: 0, y: 0 },
-        sourcePosition: sourcePos,
-        targetPosition: targetPos,
-      })),
-    [nodes, positions, sourcePos, targetPos],
-  );
+  return useMemo(() => {
+    if (!enabled) return nodes;
+    return nodes.map((n) => ({
+      ...n,
+      position: positions[n.id] ?? { x: 0, y: 0 },
+      sourcePosition: sourcePos,
+      targetPosition: targetPos,
+    }));
+  }, [enabled, nodes, positions, sourcePos, targetPos]);
 }

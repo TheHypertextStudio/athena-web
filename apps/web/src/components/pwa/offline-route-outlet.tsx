@@ -1,8 +1,12 @@
 'use client';
 
+import { EmptyState } from '@docket/ui/components';
+import { CircleAlert } from '@docket/ui/icons';
+
 import type { EntityNavigationSnapshot } from '../../lib/contracts/entity-navigation';
 import { useEffect, useState, type ComponentType, type JSX } from 'react';
 
+import { RegionFrame } from '@/components/feedback';
 import { OfflineContent } from '@/components/offline-state';
 import { TaskDetailLoading } from '@/components/task-detail/task-detail-loading';
 import {
@@ -115,11 +119,9 @@ export default function OfflineRouteOutlet(): JSX.Element | null {
   if (state.status === 'unavailable') {
     if (state.reason === 'not-found') {
       return (
-        <div className="flex h-full items-center justify-center p-6">
-          <p role="alert" className="text-on-surface-variant text-body-medium">
-            Page not found.
-          </p>
-        </div>
+        <RegionFrame>
+          <EmptyState frame="none" tone="critical" icon={CircleAlert} title="Page not found" />
+        </RegionFrame>
       );
     }
     return <OfflineContent online={online} />;

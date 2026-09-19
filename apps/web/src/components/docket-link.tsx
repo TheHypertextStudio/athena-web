@@ -15,7 +15,11 @@ import {
 
 import { useServerReachable } from '@/components/reachability';
 import { navigateWithoutRouter } from '@/lib/app-location';
-import { parseAuthenticatedRoute, prefetchAuthenticatedRoute } from '@/lib/authenticated-route';
+import {
+  parseAuthenticatedRoute,
+  pathnameOf,
+  prefetchAuthenticatedRoute,
+} from '@/lib/authenticated-route';
 import {
   initiativeDetailAggregateDef,
   programDetailAggregateDef,
@@ -71,7 +75,92 @@ export type DocketLinkProps = ComponentProps<typeof Link> & {
 
 const MODULE_PREFETCH_DELAY_MS = 75;
 
+/** How long a browser without `requestIdleCallback` waits before warming a shared-element link. */
+const IDLE_WARM_FALLBACK_MS = 200;
+
 type PrefetchApi = <T>(definition: UseQueryOptions<T, DefaultError, T>) => void;
+
+/** Run `task` once the browser is idle, and return the function that cancels it. */
+function runWhenIdle(task: () => void): () => void {
+  if (typeof window.requestIdleCallback === 'function') {
+    const handle = window.requestIdleCallback(task);
+    return () => {
+      window.cancelIdleCallback(handle);
+    };
+  }
+  const handle = window.setTimeout(task, IDLE_WARM_FALLBACK_MS);
+  return () => {
+    window.clearTimeout(handle);
+  };
+}
+
+/** What {@link useDestinationWarming} hands the link's pointer and focus handlers. */
+interface DestinationWarming {
+  /** Start the delayed warm-up, unless one is already pending. */
+  readonly handleIntent: () => void;
+  /** Drop a pending warm-up. */
+  readonly cancelIntent: () => void;
+}
+
+/**
+ * Load a link's route module and data ahead of the click.
+ *
+ * @remarks
+ * Pointer and keyboard focus warm the destination after a short delay. A shared-element
+ * transition captures its destination in a single commit, which only a loaded module can supply,
+ * and a touch or keyboard click gives no hover to warm on, so such a link also warms once when the
+ * browser is idle after mount. A failed module load is ignored: the navigation then swaps
+ * instantly instead of morphing.
+ *
+ * @param linkHref - The link's href, or `null` when it is not a string.
+ * @param localRoute - Whether the href is an authenticated route of this app; nothing else warms.
+ * @param warmOnMount - Whether to warm without waiting for intent.
+ */
+function useDestinationWarming(
+  linkHref: string | null,
+  localRoute: boolean,
+  warmOnMount: boolean,
+): DestinationWarming {
+  const href = localRoute ? linkHref : null;
+  const prefetchTimer = useRef<number | null>(null);
+  const queryClient = useContext(QueryClientContext);
+  const prefetchApi = useCallback<PrefetchApi>(
+    (definition) => {
+      if (queryClient !== undefined) void queryClient.prefetchQuery(definition);
+    },
+    [queryClient],
+  );
+
+  const cancelIntent = useCallback((): void => {
+    if (prefetchTimer.current === null) return;
+    window.clearTimeout(prefetchTimer.current);
+    prefetchTimer.current = null;
+  }, []);
+
+  const warmDestination = useCallback((): void => {
+    if (href === null) return;
+    prefetchAuthenticatedRoute(href).catch(() => undefined);
+    prefetchRouteData(href, prefetchApi);
+  }, [href, prefetchApi]);
+
+  const handleIntent = useCallback((): void => {
+    if (href === null || prefetchTimer.current !== null) return;
+    prefetchTimer.current = window.setTimeout(() => {
+      prefetchTimer.current = null;
+      warmDestination();
+    }, MODULE_PREFETCH_DELAY_MS);
+  }, [href, warmDestination]);
+
+  useEffect(() => cancelIntent, [cancelIntent]);
+
+  const warmsOnMount = warmOnMount && href !== null;
+  useEffect(() => {
+    if (!warmsOnMount) return;
+    return runWhenIdle(warmDestination);
+  }, [warmsOnMount, warmDestination]);
+
+  return { handleIntent, cancelIntent };
+}
 
 /**
  * Navigate without losing the shell when there is no server to ask.
@@ -97,31 +186,11 @@ export default function DocketLink({
   const localRoute = href?.startsWith('/') === true && routePathIsAuthenticated(href);
   const availability = useOfflineAvailability(href, !routerReachable);
   const navigationPending = responsiveRouter?.requestedHref === href;
-  const prefetchTimer = useRef<number | null>(null);
-  const queryClient = useContext(QueryClientContext);
-  const prefetchApi = useCallback<PrefetchApi>(
-    (definition) => {
-      if (queryClient !== undefined) void queryClient.prefetchQuery(definition);
-    },
-    [queryClient],
+  const { handleIntent, cancelIntent } = useDestinationWarming(
+    href,
+    localRoute,
+    transition === 'shared-element',
   );
-
-  const cancelIntent = useCallback((): void => {
-    if (prefetchTimer.current === null) return;
-    window.clearTimeout(prefetchTimer.current);
-    prefetchTimer.current = null;
-  }, []);
-
-  const handleIntent = useCallback((): void => {
-    if (href === null || !localRoute || prefetchTimer.current !== null) return;
-    prefetchTimer.current = window.setTimeout(() => {
-      prefetchTimer.current = null;
-      void prefetchAuthenticatedRoute(href);
-      prefetchRouteData(href, prefetchApi);
-    }, MODULE_PREFETCH_DELAY_MS);
-  }, [href, localRoute, prefetchApi]);
-
-  useEffect(() => cancelIntent, [cancelIntent]);
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>): void => {
     onClick?.(event);
@@ -137,7 +206,7 @@ export default function DocketLink({
     cancelIntent();
     if (routerReachable) {
       if (responsiveRouter === null) return;
-      const options = navigationOptions(props.scroll, transition);
+      const options: ResponsiveNavigationOptions = { scroll: props.scroll, transition };
       if (requestNavigation(responsiveRouter, href, props.replace, options)) event.preventDefault();
       return;
     }
@@ -203,23 +272,9 @@ function requestNavigation(
   return replace ? router.replace(href, options) : router.push(href, options);
 }
 
-/** The navigation options a link's own props ask for, or `undefined` when it asks for none. */
-function navigationOptions(
-  scroll: boolean | undefined,
-  transition: NavigationTransition | undefined,
-): ResponsiveNavigationOptions | undefined {
-  if (scroll === undefined && transition === undefined) return undefined;
-  return {
-    ...(scroll === undefined ? {} : { scroll }),
-    ...(transition === undefined ? {} : { transition }),
-  };
-}
-
 /** Warm the query the destination route reads on mount. */
 function prefetchRouteData(href: string, prefetch: PrefetchApi): void {
-  const queryAt = href.indexOf('?');
-  const pathname = queryAt === -1 ? href : href.slice(0, queryAt);
-  const match = parseAuthenticatedRoute(pathname);
+  const match = parseAuthenticatedRoute(pathnameOf(href));
   if (match.kind !== 'matched') return;
 
   const { params, pattern } = match.route;
@@ -245,9 +300,7 @@ function prefetchRouteData(href: string, prefetch: PrefetchApi): void {
 }
 
 function routePathIsAuthenticated(href: string): boolean {
-  const queryAt = href.indexOf('?');
-  const pathname = queryAt === -1 ? href : href.slice(0, queryAt);
-  return parseAuthenticatedRoute(pathname).kind === 'matched';
+  return parseAuthenticatedRoute(pathnameOf(href)).kind === 'matched';
 }
 
 /**

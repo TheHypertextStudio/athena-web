@@ -162,6 +162,22 @@ describe('useControlledFlow motion', () => {
     expect(queue.size).toBe(0);
   });
 
+  it('stops a tween in flight when the node set changes so it cannot drop the new nodes', () => {
+    const { result, rerender } = renderFlow({ nodes: [node('a', 0)], edges: [] });
+    rerender({ nodes: [node('a', 200)], edges: [] });
+    runFrame(0);
+    runFrame(100);
+    expect(queue.size).toBe(1);
+
+    rerender({ nodes: [node('a', 200), node('b', 300)], edges: [] });
+    runFrame(240);
+    runFrame(480);
+
+    expect(queue.size).toBe(0);
+    expect(result.current.nodes.map(({ id }) => id)).toEqual(['a', 'b']);
+    expect(result.current.layoutApplied).toBe(true);
+  });
+
   it('runs a named-scope View Transition when nodes are removed', () => {
     const { result, rerender } = renderFlow({
       nodes: [node('a', 0), node('b', 300)],

@@ -99,6 +99,23 @@ vi.mock('../../../src/components/canvas/bulk-actions-bar', () => ({
   BulkSelectionActions: () => null,
 }));
 vi.mock('../../../src/components/canvas/canvas-command-notice', () => ({ default: () => null }));
+vi.mock('../../../src/components/canvas/project-graph-bar', () => ({
+  ProjectGraphBar: ({
+    onCreate,
+  }: {
+    onCreate?: (returnFocusTo: HTMLElement) => void;
+  }): ReactNode =>
+    onCreate === undefined ? null : (
+      <button
+        type="button"
+        onClick={(event) => {
+          onCreate(event.currentTarget);
+        }}
+      >
+        New project
+      </button>
+    ),
+}));
 
 vi.mock('../../../src/components/canvas/canvas', () => ({
   default: (props: {
@@ -181,8 +198,6 @@ function project(id: string, name: string): ProjectOverviewItem {
   } as unknown as ProjectOverviewItem;
 }
 
-const CHROME = { title: 'Projects' };
-
 describe('Project graph creation continuity', () => {
   it('selects, frames, focuses, and peeks a Project created from the canvas', () => {
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
@@ -195,7 +210,7 @@ describe('Project graph creation continuity', () => {
     });
     const renderPanel = (rows: readonly ProjectOverviewItem[]) => (
       <QueryClientProvider client={client}>
-        <ProjectGraphPanel rows={rows} orgId="org_1" chrome={CHROME} />
+        <ProjectGraphPanel rows={rows} orgId="org_1" />
       </QueryClientProvider>
     );
     const rendered = render(renderPanel([project(EXISTING_ID, 'Existing Project')]));
@@ -246,7 +261,7 @@ describe('Project graph creation continuity', () => {
     const client = new QueryClient();
     const rendered = render(
       <QueryClientProvider client={client}>
-        <ProjectGraphPanel rows={[]} orgId="org_1" chrome={CHROME} />
+        <ProjectGraphPanel rows={[]} orgId="org_1" />
       </QueryClientProvider>,
     );
 
@@ -265,7 +280,6 @@ describe('Project graph creation continuity', () => {
         <ProjectGraphPanel
           rows={[project(EXISTING_ID, 'Existing Project'), project(CREATED_ID, 'Created Project')]}
           orgId="org_1"
-          chrome={CHROME}
         />
       </QueryClientProvider>,
     );
@@ -301,7 +315,7 @@ describe('Project graph creation continuity', () => {
       client.setQueryData(OVERVIEW_KEY, { items });
       render(
         <QueryClientProvider client={client}>
-          <ProjectGraphPanel rows={items} orgId="org_1" chrome={CHROME} />
+          <ProjectGraphPanel rows={items} orgId="org_1" />
         </QueryClientProvider>,
       );
       const canvas = canvasState.props as {
@@ -437,7 +451,7 @@ describe('Project graph creation continuity', () => {
       const client = new QueryClient();
       render(
         <QueryClientProvider client={client}>
-          <ProjectGraphPanel rows={rows()} orgId="org_1" chrome={CHROME} />
+          <ProjectGraphPanel rows={rows()} orgId="org_1" />
         </QueryClientProvider>,
       );
       const canvas = canvasState.props as {

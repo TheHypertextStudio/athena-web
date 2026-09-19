@@ -184,7 +184,9 @@ export function OfflineSyncIndicator(): JSX.Element | null {
           readable at that width. */}
       <ControlGroup controlSize="sm" wrap>
         {stalled > 0 && pending === 0 ? (
-          <CircleAlert aria-hidden="true" className="text-error shrink-0" />
+          <Text token="label-large" tone="error" className="flex shrink-0">
+            <CircleAlert aria-hidden="true" />
+          </Text>
         ) : (
           <CloudOff aria-hidden="true" className="text-on-surface-variant shrink-0" />
         )}

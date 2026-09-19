@@ -2,8 +2,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  COMPONENT_GAP,
+  componentEdgesOf,
   graphLayoutStructureKey,
   layoutMeasuredGraph,
+  packRows,
   projectGraphEdges,
 } from '@/components/canvas/graph-layout-engine';
 import { deriveGraphInitialFrame } from '@/components/canvas/graph-initial-frame';
@@ -138,5 +141,68 @@ describe('layoutMeasuredGraph', () => {
       nodeIds: ['root-a', 'root-b', 'root-c'],
       anchorNodeId: 'root-b',
     });
+  });
+});
+
+describe('componentEdgesOf', () => {
+  it('buckets each edge into the component holding both endpoints in one pass', () => {
+    const buckets = componentEdgesOf(
+      [['a', 'b'], ['c', 'd'], ['e']],
+      [
+        { source: 'b', target: 'a' },
+        { source: 'c', target: 'd' },
+        { source: 'a', target: 'c' },
+        { source: 'a', target: 'missing' },
+      ],
+      'LR',
+    );
+
+    expect(buckets.map(({ induced }) => induced)).toEqual([
+      [{ source: 'b', target: 'a' }],
+      [{ source: 'c', target: 'd' }],
+      [],
+    ]);
+    expect(buckets[0]?.signature).toBe('LR|b>a');
+  });
+
+  it('gives edge order no say in a component signature', () => {
+    const forward = componentEdgesOf(
+      [['a', 'b', 'c']],
+      [
+        { source: 'a', target: 'b' },
+        { source: 'b', target: 'c' },
+      ],
+      'TB',
+    );
+    const reversed = componentEdgesOf(
+      [['a', 'b', 'c']],
+      [
+        { source: 'b', target: 'c' },
+        { source: 'a', target: 'b' },
+      ],
+      'TB',
+    );
+
+    expect(forward[0]?.signature).toBe(reversed[0]?.signature);
+  });
+});
+
+describe('packRows', () => {
+  it('lays components in rows of a fixed count, separated by the component gap', () => {
+    const size = { nodeIds: [], positions: new Map(), width: 100, height: 40 };
+
+    const packed = packRows([size, size, size], 2);
+
+    expect(packed.origins).toEqual([
+      { x: 0, y: 0 },
+      { x: 100 + COMPONENT_GAP, y: 0 },
+      { x: 0, y: 40 + COMPONENT_GAP },
+    ]);
+    expect(packed.width).toBe(200 + COMPONENT_GAP);
+    expect(packed.height).toBe(80 + COMPONENT_GAP);
+  });
+
+  it('spans nothing for no components', () => {
+    expect(packRows([], 3)).toEqual({ origins: [], width: 0, height: 0 });
   });
 });

@@ -18,7 +18,7 @@ import {
   type ViewScope,
 } from '@docket/work/saved-view-contract';
 import { EmptyState } from '@docket/ui/components';
-import { Layers, ListChecks, Plus, Target } from '@docket/ui/icons';
+import { Plus } from '@docket/ui/icons';
 import {
   Button,
   Dialog,
@@ -46,18 +46,11 @@ import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
 import { openEntity } from '@/lib/local-first-navigation';
 import { transitionNameStyle } from '@/lib/view-transition';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, type RpcResponse, useApiQuery } from '@/lib/query';
 import { objectHref } from '@/lib/actions/object';
 
 import { CARD_GRID_CLASS, CARD_INSET, CARD_MIN_HEIGHT } from './card-styles';
 import { InitiativeTimeline } from './initiative-timeline';
-import {
-  PROJECT_LENS_COPY,
-  PROJECT_LENS_TRANSITION,
-  projectDependenciesHref,
-  useWarmProjectLens,
-} from './project-lens-frame';
 import { ProjectTimelineAdapter } from './project-timeline-adapter';
 import type { WorkViewGroupSummary, WorkViewRowFor } from './renderer-types';
 import { useWorkView } from './use-work-view';
@@ -69,7 +62,7 @@ import { visibleWorkBoardRows, WorkBoard } from './work-board';
 import { WorkCards } from './work-cards';
 import { WorkList } from './work-list';
 import { visibleWorkListRows } from './work-list-groups';
-import { SaveViewFailure, WorkViewOperationFailures } from './work-view-failures';
+import { WorkViewOperationFailures } from './work-view-failures';
 import { WorkViewOverflowItems, WorkViewTabs } from './work-view-tabs';
 import {
   isRouteOwnedDirectWorkViewRow,
@@ -77,6 +70,7 @@ import {
   workViewSelectionObjects,
 } from './work-view-object';
 import { supportsWorkViewRenderer } from './work-view-renderers';
+import { PAGE_COPY, resolvePageLens } from './work-view-page-copy';
 import { WorkViewToolbar } from './work-view-toolbar';
 
 const FALLBACKS = {
@@ -131,13 +125,6 @@ const FALLBACKS = {
       showEmptyGroups: false,
     },
   }),
-} as const;
-
-const PAGE_COPY = {
-  task: { title: 'Tasks', singular: 'task', icon: ListChecks },
-  project: PROJECT_LENS_COPY,
-  program: { title: 'Programs', singular: 'program', icon: Layers },
-  initiative: { title: 'Initiatives', singular: 'initiative', icon: Target },
 } as const;
 
 const SavedWorkViewPage = pageOf(SavedWorkViewOut);
@@ -343,10 +330,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const copy = PAGE_COPY[target];
-  const dependenciesHref = target === 'project' ? projectDependenciesHref(organizationId) : null;
-  const transitions: Partial<typeof PROJECT_LENS_TRANSITION> =
-    target === 'project' ? PROJECT_LENS_TRANSITION : {};
-  useWarmProjectLens(organizationId, 'dependencies', target === 'project');
+  const { dependenciesHref, transitions } = resolvePageLens(copy.lens, organizationId);
   const savedViewsQuery = useApiQuery(
     apiQueryOptions(
       queryKeys.savedViews(organizationId),
@@ -731,16 +715,6 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         >
           <WorkViewSelectionFrame>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              {projectTimeline.error || orderMutation.error ? (
-                <p role="alert" className="text-error text-body-medium px-3 py-2">
-                  {projectTimeline.error
-                    ? userErrorMessage(projectTimeline.error, 'Could not reschedule this project.')
-                    : userErrorMessage(
-                        orderMutation.error,
-                        `Could not move this ${copy.singular}.`,
-                      )}
-                </p>
-              ) : null}
               <WorkViewOperationFailures
                 title={copy.title}
                 contentFailed={contentFailed}
@@ -818,7 +792,6 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                   </Select>
                 </label>
               ) : null}
-              <SaveViewFailure error={controller.saveError} />
             </DialogBody>
 
             <DialogFooter>

@@ -38,6 +38,18 @@ function lineOf(sf: ts.SourceFile, node: ts.Node): number {
   return sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
 }
 
+/** Check if a node is a declaration with a name property. */
+function isNamedDeclaration(node: ts.Statement): boolean {
+  return (
+    ts.isFunctionDeclaration(node) ||
+    ts.isClassDeclaration(node) ||
+    ts.isInterfaceDeclaration(node) ||
+    ts.isTypeAliasDeclaration(node) ||
+    ts.isEnumDeclaration(node) ||
+    ts.isModuleDeclaration(node)
+  );
+}
+
 /** Record a top-level exported declaration if it lacks documentation. */
 function collect(
   sf: ts.SourceFile,
@@ -45,22 +57,17 @@ function collect(
   file: string,
   out: UndocumentedDeclaration[],
 ): void {
+  if (!isExported(node) || hasDoc(node)) return;
+
   if (ts.isVariableStatement(node)) {
-    if (!isExported(node) || hasDoc(node)) return;
     const name = node.declarationList.declarations.map((d) => d.name.getText(sf)).join(', ');
     out.push({ file, name, kind: 'VariableStatement', line: lineOf(sf, node) });
     return;
   }
-  if (
-    ts.isFunctionDeclaration(node) ||
-    ts.isClassDeclaration(node) ||
-    ts.isInterfaceDeclaration(node) ||
-    ts.isTypeAliasDeclaration(node) ||
-    ts.isEnumDeclaration(node) ||
-    ts.isModuleDeclaration(node)
-  ) {
-    if (!isExported(node) || hasDoc(node)) return;
-    const name = node.name ? node.name.getText(sf) : '(default)';
+
+  if (isNamedDeclaration(node)) {
+    const decl = node as ts.NamedDeclaration;
+    const name = decl.name ? decl.name.getText(sf) : '(default)';
     out.push({ file, name, kind: ts.SyntaxKind[node.kind], line: lineOf(sf, node) });
   }
 }

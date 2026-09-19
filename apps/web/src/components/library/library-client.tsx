@@ -520,7 +520,7 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
                 That entry is no longer here, or you do not have access to it.
               </p>
               <Button
-                variant="outline"
+                variant="secondary"
                 controlSize="lg"
                 className="self-start"
                 onClick={() => {

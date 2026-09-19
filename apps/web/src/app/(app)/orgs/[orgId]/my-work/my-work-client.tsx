@@ -201,7 +201,7 @@ export default function MyWorkClient(): JSX.Element {
             </span>
             <p className="text-on-surface text-body-medium font-medium">{empty.title}</p>
             {tab === 'mine' ? (
-              <Button type="button" variant="outline" size="sm" onClick={openTaskComposer}>
+              <Button type="button" variant="secondary" size="sm" onClick={openTaskComposer}>
                 <Plus aria-hidden="true" className="size-4" />
                 New task
               </Button>

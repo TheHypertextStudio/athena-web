@@ -230,7 +230,7 @@ export default function RecurrenceSeriesPage(): JSX.Element {
           <div className="flex items-center gap-2 [&_button]:min-h-10">
             {detail.status === 'active' ? (
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => {
                   lifecycle.mutate({ action: 'pause' });
                 }}
@@ -240,7 +240,7 @@ export default function RecurrenceSeriesPage(): JSX.Element {
               </Button>
             ) : detail.status === 'paused' ? (
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => {
                   lifecycle.mutate({ action: 'resume' });
                 }}
@@ -313,7 +313,7 @@ export default function RecurrenceSeriesPage(): JSX.Element {
                   placeholder="Choose an effective date"
                   ariaLabel="Apply from"
                   min={earliestEffectiveFrom}
-                  triggerVariant="outline"
+                  triggerVariant="secondary"
                   triggerClassName="min-h-10 w-full justify-between"
                   disabled={edit.isPending || detail.status === 'ended'}
                 />
@@ -470,7 +470,7 @@ function OccurrenceRow({ orgId, item, onResolve }: OccurrenceRowProps): JSX.Elem
             }}
             placeholder="Choose a new date"
             ariaLabel={`New date for ${item.scheduledFor}`}
-            triggerVariant="outline"
+            triggerVariant="secondary"
             triggerClassName="min-h-10 w-40"
           />
           <Button
@@ -509,7 +509,7 @@ function OccurrenceRow({ orgId, item, onResolve }: OccurrenceRowProps): JSX.Elem
           </Button>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             onClick={() => {
               setMoving(true);
             }}
@@ -548,7 +548,7 @@ function OccurrenceRow({ orgId, item, onResolve }: OccurrenceRowProps): JSX.Elem
           </Button>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             onClick={() => {
               setMoving(true);
             }}

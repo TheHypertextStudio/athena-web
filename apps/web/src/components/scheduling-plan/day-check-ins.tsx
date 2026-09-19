@@ -85,7 +85,7 @@ export function DayCheckIns(props: DayCheckInsProps): JSX.Element {
                 {RESPONSES.map((response) => (
                   <Button
                     key={response}
-                    variant="outline"
+                    variant="secondary"
                     disabled={props.busy === true || checkIn.firedAt === null}
                     onClick={() => {
                       props.onRespond({ id: checkIn.id, response });

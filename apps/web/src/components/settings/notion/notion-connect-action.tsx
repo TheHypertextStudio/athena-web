@@ -19,7 +19,7 @@ export interface NotionConnectActionProps {
   /** The action's label. */
   readonly label: string;
   /** Visual weight; `default` when this is the only way forward. */
-  readonly variant?: 'default' | 'outline';
+  readonly variant?: 'default' | 'secondary';
   /**
    * Whether the viewer may actually do this.
    *
@@ -33,7 +33,7 @@ export interface NotionConnectActionProps {
 /** Reopen Notion's consent screen, returning here afterwards. */
 export function NotionConnectAction({
   label,
-  variant = 'outline',
+  variant = 'secondary',
   disabled = false,
 }: NotionConnectActionProps): JSX.Element {
   return (

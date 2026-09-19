@@ -119,7 +119,7 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
           <Button
             type="button"
             size="sm"
-            variant="outline"
+            variant="secondary"
             aria-expanded={adding}
             onClick={() => {
               setAdding((open) => !open);
@@ -151,7 +151,7 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
             </div>
             <Button
               type="submit"
-              variant="outline"
+              variant="secondary"
               disabled={addDomain.isPending || host.trim().length === 0}
             >
               {addDomain.isPending ? 'Adding…' : 'Add domain'}

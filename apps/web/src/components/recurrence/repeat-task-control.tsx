@@ -198,7 +198,7 @@ export function RepeatTaskControl({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild disabled={disabled}>
         <PropertyTrigger
-          variant="outline"
+          variant="secondary"
           icon={<RefreshCw className="size-4" />}
           label={value.kind === 'none' ? undefined : summary}
           placeholder="Repeat"
@@ -250,7 +250,7 @@ export function RepeatTaskControl({
                     }}
                     placeholder="Choose a start date"
                     ariaLabel="Repeat start date"
-                    triggerVariant="outline"
+                    triggerVariant="secondary"
                     triggerClassName="w-full justify-between"
                   />
                 </div>
@@ -346,7 +346,7 @@ export function RepeatTaskControl({
                       }}
                       placeholder="Choose an end date"
                       ariaLabel="Repeat end date"
-                      triggerVariant="outline"
+                      triggerVariant="secondary"
                       triggerClassName="w-full justify-between"
                     />
                   </div>

@@ -74,7 +74,7 @@ export function AppContentFallback({
               Try again
             </Button>
           ) : null}
-          <Button asChild size="sm" variant={onRetry ? 'outline' : 'default'}>
+          <Button asChild size="sm" variant={onRetry ? 'secondary' : 'default'}>
             <Link href={returnHref}>{returnLabel}</Link>
           </Button>
         </div>

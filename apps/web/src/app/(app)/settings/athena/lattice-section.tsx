@@ -305,7 +305,7 @@ function UnconnectedLatticeSection({
             // Once the fallback is offered it becomes the action that will
             // actually work, so this one steps back rather than competing with
             // it as a second equally-weighted button.
-            variant={fallbackUrl ? 'ghost' : 'outline'}
+            variant={fallbackUrl ? 'ghost' : 'secondary'}
             disabled={authorizePending || !authorizationReady}
             onClick={startAuthorization}
           >
@@ -582,7 +582,7 @@ export function LatticeSection(): JSX.Element {
                 body="Install Lattice on a computer to pair it here."
                 frame="none"
                 action={
-                  <Button asChild variant="outline">
+                  <Button asChild variant="secondary">
                     <a href={LATTICE_SETUP_URL} target="_blank" rel="noopener noreferrer">
                       Set up Lattice
                     </a>
@@ -623,7 +623,7 @@ export function LatticeSection(): JSX.Element {
                     </ControlGroup>
                   ) : (
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       onClick={() => {
                         chooseDevice.mutate(device.id);
                       }}

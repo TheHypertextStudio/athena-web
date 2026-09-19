@@ -15,7 +15,6 @@
  * |---------------|---------------|---------|
  * | `default`     | Filled        | the one primary action on a surface |
  * | `secondary`   | Filled tonal  | a secondary action that still needs weight |
- * | `outline`     | Outlined      | a secondary action on a busy surface |
  * | `ghost`       | Text          | tertiary actions, toolbar and row affordances |
  * | `link`        | Text (inline) | navigation rendered inside prose |
  * | `destructive` | Filled, error | the confirm action of a destructive flow |
@@ -24,6 +23,10 @@
  * deliberately not offered. It existed here as a `shadow-sm`/`hover:shadow` variant, had zero
  * callsites in the entire monorepo, and the only thing it could do was reintroduce the drop
  * shadows the rest of this file removed.
+ *
+ * MD3's **Outlined** button is not offered either. A button is filled, tonal, or text; a drawn
+ * 1px box is not one of the design system's three earned borders, and every former `outline`
+ * caller now uses `secondary`.
  *
  * ## No size-changing interaction states
  *
@@ -43,7 +46,6 @@ import { focusRing } from './focus';
 export const BUTTON_VARIANTS = [
   'default',
   'secondary',
-  'outline',
   'ghost',
   'link',
   'destructive',
@@ -57,8 +59,6 @@ const BUTTON_COLOR: Readonly<Record<ButtonVariant, string>> = {
   default: 'bg-primary text-on-primary hover:bg-primary/90',
   // MD3's filled tonal button: a container role rather than the `secondary` accent.
   secondary: 'bg-secondary-container text-on-secondary-container hover:bg-secondary-container/80',
-  outline:
-    'border-outline-variant hover:bg-surface-container-high hover:text-on-surface border bg-transparent',
   ghost: 'hover:bg-surface-container-high hover:text-on-surface',
   link: 'text-primary underline-offset-4 hover:underline',
   destructive: 'bg-error text-on-error hover:bg-error/90',

@@ -119,7 +119,7 @@ export function CarryoverRow({
         {/* Action picker. */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5">
+            <Button variant="secondary" size="sm" className="gap-1.5">
               <span>{actionLabel(item.action)}</span>
               <ChevronDown className="h-4 w-4 opacity-60" />
             </Button>
@@ -149,7 +149,7 @@ export function CarryoverRow({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 disabled={noTargets}
                 className={cn('gap-1.5', !item.targetCycleId && 'text-on-surface-variant')}

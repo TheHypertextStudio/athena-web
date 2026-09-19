@@ -173,7 +173,7 @@ export default function PortfolioClient(): JSX.Element {
           <div className="flex items-center justify-end">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="min-h-10 gap-1.5 @2xl:min-h-8">
+                <Button variant="secondary" size="sm" className="min-h-10 gap-1.5 @2xl:min-h-8">
                   <TuneRounded className="size-4" aria-hidden="true" />
                   <span className="hidden @2xl:inline">Display</span>
                   <ChevronDown className="size-3.5 opacity-60" aria-hidden="true" />

@@ -86,7 +86,7 @@ export function LoadFailure({
         {...(destination
           ? {
               action: (
-                <Button asChild variant="outline">
+                <Button asChild variant="secondary">
                   <Link href={destination.href}>{destination.label}</Link>
                 </Button>
               ),

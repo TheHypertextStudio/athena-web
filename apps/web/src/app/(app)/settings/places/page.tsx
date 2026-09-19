@@ -195,7 +195,7 @@ function UnmatchedNamesGroup(props: {
             }
             trailing={
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => {
                   props.onResolve(change, props.places[0]?.id ?? '');
@@ -228,7 +228,7 @@ function AutomaticLocationGroup(props: {
           description="Choose a saved place, then add its location on the map."
           trailingLayout="stacked-on-narrow"
           trailing={
-            <Button variant="outline" size="sm" onClick={props.onSetUp}>
+            <Button variant="secondary" size="sm" onClick={props.onSetUp}>
               Set up automatic location
             </Button>
           }
@@ -383,7 +383,7 @@ function PlacesDialogs(props: {
             <Button variant="ghost" disabled={props.resolvePending} onClick={props.onIgnoreName}>
               Ignore name
             </Button>
-            <Button variant="outline" disabled={props.resolvePending} onClick={props.onCreateName}>
+            <Button variant="secondary" disabled={props.resolvePending} onClick={props.onCreateName}>
               Create new place
             </Button>
             <DialogClose asChild>

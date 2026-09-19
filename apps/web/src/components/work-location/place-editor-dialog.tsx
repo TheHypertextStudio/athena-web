@@ -61,7 +61,7 @@ function ReverseAddressSuggestion(props: {
         </Button>
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           size="sm"
           onClick={() => {
             if (props.suggestion) props.onUse(props.suggestion);

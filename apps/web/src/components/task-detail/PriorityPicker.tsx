@@ -28,7 +28,7 @@ interface PriorityPickerProps {
   /** Whether the viewer lacks permission to change this Task. */
   disabled?: boolean;
   /** Trigger weight: `outline` (boxed, the default) or `ghost` (a metadata-row chip). */
-  triggerVariant?: 'ghost' | 'outline';
+  triggerVariant?: 'ghost' | 'secondary';
   /** Extra classes merged onto the trigger, e.g. the metadata-row chip geometry. */
   triggerClassName?: string;
 }
@@ -47,7 +47,7 @@ export function PriorityPicker({
   onSelect,
   pending,
   disabled = false,
-  triggerVariant = 'outline',
+  triggerVariant = 'secondary',
   triggerClassName,
 }: PriorityPickerProps): JSX.Element {
   return (

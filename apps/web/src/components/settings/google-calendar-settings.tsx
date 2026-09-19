@@ -270,7 +270,7 @@ function ConnectionSettingsGroup({
         {!connection.scopeState?.calendarWrite && googleAvailable ? (
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             disabled={oauthPending}
             onClick={onEnableEditing}
             title="Choose this Google account again to grant Calendar editing."
@@ -326,7 +326,7 @@ function CalendarGroups({
             <Button
               type="button"
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={disabled}
               onClick={() => {
                 onCombine(suggestion.layerIds);
@@ -535,7 +535,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
           {googleAvailable && (data?.connections.length ?? 0) > 0 ? (
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               onClick={() => {
                 void startGoogleLink();
               }}
@@ -544,11 +544,11 @@ export default function GoogleCalendarSettings(): JSX.Element {
               {oauthPending ? 'Opening Google…' : 'Add Google account'}
             </Button>
           ) : null}
-          <Button asChild variant="outline" size="sm">
+          <Button asChild variant="secondary" size="sm">
             <NextLink href="/settings/connected-accounts">Connected accounts</NextLink>
           </Button>
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={() => {
               sync.mutate(undefined);

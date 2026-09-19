@@ -238,7 +238,7 @@ function ActionBody({
             {pending ? 'Approving…' : 'Approve ▸'}
           </Button>
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             disabled={pending}
             onClick={() => {

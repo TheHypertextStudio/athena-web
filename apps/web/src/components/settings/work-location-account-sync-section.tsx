@@ -35,7 +35,7 @@ export function WorkLocationAccountSyncSection(): JSX.Element {
           description={syncStateCopy(account.state, account.reason)}
           trailing={
             isActionable(account.state, account.reason) ? (
-              <Button asChild variant="outline" size="sm">
+              <Button asChild variant="secondary" size="sm">
                 <Link href="/settings/connections/google-calendar">
                   {actionLabel(account.reason)}
                 </Link>
@@ -51,7 +51,7 @@ export function WorkLocationAccountSyncSection(): JSX.Element {
           body="Link a Google account if you want working-location changes to stay aligned."
           frame="none"
           action={
-            <Button asChild variant="outline" size="sm">
+            <Button asChild variant="secondary" size="sm">
               <Link href="/settings/connections/google-calendar">Link Google account</Link>
             </Button>
           }

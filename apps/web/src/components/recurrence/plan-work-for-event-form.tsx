@@ -129,7 +129,7 @@ export function PlanWorkForEventForm({ item, onDone }: PlanWorkForEventFormProps
           Docket created today&apos;s work and will keep the series in sync with the calendar.
         </p>
         <div className="flex items-center gap-2">
-          <Button asChild size="sm" variant="outline">
+          <Button asChild size="sm" variant="secondary">
             <Link
               href={`/orgs/${created.organizationId}/recurrence-series/${created.recurrenceSeriesId}`}
             >

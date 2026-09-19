@@ -180,7 +180,7 @@ function DateChangesGroup(props: {
     .filter((exception) => exception.date < currentDate)
     .reverse();
   const action = props.canEdit ? (
-    <Button variant="outline" size="sm" onClick={props.onEdit}>
+    <Button variant="secondary" size="sm" onClick={props.onEdit}>
       <Plus aria-hidden="true" />
       Add date change
     </Button>
@@ -312,7 +312,7 @@ function IncomingChangesGroup(props: {
             description={copy.description}
             trailing={
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => {
                   props.onResolve(item.change);
@@ -370,7 +370,7 @@ function ScheduleChangeDialog(props: {
           </DialogClose>
           {legacy ? (
             <>
-              <Button variant="outline" disabled={props.pending} onClick={props.onKeepExisting}>
+              <Button variant="secondary" disabled={props.pending} onClick={props.onKeepExisting}>
                 Keep existing entries
               </Button>
               <Button disabled={props.pending} onClick={props.onDefineDefault}>
@@ -379,7 +379,7 @@ function ScheduleChangeDialog(props: {
             </>
           ) : (
             <>
-              <Button variant="outline" disabled={props.pending} onClick={props.onKeepDocket}>
+              <Button variant="secondary" disabled={props.pending} onClick={props.onKeepDocket}>
                 Keep Docket schedule
               </Button>
               <Button disabled={props.pending} onClick={props.onUseProvider}>

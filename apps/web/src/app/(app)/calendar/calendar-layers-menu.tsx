@@ -64,7 +64,7 @@ export function CalendarLayersMenu({
     <Popover>
       <PopoverTrigger asChild>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           aria-label="Calendars"
           className={CALENDAR_CONTROL_CLASS}

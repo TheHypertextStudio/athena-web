@@ -107,7 +107,7 @@ export function NotionParentPagePicker({
       idleText={PAGE_PICKER_IDLE}
       emptyText={PAGE_PICKER_EMPTY}
       ariaLabel="Notion page"
-      triggerVariant="outline"
+      triggerVariant="secondary"
       disabled={disabled}
     />
   );

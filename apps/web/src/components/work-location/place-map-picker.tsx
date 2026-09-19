@@ -238,7 +238,7 @@ export function PlaceMapPicker({ value, onChange }: PlaceMapPickerProps): JSX.El
             <p className="text-on-surface text-body-medium">Docket could not load the map.</p>
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               onClick={() => {
                 setRetryVersion((current) => current + 1);
               }}

@@ -197,7 +197,7 @@ function RuleRow({
           <SettingRowStatus pending={false} saved={status === 'saved'} />
           {canManage ? (
             <>
-              <Button variant="outline" size="sm" onClick={onToggle}>
+              <Button variant="secondary" size="sm" onClick={onToggle}>
                 {rule.enabled ? 'Disable' : 'Enable'}
               </Button>
               <Button
@@ -260,7 +260,7 @@ export default function AutomationsTab({
       action={
         canManage && (rules.length > 0 || creating) ? (
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={() => {
               setCreating((current) => !current);

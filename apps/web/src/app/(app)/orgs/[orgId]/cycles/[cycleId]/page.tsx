@@ -367,7 +367,7 @@ export default function CycleDetailPage(): JSX.Element {
           <div className="flex flex-col items-end gap-1">
             <div className="flex gap-2">
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 disabled={backfilling}
                 onClick={() => {
@@ -376,7 +376,7 @@ export default function CycleDetailPage(): JSX.Element {
               >
                 {backfilling ? 'Assigning…' : 'Assign backlog'}
               </Button>
-              <Button variant="outline" size="sm" onClick={openCloseDialog}>
+              <Button variant="secondary" size="sm" onClick={openCloseDialog}>
                 Close {cycleNounLower}
               </Button>
             </div>

@@ -546,12 +546,13 @@ Geometry comes from the control scale; only colour is the button's own decision.
 | ------------- | ------------- | --------------------------------------------- |
 | `default`     | Filled        | the one primary action on a surface           |
 | `secondary`   | Filled tonal  | a secondary action that still needs weight    |
-| `outline`     | Outlined      | a secondary action on a busy surface          |
 | `ghost`       | Text          | tertiary actions, toolbar and row affordances |
 | `link`        | Text (inline) | navigation rendered inside prose              |
 | `destructive` | Filled, error | the confirm action of a destructive flow      |
 
-MD3's **Elevated** button — the one MD3 button style carrying a shadow — is not offered.
+MD3's **Elevated** button — the one MD3 button style carrying a shadow — is not offered. Nor is
+the **Outlined** button: a button is filled, tonal, or text, and a drawn 1px box is not one of §8's
+earned borders.
 
 ```ts
 const BUTTON_VARIANTS: readonly ['default', 'secondary', 'outline', 'ghost', 'link', 'destructive'];
@@ -980,8 +981,8 @@ naming it.
 
 What survives is `BORDER_EARNED_FILES`, an exemption rather than a scope — the rule reads those
 files and finds a border it agrees with. Each is one of §8's three cases: `field.tsx` is the
-editable affordance; `checkbox.tsx` and `switch.tsx` draw the control itself; `button.tsx`,
-`chip.tsx` and `badge.tsx` are MD3's outlined variants, where the line _is_ the variant; and
+editable affordance; `switch.tsx` draws the control itself; `chip.tsx` and `badge.tsx` are MD3's
+outlined variants, where the line _is_ the variant; and
 `AppShell.tsx`'s skip link is `page` tone landing over content of the same tone, so the ramp
 separates nothing and only a line can. Adding a file there means arguing it into one of those
 cases, not parking it pending a migration.

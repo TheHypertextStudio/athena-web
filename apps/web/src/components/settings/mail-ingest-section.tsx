@@ -46,7 +46,7 @@ export function MailIngestSection({ orgId, canManage }: MailIngestSectionProps):
           body="Connect Gmail and Docket turns the mail that needs doing into task suggestions you can accept or ignore."
           frame="none"
           action={
-            <Button asChild variant="outline">
+            <Button asChild variant="secondary">
               <NextLink href={connectionsHref}>Connect Gmail</NextLink>
             </Button>
           }

@@ -26,6 +26,7 @@ import {
   Avatar,
   AvatarFallback,
   Button,
+  type ButtonProps,
   focusRingInset,
   Popover,
   PopoverBody,
@@ -38,6 +39,29 @@ import { type JSX, useId } from 'react';
 import { CALENDAR_CONTROL_CLASS } from '@/components/calendar/calendar-toolbar-control';
 
 import type { ComparisonMember } from './use-calendar-people-axis';
+
+/**
+ * The People popover's trigger. `PopoverTrigger asChild` hands it the open state, handlers, and
+ * ref through its props, which pass straight onto the button.
+ *
+ * @param props - Button props supplied by the popover trigger.
+ * @returns The labelled toolbar button.
+ */
+function PeopleTrigger(props: ButtonProps): JSX.Element {
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      aria-label="People"
+      className={CALENDAR_CONTROL_CLASS}
+      {...props}
+    >
+      <Users className="size-4" aria-hidden="true" />
+      <span className="hidden @2xl:inline">People</span>
+      <ChevronDown className="hidden size-4 opacity-60 @2xl:inline" aria-hidden="true" />
+    </Button>
+  );
+}
 
 /**
  * Reduce a display name to at most two initials for the avatar fallback.
@@ -97,11 +121,7 @@ export function CalendarComparisonControls({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" aria-label="People" className={CALENDAR_CONTROL_CLASS}>
-          <Users className="size-4" aria-hidden="true" />
-          <span className="hidden @2xl:inline">People</span>
-          <ChevronDown className="hidden size-4 opacity-60 @2xl:inline" aria-hidden="true" />
-        </Button>
+        <PeopleTrigger />
       </PopoverTrigger>
       <PopoverContent presentation="panel" width="xl" align="end" aria-label="People">
         <PopoverBody className="flex flex-col gap-3">

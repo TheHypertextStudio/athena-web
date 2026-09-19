@@ -101,7 +101,7 @@ export function SettingsImagePicker({
         />
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           disabled={disabled}
           onClick={() => {
             inputRef.current?.click();

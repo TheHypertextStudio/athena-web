@@ -82,7 +82,7 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
         canManage && (listQ.data?.length ?? 0) > 0 ? (
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={() => {
               setAddOpen(true);
@@ -338,7 +338,7 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
         <div className="flex flex-wrap gap-2">
           {mcp.authMode === 'oauth' ? (
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               disabled={busy}
               onClick={() => {
@@ -353,7 +353,7 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
             </Button>
           ) : (
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               disabled={busy}
               onClick={() => {

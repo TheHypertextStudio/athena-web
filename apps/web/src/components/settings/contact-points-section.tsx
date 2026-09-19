@@ -111,6 +111,53 @@ const KIND = {
   },
 } as const;
 
+/** Props for {@link ContactPointAddForm}. */
+interface ContactPointAddFormProps {
+  readonly kind: AddableContactPointType;
+  readonly value: string;
+  readonly creating: boolean;
+  readonly onChange: (value: string) => void;
+  readonly onSubmit: (event: SyntheticEvent<HTMLFormElement>) => void;
+}
+
+/**
+ * The inline field that adds one destination of a kind.
+ *
+ * @param props - See {@link ContactPointAddFormProps}.
+ * @returns The add form.
+ */
+function ContactPointAddForm({
+  kind,
+  value,
+  creating,
+  onChange,
+  onSubmit,
+}: ContactPointAddFormProps): JSX.Element {
+  const copy = KIND[kind];
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="grid gap-2 px-4 pb-3 @2xl:grid-cols-[1fr_auto] @2xl:items-end"
+    >
+      <label className="text-on-surface-variant text-body-small flex min-w-0 flex-col gap-1">
+        {copy.field}
+        <Input
+          type={copy.inputType}
+          value={value}
+          disabled={creating}
+          autoComplete={copy.autoComplete}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+        />
+      </label>
+      <Button type="submit" variant="secondary" disabled={creating || value.trim().length === 0}>
+        {creating ? 'Adding…' : 'Add'}
+      </Button>
+    </form>
+  );
+}
+
 /** Props for {@link ContactPointGroup}. */
 interface ContactPointGroupProps {
   readonly kind: AddableContactPointType;
@@ -170,7 +217,7 @@ function ContactPointGroup({
         points.length > 0 || adding ? (
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             size="sm"
             aria-expanded={adding}
             onClick={() => {
@@ -183,26 +230,13 @@ function ContactPointGroup({
       }
     >
       {adding ? (
-        <form
+        <ContactPointAddForm
+          kind={kind}
+          value={value}
+          creating={creating}
+          onChange={setValue}
           onSubmit={submit}
-          className="grid gap-2 px-4 pb-3 @2xl:grid-cols-[1fr_auto] @2xl:items-end"
-        >
-          <label className="text-on-surface-variant text-body-small flex min-w-0 flex-col gap-1">
-            {copy.field}
-            <Input
-              type={copy.inputType}
-              value={value}
-              disabled={creating}
-              autoComplete={copy.autoComplete}
-              onChange={(event) => {
-                setValue(event.target.value);
-              }}
-            />
-          </label>
-          <Button type="submit" variant="outline" disabled={creating || value.trim().length === 0}>
-            {creating ? 'Adding…' : 'Add'}
-          </Button>
-        </form>
+        />
       ) : null}
 
       <div className="flex flex-col">
@@ -265,7 +299,7 @@ function ContactPointGroup({
                       <Button
                         type="button"
                         size="sm"
-                        variant="outline"
+                        variant="secondary"
                         aria-label={`Confirm disable ${point.value}`}
                         disabled={savingId === point.id}
                         onClick={() => {

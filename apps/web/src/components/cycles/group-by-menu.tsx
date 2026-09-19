@@ -56,7 +56,7 @@ export function GroupByMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1.5">
+        <Button variant="secondary" size="sm" className="gap-1.5">
           <Filter className="h-4 w-4" />
           <span>Group by {label.toLowerCase()}</span>
           <ChevronDown className="h-4 w-4 opacity-60" />

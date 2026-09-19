@@ -164,7 +164,7 @@ export function UpdatesPanel({
               <span className="text-on-surface-variant text-body-medium">Set health</span>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1.5">
+                  <Button variant="secondary" size="sm" className="gap-1.5">
                     {health !== '' ? (
                       <span
                         aria-hidden="true"

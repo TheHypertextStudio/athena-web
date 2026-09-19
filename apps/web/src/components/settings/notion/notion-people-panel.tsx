@@ -111,7 +111,7 @@ export function NotionPeoplePanel({
           body="Docket learns who is in your Notion workspace on the first sync. Run one and everyone shows up here to be matched."
           frame="none"
           action={
-            <Button asChild variant="outline">
+            <Button asChild variant="secondary">
               <NextLink href={`/orgs/${orgId}/settings/connections/notion`}>
                 Go to Notion sync
               </NextLink>
@@ -338,7 +338,7 @@ function IgnoredRow(props: {
         </span>
       </span>
       {props.canManage ? (
-        <Button variant="outline" disabled={props.busy} onClick={props.onRestore}>
+        <Button variant="secondary" disabled={props.busy} onClick={props.onRestore}>
           {UNIGNORE_ACTION}
         </Button>
       ) : null}

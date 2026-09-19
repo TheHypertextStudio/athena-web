@@ -5,7 +5,12 @@ import { describe, expect, it } from 'vitest';
 
 import { Avatar, AvatarFallback, AvatarImage } from '../../src/primitives/avatar';
 import { Badge, badgeVariants, type BadgeProps } from '../../src/primitives/badge';
-import { Button, buttonVariants, type ButtonProps } from '../../src/primitives/button';
+import {
+  Button,
+  BUTTON_VARIANTS,
+  buttonVariants,
+  type ButtonProps,
+} from '../../src/primitives/button';
 import {
   Card,
   CardContent,
@@ -64,13 +69,24 @@ describe('Button', () => {
   it.each<[NonNullable<ButtonProps['variant']>, string]>([
     ['default', 'bg-primary'],
     ['destructive', 'bg-error'],
-    ['outline', 'border-outline-variant'],
     ['secondary', 'bg-secondary-container'],
     ['ghost', 'hover:bg-surface-container-high'],
     ['link', 'underline-offset-4'],
   ])('applies the %s variant class', (variant, cls) => {
     render(<Button variant={variant}>{variant}</Button>);
     expect(screen.getByRole('button', { name: variant })).toHaveClass(cls);
+  });
+
+  it.each(BUTTON_VARIANTS)('draws no border in the %s variant', (variant) => {
+    // A button is filled, tonal, or text. None of them draws a line at rest.
+    render(<Button variant={variant}>{variant}</Button>);
+    expect(screen.getByRole('button', { name: variant }).className).not.toMatch(
+      /(^|\s)border(-|\s|$)/,
+    );
+  });
+
+  it('offers no outlined variant', () => {
+    expect(BUTTON_VARIANTS).not.toContain('outline');
   });
 
   it.each<[NonNullable<ButtonProps['size']>, string]>([

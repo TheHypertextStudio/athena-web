@@ -45,7 +45,7 @@ export function DetailUnavailable({
           forbidden ? `You no longer have access to this ${noun}` : `This ${noun} no longer exists`
         }
         action={
-          <Button asChild variant="outline">
+          <Button asChild variant="secondary">
             <Link href={backHref}>{backLabel}</Link>
           </Button>
         }

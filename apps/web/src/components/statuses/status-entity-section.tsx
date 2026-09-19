@@ -152,7 +152,7 @@ export function StatusEntitySection({
         {teams.length > 0 && onScopeChange !== undefined ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" size="sm">
+              <Button type="button" variant="secondary" size="sm">
                 {scopeName}
                 <ChevronDown />
               </Button>
@@ -191,7 +191,7 @@ export function StatusEntitySection({
             This team uses the workspace statuses.
           </p>
           {canManage && onFork !== undefined ? (
-            <Button type="button" variant="outline" size="sm" onClick={onFork}>
+            <Button type="button" variant="secondary" size="sm" onClick={onFork}>
               Customize for this team
             </Button>
           ) : null}

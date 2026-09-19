@@ -84,7 +84,7 @@ export function PricingProducts(): JSX.Element {
             </ul>
             <Button
               asChild
-              variant={product.featured ? 'default' : 'outline'}
+              variant={product.featured ? 'default' : 'secondary'}
               className="mt-auto w-full"
             >
               <Link

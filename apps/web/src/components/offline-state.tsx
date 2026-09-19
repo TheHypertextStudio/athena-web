@@ -60,7 +60,7 @@ export function OfflineBanner({ online, onRetry }: OfflineBannerProps): JSX.Elem
         Showing what was loaded earlier. Changes you make are saved on this device and sync
         automatically once you're back online.
       </span>
-      <Button variant="outline" size="sm" onClick={onRetry}>
+      <Button variant="secondary" size="sm" onClick={onRetry}>
         Try again
       </Button>
     </div>

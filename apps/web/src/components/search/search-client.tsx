@@ -493,7 +493,7 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
               </Stack>
               {data?.nextCursor ? (
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   className="self-start"
                   disabled={loadingMore}
                   onClick={() => {
@@ -728,7 +728,7 @@ function DateInput({
       <DatePicker
         ariaLabel={label}
         placeholder="Any day"
-        triggerVariant="outline"
+        triggerVariant="secondary"
         value={value === '' ? null : value}
         onChange={(next) => {
           onChange(next ?? '');

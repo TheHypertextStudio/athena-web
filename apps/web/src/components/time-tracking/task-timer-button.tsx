@@ -99,7 +99,7 @@ export function TaskTimerButton({
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant={action.tracking ? 'secondary' : 'outline'}
+            variant={action.tracking ? 'secondary' : 'ghost'}
             iconOnly={!withLabel}
             aria-label={action.label}
             aria-pressed={action.active}

@@ -76,8 +76,8 @@ export interface DatePickerProps {
   disabled?: boolean | undefined;
   /** Render as plain text with no affordance (actor lacks edit capability). */
   readOnly?: boolean | undefined;
-  /** Trigger weight: `ghost` (panel rows) or `outline` (composer strip). */
-  triggerVariant?: 'ghost' | 'outline' | undefined;
+  /** Trigger weight: `ghost` (panel rows) or `secondary` (composer strip). */
+  triggerVariant?: 'ghost' | 'secondary' | undefined;
   /** Extra classes for the trigger. */
   triggerClassName?: string | undefined;
   /** ISO day used by the Today shortcut when the host displays a non-local timezone. */
@@ -234,8 +234,8 @@ export interface DateRangePickerProps {
   disabled?: boolean;
   /** Render as plain text with no affordance (actor lacks edit capability). */
   readOnly?: boolean;
-  /** Trigger weight: `ghost` (panel rows) or `outline` (composer strip). */
-  triggerVariant?: 'ghost' | 'outline';
+  /** Trigger weight: `ghost` (panel rows) or `secondary` (composer strip). */
+  triggerVariant?: 'ghost' | 'secondary';
   /** Extra classes for the trigger. */
   triggerClassName?: string;
   /** Earliest selectable day, inclusive. Defaults to the product's 1970 floor. */

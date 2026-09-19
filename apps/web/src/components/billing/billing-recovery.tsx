@@ -132,7 +132,7 @@ export function BillingRecovery(): JSX.Element | null {
       <div className="flex flex-nowrap items-center justify-end gap-2 overflow-x-auto">
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           className="shrink-0"
           onClick={() => {
             setRequest(null);

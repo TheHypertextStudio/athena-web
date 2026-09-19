@@ -129,7 +129,7 @@ export function SaveViewComposer({
             <span className="text-label-large">Who can see this view</span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button type="button" variant="outline" className="w-fit gap-2">
+                <Button type="button" variant="secondary" className="w-fit gap-2">
                   <span>{activeScope?.label ?? 'Personal'}</span>
                   <span className="text-on-surface-variant text-body-small">
                     {activeScope?.hint}

@@ -56,7 +56,7 @@ export function LifecycleFilter({ value, onChange }: LifecycleFilterProps): JSX.
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1.5">
+        <Button variant="secondary" size="sm" className="gap-1.5">
           <Filter className="h-4 w-4" />
           <span>{labelOf(value)}</span>
           <ChevronDown className="h-4 w-4 opacity-60" />
@@ -110,7 +110,7 @@ export function LifecycleStateMenu({ value, onChange, id }: LifecycleStateMenuPr
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button id={id} variant="outline" size="sm" className="w-44 justify-between gap-1.5">
+        <Button id={id} variant="secondary" size="sm" className="w-44 justify-between gap-1.5">
           <span>{lifecycleLabel(value)}</span>
           <ChevronDown className="h-4 w-4 opacity-60" />
         </Button>

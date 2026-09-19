@@ -64,7 +64,7 @@ export function InitiativeRelationshipPanels({
         className="no-print flex min-w-0 flex-col gap-3"
       >
         <div className="flex justify-end">
-          <Button variant="outline" className="min-h-10 gap-2" onClick={onAddSubinitiative}>
+          <Button variant="secondary" className="min-h-10 gap-2" onClick={onAddSubinitiative}>
             <Plus aria-hidden className="size-5" />
             Add sub-{initiativeNoun.toLowerCase()}
           </Button>

@@ -396,7 +396,7 @@ export function BillingDiscountsSection({
       {canManageBilling && awaitingDecision ? (
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           onClick={() => {
             withdraw.mutate(application.id);
           }}

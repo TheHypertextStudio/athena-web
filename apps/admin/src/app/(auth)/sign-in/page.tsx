@@ -220,7 +220,7 @@ export default function SignInPage(): JSX.Element {
         <Button
           type="button"
           size="lg"
-          variant={googleSso ? 'outline' : 'default'}
+          variant={googleSso ? 'secondary' : 'default'}
           disabled={!canSubmit}
           onClick={() => {
             void authenticate(false);

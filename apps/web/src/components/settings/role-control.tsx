@@ -89,7 +89,7 @@ export function RoleControl({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           disabled={saving}
           aria-label={ariaLabel}

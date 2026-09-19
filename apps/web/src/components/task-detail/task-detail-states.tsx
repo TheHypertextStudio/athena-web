@@ -93,7 +93,7 @@ function TaskUnavailable({
         icon={forbidden ? Shield : CircleAlert}
         title={forbidden ? 'You no longer have access to this task' : 'This task no longer exists'}
         action={
-          <Button asChild variant="outline">
+          <Button asChild variant="secondary">
             <Link href={`/orgs/${orgId}/my-work`}>Back to your work</Link>
           </Button>
         }

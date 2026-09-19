@@ -185,7 +185,7 @@ function MoveForm({ entry, date, onDone }: EntryEditorProps): JSX.Element {
         <DatePicker
           ariaLabel="Move to"
           placeholder="Pick a day"
-          triggerVariant="outline"
+          triggerVariant="secondary"
           value={target === '' ? null : target}
           onChange={(next) => {
             setTarget(next ?? '');

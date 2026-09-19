@@ -361,7 +361,7 @@ function DiscountSection({
               }}
               placeholder="Choose end date"
               ariaLabel="Partner discount end date"
-              triggerVariant="outline"
+              triggerVariant="secondary"
               triggerClassName="w-full justify-start"
               min={today.toISOString().slice(0, 10)}
               max={latest.toISOString().slice(0, 10)}

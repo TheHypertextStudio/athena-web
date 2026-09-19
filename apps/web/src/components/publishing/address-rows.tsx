@@ -329,7 +329,7 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
             <Button
               type="button"
               size="sm"
-              variant="outline"
+              variant="secondary"
               aria-label={`Confirm removing ${domain.host}`}
               disabled={remove.isPending}
               onClick={() => {
@@ -391,7 +391,7 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
             <Button
               type="button"
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={verify.isPending}
               onClick={() => {
                 verify.mutate(domain.id);
@@ -447,7 +447,7 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
             <Button
               type="button"
               size="sm"
-              variant="outline"
+              variant="secondary"
               onClick={() => {
                 verify.mutate(domain.id);
               }}

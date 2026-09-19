@@ -115,9 +115,10 @@ export const RULE_ROOTS: Partial<Record<DesignTokenRule, readonly string[]>> = {
  * - **A control's own outline.** `switch.tsx` draws a track; without the border there is no
  *   control, only a fill that appears when on. `checkbox.tsx` left this list when its unchecked box
  *   became a tonal fill that clears 3:1 on its own.
- * - **MD3's outlined variants**, where the line *is* the variant: `button.tsx` (Outlined Button),
- *   `chip.tsx` (`outline-width 1dp` unselected, per the chip spec) and `badge.tsx`, whose
- *   `outline` variant has no fill and would otherwise be bare text.
+ * - **MD3's outlined variants**, where the line *is* the variant: `chip.tsx` (`outline-width 1dp`
+ *   unselected, per the chip spec) and `badge.tsx`, whose `outline` variant has no fill and would
+ *   otherwise be bare text. `button.tsx` left this list with its Outlined variant: a button is
+ *   filled, tonal, or text.
  * - **A boundary between things not contained by one another.** `AppShell.tsx`'s skip link is
  *   `page` tone landing over content of the same tone, so the surface ramp separates nothing and
  *   the line is the only thing that can.
@@ -128,7 +129,6 @@ export const RULE_ROOTS: Partial<Record<DesignTokenRule, readonly string[]>> = {
 export const BORDER_EARNED_FILES: readonly string[] = [
   'packages/ui/src/components/shell/AppShell.tsx',
   'packages/ui/src/primitives/badge.tsx',
-  'packages/ui/src/primitives/button.tsx',
   'packages/ui/src/primitives/chip.tsx',
   'packages/ui/src/primitives/field.tsx',
   'packages/ui/src/primitives/switch.tsx',

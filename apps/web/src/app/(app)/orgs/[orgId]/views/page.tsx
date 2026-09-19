@@ -133,7 +133,7 @@ export default function ViewsPage(): JSX.Element {
               }}
               saveSlot={
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   className="min-h-10 gap-1.5 @2xl:min-h-8"
                   onClick={() => {

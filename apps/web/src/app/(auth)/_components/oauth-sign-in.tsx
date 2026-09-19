@@ -125,7 +125,7 @@ function safeCallbackPath(): string | null {
  * above it is already interactive.
  *
  * Each button is `size="lg"` (40px) to clear the craft rubric's mobile touch-target gate, and
- * `variant="outline"` so the passkey button stays the one filled, primary action on the screen.
+ * `variant="secondary"` so the passkey button stays the one filled, primary action on the screen.
  *
  * @returns The provider block, or `null`.
  */
@@ -176,7 +176,7 @@ export function OAuthSignIn(): JSX.Element | null {
               key={provider}
               type="button"
               size="lg"
-              variant="outline"
+              variant="secondary"
               className="relative"
               disabled={pendingProvider !== null}
               data-testid={`oauth-sign-in-${provider}`}

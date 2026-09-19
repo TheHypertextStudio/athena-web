@@ -128,7 +128,7 @@ function RecoveryCodesSection(): JSX.Element {
         <div>
           <Button
             type="button"
-            variant={status.enabled ? 'outline' : undefined}
+            variant={status.enabled ? 'secondary' : undefined}
             onClick={() => {
               setDialogOpen(true);
             }}

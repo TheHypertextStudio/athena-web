@@ -108,7 +108,7 @@ export function AuthenticationInterlockProvider({
               <>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   onClick={() => {
                     setOpen(false);
                   }}

@@ -155,7 +155,7 @@ function InvitationRow({
           </span>
         ) : (
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={() => {
               setConfirming(true);

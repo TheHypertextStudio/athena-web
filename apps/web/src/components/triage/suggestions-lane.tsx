@@ -141,7 +141,7 @@ function SuggestionEditor({ suggestion, onAccept, onCancel }: SuggestionEditorPr
       <DatePicker
         ariaLabel="Due date"
         placeholder="Set due date"
-        triggerVariant="outline"
+        triggerVariant="secondary"
         value={dueDate === '' ? null : dueDate}
         onChange={(next) => {
           setDueDate(next ?? '');
@@ -217,7 +217,7 @@ function SuggestionCard({
                 Accept
               </Button>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => {
                   setEditing(true);

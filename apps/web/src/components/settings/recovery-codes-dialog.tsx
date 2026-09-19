@@ -199,7 +199,7 @@ export function RecoveryCodesDialog({
             <>
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 onClick={() => {
                   void onCopy();
                 }}
@@ -208,7 +208,7 @@ export function RecoveryCodesDialog({
               </Button>
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 onClick={() => {
                   downloadCodes(codes);
                   setDownloaded(true);
@@ -230,7 +230,7 @@ export function RecoveryCodesDialog({
             <>
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 disabled={busy}
                 onClick={() => {
                   close(false);

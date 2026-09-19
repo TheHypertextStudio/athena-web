@@ -273,7 +273,7 @@ function RenamePasskeyDialog({
           <DialogFooter>
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               onClick={() => {
                 onOpenChange(false);
               }}
@@ -390,7 +390,7 @@ function RemovePasskeyDialog({
         <DialogFooter>
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             onClick={() => {
               onOpenChange(false);
             }}

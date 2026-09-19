@@ -723,7 +723,7 @@ function CustomRangeControls({
         startLabel="From"
         endLabel="Through"
         ariaLabel="Custom time range"
-        triggerVariant="outline"
+        triggerVariant="secondary"
         onChange={(next) => {
           const start = next.start ?? next.end ?? state.start ?? state.anchor;
           const inclusiveEnd = next.end ?? next.start ?? through;

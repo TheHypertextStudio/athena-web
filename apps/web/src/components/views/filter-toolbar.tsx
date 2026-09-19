@@ -105,7 +105,7 @@ export interface FilterToolbarProps<T> {
    */
   saveSlot?: ReactNode;
   /** The controls' weight: outlined on a band, text on a floating bar. Default `outline`. */
-  buttonVariant?: 'outline' | 'ghost';
+  buttonVariant?: 'secondary' | 'ghost';
 }
 
 /**
@@ -126,7 +126,7 @@ export function FilterToolbar<T>({
   displayExtras,
   leading,
   saveSlot,
-  buttonVariant = 'outline',
+  buttonVariant = 'secondary',
 }: FilterToolbarProps<T>): JSX.Element {
   const groupable = groupableFields(catalog);
   const sortable = sortableFields(catalog);

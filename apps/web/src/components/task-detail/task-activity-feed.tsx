@@ -77,7 +77,7 @@ function ActivityFilterMenu({ filter, onFilterChange }: ActivityFilterMenuProps)
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1.5" aria-label="Filter activity">
+        <Button variant="secondary" size="sm" className="gap-1.5" aria-label="Filter activity">
           {FILTER_LABEL[filter]}
           <ChevronDown className="size-4 opacity-60" />
         </Button>
@@ -207,7 +207,7 @@ export function TaskActivityFeed({
           <div>
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               size="sm"
               aria-label="Load newer activity"
               disabled={query.isFetchingNextPage}

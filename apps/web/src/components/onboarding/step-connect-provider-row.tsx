@@ -100,7 +100,7 @@ export function ProviderRow<Provider extends string = string>({
         ) : (
           <Button
             type="button"
-            variant={phase === 'error' ? 'outline' : 'secondary'}
+            variant={phase === 'error' ? 'ghost' : 'secondary'}
             size="sm"
             onClick={onConnect}
             disabled={phase === 'connecting'}

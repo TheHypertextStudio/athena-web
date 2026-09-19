@@ -283,7 +283,7 @@ export function ScheduleEditorDialog({
               <DatePicker
                 ariaLabel={dateLabel}
                 placeholder="Pick a day"
-                triggerVariant="outline"
+                triggerVariant="secondary"
                 value={date || null}
                 max={effectiveUntil || undefined}
                 invalid={invalid}
@@ -301,7 +301,7 @@ export function ScheduleEditorDialog({
                 <DatePicker
                   ariaLabel="End date"
                   placeholder="No end date"
-                  triggerVariant="outline"
+                  triggerVariant="secondary"
                   value={effectiveUntil || null}
                   min={date || undefined}
                   onChange={(nextDate) => {

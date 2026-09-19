@@ -657,7 +657,7 @@ export default function TimelineCanvas<T>({
         <div className={cn('flex items-center gap-2', fullBleed && LABEL_PAD_CLASS)}>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             className="gap-1.5"
             onClick={() => {
               onReschedule(visibleLastChange.id, visibleLastChange.from);

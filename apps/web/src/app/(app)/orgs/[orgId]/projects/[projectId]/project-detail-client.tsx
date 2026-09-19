@@ -516,7 +516,7 @@ export default function ProjectDetailPage(): JSX.Element {
             />
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               onClick={() => router.push(`/orgs/${orgId}/projects`)}
             >
               Back to Projects

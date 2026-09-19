@@ -234,7 +234,7 @@ export function WorkScheduleEditorDialog({
                   ariaLabel="Schedule applies from"
                   min={nextVersionStart(plan)}
                   placeholder="Pick a day"
-                  triggerVariant="outline"
+                  triggerVariant="secondary"
                   value={effectiveFrom || null}
                   onChange={(value) => {
                     setEffectiveFrom(value ?? '');
@@ -246,7 +246,7 @@ export function WorkScheduleEditorDialog({
                 <DatePicker
                   ariaLabel="Cycle starts"
                   placeholder="Pick a day"
-                  triggerVariant="outline"
+                  triggerVariant="secondary"
                   value={anchorDate || null}
                   onChange={(value) => {
                     setAnchorDate(value ?? '');
@@ -305,7 +305,7 @@ export function WorkScheduleEditorDialog({
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button type="button" variant="outline" size="sm">
+                      <Button type="button" variant="secondary" size="sm">
                         <Copy aria-hidden="true" />
                         Copy day
                       </Button>
@@ -450,7 +450,7 @@ export function WorkScheduleEditorDialog({
 
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   className="self-start"
                   onClick={() => {
                     const location: WorkScheduleSegment['location'] = places[0]
@@ -681,7 +681,7 @@ export function WorkScheduleDateDialog({
                 ariaLabel="Date change"
                 min={minimumDate}
                 placeholder="Pick a day"
-                triggerVariant="outline"
+                triggerVariant="secondary"
                 value={date || null}
                 onChange={(value) => {
                   setDate(value ?? '');
@@ -715,7 +715,7 @@ export function WorkScheduleDateDialog({
             )}
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               className="self-start"
               onClick={() => {
                 setSegments((current) => [...current, defaultSegment(places)]);

@@ -114,7 +114,7 @@ export function DayStartReview(props: DayStartReviewProps): JSX.Element {
           <ControlGroup controlSize="md">
             {props.onReorganize === undefined ? null : (
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={props.onReorganize}
                 disabled={props.reorganizing === true}
               >

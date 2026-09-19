@@ -300,7 +300,7 @@ export default function CalendarSettingsPage(): JSX.Element {
             body="Calendar sharing is between people in the same workspace. Yours is just you for now."
             frame="none"
             action={
-              <Button asChild variant="outline">
+              <Button asChild variant="secondary">
                 <NextLink href="/workspaces/new">Create a shared workspace</NextLink>
               </Button>
             }

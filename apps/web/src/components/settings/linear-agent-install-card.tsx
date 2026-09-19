@@ -138,7 +138,7 @@ export function LinearAgentInstallCard({
           ) : (
             <Button
               controlSize="md"
-              variant="outline"
+              variant="secondary"
               disabled={isPending}
               onClick={() => {
                 install.mutate(undefined);

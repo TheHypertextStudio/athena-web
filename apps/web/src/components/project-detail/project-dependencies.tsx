@@ -138,7 +138,7 @@ function DependencyColumn({
             disabled={disabled}
             loading={pickerLoading}
             onOpenChange={onPickerOpenChange}
-            triggerVariant="outline"
+            triggerVariant="secondary"
             triggerClassName="shrink-0"
           />
         ) : null}

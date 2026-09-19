@@ -11,7 +11,7 @@
  * control reads identically everywhere.
  *
  * It renders as a borderless `ghost`-weight button by default (so a column of rows reads as
- * quiet, clickable text rather than a wall of boxed inputs); pass `variant="outline"` for the
+ * quiet, clickable text rather than a wall of boxed inputs); pass `variant="secondary"` for the
  * boxed look the create composers use in their picker strip. When `readOnly` (the actor lacks
  * edit capability) it renders the same content as plain, non-interactive text so the panel
  * still reads as complete without offering an affordance that would fail.
@@ -56,8 +56,8 @@ export interface PropertyTriggerProps {
    * em-dash when unset) so the panel reads as complete, but offers no clickable affordance.
    */
   readOnly?: boolean | undefined;
-  /** Trigger weight: `ghost` (quiet, for panel rows) or `outline` (boxed, for composers). */
-  variant?: 'ghost' | 'outline' | undefined;
+  /** Trigger weight: `ghost` (quiet, for panel rows) or `secondary` (tonal, for composers). */
+  variant?: 'ghost' | 'secondary' | undefined;
   /** Extra classes merged onto the trigger. */
   className?: string | undefined;
   /**

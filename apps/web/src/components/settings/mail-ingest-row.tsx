@@ -38,7 +38,7 @@ export function MailIngestRow({ orgId, integration, canManage }: MailIngestRowPr
         {canManage ? (
           <Button
             size="sm"
-            variant={row.enabled ? 'outline' : 'default'}
+            variant={row.enabled ? 'secondary' : 'default'}
             disabled={row.saving}
             onClick={row.toggle}
           >

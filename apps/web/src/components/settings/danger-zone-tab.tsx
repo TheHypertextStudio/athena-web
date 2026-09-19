@@ -133,7 +133,7 @@ export function DangerZoneTab(): JSX.Element {
                     {b.memberCount} members · you&apos;re the only owner
                   </span>
                 </div>
-                <Button asChild variant="outline" size="sm">
+                <Button asChild variant="secondary" size="sm">
                   <Link href={sectionHref(b.organizationId, 'members')}>Manage members</Link>
                 </Button>
               </li>

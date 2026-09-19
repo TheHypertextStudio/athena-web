@@ -4,7 +4,7 @@
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { Button, surfaceToneColor } from '@docket/ui/primitives';
+import { surfaceToneColor } from '@docket/ui/primitives';
 import { SHELL_DESKTOP_QUERY } from '@docket/ui/components';
 import { useMediaQuery } from '@docket/ui/hooks';
 
@@ -31,6 +31,7 @@ import {
   scheduleWallPositionForInstant,
   SchedulingCanvas,
 } from '@/components/scheduling';
+import { SchedulingRetryButton } from '@/components/scheduling/scheduling-retry-button';
 import { useNow } from '@/lib/use-now';
 
 import { type AgendaEntry, shiftISODate, useAgenda } from './agenda-context';
@@ -363,9 +364,7 @@ function TimelineArrangement({
           error={hasInlineUpdateFailure ? INLINE_UPDATE_FAILURE_COPY : error}
           errorAction={
             !hasInlineUpdateFailure && error ? (
-              <Button type="button" variant="outline" size="sm" disabled={retrying} onClick={retry}>
-                {retrying ? 'Retrying…' : 'Retry'}
-              </Button>
+              <SchedulingRetryButton retrying={retrying} onRetry={retry} />
             ) : null
           }
           // No visual empty state in the rail. The notice pins itself to the viewport's bottom

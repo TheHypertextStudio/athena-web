@@ -74,8 +74,8 @@ export interface OptionPickerProps<TValue extends string = string> {
   disabled?: boolean | undefined;
   /** Render the value as plain text with no affordance (actor lacks edit capability). */
   readOnly?: boolean | undefined;
-  /** Trigger weight: `ghost` (panel rows) or `outline` (composer strip). */
-  triggerVariant?: 'ghost' | 'outline' | undefined;
+  /** Trigger weight: `ghost` (panel rows) or `secondary` (composer strip). */
+  triggerVariant?: 'ghost' | 'secondary' | undefined;
   /** Extra classes for the trigger. */
   triggerClassName?: string | undefined;
 }

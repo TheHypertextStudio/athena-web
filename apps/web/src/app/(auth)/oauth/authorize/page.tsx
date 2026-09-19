@@ -781,7 +781,7 @@ function ConsentPage(): JSX.Element {
         <div className="bg-surface sticky bottom-0 z-10 flex flex-col-reverse gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] @3xl:flex-row @3xl:justify-end">
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             size="lg"
             disabled={decisionDisabled}
             onClick={() => {

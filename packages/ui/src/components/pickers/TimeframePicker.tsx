@@ -83,7 +83,7 @@ export interface TimeframePickerProps {
   /** Render the saved label without an edit affordance. */
   readonly readOnly?: boolean | undefined;
   /** Trigger weight for detail rows or composer strips. */
-  readonly triggerVariant?: 'ghost' | 'outline' | undefined;
+  readonly triggerVariant?: 'ghost' | 'secondary' | undefined;
   /** Additional trigger layout classes. */
   readonly triggerClassName?: string | undefined;
   /** Earliest precise day offered by the delegated calendar. */
@@ -347,7 +347,7 @@ export interface TimeframeRangePickerProps {
   /** Render both values without edit affordances. */
   readonly readOnly?: boolean | undefined;
   /** Trigger weight for detail rows or composer strips. */
-  readonly triggerVariant?: 'ghost' | 'outline' | undefined;
+  readonly triggerVariant?: 'ghost' | 'secondary' | undefined;
   /** Additional layout classes for both triggers. */
   readonly triggerClassName?: string | undefined;
   /** Accessible group and field prefix. */

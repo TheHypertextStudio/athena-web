@@ -152,7 +152,7 @@ export function SessionsSection(): JSX.Element {
           hasOtherSessions ? (
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               disabled={revokeOthers.isPending}
               onClick={() => {
                 setConfirmSignOutAll(true);

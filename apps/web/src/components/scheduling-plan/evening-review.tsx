@@ -168,7 +168,7 @@ export function EveningReview(props: EveningReviewProps): JSX.Element {
                         Actually done
                       </Button>
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         disabled={props.busy === true}
                         onClick={() => {
                           props.onDispose({
@@ -247,7 +247,7 @@ export function EveningReview(props: EveningReviewProps): JSX.Element {
                 />
                 <div>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     controlSize="sm"
                     disabled={
                       props.busy === true ||

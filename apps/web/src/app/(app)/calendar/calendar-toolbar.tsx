@@ -145,7 +145,7 @@ export function CalendarToolbar({
       <Button
         className={CALENDAR_CONTROL_CLASS}
         size="sm"
-        variant="outline"
+        variant="secondary"
         aria-label="Today"
         onClick={onToday}
       >

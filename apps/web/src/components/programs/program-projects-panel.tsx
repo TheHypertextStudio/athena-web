@@ -84,7 +84,7 @@ export function ProgramProjectsPanel({
               emptyText={`No other ${projectNounLower}s`}
               ariaLabel={`Add ${projectNounLower}`}
               disabled={pending || options.loading}
-              triggerVariant="outline"
+              triggerVariant="secondary"
             />
             <Button
               type="button"

@@ -132,7 +132,7 @@ export function CalendarTimezoneDialog({
           <div className="grid grid-cols-2 gap-2" role="group" aria-label="Time zone field">
             <Button
               type="button"
-              variant={target === 'start' ? 'secondary' : 'outline'}
+              variant={target === 'start' ? 'secondary' : 'ghost'}
               className="h-auto min-w-0 justify-start px-3 py-2 text-left"
               onClick={() => {
                 setTarget('start');
@@ -145,7 +145,7 @@ export function CalendarTimezoneDialog({
             </Button>
             <Button
               type="button"
-              variant={target === 'end' ? 'secondary' : 'outline'}
+              variant={target === 'end' ? 'secondary' : 'ghost'}
               disabled={!separate}
               className="h-auto min-w-0 justify-start px-3 py-2 text-left"
               onClick={() => {

@@ -239,7 +239,7 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
   const canSync = containerPage !== null && !connectionBroken && canManage;
   const syncButton = canSync ? (
     <Button
-      variant="outline"
+      variant="secondary"
       disabled={sync.syncing}
       onClick={() => {
         sync.sync();

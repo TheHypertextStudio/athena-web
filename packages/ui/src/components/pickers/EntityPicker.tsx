@@ -54,8 +54,8 @@ export interface EntityPickerProps<TValue extends string = string> {
   disabled?: boolean;
   /** Render as plain text with no affordance (actor lacks edit capability). */
   readOnly?: boolean;
-  /** Trigger weight: `ghost` (panel rows) or `outline` (composer strip). */
-  triggerVariant?: 'ghost' | 'outline';
+  /** Trigger weight: `ghost` (panel rows) or `secondary` (composer strip). */
+  triggerVariant?: 'ghost' | 'secondary';
   /** Extra classes for the trigger. */
   triggerClassName?: string;
 }

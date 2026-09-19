@@ -128,7 +128,7 @@ export function CreateBlockScheduleEditor({
             <DatePicker
               ariaLabel="Start date"
               placeholder="Pick a day"
-              triggerVariant="outline"
+              triggerVariant="secondary"
               value={allDayDraft.start}
               onChange={(date) => {
                 onAllDayChange({ ...allDayDraft, start: date ?? '' });
@@ -140,7 +140,7 @@ export function CreateBlockScheduleEditor({
             <DatePicker
               ariaLabel="End date"
               placeholder="Pick a day"
-              triggerVariant="outline"
+              triggerVariant="secondary"
               value={inclusiveAllDayEnd}
               invalid={Boolean(allDayDraft.end && allDayDraft.end <= allDayDraft.start)}
               onChange={(date) => {
@@ -156,7 +156,7 @@ export function CreateBlockScheduleEditor({
             <DatePicker
               ariaLabel="Start date"
               placeholder="Pick a day"
-              triggerVariant="outline"
+              triggerVariant="secondary"
               value={draft.start.date}
               invalid={startInvalid}
               onChange={(date) => {
@@ -193,7 +193,7 @@ export function CreateBlockScheduleEditor({
               <DatePicker
                 ariaLabel="End date"
                 placeholder="Pick a day"
-                triggerVariant="outline"
+                triggerVariant="secondary"
                 value={draft.end.date}
                 invalid={endInvalid}
                 onChange={(date) => {

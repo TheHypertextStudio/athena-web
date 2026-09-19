@@ -36,6 +36,13 @@ import {
   phoneNotificationAction,
 } from './notification-meta';
 
+/** The shared treatment of a phone notification's secondary actions (Undo, Review changes). */
+const PHONE_SECONDARY_ACTION = {
+  size: 'sm',
+  variant: 'secondary',
+  className: 'relative z-10 whitespace-nowrap',
+} as const;
+
 /** Props for {@link NotificationRow}. */
 export interface NotificationRowProps {
   /** The notification to render. */
@@ -178,9 +185,7 @@ export function NotificationRow({
           ) : null}
           {phoneAction?.kind === 'undo' ? (
             <Button
-              size="sm"
-              variant="outline"
-              className="relative z-10 whitespace-nowrap"
+              {...PHONE_SECONDARY_ACTION}
               disabled={pending}
               onClick={() => {
                 onUndoPhoneChange(
@@ -194,7 +199,7 @@ export function NotificationRow({
             </Button>
           ) : null}
           {phoneAction?.kind === 'review' && href ? (
-            <Button size="sm" variant="outline" className="relative z-10 whitespace-nowrap" asChild>
+            <Button {...PHONE_SECONDARY_ACTION} asChild>
               <Link href={href}>Review changes</Link>
             </Button>
           ) : null}

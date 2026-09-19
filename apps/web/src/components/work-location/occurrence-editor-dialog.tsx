@@ -111,7 +111,7 @@ export function OccurrenceEditorDialog({
               <DatePicker
                 ariaLabel="Occurrence date"
                 placeholder="Pick a day"
-                triggerVariant="outline"
+                triggerVariant="secondary"
                 value={date || null}
                 onChange={(nextDate) => {
                   setDate(nextDate ?? '');

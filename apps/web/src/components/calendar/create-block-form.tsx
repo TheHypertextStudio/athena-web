@@ -406,7 +406,7 @@ export default function CreateBlockForm({
         <Button
           className={CALENDAR_CONTROL_CLASS}
           size="sm"
-          variant="outline"
+          variant="secondary"
           aria-label="New"
           onClick={() => {
             handleOpenChange(true);

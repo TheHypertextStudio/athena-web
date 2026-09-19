@@ -1,6 +1,5 @@
 'use client';
 
-import { Button } from '@docket/ui/primitives';
 import { type JSX, useCallback, useEffect } from 'react';
 
 import { useUpdateCalendarItemById } from '@/components/calendar/calendar-mutations';
@@ -15,6 +14,7 @@ import {
   type ScheduleRegionSelection,
   SchedulingCanvas,
 } from '@/components/scheduling';
+import { SchedulingRetryButton } from '@/components/scheduling/scheduling-retry-button';
 import { TaskTimerButton } from '@/components/time-tracking';
 
 import {
@@ -166,9 +166,7 @@ export function CalendarSchedulingSurface({
           )}
           errorAction={
             readFailed && !inlineMutationFailed ? (
-              <Button type="button" variant="outline" size="sm" disabled={retrying} onClick={retry}>
-                {retrying ? 'Retrying…' : 'Retry'}
-              </Button>
+              <SchedulingRetryButton retrying={retrying} onRetry={retry} />
             ) : null
           }
           emptyMessage={calendarSchedulingEmptyMessage(

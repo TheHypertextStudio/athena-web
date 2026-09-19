@@ -44,7 +44,7 @@ export function AgendaListArrangement({
         // any reading of the rubric.
         <Stack gap={2} role="status">
           <p className="text-on-surface-variant text-body-medium">Nothing scheduled.</p>
-          <Button asChild variant="outline" size="sm" className="self-start">
+          <Button asChild variant="secondary" size="sm" className="self-start">
             <Link href="/calendar">Plan in the calendar</Link>
           </Button>
         </Stack>

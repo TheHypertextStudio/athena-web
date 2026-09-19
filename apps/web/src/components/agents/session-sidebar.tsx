@@ -157,7 +157,7 @@ export function SessionSidebar({
           <div className="flex flex-col gap-2">
             {controls.canPause ? (
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 disabled={controlPending}
                 onClick={onPause}
@@ -168,7 +168,7 @@ export function SessionSidebar({
             ) : null}
             {controls.canTakeOver ? (
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 disabled={controlPending}
                 onClick={onTakeOver}

@@ -119,7 +119,7 @@ export function PhoneCallSummarySheet({ voiceSessionId }: PhoneCallSummarySheetP
                   </Text>
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     className="shrink-0 whitespace-nowrap"
                     disabled={!change.undoAvailable || undo.isPending}
                     onClick={() => {

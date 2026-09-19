@@ -1,5 +1,5 @@
 import type { lifecycleHold, impersonationSession, staffUser, user } from '@docket/db';
-import { type Database, billingExemption, db, operatorAuditEvent, organization } from '@docket/db';
+import { billingExemption, db, operatorAuditEvent, organization } from '@docket/db';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -84,12 +84,9 @@ export function toHoldOut(h: HoldRow): z.input<typeof AdminHoldOut> {
 }
 
 /** Load the set of org ids among `orgIds` that currently hold an active billing exemption. */
-export async function loadActiveExemptOrgIds(
-  database: Database,
-  orgIds: readonly string[],
-): Promise<Set<string>> {
+export async function loadActiveExemptOrgIds(orgIds: readonly string[]): Promise<Set<string>> {
   if (orgIds.length === 0) return new Set();
-  const rows = await database
+  const rows = await db
     .select({ organizationId: billingExemption.organizationId })
     .from(billingExemption)
     .where(
@@ -162,14 +159,13 @@ export function countOf(rows: readonly { n: number }[]): number {
 
 /** Record an operator audit event for an actioned mutation. */
 export async function audit(
-  database: Database,
   staffUserId: string,
   type: string,
   subjectType: string,
   subjectId: string,
   metadata: Record<string, unknown>,
 ): Promise<void> {
-  await database
+  await db
     .insert(operatorAuditEvent)
     .values({ staffUserId, type, subjectType, subjectId, metadata });
 }

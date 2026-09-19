@@ -532,7 +532,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
         new Date(),
         { organizationId: id },
       );
-      await audit(db, staffUserId, 'billing.reconciled', 'organization', id, { ...result });
+      await audit(staffUserId, 'billing.reconciled', 'organization', id, { ...result });
       return ok(c, AdminBillingReconciliationOut, result);
     },
   )
@@ -700,7 +700,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
           .update(billingProviderSync)
           .set({ status: 'succeeded', completedAt: now })
           .where(eq(billingProviderSync.idempotencyKey, syncKey));
-        await audit(db, staffUserId, 'billing.partner_discount_granted', 'organization', id, {
+        await audit(staffUserId, 'billing.partner_discount_granted', 'organization', id, {
           awardId: updated.id,
           percentOff: updated.percentOff,
           endsAt: updated.endsAt.toISOString(),
@@ -757,7 +757,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       const hold = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
       if (!hold) throw new NotFoundError('Hold insert returned no row');
-      await audit(db, staffUserId, 'lifecycle_hold.placed', 'organization', id, {
+      await audit(staffUserId, 'lifecycle_hold.placed', 'organization', id, {
         holdId: hold.id,
         reason,
       });
@@ -797,7 +797,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
         .returning();
       const hold = released[0];
       if (!hold) throw new NotFoundError('Active hold not found');
-      await audit(db, staffUserId, 'lifecycle_hold.released', 'organization', id, { holdId });
+      await audit(staffUserId, 'lifecycle_hold.released', 'organization', id, { holdId });
       return ok(c, AdminHoldOut, toHoldOut(hold));
     },
   )
@@ -937,7 +937,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
                 updatedAt: new Date(),
               },
             });
-          await audit(tx, staffUserId, 'billing.exemption_granted', 'organization', id, {
+          await audit(staffUserId, 'billing.exemption_granted', 'organization', id, {
             exemptionId: inserted.id,
             reason,
           });
@@ -1011,7 +1011,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
               eq(organizationProductEntitlement.source, 'complimentary'),
             ),
           );
-        await audit(tx, staffUserId, 'billing.exemption_revoked', 'organization', id, {
+        await audit(staffUserId, 'billing.exemption_revoked', 'organization', id, {
           exemptionId: revoked.id,
           reason,
         });
@@ -1077,13 +1077,13 @@ export const adminBillingRoutes = new Hono<AppEnv>()
         },
         observedAt,
       );
-      await audit(db, staffUserId, 'billing.trial_extended', 'organization', id, {
+      await audit(staffUserId, 'billing.trial_extended', 'organization', id, {
         days,
         stripeSubscriptionId: current.id,
         previousTrialEnd: current.trialEnd,
         nextTrialEnd: updated.trialEnd,
       });
-      const exemptIds = await loadActiveExemptOrgIds(db, [id]);
+      const exemptIds = await loadActiveExemptOrgIds([id]);
       return ok(c, AdminOrgOut, toOrgOut(org, exemptIds));
     },
   );

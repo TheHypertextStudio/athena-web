@@ -1,3 +1,4 @@
+// MARKED_FOR_REFACTOR
 /**
  * `@docket/api` — grants router (mounted at `/v1/orgs/:orgId/grants`).
  *
@@ -59,6 +60,19 @@ function maxCapability(caps: readonly Capability[]): Capability {
 
 const grantIdParam = z.object({ grantId: z.string() });
 
+/** Validate that the granted capability does not exceed the writer's own max capability. */
+async function validateCapabilityEscalation(
+  writerCapability: Capability,
+  grantedCapability: Capability,
+): Promise<void> {
+  try {
+    noSelfEscalation(writerCapability, grantedCapability);
+  } catch (err) {
+    if (err instanceof SelfEscalationError) throw new CapabilityError(err.message);
+    throw err;
+  }
+}
+
 /** Grants router: list + upsert (allow-only, self-escalation-guarded) + delete. */
 const grants = new Hono<AppEnv>()
   .get(
@@ -101,14 +115,8 @@ Semantics that flow into the resolver: \`cascades\` (default true) makes the gra
 
       const writerCapability = maxCapability(capabilities as Capability[]);
       const grantedCapability = maxCapability(body.capabilities);
-      try {
-        noSelfEscalation(writerCapability, grantedCapability);
-        /* v8 ignore start -- @preserve unreachable: capabilityGuard('manage') caps the writer at the top rank, so no grant can exceed it */
-      } catch (err) {
-        if (err instanceof SelfEscalationError) throw new CapabilityError(err.message);
-        throw err;
-      }
-      /* v8 ignore stop */
+      /* v8 ignore next -- @preserve unreachable: capabilityGuard('manage') caps the writer at the top rank, so no grant can exceed it */
+      await validateCapabilityEscalation(writerCapability, grantedCapability);
 
       // Read before writing so the answer can tell the truth about what happened: `201` only
       // when this tuple was new. The table carries no `updatedAt`, so the upsert's own return

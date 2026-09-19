@@ -92,7 +92,7 @@ export const adminStaffRoutes = new Hono<AppEnv>()
       const staff = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
       if (!staff) throw new NotFoundError('Staff insert returned no row');
-      await audit(db, staffUserId, 'staff.granted', 'staff_user', staff.id, {
+      await audit(staffUserId, 'staff.granted', 'staff_user', staff.id, {
         targetUserId: userId,
         role,
       });
@@ -139,7 +139,7 @@ export const adminStaffRoutes = new Hono<AppEnv>()
       const deleted = await db.delete(staffUser).where(eq(staffUser.id, id)).returning();
       const staff = deleted[0];
       if (!staff) throw new NotFoundError('Staff member not found');
-      await audit(db, staffUserId, 'staff.revoked', 'staff_user', staff.id, {
+      await audit(staffUserId, 'staff.revoked', 'staff_user', staff.id, {
         targetUserId: staff.userId,
         role: staff.role,
       });

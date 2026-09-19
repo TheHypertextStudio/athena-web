@@ -8,7 +8,7 @@
  * without a redeploy. Reading the current state is open to any staff tier; changing it requires
  * `superadmin` and writes an operator audit event per control changed.
  */
-import { db, type ServiceControlKey } from '@docket/db';
+import { type ServiceControlKey } from '@docket/db';
 import { Hono } from 'hono';
 
 import { AdminServiceControlsOut, UpdateServiceControlsBody } from '../admin-dto';
@@ -94,7 +94,7 @@ export const adminSettingsRoutes = new Hono<AppEnv>()
         const enabled = body[field];
         if (enabled === undefined) continue;
         const stored = await setServiceControl(key, enabled, staffUserId);
-        await audit(db, staffUserId, 'service_control.updated', 'service_control', key, {
+        await audit(staffUserId, 'service_control.updated', 'service_control', key, {
           key,
           enabled: stored,
         });

@@ -609,7 +609,6 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
         staffUserId,
       });
       await audit(
-        db,
         staffUserId,
         'billing.discount_information_requested',
         'discount_application',
@@ -735,7 +734,6 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
         });
         await scheduleEvidenceDeletion(application.id, now);
         await audit(
-          db,
           staffUserId,
           'billing.discount_renewed',
           'discount_award',
@@ -897,7 +895,6 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
         });
         await scheduleEvidenceDeletion(application.id, now);
         await audit(
-          db,
           staffUserId,
           'billing.discount_approved',
           'discount_application',
@@ -971,7 +968,6 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
       });
       await scheduleEvidenceDeletion(application.id, now);
       await audit(
-        db,
         staffUserId,
         'billing.discount_rejected',
         'discount_application',
@@ -1102,7 +1098,7 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
         return award;
       });
       if (renewal) await scheduleEvidenceDeletion(renewal.id, now);
-      await audit(db, staffUserId, 'billing.discount_renewed', 'discount_award', awardId, {
+      await audit(staffUserId, 'billing.discount_renewed', 'discount_award', awardId, {
         reason,
         endsAt: endsAt.toISOString(),
       });
@@ -1158,7 +1154,7 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
         .where(eq(billingDiscountAward.id, award.id))
         .returning();
       if (!updated) throw new NotFoundError('Discount award not found');
-      await audit(db, staffUserId, 'billing.discount_revoked', 'discount_award', award.id, {
+      await audit(staffUserId, 'billing.discount_revoked', 'discount_award', award.id, {
         reason,
       });
       await dispatchEssentialBillingNotice(db, {

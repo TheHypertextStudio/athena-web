@@ -231,6 +231,131 @@ function reasonForExternal(kind: EventKind): StreamRelevance {
 }
 
 /**
+ * Record a reason for a key, keeping whichever reason ranks strongest.
+ *
+ * @param into - The map to record into.
+ * @param key - The actor or user id.
+ * @param reason - The reason this key is in the fan-out.
+ */
+function keepStrongest(
+  into: Map<string, StreamRelevance>,
+  key: string,
+  reason: StreamRelevance,
+): void {
+  const existing = into.get(key);
+  if (!existing || RELEVANCE_RANK[reason] < RELEVANCE_RANK[existing]) into.set(key, reason);
+}
+
+/** The owners and participants of one event, before Actor ids resolve to user ids. */
+interface ActorReasons {
+  /** Keyed by Actor id. */
+  readonly byActor: Map<string, StreamRelevance>;
+  /** Owners already resolved to a user id (agent sessions own by user, not by Actor). */
+  readonly byOwnerUser: Map<string, StreamRelevance>;
+}
+
+/**
+ * Collect the owners and participants an event concerns.
+ *
+ * @param tx - The active transaction.
+ * @param event - The canonical event to route.
+ * @returns The strongest reason per Actor, and per already-resolved owner user.
+ */
+async function collectActorReasons(tx: Tx, event: RoutableEvent): Promise<ActorReasons> {
+  const reasons = await collectOwnerReasons(tx, event);
+
+  // Participants (internal Actor ids) — mention when the event is a mention, else participant.
+  const participantReason: StreamRelevance = event.kind === 'mention' ? 'mention' : 'participant';
+  for (const actorId of event.participantActorIds ?? []) {
+    if (actorId) keepStrongest(reasons.byActor, actorId, participantReason);
+  }
+
+  return reasons;
+}
+
+/**
+ * Collect the owners of an event's entity, via the per-entity-kind Strategy.
+ *
+ * @remarks
+ * Only when the entity is a Docket one — an external entity that has not been associated to a
+ * Docket row has no owners to look up.
+ *
+ * @param tx - The active transaction.
+ * @param event - The canonical event to route.
+ * @returns The strongest reason per owning Actor, and per owner already known by user id.
+ */
+async function collectOwnerReasons(tx: Tx, event: RoutableEvent): Promise<ActorReasons> {
+  const byActor = new Map<string, StreamRelevance>();
+  const byOwnerUser = new Map<string, StreamRelevance>();
+  if (!event.entity) return { byActor, byOwnerUser };
+
+  const docketId = docketIdOf(event.entity);
+  const rule = OWNER_RULES[event.entity.kind];
+  if (!docketId || !rule) return { byActor, byOwnerUser };
+
+  for (const owner of await rule(tx, docketId)) {
+    const reason = reasonForOwner(owner.role, event.kind);
+    if (owner.actorId) keepStrongest(byActor, owner.actorId, reason);
+    if (owner.userId) keepStrongest(byOwnerUser, owner.userId, reason);
+  }
+  return { byActor, byOwnerUser };
+}
+
+/**
+ * Resolve the Actor ids this event touches to Better Auth user ids.
+ *
+ * @param tx - The active transaction.
+ * @param event - The canonical event to route.
+ * @param byActor - The reasons collected per Actor.
+ * @returns The lookup, and the acting user to exclude from the fan-out.
+ */
+async function resolveActorUsers(
+  tx: Tx,
+  event: RoutableEvent,
+  byActor: ReadonlyMap<string, StreamRelevance>,
+): Promise<{ userByActor: ReadonlyMap<string, string | null>; actingUserId: string | null }> {
+  const actorIds = [...byActor.keys()];
+  if (event.actorId) actorIds.push(event.actorId);
+  const actorRows = actorIds.length
+    ? await tx
+        .select({ id: actor.id, userId: actor.userId })
+        .from(actor)
+        .where(inArray(actor.id, actorIds))
+    : [];
+  const userByActor = new Map(actorRows.map((a) => [a.id, a.userId]));
+  return {
+    userByActor,
+    actingUserId: event.actorId ? (userByActor.get(event.actorId) ?? null) : null,
+  };
+}
+
+/**
+ * The users explicitly following this event's canonical entity, unmuted.
+ *
+ * @param tx - The active transaction.
+ * @param entity - The event's entity, when it has one.
+ * @returns The follower user ids.
+ */
+async function followerUserIds(
+  tx: Tx,
+  entity: RoutableEvent['entity'],
+): Promise<readonly string[]> {
+  if (!entity) return [];
+  const followers = await tx
+    .select({ userId: streamSubscription.userId })
+    .from(streamSubscription)
+    .where(
+      and(
+        eq(streamSubscription.entityKind, entity.kind),
+        eq(streamSubscription.source, entity.source),
+        eq(streamSubscription.externalId, entity.externalId),
+        eq(streamSubscription.muted, false),
+      ),
+    );
+  return followers.map((f) => f.userId);
+}
+
+/**
  * Resolve the users this event concerns (strongest reason each), uniformly for internal and
  * external events. Maps owning/participant Actor ids → Better Auth user ids and excludes the
  * acting user (you don't surface your own action to yourself).
@@ -243,16 +368,6 @@ export async function resolveRecipients(
   tx: Tx,
   event: RoutableEvent,
 ): Promise<Map<string, StreamRelevance>> {
-  const byActor = new Map<string, StreamRelevance>();
-  /** Owners already resolved to a user id (agent sessions own by user, not by Actor). */
-  const byOwnerUser = new Map<string, StreamRelevance>();
-  const consider = (actorId: string | null | undefined, reason: StreamRelevance): void => {
-    if (!actorId) return;
-    const existing = byActor.get(actorId);
-    if (!existing || RELEVANCE_RANK[reason] < RELEVANCE_RANK[existing])
-      byActor.set(actorId, reason);
-  };
-
   // Personal kinds (tracking) never fan out: a timer transition is the acting person's own
   // data, and its only audience is that person plus the assistant reading the live bus. The
   // event still carries its entity so the item's history reads correctly — it just does not
@@ -261,43 +376,13 @@ export async function resolveRecipients(
     return new Map(event.directRecipients ?? []);
   }
 
-  // Owners — via the per-entity-kind Strategy, only when the entity is a Docket one.
-  if (event.entity) {
-    const docketId = docketIdOf(event.entity);
-    const rule = OWNER_RULES[event.entity.kind];
-    if (docketId && rule) {
-      for (const owner of await rule(tx, docketId)) {
-        const reason = reasonForOwner(owner.role, event.kind);
-        consider(owner.actorId, reason);
-        if (owner.userId) {
-          const existing = byOwnerUser.get(owner.userId);
-          if (!existing || RELEVANCE_RANK[reason] < RELEVANCE_RANK[existing])
-            byOwnerUser.set(owner.userId, reason);
-        }
-      }
-    }
-  }
-  // Participants (internal Actor ids) — mention when the event is a mention, else participant.
-  const participantReason: StreamRelevance = event.kind === 'mention' ? 'mention' : 'participant';
-  for (const actorId of event.participantActorIds ?? []) consider(actorId, participantReason);
-
-  // Resolve owner/participant Actor ids → user ids (one query) + the acting actor (to exclude).
-  const actorIds = [...byActor.keys()];
-  if (event.actorId) actorIds.push(event.actorId);
-  const actorRows = actorIds.length
-    ? await tx
-        .select({ id: actor.id, userId: actor.userId })
-        .from(actor)
-        .where(inArray(actor.id, actorIds))
-    : [];
-  const userByActor = new Map(actorRows.map((a) => [a.id, a.userId]));
-  const actingUserId = event.actorId ? (userByActor.get(event.actorId) ?? null) : null;
+  const { byActor, byOwnerUser } = await collectActorReasons(tx, event);
+  const { userByActor, actingUserId } = await resolveActorUsers(tx, event, byActor);
 
   const byUser = new Map<string, StreamRelevance>();
   const addUser = (userId: string | null, reason: StreamRelevance): void => {
     if (!userId || userId === actingUserId) return; // skip self
-    const existing = byUser.get(userId);
-    if (!existing || RELEVANCE_RANK[reason] < RELEVANCE_RANK[existing]) byUser.set(userId, reason);
+    keepStrongest(byUser, userId, reason);
   };
   for (const [actorId, reason] of byActor) addUser(userByActor.get(actorId) ?? null, reason);
   for (const [userId, reason] of byOwnerUser) addUser(userId, reason);
@@ -309,27 +394,12 @@ export async function resolveRecipients(
   for (const [userId, reason] of event.externalRecipients ?? []) addUser(userId, reason);
 
   // Explicit followers of this canonical entity (unmuted) — resolved straight to user ids.
-  if (event.entity) {
-    const followers = await tx
-      .select({ userId: streamSubscription.userId })
-      .from(streamSubscription)
-      .where(
-        and(
-          eq(streamSubscription.entityKind, event.entity.kind),
-          eq(streamSubscription.source, event.entity.source),
-          eq(streamSubscription.externalId, event.entity.externalId),
-          eq(streamSubscription.muted, false),
-        ),
-      );
-    for (const f of followers) addUser(f.userId, 'followed');
-  }
+  for (const userId of await followerUserIds(tx, event.entity)) addUser(userId, 'followed');
 
   // Directly addressed recipients — merged last and exempt from the self-exclusion, because
   // the producer named them on purpose (see `RoutableEvent.directRecipients`).
-  for (const [userId, reason] of event.directRecipients ?? []) {
-    const existing = byUser.get(userId);
-    if (!existing || RELEVANCE_RANK[reason] < RELEVANCE_RANK[existing]) byUser.set(userId, reason);
-  }
+  for (const [userId, reason] of event.directRecipients ?? [])
+    keepStrongest(byUser, userId, reason);
 
   return byUser;
 }

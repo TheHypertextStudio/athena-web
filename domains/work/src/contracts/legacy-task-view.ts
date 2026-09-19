@@ -149,11 +149,14 @@ function projectedLegacyOperator(operator: string): ViewFilter['op'] {
   throw new TypeError(`Filter operator "${operator}" has no legacy projection.`);
 }
 
-function projectedLegacyPredicate(predicate: {
+/** One v2 predicate node, reduced to the fields the legacy projection reads. */
+interface V2Predicate {
   readonly field: string;
   readonly operator: string;
   readonly operand?: unknown;
-}): ViewFilter {
+}
+
+function projectedLegacyPredicate(predicate: V2Predicate): ViewFilter {
   const field = V2_TASK_FIELD[predicate.field];
   /* v8 ignore next -- @preserve TaskViewDefinition rejects unknown fields before projection. */
   if (!field) throw new TypeError(`Task field "${predicate.field}" has no legacy projection.`);
@@ -161,16 +164,16 @@ function projectedLegacyPredicate(predicate: {
   return ViewFilter.parse({ field, op, value: projectedLegacyOperand(predicate.operand) });
 }
 
-function extractFilterPredicates(filter: unknown): unknown[] {
+function extractFilterPredicates(filter: unknown): V2Predicate[] {
   if (filter === null) return [];
   const f = filter as { kind: string; children?: unknown[] };
-  if (f.kind === 'predicate') return [f];
+  if (f.kind === 'predicate') return [f as unknown as V2Predicate];
   if (
     f.kind === 'all' &&
     Array.isArray(f.children) &&
     f.children.every((c: unknown) => (c as { kind: string }).kind === 'predicate')
   ) {
-    return f.children;
+    return f.children as V2Predicate[];
   }
   throw new TypeError('Nested, negated, or disjunctive filters have no legacy projection.');
 }

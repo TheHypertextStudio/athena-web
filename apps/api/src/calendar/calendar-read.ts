@@ -28,6 +28,7 @@ import {
   canonicalizeCalendarItems,
   canonicalizeCalendarLayers,
 } from '@docket/planning/calendar-canonicalization';
+import type { WorkflowState } from '@docket/work/workflow';
 import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
 
@@ -43,6 +44,21 @@ import { toCalendarItemOut, toCalendarLayerOut } from './calendar-serializers';
 import { readPreferredCalendarLayerMap } from './calendar-source-groups';
 
 type CalendarItemRow = typeof calendarItem.$inferSelect;
+
+/**
+ * Whether a task's workflow state is one the team treats as finished.
+ *
+ * @param workflowStates - The team's configured states, when the team was loaded.
+ * @param state - The task's state key.
+ * @returns `true` when that state is completed or canceled.
+ */
+function isStateCompleted(
+  workflowStates: readonly WorkflowState[] | undefined,
+  state: string,
+): boolean {
+  const entry = workflowStates?.find((s) => s.key === state);
+  return entry?.type === 'completed' || entry?.type === 'canceled';
+}
 
 /**
  * Hydrate the linked-task summaries for a set of calendar items, filtered per viewer.
@@ -99,15 +115,9 @@ async function hydrateLinkedTasks(
 
   for (const row of linkRows) {
     const canViewInOrg = viewFilterByOrg.get(row.link.organizationId);
-    if (!canViewInOrg) continue;
-    if (!canViewInOrg(row.task)) continue;
+    if (!canViewInOrg?.(row.task)) continue;
 
     const teamRow = teamById.get(row.task.teamId);
-    const stateEntry = teamRow?.workflowStates.find((s) => s.key === row.task.state);
-    const isCompleted =
-      stateEntry !== undefined &&
-      (stateEntry.type === 'completed' || stateEntry.type === 'canceled');
-
     const out: z.input<typeof CalendarItemLinkedTaskOut> = {
       taskId: row.task.id,
       organizationId: row.link.organizationId,
@@ -116,7 +126,7 @@ async function hydrateLinkedTasks(
       note: row.link.note,
       title: row.task.title,
       state: row.task.state,
-      done: isCompleted,
+      done: isStateCompleted(teamRow?.workflowStates, row.task.state),
     };
 
     const existing = result.get(row.link.calendarItemId);

@@ -62,40 +62,36 @@ export function sourceUrlOf(suggestion: SuggestionRow): string {
   return url;
 }
 
+/** The pending suggestion row being accepted. */
+type PendingSuggestion = typeof emailSuggestion.$inferSelect;
+
+/** Where the materialized task lands. */
+type LandingTarget = NonNullable<Awaited<ReturnType<typeof resolveLandingTarget>>>;
+
+/** The rows one accept wrote. */
+interface AcceptedRows {
+  readonly taskRow: typeof task.$inferSelect;
+  readonly suggestionRow: PendingSuggestion;
+  readonly attachmentId: string;
+}
+
 /**
- * Materialize a pending suggestion into a native task with its source email attached.
+ * Insert the task, its source-email attachment, and the suggestion's resolution in one transaction.
  *
  * @param input - The org-scoped suggestion, the accepting actor, and field overrides.
- * @returns the outcome; on `accepted`, the created task row and the updated suggestion row.
+ * @param suggestion - The pending suggestion being accepted.
+ * @param landing - Where new work lands in this workspace.
+ * @param dueDate - The resolved due date, when there is one.
+ * @returns The written rows.
  */
-export async function acceptSuggestion(
+async function insertAcceptedTask(
   input: AcceptSuggestionInput,
-): Promise<AcceptSuggestionResult> {
-  const rows = await db
-    .select()
-    .from(emailSuggestion)
-    .where(
-      and(
-        eq(emailSuggestion.id, input.suggestionId),
-        eq(emailSuggestion.organizationId, input.organizationId),
-      ),
-    )
-    .limit(1);
-  const suggestion = rows[0];
-  if (!suggestion) return { kind: 'not_found' };
-  if (suggestion.status !== 'pending') return { kind: 'already_resolved' };
-
-  // Land the materialized task exactly like quick-capture (shared resolver): oldest active
-  // team, its first workflow state, caller as assignee, current cycle when one covers today.
-  const landing = await resolveLandingTarget(input.organizationId, input.actorId);
-  if (!landing) return { kind: 'no_team' };
-
+  suggestion: PendingSuggestion,
+  landing: LandingTarget,
+  dueDate: Date | undefined,
+): Promise<AcceptedRows> {
   const overrides = input.overrides;
-  const dueDate = overrides.dueDate
-    ? new Date(overrides.dueDate)
-    : (suggestion.dueDate ?? undefined);
-
-  const created = await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     const inserted = await tx
       .insert(task)
       .values({
@@ -153,6 +149,42 @@ export async function acceptSuggestion(
     if (!suggestionRow) throw new Error('accept suggestion update returned no row');
     return { taskRow, suggestionRow, attachmentId: attachmentRow.id };
   });
+}
+
+/**
+ * Materialize a pending suggestion into a native task with its source email attached.
+ *
+ * @param input - The org-scoped suggestion, the accepting actor, and field overrides.
+ * @returns the outcome; on `accepted`, the created task row and the updated suggestion row.
+ */
+export async function acceptSuggestion(
+  input: AcceptSuggestionInput,
+): Promise<AcceptSuggestionResult> {
+  const rows = await db
+    .select()
+    .from(emailSuggestion)
+    .where(
+      and(
+        eq(emailSuggestion.id, input.suggestionId),
+        eq(emailSuggestion.organizationId, input.organizationId),
+      ),
+    )
+    .limit(1);
+  const suggestion = rows[0];
+  if (!suggestion) return { kind: 'not_found' };
+  if (suggestion.status !== 'pending') return { kind: 'already_resolved' };
+
+  // Land the materialized task exactly like quick-capture (shared resolver): oldest active
+  // team, its first workflow state, caller as assignee, current cycle when one covers today.
+  const landing = await resolveLandingTarget(input.organizationId, input.actorId);
+  if (!landing) return { kind: 'no_team' };
+
+  const overrides = input.overrides;
+  const dueDate = overrides.dueDate
+    ? new Date(overrides.dueDate)
+    : (suggestion.dueDate ?? undefined);
+
+  const created = await insertAcceptedTask(input, suggestion, landing, dueDate);
 
   // Emit a creation event so automation rules can react to the accept.
   await emitEvent({

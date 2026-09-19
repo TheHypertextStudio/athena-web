@@ -35,9 +35,9 @@ function readProse(
   return prose;
 }
 
-/** Build the slice's storage over the app database. */
-export function createDrizzleMentionStorage(): MentionStorage {
-  const mentions: MentionRepository = {
+/** The mention rows themselves, keyed by the subject whose prose produced them. */
+function createMentionRepository(): MentionRepository {
+  return {
     async listForSubject(subject: MentionSubject): Promise<readonly StoredMention[]> {
       const schema = await import('@docket/db');
       const rows = await schema.db
@@ -109,8 +109,11 @@ export function createDrizzleMentionStorage(): MentionStorage {
         );
     },
   };
+}
 
-  const resources: ExternalResourceRepository = {
+/** The deduplicated external resources a mention can point at. */
+function createExternalResourceRepository(): ExternalResourceRepository {
+  return {
     async findOrCreate(draft: ResourceDraft): Promise<string | undefined> {
       const schema = await import('@docket/db');
       await schema.db
@@ -171,8 +174,11 @@ export function createDrizzleMentionStorage(): MentionStorage {
       return rows;
     },
   };
+}
 
-  const subjects: MentionSubjectReader = {
+/** The entity tables a mention subject can live in, and the ones a mention can point at. */
+function createMentionSubjectReader(): MentionSubjectReader {
+  return {
     async read(
       subjectType: MentionSubjectType,
       entityId: string,
@@ -234,6 +240,13 @@ export function createDrizzleMentionStorage(): MentionStorage {
       return rows.length > 0;
     },
   };
+}
 
-  return { mentions, resources, subjects };
+/** Build the slice's storage over the app database. */
+export function createDrizzleMentionStorage(): MentionStorage {
+  return {
+    mentions: createMentionRepository(),
+    resources: createExternalResourceRepository(),
+    subjects: createMentionSubjectReader(),
+  };
 }

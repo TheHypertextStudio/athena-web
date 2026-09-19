@@ -17,7 +17,12 @@ import { loadVisibleDocuments, type SearchCaller } from '../search/query';
 
 import { entityMentionHref } from './mention-href';
 import { createDrizzleMentionStorage } from './drizzle-mention-storage';
-import type { ExternalResourceRepository, MentionStorage, StoredResource } from './mention-ports';
+import type {
+  ExternalResourceRepository,
+  MentionStorage,
+  StoredMention,
+  StoredResource,
+} from './mention-ports';
 import { toExternalResourceOut } from './resource-view';
 
 /** What the Resources tab asks for. */
@@ -75,12 +80,55 @@ export async function loadEntityMentions(
 
   if (rows.length === 0) return { external: [], entities: [] };
 
+  const accumulated = accumulateRows(rows);
+  const resourceIds = [...accumulated.values()]
+    .map((entry) => entry.externalResourceId)
+    .filter((id): id is string => id !== null);
+
+  const [resources, visibleEntityIds] = await Promise.all([
+    loadResources(storage.resources, input.orgId, resourceIds),
+    loadVisibleEntityIds(input, [...accumulated.values()]),
+  ]);
+
+  const external: EntityMention[] = [];
+  const entities: EntityMention[] = [];
+
+  for (const entry of accumulated.values()) {
+    if (entry.ref.kind === 'external') {
+      const row =
+        entry.externalResourceId === null ? undefined : resources.get(entry.externalResourceId);
+      if (row !== undefined) external.push(toExternalMention(entry, row));
+      continue;
+    }
+    if (!visibleEntityIds.has(entry.ref.entityId)) continue;
+    entities.push({
+      ref: entry.ref,
+      key: entry.key,
+      label: entry.label,
+      href: entityMentionHref(input.orgId, entry.ref),
+      fields: [...entry.fields],
+      occurrences: entry.occurrences,
+      resource: null,
+    });
+  }
+
+  return { external, entities };
+}
+
+/**
+ * Collapse the stored edges into one entry per distinct reference.
+ *
+ * @remarks
+ * Two chips naming the same task are one reference that appears twice, so the fields they sit in
+ * and the number of occurrences accumulate onto a single entry.
+ *
+ * @param rows - The stored edges for one subject.
+ * @returns The accumulated entries, keyed by reference.
+ */
+function accumulateRows(rows: readonly StoredMention[]): ReadonlyMap<string, Accumulated> {
   const accumulated = new Map<string, Accumulated>();
   for (const row of rows) {
-    const ref: MentionRef =
-      row.targetKind === 'entity' && row.targetEntityKind !== null && row.targetEntityId !== null
-        ? { kind: 'entity', entityKind: row.targetEntityKind, entityId: row.targetEntityId }
-        : { kind: 'external', url: '' };
+    const ref = refOfRow(row);
     // An external edge carries its URL on the resource row, not on the edge itself.
     if (ref.kind === 'external' && row.externalResourceId === null) continue;
 
@@ -101,50 +149,39 @@ export async function loadEntityMentions(
     existing.fields.add(row.field);
     existing.occurrences += 1;
   }
+  return accumulated;
+}
 
-  const resourceIds = [...accumulated.values()]
-    .map((entry) => entry.externalResourceId)
-    .filter((id): id is string => id !== null);
-
-  const [resources, visibleEntityIds] = await Promise.all([
-    loadResources(storage.resources, input.orgId, resourceIds),
-    loadVisibleEntityIds(input, [...accumulated.values()]),
-  ]);
-
-  const external: EntityMention[] = [];
-  const entities: EntityMention[] = [];
-
-  for (const entry of accumulated.values()) {
-    const fields = [...entry.fields];
-    if (entry.ref.kind === 'external') {
-      const row =
-        entry.externalResourceId === null ? undefined : resources.get(entry.externalResourceId);
-      if (row === undefined) continue;
-      external.push({
-        ref: { kind: 'external', url: row.canonicalUrl },
-        key: entry.key,
-        label: entry.label,
-        href: row.canonicalUrl,
-        fields,
-        occurrences: entry.occurrences,
-        resource: toExternalResourceOut(row),
-      });
-      continue;
-    }
-
-    if (!visibleEntityIds.has(entry.ref.entityId)) continue;
-    entities.push({
-      ref: entry.ref,
-      key: entry.key,
-      label: entry.label,
-      href: entityMentionHref(input.orgId, entry.ref),
-      fields,
-      occurrences: entry.occurrences,
-      resource: null,
-    });
+/**
+ * Read one stored edge's target.
+ *
+ * @param row - The stored edge.
+ * @returns The reference it points at; an edge missing its entity target reads as external.
+ */
+function refOfRow(row: StoredMention): MentionRef {
+  if (row.targetKind === 'entity' && row.targetEntityKind !== null && row.targetEntityId !== null) {
+    return { kind: 'entity', entityKind: row.targetEntityKind, entityId: row.targetEntityId };
   }
+  return { kind: 'external', url: '' };
+}
 
-  return { external, entities };
+/**
+ * Render one accumulated external reference for the Resources tab.
+ *
+ * @param entry - The accumulated entry.
+ * @param row - The resource row its URL and metadata live on.
+ * @returns The reference.
+ */
+function toExternalMention(entry: Accumulated, row: StoredResource): EntityMention {
+  return {
+    ref: { kind: 'external', url: row.canonicalUrl },
+    key: entry.key,
+    label: entry.label,
+    href: row.canonicalUrl,
+    fields: [...entry.fields],
+    occurrences: entry.occurrences,
+    resource: toExternalResourceOut(row),
+  };
 }
 
 /** Narrow referenced Docket entities to the ones this caller may see. */

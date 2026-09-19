@@ -157,10 +157,35 @@ function buildRenderSignal(
   }
 }
 
-/** The `signal` and `signalMetadata` fields Linear's activity-create input expects. */
-interface LinearPublishSignal {
-  readonly signal?: 'auth' | 'select';
-  readonly signalMetadata?: Record<string, unknown>;
+/**
+ * The `signal` and `signalMetadata` fields Linear's activity-create input expects.
+ *
+ * @remarks
+ * A union of "both present" and "neither present" rather than two optional properties, because
+ * `exactOptionalPropertyTypes` makes an absent optional property and an explicit `undefined`
+ * different things, and the activity-create input accepts only the former.
+ */
+type LinearPublishSignal =
+  | Record<string, never>
+  | {
+      readonly signal: 'select';
+      readonly signalMetadata: LinearSelectMetadata;
+    }
+  | {
+      readonly signal: 'auth';
+      readonly signalMetadata: LinearAuthMetadata;
+    };
+
+/** Linear's `select` signal metadata: the options the person picks from. */
+interface LinearSelectMetadata {
+  readonly options: readonly { readonly label?: string; readonly value: string }[];
+}
+
+/** Linear's `auth` signal metadata: where to authenticate, and as whom. */
+interface LinearAuthMetadata {
+  readonly url: string;
+  readonly userId?: string;
+  readonly providerName?: string;
 }
 
 /**

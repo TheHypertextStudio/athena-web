@@ -12,6 +12,7 @@
  * mirrors the search index sweep so the two behave alike under a failing dependency.
  */
 import { and, eq, isNull, lte, or, sql } from 'drizzle-orm';
+import type * as dbSchema from '@docket/db';
 import type { Unfurler } from '@docket/integrations';
 import { resourceProviderById } from '@docket/connections/resource-provider-contract';
 
@@ -41,23 +42,29 @@ export interface UnfurlSweepResult {
   readonly failed: number;
 }
 
-/**
- * Claim and resolve a batch of pending resources.
- *
- * @param unfurler - The outbound boundary; the mock double in local and test runs.
- * @param now - The clock, injected so tests need no real timers.
- * @returns What the pass did.
- */
-export async function sweepResourceUnfurls(
-  unfurler: Unfurler,
-  now: Date = new Date(),
-): Promise<UnfurlSweepResult> {
-  const schema = await import('@docket/db');
-  const leaseToken = `lease_${now.getTime()}_${Math.floor(now.getTime() % 100000)}`;
+/** The database module, loaded lazily so importing this file does not open a connection. */
+type UnfurlSchema = typeof dbSchema;
 
-  // Claim in one statement so two workers cannot take the same row: the UPDATE's WHERE re-checks
-  // the lease, and only rows this statement actually changed come back.
-  const claimed = await schema.db
+/** One claimed resource, as the claiming UPDATE returns it. */
+type ClaimedResource = Awaited<ReturnType<typeof claimPendingResources>>[number];
+
+/** What one claimed row settled on. */
+type UnfurlDisposition = 'resolved' | 'deferred' | 'failed';
+
+/**
+ * Take a batch of pending resources under lease.
+ *
+ * @remarks
+ * One statement, so two workers cannot take the same row: the UPDATE's WHERE re-checks the lease,
+ * and only rows this statement actually changed come back.
+ *
+ * @param schema - The loaded database module.
+ * @param now - The clock.
+ * @param leaseToken - This worker's lease token.
+ * @returns The rows this worker claimed.
+ */
+async function claimPendingResources(schema: UnfurlSchema, now: Date, leaseToken: string) {
+  return schema.db
     .update(schema.externalResource)
     .set({
       unfurlLeaseToken: leaseToken,
@@ -81,68 +88,130 @@ export async function sweepResourceUnfurls(
       ),
     )
     .returning();
+}
 
-  let resolved = 0;
-  let failed = 0;
+/**
+ * Write back the outcome of one failed or unsupported unfurl.
+ *
+ * @param schema - The loaded database module.
+ * @param row - The claimed resource.
+ * @param outcome - The unfurler's non-ok answer.
+ * @param now - The clock.
+ */
+async function recordUnfurlFailure(
+  schema: UnfurlSchema,
+  row: ClaimedResource,
+  outcome: Exclude<Awaited<ReturnType<Unfurler['unfurl']>>, { status: 'ok' }>,
+  now: Date,
+): Promise<void> {
+  const exhausted = outcome.status === 'unsupported' || row.unfurlAttempts >= MAX_ATTEMPTS;
+  await schema.db
+    .update(schema.externalResource)
+    .set({
+      unfurlStatus: unfurlFailureStatus(outcome.status, exhausted),
+      unfurlError: outcome.status === 'failed' ? outcome.reason : 'unsupported',
+      unfurlAfter: new Date(now.getTime() + backoffMs(row.unfurlAttempts)),
+      unfurlLeaseToken: null,
+      unfurlLeaseExpiresAt: null,
+    })
+    .where(eq(schema.externalResource.id, row.id));
+}
 
-  for (const row of claimed) {
-    // A source that needs a credential is resolved through its own API, never fetched over plain
-    // HTTP: an unauthenticated GET of a Drive, SharePoint, or Notion URL returns that product's
-    // sign-in page, which would title every such file "Sign in". The registry declares which
-    // sources those are, so this stays true as sources are added.
-    const definition = row.provider === 'web' ? undefined : resourceProviderById(row.provider);
-    if (definition?.resolution === 'credentialed') {
-      await schema.db
-        .update(schema.externalResource)
-        .set({
-          unfurlStatus: 'requires_connection',
-          unfurlLeaseToken: null,
-          unfurlLeaseExpiresAt: null,
-          fetchedAt: now,
-        })
-        .where(eq(schema.externalResource.id, row.id));
-      continue;
-    }
+/**
+ * The status a non-ok unfurl leaves the row in.
+ *
+ * @param status - The unfurler's answer.
+ * @param exhausted - Whether this row has run out of attempts.
+ * @returns The status to write.
+ */
+function unfurlFailureStatus(
+  status: 'failed' | 'unsupported',
+  exhausted: boolean,
+): 'unsupported' | 'failed' | 'pending' {
+  if (status === 'unsupported') return 'unsupported';
+  return exhausted ? 'failed' : 'pending';
+}
 
-    const outcome = await unfurler.unfurl(row.canonicalUrl);
-    if (outcome.status === 'ok') {
-      resolved += 1;
-      await schema.db
-        .update(schema.externalResource)
-        .set({
-          unfurlStatus: 'ok',
-          title: outcome.metadata.title ?? null,
-          description: outcome.metadata.description ?? null,
-          siteName: outcome.metadata.siteName ?? null,
-          iconUrl: outcome.metadata.iconUrl ?? null,
-          thumbnailUrl: outcome.metadata.thumbnailUrl ?? null,
-          resourceType: outcome.metadata.resourceType,
-          unfurlError: null,
-          unfurlLeaseToken: null,
-          unfurlLeaseExpiresAt: null,
-          fetchedAt: now,
-          staleAfter: new Date(now.getTime() + FRESH_MS),
-        })
-        .where(eq(schema.externalResource.id, row.id));
-      continue;
-    }
-
-    failed += 1;
-    const exhausted = outcome.status === 'unsupported' || row.unfurlAttempts >= MAX_ATTEMPTS;
+/**
+ * Resolve one claimed resource and write back what happened.
+ *
+ * @param schema - The loaded database module.
+ * @param unfurler - The outbound boundary.
+ * @param row - The claimed resource.
+ * @param now - The clock.
+ * @returns Which counter this row belongs to.
+ */
+async function resolveClaimedResource(
+  schema: UnfurlSchema,
+  unfurler: Unfurler,
+  row: ClaimedResource,
+  now: Date,
+): Promise<UnfurlDisposition> {
+  // A source that needs a credential is resolved through its own API, never fetched over plain
+  // HTTP: an unauthenticated GET of a Drive, SharePoint, or Notion URL returns that product's
+  // sign-in page, which would title every such file "Sign in". The registry declares which
+  // sources those are, so this stays true as sources are added.
+  const definition = row.provider === 'web' ? undefined : resourceProviderById(row.provider);
+  if (definition?.resolution === 'credentialed') {
     await schema.db
       .update(schema.externalResource)
       .set({
-        unfurlStatus: exhausted
-          ? outcome.status === 'unsupported'
-            ? 'unsupported'
-            : 'failed'
-          : 'pending',
-        unfurlError: outcome.status === 'failed' ? outcome.reason : 'unsupported',
-        unfurlAfter: new Date(now.getTime() + backoffMs(row.unfurlAttempts)),
+        unfurlStatus: 'requires_connection',
         unfurlLeaseToken: null,
         unfurlLeaseExpiresAt: null,
+        fetchedAt: now,
       })
       .where(eq(schema.externalResource.id, row.id));
+    return 'deferred';
+  }
+
+  const outcome = await unfurler.unfurl(row.canonicalUrl);
+  if (outcome.status !== 'ok') {
+    await recordUnfurlFailure(schema, row, outcome, now);
+    return 'failed';
+  }
+
+  await schema.db
+    .update(schema.externalResource)
+    .set({
+      unfurlStatus: 'ok',
+      title: outcome.metadata.title ?? null,
+      description: outcome.metadata.description ?? null,
+      siteName: outcome.metadata.siteName ?? null,
+      iconUrl: outcome.metadata.iconUrl ?? null,
+      thumbnailUrl: outcome.metadata.thumbnailUrl ?? null,
+      resourceType: outcome.metadata.resourceType,
+      unfurlError: null,
+      unfurlLeaseToken: null,
+      unfurlLeaseExpiresAt: null,
+      fetchedAt: now,
+      staleAfter: new Date(now.getTime() + FRESH_MS),
+    })
+    .where(eq(schema.externalResource.id, row.id));
+  return 'resolved';
+}
+
+/**
+ * Claim and resolve a batch of pending resources.
+ *
+ * @param unfurler - The outbound boundary; the mock double in local and test runs.
+ * @param now - The clock, injected so tests need no real timers.
+ * @returns What the pass did.
+ */
+export async function sweepResourceUnfurls(
+  unfurler: Unfurler,
+  now: Date = new Date(),
+): Promise<UnfurlSweepResult> {
+  const schema = await import('@docket/db');
+  const leaseToken = `lease_${now.getTime()}_${Math.floor(now.getTime() % 100000)}`;
+  const claimed = await claimPendingResources(schema, now, leaseToken);
+
+  let resolved = 0;
+  let failed = 0;
+  for (const row of claimed) {
+    const disposition = await resolveClaimedResource(schema, unfurler, row, now);
+    if (disposition === 'resolved') resolved += 1;
+    if (disposition === 'failed') failed += 1;
   }
 
   // Every claimed row was rewritten by one of the branches above — resolved, deferred to a

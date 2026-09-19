@@ -38,8 +38,17 @@ function lineOf(sf: ts.SourceFile, node: ts.Node): number {
   return sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
 }
 
+/** A top-level statement that carries its own name, and so can be reported by that name. */
+type NamedStatement =
+  | ts.FunctionDeclaration
+  | ts.ClassDeclaration
+  | ts.InterfaceDeclaration
+  | ts.TypeAliasDeclaration
+  | ts.EnumDeclaration
+  | ts.ModuleDeclaration;
+
 /** Check if a node is a declaration with a name property. */
-function isNamedDeclaration(node: ts.Statement): boolean {
+function isNamedDeclaration(node: ts.Statement): node is NamedStatement {
   return (
     ts.isFunctionDeclaration(node) ||
     ts.isClassDeclaration(node) ||
@@ -66,8 +75,7 @@ function collect(
   }
 
   if (isNamedDeclaration(node)) {
-    const decl = node as ts.NamedDeclaration;
-    const name = decl.name ? decl.name.getText(sf) : '(default)';
+    const name = node.name ? node.name.getText(sf) : '(default)';
     out.push({ file, name, kind: ts.SyntaxKind[node.kind], line: lineOf(sf, node) });
   }
 }

@@ -38,7 +38,9 @@ import { CAPABILITY_RANK, satisfies, type Capability } from '@docket/authz';
 import {
   ObjectCommandRequest,
   ObjectCommandResult,
+  type ObjectCommandReplayIn,
   type ObjectCommandRequest as ObjectCommandRequestValue,
+  type ObjectCommandResult as ObjectCommandResultValue,
 } from '../contracts/object-command';
 import { actor, db, idempotencyKey, label } from '@docket/db';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
@@ -238,18 +240,39 @@ function parseObjectCommandRequest(body: string): ObjectCommandRequestValue | nu
   }
 }
 
-async function assertCurrentObjectCommandReplayAccess(
-  userId: string,
-  path: string,
-  organizationId: string | null,
-  requestBody: string,
-  responseBody: unknown,
-): Promise<void> {
-  const parsed = ObjectCommandResult.safeParse(responseBody);
-  const pathOrganizationId = /^\/v1\/orgs\/([^/]+)\/object-commands$/u.exec(path)?.[1] ?? null;
-  if (!parsed.success || organizationId === null || pathOrganizationId !== organizationId) {
-    throw new NotFoundError('Object command result not found');
-  }
+/** Accumulates one required capability per resource, keeping the strongest asked for. */
+interface RequirementCollector {
+  /** Record that `ref` must be reachable at `capability`. */
+  add(ref: ResourceAccessRef, capability: Capability): void;
+  /** Every distinct requirement gathered so far. */
+  values(): readonly ReplayResourceRequirement[];
+}
+
+/** Build a fresh {@link RequirementCollector}. */
+function createRequirementCollector(): RequirementCollector {
+  const requirements = new Map<string, ReplayResourceRequirement>();
+  return {
+    add(ref, capability) {
+      const key = resourceAccessKey(ref);
+      const current = requirements.get(key);
+      if (
+        current === undefined ||
+        CAPABILITY_RANK[capability] > CAPABILITY_RANK[current.capability]
+      )
+        requirements.set(key, { ref, capability });
+    },
+    values: () => [...requirements.values()],
+  };
+}
+
+/**
+ * Refuse a replay from anyone who is not an active human member of the workspace.
+ *
+ * @param userId - The replaying user.
+ * @param organizationId - The workspace the receipt belongs to.
+ * @throws {NotFoundError} When they are not a member, which is indistinguishable from no receipt.
+ */
+async function assertReplayMembership(userId: string, organizationId: string): Promise<void> {
   const memberships = await db
     .select({ id: actor.id })
     .from(actor)
@@ -264,19 +287,22 @@ async function assertCurrentObjectCommandReplayAccess(
     )
     .limit(1);
   if (!memberships[0]) throw new NotFoundError('Object command result not found');
+}
 
-  const receipt = parsed.data.receipt;
-  const requirements = new Map<string, ReplayResourceRequirement>();
-  const addRequirement = (ref: ResourceAccessRef, capability: Capability): void => {
-    const key = resourceAccessKey(ref);
-    const current = requirements.get(key);
-    if (
-      current === undefined ||
-      CAPABILITY_RANK[capability] > CAPABILITY_RANK[current.capability]
-    ) {
-      requirements.set(key, { ref, capability });
-    }
-  };
+/**
+ * Collect what the stored receipt says the replay touched.
+ *
+ * @param into - The collector to record into.
+ * @param organizationId - The workspace the receipt belongs to.
+ * @param result - The stored command result.
+ * @returns The label ids the receipt referenced, checked separately for existence.
+ */
+function collectReceiptRequirements(
+  into: RequirementCollector,
+  organizationId: string,
+  result: ObjectCommandResultValue,
+): string[] {
+  const receipt = result.receipt;
   const objectCapabilityById = new Map<string, Capability>();
   for (const entry of receipt.entries) {
     const required = receiptObjectCapability(
@@ -289,109 +315,150 @@ async function assertCurrentObjectCommandReplayAccess(
       objectCapabilityById.set(entry.objectId, required);
     }
   }
-  for (const id of [
-    ...parsed.data.appliedIds,
-    ...parsed.data.conflictingIds,
-    ...parsed.data.deniedIds,
-  ]) {
-    addRequirement(
+  for (const id of [...result.appliedIds, ...result.conflictingIds, ...result.deniedIds]) {
+    into.add(
       { organizationId, kind: receipt.objectKind, id },
       objectCapabilityById.get(id) ?? receiptObjectCapability(receipt.objectKind, receipt.action),
     );
   }
+
   const labelIds: string[] = [];
   for (const entry of receipt.entries) {
-    const objectRef: ResourceAccessRef = {
-      organizationId,
-      kind: receipt.objectKind,
-      id: entry.objectId,
-    };
-    addRequirement(
-      objectRef,
+    into.add(
+      { organizationId, kind: receipt.objectKind, id: entry.objectId },
       receiptObjectCapability(
         receipt.objectKind,
         receipt.action,
         entry.kind === 'object' ? entry.property : undefined,
       ),
     );
+    const labelId = collectReceiptEntryTarget(into, organizationId, receipt.objectKind, entry);
+    if (labelId !== null) labelIds.push(labelId);
+  }
+  return labelIds;
+}
+
+/**
+ * Collect what one receipt entry pointed at, beyond the object it changed.
+ *
+ * @param into - The collector to record into.
+ * @param organizationId - The workspace the receipt belongs to.
+ * @param objectKind - The kind of object the receipt acted on.
+ * @param entry - The receipt entry.
+ * @returns A label id to check separately, or `null` when the entry named no label.
+ */
+function collectReceiptEntryTarget(
+  into: RequirementCollector,
+  organizationId: string,
+  objectKind: 'task' | 'project',
+  entry: ObjectCommandResultValue['receipt']['entries'][number],
+): string | null {
+  if (entry.kind === 'object') {
+    const referenceKind = receiptReferenceKind(objectKind, entry.property);
+    if (referenceKind === null) return null;
+    for (const value of [entry.before, entry.after]) {
+      if (typeof value === 'string') {
+        into.add({ organizationId, kind: referenceKind, id: value }, 'view');
+      }
+    }
+    return null;
+  }
+  if (entry.relation === 'dependency') {
+    into.add({ organizationId, kind: objectKind, id: entry.relatedId }, 'contribute');
+    return null;
+  }
+  if (entry.relation === 'initiative') {
+    into.add({ organizationId, kind: 'initiative', id: entry.relatedId }, 'view');
+    return null;
+  }
+  return entry.relatedId;
+}
+
+/**
+ * Collect what an undo/redo request would write.
+ *
+ * @param into - The collector to record into.
+ * @param organizationId - The workspace the receipt belongs to.
+ * @param request - The replayed undo or redo request.
+ */
+function collectUndoRequirements(
+  into: RequirementCollector,
+  organizationId: string,
+  request: ObjectCommandReplayIn,
+): void {
+  const { objectKind, action, entries } = request.receipt;
+  for (const entry of entries) {
+    into.add(
+      { organizationId, kind: objectKind, id: entry.objectId },
+      receiptObjectCapability(
+        objectKind,
+        action,
+        entry.kind === 'object' ? entry.property : undefined,
+      ),
+    );
+    if (entry.kind === 'relation' && entry.relation === 'dependency') {
+      into.add({ organizationId, kind: objectKind, id: entry.relatedId }, 'contribute');
+    }
     if (entry.kind === 'object') {
-      const referenceKind = receiptReferenceKind(receipt.objectKind, entry.property);
-      if (referenceKind !== null) {
-        for (const value of [entry.before, entry.after]) {
-          if (typeof value === 'string') {
-            addRequirement({ organizationId, kind: referenceKind, id: value }, 'view');
-          }
-        }
-      }
-      continue;
-    }
-    if (entry.relation === 'dependency') {
-      addRequirement(
-        { organizationId, kind: receipt.objectKind, id: entry.relatedId },
-        'contribute',
-      );
-      continue;
-    }
-    if (entry.relation === 'initiative') {
-      addRequirement({ organizationId, kind: 'initiative', id: entry.relatedId }, 'view');
-      continue;
-    }
-    labelIds.push(entry.relatedId);
-  }
-
-  const request = parseObjectCommandRequest(requestBody);
-  if (request && 'direction' in request) {
-    for (const entry of request.receipt.entries) {
-      addRequirement(
-        { organizationId, kind: request.receipt.objectKind, id: entry.objectId },
-        receiptObjectCapability(
-          request.receipt.objectKind,
-          request.receipt.action,
-          entry.kind === 'object' ? entry.property : undefined,
-        ),
-      );
-      if (entry.kind === 'relation' && entry.relation === 'dependency') {
-        addRequirement(
-          { organizationId, kind: request.receipt.objectKind, id: entry.relatedId },
-          'contribute',
-        );
-      }
-      if (entry.kind === 'object') {
-        const referenceKind = receiptReferenceKind(request.receipt.objectKind, entry.property);
-        const target = request.direction === 'undo' ? entry.before : entry.after;
-        if (referenceKind !== null && typeof target === 'string') {
-          addRequirement({ organizationId, kind: referenceKind, id: target }, 'contribute');
-        }
-      }
-    }
-  } else if (request) {
-    const required = forwardObjectCapability(request);
-    for (const id of request.objectIds) {
-      addRequirement({ organizationId, kind: request.objectKind, id }, required);
-    }
-    const operation = request.operation;
-    if (operation.type === 'add_dependency' || operation.type === 'remove_dependency') {
-      for (const id of [operation.blockingId, operation.blockedId]) {
-        addRequirement({ organizationId, kind: request.objectKind, id }, 'contribute');
-      }
-    }
-    if (operation.type === 'change_parent' && operation.parentId !== null) {
-      addRequirement({ organizationId, kind: 'task', id: operation.parentId }, 'contribute');
-    }
-    if (operation.type === 'replace_property' && typeof operation.value === 'string') {
-      const referenceKind = receiptReferenceKind(request.objectKind, operation.property);
-      if (referenceKind !== null) {
-        addRequirement({ organizationId, kind: referenceKind, id: operation.value }, 'contribute');
+      const referenceKind = receiptReferenceKind(objectKind, entry.property);
+      const target = request.direction === 'undo' ? entry.before : entry.after;
+      if (referenceKind !== null && typeof target === 'string') {
+        into.add({ organizationId, kind: referenceKind, id: target }, 'contribute');
       }
     }
   }
+}
 
-  const uniqueRequirements = [...requirements.values()];
+/**
+ * Collect what a forward command request would write.
+ *
+ * @param into - The collector to record into.
+ * @param organizationId - The workspace the command targets.
+ * @param request - The replayed forward request.
+ */
+function collectForwardRequirements(
+  into: RequirementCollector,
+  organizationId: string,
+  request: Extract<ObjectCommandRequestValue, { objectKind: 'task' | 'project' }>,
+): void {
+  const required = forwardObjectCapability(request);
+  for (const id of request.objectIds) {
+    into.add({ organizationId, kind: request.objectKind, id }, required);
+  }
+  const operation = request.operation;
+  if (operation.type === 'add_dependency' || operation.type === 'remove_dependency') {
+    for (const id of [operation.blockingId, operation.blockedId]) {
+      into.add({ organizationId, kind: request.objectKind, id }, 'contribute');
+    }
+  }
+  if (operation.type === 'change_parent' && operation.parentId !== null) {
+    into.add({ organizationId, kind: 'task', id: operation.parentId }, 'contribute');
+  }
+  if (operation.type === 'replace_property' && typeof operation.value === 'string') {
+    const referenceKind = receiptReferenceKind(request.objectKind, operation.property);
+    if (referenceKind !== null) {
+      into.add({ organizationId, kind: referenceKind, id: operation.value }, 'contribute');
+    }
+  }
+}
+
+/**
+ * Check every collected requirement against the replaying user's current access.
+ *
+ * @param userId - The replaying user.
+ * @param requirements - The resources the replay would touch.
+ * @throws {NotFoundError} When any resource is no longer visible to them.
+ * @throws {CapabilityError} When a visible resource is below the capability the replay needs.
+ */
+async function assertRequirementsSatisfied(
+  userId: string,
+  requirements: readonly ReplayResourceRequirement[],
+): Promise<void> {
   const accessByResource = await resolveResourceAccess(
     userId,
-    uniqueRequirements.map(({ ref }) => ref),
+    requirements.map(({ ref }) => ref),
   );
-  for (const requirement of uniqueRequirements) {
+  for (const requirement of requirements) {
     const access = accessByResource.get(resourceAccessKey(requirement.ref));
     if (!access?.canView || access.effectiveCapability === null) {
       throw new NotFoundError('Object command result not found');
@@ -400,6 +467,19 @@ async function assertCurrentObjectCommandReplayAccess(
       throw new CapabilityError();
     }
   }
+}
+
+/**
+ * Refuse a replay whose receipt names a label the workspace no longer has.
+ *
+ * @param organizationId - The workspace the receipt belongs to.
+ * @param labelIds - The label ids the receipt referenced.
+ * @throws {NotFoundError} When any of them is gone.
+ */
+async function assertLabelsStillExist(
+  organizationId: string,
+  labelIds: readonly string[],
+): Promise<void> {
   const uniqueLabelIds = [...new Set(labelIds)];
   if (uniqueLabelIds.length === 0) return;
   const currentLabels = await db
@@ -409,6 +489,34 @@ async function assertCurrentObjectCommandReplayAccess(
   if (currentLabels.length !== uniqueLabelIds.length) {
     throw new NotFoundError('Object command result not found');
   }
+}
+
+async function assertCurrentObjectCommandReplayAccess(
+  userId: string,
+  path: string,
+  organizationId: string | null,
+  requestBody: string,
+  responseBody: unknown,
+): Promise<void> {
+  const parsed = ObjectCommandResult.safeParse(responseBody);
+  const pathOrganizationId = /^\/v1\/orgs\/([^/]+)\/object-commands$/u.exec(path)?.[1] ?? null;
+  if (!parsed.success || organizationId === null || pathOrganizationId !== organizationId) {
+    throw new NotFoundError('Object command result not found');
+  }
+  await assertReplayMembership(userId, organizationId);
+
+  const requirements = createRequirementCollector();
+  const labelIds = collectReceiptRequirements(requirements, organizationId, parsed.data);
+
+  const request = parseObjectCommandRequest(requestBody);
+  if (request && 'direction' in request) {
+    collectUndoRequirements(requirements, organizationId, request);
+  } else if (request) {
+    collectForwardRequirements(requirements, organizationId, request);
+  }
+
+  await assertRequirementsSatisfied(userId, requirements.values());
+  await assertLabelsStillExist(organizationId, labelIds);
 }
 
 /**
@@ -425,6 +533,125 @@ async function assertCurrentObjectCommandReplayAccess(
  * A process death can leave a row `in_progress` until the first request after its five-minute lease
  * conditionally removes and reclaims it.
  */
+/** What one keyed request is claiming, gathered before the claim loop runs. */
+interface IdempotencyClaimInput {
+  readonly userId: string;
+  readonly key: string;
+  readonly method: string;
+  readonly path: string;
+  readonly requestBody: string;
+  readonly hash: string;
+}
+
+/** Either this request now owns the key, or an earlier one already answered it. */
+type IdempotencyClaimOutcome =
+  | { readonly kind: 'claimed'; readonly claimExpiresAt: Date; readonly completedExpiresAt: Date }
+  | { readonly kind: 'replay'; readonly status: ContentfulStatusCode; readonly body: unknown };
+
+/**
+ * Take a durable claim on the key, or resolve the recorded response to replay.
+ *
+ * @remarks
+ * The key is claimed with an `ON CONFLICT DO NOTHING` insert, which is what makes two simultaneous
+ * retries safe. The loop exists because a competing reclaimer can remove an expired row between
+ * this request's failed insert and its read, and the request must never execute without owning a
+ * durable claim.
+ *
+ * @param c - The request context, used to set `Retry-After` on an in-flight refusal.
+ * @param input - The key and the fingerprinted request claiming it.
+ * @returns The claim, or the response to replay.
+ * @throws {IdempotencyConflictError} When the key was used for a different request.
+ * @throws {ConflictError} When an earlier request with this key is still in flight.
+ */
+async function claimIdempotencyKey(
+  c: Parameters<MiddlewareHandler<AppEnv>>[0],
+  input: IdempotencyClaimInput,
+): Promise<IdempotencyClaimOutcome> {
+  const { userId, key, method, path, requestBody, hash } = input;
+  for (;;) {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + IN_PROGRESS_LEASE_MS);
+    const completionDeadline = new Date(now.getTime() + retentionMs(method, path));
+    const claimed = await db
+      .insert(idempotencyKey)
+      .values({
+        userId,
+        key,
+        method,
+        path,
+        requestHash: hash,
+        status: 'in_progress',
+        expiresAt,
+        createdAt: now,
+      })
+      .onConflictDoNothing()
+      .returning({ key: idempotencyKey.key });
+    if (claimed.length > 0) {
+      return { kind: 'claimed', claimExpiresAt: expiresAt, completedExpiresAt: completionDeadline };
+    }
+
+    const rows = await db
+      .select()
+      .from(idempotencyKey)
+      .where(and(eq(idempotencyKey.userId, userId), eq(idempotencyKey.key, key)))
+      .limit(1);
+    const prior = rows[0];
+    if (!prior) continue;
+    if (effectiveExpiry(prior) <= now) {
+      await reclaimExpiredKey(userId, key, prior);
+      continue;
+    }
+    if (prior.requestHash !== hash) throw new IdempotencyConflictError();
+    if (prior.status === 'in_progress' || prior.responseStatus === null) {
+      c.header('Retry-After', String(IN_PROGRESS_RETRY_AFTER_SECONDS));
+      throw new ConflictError('An earlier request with this key is still in flight');
+    }
+    if (isReplayOwnerRequest(method, path)) {
+      await assertCurrentObjectCommandReplayAccess(
+        userId,
+        path,
+        prior.organizationId,
+        requestBody,
+        prior.responseBody,
+      );
+    }
+    return {
+      kind: 'replay',
+      status: prior.responseStatus as ContentfulStatusCode,
+      body: prior.responseBody,
+    };
+  }
+}
+
+/**
+ * Remove an expired key row so the next insert can reclaim it.
+ *
+ * @remarks
+ * The expiry predicate is part of the delete. A competing request may already have replaced this
+ * row with a fresh claim, and this stale reclaimer must not delete that new owner.
+ *
+ * @param userId - The key's owner.
+ * @param key - The idempotency key.
+ * @param prior - The expired row, whose exact identity scopes the delete.
+ */
+async function reclaimExpiredKey(
+  userId: string,
+  key: string,
+  prior: typeof idempotencyKey.$inferSelect,
+): Promise<void> {
+  await db
+    .delete(idempotencyKey)
+    .where(
+      and(
+        eq(idempotencyKey.userId, userId),
+        eq(idempotencyKey.key, key),
+        eq(idempotencyKey.status, prior.status),
+        eq(idempotencyKey.expiresAt, prior.expiresAt),
+        eq(idempotencyKey.createdAt, prior.createdAt),
+      ),
+    );
+}
+
 export const idempotency: MiddlewareHandler<AppEnv> = async (c, next) => {
   const key = c.req.header('Idempotency-Key');
   const userId = c.get('session')?.user.id;
@@ -436,71 +663,15 @@ export const idempotency: MiddlewareHandler<AppEnv> = async (c, next) => {
   const requestBody = await c.req.raw.clone().text();
   const hash = fingerprint(c.req.method, path, requestBody);
 
-  let claimExpiresAt: Date;
-  let completedExpiresAt: Date;
-  for (;;) {
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + IN_PROGRESS_LEASE_MS);
-    const completionDeadline = new Date(now.getTime() + retentionMs(c.req.method, path));
-    const claimed = await db
-      .insert(idempotencyKey)
-      .values({
-        userId,
-        key,
-        method: c.req.method,
-        path,
-        requestHash: hash,
-        status: 'in_progress',
-        expiresAt,
-        createdAt: now,
-      })
-      .onConflictDoNothing()
-      .returning({ key: idempotencyKey.key });
-    if (claimed.length > 0) {
-      claimExpiresAt = expiresAt;
-      completedExpiresAt = completionDeadline;
-      break;
-    }
-
-    const rows = await db
-      .select()
-      .from(idempotencyKey)
-      .where(and(eq(idempotencyKey.userId, userId), eq(idempotencyKey.key, key)))
-      .limit(1);
-    const prior = rows[0];
-    // Another reclaimer can remove the expired row between our failed insert and read. Loop back
-    // through the insert so this request never executes without owning a durable claim.
-    if (!prior) continue;
-    if (effectiveExpiry(prior) <= now) {
-      // The expiry predicate is part of the delete. A competing request may already have replaced
-      // this row with a fresh claim, and this stale reclaimer must not delete that new owner.
-      await db
-        .delete(idempotencyKey)
-        .where(
-          and(
-            eq(idempotencyKey.userId, userId),
-            eq(idempotencyKey.key, key),
-            eq(idempotencyKey.status, prior.status),
-            eq(idempotencyKey.expiresAt, prior.expiresAt),
-            eq(idempotencyKey.createdAt, prior.createdAt),
-          ),
-        );
-      continue;
-    }
-    if (prior.requestHash !== hash) throw new IdempotencyConflictError();
-    if (prior.status === 'in_progress' || prior.responseStatus === null) {
-      c.header('Retry-After', String(IN_PROGRESS_RETRY_AFTER_SECONDS));
-      throw new ConflictError('An earlier request with this key is still in flight');
-    }
-    if (isReplayOwnerRequest(c.req.method, path)) {
-      await assertCurrentObjectCommandReplayAccess(
-        userId,
-        path,
-        prior.organizationId,
-        requestBody,
-        prior.responseBody,
-      );
-    }
+  const outcome = await claimIdempotencyKey(c, {
+    userId,
+    key,
+    method: c.req.method,
+    path,
+    requestBody,
+    hash,
+  });
+  if (outcome.kind === 'replay') {
     c.header(REPLAY_HEADER, 'true');
     // Only the status and body are recorded, so a replayed `201` carries no `Location`. It is
     // tempting to rebuild one from the request path and the body's `id`, and that is wrong:
@@ -510,9 +681,10 @@ export const idempotency: MiddlewareHandler<AppEnv> = async (c, next) => {
     // matches no route, and none at all for a body without a top-level `id`. An absent header is
     // a smaller lie than a fabricated one; recording the real one needs a column this table has
     // not got.
-    return c.json(prior.responseBody, prior.responseStatus as ContentfulStatusCode);
+    return c.json(outcome.body, outcome.status);
   }
 
+  const { claimExpiresAt, completedExpiresAt } = outcome;
   c.set('idempotencyClaim', {
     userId,
     key,

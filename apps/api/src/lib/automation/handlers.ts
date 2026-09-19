@@ -21,7 +21,7 @@ import { acceptSuggestion } from '../email-to-task/accept';
 import { emitEvent } from '../../routes/event-emit';
 import { enqueueSearchUpsert } from '../../search/write-through';
 import type { ActionContext } from './engine';
-import { createRegistry, type Registry } from './registry';
+import { createRegistry, type ActionHandler, type Registry } from './registry';
 import { eventOf, taskOf } from './handler-context';
 import { registerCycleAssignAction } from './handlers-cycle';
 import { RouteTaskParams, routeInboundItemToTask } from './route-task';
@@ -143,31 +143,16 @@ async function userIdOfActor(orgId: string, actorId: string): Promise<string | u
 }
 
 /**
- * Build the action-handler registry.
+ * `process.start` — run an existing manual/event process series from a matching automation event.
  *
  * @remarks
- * Parameterized handlers validate their supported fields—normally with colocated Zod schemas;
- * mail label actions use a small local type check—then no-op (return without effect) on a wrong
- * subject type or invalid params. Zero-parameter actions ignore unused params, so a rule can
- * misfire without throwing domain errors. Task-state and suggestion handlers reuse shared lib mutations
- * (`setTaskState`, `acceptSuggestion`); assignment, priority, process materialization, and
- * notification handlers use their own validated write paths. Events they emit are recorded but
- * don't cascade (the runtime's depth-1 cap). See
- * `docs/engineering/specs/automations.md` §4 for the catalog.
+ * The event projection supplies a stable identity so a drain retry cannot start the process twice,
+ * while two distinct events on the same day still create distinct instances.
  *
- * @param deps - Injected services (the mail applier).
- * @returns a registry with `mail.*`, `process.*`, `suggestion.*`, `task.*`, and
- *   `notification.*` strategies registered.
+ * @returns The handler.
  */
-export function buildAutomationRegistry(deps: HandlerDeps): Registry {
-  const registry = createRegistry();
-
-  for (const m of MAIL_ACTIONS) registry.register(mailHandler(m.type, m.build, deps));
-
-  // process.start — run an existing manual/event process series from a matching automation event.
-  // The event projection supplies a stable identity so a drain retry cannot start the process
-  // twice, while two distinct events on the same day still create distinct instances.
-  registry.register({
+function startProcessAction(): ActionHandler {
+  return {
     type: 'process.start',
     run: async (ctx, params): Promise<void> => {
       const event = eventOf(ctx);
@@ -208,10 +193,16 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
         });
       }
     },
-  });
+  };
+}
 
-  // task.setStatus — move the firing task to a workflow state (shared transition lib).
-  registry.register({
+/**
+ * `task.setStatus` — move the firing task to a workflow state via the shared transition lib.
+ *
+ * @returns The handler.
+ */
+function setStatusAction(): ActionHandler {
+  return {
     type: 'task.setStatus',
     run: async (ctx, params): Promise<void> => {
       const event = eventOf(ctx);
@@ -233,10 +224,16 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
         });
       }
     },
-  });
+  };
+}
 
-  // task.assign — assign the firing task to an org actor.
-  registry.register({
+/**
+ * `task.assign` — assign the firing task to an org actor.
+ *
+ * @returns The handler.
+ */
+function assignAction(): ActionHandler {
+  return {
     type: 'task.assign',
     run: async (ctx, params): Promise<void> => {
       const event = eventOf(ctx);
@@ -261,13 +258,16 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
         subject: { type: 'task', id: row.id, title: row.title },
       });
     },
-  });
+  };
+}
 
-  // task.assignToCycle — registered from its own module; see handlers-cycle.ts.
-  registerCycleAssignAction(registry);
-
-  // task.setPriority — set the firing task's priority.
-  registry.register({
+/**
+ * `task.setPriority` — set the firing task's priority.
+ *
+ * @returns The handler.
+ */
+function setPriorityAction(): ActionHandler {
+  return {
     type: 'task.setPriority',
     run: async (ctx, params): Promise<void> => {
       const event = eventOf(ctx);
@@ -277,17 +277,24 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
       if (!row) return;
       await db.update(task).set({ priority: parsed.data.priority }).where(eq(task.id, row.id));
     },
-  });
+  };
+}
 
-  // task.applyLabel — attach an org label to the firing task.
-  //
-  // Goes through the shared `attachLabels` write path rather than inserting the join directly,
-  // so a rule obeys label-group exclusivity exactly as a person does: applying `Type: Bug` to a
-  // task already carrying `Type: Feature` swaps it rather than stacking both. A rule is the
-  // caller most likely to violate that invariant at scale, and an invariant only the picker
-  // honours is decorative. Still idempotent — re-applying a label the task already has is a
-  // no-op after the union collapses.
-  registry.register({
+/**
+ * `task.applyLabel` — attach an org label to the firing task.
+ *
+ * @remarks
+ * Goes through the shared `attachLabels` write path rather than inserting the join directly, so a
+ * rule obeys label-group exclusivity exactly as a person does: applying `Type: Bug` to a task
+ * already carrying `Type: Feature` swaps it rather than stacking both. A rule is the caller most
+ * likely to violate that invariant at scale, and an invariant only the picker honours is
+ * decorative. Still idempotent — re-applying a label the task already has is a no-op after the
+ * union collapses.
+ *
+ * @returns The handler.
+ */
+function applyLabelAction(): ActionHandler {
+  return {
     type: 'task.applyLabel',
     run: async (ctx, params): Promise<void> => {
       const event = eventOf(ctx);
@@ -323,10 +330,16 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
         attachLabels(tx, { kind: 'task', subjectId: row.id, orgId }, current, incoming),
       );
     },
-  });
+  };
+}
 
-  // notification.send — write an inbox notification to the acting user or the task assignee.
-  registry.register({
+/**
+ * `notification.send` — write an inbox notification to the acting user or the task assignee.
+ *
+ * @returns The handler.
+ */
+function notificationSendAction(): ActionHandler {
+  return {
     type: 'notification.send',
     run: async (ctx, params): Promise<void> => {
       const event = eventOf(ctx);
@@ -355,13 +368,21 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
         },
       });
     },
-  });
+  };
+}
 
-  // task.route — the inbound-item action: an email, pull request or issue the org is monitoring
-  // becomes (or updates) exactly one task, in the workspace the rule names. Unlike every other
-  // handler here this one may write outside the firing event's workspace, which is the whole
-  // point of routing and the reason the shared lib re-authorizes the person against the target.
-  registry.register({
+/**
+ * `task.route` — turn an inbound email, pull request or issue into exactly one task.
+ *
+ * @remarks
+ * Unlike every other handler here this one may write outside the firing event's workspace, which
+ * is the whole point of routing and the reason the shared lib re-authorizes the person against the
+ * target.
+ *
+ * @returns The handler.
+ */
+function routeAction(): ActionHandler {
+  return {
     type: 'task.route',
     run: async (ctx, params): Promise<void> => {
       const event = eventOf(ctx);
@@ -383,30 +404,47 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
         );
       }
     },
-  });
+  };
+}
 
-  // suggestion.autoAccept — materialize the firing pending suggestion (shared accept lib).
-  registry.register({
+/**
+ * Resolve the actor that accepts a suggestion: the event's actor, else the suggestion's creator.
+ *
+ * @param event - The firing event, already known to carry an `email_suggestion` subject.
+ * @param suggestionId - The suggestion the event fired on.
+ * @returns The accepting actor id, or `undefined` when neither identity is available.
+ */
+async function acceptingActorId(
+  event: ReturnType<typeof eventOf>,
+  suggestionId: string,
+): Promise<string | undefined> {
+  if (event.actorId !== undefined) return event.actorId;
+  // The integration owner — the same identity the ingest sweep runs under.
+  const rows = await db
+    .select({ createdBy: emailSuggestion.createdBy })
+    .from(emailSuggestion)
+    .where(
+      and(
+        eq(emailSuggestion.id, suggestionId),
+        eq(emailSuggestion.organizationId, event.organizationId),
+      ),
+    )
+    .limit(1);
+  return rows[0]?.createdBy ?? undefined;
+}
+
+/**
+ * `suggestion.autoAccept` — materialize the firing pending suggestion via the shared accept lib.
+ *
+ * @returns The handler.
+ */
+function autoAcceptAction(): ActionHandler {
+  return {
     type: 'suggestion.autoAccept',
     run: async (ctx): Promise<void> => {
       const event = eventOf(ctx);
       if (event.subjectType !== 'email_suggestion' || !event.subjectId) return;
-      // The accepting actor: the event's actor, else the suggestion's creator (the
-      // integration owner) — the same identity the ingest sweep runs under.
-      let actorId = event.actorId;
-      if (actorId === undefined) {
-        const rows = await db
-          .select({ createdBy: emailSuggestion.createdBy })
-          .from(emailSuggestion)
-          .where(
-            and(
-              eq(emailSuggestion.id, event.subjectId),
-              eq(emailSuggestion.organizationId, event.organizationId),
-            ),
-          )
-          .limit(1);
-        actorId = rows[0]?.createdBy ?? undefined;
-      }
+      const actorId = await acceptingActorId(event, event.subjectId);
       if (actorId === undefined) return;
       try {
         const result = await acceptSuggestion({
@@ -430,10 +468,16 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
         });
       }
     },
-  });
+  };
+}
 
-  // suggestion.dismiss — discard the email_suggestion subject the event fired on.
-  registry.register({
+/**
+ * `suggestion.dismiss` — discard the `email_suggestion` subject the event fired on.
+ *
+ * @returns The handler.
+ */
+function dismissSuggestionAction(): ActionHandler {
+  return {
     type: 'suggestion.dismiss',
     run: async (ctx: ActionContext): Promise<void> => {
       const event = eventOf(ctx);
@@ -449,7 +493,47 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
           ),
         );
     },
-  });
+  };
+}
+
+/**
+ * Build the action-handler registry.
+ *
+ * @remarks
+ * Parameterized handlers validate their supported fields—normally with colocated Zod schemas;
+ * mail label actions use a small local type check—then no-op (return without effect) on a wrong
+ * subject type or invalid params. Zero-parameter actions ignore unused params, so a rule can
+ * misfire without throwing domain errors. Task-state and suggestion handlers reuse shared lib mutations
+ * (`setTaskState`, `acceptSuggestion`); assignment, priority, process materialization, and
+ * notification handlers use their own validated write paths. Events they emit are recorded but
+ * don't cascade (the runtime's depth-1 cap). See
+ * `docs/engineering/specs/automations.md` §4 for the catalog.
+ *
+ * @param deps - Injected services (the mail applier).
+ * @returns a registry with `mail.*`, `process.*`, `suggestion.*`, `task.*`, and
+ *   `notification.*` strategies registered.
+ */
+export function buildAutomationRegistry(deps: HandlerDeps): Registry {
+  const registry = createRegistry();
+
+  for (const m of MAIL_ACTIONS) registry.register(mailHandler(m.type, m.build, deps));
+
+  for (const handler of [
+    startProcessAction(),
+    setStatusAction(),
+    assignAction(),
+    setPriorityAction(),
+    applyLabelAction(),
+    notificationSendAction(),
+    routeAction(),
+    autoAcceptAction(),
+    dismissSuggestionAction(),
+  ]) {
+    registry.register(handler);
+  }
+
+  // task.assignToCycle — registered from its own module; see handlers-cycle.ts.
+  registerCycleAssignAction(registry);
 
   return registry;
 }

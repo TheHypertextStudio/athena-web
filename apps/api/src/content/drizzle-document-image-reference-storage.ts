@@ -74,9 +74,9 @@ async function listSubjectRows(
     .filter((row): row is DocumentImageSubjectRow => row !== undefined);
 }
 
-/** Build the image-reference storage ports over the application database. */
-export function createDrizzleDocumentImageReferenceStorage(): DocumentImageReferenceStorage {
-  const references: DocumentImageReferenceRepository = {
+/** The reference rows themselves, keyed by the subject whose prose embedded the image. */
+function createReferenceRepository(): DocumentImageReferenceRepository {
+  return {
     async replaceForSubject(
       subject: DocumentImageSubject,
       desired: readonly DocumentImageReferenceDraft[],
@@ -134,8 +134,11 @@ export function createDrizzleDocumentImageReferenceStorage(): DocumentImageRefer
       return rows.length > 0;
     },
   };
+}
 
-  const images: DocumentImageRepository = {
+/** The uploaded images a reference can point at. */
+function createImageRepository(): DocumentImageRepository {
+  return {
     async filterOwnedImageIds(organizationId, imageIds): Promise<ReadonlySet<string>> {
       if (imageIds.length === 0) return new Set();
       const schema = await import('@docket/db');
@@ -151,8 +154,11 @@ export function createDrizzleDocumentImageReferenceStorage(): DocumentImageRefer
       return new Set(rows.map((row) => row.id));
     },
   };
+}
 
-  const subjects: DocumentImageSubjectReader = {
+/** The entity tables whose prose can embed an image. */
+function createSubjectReader(): DocumentImageSubjectReader {
+  return {
     async read(
       subjectType,
       subjectId,
@@ -175,6 +181,13 @@ export function createDrizzleDocumentImageReferenceStorage(): DocumentImageRefer
       ).flat();
     },
   };
+}
 
-  return { references, images, subjects };
+/** Build the image-reference storage ports over the application database. */
+export function createDrizzleDocumentImageReferenceStorage(): DocumentImageReferenceStorage {
+  return {
+    references: createReferenceRepository(),
+    images: createImageRepository(),
+    subjects: createSubjectReader(),
+  };
 }

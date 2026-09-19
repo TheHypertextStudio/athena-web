@@ -43,11 +43,13 @@ import {
 import type { CalendarProviderSyncModule } from '../routes/calendar-sync-engine';
 
 import { attemptCalendarItemWrite } from './calendar-outbox';
+import { resolveTimeShapePatch, toWritePatch } from './calendar-write-patch';
 import { resolveItemPermissions } from './calendar-permissions';
 import { loadOwnedCalendarItem } from './calendar-read';
 
 type CalendarItemRow = typeof calendarItem.$inferSelect;
 type CalendarLayerRow = typeof calendarLayer.$inferSelect;
+type CalendarConnectionRow = typeof calendarConnection.$inferSelect;
 
 /** The provider → sync-module map an outbox-touching write optionally attempts through. */
 type SyncModules = Partial<Record<CalendarProvider, CalendarProviderSyncModule>>;
@@ -210,10 +212,6 @@ export async function createNativeBlock(
 
   validateCreateBounds(body);
 
-  // Documented default, not a hidden fallback: the DTO declares `status` as
-  // "omitted defaults server-side (typically 'confirmed')" — `body.status` is never null.
-  const status = body.status ?? 'confirmed';
-
   const inserted = await db
     .insert(calendarItem)
     .values({
@@ -221,25 +219,43 @@ export async function createNativeBlock(
       layerId: layer.id,
       kind: 'native_block',
       provider: 'docket',
-      status,
+      // Documented default, not a hidden fallback: the DTO declares `status` as
+      // "omitted defaults server-side (typically 'confirmed')" — `body.status` is never null.
+      status: body.status ?? 'confirmed',
       syncState: 'clean',
       connectionId: null,
-      title: body.title,
-      ...(body.workPlaceId !== undefined ? { workPlaceId: body.workPlaceId } : {}),
-      ...(body.description !== undefined ? { description: body.description } : {}),
-      ...(body.location !== undefined ? { location: body.location } : {}),
-      ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
-      ...(body.endTimezone !== undefined ? { endTimezone: body.endTimezone } : {}),
-      ...(body.startsAt !== undefined ? { startsAt: new Date(body.startsAt) } : {}),
-      ...(body.endsAt !== undefined ? { endsAt: new Date(body.endsAt) } : {}),
-      ...(body.allDayStartDate !== undefined ? { allDayStartDate: body.allDayStartDate } : {}),
-      ...(body.allDayEndDate !== undefined ? { allDayEndDate: body.allDayEndDate } : {}),
+      ...authoredColumns(body),
     })
     .returning();
   const row = inserted[0];
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (row === undefined) throw new Error('native block insert returned no row');
   return row;
+}
+
+/**
+ * The columns a create body authors, with every omitted field left out.
+ *
+ * @remarks
+ * Every insert path — native block, timebox, Docket-owned event, provider event — writes exactly
+ * these, so stating them once is what keeps the four from drifting apart as fields are added.
+ *
+ * @param body - The validated create body.
+ * @returns The column values to spread into the insert.
+ */
+function authoredColumns(body: CalendarItemCreate) {
+  return {
+    title: body.title,
+    ...(body.workPlaceId !== undefined ? { workPlaceId: body.workPlaceId } : {}),
+    ...(body.description !== undefined ? { description: body.description } : {}),
+    ...(body.location !== undefined ? { location: body.location } : {}),
+    ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+    ...(body.endTimezone !== undefined ? { endTimezone: body.endTimezone } : {}),
+    ...(body.startsAt !== undefined ? { startsAt: new Date(body.startsAt) } : {}),
+    ...(body.endsAt !== undefined ? { endsAt: new Date(body.endsAt) } : {}),
+    ...(body.allDayStartDate !== undefined ? { allDayStartDate: body.allDayStartDate } : {}),
+    ...(body.allDayEndDate !== undefined ? { allDayEndDate: body.allDayEndDate } : {}),
+  };
 }
 
 /** Build the complete provider write payload for a newly-created event. */
@@ -277,71 +293,21 @@ export async function createCalendarItem(
 
   validateCreateBounds(body);
   await requireOwnedWorkPlace(db, userId, body.workPlaceId);
-  const intent = body.intent;
-  const requestedLayer =
-    body.layerId === undefined
-      ? null
-      : (
-          await db
-            .select({ layer: calendarLayer, connection: calendarConnection })
-            .from(calendarLayer)
-            .leftJoin(calendarConnection, eq(calendarConnection.id, calendarLayer.connectionId))
-            .where(and(eq(calendarLayer.id, body.layerId), eq(calendarLayer.userId, userId)))
-            .limit(1)
-        )[0];
-  if (body.layerId !== undefined && requestedLayer === undefined) {
-    throw new NotFoundError('Calendar layer not found');
+  const requestedLayer = await resolveRequestedLayer(db, userId, body.layerId);
+
+  const nativeLayer = await resolveNativeLayer(db, userId, body, requestedLayer);
+  if (body.intent === 'timebox' || nativeLayer !== null) {
+    return insertDocketOwnedItem(db, userId, body, nativeLayer);
   }
 
-  const nativeLayer =
-    requestedLayer?.layer.sourceKind === 'native_blocks'
-      ? requestedLayer.layer
-      : body.layerId === undefined
-        ? await ensureNativeLayer(db, userId)
-        : null;
-
-  if (intent === 'timebox' || nativeLayer !== null) {
-    if (intent === 'timebox' && body.layerId !== undefined && nativeLayer === null) {
-      throw new ValidationError([
-        { path: ['layerId'], message: 'Timeboxes must use a Docket-owned calendar layer' },
-      ]);
-    }
-    /* v8 ignore next -- @preserve defensive: the branches above always resolve a native layer */
-    const targetLayer = nativeLayer ?? (await ensureNativeLayer(db, userId));
-    const inserted = await db
-      .insert(calendarItem)
-      .values({
-        userId,
-        layerId: targetLayer.id,
-        connectionId: null,
-        kind: intent === 'timebox' ? 'timebox' : 'native_event',
-        provider: 'docket',
-        status: body.status ?? 'confirmed',
-        syncState: 'clean',
-        title: body.title,
-        ...(body.workPlaceId !== undefined ? { workPlaceId: body.workPlaceId } : {}),
-        ...(body.description !== undefined ? { description: body.description } : {}),
-        ...(body.location !== undefined ? { location: body.location } : {}),
-        ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
-        ...(body.endTimezone !== undefined ? { endTimezone: body.endTimezone } : {}),
-        ...(body.startsAt !== undefined ? { startsAt: new Date(body.startsAt) } : {}),
-        ...(body.endsAt !== undefined ? { endsAt: new Date(body.endsAt) } : {}),
-        ...(body.allDayStartDate !== undefined ? { allDayStartDate: body.allDayStartDate } : {}),
-        ...(body.allDayEndDate !== undefined ? { allDayEndDate: body.allDayEndDate } : {}),
-      })
-      .returning();
-    const row = inserted[0];
-    /* v8 ignore next -- @preserve defensive: insert always returns a row */
-    if (row === undefined) throw new Error('calendar item insert returned no row');
-    return row;
-  }
-
-  const target = requestedLayer;
+  const connection = requestedLayer?.connection ?? null;
   if (
-    target?.layer.sourceKind !== 'provider_calendar' ||
-    !target.layer.editableCore ||
-    target.layer.externalLayerId === null ||
-    target.connection?.scopeState?.calendarWrite !== true
+    requestedLayer === null ||
+    connection === null ||
+    requestedLayer.layer.sourceKind !== 'provider_calendar' ||
+    !requestedLayer.layer.editableCore ||
+    requestedLayer.layer.externalLayerId === null ||
+    connection.scopeState?.calendarWrite !== true
   ) {
     throw new InsufficientScopeError(
       'calendar.write',
@@ -349,6 +315,129 @@ export async function createCalendarItem(
     );
   }
 
+  return insertProviderEvent(
+    db,
+    userId,
+    body,
+    { layer: requestedLayer.layer, connection },
+    input.syncModules,
+  );
+}
+
+/** A calendar layer the caller named, with the connection it belongs to. */
+interface RequestedLayer {
+  readonly layer: CalendarLayerRow;
+  readonly connection: CalendarConnectionRow | null;
+}
+
+/**
+ * Load the layer a create body named, scoped to its owner.
+ *
+ * @param db - The database client.
+ * @param userId - The owning Docket user id.
+ * @param layerId - The layer the body named, if any.
+ * @returns The layer and its connection, or `null` when the body named none.
+ * @throws {NotFoundError} When the named layer is not one of this user's.
+ */
+async function resolveRequestedLayer(
+  db: Database,
+  userId: string,
+  layerId: string | undefined,
+): Promise<RequestedLayer | null> {
+  if (layerId === undefined) return null;
+  const [found] = await db
+    .select({ layer: calendarLayer, connection: calendarConnection })
+    .from(calendarLayer)
+    .leftJoin(calendarConnection, eq(calendarConnection.id, calendarLayer.connectionId))
+    .where(and(eq(calendarLayer.id, layerId), eq(calendarLayer.userId, userId)))
+    .limit(1);
+  if (found === undefined) throw new NotFoundError('Calendar layer not found');
+  return found;
+}
+
+/**
+ * Decide which Docket-owned layer this item lands on, if any.
+ *
+ * @param db - The database client.
+ * @param userId - The owning Docket user id.
+ * @param body - The validated create body.
+ * @param requested - The layer the body named, if any.
+ * @returns The native layer, or `null` when the body targets a provider calendar.
+ */
+async function resolveNativeLayer(
+  db: Database,
+  userId: string,
+  body: CalendarItemCreate,
+  requested: RequestedLayer | null,
+): Promise<CalendarLayerRow | null> {
+  if (requested?.layer.sourceKind === 'native_blocks') return requested.layer;
+  if (body.layerId === undefined) return ensureNativeLayer(db, userId);
+  return null;
+}
+
+/**
+ * Insert a timebox or Docket-owned event, which never enters the provider write outbox.
+ *
+ * @param db - The database client.
+ * @param userId - The owning Docket user id.
+ * @param body - The validated create body.
+ * @param nativeLayer - The resolved Docket-owned layer, when one was resolved.
+ * @returns The inserted row.
+ * @throws {ValidationError} When a timebox names a layer Docket does not own.
+ */
+async function insertDocketOwnedItem(
+  db: Database,
+  userId: string,
+  body: CalendarItemCreate,
+  nativeLayer: CalendarLayerRow | null,
+): Promise<CalendarItemRow> {
+  if (body.intent === 'timebox' && body.layerId !== undefined && nativeLayer === null) {
+    throw new ValidationError([
+      { path: ['layerId'], message: 'Timeboxes must use a Docket-owned calendar layer' },
+    ]);
+  }
+  /* v8 ignore next -- @preserve defensive: the branches above always resolve a native layer */
+  const targetLayer = nativeLayer ?? (await ensureNativeLayer(db, userId));
+  const inserted = await db
+    .insert(calendarItem)
+    .values({
+      userId,
+      layerId: targetLayer.id,
+      connectionId: null,
+      kind: body.intent === 'timebox' ? 'timebox' : 'native_event',
+      provider: 'docket',
+      status: body.status ?? 'confirmed',
+      syncState: 'clean',
+      ...authoredColumns(body),
+    })
+    .returning();
+  const row = inserted[0];
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
+  if (row === undefined) throw new Error('calendar item insert returned no row');
+  return row;
+}
+
+/**
+ * Insert a provider event locally, enqueue its `create` write, and attempt it once.
+ *
+ * @remarks
+ * This local-first boundary keeps the item visible through provider outages and makes every retry
+ * idempotent: the external id is minted here and reused by every attempt.
+ *
+ * @param db - The database client.
+ * @param userId - The owning Docket user id.
+ * @param body - The validated create body.
+ * @param target - The writable provider layer and its connection.
+ * @param syncModules - The sync modules, when the caller wants the write attempted inline.
+ * @returns The inserted row, re-read after the attempt so its sync state is current.
+ */
+async function insertProviderEvent(
+  db: Database,
+  userId: string,
+  body: CalendarItemCreate,
+  target: { layer: CalendarLayerRow; connection: CalendarConnectionRow },
+  syncModules: SyncModules | undefined,
+): Promise<CalendarItemRow> {
   // Google-compatible lowercase hexadecimal is stable across every outbox retry. Other adapters
   // receive the same opaque id through the provider-neutral create contract.
   const externalEventId = randomBytes(16).toString('hex');
@@ -365,16 +454,7 @@ export async function createCalendarItem(
       status: body.status ?? 'confirmed',
       syncState: 'push_pending',
       permissions: { canEditCore: true, canDelete: true, readOnlyReason: null },
-      title: body.title,
-      ...(body.workPlaceId !== undefined ? { workPlaceId: body.workPlaceId } : {}),
-      ...(body.description !== undefined ? { description: body.description } : {}),
-      ...(body.location !== undefined ? { location: body.location } : {}),
-      ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
-      ...(body.endTimezone !== undefined ? { endTimezone: body.endTimezone } : {}),
-      ...(body.startsAt !== undefined ? { startsAt: new Date(body.startsAt) } : {}),
-      ...(body.endsAt !== undefined ? { endsAt: new Date(body.endsAt) } : {}),
-      ...(body.allDayStartDate !== undefined ? { allDayStartDate: body.allDayStartDate } : {}),
-      ...(body.allDayEndDate !== undefined ? { allDayEndDate: body.allDayEndDate } : {}),
+      ...authoredColumns(body),
     })
     .returning();
   const created = inserted[0];
@@ -397,8 +477,8 @@ export async function createCalendarItem(
   const write = writeRows[0];
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (write === undefined) throw new Error('calendar create outbox insert returned no row');
-  if (input.syncModules !== undefined) {
-    await attemptCalendarItemWrite(db, write.id, input.syncModules);
+  if (syncModules !== undefined) {
+    await attemptCalendarItemWrite(db, write.id, syncModules);
   }
   const fresh = await db
     .select()
@@ -449,171 +529,34 @@ function problemForReadOnlyReason(reason: CalendarItemPermission['readOnlyReason
   }
 }
 
-/** Build the outbox-stored patch from a validated update body + its resolved time-shape fields. */
-function toWritePatch(
-  patch: CalendarItemUpdate,
-  timePatch: TimeShapePatch,
-  existing: CalendarItemRow,
-): CalendarItemWritePatch {
-  const out: CalendarItemWritePatch = {};
-  if (patch.title !== undefined) out.title = patch.title;
-  if (patch.description !== undefined) out.description = patch.description;
-  if (patch.location !== undefined) out.location = patch.location;
-  const zoneTouched = patch.timezone !== undefined || patch.endTimezone !== undefined;
-  if (zoneTouched) {
-    out.timezone = patch.timezone ?? existing.timezone ?? undefined;
-    if (patch.endTimezone !== undefined) out.endTimezone = patch.endTimezone;
-    else if (existing.endTimezone !== null) out.endTimezone = existing.endTimezone;
-  }
-  if (timePatch.startsAt) out.startsAt = timePatch.startsAt.toISOString();
-  if (timePatch.endsAt) out.endsAt = timePatch.endsAt.toISOString();
-  if (timePatch.allDayStartDate) out.allDayStartDate = timePatch.allDayStartDate;
-  if (timePatch.allDayEndDate) out.allDayEndDate = timePatch.allDayEndDate;
-  if (
-    zoneTouched &&
-    timePatch.startsAt === undefined &&
-    timePatch.endsAt === undefined &&
-    existing.startsAt !== null &&
-    existing.endsAt !== null
-  ) {
-    out.startsAt = existing.startsAt.toISOString();
-    out.endsAt = existing.endsAt.toISOString();
-  }
-  return out;
-}
-
 /**
- * The subset of {@link CalendarItemUpdate} time fields, resolved to a patch.
+ * The local columns a patch body sets, with every untouched field left out.
  *
  * @remarks
- * A shape-switching patch sets the OLD shape's columns to `null` explicitly (not
- * `undefined` — Drizzle's `.set()` skips keys whose value is `undefined`, so clearing a
- * column requires the literal `null`). A same-shape patch omits the other shape's keys
- * entirely, since they are already `null` on a single-shape row.
- */
-interface TimeShapePatch {
-  startsAt?: Date | null;
-  endsAt?: Date | null;
-  allDayStartDate?: string | null;
-  allDayEndDate?: string | null;
-}
-
-/**
- * Resolve the time-shape portion of a patch against the item's current shape.
+ * Empty-string `description` and `location` clear the column to `NULL` per the DTO contract.
  *
- * @remarks
- * A patch touching only fields of the item's CURRENT shape (e.g. just `endsAt` on an
- * already-timed item) is a same-shape partial update — it merges with the existing value
- * of the untouched field of that shape. A patch touching fields of the OTHER shape is a
- * shape switch, which requires BOTH fields of the new shape (the full new shape) and
- * clears the old shape's columns to `null`. Touching fields from both shapes at once is
- * rejected as ambiguous. Every branch validates the resulting ordering
- * (`endsAt > startsAt` / `allDayEndDate > allDayStartDate`, exclusive end).
+ * @param patch - The validated update body.
+ * @returns The column values to spread into the update.
  */
-function resolveTimeShapePatch(item: CalendarItemRow, patch: CalendarItemUpdate): TimeShapePatch {
-  const timedFieldsPresent = patch.startsAt !== undefined || patch.endsAt !== undefined;
-  const allDayFieldsPresent =
-    patch.allDayStartDate !== undefined || patch.allDayEndDate !== undefined;
-
-  if (timedFieldsPresent && allDayFieldsPresent) {
-    throw new ValidationError([
-      {
-        path: ['startsAt'],
-        message: 'Cannot patch timed and all-day fields in the same request',
-      },
-    ]);
+function patchedColumns(patch: CalendarItemUpdate): Partial<typeof calendarItem.$inferInsert> {
+  const values: Partial<typeof calendarItem.$inferInsert> = {};
+  if (patch.title !== undefined) values.title = patch.title;
+  if (patch.description !== undefined) {
+    values.description = patch.description === '' ? null : patch.description;
   }
-
-  const currentlyTimed = item.startsAt !== null;
-
-  if (timedFieldsPresent) {
-    if (currentlyTimed) {
-      const startsAt = patch.startsAt !== undefined ? new Date(patch.startsAt) : item.startsAt;
-      const endsAt = patch.endsAt !== undefined ? new Date(patch.endsAt) : item.endsAt;
-      /* v8 ignore next -- @preserve defensive: an item currently timed has both columns set */
-      if (startsAt === null || endsAt === null) throw new Error('timed item missing bounds');
-      if (endsAt <= startsAt) {
-        throw new ValidationError([
-          { path: ['endsAt'], message: '`endsAt` must be after `startsAt`' },
-        ]);
-      }
-      return { startsAt, endsAt };
-    }
-
-    // Switching all-day -> timed requires the complete new shape.
-    if (patch.startsAt === undefined || patch.endsAt === undefined) {
-      throw new ValidationError([
-        {
-          path: ['startsAt'],
-          message: 'Switching to a timed block requires both `startsAt` and `endsAt`',
-        },
-      ]);
-    }
-    const startsAt = new Date(patch.startsAt);
-    const endsAt = new Date(patch.endsAt);
-    if (endsAt <= startsAt) {
-      throw new ValidationError([
-        { path: ['endsAt'], message: '`endsAt` must be after `startsAt`' },
-      ]);
-    }
-    return { startsAt, endsAt, allDayStartDate: null, allDayEndDate: null };
+  if (patch.location !== undefined) {
+    values.location = patch.location === '' ? null : patch.location;
   }
-
-  if (allDayFieldsPresent) {
-    if (!currentlyTimed) {
-      // Same-shape merge, not a hidden fallback: an omitted field keeps the row's
-      // current value (the patch never carries null for these).
-      const allDayStartDate = patch.allDayStartDate ?? item.allDayStartDate;
-      const allDayEndDate = patch.allDayEndDate ?? item.allDayEndDate;
-      /* v8 ignore next -- @preserve defensive: an all-day item has both columns set */
-      if (allDayStartDate === null || allDayEndDate === null) {
-        throw new Error('all-day item missing bounds');
-      }
-      if (allDayEndDate <= allDayStartDate) {
-        throw new ValidationError([
-          {
-            path: ['allDayEndDate'],
-            message: '`allDayEndDate` must be after `allDayStartDate` (exclusive end)',
-          },
-        ]);
-      }
-      return { allDayStartDate, allDayEndDate };
-    }
-
-    // Switching timed -> all-day requires the complete new shape.
-    if (patch.allDayStartDate === undefined || patch.allDayEndDate === undefined) {
-      throw new ValidationError([
-        {
-          path: ['allDayStartDate'],
-          message:
-            'Switching to an all-day block requires both `allDayStartDate` and `allDayEndDate`',
-        },
-      ]);
-    }
-    if (patch.allDayEndDate <= patch.allDayStartDate) {
-      throw new ValidationError([
-        {
-          path: ['allDayEndDate'],
-          message: '`allDayEndDate` must be after `allDayStartDate` (exclusive end)',
-        },
-      ]);
-    }
-    return {
-      allDayStartDate: patch.allDayStartDate,
-      allDayEndDate: patch.allDayEndDate,
-      startsAt: null,
-      endsAt: null,
-    };
-  }
-
-  return {};
+  if (patch.timezone !== undefined) values.timezone = patch.timezone;
+  if (patch.endTimezone !== undefined) values.endTimezone = patch.endTimezone;
+  if (patch.workPlaceId !== undefined) values.workPlaceId = patch.workPlaceId;
+  return values;
 }
 
 /**
  * Apply a validated patch to an already-loaded, already-owned `native_block` row.
  *
  * @remarks
- * Empty-string `description`/`location` clear the field to `NULL` per the DTO contract.
  * See {@link resolveTimeShapePatch} for the time-shape switching rules.
  *
  * @throws {ValidationError} When the resulting time shape is invalid.
@@ -623,23 +566,9 @@ async function applyNativeBlockPatch(
   existing: CalendarItemRow,
   patch: CalendarItemUpdate,
 ): Promise<CalendarItemRow> {
-  const timePatch = resolveTimeShapePatch(existing, patch);
-
-  const patchValues: Partial<typeof calendarItem.$inferInsert> = { ...timePatch };
-  if (patch.title !== undefined) patchValues.title = patch.title;
-  if (patch.description !== undefined) {
-    patchValues.description = patch.description === '' ? null : patch.description;
-  }
-  if (patch.location !== undefined) {
-    patchValues.location = patch.location === '' ? null : patch.location;
-  }
-  if (patch.timezone !== undefined) patchValues.timezone = patch.timezone;
-  if (patch.endTimezone !== undefined) patchValues.endTimezone = patch.endTimezone;
-  if (patch.workPlaceId !== undefined) patchValues.workPlaceId = patch.workPlaceId;
-
   const updated = await db
     .update(calendarItem)
-    .set(patchValues)
+    .set({ ...patchedColumns(patch), ...resolveTimeShapePatch(existing, patch) })
     .where(eq(calendarItem.id, existing.id))
     .returning();
   const row = updated[0];
@@ -693,6 +622,31 @@ async function hardDeleteCalendarItem(
  * @throws {ConflictError} When a `provider_event` item has an unresolved conflict.
  * @throws {CapabilityError} When a `provider_event` edit is denied for another read-only reason.
  */
+/**
+ * Apply the one field a provider event owns locally, without touching the outbox.
+ *
+ * @param db - The database client.
+ * @param itemId - The calendar item to patch.
+ * @param workPlaceId - The saved place to bind, as the patch body carried it.
+ * @returns The updated row.
+ * @throws {NotFoundError} When the row disappeared between the load and the update.
+ */
+async function applyLocalOnlyPatch(
+  db: Database,
+  itemId: string,
+  workPlaceId: string | null | undefined,
+): Promise<CalendarItemRow> {
+  const rows = await db
+    .update(calendarItem)
+    .set({ workPlaceId })
+    .where(eq(calendarItem.id, itemId))
+    .returning();
+  const row = rows[0];
+  /* v8 ignore next -- @preserve defensive: existence was verified by the caller */
+  if (row === undefined) throw new NotFoundError('Calendar item not found');
+  return row;
+}
+
 export async function updateCalendarItem(
   db: Database,
   input: { userId: string; itemId: string; patch: CalendarItemUpdate; syncModules?: SyncModules },
@@ -711,17 +665,9 @@ export async function updateCalendarItem(
   // kind === 'provider_event'
   const timePatch = resolveTimeShapePatch(loaded.item, patch);
   const providerPatch = toWritePatch(patch, timePatch, loaded.item);
-  const providerFieldsTouched = Object.keys(providerPatch).length > 0;
-  if (!providerFieldsTouched) {
-    const localRows = await db
-      .update(calendarItem)
-      .set({ workPlaceId: patch.workPlaceId })
-      .where(eq(calendarItem.id, itemId))
-      .returning();
-    const local = localRows[0];
-    /* v8 ignore next -- @preserve defensive: existence was verified above */
-    if (local === undefined) throw new NotFoundError('Calendar item not found');
-    return local;
+  // Nothing the provider owns changed, so this stays a purely local write.
+  if (Object.keys(providerPatch).length === 0) {
+    return applyLocalOnlyPatch(db, itemId, patch.workPlaceId);
   }
 
   const permissions = resolveItemPermissions(loaded);
@@ -731,24 +677,9 @@ export async function updateCalendarItem(
   /* v8 ignore next -- @preserve defensive: canEditCore true for provider_event requires a connection */
   if (connection === null) throw new Error('provider_event item missing its connection');
 
-  const patchValues: Partial<typeof calendarItem.$inferInsert> = {
-    ...timePatch,
-    syncState: 'push_pending',
-  };
-  if (patch.title !== undefined) patchValues.title = patch.title;
-  if (patch.description !== undefined) {
-    patchValues.description = patch.description === '' ? null : patch.description;
-  }
-  if (patch.location !== undefined) {
-    patchValues.location = patch.location === '' ? null : patch.location;
-  }
-  if (patch.timezone !== undefined) patchValues.timezone = patch.timezone;
-  if (patch.endTimezone !== undefined) patchValues.endTimezone = patch.endTimezone;
-  if (patch.workPlaceId !== undefined) patchValues.workPlaceId = patch.workPlaceId;
-
   const updatedRows = await db
     .update(calendarItem)
-    .set(patchValues)
+    .set({ ...patchedColumns(patch), ...timePatch, syncState: 'push_pending' })
     .where(eq(calendarItem.id, itemId))
     .returning();
   const updated = updatedRows[0];

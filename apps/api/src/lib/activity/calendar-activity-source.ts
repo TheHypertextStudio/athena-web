@@ -20,7 +20,7 @@
  * see `event_kind.meeting_attended`.
  */
 import { calendarConnection, calendarItem, calendarLayer, db } from '@docket/db';
-import type { CalendarEventAttendee } from '@docket/db';
+import type { CalendarEventAttendee, CalendarEventOrganizer } from '@docket/db';
 import type { ActivityPullInput, ActivityPullResult, ActivitySource } from '@docket/integrations';
 import type { EventDraft } from '@docket/integrations';
 import { and, eq, gte, isNotNull, lt, ne, sql } from 'drizzle-orm';
@@ -50,6 +50,74 @@ function isAttended(attendees: readonly CalendarEventAttendee[]): boolean {
 function minutesBetween(startsAt: Date, endsAt: Date): number {
   return Math.max(0, Math.round((endsAt.getTime() - startsAt.getTime()) / 60_000));
 }
+/** One elapsed meeting, as the projection query selects it. */
+interface AttendedRow {
+  readonly externalEventId: string | null;
+  readonly recurrenceInstanceKey: string | null;
+  readonly recurringEventId: string | null;
+  readonly title: string;
+  readonly htmlLink: string | null;
+  readonly startsAt: Date | null;
+  readonly endsAt: Date | null;
+  readonly organizer: CalendarEventOrganizer | null;
+  readonly attendees: readonly CalendarEventAttendee[];
+}
+
+/**
+ * Project one elapsed meeting into a `meeting_attended` draft.
+ *
+ * @param row - The calendar item, as selected.
+ * @returns The draft, or `undefined` when the row is not an attended meeting.
+ */
+function toAttendedDraft(row: AttendedRow): EventDraft | undefined {
+  const { externalEventId, startsAt, endsAt } = row;
+  /* v8 ignore next -- the query already requires all three to be non-null */
+  if (!externalEventId || !startsAt || !endsAt) return undefined;
+  const attendees = row.attendees;
+  if (!isAttended(attendees)) return undefined;
+
+  // A recurring series repeats one external id, so the instance has to key on its own
+  // occurrence or every week of a standing meeting would collapse into a single episode.
+  const instance = row.recurrenceInstanceKey ?? startsAt.toISOString();
+  return {
+    kind: 'meeting_attended',
+    // The episode is placed when the meeting *started*, which is where a person looks for it.
+    occurredAt: startsAt.toISOString(),
+    title: row.title,
+    ...(row.htmlLink ? { permalink: row.htmlLink } : {}),
+    entity: {
+      kind: 'calendar_event',
+      externalId: externalEventId,
+      title: row.title,
+      ...(row.htmlLink ? { url: row.htmlLink } : {}),
+    },
+    // Everyone else who was invited, so narration can name the people rather than count them.
+    participants: attendees.flatMap((a) => {
+      if (a.self === true) return [];
+      const email = a.email;
+      if (typeof email !== 'string' || email === '') return [];
+      return [
+        {
+          externalId: email,
+          ...(a.displayName ? { displayName: a.displayName } : {}),
+          email,
+        },
+      ];
+    }),
+    detail: {
+      schema: 'google_calendar.meeting',
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString(),
+      durationMinutes: minutesBetween(startsAt, endsAt),
+      attendeeCount: attendees.length,
+      organizerEmail: row.organizer?.email ?? null,
+      recurring: row.recurringEventId !== null,
+    },
+    externalId: externalEventId,
+    dedupeKey: `gcal:attended:${externalEventId}:${instance}`,
+  };
+}
+
 /**
  * Build the activity source for one person's calendars.
  *
@@ -97,56 +165,10 @@ export function calendarActivitySource(userId: string): ActivitySource {
         .orderBy(sql`${calendarItem.startsAt} asc`)
         .limit(input.maxDrafts + 1);
 
-      const drafts: EventDraft[] = [];
-      for (const row of rows.slice(0, input.maxDrafts)) {
-        const { externalEventId, startsAt, endsAt } = row;
-        /* v8 ignore next -- the query already requires all three to be non-null */
-        if (!externalEventId || !startsAt || !endsAt) continue;
-        const attendees = row.attendees;
-        if (!isAttended(attendees)) continue;
-
-        const organizerEmail = row.organizer?.email ?? null;
-        // A recurring series repeats one external id, so the instance has to key on its own
-        // occurrence or every week of a standing meeting would collapse into a single episode.
-        const instance = row.recurrenceInstanceKey ?? startsAt.toISOString();
-        drafts.push({
-          kind: 'meeting_attended',
-          // The episode is placed when the meeting *started*, which is where a person looks for it.
-          occurredAt: startsAt.toISOString(),
-          title: row.title,
-          ...(row.htmlLink ? { permalink: row.htmlLink } : {}),
-          entity: {
-            kind: 'calendar_event',
-            externalId: externalEventId,
-            title: row.title,
-            ...(row.htmlLink ? { url: row.htmlLink } : {}),
-          },
-          // Everyone else who was invited, so narration can name the people rather than count them.
-          participants: attendees.flatMap((a) => {
-            if (a.self === true) return [];
-            const email = a.email;
-            if (typeof email !== 'string' || email === '') return [];
-            return [
-              {
-                externalId: email,
-                ...(a.displayName ? { displayName: a.displayName } : {}),
-                email,
-              },
-            ];
-          }),
-          detail: {
-            schema: 'google_calendar.meeting',
-            startsAt: startsAt.toISOString(),
-            endsAt: endsAt.toISOString(),
-            durationMinutes: minutesBetween(startsAt, endsAt),
-            attendeeCount: attendees.length,
-            organizerEmail,
-            recurring: row.recurringEventId !== null,
-          },
-          externalId: externalEventId,
-          dedupeKey: `gcal:attended:${externalEventId}:${instance}`,
-        });
-      }
+      const drafts = rows.slice(0, input.maxDrafts).flatMap((row) => {
+        const draft = toAttendedDraft(row);
+        return draft === undefined ? [] : [draft];
+      });
 
       return { drafts, truncated: rows.length > input.maxDrafts };
     },

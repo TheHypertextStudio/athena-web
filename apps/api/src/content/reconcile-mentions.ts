@@ -13,12 +13,7 @@
  * states domain rules and nothing about tables — and can be tested against an in-memory double.
  */
 import { canonicalizeResourceUrl } from '@docket/connections/resource-contract';
-import {
-  parseMentionMarker,
-  type MentionEntityKind,
-  type MentionRef,
-  type MentionSubjectType,
-} from '../contracts/mention';
+import { parseMentionMarker, type MentionRef, type MentionSubjectType } from '../contracts/mention';
 import { extractMarkdownLinks, type MarkdownLink } from './markdown-links';
 import type { MentionDraft, MentionStorage } from './mention-ports';
 /**
@@ -53,86 +48,99 @@ export interface MentionReconciler {
 }
 
 /**
+ * Find or create the shared resource row for an external URL.
+ *
+ * @remarks
+ * Makes no network call. A brand-new row lands `pending` and the unfurl sweep resolves its
+ * metadata later, so writing a description never waits on a third party.
+ *
+ * @param storage - The ports to write through.
+ * @param organizationId - The writing organization.
+ * @param createdBy - The author of the prose, when there is one.
+ * @param url - The authored URL.
+ * @returns The resource's id, or `undefined` when the URL is not one we keep.
+ */
+async function resolveExternalResource(
+  storage: MentionStorage,
+  organizationId: string,
+  createdBy: string | null,
+  url: string,
+): Promise<string | undefined> {
+  const canonical = canonicalizeResourceUrl(url);
+  if (canonical === undefined) return undefined;
+  return storage.resources.findOrCreate({
+    organizationId,
+    createdBy,
+    provider: canonical.provider,
+    canonicalKey: canonical.canonicalKey,
+    canonicalUrl: canonical.canonicalUrl,
+    externalId: canonical.externalId,
+    resourceType: canonical.resourceType,
+  });
+}
+
+/** One authored link, with everything needed to turn it into an edge. */
+interface LinkToResolve {
+  readonly organizationId: string;
+  readonly createdBy: string | null;
+  readonly field: string;
+  readonly link: MarkdownLink;
+  readonly position: number;
+}
+
+/**
+ * Turn one authored link into an edge.
+ *
+ * @remarks
+ * A `docket:` marker naming an entity is verified in-tenant before the edge exists: anyone who can
+ * write a description can write a marker naming another organization's task id, and creating that
+ * edge would make the hydrate endpoint an existence oracle for ids the author cannot see. Hydrate
+ * re-checks visibility independently at read time, because a grant can be revoked after the prose
+ * is written — neither gate alone is sufficient.
+ *
+ * @param storage - The ports to read and write through.
+ * @param authored - The link and its position in the field.
+ * @returns The edge, or `undefined` when this is not a reference we can keep.
+ */
+async function resolveLink(
+  storage: MentionStorage,
+  authored: LinkToResolve,
+): Promise<MentionDraft | undefined> {
+  const { organizationId, createdBy, field, link, position } = authored;
+  const marked = parseMentionMarker(link.href, link.title);
+
+  // A deliberate entity mention: verify the target is real and in-tenant, or drop the edge.
+  if (marked?.kind === 'entity') {
+    const exists = await storage.subjects.entityExists(
+      organizationId,
+      marked.entityKind,
+      marked.entityId,
+    );
+    if (!exists) return undefined;
+    return { field, position, label: link.label, ref: marked, externalResourceId: undefined };
+  }
+
+  // Everything else pointing outward is a reference, marker or not. That is what makes a plainly
+  // pasted URL carry metadata and appear in the Resources tab alongside chips.
+  const url = marked?.kind === 'external' ? marked.url : link.href;
+  const externalResourceId = await resolveExternalResource(storage, organizationId, createdBy, url);
+  if (externalResourceId === undefined) return undefined;
+  return {
+    field,
+    position,
+    label: link.label,
+    ref: { kind: 'external', url },
+    externalResourceId,
+  };
+}
+
+/**
  * Build a reconciler over the given storage.
  *
  * @param storage - The ports this reconciler reads and writes through.
  * @returns The reconciler.
  */
 export function createMentionReconciler(storage: MentionStorage): MentionReconciler {
-  /**
-   * Resolve a `docket:` marker into an entity reference, refusing anything cross-tenant.
-   *
-   * @remarks
-   * Anyone who can write a description can write a marker naming another organization's task id.
-   * Creating that edge would make the hydrate endpoint an existence oracle for ids the author
-   * cannot see, so the target must be proven to live in the writing organization *before* the edge
-   * exists. Hydrate re-checks visibility independently at read time, because a grant can be revoked
-   * after the prose is written — neither gate alone is sufficient.
-   */
-  async function entityTargetExists(
-    organizationId: string,
-    entityKind: MentionEntityKind,
-    entityId: string,
-  ): Promise<boolean> {
-    return storage.subjects.entityExists(organizationId, entityKind, entityId);
-  }
-
-  /**
-   * Find or create the shared resource row for an external URL.
-   *
-   * @remarks
-   * Makes no network call. A brand-new row lands `pending` and the unfurl sweep resolves its
-   * metadata later, so writing a description never waits on a third party.
-   */
-  async function resolveExternalResource(
-    organizationId: string,
-    createdBy: string | null,
-    url: string,
-  ): Promise<string | undefined> {
-    const canonical = canonicalizeResourceUrl(url);
-    if (canonical === undefined) return undefined;
-    return storage.resources.findOrCreate({
-      organizationId,
-      createdBy,
-      provider: canonical.provider,
-      canonicalKey: canonical.canonicalKey,
-      canonicalUrl: canonical.canonicalUrl,
-      externalId: canonical.externalId,
-      resourceType: canonical.resourceType,
-    });
-  }
-
-  /** Turn one authored link into an edge, or undefined when it is not a reference we can keep. */
-  async function resolveLink(
-    organizationId: string,
-    createdBy: string | null,
-    field: string,
-    link: MarkdownLink,
-    position: number,
-  ): Promise<MentionDraft | undefined> {
-    const marked = parseMentionMarker(link.href, link.title);
-
-    // A deliberate entity mention: verify the target is real and in-tenant, or drop the edge.
-    if (marked?.kind === 'entity') {
-      const exists = await entityTargetExists(organizationId, marked.entityKind, marked.entityId);
-      if (!exists) return undefined;
-      return { field, position, label: link.label, ref: marked, externalResourceId: undefined };
-    }
-
-    // Everything else pointing outward is a reference, marker or not. That is what makes a plainly
-    // pasted URL carry metadata and appear in the Resources tab alongside chips.
-    const url = marked?.kind === 'external' ? marked.url : link.href;
-    const externalResourceId = await resolveExternalResource(organizationId, createdBy, url);
-    if (externalResourceId === undefined) return undefined;
-    return {
-      field,
-      position,
-      label: link.label,
-      ref: { kind: 'external', url },
-      externalResourceId,
-    };
-  }
-
   return {
     async reconcile(organizationId: string, sourceTable: string, entityId: string): Promise<void> {
       const subjectType = mentionSubjectFor(sourceTable);
@@ -151,13 +159,13 @@ export function createMentionReconciler(storage: MentionStorage): MentionReconci
         const markdown = row.prose[field];
         if (markdown === undefined) continue;
         for (const link of extractMarkdownLinks(markdown)) {
-          const resolved = await resolveLink(
+          const resolved = await resolveLink(storage, {
             organizationId,
-            row.createdBy,
+            createdBy: row.createdBy,
             field,
             link,
-            desired.filter((draft) => draft.field === field).length,
-          );
+            position: desired.filter((draft) => draft.field === field).length,
+          });
           if (resolved !== undefined) desired.push(resolved);
         }
       }

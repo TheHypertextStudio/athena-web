@@ -350,6 +350,285 @@ async function taskExistsIn(taskId: string, targetOrgId: string): Promise<boolea
 }
 
 /**
+ * Resolve the firing event back to the inbound item behind it.
+ *
+ * @remarks
+ * A failure says which one it was, because "there was an item but we cannot key it" and "this was
+ * never an inbound item" want different answers from a person, and only the first is worth their
+ * attention.
+ *
+ * @param event - The firing committed event, projected into the engine's shape.
+ * @returns The item, or the reason the event yields none.
+ */
+async function resolveInboundItem(event: AutomationEvent): Promise<InboundItem | RouteSkipReason> {
+  if (event.subjectType === 'email_suggestion') {
+    const item = await mailItem(event);
+    if (!item) return 'suggestion_unavailable';
+    return item.sourceKey.trim() === '' ? 'no_source_key' : item;
+  }
+  if (event.source === 'docket') return 'not_inbound';
+  const item = externalItem(event);
+  if (!item) return event.externalId === undefined ? 'no_source_key' : 'not_inbound';
+  return item.sourceKey.trim() === '' ? 'no_source_key' : item;
+}
+
+/**
+ * Find the task this item already lives on, in the order that avoids duplicates.
+ *
+ * @remarks
+ * The ingestion layer's own resolution wins when it produced one and it points somewhere live in
+ * this workspace; otherwise the routing ledger answers, which is what makes a re-seen item and a
+ * second event about the same item converge.
+ *
+ * @param targetOrgId - The workspace the task would live in.
+ * @param item - The inbound item being routed.
+ * @returns The existing task's id, or `undefined` when this item has no task yet.
+ */
+async function findExistingTaskId(
+  targetOrgId: string,
+  item: InboundItem,
+): Promise<string | undefined> {
+  if (item.linkedTaskId !== null && (await taskExistsIn(item.linkedTaskId, targetOrgId))) {
+    return item.linkedTaskId;
+  }
+  const route = await existingRoute(targetOrgId, item);
+  if (route && (await taskExistsIn(route.taskId, targetOrgId))) return route.taskId;
+  return undefined;
+}
+
+/** The transaction handle the create path writes through. */
+type RouteTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Where new work lands in the target workspace, once resolved. */
+type LandingTarget = NonNullable<Awaited<ReturnType<typeof resolveLandingTarget>>>;
+
+/** Everything the create transaction needs, resolved before it opens. */
+interface RoutedTaskPlan {
+  readonly event: AutomationEvent;
+  readonly params: RouteTaskParams;
+  readonly item: InboundItem;
+  readonly targetOrgId: string;
+  readonly writerActorId: string | null;
+  readonly landing: LandingTarget;
+  readonly projectId: string | null;
+  readonly statusId: string;
+  readonly state: string;
+}
+
+/** The rows one successful create produced. */
+interface RoutedTaskRows {
+  readonly taskId: string;
+  readonly title: string;
+  readonly attachmentId: string | null;
+}
+
+/**
+ * Insert the routed task, its ledger row, and its email attachment in one transaction.
+ *
+ * @param plan - The resolved create plan.
+ * @returns The inserted rows, or `null` when a concurrent delivery routed this item first.
+ */
+async function insertRoutedTask(plan: RoutedTaskPlan): Promise<RoutedTaskRows | null> {
+  const { event, params, item, targetOrgId, writerActorId, landing } = plan;
+  return (
+    db
+      .transaction(async (tx) => {
+        const [taskRow] = await tx
+          .insert(task)
+          .values({
+            organizationId: targetOrgId,
+            title: item.title,
+            description: item.description,
+            teamId: params.teamId ?? landing.teamId,
+            projectId: plan.projectId,
+            statusId: plan.statusId,
+            state: plan.state,
+            priority: params.priority ?? item.priority ?? 'none',
+            assigneeId: landing.assigneeId,
+            cycleId: landing.cycleId,
+            dueDate: item.dueDate ?? undefined,
+            source: 'native',
+            createdBy: writerActorId,
+          })
+          .returning();
+        /* v8 ignore next -- @preserve defensive: insert always returns a row */
+        if (!taskRow) throw new Error('routed task insert returned no row');
+
+        // The ledger row and the task are one fact: a task with no route row would be re-created
+        // by the next delivery, which is the duplicate this whole module exists to prevent. A
+        // conflict means a concurrent route won the race — that writer's task is the real one, so
+        // this throws {@link InboundRouteRaceLost} to roll the task and attachment inserts back.
+        // Returning here would commit them instead: a normal return from a Drizzle transaction
+        // callback is a `commit`, and only a throw is a `rollback`.
+        const [routeRow] = await tx
+          .insert(inboundTaskRoute)
+          .values({
+            organizationId: targetOrgId,
+            createdBy: writerActorId,
+            taskId: taskRow.id,
+            sourceSystem: item.sourceSystem,
+            sourceKey: item.sourceKey,
+            sourceUrl: item.sourceUrl,
+            sourceIntegrationId: item.integrationId,
+            originOrganizationId: event.organizationId,
+          })
+          .onConflictDoNothing({
+            target: [
+              inboundTaskRoute.organizationId,
+              inboundTaskRoute.sourceSystem,
+              inboundTaskRoute.sourceKey,
+            ],
+          })
+          .returning({ id: inboundTaskRoute.id });
+        if (!routeRow) throw new InboundRouteRaceLost(); // another writer routed this item first
+
+        const attachmentId = await insertSourceAttachment(tx, plan, taskRow.id);
+        return { taskId: taskRow.id, title: taskRow.title, attachmentId };
+      })
+      // Only the race sentinel, and deliberately nothing else. A catch-all here would read a
+      // genuine database failure — a bad foreign key, a dead connection — as "somebody beat me to
+      // it" and report a confident `updated` for a write that never happened. Every other error
+      // stays loud and reaches the caller.
+      .catch((error: unknown) => {
+        if (!(error instanceof InboundRouteRaceLost)) throw error;
+        return null;
+      })
+  );
+}
+
+/**
+ * Attach the source email to the routed task.
+ *
+ * @remarks
+ * The source email rides along as the task's provenance: the thread a person can open, and the
+ * integration and thread id the `mail.*` actions later act through.
+ *
+ * @param tx - The open create transaction.
+ * @param plan - The resolved create plan.
+ * @param taskId - The task the attachment hangs off.
+ * @returns The attachment's id, or `null` when there is no email behind this item.
+ */
+async function insertSourceAttachment(
+  tx: RouteTransaction,
+  plan: RoutedTaskPlan,
+  taskId: string,
+): Promise<string | null> {
+  const { item, targetOrgId, writerActorId } = plan;
+  if (item.suggestionId === null || item.sourceUrl === null) return null;
+  const meta = item.emailMeta as { subject?: string } | null;
+  const [att] = await tx
+    .insert(attachment)
+    .values({
+      organizationId: targetOrgId,
+      createdBy: writerActorId,
+      subjectType: 'task',
+      subjectId: taskId,
+      kind: 'email',
+      title: meta?.subject ?? item.title,
+      url: item.sourceUrl,
+      sourceIntegrationId: item.integrationId,
+      externalId: item.sourceKey,
+      metadata: item.emailMeta,
+    })
+    .returning({ id: attachment.id });
+  return att?.id ?? null;
+}
+
+/**
+ * Build the create plan, or say why this item cannot land anywhere.
+ *
+ * @param event - The firing event.
+ * @param params - The rule's routing target.
+ * @param item - The inbound item being routed.
+ * @param targetOrgId - The workspace the task belongs in.
+ * @param writerActorId - The actor the write runs as in the target workspace.
+ * @returns The plan, or the reason the item cannot be created.
+ */
+async function planRoutedTask(
+  event: AutomationEvent,
+  params: RouteTaskParams,
+  item: InboundItem,
+  targetOrgId: string,
+  writerActorId: string | null,
+): Promise<RoutedTaskPlan | RouteSkipReason> {
+  const landing = await resolveLandingTarget(targetOrgId, writerActorId);
+  if (!landing) return 'no_team';
+  // A project from another workspace is dropped rather than written: a task carrying a foreign
+  // project id would be a tenancy leak wearing a foreign key.
+  const named = params.projectId;
+  const projectId = named !== undefined && (await projectInOrg(named, targetOrgId)) ? named : null;
+  // A rule may name the status to file into; otherwise the work lands where new work lands.
+  const status =
+    params.state === undefined
+      ? { statusId: landing.statusId, state: landing.state }
+      : await resolveTaskStatus(targetOrgId, params.teamId ?? landing.teamId, params.state);
+  return {
+    event,
+    params,
+    item,
+    targetOrgId,
+    writerActorId,
+    landing,
+    projectId,
+    statusId: status.statusId,
+    state: status.state,
+  };
+}
+
+/**
+ * Adopt the task a concurrent delivery created for this same item.
+ *
+ * @remarks
+ * The winner's task is the one task this item gets. The suggestion is closed against the
+ * *winner's* task for the same reason the already-routed branch does it: this delivery's
+ * suggestion is no longer pending once a task for its mail exists. Leaving it pending would leave
+ * the loser's row in the review queue, and `acceptSuggestion` decides on the suggestion's status
+ * alone — it never consults the routing ledger — so a person, or a `suggestion.autoAccept` rule,
+ * accepting it would open the second task for this one email that losing the race was supposed to
+ * prevent.
+ *
+ * @param plan - The create plan whose transaction lost the race.
+ * @returns The outcome naming the winner's task.
+ */
+async function adoptRaceWinner(plan: RoutedTaskPlan): Promise<RouteTaskOutcome> {
+  const { event, params, item, targetOrgId, writerActorId } = plan;
+  const winner = await existingRoute(targetOrgId, item);
+  if (!winner) return { kind: 'skipped', reason: 'no_source_key' };
+  await applyParamsToTask(winner.taskId, targetOrgId, writerActorId, params);
+  if (item.suggestionId !== null) await markSuggestionRouted(item, winner.taskId, event);
+  return { kind: 'updated', taskId: winner.taskId };
+}
+
+/**
+ * Publish a freshly created routed task.
+ *
+ * @remarks
+ * Through the real event facade, not a private one: a routed task reaches the feed and search
+ * exactly like a captured one, and this is the emit that any Athena assignment trigger watching
+ * this workspace's work observes.
+ *
+ * @param plan - The create plan the rows came from.
+ * @param rows - The inserted rows.
+ */
+async function publishRoutedTask(plan: RoutedTaskPlan, rows: RoutedTaskRows): Promise<void> {
+  const { event, params, item, targetOrgId, writerActorId } = plan;
+  if (params.labelId !== undefined) await attachLabel(rows.taskId, targetOrgId, params.labelId);
+  if (item.suggestionId !== null) await markSuggestionRouted(item, rows.taskId, event);
+  await emitEvent({
+    organizationId: targetOrgId,
+    kind: 'created',
+    actorId: writerActorId,
+    title: rows.title,
+    subject: { type: 'task', id: rows.taskId, title: rows.title },
+    ...(item.sourceUrl !== null ? { permalink: item.sourceUrl } : {}),
+  });
+  await enqueueSearchUpsert(targetOrgId, 'task', rows.taskId);
+  if (rows.attachmentId !== null) {
+    await enqueueSearchUpsert(targetOrgId, 'attachment', rows.attachmentId);
+  }
+}
+
+/**
  * Route one inbound item to a task in the target workspace: create it, or update the task the
  * item is already linked to. Never throws for a routing-configuration problem.
  *
@@ -361,41 +640,14 @@ export async function routeInboundItemToTask(
   event: AutomationEvent,
   params: RouteTaskParams,
 ): Promise<RouteTaskOutcome> {
-  const item =
-    event.subjectType === 'email_suggestion'
-      ? await mailItem(event)
-      : event.source !== 'docket'
-        ? externalItem(event)
-        : null;
-  if (!item) {
-    // Distinguish "there was an item but we cannot key it" from "this was never an inbound
-    // item", because only the first is worth a person's attention.
-    if (event.subjectType === 'email_suggestion') {
-      return { kind: 'skipped', reason: 'suggestion_unavailable' };
-    }
-    if (event.source !== 'docket' && event.externalId === undefined) {
-      return { kind: 'skipped', reason: 'no_source_key' };
-    }
-    return { kind: 'skipped', reason: 'not_inbound' };
-  }
-  if (item.sourceKey.trim() === '') return { kind: 'skipped', reason: 'no_source_key' };
+  const item = await resolveInboundItem(event);
+  if (typeof item === 'string') return { kind: 'skipped', reason: item };
 
   const targetOrgId = params.organizationId ?? event.organizationId;
   const writerActorId = await actorInTargetOrg(item.actorId, event.organizationId, targetOrgId);
   if (writerActorId === undefined) return { kind: 'skipped', reason: 'not_a_member' };
 
-  // Linkage, in the order that avoids duplicates. The ingestion layer's own resolution wins when
-  // it produced one and it points somewhere live in this workspace; otherwise the routing ledger
-  // answers, which is what makes a re-seen item and a second event about the same item converge.
-  const linked =
-    item.linkedTaskId !== null && (await taskExistsIn(item.linkedTaskId, targetOrgId))
-      ? item.linkedTaskId
-      : undefined;
-  const route = await existingRoute(targetOrgId, item);
-  const routedTaskId =
-    route && (await taskExistsIn(route.taskId, targetOrgId)) ? route.taskId : undefined;
-  const existingTaskId = linked ?? routedTaskId;
-
+  const existingTaskId = await findExistingTaskId(targetOrgId, item);
   if (existingTaskId !== undefined) {
     await applyParamsToTask(existingTaskId, targetOrgId, writerActorId, params);
     // Keep the ledger pointing at the task this item actually lives on, so a later delivery
@@ -406,141 +658,14 @@ export async function routeInboundItemToTask(
     return { kind: 'updated', taskId: existingTaskId };
   }
 
-  const landing = await resolveLandingTarget(targetOrgId, writerActorId);
-  if (!landing) return { kind: 'skipped', reason: 'no_team' };
-  // A project from another workspace is dropped rather than written: a task carrying a foreign
-  // project id would be a tenancy leak wearing a foreign key.
-  const projectId =
-    params.projectId !== undefined && (await projectInOrg(params.projectId, targetOrgId))
-      ? params.projectId
-      : null;
+  const plan = await planRoutedTask(event, params, item, targetOrgId, writerActorId);
+  if (typeof plan === 'string') return { kind: 'skipped', reason: plan };
 
-  // A rule may name the status to file into; otherwise the work lands where new work lands.
-  const routedStatus =
-    params.state === undefined
-      ? { statusId: landing.statusId, state: landing.state }
-      : await resolveTaskStatus(targetOrgId, params.teamId ?? landing.teamId, params.state);
+  const rows = await insertRoutedTask(plan);
+  if (!rows) return adoptRaceWinner(plan);
 
-  const created = await db
-    .transaction(async (tx) => {
-      const [taskRow] = await tx
-        .insert(task)
-        .values({
-          organizationId: targetOrgId,
-          title: item.title,
-          description: item.description,
-          teamId: params.teamId ?? landing.teamId,
-          projectId,
-          statusId: routedStatus.statusId,
-          state: routedStatus.state,
-          priority: params.priority ?? item.priority ?? 'none',
-          assigneeId: landing.assigneeId,
-          cycleId: landing.cycleId,
-          dueDate: item.dueDate ?? undefined,
-          source: 'native',
-          createdBy: writerActorId,
-        })
-        .returning();
-      /* v8 ignore next -- @preserve defensive: insert always returns a row */
-      if (!taskRow) throw new Error('routed task insert returned no row');
-
-      // The ledger row and the task are one fact: a task with no route row would be re-created
-      // by the next delivery, which is the duplicate this whole module exists to prevent. A
-      // conflict means a concurrent route won the race — that writer's task is the real one, so
-      // this throws {@link InboundRouteRaceLost} to roll the task and attachment inserts back.
-      // Returning here would commit them instead: a normal return from a Drizzle transaction
-      // callback is a `commit`, and only a throw is a `rollback`.
-      const [routeRow] = await tx
-        .insert(inboundTaskRoute)
-        .values({
-          organizationId: targetOrgId,
-          createdBy: writerActorId,
-          taskId: taskRow.id,
-          sourceSystem: item.sourceSystem,
-          sourceKey: item.sourceKey,
-          sourceUrl: item.sourceUrl,
-          sourceIntegrationId: item.integrationId,
-          originOrganizationId: event.organizationId,
-        })
-        .onConflictDoNothing({
-          target: [
-            inboundTaskRoute.organizationId,
-            inboundTaskRoute.sourceSystem,
-            inboundTaskRoute.sourceKey,
-          ],
-        })
-        .returning({ id: inboundTaskRoute.id });
-      if (!routeRow) throw new InboundRouteRaceLost(); // another writer routed this item first
-
-      // The source email rides along as the task's provenance: the thread a person can open, the
-      // integration and thread id the `mail.*` actions later act through.
-      let attachmentId: string | null = null;
-      if (item.suggestionId !== null && item.sourceUrl !== null) {
-        const meta = item.emailMeta as { subject?: string } | null;
-        const [att] = await tx
-          .insert(attachment)
-          .values({
-            organizationId: targetOrgId,
-            createdBy: writerActorId,
-            subjectType: 'task',
-            subjectId: taskRow.id,
-            kind: 'email',
-            title: meta?.subject ?? item.title,
-            url: item.sourceUrl,
-            sourceIntegrationId: item.integrationId,
-            externalId: item.sourceKey,
-            metadata: item.emailMeta,
-          })
-          .returning({ id: attachment.id });
-        attachmentId = att?.id ?? null;
-      }
-      return { taskRow, attachmentId };
-    })
-    // Only the race sentinel, and deliberately nothing else. A catch-all here would read a
-    // genuine database failure — a bad foreign key, a dead connection — as "somebody beat me to
-    // it" and report a confident `updated` for a write that never happened. Every other error
-    // stays loud and reaches the caller.
-    .catch((error: unknown) => {
-      if (!(error instanceof InboundRouteRaceLost)) throw error;
-      return null;
-    });
-
-  if (!created) {
-    // Lost the race. The winner's task is the one task this item gets; adopt it.
-    const winner = await existingRoute(targetOrgId, item);
-    if (!winner) return { kind: 'skipped', reason: 'no_source_key' };
-    await applyParamsToTask(winner.taskId, targetOrgId, writerActorId, params);
-    // Against the WINNER's task, for the same reason the already-routed branch above does it:
-    // this delivery's suggestion is no longer pending once a task for its mail exists. Leaving
-    // it pending would leave the loser's row in the review queue, and `acceptSuggestion` decides
-    // on the suggestion's status alone — it never consults the routing ledger — so a person, or
-    // a `suggestion.autoAccept` rule, accepting it would open the second task for this one email
-    // that losing the race was supposed to prevent.
-    if (item.suggestionId !== null) await markSuggestionRouted(item, winner.taskId, event);
-    return { kind: 'updated', taskId: winner.taskId };
-  }
-
-  if (params.labelId !== undefined)
-    await attachLabel(created.taskRow.id, targetOrgId, params.labelId);
-  if (item.suggestionId !== null) await markSuggestionRouted(item, created.taskRow.id, event);
-
-  // The real event facade, not a private one: a routed task reaches the feed and search exactly
-  // like a captured one, and this is the emit that any Athena assignment trigger watching this
-  // workspace's work observes.
-  await emitEvent({
-    organizationId: targetOrgId,
-    kind: 'created',
-    actorId: writerActorId,
-    title: created.taskRow.title,
-    subject: { type: 'task', id: created.taskRow.id, title: created.taskRow.title },
-    ...(item.sourceUrl !== null ? { permalink: item.sourceUrl } : {}),
-  });
-  await enqueueSearchUpsert(targetOrgId, 'task', created.taskRow.id);
-  if (created.attachmentId !== null) {
-    await enqueueSearchUpsert(targetOrgId, 'attachment', created.attachmentId);
-  }
-
-  return { kind: 'created', taskId: created.taskRow.id };
+  await publishRoutedTask(plan, rows);
+  return { kind: 'created', taskId: rows.taskId };
 }
 
 /** Write (or refresh) the ledger row linking this item to the task it routed to. */

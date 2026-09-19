@@ -484,12 +484,23 @@ function buildPlaceGeocoder(runtimeEnv: AppRuntimeEnv): PlaceGeocoder {
   });
 }
 
+/** Every boundary, as a thunk that constructs it on first use. */
+type LazyBoundaries = {
+  readonly [K in keyof AppContainer]: () => AppContainer[K];
+};
+
 /**
- * Construct the API dependency container for the current runtime mode.
+ * Build one thunk per boundary, resolving each through the real/mock seam.
  *
- * @param runtimeEnv - Optional runtime configuration override for tests.
+ * @remarks
+ * Lazy throughout: production refuses to build several of these without a credential, and a deploy
+ * that never sends mail, receives mail, or opens a voice session must not be blocked at boot by a
+ * credential it does not use.
+ *
+ * @param runtimeEnv - The runtime configuration.
+ * @returns The thunks {@link buildAppContainer} exposes as getters.
  */
-export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv()): AppContainer {
+function buildLazyBoundaries(runtimeEnv: AppRuntimeEnv): LazyBoundaries {
   const mock = localMode(runtimeEnv);
   const billing = lazyValue(() =>
     usesRealBilling(runtimeEnv)
@@ -515,17 +526,11 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
     mock ? new MockTaskSynthesizer() : new RealTaskSynthesizer(anthropicConfigFromEnv(runtimeEnv)),
   );
   const mailer = lazyValue(() => buildMailer(runtimeEnv));
-  // The receiving edge is lazy for the same reason the sending one is: production refuses to
-  // build it without a signing secret, and a deploy that never receives mail should not be
-  // blocked at boot by a credential it does not use.
   const inboundMail = lazyValue(() => buildInboundReceiver(runtimeEnv));
   const mcpConnector = lazyValue(() => (mock ? new MockMcpConnector() : new RealMcpConnector()));
   const sms = lazyValue(() => buildSmsSender(runtimeEnv));
   const phoneVerification = lazyValue(() => buildPhoneVerificationProvider(runtimeEnv));
   const telephony = lazyValue(() => buildTelephonyProvider(runtimeEnv));
-  // Voice resolves through the same real/mock seam every other boundary uses, and is lazy for
-  // the same reason the mailer is: a deploy that never opens a voice session must not be blocked
-  // at boot by a credential it does not use.
   const voice = lazyValue(() => resolveVoiceProvider(runtimeEnv));
   const push = lazyValue(() => buildPushSender(runtimeEnv));
   const unfurler = lazyValue(() => (mock ? new MockUnfurler() : new RealUnfurler()));
@@ -539,65 +544,61 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
   );
   const placeGeocoder = lazyValue(() => buildPlaceGeocoder(runtimeEnv));
 
-  const built: AppContainer = {
-    get billing() {
-      return billing();
-    },
-    get agentRuntime() {
-      return agentRuntime();
-    },
-    get agentTurn() {
-      return agentTurn();
-    },
-    get summarizer() {
-      return summarizer();
-    },
-    get taskSynthesizer() {
-      return taskSynthesizer();
-    },
-    get taskExpander() {
-      return taskExpander();
-    },
-    get mailer() {
-      return mailer();
-    },
-    get inboundMail() {
-      return inboundMail();
-    },
-    get mcpConnector() {
-      return mcpConnector();
-    },
-    get sms() {
-      return sms();
-    },
-    get phoneVerification() {
-      return phoneVerification();
-    },
-    get telephony() {
-      return telephony();
-    },
-    get voice() {
-      return voice();
-    },
-    get push() {
-      return push();
-    },
-    get blob() {
-      return blob();
-    },
-    get unfurler() {
-      return unfurler();
-    },
-    get placeGeocoder() {
-      return placeGeocoder();
-    },
+  return {
+    billing,
+    agentRuntime,
+    agentTurn,
+    summarizer,
+    taskSynthesizer,
+    taskExpander,
+    mailer,
+    inboundMail,
+    mcpConnector,
+    sms,
+    phoneVerification,
+    telephony,
+    voice,
+    push,
+    blob,
+    unfurler,
+    placeGeocoder,
   };
+}
+
+/**
+ * Expose each thunk as a getter, so reading a boundary constructs it and nothing else.
+ *
+ * @remarks
+ * Defined rather than written out one property at a time: the container's shape is already stated
+ * by {@link AppContainer}, and a hand-written getter per boundary is a second copy of that list
+ * for a reader to check against the first.
+ *
+ * @param lazy - One thunk per boundary.
+ * @returns The container.
+ */
+function toLazyContainer(lazy: LazyBoundaries): AppContainer {
+  const container = {} as AppContainer;
+  for (const [key, get] of Object.entries(lazy)) {
+    Object.defineProperty(container, key, { get, enumerable: true });
+  }
+  return container;
+}
+
+/**
+ * Construct the API dependency container for the current runtime mode.
+ *
+ * @param runtimeEnv - Optional runtime configuration override for tests.
+ * @returns The container; every boundary constructs on first access.
+ */
+export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv()): AppContainer {
+  const lazy = buildLazyBoundaries(runtimeEnv);
+  const built = toLazyContainer(lazy);
 
   // `@docket/notifications/dispatch`'s adapters have no DI container of their own — register this
   // container's own lazy mailer/sms/push accessors once so a dispatch from ANY caller in this
   // process (this app's routes, or `@docket/auth`'s recovery hooks) resolves the same transports
   // this container itself would, without forcing early construction of ones nothing uses yet.
-  configureNotificationTransports({ mailer, sms, push });
+  configureNotificationTransports({ mailer: lazy.mailer, sms: lazy.sms, push: lazy.push });
 
   return built;
 }

@@ -55,6 +55,144 @@ export interface PersistSuggestionsResult {
   readonly synthCalls: number;
 }
 
+/** A thread the funnel passed, carried with the verdict whose score and category are reused. */
+interface WorthyCandidate {
+  readonly thread: CandidateThread;
+  readonly verdict: ReturnType<typeof classifyTaskWorthiness>;
+}
+
+/** The thread ids and Message-IDs this organization has already been shown a suggestion for. */
+interface AlreadySuggested {
+  readonly threadIds: ReadonlySet<string>;
+  readonly messageIds: ReadonlySet<string>;
+}
+
+/**
+ * Find which of the candidate threads already have a suggestion.
+ *
+ * @remarks
+ * Two dedup keys, because sweeps re-pull recent threads and the same email seen through two mail
+ * providers carries the same RFC 5322 Message-ID even though the provider thread ids differ.
+ * Skipping here rather than after synthesis is what keeps the (potentially paid) model from
+ * re-running on every recurring thread only to have the result discarded.
+ *
+ * @param organizationId - The workspace being swept.
+ * @param worthy - The threads that passed the funnel.
+ * @returns The keys to skip.
+ */
+async function loadAlreadySuggested(
+  organizationId: string,
+  worthy: readonly WorthyCandidate[],
+): Promise<AlreadySuggested> {
+  const byThread = await db
+    .select({ threadId: emailSuggestion.externalThreadId })
+    .from(emailSuggestion)
+    .where(
+      and(
+        eq(emailSuggestion.organizationId, organizationId),
+        inArray(
+          emailSuggestion.externalThreadId,
+          worthy.map((candidate) => candidate.thread.threadId),
+        ),
+      ),
+    );
+
+  const candidateMessageIds = worthy.flatMap((candidate) =>
+    candidate.thread.rfc822MessageId !== undefined ? [candidate.thread.rfc822MessageId] : [],
+  );
+  const byMessageId =
+    candidateMessageIds.length === 0
+      ? []
+      : await db
+          .select({ messageId: emailSuggestion.rfc822MessageId })
+          .from(emailSuggestion)
+          .where(
+            and(
+              eq(emailSuggestion.organizationId, organizationId),
+              inArray(emailSuggestion.rfc822MessageId, candidateMessageIds),
+            ),
+          );
+
+  return {
+    threadIds: new Set(byThread.map((row) => row.threadId)),
+    messageIds: new Set(
+      byMessageId.flatMap((row) => (row.messageId !== null ? [row.messageId] : [])),
+    ),
+  };
+}
+
+/**
+ * Draft and persist one suggestion, emitting its `created` observation.
+ *
+ * @param input - The run's shared input.
+ * @param candidate - The thread to draft, with its funnel verdict.
+ * @returns The new suggestion's id, or `undefined` when a concurrent writer won the insert.
+ */
+async function persistOneSuggestion(
+  input: PersistSuggestionsInput,
+  candidate: WorthyCandidate,
+): Promise<string | undefined> {
+  const { thread, verdict } = candidate;
+  const draft = await input.synthesizer.synthesize({
+    subject: thread.subject,
+    snippet: thread.snippet,
+    sender: thread.sender,
+  });
+
+  const inserted = await db
+    .insert(emailSuggestion)
+    .values({
+      organizationId: input.organizationId,
+      createdBy: input.actorId,
+      integrationId: input.integrationId,
+      externalThreadId: thread.threadId,
+      title: draft.title,
+      description: draft.description ?? null,
+      priority: draft.priority,
+      dueDate: draft.dueDate !== undefined ? new Date(`${draft.dueDate}T00:00:00.000Z`) : null,
+      confidence: verdict.score,
+      rfc822MessageId: thread.rfc822MessageId ?? null,
+      emailMeta: {
+        subject: thread.subject,
+        sender: thread.sender,
+        snippet: thread.snippet,
+        ...(thread.receivedAt !== undefined ? { receivedAt: thread.receivedAt } : {}),
+        ...(thread.rfc822MessageId !== undefined
+          ? { rfc822MessageId: thread.rfc822MessageId }
+          : {}),
+        externalUrl: thread.externalUrl,
+      },
+    })
+    .onConflictDoNothing({
+      target: [emailSuggestion.organizationId, emailSuggestion.externalThreadId],
+    })
+    .returning({ id: emailSuggestion.id });
+  const row = inserted[0];
+  if (!row) return undefined; // raced with another writer — already suggested
+
+  await emitEvent({
+    organizationId: input.organizationId,
+    kind: 'created',
+    actorId: input.actorId,
+    title: draft.title,
+    subject: { type: 'email_suggestion', id: row.id, title: draft.title },
+    // The funnel verdict rides along so pipeline rules can match on it
+    // (e.g. dismiss-promotions matches `detail.category === 'promotions'`), and so does the
+    // email's own subject/sender/snippet — a routing rule ("anything about an LVBT
+    // opportunity belongs in the LVBT workspace") is a condition on the mail, not on the
+    // classifier, and the predicate interpreter can only read what the event carries.
+    detail: {
+      schema: 'docket.email_suggestion',
+      category: verdict.category ?? null,
+      confidence: verdict.score,
+      subject: thread.subject,
+      sender: thread.sender,
+      snippet: thread.snippet,
+    },
+  });
+  return row.id;
+}
+
 /**
  * Classify, synthesize, and persist suggestions for a batch of threads.
  *
@@ -67,13 +205,16 @@ export interface PersistSuggestionsResult {
  * The org's routing rules are loaded once per batch and handed to the classifier, because the
  * funnel runs before any rule does and would otherwise discard mail the person explicitly asked
  * to have routed. See {@link loadMailRoutingCues}.
+ *
+ * @param input - The threads to consider and the services to draft them with.
+ * @returns The run's counters and the ids of the suggestions it created.
  */
 export async function persistSuggestions(
   input: PersistSuggestionsInput,
 ): Promise<PersistSuggestionsResult> {
   const routingCues = await loadMailRoutingCues(input.organizationId);
   // Classify once and carry the verdict through (its score/category are reused below).
-  const worthy = input.threads
+  const worthy: readonly WorthyCandidate[] = input.threads
     .map((thread) => ({
       thread,
       verdict: classifyTaskWorthiness(thread, input.threshold, routingCues),
@@ -90,113 +231,23 @@ export async function persistSuggestions(
     };
   }
 
-  // Pre-dedup 1: skip synthesis for threads already suggested (sweeps re-pull recent threads,
-  // so without this the model would re-run on every recurring thread and the result be discarded).
-  const alreadySuggested = await db
-    .select({ threadId: emailSuggestion.externalThreadId })
-    .from(emailSuggestion)
-    .where(
-      and(
-        eq(emailSuggestion.organizationId, input.organizationId),
-        inArray(
-          emailSuggestion.externalThreadId,
-          worthy.map((candidate) => candidate.thread.threadId),
-        ),
-      ),
-    );
-  const seen = new Set(alreadySuggested.map((row) => row.threadId));
-
-  // Pre-dedup 2 (cross-provider): the same email seen through two mail providers carries the
-  // same RFC 5322 Message-ID even though the provider thread ids differ — skip those too.
-  const candidateMessageIds = worthy.flatMap((candidate) =>
-    candidate.thread.rfc822MessageId !== undefined ? [candidate.thread.rfc822MessageId] : [],
-  );
-  const seenMessageIds = new Set(
-    candidateMessageIds.length > 0
-      ? (
-          await db
-            .select({ messageId: emailSuggestion.rfc822MessageId })
-            .from(emailSuggestion)
-            .where(
-              and(
-                eq(emailSuggestion.organizationId, input.organizationId),
-                inArray(emailSuggestion.rfc822MessageId, candidateMessageIds),
-              ),
-            )
-        ).flatMap((row) => (row.messageId !== null ? [row.messageId] : []))
-      : [],
-  );
-
+  const seen = await loadAlreadySuggested(input.organizationId, worthy);
   const suggestionIds: string[] = [];
   let skippedExisting = 0;
   let synthCalls = 0;
-  for (const { thread, verdict } of worthy) {
+  for (const candidate of worthy) {
+    const { thread } = candidate;
+    const messageId = thread.rfc822MessageId;
     if (
-      seen.has(thread.threadId) ||
-      (thread.rfc822MessageId !== undefined && seenMessageIds.has(thread.rfc822MessageId))
+      seen.threadIds.has(thread.threadId) ||
+      (messageId !== undefined && seen.messageIds.has(messageId))
     ) {
       skippedExisting += 1;
       continue;
     }
     synthCalls += 1;
-    const draft = await input.synthesizer.synthesize({
-      subject: thread.subject,
-      snippet: thread.snippet,
-      sender: thread.sender,
-    });
-
-    const inserted = await db
-      .insert(emailSuggestion)
-      .values({
-        organizationId: input.organizationId,
-        createdBy: input.actorId,
-        integrationId: input.integrationId,
-        externalThreadId: thread.threadId,
-        title: draft.title,
-        description: draft.description ?? null,
-        priority: draft.priority,
-        dueDate: draft.dueDate !== undefined ? new Date(`${draft.dueDate}T00:00:00.000Z`) : null,
-        confidence: verdict.score,
-        rfc822MessageId: thread.rfc822MessageId ?? null,
-        emailMeta: {
-          subject: thread.subject,
-          sender: thread.sender,
-          snippet: thread.snippet,
-          ...(thread.receivedAt !== undefined ? { receivedAt: thread.receivedAt } : {}),
-          ...(thread.rfc822MessageId !== undefined
-            ? { rfc822MessageId: thread.rfc822MessageId }
-            : {}),
-          externalUrl: thread.externalUrl,
-        },
-      })
-      .onConflictDoNothing({
-        target: [emailSuggestion.organizationId, emailSuggestion.externalThreadId],
-      })
-      .returning({ id: emailSuggestion.id });
-    const row = inserted[0];
-    if (!row) continue; // raced with another writer — already suggested
-
-    suggestionIds.push(row.id);
-    await emitEvent({
-      organizationId: input.organizationId,
-      kind: 'created',
-      actorId: input.actorId,
-      title: draft.title,
-      subject: { type: 'email_suggestion', id: row.id, title: draft.title },
-      // The funnel verdict rides along so pipeline rules can match on it
-      // (e.g. dismiss-promotions matches `detail.category === 'promotions'`), and so does the
-      // email's own subject/sender/snippet — a routing rule ("anything about an LVBT
-      // opportunity belongs in the LVBT workspace") is a condition on the mail, not on the
-      // classifier, and the predicate interpreter can only read what the event carries.
-      detail: {
-        schema: 'docket.email_suggestion',
-        category: verdict.category ?? null,
-        confidence: verdict.score,
-        subject: thread.subject,
-        sender: thread.sender,
-        snippet: thread.snippet,
-      },
-    });
+    const id = await persistOneSuggestion(input, candidate);
+    if (id !== undefined) suggestionIds.push(id);
   }
 
   return {

@@ -169,7 +169,6 @@ export async function listSyncConflicts(
     )
     .orderBy(desc(auditEvent.createdAt))
     .limit(limit);
-
   const conflicts: SyncConflictRow[] = [];
   for (const row of rows) {
     const conflict = asSyncConflictRecord(row.metadata);

@@ -182,6 +182,24 @@ export type AccessTokenFetcher = (input: {
 const defaultAccessTokenFetcher: AccessTokenFetcher = (input) =>
   auth.api.getAccessToken({ body: input });
 
+async function resolveActorUser(actorId: string | null): Promise<string | null> {
+  if (!actorId) return null;
+  const rows = await db
+    .select({ userId: actor.userId })
+    .from(actor)
+    .where(eq(actor.id, actorId))
+    .limit(1);
+  return rows[0]?.userId ?? null;
+}
+
+function selectLinkedAccount(
+  linked: readonly { readonly accountId: string; readonly scope: string }[],
+  externalAccountId: string | undefined,
+): (typeof linked)[0] | null {
+  if (externalAccountId) return linked.find((row) => row.accountId === externalAccountId) ?? null;
+  return linked.length === 1 ? linked[0] : null;
+}
+
 /**
  * Resolve a fresh OAuth access token for a connector provider on behalf of an Actor —
  * the live path, with NO env-mode short-circuit (see {@link resolveConnectorToken}).
@@ -213,26 +231,18 @@ export async function resolveLiveConnectorToken(
     message: `Sign in with ${providerId} to reconnect this integration.`,
   };
 
-  if (!actorId) return needsReauth;
-
-  const rows = await db
-    .select({ userId: actor.userId })
-    .from(actor)
-    .where(eq(actor.id, actorId))
-    .limit(1);
-  const userId = rows[0]?.userId;
+  const userId = await resolveActorUser(actorId);
   if (!userId) return needsReauth;
 
   const linked = await db
     .select({ accountId: account.accountId, scope: account.scope })
     .from(account)
     .where(and(eq(account.userId, userId), eq(account.providerId, providerId)));
-  const selected = externalAccountId
-    ? linked.find((row) => row.accountId === externalAccountId)
-    : linked.length === 1
-      ? linked[0]
-      : null;
-  if (externalAccountId && !selected) return needsReauth;
+
+  if (externalAccountId && !linked.some((row) => row.accountId === externalAccountId)) {
+    return needsReauth;
+  }
+
   if (!externalAccountId && linked.length > 1) {
     return {
       ok: false,
@@ -240,7 +250,10 @@ export async function resolveLiveConnectorToken(
       message: `Choose which ${providerId} account this integration should use.`,
     };
   }
+
+  const selected = selectLinkedAccount(linked, externalAccountId);
   if (!selected) return needsReauth;
+
   if (provider === 'linear' && !parseOAuthScopes(selected.scope).includes('write')) {
     return needsReauth;
   }

@@ -86,6 +86,280 @@ function contextIcon(hint: string | undefined): LucideIcon | null {
   return SEARCH_KIND_ICON[hint as SearchDocumentKind];
 }
 
+/**
+ * Build the library table columns.
+ * @param onOpenedChange - Callback when user clicks info button
+ * @returns Column definitions for EntityTable
+ */
+function buildLibraryColumns(
+  onOpenedChange: (resourceId: string) => void,
+): readonly Column<SearchResult>[] {
+  return [
+    {
+      key: 'name',
+      header: 'Name',
+      flex: true,
+      priority: 'always',
+      render: (row) => {
+        const Icon = glyphFor(row);
+        const resolved = titleResolved(row);
+        const host = resolved ? hostOf(row.externalUrl) : null;
+        return (
+          <span className="flex min-w-0 items-center gap-2">
+            <Icon aria-hidden className="text-on-surface-variant size-4! shrink-0" />
+            <span
+              className={`min-w-0 truncate ${resolved ? 'text-label-large' : 'text-on-surface-variant'}`}
+            >
+              {row.title}
+            </span>
+            {host ? (
+              <span className="text-on-surface-variant text-label-small hidden shrink-0 @lg/table:inline">
+                · {host}
+              </span>
+            ) : null}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'source',
+      header: 'Source',
+      width: '9rem',
+      priority: 1,
+      render: (row) => {
+        const source = sourceOf(row);
+        return (
+          <span className="text-on-surface-variant text-label-small truncate">
+            {source ? sourceLabel(source) : 'Docket'}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'updated',
+      header: 'Updated',
+      width: '6rem',
+      align: 'end',
+      priority: 2,
+      render: (row) => (
+        <span className="text-on-surface-variant text-label-small">
+          {relativeTime(row.updatedAt)}
+        </span>
+      ),
+    },
+    {
+      key: 'info',
+      header: <span className="sr-only">Context</span>,
+      width: '3rem',
+      align: 'end',
+      priority: 'always',
+      render: (row) => (
+        <Button
+          type="button"
+          variant="ghost"
+          iconOnly
+          controlSize="lg"
+          aria-label={`Show context for ${row.title}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenedChange(row.entityId);
+          }}
+        >
+          <Info aria-hidden className="size-4" />
+        </Button>
+      ),
+    },
+  ];
+}
+
+/**
+ * Build the library table groups.
+ * @param appliedGroups - Groups from applyView
+ * @returns EntityTableGroup definitions
+ */
+function buildLibraryGroups(
+  appliedGroups: ReturnType<typeof applyView>['groups'],
+): readonly EntityTableGroup<SearchResult>[] {
+  return (appliedGroups ?? []).map((group) => {
+    const Icon = group.id === EMPTY_GROUP_ID ? null : contextIcon(group.hint);
+    return {
+      id: group.id,
+      label: group.label,
+      rows: group.rows,
+      ...(Icon
+        ? {
+            decoration: (
+              <Icon aria-hidden className="text-on-surface-variant size-4! shrink-0" />
+            ),
+          }
+        : {}),
+    };
+  });
+}
+
+/** Props for the search field component. */
+interface LibrarySearchFieldProps {
+  readonly findOpen: boolean;
+  readonly searchInputRef: React.RefObject<HTMLInputElement>;
+  readonly draft: string;
+  readonly query: string;
+  readonly isFetching: boolean;
+  readonly resultCount: number;
+  readonly onDraftChange: (value: string) => void;
+  readonly onFindClose: () => void;
+  readonly restoreFocus: () => void;
+}
+
+/** Search field component. */
+function LibrarySearchFieldComponent({
+  findOpen,
+  searchInputRef,
+  draft,
+  query,
+  isFetching,
+  resultCount,
+  onDraftChange,
+  onFindClose,
+  restoreFocus,
+}: LibrarySearchFieldProps): JSX.Element | null {
+  if (!findOpen) return null;
+  return (
+    <InPageSearchField
+      inputRef={searchInputRef}
+      value={draft}
+      onValueChange={onDraftChange}
+      onEscapeEmpty={() => {
+        onFindClose();
+        restoreFocus();
+      }}
+      label="Search the Library"
+      placeholder="Search Library"
+      resultCount={resultCount}
+      pending={draft.trim() !== query || isFetching}
+    />
+  );
+}
+
+/** Props for the end adornment component. */
+interface LibraryEndAdornmentProps {
+  readonly isFetchingNextPage: boolean;
+  readonly isFetchNextPageError: boolean;
+  readonly hasNextPage: boolean;
+  readonly refillingSparsePage: boolean;
+  readonly onRetry: () => void;
+}
+
+/** End adornment component for loading and error states. */
+function LibraryEndAdornmentComponent({
+  isFetchingNextPage,
+  isFetchNextPageError,
+  hasNextPage,
+  refillingSparsePage,
+  onRetry,
+}: LibraryEndAdornmentProps): JSX.Element | undefined {
+  if (
+    isFetchingNextPage ||
+    (refillingSparsePage && hasNextPage && !isFetchNextPageError)
+  ) {
+    return (
+      <div
+        role="status"
+        className="text-on-surface-variant text-body-small flex min-h-12 items-center justify-center gap-2"
+      >
+        <RefreshCw aria-hidden className="size-4 animate-spin" />
+        Loading more resources
+      </div>
+    );
+  }
+
+  if (isFetchNextPageError) {
+    return (
+      <div
+        role="alert"
+        className="text-error text-body-small flex min-h-14 items-center justify-between gap-3 px-3"
+      >
+        <span>Could not load more resources.</span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onRetry}
+        >
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  return undefined;
+}
+
+/** Props for the detail panel component. */
+interface LibraryDetailPanelProps {
+  readonly orgId: string;
+  readonly opened: SearchResult | null;
+  readonly panelOpen: boolean;
+  readonly openedId: string | null;
+  readonly onClose: () => void;
+}
+
+/** Detail panel component. */
+function LibraryDetailPanelComponent({
+  orgId,
+  opened,
+  panelOpen,
+  openedId,
+  onClose,
+}: LibraryDetailPanelProps): JSX.Element | null {
+  if (opened) {
+    return (
+      <ResourceDetailPanel
+        orgId={orgId}
+        resource={opened}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (panelOpen) {
+    return (
+      <aside
+        aria-label="Loading entry"
+        aria-busy="true"
+        className="bg-surface-container-low flex min-w-0 flex-col gap-3 rounded-xl p-4"
+      >
+        {Array.from({ length: 3 }, (_, index) => (
+          <Skeleton key={index} className="h-7 w-full" />
+        ))}
+      </aside>
+    );
+  }
+
+  if (openedId !== null) {
+    return (
+      <aside
+        aria-label="Entry unavailable"
+        className="bg-surface-container-low flex min-w-0 flex-col gap-2 rounded-xl p-4"
+      >
+        <p className="text-on-surface text-title-small">Not available</p>
+        <p className="text-on-surface-variant text-body-medium">
+          That entry is no longer here, or you do not have access to it.
+        </p>
+        <Button
+          variant="outline"
+          controlSize="lg"
+          className="self-start"
+          onClick={onClose}
+        >
+          Back to the library
+        </Button>
+      </aside>
+    );
+  }
+
+  return null;
+}
+
 /** Render the Library. */
 export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Element {
   const { state, setFilters, setGroupBy, setSort, setSearchParam, pushSearchParams } =
@@ -202,105 +476,8 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
     table.scrollTop = scrollPositions.current[mode];
   }, [applied.rows.length, displayedSearchActive, resourcesQ.isPending]);
 
-  const columns: readonly Column<SearchResult>[] = useMemo(
-    () => [
-      {
-        key: 'name',
-        header: 'Name',
-        flex: true,
-        priority: 'always',
-        render: (row) => {
-          const Icon = glyphFor(row);
-          const resolved = titleResolved(row);
-          const host = resolved ? hostOf(row.externalUrl) : null;
-          return (
-            <span className="flex min-w-0 items-center gap-2">
-              <Icon aria-hidden className="text-on-surface-variant size-4! shrink-0" />
-              <span
-                className={`min-w-0 truncate ${resolved ? 'text-label-large' : 'text-on-surface-variant'}`}
-              >
-                {row.title}
-              </span>
-              {host ? (
-                <span className="text-on-surface-variant text-label-small hidden shrink-0 @lg/table:inline">
-                  · {host}
-                </span>
-              ) : null}
-            </span>
-          );
-        },
-      },
-      {
-        key: 'source',
-        header: 'Source',
-        width: '9rem',
-        priority: 1,
-        render: (row) => {
-          const source = sourceOf(row);
-          return (
-            <span className="text-on-surface-variant text-label-small truncate">
-              {source ? sourceLabel(source) : 'Docket'}
-            </span>
-          );
-        },
-      },
-      {
-        key: 'updated',
-        header: 'Updated',
-        width: '6rem',
-        align: 'end',
-        priority: 2,
-        render: (row) => (
-          <span className="text-on-surface-variant text-label-small">
-            {relativeTime(row.updatedAt)}
-          </span>
-        ),
-      },
-      {
-        key: 'info',
-        header: <span className="sr-only">Context</span>,
-        width: '3rem',
-        align: 'end',
-        priority: 'always',
-        render: (row) => (
-          <Button
-            type="button"
-            variant="ghost"
-            iconOnly
-            controlSize="lg"
-            aria-label={`Show context for ${row.title}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              setOpened(row.entityId);
-            }}
-          >
-            <Info aria-hidden className="size-4" />
-          </Button>
-        ),
-      },
-    ],
-    [setOpened],
-  );
-
-  const groups: readonly EntityTableGroup<SearchResult>[] = useMemo(
-    () =>
-      (applied.groups ?? []).map((group) => {
-        const Icon = group.id === EMPTY_GROUP_ID ? null : contextIcon(group.hint);
-        return {
-          id: group.id,
-          label: group.label,
-          rows: group.rows,
-          ...(Icon
-            ? {
-                decoration: (
-                  <Icon aria-hidden className="text-on-surface-variant size-4! shrink-0" />
-                ),
-              }
-            : {}),
-        };
-      }),
-    [applied.groups],
-  );
+  const columns = useMemo(() => buildLibraryColumns(setOpened), [setOpened]);
+  const groups = useMemo(() => buildLibraryGroups(applied.groups), [applied.groups]);
 
   const onPage = openedId === null ? null : (rows.find((row) => row.entityId === openedId) ?? null);
   const deepLinkQ = useApiListQuery(
@@ -323,35 +500,6 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
     (rows.length === 0 || filtered) &&
     (resourcesQ.hasNextPage || resourcesQ.isFetchingNextPage || resourcesQ.isFetchNextPageError);
 
-  const endAdornment =
-    resourcesQ.isFetchingNextPage ||
-    (refillingSparsePage && resourcesQ.hasNextPage && !resourcesQ.isFetchNextPageError) ? (
-      <div
-        role="status"
-        className="text-on-surface-variant text-body-small flex min-h-12 items-center justify-center gap-2"
-      >
-        <RefreshCw aria-hidden className="size-4 animate-spin" />
-        Loading more resources
-      </div>
-    ) : resourcesQ.isFetchNextPageError ? (
-      <div
-        role="alert"
-        className="text-error text-body-small flex min-h-14 items-center justify-between gap-3 px-3"
-      >
-        <span>Could not load more resources.</span>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            void resourcesQ.fetchNextPage();
-          }}
-        >
-          Retry
-        </Button>
-      </div>
-    ) : undefined;
-
   // placeholder: the library's resources, which the current filters decide, and the fields of
   // whichever entry is opened beside them.
   return (
@@ -360,21 +508,17 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
       fill
       toolbar={
         <div className="flex min-w-0 flex-col gap-3">
-          {findOpen ? (
-            <InPageSearchField
-              inputRef={searchInputRef}
-              value={draft}
-              onValueChange={setDraft}
-              onEscapeEmpty={() => {
-                setFindOpen(false);
-                restoreFocus();
-              }}
-              label="Search the Library"
-              placeholder="Search Library"
-              resultCount={applied.rows.length}
-              pending={draft.trim() !== query || resourcesQ.isFetching}
-            />
-          ) : null}
+          <LibrarySearchFieldComponent
+            findOpen={findOpen}
+            searchInputRef={searchInputRef}
+            draft={draft}
+            query={query}
+            isFetching={resourcesQ.isFetching}
+            resultCount={applied.rows.length}
+            onDraftChange={setDraft}
+            onFindClose={() => { setFindOpen(false); }}
+            restoreFocus={restoreFocus}
+          />
           <FilterToolbar
             catalog={catalog}
             state={state}
@@ -479,7 +623,15 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
               {...(opened ? { selected: new Set([opened.id]) } : {})}
               virtualized
               onEndReached={loadNextPage}
-              endAdornment={endAdornment}
+              endAdornment={
+                <LibraryEndAdornmentComponent
+                  isFetchingNextPage={resourcesQ.isFetchingNextPage}
+                  isFetchNextPageError={resourcesQ.isFetchNextPageError}
+                  hasNextPage={resourcesQ.hasNextPage}
+                  refillingSparsePage={refillingSparsePage}
+                  onRetry={() => void resourcesQ.fetchNextPage()}
+                />
+              }
               className={`h-full ${applied.rows.length === 0 && !refillingSparsePage ? 'invisible' : ''}`}
               aria-label={displayedSearchActive ? 'Library search results' : 'Library resources'}
             />
@@ -493,9 +645,7 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
                     ? {
                         cta: {
                           label: 'Clear filters',
-                          onClick: () => {
-                            setFilters([]);
-                          },
+                          onClick: () => { setFilters([]); },
                         },
                       }
                     : {})}
@@ -503,45 +653,13 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
               </div>
             ) : null}
           </div>
-          {opened ? (
-            <ResourceDetailPanel
-              orgId={orgId}
-              resource={opened}
-              onClose={() => {
-                setOpened(null);
-              }}
-            />
-          ) : panelOpen ? (
-            <aside
-              aria-label="Loading entry"
-              aria-busy="true"
-              className="bg-surface-container-low flex min-w-0 flex-col gap-3 rounded-xl p-4"
-            >
-              {Array.from({ length: 3 }, (_, index) => (
-                <Skeleton key={index} className="h-7 w-full" />
-              ))}
-            </aside>
-          ) : openedId !== null ? (
-            <aside
-              aria-label="Entry unavailable"
-              className="bg-surface-container-low flex min-w-0 flex-col gap-2 rounded-xl p-4"
-            >
-              <p className="text-on-surface text-title-small">Not available</p>
-              <p className="text-on-surface-variant text-body-medium">
-                That entry is no longer here, or you do not have access to it.
-              </p>
-              <Button
-                variant="outline"
-                controlSize="lg"
-                className="self-start"
-                onClick={() => {
-                  setOpened(null);
-                }}
-              >
-                Back to the library
-              </Button>
-            </aside>
-          ) : null}
+          <LibraryDetailPanelComponent
+            orgId={orgId}
+            opened={opened}
+            panelOpen={panelOpen}
+            openedId={openedId}
+            onClose={() => { setOpened(null); }}
+          />
         </div>
       )}
     </ListPageLayout>

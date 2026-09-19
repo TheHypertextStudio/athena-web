@@ -1,134 +1,131 @@
-/**
- * `@docket/api` — pure cycle auto-roll math (no DB, no Hono).
- *
- * @remarks
- * DECISION (product): cycles auto-roll on a configurable cadence
- * (`team.cycle_cadence_weeks`, default 1 = weekly; weekly for personal) so the user
- * never creates cycles by hand. This module computes the week-aligned, cadence-stepped
- * windows around a given instant and derives which window is "current" (today within
- * `[startsAt, endsAt]`). It is deterministic and side-effect free so the route layer
- * can lazily ensure-and-persist these windows idempotently and so the math is unit-
- * testable in isolation.
- *
- * @see {@link ensureCycleWindow} (in `routes/cycles.ts`) for the persistence wrapper.
- */
+/** Pure calendar-day cycle schedule math. */
 
-/** Milliseconds in one calendar day. */
 const DAY_MS = 86_400_000;
-/** Milliseconds in one week (7 days). */
-const WEEK_MS = 7 * DAY_MS;
+const LEGACY_ANCHOR = '2024-01-01';
+const NATIVE_NUMBER_OFFSET = 20_000_000;
 
-/**
- * The absolute week-aligned epoch every team's cadence steps from: Monday
- * 2024-01-01 00:00:00 UTC (a Monday).
- *
- * @remarks
- * Anchoring every window to one shared epoch (rather than to "now") is what makes a
- * window's sequential `number` stable: a given calendar window always maps to the
- * same index regardless of when the rolling window is (re)computed, so re-running the
- * ensure pass never renumbers or duplicates an existing cycle.
- */
-const EPOCH_MS = Date.UTC(2024, 0, 1, 0, 0, 0, 0);
-
-/** How many cadence windows to keep behind today in the rolling window. */
+/** How many windows a single materialization request may contain. */
+export const MAX_CYCLE_WINDOWS_PER_REQUEST = 400;
+/** Compatibility window retained for the current-cycle endpoint. */
 export const WINDOW_PAST = 4;
-/** How many cadence windows to keep ahead of today in the rolling window. */
+/** Compatibility window retained for the current-cycle endpoint. */
 export const WINDOW_FUTURE = 4;
 
-/**
- * A single auto-rolled cycle window: a closed `[startsAt, endsAt]` interval (the two
- * stored timestamps) and the stable sequential `number` derived from its offset from
- * {@link EPOCH_MS}.
- *
- * @remarks
- * Consecutive windows tile the timeline without overlapping: `endsAt` is one
- * millisecond before the next window's `startsAt`, so for any instant exactly one
- * window is "current".
- */
+/** A team's native cycle schedule. */
+export interface CycleSchedule {
+  /** Calendar date on which cycle index zero begins. */
+  readonly anchorDate: string;
+  /** Number of calendar days in each cycle. */
+  readonly cadenceDays: number;
+}
+
+/** One native cycle window derived from a schedule. */
 export interface CycleWindowSlot {
-  /** Stable sequential cycle number (1-based index of this window from the epoch). */
+  /** Stable compatibility number derived from the start calendar date. */
   readonly number: number;
-  /** Inclusive window start (week-aligned, Monday 00:00 UTC of a cadence boundary). */
+  /** Inclusive start calendar date. */
+  readonly startDate: string;
+  /** Inclusive end calendar date. */
+  readonly endDate: string;
+  /** Inclusive UTC start timestamp. */
   readonly startsAt: Date;
-  /** Inclusive window end: one millisecond before the next window opens. */
+  /** Inclusive UTC end timestamp. */
   readonly endsAt: Date;
 }
 
-/** Normalize a cadence to a sane positive integer week count (defaults/guards to 1). */
+/** Raised when one request would materialize too many cycle rows. */
+export class CycleRangeLimitError extends Error {
+  /** Create the bounded-range error. */
+  constructor() {
+    super(`A cycle request may contain at most ${String(MAX_CYCLE_WINDOWS_PER_REQUEST)} windows.`);
+    this.name = 'CycleRangeLimitError';
+  }
+}
+
+/** Normalize persisted cadence input to the supported 1–365 day range. */
+export function normalizeCadenceDays(days: number): number {
+  return Number.isInteger(days) && days >= 1 && days <= 365 ? days : 7;
+}
+
+/** Compatibility normalization for callers removed by the through-date API slice. */
 export function normalizeCadenceWeeks(weeks: number): number {
   if (!Number.isFinite(weeks)) return 1;
-  const w = Math.floor(weeks);
-  return w >= 1 ? w : 1;
+  const value = Math.floor(weeks);
+  return value >= 1 ? value : 1;
 }
 
-/**
- * The cadence-window index that contains `instant` (0-based, counted from
- * {@link EPOCH_MS}). May be negative for instants before the epoch.
- */
-function windowIndexFor(instant: Date, cadenceWeeks: number): number {
-  const cadenceMs = cadenceWeeks * WEEK_MS;
-  return Math.floor((instant.getTime() - EPOCH_MS) / cadenceMs);
+function dateAtUtc(date: string): Date {
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+    throw new RangeError(`Invalid calendar date: ${date}`);
+  }
+  return parsed;
 }
 
-/** Build the {@link CycleWindowSlot} for a given (epoch-relative) window index + cadence. */
-function slotForIndex(index: number, cadenceWeeks: number): CycleWindowSlot {
-  const cadenceMs = cadenceWeeks * WEEK_MS;
-  const startMs = EPOCH_MS + index * cadenceMs;
+function dateOf(timestamp: number): string {
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function scheduleIndex(schedule: CycleSchedule, date: string): number {
+  const cadence = normalizeCadenceDays(schedule.cadenceDays);
+  return Math.floor(
+    (dateAtUtc(date).getTime() - dateAtUtc(schedule.anchorDate).getTime()) / DAY_MS / cadence,
+  );
+}
+
+function slotAt(schedule: CycleSchedule, index: number): CycleWindowSlot {
+  const cadence = normalizeCadenceDays(schedule.cadenceDays);
+  const startMs = dateAtUtc(schedule.anchorDate).getTime() + index * cadence * DAY_MS;
+  const nextStartMs = startMs + cadence * DAY_MS;
   return {
-    // Window indices are epoch-relative and can be negative; the cycle `number` is the
-    // 1-based sequential count, kept positive by offsetting past the earliest window we
-    // would ever generate. The offset is large enough that any realistic date stays > 0.
-    number: index + NUMBER_OFFSET,
+    number: NATIVE_NUMBER_OFFSET + Math.floor(startMs / DAY_MS),
+    startDate: dateOf(startMs),
+    endDate: dateOf(nextStartMs - DAY_MS),
     startsAt: new Date(startMs),
-    // One ms before the next window opens, so consecutive windows never overlap and
-    // exactly one window contains any given instant.
-    endsAt: new Date(startMs + cadenceMs - 1),
+    endsAt: new Date(nextStartMs - 1),
   };
 }
 
-/**
- * Offset added to the epoch-relative window index to produce the stored cycle
- * `number`.
- *
- * @remarks
- * Window indices are 0 at the epoch (2024-01-01) and negative before it; the DB
- * `number` column is a plain integer with a per-team uniqueness constraint, so any
- * stable bijection works. Offsetting by a large constant keeps numbers positive for
- * every plausible date (the epoch itself becomes #1,000,001) while preserving the
- * monotonic, gap-free sequence the UI expects.
- */
-const NUMBER_OFFSET = 1_000_001;
-
-/**
- * Compute the rolling window of cycle slots around `now`: {@link WINDOW_PAST} windows
- * behind, the current window, and {@link WINDOW_FUTURE} windows ahead, week-aligned and
- * stepping by `cadenceWeeks`.
- *
- * @param now - The reference instant ("today").
- * @param cadenceWeeks - The team's cadence in weeks (normalized to >= 1).
- * @returns The ordered (ascending by start) list of window slots.
- */
-export function rollingWindow(now: Date, cadenceWeeks: number): CycleWindowSlot[] {
-  const cadence = normalizeCadenceWeeks(cadenceWeeks);
-  const center = windowIndexFor(now, cadence);
-  const slots: CycleWindowSlot[] = [];
-  for (let i = center - WINDOW_PAST; i <= center + WINDOW_FUTURE; i += 1) {
-    slots.push(slotForIndex(i, cadence));
-  }
-  return slots;
+/** Return the anchored cycle window containing a calendar date. */
+export function cycleWindowContaining(schedule: CycleSchedule, date: string): CycleWindowSlot {
+  return slotAt(schedule, scheduleIndex(schedule, date));
 }
 
 /**
- * Whether `now` falls within a window `[startsAt, endsAt]` (inclusive on both ends).
+ * Return every schedule window intersecting an inclusive date range.
  *
- * @remarks
- * The auto-rolled windows tile the timeline without overlap (`endsAt` is one ms before
- * the next window opens), so for an auto-rolled team exactly one window contains a given
- * instant. Inclusivity on both ends matches the product's "today is in this cycle"
- * intuition and is also applied to manually-created cycles; if two manual cycles overlap,
- * the route resolves `current` deterministically (it picks the earliest-starting match).
+ * @param schedule - Team cadence and anchor.
+ * @param throughDate - Inclusive target date.
+ * @param fromDate - Inclusive range start; defaults to the anchor.
+ * @throws {CycleRangeLimitError} When the range contains more than 400 windows.
  */
+export function cycleWindowsThrough(
+  schedule: CycleSchedule,
+  throughDate: string,
+  fromDate = schedule.anchorDate,
+): CycleWindowSlot[] {
+  const first = scheduleIndex(schedule, fromDate);
+  const last = scheduleIndex(schedule, throughDate);
+  if (last < first) return [];
+  const count = last - first + 1;
+  if (count > MAX_CYCLE_WINDOWS_PER_REQUEST) throw new CycleRangeLimitError();
+  return Array.from({ length: count }, (_, offset) => slotAt(schedule, first + offset));
+}
+
+/** Compatibility rolling window while route callers migrate to explicit date ranges. */
+export function rollingWindow(now: Date, cadenceWeeks: number): CycleWindowSlot[] {
+  const schedule = {
+    anchorDate: LEGACY_ANCHOR,
+    cadenceDays: normalizeCadenceWeeks(cadenceWeeks) * 7,
+  };
+  const center = scheduleIndex(schedule, now.toISOString().slice(0, 10));
+  return Array.from({ length: WINDOW_PAST + 1 + WINDOW_FUTURE }, (_, offset) =>
+    slotAt(schedule, center - WINDOW_PAST + offset),
+  );
+}
+
+/** Whether an instant falls inside an inclusive timestamp window. */
 export function isWithinWindow(now: Date, startsAt: Date, endsAt: Date): boolean {
-  const t = now.getTime();
-  return t >= startsAt.getTime() && t <= endsAt.getTime();
+  const timestamp = now.getTime();
+  return timestamp >= startsAt.getTime() && timestamp <= endsAt.getTime();
 }

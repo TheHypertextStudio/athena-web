@@ -84,7 +84,10 @@ export async function loadTeam(orgId: string, teamId: string): Promise<TeamRow> 
 }
 
 /** Seed status for an auto-rolled slot from its position relative to `now`. */
-export function deriveStatus(slot: CycleWindowSlot, now: Date): CycleRow['status'] {
+export function deriveStatus(
+  slot: Pick<CycleWindowSlot, 'startsAt' | 'endsAt'>,
+  now: Date,
+): CycleRow['status'] {
   if (now.getTime() > slot.endsAt.getTime()) return 'completed';
   if (now.getTime() < slot.startsAt.getTime()) return 'upcoming';
   return 'active';

@@ -176,6 +176,21 @@ async function assertTaskVisible(
   if (!target || !canViewTask(target)) throw new NotFoundError();
 }
 
+/** Authorize a comment by checking its subject task visibility. */
+async function authorizeComment(orgId: string, actorId: string, id: string): Promise<boolean> {
+  const [target] = await db
+    .select({ subjectType: comment.subjectType, subjectId: comment.subjectId })
+    .from(comment)
+    .where(and(eq(comment.id, id), eq(comment.organizationId, orgId)))
+    .limit(1);
+  if (!target) throw new NotFoundError();
+  if (target.subjectType === 'task') {
+    await assertTaskVisible(orgId, actorId, target.subjectId);
+    return true;
+  }
+  return false;
+}
+
 /**
  * The `view` gate every entity read passes, whatever addressed it.
  *
@@ -212,16 +227,8 @@ export async function authorizeEntity(
     // A task comment is a task projection, not an organization-level note. Resolve only its
     // subject pointer before the generic comment gate so neither the resource URI nor a semantic
     // batch read can expose its body, ids, or href when the owning task is hidden.
-    const [target] = await db
-      .select({ subjectType: comment.subjectType, subjectId: comment.subjectId })
-      .from(comment)
-      .where(and(eq(comment.id, id), eq(comment.organizationId, orgId)))
-      .limit(1);
-    if (!target) throw new NotFoundError();
-    if (target.subjectType === 'task') {
-      await assertTaskVisible(orgId, actorCtx.actorId, target.subjectId);
-      return actorCtx;
-    }
+    const isTaskComment = await authorizeComment(orgId, actorCtx.actorId, id);
+    if (isTaskComment) return actorCtx;
   }
 
   await authorize(actorCtx, 'view', {

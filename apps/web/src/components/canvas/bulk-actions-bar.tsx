@@ -49,11 +49,66 @@ export interface BulkSelectionProps {
 /** Props for {@link BulkPropertiesDialog}. */
 export interface BulkPropertiesDialogProps extends BulkSelectionProps, BulkActionsBarProps {}
 
+/** Render the more-actions dropdown menu. */
+function MoreActionsMenu({
+  commands,
+  taskActions,
+  count,
+}: BulkSelectionProps & { taskActions: ReturnType<typeof useCanvasActions> | null; count: number }): React.JSX.Element {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          iconOnly
+          aria-label="More selection actions"
+        >
+          <Ellipsis className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {commands.objectKind === 'task' && commands.canEdit && taskActions !== null && count === 1 ? (
+          <DropdownMenuItem
+            onSelect={() => {
+              const task = commands.selectedObjects[0];
+              if (task !== undefined) taskActions.setComplete(task.id, true);
+            }}
+          >
+            <CheckCircle2 />
+            Mark done
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem
+          disabled={!commands.canUndo || commands.pending}
+          onSelect={() => {
+            void commands.undo();
+          }}
+        >
+          <Undo />
+          Undo{commands.undoLabel ? ` ${commands.undoLabel}` : ''}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={!commands.canRedo || commands.pending}
+          onSelect={() => {
+            void commands.redo();
+          }}
+        >
+          <RefreshCw />
+          Redo{commands.redoLabel ? ` ${commands.redoLabel}` : ''}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /** The selection's actions: count, Open, Properties, Mark done, Move to trash, and history. */
 export function BulkSelectionActions({ commands }: BulkSelectionProps): React.JSX.Element | null {
   const taskActions = useCanvasActions();
   const count = commands.selectedObjects.length;
   if (count === 0) return null;
+
   return (
     <>
       <span className="text-label-large shrink-0 px-2 whitespace-nowrap">{count} selected</span>
@@ -91,53 +146,7 @@ export function BulkSelectionActions({ commands }: BulkSelectionProps): React.JS
       >
         <Trash2 className="size-4" /> <span className="hidden @lg:inline">Move to trash</span>
       </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            iconOnly
-            aria-label="More selection actions"
-          >
-            <Ellipsis className="size-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {commands.objectKind === 'task' &&
-          commands.canEdit &&
-          taskActions !== null &&
-          count === 1 ? (
-            <DropdownMenuItem
-              onSelect={() => {
-                const task = commands.selectedObjects[0];
-                if (task !== undefined) taskActions.setComplete(task.id, true);
-              }}
-            >
-              <CheckCircle2 />
-              Mark done
-            </DropdownMenuItem>
-          ) : null}
-          <DropdownMenuItem
-            disabled={!commands.canUndo || commands.pending}
-            onSelect={() => {
-              void commands.undo();
-            }}
-          >
-            <Undo />
-            Undo{commands.undoLabel ? ` ${commands.undoLabel}` : ''}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={!commands.canRedo || commands.pending}
-            onSelect={() => {
-              void commands.redo();
-            }}
-          >
-            <RefreshCw />
-            Redo{commands.redoLabel ? ` ${commands.redoLabel}` : ''}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <MoreActionsMenu commands={commands} taskActions={taskActions} count={count} />
     </>
   );
 }

@@ -453,18 +453,53 @@ function executableDraft(
   return negatedPaths.has(key) ? { kind: 'not', child: node } : node;
 }
 
+/**
+ * Validate group draft recursively.
+ */
+function validateGroupDraft<TTarget extends ViewTarget>(
+  target: TTarget,
+  children: readonly WorkViewFilterDraftFor<TTarget>[],
+): string | null {
+  if (children.length === 0) return 'Add at least one condition.';
+  for (const child of children) {
+    const message = incompleteDraftMessage(target, child);
+    if (message) return message;
+  }
+  return null;
+}
+
+/**
+ * Validate predicate operand for a given operator and field.
+ */
+function validatePredicateOperand(field: WorkViewFieldMetadata, operator: string, operand: unknown): string | null {
+  if (operator === 'isEmpty' || operator === 'isNotEmpty') return null;
+  if (operator === 'between') {
+    if (
+      !Array.isArray(operand) ||
+      operand.length !== 2 ||
+      operand.some((o) => o === undefined)
+    ) {
+      return `Enter both ${field.label} endpoints.`;
+    }
+    return null;
+  }
+  if (Array.isArray(operand) && operand.length === 0) {
+    return `Select at least one ${field.label} value.`;
+  }
+  if (operand === undefined || operand === '') {
+    return `Enter a ${field.label} value.`;
+  }
+  return null;
+}
+
 function incompleteDraftMessage<TTarget extends ViewTarget>(
   target: TTarget,
   draft: WorkViewFilterDraftFor<TTarget>,
 ): string | null {
   if (draft.kind === 'group') {
-    if (draft.children.length === 0) return 'Add at least one condition.';
-    for (const child of draft.children) {
-      const message = incompleteDraftMessage(target, child);
-      if (message) return message;
-    }
-    return null;
+    return validateGroupDraft(target, draft.children);
   }
+
   const fieldKey = draft.field;
   if (!isChosenField(fieldKey)) return 'Choose a filter property.';
   const field = workViewFilterFieldCatalog(target).find((candidate) => candidate.key === fieldKey);
@@ -474,24 +509,7 @@ function incompleteDraftMessage<TTarget extends ViewTarget>(
   if (!field.operators.includes(operator)) {
     return `Choose a valid ${field.label} operator.`;
   }
-  if (operator === 'isEmpty' || operator === 'isNotEmpty') return null;
-  if (operator === 'between') {
-    if (
-      !Array.isArray(draft.operand) ||
-      draft.operand.length !== 2 ||
-      draft.operand.some((operand) => operand === undefined)
-    ) {
-      return `Enter both ${field.label} endpoints.`;
-    }
-    return null;
-  }
-  if (Array.isArray(draft.operand) && draft.operand.length === 0) {
-    return `Select at least one ${field.label} value.`;
-  }
-  if (draft.operand === undefined || draft.operand === '') {
-    return `Enter a ${field.label} value.`;
-  }
-  return null;
+  return validatePredicateOperand(field, operator, draft.operand);
 }
 
 /** Validate an incomplete filter draft before execution or persistence. */

@@ -43,6 +43,69 @@ export interface AdminSidebarProps {
  * row moves its label into a tooltip, so the sidebar carries a provider to stay renderable in both
  * shell slots — the static desktop rail and the mobile drawer — without depending on an ancestor.
  */
+/** Sidebar header with branding. */
+function SidebarHeader({ collapsed }: { readonly collapsed: boolean }): JSX.Element {
+  return (
+    <div className="flex shrink-0 items-center gap-2 px-3 py-2">
+      <IdentityGlyph size={28}>
+        <Shield className="size-4" />
+      </IdentityGlyph>
+      {collapsed ? null : (
+        <div className="min-w-0">
+          <Text as="p" token="label-large" truncate>
+            Docket
+          </Text>
+          <Text as="p" token="label-small" tone="muted" truncate>
+            Service admin
+          </Text>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Sidebar footer with user info and sign-out. */
+function SidebarFooter({
+  email,
+  tier,
+  signingOut,
+  onSignOut,
+  collapsed,
+}: {
+  readonly email: string | null;
+  readonly tier: string | null;
+  readonly signingOut: boolean;
+  readonly onSignOut: () => void;
+  readonly collapsed: boolean;
+}): JSX.Element {
+  return (
+    <Stack gap={2} className="shrink-0 pt-2">
+      <Separator />
+      {collapsed ? null : (
+        <div className="min-w-0 px-3">
+          {email ? (
+            <Text as="p" token="body-small" truncate title={email}>
+              {email}
+            </Text>
+          ) : null}
+          {tier ? (
+            <Text as="p" token="label-small" tone="muted" truncate>
+              {tier}
+            </Text>
+          ) : null}
+        </div>
+      )}
+      <SidebarNavItem
+        label={signingOut ? 'Signing out…' : 'Sign out'}
+        icon={LogOut}
+        onSelect={onSignOut}
+        disabled={signingOut}
+        collapsed={collapsed}
+      />
+    </Stack>
+  );
+}
+
 export function AdminSidebar({
   pathname,
   queues,
@@ -59,21 +122,7 @@ export function AdminSidebar({
         aria-label="Navigation"
         className="text-on-surface flex h-full w-full shrink-0 flex-col p-2 lg:w-60"
       >
-        <div className="flex shrink-0 items-center gap-2 px-3 py-2">
-          <IdentityGlyph size={28}>
-            <Shield className="size-4" />
-          </IdentityGlyph>
-          {collapsed ? null : (
-            <div className="min-w-0">
-              <Text as="p" token="label-large" truncate>
-                Docket
-              </Text>
-              <Text as="p" token="label-small" tone="muted" truncate>
-                Service admin
-              </Text>
-            </div>
-          )}
-        </div>
+        <SidebarHeader collapsed={collapsed} />
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {ADMIN_NAV.map((section) => (
@@ -101,30 +150,13 @@ export function AdminSidebar({
           ))}
         </div>
 
-        <Stack gap={2} className="shrink-0 pt-2">
-          <Separator />
-          {collapsed ? null : (
-            <div className="min-w-0 px-3">
-              {email ? (
-                <Text as="p" token="body-small" truncate title={email}>
-                  {email}
-                </Text>
-              ) : null}
-              {tier ? (
-                <Text as="p" token="label-small" tone="muted" truncate>
-                  {tier}
-                </Text>
-              ) : null}
-            </div>
-          )}
-          <SidebarNavItem
-            label={signingOut ? 'Signing out…' : 'Sign out'}
-            icon={LogOut}
-            onSelect={onSignOut}
-            disabled={signingOut}
-            collapsed={collapsed}
-          />
-        </Stack>
+        <SidebarFooter
+          email={email}
+          tier={tier}
+          signingOut={signingOut}
+          onSignOut={onSignOut}
+          collapsed={collapsed}
+        />
       </aside>
     </TooltipProvider>
   );

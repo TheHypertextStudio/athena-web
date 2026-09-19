@@ -25,7 +25,6 @@
 import type { BriefSection, BriefWorkItem, PublicBriefOut } from '@docket/work/publish-contract';
 import { Text } from '@docket/ui/primitives';
 import type { JSX } from 'react';
-
 import { documentImageIdFromSource } from '@docket/markdown-tree';
 
 import { parsePersistedMarkdown } from '@/components/editor/parse-markdown';

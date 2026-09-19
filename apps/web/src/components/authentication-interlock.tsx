@@ -10,7 +10,6 @@ import {
   DialogTitle,
 } from '@docket/ui/primitives/dialog';
 import { createContext, type JSX, type ReactNode, useCallback, useContext, useState } from 'react';
-
 import { AuthenticationRequiredError } from '@/lib/query-core';
 import { safeSameOriginPath, signInReturnPath } from '@/lib/auth-navigation';
 

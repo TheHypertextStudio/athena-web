@@ -9,7 +9,6 @@ export const metadata: Metadata = {
   description:
     'How Docket collects, uses, protects, and deletes account and Google Workspace data.',
 };
-
 /** One policy section in the public legal-page register. */
 function PolicySection({ title, children }: { title: string; children: ReactNode }): JSX.Element {
   return (

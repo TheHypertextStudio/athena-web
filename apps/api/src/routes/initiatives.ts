@@ -194,7 +194,7 @@ const initiatives = new Hono<AppEnv>()
         /* v8 ignore next -- @preserve defensive: insert always returns one row */
         if (!created) throw new Error('initiative insert returned no row');
         if (labels.length > 0) {
-          await replaceLabels(tx, 'initiative', created.id, orgId, labels);
+          await replaceLabels(tx, { kind: 'initiative', subjectId: created.id, orgId }, labels);
         }
         return created;
       });
@@ -388,7 +388,7 @@ const initiatives = new Hono<AppEnv>()
         const changed = updated[0];
         if (!changed) return undefined;
         if (body.labelIds !== undefined) {
-          await replaceLabels(tx, 'initiative', id, orgId, labels);
+          await replaceLabels(tx, { kind: 'initiative', subjectId: id, orgId }, labels);
         }
         return changed;
       });
@@ -450,7 +450,7 @@ const initiatives = new Hono<AppEnv>()
           ),
           resolveLabelSet(orgId, [labelId], { dbh: tx }),
         ]);
-        await attachLabels(tx, 'initiative', id, orgId, existing, incoming);
+        await attachLabels(tx, { kind: 'initiative', subjectId: id, orgId }, existing, incoming);
       });
       await enqueueSearchUpsert(orgId, 'initiative', id);
       return ok(c, InitiativeLabelLinked, { initiativeId: id, labelId, linked: true });

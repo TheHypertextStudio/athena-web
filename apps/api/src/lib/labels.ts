@@ -46,6 +46,16 @@ type Db = typeof db | Tx;
 export type LabelableKind = 'task' | 'project' | 'initiative' | 'program' | 'resource';
 
 /**
+ * Parameters needed for any label write operation.
+ * Grouped to reduce function parameter counts across replaceLabels and attachLabels.
+ */
+interface LabelWriteContext {
+  readonly kind: LabelableKind;
+  readonly subjectId: string;
+  readonly orgId: string;
+}
+
+/**
  * A resolved label: the chip fields plus just enough of its group to enforce exclusivity.
  *
  * @remarks
@@ -428,18 +438,16 @@ export async function resolveAttachedLabels(
  */
 export async function replaceLabels(
   tx: Tx,
-  kind: LabelableKind,
-  subjectId: string,
-  orgId: string,
+  context: LabelWriteContext,
   labels: readonly ResolvedLabel[],
 ): Promise<void> {
-  const join = JOINS[kind];
-  await join.clear(tx, subjectId, orgId);
+  const join = JOINS[context.kind];
+  await join.clear(tx, context.subjectId, context.orgId);
   if (labels.length > 0) {
     await join.attach(
       tx,
-      subjectId,
-      orgId,
+      context.subjectId,
+      context.orgId,
       labels.map((l) => l.id),
     );
   }
@@ -462,16 +470,14 @@ export async function replaceLabels(
  */
 export async function attachLabels(
   tx: Tx,
-  kind: LabelableKind,
-  subjectId: string,
-  orgId: string,
+  context: LabelWriteContext,
   existing: readonly ResolvedLabel[],
   incoming: readonly ResolvedLabel[],
 ): Promise<ResolvedLabel[]> {
   const incomingIds = new Set(incoming.map((l) => l.id));
   const union = [...existing.filter((l) => !incomingIds.has(l.id)), ...incoming];
   const next = applyExclusivity(union);
-  await replaceLabels(tx, kind, subjectId, orgId, next);
+  await replaceLabels(tx, context, next);
   return next;
 }
 

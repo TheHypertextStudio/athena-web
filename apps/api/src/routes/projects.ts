@@ -380,7 +380,7 @@ const projects = new Hono<AppEnv>()
           );
         }
         if (labels.length > 0) {
-          await replaceLabels(tx, 'project', created.id, orgId, labels);
+          await replaceLabels(tx, { kind: 'project', subjectId: created.id, orgId }, labels);
         }
 
         // The project's checkpoints, in the same transaction and for the same reason as the links
@@ -836,7 +836,7 @@ const projects = new Hono<AppEnv>()
         const changed = updated[0];
         if (!changed) return undefined;
         if (body.labelIds !== undefined) {
-          await replaceLabels(tx, 'project', id, orgId, labels);
+          await replaceLabels(tx, { kind: 'project', subjectId: id, orgId }, labels);
         }
         if (initiativeIds !== undefined) {
           await tx
@@ -906,7 +906,7 @@ const projects = new Hono<AppEnv>()
           ),
           resolveLabelSet(orgId, [labelId], { teamId: row.teamId, dbh: tx }),
         ]);
-        await attachLabels(tx, 'project', id, orgId, existing, incoming);
+        await attachLabels(tx, { kind: 'project', subjectId: id, orgId }, existing, incoming);
       });
       await enqueueSearchUpsert(orgId, 'project', id);
       return ok(c, ProjectLabelLinked, { projectId: id, labelId, linked: true });

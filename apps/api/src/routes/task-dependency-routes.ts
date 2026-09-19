@@ -138,7 +138,7 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
         /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
         if (!row) throw new Error('subtask insert returned no row');
         if (resolvedLabels.length > 0) {
-          await replaceLabels(tx, 'task', row.id, orgId, resolvedLabels);
+          await replaceLabels(tx, { kind: 'task', subjectId: row.id, orgId }, resolvedLabels);
         }
         return {
           row,

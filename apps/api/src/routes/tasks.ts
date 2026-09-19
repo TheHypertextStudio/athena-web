@@ -625,7 +625,7 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
             })),
           );
         }
-        await replaceLabels(tx, 'task', row.id, orgId, resolvedLabels);
+        await replaceLabels(tx, { kind: 'task', subjectId: row.id, orgId }, resolvedLabels);
         return {
           row,
           cascades: await applySubtaskCompletionPolicyForParents(tx, orgId, [row.parentTaskId]),
@@ -925,7 +925,11 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
         const insertedDependencies: (typeof expansion.dependencies)[number][] = [];
         const insertedRelatedTaskIds: string[] = [];
         if (expandedLabels !== undefined) {
-          await replaceLabels(tx, 'task', lockedBefore.id, orgId, expandedLabels);
+          await replaceLabels(
+            tx,
+            { kind: 'task', subjectId: lockedBefore.id, orgId },
+            expandedLabels,
+          );
           changes.push({
             kind: 'task_labels',
             taskId: lockedBefore.id,
@@ -1724,7 +1728,7 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
           }
         }
         if (patchLabels !== undefined) {
-          await replaceLabels(tx, 'task', id, orgId, patchLabels);
+          await replaceLabels(tx, { kind: 'task', subjectId: id, orgId }, patchLabels);
         }
         const parentTaskIds = [
           ...(statePatch === undefined ? [] : [updated.parentTaskId]),

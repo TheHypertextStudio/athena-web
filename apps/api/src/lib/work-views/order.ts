@@ -240,7 +240,7 @@ async function replaceOneLabel(
     [...retained, ...(destinationLabelId === null ? [] : [destinationLabelId])],
     { teamIds, dbh: tx },
   );
-  await replaceLabels(tx, target, itemId, organizationId, next);
+  await replaceLabels(tx, { kind: target, subjectId: itemId, orgId: organizationId }, next);
 }
 
 function stringValue(value: unknown, field: string): string {

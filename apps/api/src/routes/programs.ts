@@ -382,7 +382,7 @@ const programs = new Hono<AppEnv>()
           ),
           resolveLabelSet(orgId, [labelId], { dbh: tx }),
         ]);
-        await attachLabels(tx, 'program', id, orgId, existing, incoming);
+        await attachLabels(tx, { kind: 'program', subjectId: id, orgId }, existing, incoming);
       });
       await enqueueSearchUpsert(orgId, 'program', id);
       return ok(c, ProgramLabelLinked, { programId: id, labelId, linked: true });

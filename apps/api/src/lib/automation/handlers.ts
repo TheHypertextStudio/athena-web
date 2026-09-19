@@ -319,7 +319,9 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
         existing.map((e) => e.labelId),
       );
 
-      await db.transaction((tx) => attachLabels(tx, 'task', row.id, orgId, current, incoming));
+      await db.transaction((tx) =>
+        attachLabels(tx, { kind: 'task', subjectId: row.id, orgId }, current, incoming),
+      );
     },
   });
 

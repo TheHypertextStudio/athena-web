@@ -139,7 +139,14 @@ export async function pushLocalEdit(
   // Record the losing remote value BEFORE overwriting it — see `recordSyncConflict`.
   if (conflict) {
     const lost = kept === undefined ? conflict : { ...conflict, remoteBody: null };
-    await recordSyncConflict(orgId, actorId, row.id, row.provider, local.id, lost);
+    await recordSyncConflict({
+      orgId,
+      actorId,
+      integrationId: row.id,
+      provider: row.provider,
+      taskId: local.id,
+      conflict: lost,
+    });
     tally.conflicts += 1;
   }
   const pushed = await pushUpdate(row, withKeptBody(local, kept), writable, {

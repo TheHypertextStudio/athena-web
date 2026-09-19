@@ -103,6 +103,86 @@ function LabelDot(): React.JSX.Element {
   return <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-(--label-dot)" />;
 }
 
+/** Render the read variant (badge shape). */
+function LabelChipRead(props: LabelChipProps & { colorAttr: LabelChipColor }): React.JSX.Element {
+  const { name, colorAttr, className } = props;
+  const shared =
+    'inline-flex items-center gap-1.5 bg-(--label-container) text-(--label-on-container)';
+  return (
+    <span
+      data-label-color={colorAttr}
+      className={cn(shared, 'text-label-small min-w-0 rounded-full px-2 py-0.5', className)}
+    >
+      <LabelDot />
+      <span className="truncate">{name}</span>
+    </span>
+  );
+}
+
+/** Render the action variant with remove button. */
+function LabelChipRemovable(
+  props: LabelChipProps & { colorAttr: LabelChipColor; chipClass: string },
+): React.JSX.Element {
+  const { name, colorAttr, chipClass, onActivate, onRemove, removeLabel } = props;
+  return (
+    <span data-label-color={colorAttr} className={chipClass}>
+      <LabelDot />
+      {onActivate ? (
+        <button
+          type="button"
+          onClick={onActivate}
+          className="min-w-0 truncate outline-none hover:underline focus-visible:underline"
+        >
+          {name}
+        </button>
+      ) : (
+        <span className="truncate">{name}</span>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={removeLabel ?? `Remove label ${name}`}
+        className="rounded-corner-xs -mr-1 shrink-0 p-0.5 opacity-60 outline-none hover:opacity-100 focus-visible:opacity-100"
+      >
+        <svg viewBox="0 0 16 16" className="size-3" aria-hidden="true">
+          <path
+            d="M4 4l8 8M12 4l-8 8"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+    </span>
+  );
+}
+
+/** Render the action variant as a button. */
+function LabelChipButton(
+  props: LabelChipProps & { colorAttr: LabelChipColor; chipClass: string },
+): React.JSX.Element {
+  const { name, colorAttr, chipClass, onActivate } = props;
+  return (
+    <button type="button" data-label-color={colorAttr} onClick={onActivate} className={chipClass}>
+      <LabelDot />
+      <span className="truncate">{name}</span>
+    </button>
+  );
+}
+
+/** Render the action variant as a static span. */
+function LabelChipStatic(
+  props: LabelChipProps & { colorAttr: LabelChipColor; chipClass: string },
+): React.JSX.Element {
+  const { name, colorAttr, chipClass } = props;
+  return (
+    <span data-label-color={colorAttr} className={chipClass}>
+      <LabelDot />
+      <span className="truncate">{name}</span>
+    </span>
+  );
+}
+
 /**
  * Render a label as a chip.
  *
@@ -118,31 +198,14 @@ export function LabelChip({
   removeLabel,
   className,
 }: LabelChipProps): React.JSX.Element {
-  const shared =
-    'inline-flex items-center gap-1.5 bg-(--label-container) text-(--label-on-container)';
   const colorAttr = labelColorKey(color);
 
   if (variant === 'read') {
-    return (
-      <span
-        data-label-color={colorAttr}
-        // `label-small` + `rounded-full`: the Badge recipe. A read-only label hugs its content
-        // rather than taking a control height, so a row of them stays a row of annotations.
-        className={cn(shared, 'text-label-small min-w-0 rounded-full px-2 py-0.5', className)}
-      >
-        <LabelDot />
-        <span className="truncate">{name}</span>
-      </span>
-    );
+    return <LabelChipRead name={name} color={color} colorAttr={colorAttr} className={className} />;
   }
 
-  // The Chip recipe: 8px corners, a control height, a leading mark. Pressable.
-  const body = (
-    <>
-      <LabelDot />
-      <span className="truncate">{name}</span>
-    </>
-  );
+  const shared =
+    'inline-flex items-center gap-1.5 bg-(--label-container) text-(--label-on-container)';
   const chipClass = cn(
     shared,
     'text-label-large h-8 min-w-0 rounded-lg px-2.5',
@@ -150,55 +213,33 @@ export function LabelChip({
     className,
   );
 
-  // A removable chip is two controls, so it cannot be one button — a nested button is invalid
-  // and a single click target could not tell "filter by this" from "take this off".
   if (onRemove) {
     return (
-      <span data-label-color={colorAttr} className={chipClass}>
-        <LabelDot />
-        {onActivate ? (
-          <button
-            type="button"
-            onClick={onActivate}
-            className="min-w-0 truncate outline-none hover:underline focus-visible:underline"
-          >
-            {name}
-          </button>
-        ) : (
-          <span className="truncate">{name}</span>
-        )}
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label={removeLabel ?? `Remove label ${name}`}
-          className="rounded-corner-xs -mr-1 shrink-0 p-0.5 opacity-60 outline-none hover:opacity-100 focus-visible:opacity-100"
-        >
-          <svg viewBox="0 0 16 16" className="size-3" aria-hidden="true">
-            <path
-              d="M4 4l8 8M12 4l-8 8"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-            />
-          </svg>
-        </button>
-      </span>
+      <LabelChipRemovable
+        name={name}
+        color={color}
+        onActivate={onActivate}
+        onRemove={onRemove}
+        removeLabel={removeLabel}
+        colorAttr={colorAttr}
+        chipClass={chipClass}
+      />
     );
   }
 
   if (onActivate) {
     return (
-      <button type="button" data-label-color={colorAttr} onClick={onActivate} className={chipClass}>
-        {body}
-      </button>
+      <LabelChipButton
+        name={name}
+        color={color}
+        onActivate={onActivate}
+        colorAttr={colorAttr}
+        chipClass={chipClass}
+      />
     );
   }
 
-  return (
-    <span data-label-color={colorAttr} className={chipClass}>
-      {body}
-    </span>
-  );
+  return <LabelChipStatic name={name} color={color} colorAttr={colorAttr} chipClass={chipClass} />;
 }
 
 /** Props for {@link LabelChipRow}. */

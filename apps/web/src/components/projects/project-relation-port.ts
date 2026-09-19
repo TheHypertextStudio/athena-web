@@ -43,6 +43,60 @@ export interface ProjectRelationDependencies {
   ) => Promise<'applied' | 'unchanged'>;
 }
 
+async function handleProgramOrTeamRelation(
+  intent: ProjectRelationIntent,
+  subject: RelationEndpoint & { readonly kind: 'project' },
+  organizationId: string,
+  dependencies: ProjectRelationDependencies,
+): Promise<boolean> {
+  const field = intent.relationId === 'project.program' ? 'programId' : 'teamId';
+  if (subject.meta?.[field] === intent.target.id) return false;
+  await dependencies.patchProject(organizationId, subject.id, {
+    [field]: intent.target.id,
+  });
+  return true;
+}
+
+async function handleLeadRelation(
+  intent: ProjectRelationIntent,
+  subject: RelationEndpoint & { readonly kind: 'project' },
+  organizationId: string,
+  dependencies: ProjectRelationDependencies,
+): Promise<boolean> {
+  if (subject.meta?.leadId === intent.target.id) return false;
+  await dependencies.patchProject(organizationId, subject.id, {
+    leadId: intent.target.id,
+  });
+  return true;
+}
+
+async function handleInitiativeRelation(
+  organizationId: string,
+  projectId: string,
+  targetId: string,
+  dependencies: ProjectRelationDependencies,
+): Promise<boolean> {
+  return (await dependencies.linkInitiative(organizationId, projectId, targetId)) === 'applied';
+}
+
+async function handleLabelRelation(
+  organizationId: string,
+  projectId: string,
+  targetId: string,
+  dependencies: ProjectRelationDependencies,
+): Promise<boolean> {
+  return (await dependencies.addLabel(organizationId, projectId, targetId)) === 'applied';
+}
+
+async function handleBlockRelation(
+  organizationId: string,
+  projectId: string,
+  targetId: string,
+  dependencies: ProjectRelationDependencies,
+): Promise<boolean> {
+  return (await dependencies.addDependency(organizationId, projectId, targetId)) === 'applied';
+}
+
 /** Build the Project relation port from typed Project API operations. */
 export function createProjectRelationCommandPort(
   dependencies: ProjectRelationDependencies,
@@ -59,30 +113,36 @@ export function createProjectRelationCommandPort(
         )
           continue;
         if (intent.relationId === 'project.program' || intent.relationId === 'project.team') {
-          const field = intent.relationId === 'project.program' ? 'programId' : 'teamId';
-          if (subject.meta?.[field] === intent.target.id) continue;
-          await dependencies.patchProject(organizationId, subject.id, {
-            [field]: intent.target.id,
-          });
-          applied = true;
+          applied =
+            (await handleProgramOrTeamRelation(intent, subject, organizationId, dependencies)) ||
+            applied;
         } else if (intent.relationId === 'project.lead') {
-          if (subject.meta?.['leadId'] === intent.target.id) continue;
-          await dependencies.patchProject(organizationId, subject.id, {
-            leadId: intent.target.id,
-          });
-          applied = true;
+          applied =
+            (await handleLeadRelation(intent, subject, organizationId, dependencies)) || applied;
         } else if (intent.relationId === 'project.initiative') {
           applied =
-            (await dependencies.linkInitiative(organizationId, subject.id, intent.target.id)) ===
-              'applied' || applied;
+            (await handleInitiativeRelation(
+              organizationId,
+              subject.id,
+              intent.target.id,
+              dependencies,
+            )) || applied;
         } else if (intent.relationId === 'project.label') {
           applied =
-            (await dependencies.addLabel(organizationId, subject.id, intent.target.id)) ===
-              'applied' || applied;
+            (await handleLabelRelation(
+              organizationId,
+              subject.id,
+              intent.target.id,
+              dependencies,
+            )) || applied;
         } else {
           applied =
-            (await dependencies.addDependency(organizationId, subject.id, intent.target.id)) ===
-              'applied' || applied;
+            (await handleBlockRelation(
+              organizationId,
+              subject.id,
+              intent.target.id,
+              dependencies,
+            )) || applied;
         }
       }
       return { status: applied ? 'applied' : 'unchanged' };

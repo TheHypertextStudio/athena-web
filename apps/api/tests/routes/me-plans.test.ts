@@ -500,6 +500,14 @@ describe('/v1/me/plans', () => {
       expect(await allArchived(schema.task, orgId)).toBe(true);
       expect(await allArchived(schema.project, orgId)).toBe(true);
       expect(await allArchived(schema.initiative, orgId)).toBe(true);
+      const reopened = await body<PlanDraftOut>(await app.request(`/${planId}`));
+      expect(reopened.status).toBe('active');
+      for (const node of reopened.document.nodes) {
+        expect(node.status).toBe('draft');
+        expect(node.objectId).toBeNull();
+      }
+      const again = await undoApp.request(`/${changeSetId}/undo`, { method: 'POST' });
+      expect(again.status).toBe(404);
     });
 
     it('rejects an empty closure', async () => {

@@ -207,6 +207,33 @@ describe('layoutPlan in a portrait host', () => {
   });
 });
 
+describe('layoutPlan subtasks', () => {
+  const withSubtasks: Node[] = [
+    make('p1', PLAN_NODE_TYPE.project, {}, { canAddTask: false, expanded: true }),
+    make('t1', PLAN_NODE_TYPE.task, { parentId: 'p1' }, { depth: 0 }),
+    make('s1', PLAN_NODE_TYPE.task, { parentId: 'p1' }, { depth: 1 }),
+    make('s2', PLAN_NODE_TYPE.task, { parentId: 'p1', hidden: true }, { depth: 1 }),
+    make('t2', PLAN_NODE_TYPE.task, { parentId: 'p1' }, { depth: 0 }),
+  ];
+
+  it('indents a subtask under its feature task, flush on the right', () => {
+    const { nodes } = layoutPlan(withSubtasks);
+    const feature = rect(mustFind(nodes, 't1'));
+    const subtask = rect(mustFind(nodes, 's1'));
+    expect(subtask.x).toBeGreaterThan(feature.x);
+    expect(subtask.x + subtask.width).toBe(feature.x + feature.width);
+    expect(subtask.y).toBeGreaterThan(feature.y);
+  });
+
+  it('gives a folded subtask no slot and sizes the container to the rows showing', () => {
+    const { nodes } = layoutPlan(withSubtasks);
+    const subtask = rect(mustFind(nodes, 's1'));
+    const next = rect(mustFind(nodes, 't2'));
+    expect(next.y).toBe(subtask.y + PLAN_TASK_SIZE.height + PLAN_TASK_GAP);
+    expect(rect(mustFind(nodes, 'p1')).height).toBe(projectContainerHeight(3, false));
+  });
+});
+
 describe('orientPlanEdges', () => {
   const edges: Edge[] = [
     { id: 'l', source: 'init', target: 'p1', type: PLAN_EDGE_TYPE.link, targetHandle: 'link' },

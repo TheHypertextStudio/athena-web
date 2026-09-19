@@ -25,6 +25,7 @@ import type { AppEnv } from '../context';
 import { AuthError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
+import { reopenUndoneNodes } from '../lib/plan-draft/reopen';
 import { zParam } from '../lib/validate';
 import { undoChangeSet, undoChangeSetAtomically } from '../mcp/change-set';
 
@@ -72,8 +73,11 @@ async function ownsOriginPlan(ownerUserId: string, planId: string | undefined): 
 /** An authorized change set: where it ran, and whether it confirmed a plan. */
 interface OwnedChangeSet {
   readonly organizationId: string;
-  /** True when the change set confirmed plan nodes, which decides how it is reversed. */
-  readonly fromPlan: boolean;
+  /**
+   * The caller-owned plan the change set confirmed, or null for a session's change. A plan commit
+   * is reversed differently and reopens its nodes on the plan afterwards.
+   */
+  readonly planId: string | null;
 }
 
 /** Resolve the organization a change set ran in, only for an origin the caller owns. */
@@ -91,7 +95,10 @@ async function loadOwnedChangeSet(
   const fromPlan = await ownsOriginPlan(ownerUserId, row.origin.planId);
   const owned = fromPlan || (await ownsOriginSession(ownerUserId, row.origin.sessionId));
   if (!owned) throw new NotFoundError('Change set not found');
-  return { organizationId: row.organizationId, fromPlan };
+  return {
+    organizationId: row.organizationId,
+    planId: fromPlan ? (row.origin.planId ?? null) : null,
+  };
 }
 
 /** Personal Athena undo route. */
@@ -102,19 +109,23 @@ const meAthenaChanges = new Hono<AppEnv>().post(
     summary: 'Undo one Athena change',
     response: AthenaUndoOut,
     description:
-      'Reverse one change made in a caller-owned Athena session or confirmed from a caller-owned planning draft, only when nothing later touched the same rows. This is what backs the Undo on the line a plan commit writes: pass the `changeSetId` that `POST /v1/me/plans/{id}/commit` returned. A change set that traces back to another user, or to neither a session nor a plan, is reported as not found.',
+      'Reverse one change made in a caller-owned Athena session or confirmed from a caller-owned planning draft, only when nothing later touched the same rows. This is what backs the Undo on the line a plan commit writes: pass the `changeSetId` that `POST /v1/me/plans/{id}/commit` returned. Undoing a plan commit also returns the nodes it created to `draft` on that plan, so `GET /v1/me/plans/{id}` shows them ready to confirm again. A change set that traces back to another user, or to neither a session nor a plan, or that was already undone, is reported as not found.',
   }),
   zParam(undoParam),
   async (c) => {
     const owner = requestOwner(c);
     const { changeSetId } = c.req.valid('param');
-    const { organizationId, fromPlan } = await loadOwnedChangeSet(owner, changeSetId);
+    const { organizationId, planId } = await loadOwnedChangeSet(owner, changeSetId);
     // A plan commit creates initiatives and projects as well as tasks, and the atomic reversal
     // understands only tasks and the edges between them — it refuses a container outright. The
     // reporting reversal is the one Athena's own `undo` tool already runs for `organize`, which
     // produces the same mixed shape, so a plan commit unwinds through the same path.
-    if (fromPlan) await undoChangeSet(organizationId, changeSetId);
-    else await undoChangeSetAtomically(organizationId, changeSetId);
+    if (planId === null) {
+      await undoChangeSetAtomically(organizationId, changeSetId);
+    } else {
+      const { outcomes } = await undoChangeSet(organizationId, changeSetId);
+      await reopenUndoneNodes(planId, outcomes);
+    }
     return ok(c, AthenaUndoOut, { changeSetId, undone: true });
   },
 );

@@ -9,20 +9,25 @@
  * and re-home a dragged row. The hooks own no view state of their own: what to select, focus, or
  * reveal after an edit is the caller's, handed in as callbacks.
  */
-import type { PlanDraftOut, PlanNode, PlanOp } from '@docket/work/plan-draft-contract';
+import type {
+  PlanCommitOut,
+  PlanDraftOut,
+  PlanNode,
+  PlanOp,
+} from '@docket/work/plan-draft-contract';
 import type { Edge, Node, OnNodeDrag, ReactFlowInstance } from '@xyflow/react';
 import { useCallback } from 'react';
 
 import type { PlanOpsController } from '@/lib/plan-draft/defs';
 
 import { describeConfirmation, subtreeRefs } from './plan-confirm';
-import { PLAN_NODE_TYPE } from './plan-nodes';
+import { PLAN_NODE_TYPE, isSubtaskNode, taskProjectRef } from './plan-nodes';
 import {
   COMMIT_FAILED_NOTICE,
   LIKE_KINDS_NOTICE,
   type PlanNotice,
-  commitNotice,
   newProjectBatch,
+  newSubtaskBatch,
   newTaskBatch,
   restoreOps,
   snapToLayout,
@@ -35,12 +40,14 @@ export type ApplyOps = (batch: readonly PlanOp[]) => Promise<PlanDraftOut | null
 export interface PlanNodeEditsInput {
   readonly plan: PlanDraftOut;
   readonly ops: PlanOpsController;
-  readonly onCommit: (
-    refs: readonly string[],
-  ) => Promise<{ placed: Parameters<typeof commitNotice>[0] } | null>;
+  readonly onCommit: (refs: readonly string[]) => Promise<PlanCommitOut | null>;
+  /** A commit the API accepted: show the line it leaves behind. */
+  readonly onCommitted: (commit: PlanCommitOut) => void;
   readonly byRef: ReadonlyMap<string, PlanNode>;
   /** Show a container's rows, so a task just added is visible. */
   readonly expandTasks: (refs: readonly string[]) => void;
+  /** Unfold a feature task, so a subtask just added under it is visible. */
+  readonly showSubtasks: (taskRef: string) => void;
   /** A node the person added: select it, focus its title, bring it into view. */
   readonly onAdded: (ref: string) => void;
   /** Nodes were removed: let go of the selection. */
@@ -53,8 +60,61 @@ export interface PlanNodeEdits {
   readonly apply: ApplyOps;
   readonly addProject: (initiativeRef: string | null) => void;
   readonly addTask: (projectRef: string) => void;
+  /** Add a subtask under a feature task; does nothing for a subtask or a created task. */
+  readonly addSubtask: (taskRef: string) => void;
   readonly removeRefs: (refs: readonly string[]) => void;
   readonly confirmRefs: (refs: readonly string[]) => void;
+}
+
+/** Whether a subtask may be added under this ref: a draft task sitting directly in a project. */
+function acceptsSubtask(byRef: ReadonlyMap<string, PlanNode>, taskRef: string): boolean {
+  const node = byRef.get(taskRef);
+  if (node?.kind !== 'task' || node.status !== 'draft') return false;
+  return !isSubtaskNode(byRef, node) && taskProjectRef(byRef, node) !== null;
+}
+
+/** What {@link usePlanRowAdds} needs. */
+interface PlanRowAddsInput {
+  readonly apply: ApplyOps;
+  readonly byRef: ReadonlyMap<string, PlanNode>;
+  readonly expandTasks: (refs: readonly string[]) => void;
+  readonly showSubtasks: (taskRef: string) => void;
+  readonly onAdded: (ref: string) => void;
+}
+
+/** Add a task row to a project, or a subtask row under a feature task, and bring it into view. */
+function usePlanRowAdds({
+  apply,
+  byRef,
+  expandTasks,
+  showSubtasks,
+  onAdded,
+}: PlanRowAddsInput): Pick<PlanNodeEdits, 'addTask' | 'addSubtask'> {
+  const addTask = useCallback(
+    (projectRef: string) => {
+      const { ref, batch } = newTaskBatch(projectRef);
+      expandTasks([projectRef]);
+      void apply(batch).then((result) => {
+        if (result) onAdded(ref);
+      });
+    },
+    [apply, expandTasks, onAdded],
+  );
+  const addSubtask = useCallback(
+    (taskRef: string) => {
+      const task = byRef.get(taskRef);
+      if (task === undefined || !acceptsSubtask(byRef, taskRef)) return;
+      const { ref, batch } = newSubtaskBatch(taskRef);
+      const projectRef = taskProjectRef(byRef, task);
+      if (projectRef !== null) expandTasks([projectRef]);
+      showSubtasks(taskRef);
+      void apply(batch).then((result) => {
+        if (result) onAdded(ref);
+      });
+    },
+    [apply, byRef, expandTasks, onAdded, showSubtasks],
+  );
+  return { addTask, addSubtask };
 }
 
 /** Add, remove, and confirm nodes. */
@@ -62,8 +122,10 @@ export function usePlanNodeEdits({
   plan,
   ops,
   onCommit,
+  onCommitted,
   byRef,
   expandTasks,
+  showSubtasks,
   onAdded,
   onRemoved,
   setNotice,
@@ -87,16 +149,13 @@ export function usePlanNodeEdits({
     },
     [apply, onAdded, plan],
   );
-  const addTask = useCallback(
-    (projectRef: string) => {
-      const { ref, batch } = newTaskBatch(projectRef);
-      expandTasks([projectRef]);
-      void apply(batch).then((result) => {
-        if (result) onAdded(ref);
-      });
-    },
-    [apply, expandTasks, onAdded],
-  );
+  const { addTask, addSubtask } = usePlanRowAdds({
+    apply,
+    byRef,
+    expandTasks,
+    showSubtasks,
+    onAdded,
+  });
   const removeRefs = useCallback(
     (refs: readonly string[]) => {
       const gone = subtreeRefs(plan.document, refs);
@@ -126,12 +185,17 @@ export function usePlanNodeEdits({
       const confirmation = describeConfirmation(plan.document, refs);
       if (confirmation.count === 0) return;
       void onCommit(confirmation.refs).then((result) => {
-        setNotice(result ? commitNotice(result.placed) : COMMIT_FAILED_NOTICE);
+        if (result === null) {
+          setNotice(COMMIT_FAILED_NOTICE);
+          return;
+        }
+        setNotice(null);
+        onCommitted(result);
       });
     },
-    [onCommit, plan.document, setNotice],
+    [onCommit, onCommitted, plan.document, setNotice],
   );
-  return { apply, addProject, addTask, removeRefs, confirmRefs };
+  return { apply, addProject, addTask, addSubtask, removeRefs, confirmRefs };
 }
 
 /** What {@link usePlanEdgeEdits} needs. */

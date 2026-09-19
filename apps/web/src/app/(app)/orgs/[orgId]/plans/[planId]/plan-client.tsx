@@ -138,6 +138,8 @@ export default function PlanClient(): JSX.Element {
         ops={data.ops}
         committing={data.committing}
         onCommit={data.onCommit}
+        onUndoCommit={data.onUndoCommit}
+        roster={data.roster}
         remoteDiff={data.remoteDiff}
         onOpen={open}
         memberOptions={data.memberOptions}

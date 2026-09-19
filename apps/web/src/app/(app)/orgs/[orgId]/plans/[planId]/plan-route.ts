@@ -8,7 +8,12 @@
  * `plan-client.tsx` composes these with the rail conversation into the panel.
  */
 import { useShellRail } from '@docket/ui/components';
-import type { PlanCommitOut, PlanDraftOut, PlanOp } from '@docket/work/plan-draft-contract';
+import type {
+  PlanCommitOut,
+  PlanDraftOut,
+  PlanOp,
+  PlanRoster,
+} from '@docket/work/plan-draft-contract';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useCompactSidebarWhileMounted } from '@/components/canvas/canvas-floating-chrome';
@@ -18,9 +23,17 @@ import type { PlanCanvasPanelProps } from '@/components/plan-canvas/plan-canvas-
 import { PLAN_RAIL_WIDE_PX } from '@/components/plan-canvas/plan-panel-support';
 import { EMPTY_PLAN_DIFF, planDiff, type PlanDiff } from '@/components/plan-canvas/plan-diff';
 import { api } from '@/lib/api';
+import type { UndoPlanCommit } from '@/components/plan-canvas/use-plan-view';
 import type { PlanOpsController } from '@/lib/plan-draft/defs';
-import { useCommitPlan, usePlan, usePlanAthenaSync, usePlanOps } from '@/lib/plan-draft/defs';
-import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
+import {
+  planRosterDef,
+  useCommitPlan,
+  usePlan,
+  usePlanAthenaSync,
+  usePlanOps,
+  useUndoPlanCommit,
+} from '@/lib/plan-draft/defs';
+import { apiQueryOptions, queryKeys, useApiListQuery, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 
 const OPTION_KINDS = ['actors', 'initiatives'] as const;
@@ -66,6 +79,34 @@ function useRemoteDiff(plan: PlanDraftOut | undefined): {
   return { remoteDiff, markLocal };
 }
 
+/** The roster before it loads: nobody to assign yet. */
+const EMPTY_ROSTER: PlanRoster = { people: [], teams: [] };
+
+/**
+ * Undo a commit, marking the revision the undo writes as the person's own so the canvas does not
+ * announce it as Athena's.
+ */
+function usePlanUndo(
+  planId: string,
+  orgId: string,
+  revision: number | undefined,
+  markLocal: (revision: number) => void,
+): UndoPlanCommit {
+  const { mutateAsync } = useUndoPlanCommit(planId, orgId);
+  return useCallback(
+    async (changeSetId: string) => {
+      if (revision !== undefined) markLocal(revision + 1);
+      try {
+        await mutateAsync(changeSetId);
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error };
+      }
+    },
+    [markLocal, mutateAsync, revision],
+  );
+}
+
 /** What {@link usePlanRouteData} returns: the plan, its controllers, and who may edit it. */
 export interface PlanRouteData {
   readonly plan: PlanDraftOut | undefined;
@@ -76,6 +117,8 @@ export interface PlanRouteData {
   readonly remoteDiff: PlanDiff;
   readonly ops: PlanOpsController;
   readonly onCommit: (refs: readonly string[]) => Promise<PlanCommitOut | null>;
+  readonly onUndoCommit: PlanCanvasPanelProps['onUndoCommit'];
+  readonly roster: PlanRoster;
   readonly memberOptions: PlanCanvasPanelProps['memberOptions'];
   readonly initiativeOptions: PlanCanvasPanelProps['initiativeOptions'];
   readonly resolveActor: PlanCanvasPanelProps['resolveActor'];
@@ -131,6 +174,8 @@ export function usePlanRouteData(orgId: string, planId: string): PlanRouteData {
     },
     [commitAsync, markLocal],
   );
+  const onUndoCommit = usePlanUndo(planId, orgId, plan?.revision, markLocal);
+  const rosterQ = useApiQuery(planRosterDef(planId));
   return {
     plan,
     pending: planQuery.isPending,
@@ -140,6 +185,8 @@ export function usePlanRouteData(orgId: string, planId: string): PlanRouteData {
     remoteDiff,
     ops: trackedOps,
     onCommit,
+    onUndoCommit,
+    roster: rosterQ.data ?? EMPTY_ROSTER,
     memberOptions: options.memberOptions,
     initiativeOptions: options.initiativeOptions,
     resolveActor,

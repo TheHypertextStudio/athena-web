@@ -45,35 +45,40 @@ export function CanvasBottomChrome({
       className="pointer-events-none !bottom-2 !left-2 !m-0"
       style={{ right: 15 + insetRight }}
     >
+      {/* The row is its own size container: a notice sits between the toolbar and the minimap
+          only when the canvas is wide enough to give it a full line, and above them otherwise,
+          so a one-line notice is never truncated into the gap between the two. */}
       <div
         ref={contentRef}
         data-testid="canvas-bottom-chrome-content"
-        className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-2"
+        className="@container w-full"
       >
-        {bottomNotice === undefined ? null : (
-          <div
-            data-testid="canvas-bottom-notice"
-            className="col-span-3 col-start-1 row-start-1 flex min-w-0 justify-center sm:col-span-1 sm:col-start-2"
-          >
-            {bottomNotice}
-          </div>
-        )}
-        <div className="col-start-1 row-start-2 self-end sm:row-span-2 sm:row-start-1">
-          <CanvasViewportToolbar fitPadding={fitPadding} onRelayout={onRelayout} />
-        </div>
-        <div className="col-start-3 row-start-2 self-end sm:row-span-2 sm:row-start-1">
-          {showMinimap ? (
-            <MiniMap
-              pannable
-              zoomable
-              {...(nodeColor !== undefined ? { nodeColor } : {})}
-              maskColor="color-mix(in srgb, var(--color-surface) 70%, transparent)"
-              bgColor="var(--color-surface-container-low)"
-              className="!rounded-corner-lg pointer-events-auto !static !m-0 !h-[150px] !w-[200px] shrink-0"
-            />
-          ) : (
-            <div aria-hidden className="w-10 shrink-0" />
+        <div className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-2">
+          {bottomNotice === undefined ? null : (
+            <div
+              data-testid="canvas-bottom-notice"
+              className="col-span-3 col-start-1 row-start-1 flex min-w-0 justify-center @5xl:col-span-1 @5xl:col-start-2"
+            >
+              {bottomNotice}
+            </div>
           )}
+          <div className="col-start-1 row-start-2 self-end @5xl:row-span-2 @5xl:row-start-1">
+            <CanvasViewportToolbar fitPadding={fitPadding} onRelayout={onRelayout} />
+          </div>
+          <div className="col-start-3 row-start-2 self-end @5xl:row-span-2 @5xl:row-start-1">
+            {showMinimap ? (
+              <MiniMap
+                pannable
+                zoomable
+                {...(nodeColor !== undefined ? { nodeColor } : {})}
+                maskColor="color-mix(in srgb, var(--color-surface) 70%, transparent)"
+                bgColor="var(--color-surface-container-low)"
+                className="!rounded-corner-lg pointer-events-auto !static !m-0 !h-[150px] !w-[200px] shrink-0"
+              />
+            ) : (
+              <div aria-hidden className="w-10 shrink-0" />
+            )}
+          </div>
         </div>
       </div>
     </CanvasOverlayPanel>

@@ -92,7 +92,64 @@ const options = {
   },
   initiativeName: (id: string) => (id === 'ini_existing' ? 'Existing initiative' : null),
   expandedRefs: new Set(['p1']),
+  resolveTeam: (id: string) => (id === 'team_eng' ? 'Engineering' : null),
+  collapsedTaskRefs: new Set<string>(),
 };
+
+/** A feature task in `p1` with two subtasks, one assigned on the engineering team. */
+const SUBTASK_PLAN: PlanDraftOut = {
+  ...PLAN,
+  document: {
+    ...PLAN.document,
+    nodes: [
+      ...PLAN.document.nodes,
+      node('s1', {
+        kind: 'task',
+        parentRef: 't1',
+        fields: {
+          title: 'Build the endpoint',
+          assigneeId: 'a2' as never,
+          teamId: 'team_eng' as never,
+        },
+      }),
+      node('t3', { kind: 'task', parentRef: 'p1', fields: { title: 'Write the copy' } }),
+      node('s2', { kind: 'task', parentRef: 't1', fields: { title: 'Wire the form' } }),
+    ],
+  },
+};
+
+describe('projectPlan subtasks', () => {
+  it('lists each subtask directly under its feature task, one level in, in the same container', () => {
+    const { nodes } = projectPlan(SUBTASK_PLAN, options);
+    const rows = nodes.filter((n) => n.type === PLAN_NODE_TYPE.task && n.parentId === 'p1');
+    expect(rows.map((n) => n.id)).toEqual(['t1', 's1', 's2', 't3']);
+    const feature = rows[0]?.data as PlanTaskNodeData;
+    expect(feature.depth).toBe(0);
+    expect(feature.subtaskCount).toBe(2);
+    expect(feature.canAddSubtask).toBe(true);
+    const subtask = rows[1]?.data as PlanTaskNodeData;
+    expect(subtask.depth).toBe(1);
+    expect(subtask.parentTaskRef).toBe('t1');
+    expect(subtask.canAddSubtask).toBe(false);
+    expect(subtask.assignee?.name).toBe('Sam');
+    expect(subtask.team).toBe('Engineering');
+  });
+
+  it('hides the subtasks of a folded feature task and names only feature tasks in miniature', () => {
+    const { nodes } = projectPlan(SUBTASK_PLAN, { ...options, collapsedTaskRefs: new Set(['t1']) });
+    expect(nodes.find((n) => n.id === 't1')?.hidden).toBe(false);
+    expect(nodes.find((n) => n.id === 's1')?.hidden).toBe(true);
+    expect((nodes.find((n) => n.id === 't1')?.data as PlanTaskNodeData).subtasksShown).toBe(false);
+    const p1 = nodes.find((n) => n.id === 'p1')?.data as PlanProjectNodeData;
+    expect(p1.tasks.map((task) => task.ref)).toEqual(['t1', 't3']);
+  });
+
+  it('hides subtasks with their container', () => {
+    const { nodes } = projectPlan(SUBTASK_PLAN, { ...options, expandedRefs: new Set<string>() });
+    expect(nodes.find((n) => n.id === 's1')?.hidden).toBe(true);
+    expect(nodes.find((n) => n.id === 's2')?.hidden).toBe(true);
+  });
+});
 
 describe('projectPlan', () => {
   it('emits parents before children with the right types and containment', () => {

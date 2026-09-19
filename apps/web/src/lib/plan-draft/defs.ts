@@ -15,12 +15,14 @@
  * rail already streams for a plan-tool action and refetches the plan the moment one lands.
  */
 import type { SessionActivityOut } from '@docket/athena/agent-contract';
+import type { PhoneCallUndoOut as AthenaUndoOut } from '@docket/athena/voice';
 import {
   PLAN_TOOL_NAMES,
   type PlanCommitOut,
   type PlanDraftCreate,
   type PlanDraftOut,
   type PlanOp,
+  type PlanRoster,
 } from '@docket/work/plan-draft-contract';
 import { PlanOpError, applyPlanOps } from '@docket/work/plan-draft';
 import { useQueryClient } from '@tanstack/react-query';
@@ -178,6 +180,43 @@ export function useCommitPlan(planId: string, orgId: string) {
       queryClient.setQueryData(queryKeys.plan(planId), data.plan);
     },
     invalidateKeys: [
+      queryKeys.initiatives(orgId),
+      queryKeys.projects(orgId),
+      queryKeys.tasks(orgId),
+      queryKeys.plans(),
+    ],
+  });
+}
+
+/** Definition for `GET /v1/me/plans/:id/roster`: who the plan's nodes may be assigned to. */
+export function planRosterDef(planId: string) {
+  return apiQueryOptions<PlanRoster>(
+    queryKeys.planRoster(planId),
+    () => api.v1.me.plans[':id'].roster.$get({ param: { id: planId } }),
+    'Could not load the people and teams for this plan.',
+    { staleTime: STALE.standard, enabled: planId.length > 0 },
+  );
+}
+
+/**
+ * Undo a confirmed plan commit by its change set.
+ *
+ * @remarks
+ * The personal undo route archives what the commit created and returns those nodes to draft on
+ * the plan, so success refreshes the plan read and the workspace lists the commit touched.
+ *
+ * @param planId - The plan the commit confirmed.
+ * @param orgId - The plan's workspace, for the lists to refresh.
+ */
+export function useUndoPlanCommit(planId: string, orgId: string) {
+  return useApiMutation<AthenaUndoOut, string>({
+    mutationFn: (changeSetId) =>
+      unwrap(
+        () => api.v1.me.athena.changes[':changeSetId'].undo.$post({ param: { changeSetId } }),
+        'Could not undo that commit.',
+      ),
+    invalidateKeys: [
+      queryKeys.plan(planId),
       queryKeys.initiatives(orgId),
       queryKeys.projects(orgId),
       queryKeys.tasks(orgId),

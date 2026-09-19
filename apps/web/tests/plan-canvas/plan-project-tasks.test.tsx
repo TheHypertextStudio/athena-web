@@ -45,7 +45,9 @@ function actions(): PlanCanvasActions {
     canEdit: true,
     addProject: vi.fn(),
     addTask: vi.fn(),
+    addSubtask: vi.fn(),
     toggleTasks: vi.fn(),
+    toggleSubtasks: vi.fn(),
     removeDependency: vi.fn(),
     open: vi.fn(),
   };

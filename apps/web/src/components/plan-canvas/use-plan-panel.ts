@@ -23,7 +23,12 @@ import type { PlanCanvasPanelProps } from './plan-canvas-panel';
 import { type PlanOrientation, orientPlanEdges, usePlanLayout } from './plan-layout';
 import { projectPlan } from './plan-nodes';
 import { bottomSlot } from './plan-panel-overlays';
-import { type PlanStartState, planStartState, snapToLayout } from './plan-panel-support';
+import {
+  type PlanNotice,
+  type PlanStartState,
+  planStartState,
+  snapToLayout,
+} from './plan-panel-support';
 import {
   type PlanEdgeEdits,
   type PlanNodeEdits,
@@ -38,6 +43,7 @@ import {
   usePlanExpansion,
   usePlanNotices,
   usePlanOverlays,
+  usePlanResult,
   usePlanSearch,
   usePlanSelection,
 } from './use-plan-view';
@@ -115,6 +121,11 @@ function usePlanBoardState(props: PlanCanvasPanelProps): PlanBoardState {
     (id: string) => initiativeLabel(props.initiativeOptions, id),
     [props.initiativeOptions],
   );
+  const { teams } = props.roster;
+  const resolveTeam = useCallback(
+    (teamId: string) => teams.find((entry) => entry.id === teamId)?.name ?? null,
+    [teams],
+  );
   const projected = useMemo(
     () =>
       projectPlan(plan, {
@@ -122,8 +133,10 @@ function usePlanBoardState(props: PlanCanvasPanelProps): PlanBoardState {
         diff: remoteDiff,
         canEdit,
         resolveActor: props.resolveActor,
+        resolveTeam,
         initiativeName,
         expandedRefs: expansion.expandedForView,
+        collapsedTaskRefs: expansion.collapsedTasksForView,
       }),
     [
       plan,
@@ -131,8 +144,10 @@ function usePlanBoardState(props: PlanCanvasPanelProps): PlanBoardState {
       remoteDiff,
       canEdit,
       props.resolveActor,
+      resolveTeam,
       initiativeName,
       expansion.expandedForView,
+      expansion.collapsedTasksForView,
     ],
   );
   const orientation: PlanOrientation = aspectRatio < 1 ? 'column' : 'row';
@@ -171,6 +186,17 @@ export function usePlanPanel(props: PlanCanvasPanelProps): PlanPanelModel {
   const { byRef, overlays, expansion, nodes, flowInstance } = board;
   const [selectedRefs, setSelectedRefs] = useState<readonly string[]>([]);
   const notices = usePlanNotices(remoteDiff, flowInstance, overlays.insets);
+  const results = usePlanResult(props.onUndoCommit);
+  const { setNotice } = notices;
+  const { dismiss: dismissResult } = results;
+  // One transient surface at a time: a new notice replaces the result line.
+  const showNotice = useCallback(
+    (notice: PlanNotice | null) => {
+      if (notice !== null) dismissResult();
+      setNotice(notice);
+    },
+    [dismissResult, setNotice],
+  );
   const selection = usePlanSelection({
     flowInstance,
     nodes,
@@ -181,11 +207,13 @@ export function usePlanPanel(props: PlanCanvasPanelProps): PlanPanelModel {
     plan,
     ops: props.ops,
     onCommit: props.onCommit,
+    onCommitted: results.record,
     byRef,
     expandTasks: expansion.expandTasks,
+    showSubtasks: expansion.showSubtasks,
     onAdded: selection.focusNew,
     onRemoved: selection.clearSelection,
-    setNotice: notices.setNotice,
+    setNotice: showNotice,
   });
   const edgeEdits = usePlanEdgeEdits({
     apply: nodeEdits.apply,
@@ -193,7 +221,7 @@ export function usePlanPanel(props: PlanCanvasPanelProps): PlanPanelModel {
     flowInstance,
     nodes,
     expandTasks: expansion.expandTasks,
-    setNotice: notices.setNotice,
+    setNotice: showNotice,
   });
   const searchView = usePlanSearch(nodes, board.search);
   const actions = usePlanActions({
@@ -221,8 +249,15 @@ export function usePlanPanel(props: PlanCanvasPanelProps): PlanPanelModel {
         }
       : null,
     startState: planStartState(plan, board.counts.projects, board.rootInitiativeRef),
-    bottomNotice: bottomSlot(notices.notice, notices.pill, () => {
-      notices.setNotice(null);
+    bottomNotice: bottomSlot({
+      result: results.result,
+      notice: notices.notice,
+      pill: notices.pill,
+      onUndo: results.undo,
+      onDismissResult: dismissResult,
+      onDismissNotice: () => {
+        setNotice(null);
+      },
     }),
   };
 }
@@ -263,11 +298,13 @@ function usePlanActions({
       canEdit,
       addProject: nodeEdits.addProject,
       addTask: nodeEdits.addTask,
+      addSubtask: nodeEdits.addSubtask,
       toggleTasks: (ref) => {
         expansion.toggleTasks(ref, () => {
           selection.hideRowsOf(ref);
         });
       },
+      toggleSubtasks: expansion.toggleSubtasks,
       removeDependency: edgeEdits.removeDependency,
       open: onOpen,
     }),

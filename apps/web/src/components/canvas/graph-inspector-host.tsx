@@ -408,8 +408,11 @@ export function GraphInspectorHost({
   useInspectorFocus(open, mode, paneRef, canvasColumnRef);
   const handleKeyDown = useEscapeClose(onClose);
 
+  // `isolate` keeps the canvas's own chrome layer (`z-[2000]`) inside this row, so a picker the
+  // inspector opens — portalled to the body at the popover layer — draws above the inspector
+  // rather than beneath it.
   return (
-    <div ref={attachRow} className={cn('relative flex min-h-0', className)}>
+    <div ref={attachRow} className={cn('relative isolate flex min-h-0', className)}>
       <div
         ref={canvasColumnRef}
         tabIndex={-1}

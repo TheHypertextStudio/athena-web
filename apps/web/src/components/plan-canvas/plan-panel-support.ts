@@ -7,7 +7,6 @@
  * these; nothing here reads React state.
  */
 import type {
-  PlanCommitOut,
   PlanDocument,
   PlanDraftOut,
   PlanNode,
@@ -20,7 +19,7 @@ import {
   fitPaddingFor,
 } from '@/components/canvas/canvas-viewport-insets';
 
-import { PLAN_NODE_TYPE } from './plan-nodes';
+import { PLAN_NODE_TYPE, taskProjectRef } from './plan-nodes';
 
 /**
  * Below this window width the rail's conversation stays collapsed until asked for, and the board
@@ -119,27 +118,19 @@ export function newTaskBatch(projectRef: string): { ref: string; batch: PlanOp[]
 }
 
 /**
- * Say what a commit did. Placement matches an existing record by name rather than creating a
- * twin, so a confirm can create everything, match everything, or a mix; each reads differently.
+ * The op that adds a subtask under a feature task. The reducer refuses one under a subtask, so
+ * callers offer this only on a task that sits directly in its project.
  */
-export function commitNotice(placed: PlanCommitOut['placed']): PlanNotice {
-  const created = placed.filter((item) => item.created).length;
-  const matched = placed.length - created;
-  const items = (count: number): string => (count === 1 ? '1 item' : `${String(count)} items`);
-  if (created === 0) {
-    return {
-      title: `Matched ${items(matched)} already in the workspace`,
-      detail: 'Nothing new was created; the plan now points at the existing records.',
-      tone: 'status',
-    };
-  }
+export function newSubtaskBatch(taskRef: string): { ref: string; batch: PlanOp[] } {
+  const ref = freshRef('task');
   return {
-    title: `Created ${items(created)}`,
-    detail:
-      matched > 0
-        ? `${items(matched)} already existed and ${matched === 1 ? 'was' : 'were'} matched instead.`
-        : 'They are in the workspace now.',
-    tone: 'status',
+    ref,
+    batch: [
+      {
+        op: 'upsert_node',
+        node: { ref, kind: 'task', parentRef: taskRef, fields: { title: 'New subtask' } },
+      },
+    ],
   };
 }
 
@@ -233,22 +224,45 @@ export function withSearchMatches(
 ): ReadonlySet<string> {
   const needle = search.trim().toLowerCase();
   if (needle.length === 0) return expanded;
+  const byRef = new Map(plan.document.nodes.map((node) => [node.ref, node]));
   const next = new Set(expanded);
+  for (const node of plan.document.nodes) {
+    if (node.kind !== 'task') continue;
+    const title = plan.objects[node.ref]?.name ?? node.fields.title;
+    const projectRef = taskProjectRef(byRef, node);
+    if (projectRef !== null && title.toLowerCase().includes(needle)) next.add(projectRef);
+  }
+  return next;
+}
+
+/**
+ * The feature tasks whose subtasks stay hidden while searching: a search that names a subtask
+ * shows it even under a feature task the person folded.
+ */
+export function withoutSearchMatches(
+  plan: PlanDraftOut,
+  collapsed: ReadonlySet<string>,
+  search: string,
+): ReadonlySet<string> {
+  const needle = search.trim().toLowerCase();
+  if (needle.length === 0 || collapsed.size === 0) return collapsed;
+  const next = new Set(collapsed);
   for (const node of plan.document.nodes) {
     if (node.kind !== 'task' || node.parentRef === null) continue;
     const title = plan.objects[node.ref]?.name ?? node.fields.title;
-    if (title.toLowerCase().includes(needle)) next.add(node.parentRef);
+    if (title.toLowerCase().includes(needle)) next.delete(node.parentRef);
   }
   return next;
 }
 
 /** The containers holding the tasks a revision added, so what Athena wrote is in view. */
 export function parentsOfAddedTasks(document: PlanDocument, added: ReadonlySet<string>): string[] {
+  const byRef = new Map(document.nodes.map((node) => [node.ref, node]));
   const parents = new Set<string>();
   for (const node of document.nodes) {
-    if (node.kind === 'task' && node.parentRef !== null && added.has(node.ref)) {
-      parents.add(node.parentRef);
-    }
+    if (node.kind !== 'task' || !added.has(node.ref)) continue;
+    const projectRef = taskProjectRef(byRef, node);
+    if (projectRef !== null) parents.add(projectRef);
   }
   return [...parents];
 }

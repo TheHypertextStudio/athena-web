@@ -13,7 +13,12 @@
  */
 import type { ActorKind } from '@docket/ui/components';
 import type { Edge, Node } from '@xyflow/react';
-import type { PlanDraftOut, PlanNode, PlanNodeKind } from '@docket/work/plan-draft-contract';
+import type {
+  PlanDocument,
+  PlanDraftOut,
+  PlanNode,
+  PlanNodeKind,
+} from '@docket/work/plan-draft-contract';
 
 import { dependencyMarkerEnd } from '../canvas/dependency-marker';
 import type { PlanDiff } from './plan-diff';
@@ -35,8 +40,11 @@ export const PLAN_EDGE_TYPE = {
 
 /** The initiative card, in canvas units. */
 export const PLAN_INITIATIVE_SIZE = { width: 336, height: 112 } as const;
-/** The project container's width; its height follows its rows. */
-export const PLAN_PROJECT_WIDTH = 304;
+/**
+ * The project container's width; its height follows its rows. Wide enough that a row carries its
+ * title beside the assignee, the team, and the due date without truncating the title to a word.
+ */
+export const PLAN_PROJECT_WIDTH = 376;
 /** Inset between the container edge and its rows. */
 export const PLAN_PROJECT_PADDING = 8;
 /**
@@ -47,6 +55,8 @@ export const PLAN_TASK_SIZE = {
   width: PLAN_PROJECT_WIDTH - PLAN_PROJECT_PADDING * 2,
   height: 32,
 } as const;
+/** How far a subtask row sits in from its feature task, in canvas units. */
+export const PLAN_SUBTASK_INDENT = 20;
 /** The container's header band: glyph, title, meta line. */
 export const PLAN_PROJECT_HEADER = 64;
 /** The stroke every dependency edge on the plan takes, so the arrowhead matches the line. */
@@ -131,13 +141,99 @@ export interface PlanProjectNodeData extends PlanNodeBaseData {
   readonly canAddTask: boolean;
 }
 
+/** How deep a task row sits: a feature task in its project, or a subtask under one. */
+export type PlanTaskDepth = 0 | 1;
+
 /** A task row inside its project. */
 export interface PlanTaskNodeData extends PlanNodeBaseData {
   readonly kind: 'task';
+  /** The project container the row sits in, whether it is a task or a subtask. */
   readonly parentRef: string;
+  /** The feature task a subtask hangs from; null for a task directly in its project. */
+  readonly parentTaskRef: string | null;
+  readonly depth: PlanTaskDepth;
   readonly assignee: PlanActor | null;
+  /** The owning team's name, or null when none is set or the roster does not know it. */
+  readonly team: string | null;
   readonly dueDate: string | null;
   readonly priority: string | null;
+  /** How many subtasks hang from this task; always 0 on a subtask. */
+  readonly subtaskCount: number;
+  /** Whether this task's subtasks are shown beneath it. */
+  readonly subtasksShown: boolean;
+  /** Whether the viewer may add a subtask here: a draft task that is not itself a subtask. */
+  readonly canAddSubtask: boolean;
+}
+
+/** One task in the order its container lists it: each task, then its subtasks. */
+export interface PlanTaskRow {
+  readonly node: PlanNode;
+  /** The project the row sits in. */
+  readonly projectRef: string;
+  readonly parentTaskRef: string | null;
+  readonly depth: PlanTaskDepth;
+  readonly subtaskCount: number;
+}
+
+/**
+ * The project a task sits in: its parent when that is a project, its feature task's project when
+ * it is a subtask, or null when neither resolves.
+ *
+ * @param byRef - The document's nodes by ref.
+ * @param node - A task node.
+ */
+export function taskProjectRef(
+  byRef: ReadonlyMap<string, PlanNode>,
+  node: PlanNode,
+): string | null {
+  const parent = node.parentRef === null ? undefined : byRef.get(node.parentRef);
+  if (parent?.kind === 'project') return parent.ref;
+  if (parent?.kind !== 'task' || parent.parentRef === null) return null;
+  return byRef.get(parent.parentRef)?.kind === 'project' ? parent.parentRef : null;
+}
+
+/** Whether a task node hangs from another task. */
+export function isSubtaskNode(byRef: ReadonlyMap<string, PlanNode>, node: PlanNode): boolean {
+  return node.parentRef !== null && byRef.get(node.parentRef)?.kind === 'task';
+}
+
+/** Each feature task's subtasks, in document order, by the feature task's ref. */
+function subtasksByTask(
+  document: PlanDocument,
+  byRef: ReadonlyMap<string, PlanNode>,
+): Map<string, PlanNode[]> {
+  const grouped = new Map<string, PlanNode[]>();
+  for (const node of document.nodes) {
+    if (node.kind !== 'task' || node.parentRef === null || !isSubtaskNode(byRef, node)) continue;
+    grouped.set(node.parentRef, [...(grouped.get(node.parentRef) ?? []), node]);
+  }
+  return grouped;
+}
+
+/**
+ * Every task that resolves to a project, grouped by project in reading order: each feature task
+ * in document order, followed directly by its subtasks.
+ *
+ * @param document - The plan document.
+ * @returns the rows per project ref.
+ */
+export function planTaskRows(document: PlanDocument): Map<string, PlanTaskRow[]> {
+  const byRef = new Map(document.nodes.map((node) => [node.ref, node]));
+  const subtasks = subtasksByTask(document, byRef);
+  const rows = new Map<string, PlanTaskRow[]>();
+  for (const node of document.nodes) {
+    if (node.kind !== 'task' || isSubtaskNode(byRef, node)) continue;
+    const projectRef = taskProjectRef(byRef, node);
+    if (projectRef === null) continue;
+    const children = subtasks.get(node.ref) ?? [];
+    const list = rows.get(projectRef) ?? [];
+    list.push({ node, projectRef, parentTaskRef: null, depth: 0, subtaskCount: children.length });
+    for (const child of children) {
+      list.push({ node: child, projectRef, parentTaskRef: node.ref, depth: 1, subtaskCount: 0 });
+    }
+    rows.set(projectRef, list);
+  }
+  return rows;
 }
 
 /** Read the typed data off a plan node (one place for the cast). */
@@ -157,6 +253,10 @@ export interface ProjectPlanOptions {
   readonly initiativeName: (initiativeId: string) => string | null;
   /** The project refs whose task rows are shown; every other container is collapsed. */
   readonly expandedRefs: ReadonlySet<string>;
+  /** Resolve a team id to its name, or null when unknown. */
+  readonly resolveTeam: (teamId: string) => string | null;
+  /** The feature tasks whose subtasks are hidden; every other task shows its subtasks. */
+  readonly collapsedTaskRefs: ReadonlySet<string>;
 }
 
 function baseData(
@@ -236,29 +336,45 @@ function projectNode(
   };
 }
 
+/** Whether a row is out of view: its container is collapsed, or its feature task is. */
+function rowHidden(row: PlanTaskRow, options: ProjectPlanOptions): boolean {
+  if (!options.expandedRefs.has(row.projectRef)) return true;
+  return row.parentTaskRef !== null && options.collapsedTaskRefs.has(row.parentTaskRef);
+}
+
 function taskNode(
-  node: PlanNode,
+  row: PlanTaskRow,
   plan: PlanDraftOut,
   options: ProjectPlanOptions,
 ): Node<PlanTaskNodeData> {
+  const { node } = row;
+  const teamId = node.fields.teamId;
   return {
     id: node.ref,
     type: PLAN_NODE_TYPE.task,
     position: { x: 0, y: 0 },
-    ...(node.parentRef === null ? {} : { parentId: node.parentRef }),
+    // A subtask sits in its project's container beside its feature task, one level in, so the
+    // container stays the only frame on the board.
+    parentId: row.projectRef,
     // No `extent`: a row must be able to leave its container, because dragging it into another
     // container is how a person moves a task; the drop handler re-homes it or snaps it back.
     draggable: options.canEdit && node.status === 'draft',
     // A collapsed container names its tasks in miniature; the rows themselves stay out of the
     // graph, and so do the edges that end on them.
-    hidden: node.parentRef === null || !options.expandedRefs.has(node.parentRef),
+    hidden: rowHidden(row, options),
     data: {
       ...baseData(node, plan, options),
       kind: 'task',
-      parentRef: node.parentRef ?? '',
+      parentRef: row.projectRef,
+      parentTaskRef: row.parentTaskRef,
+      depth: row.depth,
       assignee: actorOf(node.fields.assigneeId, options),
+      team: teamId ? options.resolveTeam(teamId) : null,
       dueDate: node.fields.dueDate ?? null,
       priority: node.fields.priority ?? null,
+      subtaskCount: row.subtaskCount,
+      subtasksShown: !options.collapsedTaskRefs.has(node.ref),
+      canAddSubtask: options.canEdit && row.depth === 0 && node.status === 'draft',
     },
   };
 }
@@ -282,7 +398,7 @@ export function projectPlan(
   options: ProjectPlanOptions,
 ): { nodes: Node[]; edges: Edge[] } {
   const byRef = new Map(plan.document.nodes.map((node) => [node.ref, node]));
-  const tasksByProject = miniTasks(plan);
+  const rowsByProject = planTaskRows(plan.document);
   const rootRef = plan.document.nodes.find((node) => node.kind === 'initiative')?.ref ?? null;
 
   const initiatives: Node[] = [];
@@ -290,22 +406,14 @@ export function projectPlan(
   const tasks: Node[] = [];
   const links: Edge[] = [];
   for (const node of plan.document.nodes) {
-    switch (node.kind) {
-      case 'initiative':
-        initiatives.push(initiativeNode(node, plan, options, node.ref === rootRef));
-        break;
-      case 'project':
-        projects.push(projectNode(node, plan, options, byRef, tasksByProject.get(node.ref) ?? []));
-        links.push(...linkEdges(node, byRef));
-        break;
-      case 'task':
-        if (node.parentRef !== null && byRef.has(node.parentRef)) {
-          tasks.push(taskNode(node, plan, options));
-        }
-        break;
-      case 'program':
-        break;
+    if (node.kind === 'initiative') {
+      initiatives.push(initiativeNode(node, plan, options, node.ref === rootRef));
     }
+    if (node.kind !== 'project') continue;
+    const rows = rowsByProject.get(node.ref) ?? [];
+    projects.push(projectNode(node, plan, options, byRef, miniTasks(plan, rows)));
+    links.push(...linkEdges(node, byRef));
+    tasks.push(...rows.map((row) => taskNode(row, plan, options)));
   }
   return {
     nodes: [...initiatives, ...projects, ...tasks],
@@ -313,20 +421,15 @@ export function projectPlan(
   };
 }
 
-/** Each project's tasks in document order, as the miniature list names them. */
-function miniTasks(plan: PlanDraftOut): Map<string, PlanMiniTask[]> {
-  const grouped = new Map<string, PlanMiniTask[]>();
-  for (const node of plan.document.nodes) {
-    if (node.kind !== 'task' || node.parentRef === null) continue;
-    const list = grouped.get(node.parentRef) ?? [];
-    list.push({
+/** A project's feature tasks in reading order, as the miniature list names them. */
+function miniTasks(plan: PlanDraftOut, rows: readonly PlanTaskRow[]): PlanMiniTask[] {
+  return rows
+    .filter((row) => row.depth === 0)
+    .map(({ node }) => ({
       ref: node.ref,
       title: plan.objects[node.ref]?.name ?? node.fields.title,
       status: node.status,
-    });
-    grouped.set(node.parentRef, list);
-  }
-  return grouped;
+    }));
 }
 
 /** The membership edges from every initiative a project belongs to. */

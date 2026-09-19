@@ -16,6 +16,8 @@ import type { JSX } from 'react';
 import CanvasOverlayPanel from '@/components/canvas/canvas-overlay-panel';
 
 import type { PlanNotice, PlanStartState } from './plan-panel-support';
+import type { PlanResult } from './plan-result';
+import { PlanResultLine } from './plan-result-line';
 
 /** What a rooted plan shows while nothing is planned under its initiative yet. */
 function PlanStartHint({
@@ -136,16 +138,34 @@ function PlanNoticeSurface({
   );
 }
 
+/** What can sit above the view controls, and how each is taken down. */
+export interface PlanBottomSlotInput {
+  /** The line the latest confirm left behind. */
+  readonly result: PlanResult | null;
+  readonly notice: PlanNotice | null;
+  readonly pill: string | null;
+  readonly onUndo: () => void;
+  readonly onDismissResult: () => void;
+  readonly onDismissNotice: () => void;
+}
+
 /**
- * What sits above the view controls: an undoable notice wins over the update pill, so the two
- * transient surfaces never stack and neither ever collides with the bar up top.
+ * What sits above the view controls: the result of a confirm, then an undoable notice, then the
+ * update pill, so the transient surfaces never stack and none ever collides with the bar up top.
  */
-export function bottomSlot(
-  notice: PlanNotice | null,
-  pill: string | null,
-  onDismiss: () => void,
-): JSX.Element | undefined {
-  if (notice !== null) return <PlanNoticeSurface notice={notice} onDismiss={onDismiss} />;
-  if (pill !== null) return <PlanUpdatePill text={pill} />;
+export function bottomSlot(input: PlanBottomSlotInput): JSX.Element | undefined {
+  if (input.result !== null) {
+    return (
+      <PlanResultLine
+        result={input.result}
+        onUndo={input.onUndo}
+        onDismiss={input.onDismissResult}
+      />
+    );
+  }
+  if (input.notice !== null) {
+    return <PlanNoticeSurface notice={input.notice} onDismiss={input.onDismissNotice} />;
+  }
+  if (input.pill !== null) return <PlanUpdatePill text={input.pill} />;
   return undefined;
 }

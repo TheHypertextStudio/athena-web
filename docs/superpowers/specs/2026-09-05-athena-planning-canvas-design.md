@@ -244,6 +244,28 @@ Undo" — and the Undo behind it reverses the whole commit. A plan commit revers
 reporting path rather than the all-or-nothing one, because the atomic reversal understands only
 tasks and the edges between them, and a plan commit also creates containers.
 
+**On the canvas.** A subtask is a row in its feature task's project container, listed directly
+beneath the feature task and indented one step, on the container's own tone where a feature task
+row is raised one tone step. A feature task that carries subtasks leads with a chevron that folds
+them; they also hide with their container. A draft feature task offers Add subtask on hover and in
+the inspector's overflow; on a subtask that action is disabled, because subtasks go one level deep.
+The collapsed container's miniature list names feature tasks only. Rows show the assignee's avatar
+and the team's name.
+
+The canvas reads the roster from `GET /v1/me/plans/{id}/roster`, the same `people` and `teams` the
+tools return. The inspector picks the team first for a project or task, then the person from that
+team's people (everyone when no team is set, each hinted with their teams); both pickers show names
+and store ids.
+
+Confirming replaces the notice slot above the view controls with one line naming what was created,
+kind by kind with zero kinds left out, and Undo. Undo calls the personal undo route with the
+commit's change set; the line then reads "Undone" with the counts struck through. Undoing a plan
+commit also returns the nodes that commit created to `draft` with no object on the plan (nodes the
+commit matched stay confirmed), so the canvas is back where it was before Confirm and the person can
+adjust and confirm again. A failed Undo names its cause by Problem code — already undone, changed
+since, signed out, not allowed, rate limited, offline, or a server failure — and keeps Undo on the
+line.
+
 ## Entry and navigation
 
 **From the thread.** The Plan card's Open canvas action pushes the plan route and reveals the Athena

@@ -11,8 +11,8 @@
  * picker outlined so the column's controls stand off the floating panel they sit on.
  */
 import type { PickerOption } from '@docket/ui/components';
-import { ActorPicker, DatePicker, EnumPicker } from '@docket/ui/components';
-import { CheckCircle2, Ellipsis, OpenInNew, Trash2, X } from '@docket/ui/icons';
+import { DatePicker, EnumPicker } from '@docket/ui/components';
+import { CheckCircle2, Ellipsis, OpenInNew, Plus, Trash2, X } from '@docket/ui/icons';
 import {
   Button,
   DropdownMenu,
@@ -20,7 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@docket/ui/primitives';
-import type { PlanDraftOut, PlanNode, PlanOp } from '@docket/work/plan-draft-contract';
+import type { PlanDraftOut, PlanNode, PlanOp, PlanRoster } from '@docket/work/plan-draft-contract';
 import { type JSX, useMemo } from 'react';
 
 import { CanvasInspector } from '@/components/canvas/canvas-inspector';
@@ -29,6 +29,7 @@ import { HEALTH_LABEL } from '@/components/entity-display/health';
 import { templatesOfKindDef } from '@/components/templates/queries';
 import { useApiListQuery } from '@/lib/query';
 
+import { FIELD_TRIGGER, PlanAssignmentFields, PlanFieldRow } from './plan-assignment-fields';
 import { CommitText } from './plan-commit-text';
 import { describeConfirmation } from './plan-confirm';
 import { PlanStateChip, PlanStatusGlyph } from './plan-status';
@@ -43,11 +44,15 @@ export interface PlanInspectorProps {
   readonly committing: boolean;
   /** Focus the title with its text selected: set for a node the person just added. */
   readonly focusTitle?: boolean | undefined;
-  /** Human members, for owner, lead, and assignee. */
+  /** Human members, for their avatars beside the roster's names. */
   readonly memberOptions: readonly PickerOption[];
+  /** The people and teams the plan may assign; the pickers store their ids. */
+  readonly roster: PlanRoster;
   /** Existing initiatives a project may also join. */
   readonly initiativeOptions: readonly PickerOption[];
   readonly onApply: (ops: readonly PlanOp[]) => Promise<unknown>;
+  /** Add a draft subtask under this task. */
+  readonly onAddSubtask: (taskRef: string) => void;
   readonly onConfirm: (refs: readonly string[]) => void;
   readonly onRemove: (ref: string) => void;
   readonly onClose: () => void;
@@ -60,51 +65,18 @@ const KIND_LABEL: Record<PlanNode['kind'], string> = {
   task: 'Task',
 };
 
-/** The classes a picker trigger takes so it reads as a field beside the text fields. */
-const FIELD_TRIGGER =
-  'bg-surface-container-highest hover:bg-surface-container-high w-full justify-start';
-
 /** A labelled row wrapping a picker that reads as a field. */
-function Field({
-  label,
-  children,
-}: {
-  readonly label: string;
-  readonly children: JSX.Element;
-}): JSX.Element {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-on-surface-variant text-label-medium">{label}</span>
-      {children}
-    </div>
-  );
+const Field = PlanFieldRow;
+
+/** Whether a node is a task filed under another task. */
+function isSubtask(plan: PlanDraftOut, node: PlanNode): boolean {
+  if (node.kind !== 'task' || node.parentRef === null) return false;
+  return plan.document.nodes.some((other) => other.ref === node.parentRef && other.kind === 'task');
 }
 
-type PersonKey = 'ownerId' | 'leadId' | 'assigneeId';
-
-/** The person field a kind carries. */
-interface PersonField {
-  readonly key: PersonKey;
-  readonly label: string;
-  readonly placeholder: string;
-  readonly clearLabel: string;
-}
-
-function personField(kind: PlanNode['kind']): PersonField {
-  switch (kind) {
-    case 'initiative':
-    case 'program':
-      return { key: 'ownerId', label: 'Owner', placeholder: 'Set owner', clearLabel: 'No owner' };
-    case 'project':
-      return { key: 'leadId', label: 'Lead', placeholder: 'Set lead', clearLabel: 'No lead' };
-    case 'task':
-      return {
-        key: 'assigneeId',
-        label: 'Assignee',
-        placeholder: 'Assign',
-        clearLabel: 'Unassigned',
-      };
-  }
+/** What the inspector calls a node: its kind, or Subtask for a task under a task. */
+function kindLabel(plan: PlanDraftOut, node: PlanNode): string {
+  return isSubtask(plan, node) ? 'Subtask' : KIND_LABEL[node.kind];
 }
 
 /** The date field a kind carries, if any. */
@@ -258,10 +230,6 @@ function ConfirmedBody({
           </>
         ) : null}
       </dl>
-      <p className="text-on-surface-variant text-body-small">
-        This {KIND_LABEL[node.kind].toLowerCase()} exists in the workspace now. Edit it there, or
-        ask Athena to change it.
-      </p>
       {live ? (
         <Button asChild variant="secondary" size="sm" className="self-start">
           <Link href={live.href}>
@@ -274,7 +242,7 @@ function ConfirmedBody({
 }
 
 /** What the draft editor's pieces share. */
-type DraftProps = Omit<PlanInspectorProps, 'nodeRef' | 'onClose' | 'onRemove'> & {
+type DraftProps = Omit<PlanInspectorProps, 'nodeRef' | 'onClose' | 'onRemove' | 'onAddSubtask'> & {
   readonly node: PlanNode;
   readonly setField: (fields: Record<string, unknown>) => void;
 };
@@ -325,24 +293,16 @@ function DraftText({ node, focusTitle = false, canEdit, setField }: DraftProps):
 /** The properties a draft carries: who, when, a template, and a project's other initiatives. */
 function DraftProperties(props: DraftProps): JSX.Element {
   const { node, canEdit, memberOptions, setField } = props;
-  const person = personField(node.kind);
   const date = dateField(node.kind);
   return (
     <>
-      <Field label={person.label}>
-        <ActorPicker
-          options={memberOptions}
-          value={node.fields[person.key] ?? null}
-          placeholder={person.placeholder}
-          clearLabel={person.clearLabel}
-          disabled={!canEdit}
-          triggerVariant="ghost"
-          triggerClassName={FIELD_TRIGGER}
-          onChange={(value) => {
-            setField({ [person.key]: value });
-          }}
-        />
-      </Field>
+      <PlanAssignmentFields
+        node={node}
+        roster={props.roster}
+        memberOptions={memberOptions}
+        canEdit={canEdit}
+        setField={setField}
+      />
       {date ? (
         <Field label={date.label}>
           <DatePicker
@@ -416,8 +376,17 @@ function ConfirmFooter({
   );
 }
 
-/** The header's overflow: what a draft can be taken out of the plan with. */
-function DraftMenu({ onRemove }: { readonly onRemove: () => void }): JSX.Element {
+/** Props for {@link DraftMenu}. */
+interface DraftMenuProps {
+  /** Add a subtask under this task; null for a node that is not a task. */
+  readonly onAddSubtask: (() => void) | null;
+  /** Whether a subtask may go here: false on a subtask, which carries none of its own. */
+  readonly subtaskAllowed: boolean;
+  readonly onRemove: () => void;
+}
+
+/** The header's overflow: a subtask for a task, and taking a draft out of the plan. */
+function DraftMenu({ onAddSubtask, subtaskAllowed, onRemove }: DraftMenuProps): JSX.Element {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -426,6 +395,12 @@ function DraftMenu({ onRemove }: { readonly onRemove: () => void }): JSX.Element
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        {onAddSubtask ? (
+          <DropdownMenuItem disabled={!subtaskAllowed} onSelect={onAddSubtask}>
+            <Plus />
+            Add subtask
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem destructive onSelect={onRemove}>
           <Trash2 />
           Remove from plan
@@ -442,11 +417,12 @@ export default function PlanInspector(props: PlanInspectorProps): JSX.Element | 
   if (!node) return null;
   const title = plan.objects[node.ref]?.name ?? node.fields.title;
   const draft = node.status === 'draft';
+  const kind = kindLabel(plan, node);
   return (
     <CanvasInspector
       title={title}
       leading={<PlanStatusGlyph status={node.status} />}
-      closeLabel={`Close ${KIND_LABEL[node.kind].toLowerCase()} details`}
+      closeLabel={`Close ${kind.toLowerCase()} details`}
       onClose={onClose}
       footer={
         draft && canEdit ? (
@@ -456,6 +432,14 @@ export default function PlanInspector(props: PlanInspectorProps): JSX.Element | 
       actions={
         draft && canEdit ? (
           <DraftMenu
+            onAddSubtask={
+              node.kind === 'task'
+                ? () => {
+                    props.onAddSubtask(node.ref);
+                  }
+                : null
+            }
+            subtaskAllowed={!isSubtask(plan, node)}
             onRemove={() => {
               onRemove(node.ref);
             }}
@@ -465,7 +449,7 @@ export default function PlanInspector(props: PlanInspectorProps): JSX.Element | 
     >
       <div className="flex flex-col gap-3">
         <div className="text-on-surface-variant text-label-medium flex items-center gap-2">
-          <span>{KIND_LABEL[node.kind]}</span>
+          <span>{kind}</span>
           <PlanStateChip status={node.status} />
         </div>
         {draft ? <DraftBody {...props} node={node} /> : <ConfirmedBody plan={plan} node={node} />}

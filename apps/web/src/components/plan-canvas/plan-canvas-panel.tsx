@@ -11,7 +11,7 @@
  */
 import type { PickerOption } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
-import type { PlanCommitOut, PlanDraftOut } from '@docket/work/plan-draft-contract';
+import type { PlanCommitOut, PlanDraftOut, PlanRoster } from '@docket/work/plan-draft-contract';
 import type { JSX, ReactNode } from 'react';
 
 import { CanvasActionsProvider } from '@/components/canvas/canvas-actions-context';
@@ -25,6 +25,7 @@ import type { PlanDiff } from './plan-diff';
 import PlanInspector from './plan-inspector';
 import type { PlanActor } from './plan-nodes';
 import { type PlanPanelModel, usePlanPanel } from './use-plan-panel';
+import type { UndoPlanCommit } from './use-plan-view';
 
 /** What the floating bar needs from the route. */
 export interface PlanChrome {
@@ -43,6 +44,10 @@ export interface PlanCanvasPanelProps {
   readonly committing: boolean;
   /** Create the refs (closed over ancestors server-side). Resolves null when refused. */
   readonly onCommit: (refs: readonly string[]) => Promise<PlanCommitOut | null>;
+  /** Undo a commit by the change set it returned. */
+  readonly onUndoCommit: UndoPlanCommit;
+  /** Who the plan's nodes may be assigned to; empty while it loads. */
+  readonly roster: PlanRoster;
   /** What the latest remote revision changed; empty for a local edit. */
   readonly remoteDiff: PlanDiff;
   /** Open a real record. */
@@ -82,8 +87,10 @@ function PlanSelectionInspector({
       committing={props.committing}
       focusTitle={selection.focusTitle}
       memberOptions={props.memberOptions}
+      roster={props.roster}
       initiativeOptions={props.initiativeOptions}
       onApply={edits.apply}
+      onAddSubtask={edits.addSubtask}
       onConfirm={edits.confirmRefs}
       onRemove={(nodeRef) => {
         edits.removeRefs([nodeRef]);

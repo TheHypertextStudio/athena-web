@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
-import type { PlanDraftOut, PlanNode } from '@docket/work/plan-draft-contract';
+import type { PlanDraftOut, PlanNode, PlanRoster } from '@docket/work/plan-draft-contract';
 
 vi.mock('@docket/ui/components', () => ({
   DatePicker: ({
@@ -29,15 +29,18 @@ vi.mock('@docket/ui/components', () => ({
   ActorPicker: ({
     value,
     onChange,
+    options,
     placeholder,
   }: {
     value: string | null;
     onChange: (value: string | null) => void;
+    options: readonly { value: string; label: string }[];
     placeholder: string;
   }) => (
     <button
       type="button"
       data-testid="actor-picker"
+      data-options={options.map((option) => option.value).join(',')}
       onClick={() => {
         onChange('actor_2');
       }}
@@ -145,6 +148,7 @@ const PLAN: PlanDraftOut = {
         objectId: 'prj_2',
       }),
       node('t1', { kind: 'task', parentRef: 'p1', fields: { title: 'Segment' } }),
+      node('s1', { kind: 'task', parentRef: 't1', fields: { title: 'Build the endpoint' } }),
     ],
     edges: [],
   },
@@ -161,6 +165,17 @@ const PLAN: PlanDraftOut = {
   updatedAt: '2026-09-05T00:00:00.000Z',
 };
 
+const ROSTER: PlanRoster = {
+  people: [
+    { actorId: 'actor_1' as never, name: 'Priya', teamIds: ['team_product' as never] },
+    { actorId: 'actor_2' as never, name: 'Sam', teamIds: ['team_eng' as never] },
+  ],
+  teams: [
+    { id: 'team_eng' as never, name: 'Engineering' },
+    { id: 'team_product' as never, name: 'Product' },
+  ],
+};
+
 function renderInspector(
   nodeRef: string,
   overrides: Partial<Parameters<typeof PlanInspector>[0]> = {},
@@ -169,6 +184,7 @@ function renderInspector(
   const onConfirm = vi.fn();
   const onRemove = vi.fn();
   const onClose = vi.fn();
+  const onAddSubtask = vi.fn();
   render(
     <PlanInspector
       plan={PLAN}
@@ -177,15 +193,17 @@ function renderInspector(
       canEdit
       committing={false}
       memberOptions={[{ value: 'actor_2', label: 'Sam' }]}
+      roster={ROSTER}
       initiativeOptions={[{ value: 'ini_9', label: 'Brand refresh' }]}
       onApply={onApply}
+      onAddSubtask={onAddSubtask}
       onConfirm={onConfirm}
       onRemove={onRemove}
       onClose={onClose}
       {...overrides}
     />,
   );
-  return { onApply, onConfirm, onRemove, onClose };
+  return { onApply, onConfirm, onRemove, onClose, onAddSubtask };
 }
 
 afterEach(() => {
@@ -240,8 +258,8 @@ describe('PlanInspector', () => {
     expect(onApply).toHaveBeenCalledWith([
       { op: 'set_fields', ref: 'p1', fields: { leadId: 'actor_2' } },
     ]);
-    const [templatePicker, initiativePicker] = screen.getAllByTestId('enum-picker');
-    if (!templatePicker || !initiativePicker) throw new Error('Expected two enum pickers.');
+    const [, templatePicker, initiativePicker] = screen.getAllByTestId('enum-picker');
+    if (!templatePicker || !initiativePicker) throw new Error('Expected three enum pickers.');
     fireEvent.click(templatePicker);
     expect(onApply).toHaveBeenCalledWith([
       { op: 'apply_template', ref: 'p1', templateId: 'tpl_1' },
@@ -278,6 +296,50 @@ describe('PlanInspector', () => {
     expect(onRemove).toHaveBeenCalledWith('t1');
     fireEvent.click(screen.getByRole('button', { name: /close task details/i }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('assigns a task from the roster, storing the team and person ids', () => {
+    const { onApply } = renderInspector('t1');
+    const [teamPicker] = screen.getAllByTestId('enum-picker');
+    if (!teamPicker) throw new Error('Expected a team picker.');
+    fireEvent.click(teamPicker);
+    expect(onApply).toHaveBeenCalledWith([
+      { op: 'set_fields', ref: 't1', fields: { teamId: 'team_eng' } },
+    ]);
+    const people = screen.getByTestId('actor-picker');
+    expect(people.dataset['options']).toBe('actor_1,actor_2');
+    fireEvent.click(people);
+    expect(onApply).toHaveBeenLastCalledWith([
+      { op: 'set_fields', ref: 't1', fields: { assigneeId: 'actor_2' } },
+    ]);
+  });
+
+  it('lists only the chosen team’s people once a task has a team', () => {
+    const withTeam: PlanDraftOut = {
+      ...PLAN,
+      document: {
+        ...PLAN.document,
+        nodes: PLAN.document.nodes.map((n) =>
+          n.ref === 't1' ? { ...n, fields: { ...n.fields, teamId: 'team_eng' as never } } : n,
+        ),
+      },
+    };
+    renderInspector('t1', { plan: withTeam });
+    expect(screen.getByTestId('actor-picker').dataset['options']).toBe('actor_2');
+  });
+
+  it('adds a subtask under a task and offers none under a subtask', async () => {
+    const { onAddSubtask } = renderInspector('t1');
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /add subtask/i }));
+    expect(onAddSubtask).toHaveBeenCalledWith('t1');
+    cleanup();
+    const again = renderInspector('s1');
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }));
+    const item = await screen.findByRole('menuitem', { name: /add subtask/i });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(item);
+    expect(again.onAddSubtask).not.toHaveBeenCalled();
   });
 
   it('confirms from one small footer control that names what it creates', () => {

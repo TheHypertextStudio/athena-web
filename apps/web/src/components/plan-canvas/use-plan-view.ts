@@ -8,7 +8,7 @@
  * lets go of it; expansion decides which containers show their rows; notices hold the transient
  * pill and notice; search names the nodes to dim around.
  */
-import type { PlanDraftOut } from '@docket/work/plan-draft-contract';
+import type { PlanCommitOut, PlanDraftOut } from '@docket/work/plan-draft-contract';
 import type { Node, ReactFlowInstance } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -29,7 +29,9 @@ import {
   revealAdditions,
   revisionPillText,
   withSearchMatches,
+  withoutSearchMatches,
 } from './plan-panel-support';
+import { type PlanResult, planResultFrom, planUndoFailure } from './plan-result';
 
 /** What {@link usePlanOverlays} returns. */
 export interface PlanOverlays {
@@ -158,6 +160,41 @@ export interface PlanExpansion {
   readonly expandTasks: (refs: readonly string[]) => void;
   /** Show or hide a container's rows; `onHide` runs when this hides them. */
   readonly toggleTasks: (projectRef: string, onHide: () => void) => void;
+  /** The feature tasks whose subtasks are folded away, less any a search names a subtask of. */
+  readonly collapsedTasksForView: ReadonlySet<string>;
+  /** Fold or unfold a feature task's subtasks. */
+  readonly toggleSubtasks: (taskRef: string) => void;
+  /** Unfold a feature task, so a subtask just added under it is visible. */
+  readonly showSubtasks: (taskRef: string) => void;
+}
+
+/** Feature tasks rest unfolded; a person folds the ones whose subtasks they are done reading. */
+function useSubtaskFolding(
+  plan: PlanDraftOut,
+  search: string,
+): Pick<PlanExpansion, 'collapsedTasksForView' | 'toggleSubtasks' | 'showSubtasks'> {
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleSubtasks = useCallback((taskRef: string) => {
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(taskRef)) next.delete(taskRef);
+      else next.add(taskRef);
+      return next;
+    });
+  }, []);
+  const showSubtasks = useCallback((taskRef: string) => {
+    setCollapsed((current) => {
+      if (!current.has(taskRef)) return current;
+      const next = new Set(current);
+      next.delete(taskRef);
+      return next;
+    });
+  }, []);
+  const collapsedTasksForView = useMemo(
+    () => withoutSearchMatches(plan, collapsed, search),
+    [plan, collapsed, search],
+  );
+  return { collapsedTasksForView, toggleSubtasks, showSubtasks };
 }
 
 /**
@@ -201,7 +238,8 @@ export function usePlanExpansion(
     () => withSearchMatches(plan, expandedRefs, search),
     [plan, expandedRefs, search],
   );
-  return { expandedForView, expandTasks, toggleTasks };
+  const folding = useSubtaskFolding(plan, search);
+  return { expandedForView, expandTasks, toggleTasks, ...folding };
 }
 
 /** What {@link usePlanNotices} returns. */
@@ -238,6 +276,57 @@ export function usePlanNotices(
     };
   }, [flowInstance, insets, remoteDiff]);
   return { notice, setNotice, pill };
+}
+
+/** How an Undo of a commit went: done, or refused with the error the mutation rejected with. */
+export interface PlanUndoOutcome {
+  readonly ok: boolean;
+  readonly error?: unknown;
+}
+
+/** Undo the commit a change set recorded. */
+export type UndoPlanCommit = (changeSetId: string) => Promise<PlanUndoOutcome>;
+
+/** What {@link usePlanResult} returns. */
+export interface PlanResultControls {
+  /** The line after the latest confirm, or null when there is none to show. */
+  readonly result: PlanResult | null;
+  /** Show the line for a commit the API accepted. */
+  readonly record: (commit: PlanCommitOut) => void;
+  /** Undo the commit the line names. */
+  readonly undo: () => void;
+  readonly dismiss: () => void;
+}
+
+/** The line once an Undo for `changeSetId` settles; a line for a later commit is left alone. */
+function settleUndo(
+  current: PlanResult | null,
+  changeSetId: string,
+  outcome: PlanUndoOutcome,
+): PlanResult | null {
+  if (current?.changeSetId !== changeSetId) return current;
+  if (outcome.ok) return { ...current, phase: 'undone', error: null };
+  return { ...current, phase: 'created', error: planUndoFailure(outcome.error) };
+}
+
+/** The line a confirm leaves behind, and the Undo on it. */
+export function usePlanResult(undoCommit: UndoPlanCommit): PlanResultControls {
+  const [result, setResult] = useState<PlanResult | null>(null);
+  const record = useCallback((commit: PlanCommitOut) => {
+    setResult(planResultFrom(commit));
+  }, []);
+  const dismiss = useCallback(() => {
+    setResult(null);
+  }, []);
+  const undo = useCallback(() => {
+    const changeSetId = result?.changeSetId ?? null;
+    if (result?.phase !== 'created' || changeSetId === null) return;
+    setResult({ ...result, phase: 'undoing', error: null });
+    void undoCommit(changeSetId).then((outcome) => {
+      setResult((current) => settleUndo(current, changeSetId, outcome));
+    });
+  }, [result, undoCommit]);
+  return { result, record, undo, dismiss };
 }
 
 /** What {@link usePlanSearch} returns. */

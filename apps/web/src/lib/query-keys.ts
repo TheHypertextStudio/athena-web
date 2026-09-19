@@ -78,6 +78,7 @@ export const queryKeys = {
   // Plans are personal, like Athena sessions, so they live under `me` rather than an org.
   plans: () => ['me', 'plans'] as const,
   plan: (planId: string) => ['me', 'plans', planId] as const,
+  planRoster: (planId: string) => ['me', 'plans', planId, 'roster'] as const,
   initiatives: (orgId: string) => ['org', orgId, 'initiatives'] as const,
   initiativeHierarchyCandidates: (orgId: string, mode: 'parent' | 'child', query: string) =>
     ['org', orgId, 'initiatives', 'hierarchy-candidates', mode, query] as const,

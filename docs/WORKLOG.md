@@ -258,8 +258,27 @@ undo route.
   - [x] `people`/`teams` on `plan_start` and `plan_read`, and the prompt that uses them
   - [x] Plan-origin undo and `createdCounts` on both commit doors
   - [ ] `JOURNALING_PLAN_TURNS` and its selection in the mock runtime
-  - [ ] The web half: rendering subtask rows, assignment, and the confirmation line
+  - [x] The web half: rendering subtask rows, assignment, and the confirmation line
 - **Blockers**: None.
+
+#### Web half
+
+- **Subtask rows**: `planTaskRows` orders each project's rows as feature task then its subtasks;
+  a subtask is a row in the same container (`parentId` is the project), one `PLAN_SUBTASK_INDENT`
+  in, on the container's tone. `usePlanExpansion` tracks folded feature tasks; hidden rows take no
+  layout slot. Add subtask sits on a draft feature row's hover and in the inspector overflow, where
+  it is disabled on a subtask. The container widened to 376 so a row carries title, team, avatar,
+  and due date.
+- **Assignment**: `GET /v1/me/plans/:id/roster` returns `listPlanRoster` to the canvas.
+  `PlanAssignmentFields` picks the team, then the person from that team's roster people, storing
+  ids.
+- **Result line**: `usePlanResult` holds the commit's `createdCounts` and change set;
+  `PlanResultLine` takes the notice slot with the counts and Undo, then "Undone" with the counts
+  struck. `planUndoFailure` maps each Problem code to its own copy. The route marks the undo's
+  revision as local so the canvas does not announce it as Athena's.
+- **Undo reopens the plan**: `reopenUndoneNodes` returns every node whose record the undo reverted
+  to `draft` with no object, so the canvas is back where it was before Confirm. Matched nodes stay
+  confirmed. Athena's own `undo` tool does not reopen plan nodes yet.
 
 #### Notes
 

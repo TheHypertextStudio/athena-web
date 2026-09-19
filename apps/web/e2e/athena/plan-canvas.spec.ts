@@ -53,6 +53,15 @@ const SEED_OPS = [
       fields: { title: 'Write the appeal letter' },
     },
   },
+  {
+    op: 'upsert_node',
+    node: {
+      ref: 's1',
+      kind: 'task',
+      parentRef: 't2',
+      fields: { title: 'Pull the donor merge fields' },
+    },
+  },
   { op: 'add_edge', fromRef: 'p-outreach', toRef: 'p-push' },
 ];
 
@@ -86,10 +95,23 @@ test.describe('Planning canvas', () => {
     await expect(page.locator('[data-plan-ref="t1"]')).toBeHidden();
     await outreach.getByRole('button', { name: 'Show 2 tasks' }).first().click();
     await expect(page.locator('[data-plan-ref="t1"]')).toBeVisible();
+    // A subtask is its own row, one level in beneath its feature task, folding with it.
+    const subtask = page.locator('[data-plan-ref="s1"]');
+    await expect(subtask).toBeVisible();
+    await expect(subtask).toHaveAttribute('data-plan-depth', '1');
+    const feature = page.locator('[data-plan-ref="t2"]');
+    const featureBox = await feature.boundingBox();
+    const subtaskBox = await subtask.boundingBox();
+    expect(subtaskBox?.x ?? 0).toBeGreaterThan(featureBox?.x ?? 0);
+    expect(subtaskBox?.y ?? 0).toBeGreaterThan(featureBox?.y ?? 0);
+    await feature.getByTestId('plan-subtask-toggle').click();
+    await expect(subtask).toBeHidden();
+    await feature.getByTestId('plan-subtask-toggle').click();
+    await expect(subtask).toBeVisible();
     // The chrome floats over the board: one bar as a region, and no band above the canvas.
     const bar = page.getByRole('region', { name: 'Plan' });
     await expect(bar).toBeVisible();
-    await expect(bar.getByTestId('plan-counts')).toContainText('5 drafts');
+    await expect(bar.getByTestId('plan-counts')).toContainText('6 drafts');
     // Nothing selected, so no inspector column floats beside the board.
     await expect(page.getByRole('complementary', { name: 'Selection details' })).toHaveCount(0);
 
@@ -100,7 +122,7 @@ test.describe('Planning canvas', () => {
     await expect(inspector).toBeVisible({ timeout: TIMEOUTS.ui });
     await expect(inspector.locator('[data-presentation="floating"]')).toBeVisible();
     const confirm = inspector.getByRole('button', { name: /^Confirm/ });
-    await expect(confirm).toHaveAttribute('title', /2 tasks/);
+    await expect(confirm).toHaveAttribute('title', /3 tasks/);
     await confirm.click();
 
     // --- The project and its tasks are real now; the initiative came along --------------
@@ -111,10 +133,14 @@ test.describe('Planning canvas', () => {
       'data-plan-status',
       'confirmed',
     );
+    await expect(subtask).toHaveAttribute('data-plan-status', 'confirmed');
     await expect(page.locator('[data-plan-ref="p-push"]')).toHaveAttribute(
       'data-plan-status',
       'draft',
     );
+    // One line names what the commit created, with Undo beside it.
+    const result = page.getByTestId('plan-result');
+    await expect(result).toHaveAttribute('data-phase', 'created');
     // Escape closes the floating inspector and clears the selection, which gives the counts
     // their place in the bar back.
     await page.keyboard.press('Escape');
@@ -125,6 +151,16 @@ test.describe('Planning canvas', () => {
     const names = (projects.body as { items: { name: string }[] }).items.map((p) => p.name);
     expect(names).toContain('Donor outreach');
     expect(names).not.toContain('Two-week push');
+
+    // --- Undo reverses the whole commit and puts its nodes back in draft -----------------
+    await result.getByRole('button', { name: 'Undo' }).click();
+    await expect(result).toHaveAttribute('data-phase', 'undone', { timeout: TIMEOUTS.ui });
+    await expect(result.getByRole('button', { name: 'Undo' })).toHaveCount(0);
+    await expect(outreach).toHaveAttribute('data-plan-status', 'draft', { timeout: TIMEOUTS.ui });
+    await expect(subtask).toHaveAttribute('data-plan-status', 'draft');
+    const afterUndo = await apiFetch(page, `/v1/orgs/${orgId}/projects`);
+    const remaining = (afterUndo.body as { items: { name: string }[] }).items.map((p) => p.name);
+    expect(remaining).not.toContain('Donor outreach');
 
     // --- Plan with Athena on an initiative lands on that initiative's plan ---------------
     const initiative = await apiFetch(page, `/v1/orgs/${orgId}/initiatives`, {

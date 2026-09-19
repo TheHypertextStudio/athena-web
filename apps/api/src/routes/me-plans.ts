@@ -14,6 +14,7 @@ import {
   PlanDraftListOut,
   PlanDraftOut,
   PlanDraftPatch,
+  PlanRoster,
 } from '@docket/work/plan-draft-contract';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -27,6 +28,7 @@ import {
   archivePlan,
   createOrReopenPlan,
   listOwnedPlans,
+  listPlanRoster,
   loadOwnedPlan,
   patchPlan,
   presentPlan,
@@ -86,6 +88,21 @@ const mePlans = new Hono<AppEnv>()
       const owner = requestOwner(c);
       const row = await loadOwnedPlan(owner, c.req.valid('param').id);
       return ok(c, PlanDraftOut, await presentPlan(row));
+    },
+  )
+  .get(
+    '/:id/roster',
+    apiDoc({
+      tag: 'Me',
+      summary: 'List who a plan may assign',
+      response: PlanRoster,
+      description: `The people and teams in the plan's workspace that its nodes may be assigned to. \`people\` are the workspace's active members, each with the \`teamIds\` they belong to; \`teams\` are its live teams. Use an \`actorId\` as a node's \`assigneeId\`, \`leadId\`, or \`ownerId\`, and a team \`id\` as its \`teamId\`. **404** for an unknown or foreign plan. Returns {@link PlanRoster}.`,
+    }),
+    zParam(idParam),
+    async (c) => {
+      const owner = requestOwner(c);
+      const row = await loadOwnedPlan(owner, c.req.valid('param').id);
+      return ok(c, PlanRoster, await listPlanRoster(row));
     },
   )
   .patch(

@@ -29,10 +29,12 @@ import {
   PLAN_PROJECT_HEADER,
   PLAN_PROJECT_PADDING,
   PLAN_PROJECT_WIDTH,
+  PLAN_SUBTASK_INDENT,
   PLAN_TASK_GAP,
   PLAN_TASK_SIZE,
   miniTaskListHeight,
   type PlanProjectNodeData,
+  type PlanTaskNodeData,
 } from './plan-nodes';
 
 /** Gap between the initiative column and the first project column. */
@@ -101,6 +103,20 @@ function tasksByProject(nodes: readonly Node[]): Map<string, Node[]> {
   return grouped;
 }
 
+/** How deep a row sits; a node without task data is a feature task. */
+function rowDepth(row: Node): number {
+  return (row.data as Partial<PlanTaskNodeData>).depth ?? 0;
+}
+
+/**
+ * The rows a container is sized for: the rows showing while it is expanded (a feature task's
+ * hidden subtasks take no room), or the feature tasks its miniature list names while collapsed.
+ */
+function containerRowCount(rows: readonly Node[], expanded: boolean): number {
+  if (expanded) return rows.filter((row) => row.hidden !== true).length;
+  return rows.filter((row) => rowDepth(row) === 0).length;
+}
+
 /** How many containers each column holds: balanced, and never more than the column cap. */
 function rowsPerColumn(count: number, orientation: PlanOrientation): number {
   if (count === 0 || orientation === 'column') return Math.max(1, count);
@@ -127,7 +143,7 @@ function stackProjects(
     }
     const data = node.data as PlanProjectNodeData;
     const height = projectContainerHeight(
-      grouped.get(node.id)?.length ?? 0,
+      containerRowCount(grouped.get(node.id) ?? [], data.expanded),
       data.canAddTask,
       data.expanded,
     );
@@ -227,25 +243,32 @@ export function layoutPlan(
       targetPosition: Position.Top,
     });
   }
-  for (const [projectId, rows] of grouped) {
-    rows.forEach((row, index) => {
-      positioned.push({
-        ...row,
-        parentId: projectId,
-        position: {
-          x: (PLAN_PROJECT_WIDTH - PLAN_TASK_SIZE.width) / 2,
-          y:
-            PLAN_PROJECT_HEADER +
-            PLAN_PROJECT_PADDING +
-            index * (PLAN_TASK_SIZE.height + PLAN_TASK_GAP),
-        },
-        style: { ...row.style, ...PLAN_TASK_SIZE },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-      });
-    });
-  }
+  for (const [projectId, rows] of grouped) positioned.push(...placeRows(projectId, rows));
   return { nodes: positioned, bounds: board.bounds };
+}
+
+/**
+ * Place a container's rows top to bottom. A subtask sits one indent in from its feature task and
+ * is that much narrower, so its right edge lines up with every other row's. A hidden row takes no
+ * slot; it rests where the next showing row goes.
+ */
+function placeRows(projectId: string, rows: readonly Node[]): Node[] {
+  const inset = (PLAN_PROJECT_WIDTH - PLAN_TASK_SIZE.width) / 2;
+  let slot = 0;
+  return rows.map((row) => {
+    const indent = rowDepth(row) === 0 ? 0 : PLAN_SUBTASK_INDENT;
+    const y =
+      PLAN_PROJECT_HEADER + PLAN_PROJECT_PADDING + slot * (PLAN_TASK_SIZE.height + PLAN_TASK_GAP);
+    if (row.hidden !== true) slot += 1;
+    return {
+      ...row,
+      parentId: projectId,
+      position: { x: inset + indent, y },
+      style: { ...row.style, height: PLAN_TASK_SIZE.height, width: PLAN_TASK_SIZE.width - indent },
+      sourcePosition: Position.Bottom,
+      targetPosition: Position.Top,
+    };
+  });
 }
 
 /**
@@ -271,7 +294,8 @@ function planStructureKey(nodes: readonly Node[]): string {
       const rows = grouped.get(node.id) ?? [];
       const data = node.data as { canAddTask?: boolean; expanded?: boolean };
       const flags = `${data.canAddTask === true ? 'f' : ''}${data.expanded === false ? 'c' : ''}`;
-      return `${node.id}:${node.type ?? ''}:${rows.map((row) => row.id).join('+')}${flags}`;
+      const rowKey = rows.map((row) => `${row.id}${row.hidden === true ? '~' : ''}`).join('+');
+      return `${node.id}:${node.type ?? ''}:${rowKey}${flags}`;
     })
     .join('|');
 }

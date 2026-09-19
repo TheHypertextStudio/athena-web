@@ -89,7 +89,7 @@ export function TimeSessionList({
               as="ul"
               tone="card"
               shape="medium"
-              className="divide-outline-variant/30 divide-y overflow-hidden"
+              className="flex flex-col gap-1 overflow-hidden"
             >
               {group.map((record) => {
                 const source = sourceLabel(record);

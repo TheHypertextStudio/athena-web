@@ -205,7 +205,7 @@ function WorkBoardCell({
       )}
     >
       {accepting ? (
-        <div className="border-primary bg-primary-container text-on-primary-container text-label-medium mb-2 flex min-h-12 w-full items-center justify-center rounded-lg border border-dashed px-3">
+        <div className="bg-primary-container text-on-primary-container text-label-medium mb-2 flex min-h-12 w-full items-center justify-center rounded-lg px-3">
           Move to {label}
         </div>
       ) : null}

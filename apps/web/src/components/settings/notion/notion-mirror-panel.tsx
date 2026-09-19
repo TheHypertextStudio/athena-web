@@ -334,7 +334,7 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
 
       {mappingsNeedingReview.length > 0 ? (
         <SettingsGroup capability={SETTINGS_NODES.connectionsNotionMappings}>
-          <ul className="divide-outline-variant divide-y">
+          <ul className="flex flex-col gap-1">
             {mappingsNeedingReview.map((mapping) => (
               <li key={`${mapping.dataSourceId}:${mapping.property}`} className="px-4 py-3">
                 <p className="text-on-surface text-body-medium">{mapping.property}</p>

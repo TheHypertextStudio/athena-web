@@ -51,7 +51,7 @@ interface EmailPreviewProps {
 /** The source-email preview line(s) on a suggestion card. */
 function EmailPreview({ meta }: EmailPreviewProps): JSX.Element {
   return (
-    <div className="border-outline-variant text-on-surface-variant rounded-md border border-dashed px-2 py-1 text-xs">
+    <div className="text-on-surface-variant rounded-md px-2 py-1 text-xs">
       {meta.sender ? <span className="font-medium">{meta.sender}</span> : null}
       {meta.subject ? <span> — {meta.subject}</span> : null}
       {meta.snippet ? <p className="line-clamp-2 opacity-80">{meta.snippet}</p> : null}

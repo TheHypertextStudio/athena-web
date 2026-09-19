@@ -207,7 +207,7 @@ export function MilestoneTasks({
       <QuickAddRow onAdd={onQuickAdd} canEdit={canEdit} noun={taskNoun} />
 
       {tasks.length === 0 ? (
-        <div className="border-outline-variant text-on-surface-variant text-body-medium rounded-xl border border-dashed p-8 text-center">
+        <div className="text-on-surface-variant text-body-medium rounded-xl p-8 text-center">
           No {taskNoun}s yet — add the first one above.
         </div>
       ) : (

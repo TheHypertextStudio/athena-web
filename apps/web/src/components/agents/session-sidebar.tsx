@@ -98,11 +98,11 @@ export function SessionSidebar({
           Changes this session
         </h2>
         {changes.length === 0 ? (
-          <p className="text-on-surface-variant border-outline-variant rounded-lg border border-dashed p-3 text-xs">
+          <p className="text-on-surface-variant rounded-lg p-3 text-xs">
             No changes yet. The agent hasn’t proposed or made any changes.
           </p>
         ) : (
-          <ul className="divide-outline-variant border-outline-variant flex flex-col divide-y overflow-hidden rounded-lg border">
+          <ul className="flex flex-col gap-1 overflow-hidden rounded-lg">
             {changes.map((change) => (
               <li key={change.id} className="flex items-start justify-between gap-2 p-3">
                 <div className="flex min-w-0 flex-col gap-0.5">

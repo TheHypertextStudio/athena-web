@@ -18,10 +18,10 @@
     "raw-type-utility": 2
   },
   "apps/web/src/app/(app)/orgs/[orgId]/recurrence-series/[seriesId]/page.tsx": {
-    "ad-hoc-border": 9
+    "ad-hoc-border": 2
   },
   "apps/web/src/app/(app)/orgs/[orgId]/sessions/[sessionId]/page.tsx": {
-    "ad-hoc-border": 3,
+    "ad-hoc-border": 2,
     "raw-radius-utility": 1,
     "raw-type-utility": 3
   },
@@ -117,7 +117,7 @@
     "raw-type-utility": 5
   },
   "apps/web/src/components/agents/session-sidebar.tsx": {
-    "ad-hoc-border": 7,
+    "ad-hoc-border": 2,
     "raw-type-utility": 15
   },
   "apps/web/src/components/agents/session-status.tsx": {
@@ -235,7 +235,7 @@
     "ad-hoc-border": 2
   },
   "apps/web/src/components/entity-detail/updates-panel.tsx": {
-    "ad-hoc-border": 6
+    "ad-hoc-border": 5
   },
   "apps/web/src/components/entity-display/entity-icon-picker-loaded.tsx": {
     "ad-hoc-border": 2,
@@ -264,7 +264,7 @@
     "raw-type-utility": 2
   },
   "apps/web/src/components/initiatives/roadmap.tsx": {
-    "ad-hoc-border": 16,
+    "ad-hoc-border": 10,
     "raw-type-utility": 16,
     "shadow-outside-overlay": 1
   },
@@ -341,17 +341,11 @@
     "ad-hoc-border": 4,
     "raw-type-utility": 4
   },
-  "apps/web/src/components/programs/program-projects-panel.tsx": {
-    "ad-hoc-border": 5
-  },
   "apps/web/src/components/project-detail/agent-activity-feed.tsx": {
     "ad-hoc-border": 2
   },
   "apps/web/src/components/project-detail/agents-strip.tsx": {
     "ad-hoc-border": 4
-  },
-  "apps/web/src/components/project-detail/milestone-tasks.tsx": {
-    "ad-hoc-border": 3
   },
   "apps/web/src/components/project-detail/overview-summary.tsx": {
     "ad-hoc-border": 2
@@ -529,7 +523,7 @@
     "raw-type-utility": 2
   },
   "apps/web/src/components/triage/suggestions-lane.tsx": {
-    "ad-hoc-border": 5,
+    "ad-hoc-border": 2,
     "raw-type-utility": 15
   },
   "apps/web/src/components/triage/triage-row.tsx": {
@@ -564,7 +558,7 @@
     "ad-hoc-border": 2
   },
   "apps/web/src/components/work-views/work-board.tsx": {
-    "ad-hoc-border": 7,
+    "ad-hoc-border": 4,
     "raw-radius-utility": 1
   },
   "apps/web/src/components/work-views/work-list-columns.tsx": {

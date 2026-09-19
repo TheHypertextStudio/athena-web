@@ -76,7 +76,7 @@ export default function SessionViewPage(): JSX.Element {
   if (!session) {
     return (
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p className="border-outline-variant text-on-surface-variant text-body-medium rounded-lg border border-dashed p-6 text-center">
+        <p className="text-on-surface-variant text-body-medium rounded-lg p-6 text-center">
           This session could not be found.
         </p>
       </div>

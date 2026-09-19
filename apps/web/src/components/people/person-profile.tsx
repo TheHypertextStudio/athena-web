@@ -74,7 +74,7 @@ function WorkSection({
           {emptyCopy}
         </Text>
       ) : (
-        <ul className="bg-surface-container-low divide-outline-variant/50 flex flex-col divide-y overflow-hidden rounded-xl">
+        <ul className="bg-surface-container-low flex flex-col gap-1 overflow-hidden rounded-xl">
           {children}
         </ul>
       )}

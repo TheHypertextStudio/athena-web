@@ -356,7 +356,7 @@ export default function RecurrenceSeriesPage(): JSX.Element {
               />
             </div>
           ) : (
-            <p className="border-outline-variant text-body-small text-on-surface-variant rounded-xl border border-dashed p-5">
+            <p className="text-body-small text-on-surface-variant rounded-xl p-5">
               No future occurrences are currently scheduled.
             </p>
           )}
@@ -390,7 +390,7 @@ export default function RecurrenceSeriesPage(): JSX.Element {
             {detail.revisions.length} version{detail.revisions.length === 1 ? '' : 's'}
           </span>
         </div>
-        <ol className="border-outline-variant divide-outline-variant divide-y overflow-hidden rounded-xl border">
+        <ol className="flex flex-col gap-1 overflow-hidden rounded-xl">
           {[...detail.revisions].reverse().map((revision, index) => (
             <li
               key={revision.id}
@@ -426,7 +426,7 @@ interface OccurrenceRowsProps {
 /** Calm rows linking generated ordinary tasks back into the rest of Docket. */
 function OccurrenceRows({ orgId, items, onResolve }: OccurrenceRowsProps): JSX.Element {
   return (
-    <ul className="border-outline-variant divide-outline-variant divide-y overflow-hidden rounded-xl border">
+    <ul className="flex flex-col gap-1 overflow-hidden rounded-xl">
       {items.map((item) => (
         <OccurrenceRow key={item.id} orgId={orgId} item={item} onResolve={onResolve} />
       ))}

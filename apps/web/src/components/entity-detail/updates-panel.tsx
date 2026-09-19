@@ -229,7 +229,7 @@ export function UpdatesPanel({
       ) : loadFailure ? (
         <QueryLoadFailure title="Updates" query={loadFailure} size="panel" />
       ) : updates.length === 0 ? (
-        <div className="border-outline-variant text-on-surface-variant text-body-medium rounded-xl border border-dashed p-8 text-center">
+        <div className="text-on-surface-variant text-body-medium rounded-xl p-8 text-center">
           No updates yet. Post the first one to keep stakeholders in the loop.
         </div>
       ) : (

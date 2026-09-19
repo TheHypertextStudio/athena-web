@@ -115,11 +115,11 @@ export function ProgramProjectsPanel({
           <Skeleton className="h-14 w-full rounded-lg" />
         </div>
       ) : filed.length === 0 ? (
-        <p className="border-outline-variant text-on-surface-variant text-body-medium rounded-xl border border-dashed p-8 text-center">
+        <p className="text-on-surface-variant text-body-medium rounded-xl p-8 text-center">
           File a {projectNounLower} under this program to see it here.
         </p>
       ) : (
-        <ul className="border-outline-variant divide-outline-variant divide-y overflow-hidden rounded-xl border">
+        <ul className="flex flex-col gap-1 overflow-hidden rounded-xl">
           {filed.map((project) => {
             const status = statusOf(project.status);
             return (

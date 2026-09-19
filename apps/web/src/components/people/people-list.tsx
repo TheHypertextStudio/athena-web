@@ -155,10 +155,7 @@ export function PeopleList({ orgId }: PeopleListProps): JSX.Element {
             : {})}
         />
       ) : (
-        <ul
-          aria-label="People"
-          className="divide-outline-variant/50 flex flex-col divide-y overflow-hidden"
-        >
+        <ul aria-label="People" className="flex flex-col gap-1 overflow-hidden">
           {rows.map((person) => (
             <PersonRow
               key={person.actorId}

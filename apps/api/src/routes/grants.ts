@@ -49,11 +49,16 @@ function toOut(g: GrantRow): z.input<typeof GrantOut> {
   };
 }
 
+/** Check if a capability outranks the current best. */
+function capabilityRanksHigher(cap: Capability, current: Capability): boolean {
+  return CAPABILITY_RANK[cap] > CAPABILITY_RANK[current];
+}
+
 /** The highest-ranked capability in a set, or `view` for the empty set. */
 function maxCapability(caps: readonly Capability[]): Capability {
   let best: Capability = 'view';
   for (const cap of caps) {
-    if (CAPABILITY_RANK[cap] > CAPABILITY_RANK[best]) best = cap;
+    if (capabilityRanksHigher(cap, best)) best = cap;
   }
   return best;
 }

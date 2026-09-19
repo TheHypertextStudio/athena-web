@@ -79,6 +79,98 @@ function TeamRowLink(props: EntityTableRowLinkProps): JSX.Element {
   );
 }
 
+/** Team identity column with icon and name. */
+const teamIdentityColumn: Column<TeamRow> = {
+  key: 'team',
+  header: 'Team',
+  flex: true,
+  minWidth: '22rem',
+  render: ({ team, display }) => {
+    const identity = display ?? defaultEntityDisplay('team', team.id);
+    return (
+      <span className="flex min-w-0 items-center gap-3 py-1">
+        <EntityIconGlyph
+          subjectType="team"
+          glyph={identity.glyph}
+          colorKey={identity.colorKey}
+          customColor={identity.customColor}
+          size={40}
+        />
+        <span className="text-on-surface line-clamp-1 text-sm leading-5 font-semibold">
+          <span className="sr-only">{team.key} </span>
+          {team.name}
+        </span>
+      </span>
+    );
+  },
+};
+
+/** Workflow states count column. */
+const workflowStatesColumn: Column<TeamRow> = {
+  key: 'states',
+  header: 'States',
+  width: '8rem',
+  priority: 3,
+  render: ({ workflowStateCount }) =>
+    workflowStateCount > 0 ? (
+      <span
+        className="text-on-surface-variant flex items-center gap-1.5 text-sm tabular-nums"
+        aria-label={`${String(workflowStateCount)} workflow states`}
+      >
+        <Workflow aria-hidden="true" className="size-4" />
+        {workflowStateCount}
+        <span className="sr-only">workflow states</span>
+      </span>
+    ) : (
+      '—'
+    ),
+};
+
+/** Build the projects column with vocabulary-resolved labels. */
+function buildProjectsColumn(projectNoun: string, projectNounPlural: string): Column<TeamRow> {
+  return {
+    key: 'projects',
+    header: 'Projects',
+    width: '8rem',
+    priority: 2,
+    render: ({ projectCount }) => (
+      <span
+        aria-label={`${String(projectCount)} ${projectCount === 1 ? projectNoun : projectNounPlural}`}
+      >
+        <WorkCount
+          icon={FolderKanban}
+          value={projectCount}
+          noun={projectCount === 1 ? projectNoun : projectNounPlural}
+          token="body-medium"
+        />
+      </span>
+    ),
+  };
+}
+
+/** Build the tasks column with vocabulary-resolved labels and triage badge. */
+function buildTasksColumn(taskNoun: string, taskNounPlural: string): Column<TeamRow> {
+  return {
+    key: 'tasks',
+    header: 'Tasks',
+    width: '12rem',
+    priority: 1,
+    render: ({ taskCount, team }) => (
+      <span className="flex w-full items-center justify-between gap-2">
+        <span aria-label={`${String(taskCount)} ${taskCount === 1 ? taskNoun : taskNounPlural}`}>
+          <WorkCount
+            icon={ListChecks}
+            value={taskCount}
+            noun={taskCount === 1 ? taskNoun : taskNounPlural}
+            token="body-medium"
+          />
+        </span>
+        {team.triageEnabled ? <Badge variant="secondary">Triage</Badge> : null}
+      </span>
+    ),
+  };
+}
+
 /** Build the Team-specific cells while EntityTable owns their shared layout. */
 function teamColumns({
   projectNoun,
@@ -90,86 +182,10 @@ function teamColumns({
   'projectNoun' | 'projectNounPlural' | 'taskNoun' | 'taskNounPlural'
 >): readonly Column<TeamRow>[] {
   return [
-    {
-      key: 'team',
-      header: 'Team',
-      flex: true,
-      minWidth: '22rem',
-      render: ({ team, display }) => {
-        const identity = display ?? defaultEntityDisplay('team', team.id);
-        return (
-          <span className="flex min-w-0 items-center gap-3 py-1">
-            <EntityIconGlyph
-              subjectType="team"
-              glyph={identity.glyph}
-              colorKey={identity.colorKey}
-              customColor={identity.customColor}
-              size={40}
-            />
-            <span className="text-on-surface line-clamp-1 text-sm leading-5 font-semibold">
-              <span className="sr-only">{team.key} </span>
-              {team.name}
-            </span>
-          </span>
-        );
-      },
-    },
-    {
-      key: 'states',
-      header: 'States',
-      width: '8rem',
-      priority: 3,
-      render: ({ workflowStateCount }) =>
-        workflowStateCount > 0 ? (
-          <span
-            className="text-on-surface-variant flex items-center gap-1.5 text-sm tabular-nums"
-            aria-label={`${String(workflowStateCount)} workflow states`}
-          >
-            <Workflow aria-hidden="true" className="size-4" />
-            {workflowStateCount}
-            <span className="sr-only">workflow states</span>
-          </span>
-        ) : (
-          '—'
-        ),
-    },
-    {
-      key: 'projects',
-      header: 'Projects',
-      width: '8rem',
-      priority: 2,
-      render: ({ projectCount }) => (
-        <span
-          aria-label={`${String(projectCount)} ${projectCount === 1 ? projectNoun : projectNounPlural}`}
-        >
-          <WorkCount
-            icon={FolderKanban}
-            value={projectCount}
-            noun={projectCount === 1 ? projectNoun : projectNounPlural}
-            token="body-medium"
-          />
-        </span>
-      ),
-    },
-    {
-      key: 'tasks',
-      header: 'Tasks',
-      width: '12rem',
-      priority: 1,
-      render: ({ taskCount, team }) => (
-        <span className="flex w-full items-center justify-between gap-2">
-          <span aria-label={`${String(taskCount)} ${taskCount === 1 ? taskNoun : taskNounPlural}`}>
-            <WorkCount
-              icon={ListChecks}
-              value={taskCount}
-              noun={taskCount === 1 ? taskNoun : taskNounPlural}
-              token="body-medium"
-            />
-          </span>
-          {team.triageEnabled ? <Badge variant="secondary">Triage</Badge> : null}
-        </span>
-      ),
-    },
+    teamIdentityColumn,
+    workflowStatesColumn,
+    buildProjectsColumn(projectNoun, projectNounPlural),
+    buildTasksColumn(taskNoun, taskNounPlural),
   ];
 }
 

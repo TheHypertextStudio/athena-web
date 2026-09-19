@@ -137,6 +137,79 @@ export function FocusCard({
   );
 }
 
+/** Control buttons for the focus card. */
+function FocusControlButtons({
+  item,
+  completing,
+  onComplete,
+}: {
+  readonly item: HubTodayPlanItem;
+  readonly completing: boolean;
+  readonly onComplete: (item: HubTodayPlanItem) => void;
+}): JSX.Element {
+  const taskHref = `/orgs/${item.organizationId}/tasks/${item.id}`;
+  return (
+    <>
+      <Button
+        type="button"
+        disabled={completing}
+        onClick={() => {
+          onComplete(item);
+        }}
+      >
+        <Check aria-hidden="true" /> Complete
+      </Button>
+      <TaskTimerButton taskId={item.id} title={item.title} />
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="ghost" iconOnly aria-label="More actions">
+          <Ellipsis aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <Button asChild variant="ghost" className="ml-auto">
+        <Link href={taskHref}>
+          Open <ArrowRight aria-hidden="true" />
+        </Link>
+      </Button>
+    </>
+  );
+}
+
+/** Dropdown menu content for additional actions. */
+function FocusActionsMenu({
+  item,
+  timeboxLabel,
+  timeboxOpenRef,
+  onDefer,
+  onOpenTimebox,
+}: {
+  readonly item: HubTodayPlanItem;
+  readonly timeboxLabel: string;
+  readonly timeboxOpenRef: React.RefObject<boolean>;
+  readonly onDefer: (item: HubTodayPlanItem) => void;
+  readonly onOpenTimebox: () => void;
+}): JSX.Element {
+  return (
+    <DropdownMenuContent
+      align="end"
+      width="sm"
+      onCloseAutoFocus={(event) => {
+        if (!timeboxOpenRef.current) return;
+        timeboxOpenRef.current = false;
+        event.preventDefault();
+      }}
+    >
+      <DropdownMenuItem onSelect={onOpenTimebox}>{timeboxLabel}…</DropdownMenuItem>
+      <DropdownMenuItem
+        onSelect={() => {
+          onDefer(item);
+        }}
+      >
+        Defer
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  );
+}
+
 function FocusActions({
   item,
   completing,
@@ -158,7 +231,7 @@ function FocusActions({
   const [menuOpen, setMenuOpen] = useState(false);
   const openingTimebox = useRef(false);
   const timeboxLabel = item.timeboxStartsAt ? 'Adjust timebox' : 'Set timebox';
-  const taskHref = `/orgs/${item.organizationId}/tasks/${item.id}`;
+
   const openTimebox = (): void => {
     openingTimebox.current = true;
     setMenuOpen(false);
@@ -173,46 +246,16 @@ function FocusActions({
               gave completing the task, starting a timer, scheduling it, deferring it, and opening
               it identical weight, so the card asked the reader to rank them. */}
           <ControlGroup controlSize="sm">
-            <Button
-              type="button"
-              disabled={completing}
-              onClick={() => {
-                onComplete(item);
-              }}
-            >
-              <Check aria-hidden="true" /> Complete
-            </Button>
-            <TaskTimerButton taskId={item.id} title={item.title} />
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="ghost" iconOnly aria-label="More actions">
-                <Ellipsis aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <Button asChild variant="ghost" className="ml-auto">
-              <Link href={taskHref}>
-                Open <ArrowRight aria-hidden="true" />
-              </Link>
-            </Button>
+            <FocusControlButtons item={item} completing={completing} onComplete={onComplete} />
           </ControlGroup>
         </PopoverAnchor>
-        <DropdownMenuContent
-          align="end"
-          width="sm"
-          onCloseAutoFocus={(event) => {
-            if (!openingTimebox.current) return;
-            openingTimebox.current = false;
-            event.preventDefault();
-          }}
-        >
-          <DropdownMenuItem onSelect={openTimebox}>{timeboxLabel}…</DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => {
-              onDefer(item);
-            }}
-          >
-            Defer
-          </DropdownMenuItem>
-        </DropdownMenuContent>
+        <FocusActionsMenu
+          item={item}
+          timeboxLabel={timeboxLabel}
+          timeboxOpenRef={openingTimebox}
+          onDefer={onDefer}
+          onOpenTimebox={openTimebox}
+        />
       </DropdownMenu>
       <PopoverContent align="end" presentation="panel" width="xl">
         <TimeboxForm

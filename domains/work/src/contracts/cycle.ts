@@ -32,7 +32,7 @@ const WINDOW_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
  * Deterministic, human-meaningful default name for an unnamed cycle: its date window.
  *
  * @remarks
- * Cycles auto-roll, so the stored `number` is an epoch-anchored sequence (see
+ * Cycles auto-roll, so the stored `number` is a date-derived compatibility sequence (see
  * `apps/api/src/lib/cycle-window.ts`) that is meaningless to a reader — "Cycle 1000137". The
  * window itself is the thing a person recognizes, so an unnamed cycle is named by its dates.
  * Pinned to `en-US` + `timeZone: 'UTC'` on purpose: this string is produced on the server AND in
@@ -41,8 +41,8 @@ const WINDOW_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
  *
  * **This is the one documented cycle-naming scheme.** A cycle displays its author-set `name` when
  * it has one, and otherwise its window — `"Jul 27 – Aug 2"`. The stored `number` is an internal
- * auto-roll key (it is the idempotency target of `ensureCycleWindow`'s
- * `onConflictDoNothing({ target: [teamId, number] })` and is unique per team); it is **never**
+ * auto-roll key (native cycle idempotency uses `(teamId, startsAt)`, while the number remains
+ * unique per team); it is **never**
  * displayed and no surface may build a label from it.
  *
  * @param startsAt - The window start, as a `Date` or an ISO-8601 string.
@@ -239,28 +239,46 @@ export const CycleWindowQuery = z
 /** Validated cycle-window query value. */
 export type CycleWindowQuery = z.infer<typeof CycleWindowQuery>;
 
+/** Body for explicitly materializing a bounded native cycle range. */
+export const CycleEnsureBody = z
+  .object({
+    teamId: TeamId.describe('Team whose native cadence should be materialized.'),
+    fromDate: z.iso.date().optional().describe('Inclusive first calendar date to cover.'),
+    throughDate: z.iso.date().describe('Inclusive last calendar date to cover.'),
+  })
+  .meta({ id: 'CycleEnsureBody', description: 'A bounded future-cycle generation request.' });
+/** Validated cycle-range generation body. */
+export type CycleEnsureBody = z.infer<typeof CycleEnsureBody>;
+
+/** Cycles covered by an explicit bounded generation request. */
+export const CycleEnsureOut = z
+  .object({ items: z.array(CycleOut) })
+  .meta({ id: 'CycleEnsureOut', description: 'Materialized cycles in chronological order.' });
+/** Cycle generation result. */
+export type CycleEnsureOut = z.infer<typeof CycleEnsureOut>;
+
 /**
  * The auto-rolled cycle window for a team: the rolling set of cycles around today
  * plus the date-derived current cycle.
  *
  * @remarks
- * DECISION: cycles auto-roll on a configurable cadence (`team.cycle_cadence_weeks`,
- * default 1 = weekly), so the user never creates cycles by hand. This read lazily
- * ensures a rolling window of cycles exists (a few past + the current + a few
- * upcoming, anchored to a week-aligned start stepping by the team's cadence), then
+ * DECISION: cycles auto-roll on a configurable 1–365 calendar-day cadence, so the user never
+ * creates them by hand. This read lazily ensures a rolling window of cycles exists (a few past +
+ * the current + a few upcoming, anchored to the team's configured calendar date), then
  * returns them with the `current` cycle broken out. `current` is whichever window
  * contains today (`startsAt <= now <= endsAt`); each cycle in `cycles` carries an
- * `isCurrent` flag for the same derivation. `cadenceWeeks` echoes the team's setting.
+ * `isCurrent` flag for the same derivation. The cadence fields echo the team's schedule.
  */
 export const CycleWindow = z
   .object({
     teamId: TeamId.describe('The team whose window this is.'),
-    cadenceWeeks: z
+    cadenceDays: z
       .number()
       .int()
-      .describe(
-        'The team’s cycle cadence in weeks (`team.cycle_cadence_weeks`, default 1 = weekly) — echoed here.',
-      ),
+      .min(1)
+      .max(365)
+      .describe('The team’s native cycle length in calendar days.'),
+    cadenceAnchor: z.iso.date().describe('The calendar date anchoring native cycle boundaries.'),
     current: CycleOut.nullable().describe(
       'The cycle whose window contains today (`startsAt <= now <= endsAt`), or `null` when none does. On a tie the earliest-starting wins.',
     ),

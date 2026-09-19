@@ -5,7 +5,7 @@
  *
  * @remarks
  * DECISION (product): cycles auto-roll on a configurable cadence
- * (`team.cycle_cadence_weeks`, default 1 = weekly) so the user never creates them by
+ * (`team.cycle_cadence_days`, default 7 = weekly) so the user never creates them by
  * hand. These tests cover the generation idempotency, current-by-date selection, and
  * cadence stepping; manual create/list/patch/close coverage lives in `group-a` and
  * `cycles-detail`.
@@ -46,7 +46,8 @@ interface CycleDto {
 }
 interface WindowDto {
   teamId: string;
-  cadenceWeeks: number;
+  cadenceDays: number;
+  cadenceAnchor: string;
   current: CycleDto | null;
   cycles: CycleDto[];
 }
@@ -64,6 +65,21 @@ async function makeTeam(orgId: string, cadenceWeeks: number): Promise<string> {
       name: 'Cadence',
       key: `K${Math.random().toString(36).slice(2, 7)}`,
       cycleCadenceDays: cadenceWeeks * 7,
+    })
+    .returning({ id: schema.team.id });
+  return assertDefined(row).id;
+}
+
+/** Insert a team with a day cadence and explicit anchor. */
+async function makeDayTeam(orgId: string, cadenceDays: number, anchor: string): Promise<string> {
+  const [row] = await db
+    .insert(schema.team)
+    .values({
+      organizationId: orgId,
+      name: 'Day cadence',
+      key: `D${Math.random().toString(36).slice(2, 7)}`,
+      cycleCadenceDays: cadenceDays,
+      cycleCadenceAnchor: anchor,
     })
     .returning({ id: schema.team.id });
   return assertDefined(row).id;
@@ -90,7 +106,8 @@ describe('cycle auto-roll (GET /current)', () => {
     const body = await json<WindowDto>(res);
 
     expect(body.teamId).toBe(teamId);
-    expect(body.cadenceWeeks).toBe(1); // seedBaseOrg's team defaults to weekly
+    expect(body.cadenceDays).toBe(7); // seedBaseOrg's team defaults to weekly
+    expect(body.cadenceAnchor).toBe('2024-01-01');
     expect(body.cycles.length).toBeGreaterThan(1);
 
     // Exactly one cycle is current, and it's the one returned as `current`.
@@ -140,7 +157,7 @@ describe('cycle auto-roll (GET /current)', () => {
     const writer = appWithActor(cycles, orgId, ['view'], humanActorId);
 
     const body = await json<WindowDto>(await writer.request(`/current?teamId=${teamId}`));
-    expect(body.cadenceWeeks).toBe(2);
+    expect(body.cadenceDays).toBe(14);
 
     const sorted = [...body.cycles].sort((a, b) => a.number - b.number);
     for (let i = 1; i < sorted.length; i += 1) {
@@ -251,6 +268,87 @@ describe('cycle auto-roll (GET /current)', () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(cycles, orgId, ['view'], humanActorId);
     expect((await writer.request('/current')).status).toBe(422);
+  });
+});
+
+describe('cycle range generation (POST /ensure)', () => {
+  it('materializes a daily schedule through a quarter-ahead date idempotently', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const teamId = await makeDayTeam(orgId, 1, '2026-09-01');
+    const writer = appWithActor(cycles, orgId, ['contribute'], humanActorId);
+    const request = () =>
+      writer.request('/ensure', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ teamId, fromDate: '2026-09-01', throughDate: '2026-12-31' }),
+      });
+
+    const first = await request();
+    expect(first.status).toBe(200);
+    const firstBody = await json<{ items: CycleDto[] }>(first);
+    expect(firstBody.items).toHaveLength(122);
+    expect(firstBody.items[0]?.startsAt.slice(0, 10)).toBe('2026-09-01');
+    expect(firstBody.items.at(-1)?.startsAt.slice(0, 10)).toBe('2026-12-31');
+
+    const [second, third] = await Promise.all([request(), request()]);
+    expect(second.status).toBe(200);
+    expect(third.status).toBe(200);
+    expect(await countCycles(orgId, teamId)).toBe(122);
+  });
+
+  it('pages to a date several years ahead without a product horizon', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const teamId = await makeDayTeam(orgId, 1, '2026-01-01');
+    const writer = appWithActor(cycles, orgId, ['contribute'], humanActorId);
+    const response = await writer.request('/ensure', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ teamId, fromDate: '2030-01-01', throughDate: '2030-12-31' }),
+    });
+    expect(response.status).toBe(200);
+    expect((await json<{ items: CycleDto[] }>(response)).items).toHaveLength(365);
+  });
+
+  it('rejects invalid, oversized, cross-tenant, and provider-owned requests', async () => {
+    const own = await seedBaseOrg(db, schema);
+    const other = await seedBaseOrg(db, schema);
+    const teamId = await makeDayTeam(own.orgId, 1, '2026-01-01');
+    const writer = appWithActor(cycles, own.orgId, ['contribute'], own.humanActorId);
+
+    for (const body of [
+      { teamId, fromDate: '2025-12-31', throughDate: '2026-01-01' },
+      { teamId, fromDate: '2026-01-01', throughDate: '2027-02-05' },
+    ]) {
+      expect(
+        (
+          await writer.request('/ensure', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+        ).status,
+      ).toBe(422);
+    }
+
+    const crossTenant = await writer.request('/ensure', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        teamId: other.teamId,
+        fromDate: '2026-01-01',
+        throughDate: '2026-01-31',
+      }),
+    });
+    expect(crossTenant.status).toBe(404);
+
+    const integrationId = await makeIntegration(own.orgId, 'connected');
+    await makeLinkedCycle(own.orgId, teamId, integrationId);
+    const providerOwned = await writer.request('/ensure', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ teamId, fromDate: '2026-01-01', throughDate: '2026-01-31' }),
+    });
+    expect(providerOwned.status).toBe(409);
   });
 });
 

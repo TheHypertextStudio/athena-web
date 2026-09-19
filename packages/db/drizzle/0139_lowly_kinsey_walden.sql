@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "cycle_native_start_uq" ON "cycle" USING btree ("team_id","starts_at") WHERE "cycle"."source" = 'native';

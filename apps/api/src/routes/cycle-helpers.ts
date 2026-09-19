@@ -2,17 +2,20 @@ import { cycle, db, integration, task, team } from '@docket/db';
 import type { CycleOut } from '@docket/work/cycle-contract';
 import { type CycleStats, defaultCycleName } from '@docket/work/cycle-contract';
 import { type TaskOut } from '@docket/work/task-model';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lte } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
 import type { LabelRefRow } from '../lib/labels';
 import { toOut as serializeTask } from './task-helpers';
 import {
+  type CycleSchedule,
   type CycleWindowSlot,
+  WINDOW_FUTURE,
+  WINDOW_PAST,
+  cycleWindowContaining,
+  cycleWindowsThrough,
   isWithinWindow,
-  normalizeCadenceWeeks,
-  rollingWindow,
 } from '../lib/cycle-window';
 
 /** CycleRow is the selected database row shape consumed by these API route serializers. */
@@ -27,7 +30,7 @@ export type TeamRow = typeof team.$inferSelect;
  *
  * @remarks
  * `displayName` is derived here rather than stored: an auto-rolled cycle is inserted with no
- * `name` (see {@link ensureCycleWindow}), and its `number` is an epoch-anchored auto-roll key that
+ * `name` (see {@link ensureCycleWindow}), and its `number` is a date-derived compatibility key that
  * means nothing to a reader. Every surface renders `displayName`; `name` stays nullable because it
  * is the author's own name and the only field a rename writes. Deriving on read means no cycle row
  * is rewritten and no migration is needed — see {@link defaultCycleName} for the naming scheme.
@@ -104,7 +107,7 @@ export function deriveStatus(
  * native insert would otherwise collide with (or interleave nonsensically among) the
  * `(teamId, number)` sequence Linear's own cycle numbers already occupy.
  */
-async function hasActiveLinkedCycle(orgId: string, teamId: string): Promise<boolean> {
+export async function hasActiveLinkedCycle(orgId: string, teamId: string): Promise<boolean> {
   const rows = await db
     .select({ id: cycle.id })
     .from(cycle)
@@ -121,77 +124,16 @@ async function hasActiveLinkedCycle(orgId: string, teamId: string): Promise<bool
   return rows.length > 0;
 }
 
-/**
- * Lazily ensure the rolling window of auto-rolled cycles exists for a team, then return
- * the team's cycles ordered by `number`.
- *
- * @remarks
- * Idempotent: keyed on the stable epoch-anchored cycle `number`; `onConflictDoNothing`
- * tolerates concurrent writers. Manual cycles outside the computed window are untouched.
- * GUARD: a team with any linked cycle from an ACTIVE integration (see
- * {@link hasActiveLinkedCycle}) defers cadence entirely to the provider — no native slots are
- * generated for it, and the team's existing (mirrored + any manual) cycles are simply returned
- * as-is. This prevents native auto-roll from colliding with the provider's own cycle numbering.
- *
- * @param orgId - The tenant.
- * @param teamId - The team whose window to ensure.
- * @param cadenceWeeks - Normalized cadence in weeks (>= 1).
- * @param actorId - Creator stamped on auto-generated cycles.
- * @param now - Reference instant ("today").
- */
-export async function ensureCycleWindow(
-  orgId: string,
-  teamId: string,
-  cadenceWeeks: number,
-  actorId: string | null,
-  now: Date,
-): Promise<CycleRow[]> {
-  const existing = await db
-    .select()
-    .from(cycle)
-    .where(and(eq(cycle.teamId, teamId), eq(cycle.organizationId, orgId)));
+function calendarDateOffset(date: string, days: number): string {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
 
-  // Rows actually created below (`RETURNING` reports only the ones that landed, never the ones
-  // `onConflictDoNothing` skipped), so the caller's result can be assembled from `existing` +
-  // `inserted` without a third round-trip back to the same team's rows at the end of this call.
-  let inserted: CycleRow[] = [];
-  if (!(await hasActiveLinkedCycle(orgId, teamId))) {
-    const slots: CycleWindowSlot[] = rollingWindow(now, cadenceWeeks);
-    const existingNumbers = new Set(existing.map((c) => c.number));
-
-    const toInsert = slots
-      .filter((s) => !existingNumbers.has(s.number))
-      .map((s) => ({
-        organizationId: orgId,
-        teamId,
-        number: s.number,
-        startsAt: s.startsAt,
-        endsAt: s.endsAt,
-        status: deriveStatus(s, now),
-        createdBy: actorId,
-      }));
-
-    if (toInsert.length > 0) {
-      inserted = await db
-        .insert(cycle)
-        .values(toInsert)
-        .onConflictDoNothing({
-          target: [cycle.teamId, cycle.number],
-        })
-        .returning();
-    }
-  }
-
-  // A native cycle's `status` is otherwise stamped once at insert (above) and never
-  // revisited, so a row whose window has since ended (or started) would read
-  // `active`/`upcoming` forever — which is exactly how a past week's cycle keeps showing
-  // up as "Active" alongside the real current one. Re-derive and correct it here, on every
-  // call, so the stored column stays truthful for every reader (list grouping, badges,
-  // filters) instead of only the one live `isCurrent` computation on read. A linked cycle's
-  // status is provider-owned and left untouched.
+async function refreshNativeStatuses(rows: CycleRow[], now: Date): Promise<CycleRow[]> {
   const staleNativeUpdates = new Map(
-    existing
-      .filter((c) => c.source === 'native')
+    rows
+      .filter((row) => row.source === 'native')
       .flatMap((row) => {
         const status = deriveStatus(row, now);
         return status !== row.status ? [[row.id, status] as const] : [];
@@ -204,15 +146,106 @@ export async function ensureCycleWindow(
       ),
     );
   }
+  return rows.map((row) => {
+    const status = staleNativeUpdates.get(row.id);
+    return status ? { ...row, status } : row;
+  });
+}
 
-  const result = [
-    ...existing.map((row) => {
-      const status = staleNativeUpdates.get(row.id);
-      return status ? { ...row, status } : row;
-    }),
-    ...inserted,
-  ];
-  return result.sort((a, b) => a.number - b.number);
+/** Materialize and return the native schedule windows intersecting an explicit date range. */
+export async function ensureCycleRange(
+  orgId: string,
+  teamRow: TeamRow,
+  actorId: string | null,
+  fromDate: string,
+  throughDate: string,
+  now: Date,
+): Promise<CycleRow[]> {
+  const schedule: CycleSchedule = {
+    anchorDate: teamRow.cycleCadenceAnchor,
+    cadenceDays: teamRow.cycleCadenceDays,
+  };
+  const slots = cycleWindowsThrough(schedule, throughDate, fromDate);
+  if (slots.length === 0) return [];
+
+  await db
+    .insert(cycle)
+    .values(
+      slots.map((slot) => ({
+        organizationId: orgId,
+        teamId: teamRow.id,
+        number: slot.number,
+        startsAt: slot.startsAt,
+        endsAt: slot.endsAt,
+        status: deriveStatus(slot, now),
+        createdBy: actorId,
+      })),
+    )
+    .onConflictDoNothing();
+
+  const first = slots[0];
+  const last = slots.at(-1);
+  if (!first || !last) return [];
+  const rows = await db
+    .select()
+    .from(cycle)
+    .where(
+      and(
+        eq(cycle.organizationId, orgId),
+        eq(cycle.teamId, teamRow.id),
+        eq(cycle.source, 'native'),
+        gte(cycle.startsAt, first.startsAt),
+        lte(cycle.startsAt, last.startsAt),
+      ),
+    )
+    .orderBy(cycle.startsAt);
+  return refreshNativeStatuses(rows, now);
+}
+
+/**
+ * Lazily ensure the rolling window of auto-rolled cycles exists for a team, then return
+ * the team's cycles ordered by `number`.
+ *
+ * @remarks
+ * Idempotent: native cycles are unique by team and start date; `onConflictDoNothing`
+ * tolerates concurrent writers. Manual cycles outside the computed window are untouched.
+ * GUARD: a team with any linked cycle from an ACTIVE integration (see
+ * {@link hasActiveLinkedCycle}) defers cadence entirely to the provider — no native slots are
+ * generated for it, and the team's existing (mirrored + any manual) cycles are simply returned
+ * as-is. This prevents native auto-roll from colliding with the provider's own cycle numbering.
+ *
+ * @param orgId - The tenant.
+ * @param teamRow - The team whose window to ensure, including its native schedule.
+ * @param actorId - Creator stamped on auto-generated cycles.
+ * @param now - Reference instant ("today").
+ */
+export async function ensureCycleWindow(
+  orgId: string,
+  teamRow: TeamRow,
+  actorId: string | null,
+  now: Date,
+): Promise<CycleRow[]> {
+  if (!(await hasActiveLinkedCycle(orgId, teamRow.id))) {
+    const schedule: CycleSchedule = {
+      anchorDate: teamRow.cycleCadenceAnchor,
+      cadenceDays: teamRow.cycleCadenceDays,
+    };
+    const current = cycleWindowContaining(schedule, now.toISOString().slice(0, 10));
+    const fromDate = calendarDateOffset(current.startDate, -WINDOW_PAST * teamRow.cycleCadenceDays);
+    const throughDate = calendarDateOffset(
+      current.endDate,
+      WINDOW_FUTURE * teamRow.cycleCadenceDays,
+    );
+    await ensureCycleRange(orgId, teamRow, actorId, fromDate, throughDate, now);
+  }
+
+  const rows = await db
+    .select()
+    .from(cycle)
+    .where(and(eq(cycle.teamId, teamRow.id), eq(cycle.organizationId, orgId)));
+  return (await refreshNativeStatuses(rows, now)).sort(
+    (left, right) => left.startsAt.getTime() - right.startsAt.getTime(),
+  );
 }
 
 /**
@@ -233,15 +266,8 @@ export async function ensureOrgCycleWindows(
   actorId: string | null,
   now: Date,
 ): Promise<void> {
-  const teams = await db
-    .select({ id: team.id, cadenceDays: team.cycleCadenceDays })
-    .from(team)
-    .where(eq(team.organizationId, orgId));
-  await Promise.all(
-    teams.map((t) =>
-      ensureCycleWindow(orgId, t.id, normalizeCadenceWeeks(t.cadenceDays / 7), actorId, now),
-    ),
-  );
+  const teams = await db.select().from(team).where(eq(team.organizationId, orgId));
+  await Promise.all(teams.map((teamRow) => ensureCycleWindow(orgId, teamRow, actorId, now)));
 }
 
 /**

@@ -7,6 +7,8 @@ import {
   CycleCloseBody,
   CycleCreate,
   CycleDetail,
+  CycleEnsureBody,
+  CycleEnsureOut,
   CycleOut,
   CycleTasksOut,
   CycleTasksQuery,
@@ -20,8 +22,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { NotFoundError, ValidationError } from '../error';
-import { isWithinWindow, normalizeCadenceWeeks } from '../lib/cycle-window';
+import { ConflictError, NotFoundError, ValidationError } from '../error';
+import { CycleRangeLimitError, isWithinWindow } from '../lib/cycle-window';
 import { labelsForSubjects } from '../lib/labels';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
@@ -34,8 +36,10 @@ import {
   committedTasks,
   committedTasksForCycles,
   computeStats,
+  ensureCycleRange,
   ensureCycleWindow,
   ensureOrgCycleWindows,
+  hasActiveLinkedCycle,
   idParam,
   isCompleted,
   loadCycle,
@@ -105,7 +109,7 @@ const cycles = new Hono<AppEnv>()
       tag: 'Cycles',
       summary: 'Get current cycle window',
       response: CycleWindow,
-      description: `Resolve a team's rolling cycle window plus its current cycle. Cycles auto-roll on a configurable cadence (\`team.cycle_cadence_weeks\`, default 1 = weekly) so users never create cycles by hand. The required \`teamId\` query names the team (which must belong to the caller's org — 404 \`Team not found\` otherwise). Side effect: this lazily and idempotently ENSURES the rolling window exists — a few past cycles + the current + a few upcoming, anchored to a week-aligned start and stepping by the team's cadence — inserting any missing slots (concurrency-safe via \`onConflictDoNothing\` on the stable epoch-anchored cycle \`number\`); existing and manually-created cycles are left untouched. It then returns all the team's cycles with \`current\` broken out — whichever window contains today (\`startsAt <= now <= endsAt\`); on a tie the earliest-starting wins. Each cycle in \`cycles\` carries the same date-derived \`isCurrent\`, and \`cadenceWeeks\` echoes the team's setting. Requires no capability guard, but note it writes (the ensure) — it is a read with an idempotent materialization side effect. Returns {@link CycleWindow}.`,
+      description: `Resolve a team's rolling cycle window plus its current cycle. Cycles auto-roll from the team's calendar-date anchor on a configurable 1–365 day cadence. The required \`teamId\` query names the team (which must belong to the caller's org — 404 \`Team not found\` otherwise). Side effect: this lazily and idempotently ensures a few past cycles, the current cycle, and a few upcoming cycles exist; concurrent calls are safe because native cycles are unique by team and start date. Existing manual cycles are left untouched. It then returns all the team's cycles with \`current\` broken out — whichever window contains today (\`startsAt <= now <= endsAt\`); on a tie the earliest-starting wins. Each cycle in \`cycles\` carries the same date-derived \`isCurrent\`; \`cadenceDays\` and \`cadenceAnchor\` echo the team's schedule. Requires no capability guard, but note it writes through the idempotent materialization side effect. Returns {@link CycleWindow}.`,
     }),
     zQuery(CycleWindowQuery),
     async (c) => {
@@ -116,8 +120,7 @@ const cycles = new Hono<AppEnv>()
       // Auto-roll: lazily ensure the rolling window exists for the team (idempotent), then
       // derive the current cycle by date. The team must belong to the org (404 otherwise).
       const teamRow = await loadTeam(orgId, teamId);
-      const cadenceWeeks = normalizeCadenceWeeks(teamRow.cycleCadenceDays / 7);
-      const rows = await ensureCycleWindow(orgId, teamId, cadenceWeeks, actorId, now);
+      const rows = await ensureCycleWindow(orgId, teamRow, actorId, now);
 
       // The current cycle is whichever window contains today; on the (impossible for
       // auto-rolled, possible for overlapping manual) tie, the earliest-starting wins.
@@ -128,11 +131,61 @@ const cycles = new Hono<AppEnv>()
 
       const payload: z.input<typeof CycleWindow> = {
         teamId,
-        cadenceWeeks,
+        cadenceDays: teamRow.cycleCadenceDays,
+        cadenceAnchor: teamRow.cycleCadenceAnchor,
         current: current ? toOut(current, now) : null,
         cycles: rows.map((r) => toOut(r, now)),
       };
       return ok(c, CycleWindow, payload);
+    },
+  )
+  .post(
+    '/ensure',
+    capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Cycles',
+      summary: 'Generate cycles through a date',
+      capability: 'contribute',
+      response: CycleEnsureOut,
+      description: `Materialize every native cadence window intersecting an inclusive calendar-date range. The team must belong to the caller's organization and must not have an active provider-owned cycle schedule. \`fromDate\` defaults to the team's cadence anchor; both dates must be on or after that anchor. One request may create at most 400 windows, so callers can page arbitrarily far into the future with adjacent requests. Repeated and concurrent requests are idempotent because native cycles are unique by team and start date. Requires \`contribute\`.`,
+    }),
+    zJson(CycleEnsureBody),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const body = c.req.valid('json');
+      const teamRow = await loadTeam(orgId, body.teamId);
+      if (await hasActiveLinkedCycle(orgId, teamRow.id)) {
+        throw new ConflictError('Cycle cadence is managed by its provider');
+      }
+
+      const fromDate = body.fromDate ?? teamRow.cycleCadenceAnchor;
+      if (fromDate < teamRow.cycleCadenceAnchor) {
+        throw new ValidationError([
+          { path: ['fromDate'], message: 'fromDate must be on or after the cadence anchor' },
+        ]);
+      }
+      if (body.throughDate < fromDate) {
+        throw new ValidationError([
+          { path: ['throughDate'], message: 'throughDate must be on or after fromDate' },
+        ]);
+      }
+
+      try {
+        const rows = await ensureCycleRange(
+          orgId,
+          teamRow,
+          actorId,
+          fromDate,
+          body.throughDate,
+          new Date(),
+        );
+        return ok(c, CycleEnsureOut, { items: rows.map((row) => toOut(row)) });
+      } catch (error) {
+        if (error instanceof CycleRangeLimitError) {
+          throw new ValidationError([{ path: ['throughDate'], message: error.message }]);
+        }
+        throw error;
+      }
     },
   )
   .post(

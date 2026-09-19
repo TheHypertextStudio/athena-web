@@ -400,6 +400,9 @@ export const cycle = pgTable(
   (t) => [
     index('cycle_team_idx').on(t.teamId),
     uniqueIndex('cycle_team_number_uq').on(t.teamId, t.number),
+    uniqueIndex('cycle_native_start_uq')
+      .on(t.teamId, t.startsAt)
+      .where(sql`${t.source} = 'native'`),
     uniqueIndex('cycle_source_uq')
       .on(t.sourceIntegrationId, t.externalId)
       .where(sql`${t.source} = 'linked'`),

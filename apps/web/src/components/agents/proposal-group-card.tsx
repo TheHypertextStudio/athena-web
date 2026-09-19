@@ -17,10 +17,15 @@
  */
 import type { ProposalGroupOut, ProposalItemOut } from '@docket/athena/agent-contract';
 import { cn } from '@docket/ui/lib/utils';
-import { Button, Surface, surfaceToneColor } from '@docket/ui/primitives';
-import { type JSX, useState } from 'react';
+import { Button, surfaceToneColor } from '@docket/ui/primitives';
+import { type JSX, useMemo, useState } from 'react';
 
 import { ProposalInputRows } from '@/components/athena/proposal-input-rows';
+import {
+  EMPTY_HIGHLIGHTED_IDS,
+  taskIdsFromInput,
+  useSetHighlightedIds,
+} from '@/components/athena/proposal-highlight';
 import { describeProposal, isOutwardTool } from '@/lib/athena/describe-proposal';
 
 /** Props for {@link ProposalGroupCard}. */
@@ -88,17 +93,13 @@ export function ProposalGroupCard({
   };
 
   return (
-    <Surface
-      as="section"
-      tone="card"
-      shape="small"
-      pad="roomy"
+    <section
       aria-label={`Proposed changes: ${String(count)}`}
-      className="bg-primary/5 rounded-xl"
+      className="flex w-full flex-col gap-3"
     >
       <h3 className="text-on-surface text-label-large">{headline(count)}</h3>
 
-      <ul className="mt-3 flex flex-col gap-1.5">
+      <ul className="flex flex-col gap-1.5">
         {group.items.map((item) => (
           <ProposalRow
             key={item.activityId}
@@ -115,7 +116,7 @@ export function ProposalGroupCard({
       </ul>
 
       {canAct ? (
-        <div className="mt-4 flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <Button
             size="sm"
             disabled={pending}
@@ -149,7 +150,7 @@ export function ProposalGroupCard({
           </Button>
         </div>
       ) : null}
-    </Surface>
+    </section>
   );
 }
 
@@ -254,6 +255,8 @@ function ProposalRow({
 }: ProposalRowProps): JSX.Element {
   const sentence = describeProposal(item);
   const outward = isOutwardTool(item.tool);
+  const setHighlighted = useSetHighlightedIds();
+  const targetIds = useMemo(() => taskIdsFromInput(item.input), [item.input]);
 
   return (
     <li
@@ -263,6 +266,12 @@ function ProposalRow({
         // unmistakably "not real yet", solidified in place on approval.
         'bg-primary-container/25 flex flex-col gap-1.5 rounded-lg px-3 py-2 opacity-80',
       )}
+      onPointerEnter={() => {
+        if (targetIds.size > 0) setHighlighted(targetIds);
+      }}
+      onPointerLeave={() => {
+        if (targetIds.size > 0) setHighlighted(EMPTY_HIGHLIGHTED_IDS);
+      }}
     >
       <div className="flex items-center gap-2.5">
         {showCheckbox && canAct ? (

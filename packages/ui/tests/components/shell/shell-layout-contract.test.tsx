@@ -7,21 +7,20 @@ import '@testing-library/jest-dom/vitest';
  * The bug this file exists to keep dead: the rail used to be a fixed 22rem column that *appeared*
  * at a media query, so crossing that query took ~400px out of `<main>` in a single pixel of window
  * growth. Measured in a real browser on the running app: `<main>` was 1119px wide at a 1439px
- * viewport and 760px at 1440px — **the window got wider and the content got smaller** — and at
- * 1024px a docked rail would have left the calendar under 10% of the screen.
+ * viewport and 760px at 1440px — **the window got wider and the content got smaller**.
  *
- * jsdom has no layout engine, so this file does not pretend to measure pixels. It does something a
- * pixel measurement cannot: it derives the shell's width arithmetic **from the classes the
- * components actually render** — the rail's width expression, the activity bar's column, the
- * sidebar's column, the shell's padding and gaps — and then evaluates `<main>`'s width at *every
- * integer viewport width from 320 to 3840*, which no browser sweep can afford. If anyone changes a
- * width in the shell (including the sidebar's, which this package owns but this file does not), the
- * parsed inputs change and the guarantees below are re-checked against them. If someone replaces the
- * rail's viewport-share expression with a fixed width, the parse fails outright.
+ * The rail's inline size is now a *person-chosen* pixel width (see the width law on `ShellAside`),
+ * not a function of the viewport at all, so the arithmetic below no longer parses a CSS expression
+ * off the rendered rail — there is none to parse. It instead cross-checks `shellMainInlineSize`
+ * (the exported contract) against the same pure width function the rail itself renders from
+ * (`railClampWidthPx`), while independently reading the *unrelated* constant chrome — the sidebar
+ * column, the activity bar column, the shell's padding and gaps — straight out of the DOM the
+ * components actually render. If anyone changes one of those unrelated widths, the parsed input
+ * changes and the guarantees below are re-checked against it.
  *
- * The pixel side of the proof is a browser probe over the running app
- * (`apps/web/.data/design-review/probe-shell-sweep.ts`), which drags a real window from 320px to
- * 2200px across 525 widths and confirms the CSS produces exactly what this arithmetic says.
+ * jsdom has no layout engine and reports one fixed `window.innerWidth`, so the sweep across 320px
+ * to 3840px below is arithmetic, not a live resize. The pixel side of the proof is a browser probe
+ * over the running app (`apps/web/.data/design-review/probe-shell-sweep.ts`).
  */
 import { render, screen } from '@testing-library/react';
 import * as React from 'react';
@@ -36,7 +35,7 @@ import {
   SHELL_MAIN_MIN_VIEWPORT_SHARE,
   shellMainInlineSize,
 } from '../../../src/components/shell/AppShell';
-import { RAIL_MIN_INLINE_SIZE_PX } from '../../../src/components/shell/ShellAside';
+import { RAIL_GAP_PX, railClampWidthPx } from '../../../src/components/shell/ShellAside';
 import { ContextProvider } from '../../../src/components/shell/ContextProvider';
 import { Sidebar } from '../../../src/components/shell/Sidebar';
 import type { Workspace } from '../../../src/components/shell/workspaces';
@@ -53,42 +52,6 @@ function spacingPx(step: number): number {
 function columnWidthPx(element: Element, prefix: string): number | null {
   const match = new RegExp(`(?:^| )${prefix}w-(\\d+)(?: |$)`).exec(element.className);
   return match?.[1] === undefined ? null : spacingPx(Number(match[1]));
-}
-
-/**
- * The rail's width law, read back out of the class the component rendered.
- *
- * @remarks
- * Deliberately strict: it matches only a `clamp(<floor>rem, <share>vw, <cap>rem)` expression. A
- * plain `w-[22rem]` — the exact shape of the original bug — does not parse, and every guarantee
- * below fails loudly instead of silently checking a stale constant.
- *
- * The floor is part of the law rather than a detail of it. A share alone bottoms out at 174px on a
- * 1024px window, and the panels the rail hosts are unreadable there.
- */
-function parseRailWidthLaw(className: string): {
-  share: number;
-  floorPx: number;
-  capPx: number;
-  gapPx: number;
-} {
-  const match = /w-\[clamp\((\d+(?:\.\d+)?)rem,(\d+(?:\.\d+)?)vw,(\d+(?:\.\d+)?)rem\)\]/.exec(
-    className,
-  );
-  if (!match?.[1] || !match[2] || !match[3]) {
-    throw new Error(
-      `The rail must size itself as a viewport share floored and capped in rem — got "${className}"`,
-    );
-  }
-  // An open rail carries the gap to the activity bar as its own margin, so a collapsed rail costs
-  // nothing at all and the bar hugs its icons one shell gutter from <main>.
-  const gap = /(?:^| )mr-(\d+)(?: |$)/.exec(className);
-  return {
-    floorPx: Number(match[1]) * 16,
-    share: Number(match[2]) / 100,
-    capPx: Number(match[3]) * 16,
-    gapPx: gap?.[1] === undefined ? 0 : spacingPx(Number(gap[1])),
-  };
 }
 
 const PANEL = { id: 'tasks', label: 'Tasks', icon: <Home />, node: <div>Task list</div> };
@@ -109,7 +72,7 @@ const SHELL_STATES = [
 ] as const;
 
 /**
- * Render the shell with a rail, open, so its width law can be read off the DOM.
+ * Render the shell with a rail, open, so its constant chrome can be read off the DOM.
  *
  * @remarks
  * Open is also the default, so this is the arrangement an untouched shell produces — the floor
@@ -164,17 +127,14 @@ function collapsedNavigationRegionPx(): number {
   return spacingPx(Number(padding[1])) + navWidth + spacingPx(Number(gap[1]));
 }
 
-/** The shell's measured inputs, read out of one render of the real components. */
+/** The shell's measured constant chrome, read out of one render of the real components. */
 interface ShellGeometry {
   readonly chromePx: number;
-  readonly railShare: number;
-  readonly railFloorPx: number;
-  readonly railCapPx: number;
-  readonly railGapPx: number;
 }
 
 /**
- * Read the shell's width arithmetic out of the rendered DOM.
+ * Read the shell's constant chrome out of the rendered DOM — everything *except* the rail, whose
+ * own width law is a pure function ({@link railClampWidthPx}) rather than a class to parse.
  *
  * @remarks
  * Counts the desktop columns the same way the browser does — a child hidden at `lg` (`lg:hidden`)
@@ -202,7 +162,6 @@ function readGeometry(): ShellGeometry {
     throw new Error('The sidebar and the activity bar must each declare a fixed column width');
   }
 
-  const rail = parseRailWidthLaw(screen.getByRole('complementary', { name: 'Tasks' }).className);
   return {
     chromePx:
       spacingPx(Number(padding[1])) * 2 +
@@ -210,10 +169,6 @@ function readGeometry(): ShellGeometry {
       (dockGap?.[1] === undefined ? 0 : spacingPx(Number(dockGap[1]))) +
       navWidth +
       barWidth,
-    railShare: rail.share,
-    railFloorPx: rail.floorPx,
-    railCapPx: rail.capPx,
-    railGapPx: rail.gapPx,
   };
 }
 
@@ -225,10 +180,7 @@ function mainWidth(
   sidebarCollapsed = false,
 ): number {
   if (viewport < SHELL_DESKTOP_MIN_PX) return viewport;
-  const rail = railExpanded
-    ? Math.min(Math.max(geometry.railShare * viewport, geometry.railFloorPx), geometry.railCapPx) +
-      geometry.railGapPx
-    : 0;
+  const rail = railExpanded ? railClampWidthPx(viewport) + RAIL_GAP_PX : 0;
   // Collapsing the sidebar swaps one column's width for another; it adds no column and removes
   // none, so the gutters and the activity bar in `chromePx` are unchanged.
   const chrome = sidebarCollapsed
@@ -251,20 +203,18 @@ describe('AppShell layout contract — geometry read from the rendered shell', (
     expect(collapsedNavigationRegionPx()).toBe(80);
   });
 
-  it('sizes the rail as a viewport share, and every other column as a constant', () => {
+  it('renders the rail at its default fixed width, not a viewport share, and every other column as a constant', () => {
     renderShell();
     const geometry = readGeometry();
 
-    // A share strictly below 1 is what makes `<main>` gain from every pixel the window gains; a cap
-    // is what hands the surplus back to `<main>` on very wide displays; a floor is what stops the
-    // rail becoming too narrow to read at the bottom of the desktop range.
-    expect(geometry.railShare).toBeGreaterThan(0);
-    expect(geometry.railShare).toBeLessThan(1);
-    expect(geometry.railCapPx).toBeGreaterThan(0);
-    expect(geometry.railFloorPx).toBeGreaterThanOrEqual(RAIL_MIN_INLINE_SIZE_PX);
-    expect(geometry.railFloorPx).toBeLessThanOrEqual(geometry.railCapPx);
     // The constant chrome is what the exported contract advertises; drift here changes the floor.
     expect(geometry.chromePx).toBe(SHELL_DESKTOP_CHROME_PX);
+
+    // The rail renders at exactly what its own pure width function says for jsdom's viewport — a
+    // person-chosen pixel width, not a CSS expression of the viewport.
+    const aside = screen.getByRole('complementary', { name: 'Tasks' });
+    expect(aside).toHaveStyle({ width: `${String(railClampWidthPx(window.innerWidth))}px` });
+    expect(aside).toHaveClass('mr-2');
   });
 
   it('agrees with the exported contract at every width, in every shell state', () => {
@@ -342,11 +292,14 @@ describe('AppShell layout contract — <main> keeps its floor, and widening neve
     renderShell();
     const geometry = readGeometry();
 
-    // The rail's marginal cost per pixel of window growth must stay under 1, or a wider window
-    // would hand `<main>` less than it took. This is the property the old fixed-width rail broke.
+    // The rail's marginal cost per pixel of window growth must never be negative, or a wider
+    // window would hand `<main>` less than it took. The rail's default width is fixed once the
+    // window is wide enough to fit it without the half-viewport clamp binding, so growth beyond
+    // that point costs `<main>` nothing at all — this is the property the old fixed-width-that-
+    // appears-at-a-threshold rail broke.
     for (const viewport of DESKTOP_WIDTHS.slice(1)) {
       const gained = mainWidth(geometry, viewport, true) - mainWidth(geometry, viewport - 1, true);
-      expect(gained).toBeGreaterThan(0);
+      expect(gained).toBeGreaterThanOrEqual(0);
       expect(gained).toBeLessThanOrEqual(1);
     }
   });

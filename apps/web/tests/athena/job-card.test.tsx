@@ -47,6 +47,7 @@ function transportFor(detail: PersonalAthenaSessionDetail): PersonalAthenaTransp
     decide: vi.fn().mockResolvedValue(okResponse(detail)),
     lifecycle: vi.fn().mockResolvedValue(okResponse(detail)),
     undoChange: vi.fn().mockResolvedValue(okResponse({ changeSetId: 'change_1', undone: true })),
+    proposals: vi.fn(),
   };
 }
 
@@ -165,6 +166,7 @@ describe('AthenaJobCard', () => {
         }),
         lifecycle: vi.fn(),
         undoChange: vi.fn(),
+        proposals: vi.fn(),
       };
 
       render(
@@ -256,7 +258,7 @@ describe('AthenaJobCard', () => {
     });
   });
 
-  it('names the technical disclosure "What Athena used"', async () => {
+  it('names the technical disclosure "What Athena used", inside the expanded steps', async () => {
     renderCard(
       job(),
       detailWith({
@@ -274,11 +276,12 @@ describe('AthenaJobCard', () => {
       }),
     );
 
+    fireEvent.click(await screen.findByRole('button', { name: '1 steps' }));
     fireEvent.click(await screen.findByText('What Athena used'));
     expect(screen.getByText(/sunsama_create_task/)).toBeVisible();
   });
 
-  it('collapses a running card to the last three steps behind a Show all control', async () => {
+  it('collapses the steps behind an "N steps" trigger, listing every step flat once opened', async () => {
     const activities = Array.from({ length: 5 }, (_, index) => ({
       id: `tool_${String(index)}`,
       type: 'tool' as const,
@@ -288,15 +291,13 @@ describe('AthenaJobCard', () => {
     }));
     renderCard(job({ status: 'running' }), detailWith({ status: 'running', activities }));
 
-    const steps = within(await screen.findByRole('list', { name: 'What Athena did' }));
-    await steps.findByText(/Step 4/);
-    expect(steps.queryByText(/Step 0/)).not.toBeInTheDocument();
-    expect(steps.queryByText(/Step 1/)).not.toBeInTheDocument();
-    expect(steps.getByText(/Step 2/)).toBeInTheDocument();
-    expect(steps.getByRole('button', { name: 'Show all 5' })).toBeInTheDocument();
+    const trigger = await screen.findByRole('button', { name: '5 steps' });
+    expect(screen.queryByRole('list', { name: 'What Athena did' })).not.toBeInTheDocument();
 
-    fireEvent.click(steps.getByRole('button', { name: 'Show all 5' }));
+    fireEvent.click(trigger);
+    const steps = within(await screen.findByRole('list', { name: 'What Athena did' }));
     expect(steps.getByText(/Step 0/)).toBeInTheDocument();
+    expect(steps.getByText(/Step 4/)).toBeInTheDocument();
   });
 
   it('shows a receipt when the work is finished, with no lifecycle menu or Reply', async () => {

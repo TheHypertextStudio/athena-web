@@ -288,6 +288,18 @@ export interface TaskTableProps {
   className?: string | undefined;
   /** Customized task identities composed through one workspace-wide display read. */
   displayByTaskId?: ReadonlyMap<string, EntityDisplayOut> | undefined;
+  /**
+   * A pending proposal's sentence for a task, keyed by task id.
+   *
+   * @remarks
+   * A task with an entry renders as a ghost row — the tonal tint at reduced opacity, no border,
+   * that marks a change that has not happened yet — with the sentence trailing its title and a
+   * stable `proposal-task-<id>` view-transition name, so approving the change can morph the row
+   * in place instead of popping its new state in.
+   */
+  proposedByTaskId?: ReadonlyMap<string, string> | undefined;
+  /** Task ids to tint with the hover-highlight tone (the row a hovered proposal would change). */
+  highlightedIds?: ReadonlySet<string> | undefined;
 }
 
 /** Flatten nested task groups into the provider's visible object order. */
@@ -332,6 +344,8 @@ export function TaskTable({
   label,
   defaultCollapsed,
   className,
+  proposedByTaskId,
+  highlightedIds,
 }: TaskTableProps): JSX.Element {
   const visibleTasks = taskTableRows(tasks, groups);
   const objects = visibleTasks.map(taskObject);
@@ -376,19 +390,31 @@ export function TaskTable({
         defaultCollapsed={defaultCollapsed}
         className={className}
         displayByTaskId={displayByTaskId}
+        proposedByTaskId={proposedByTaskId}
+        highlightedIds={highlightedIds}
       />
     </SelectionProvider>
   );
 }
 
+/** The ghost tint + opacity a proposed row renders with — no border, a tonal step only. */
+const PROPOSED_ROW_CLASSNAME = 'bg-primary-container/25 opacity-80';
+
+/** The tone a row renders with while a hovered proposal names it as its target. */
+const HIGHLIGHTED_ROW_CLASSNAME = 'bg-surface-container-high';
+
 /** Row render-prop bridge that binds the application selection model inside generic UI. */
 function TaskRowInteraction({
   row,
   tasks,
+  proposedByTaskId,
+  highlightedIds,
   children,
 }: {
   readonly row: TaskOut;
   readonly tasks: readonly TaskOut[];
+  readonly proposedByTaskId: ReadonlyMap<string, string> | undefined;
+  readonly highlightedIds: ReadonlySet<string> | undefined;
   readonly children: (binding: EntityTableRowInteraction) => ReactNode;
 }): JSX.Element {
   const object = taskObject(row);
@@ -401,6 +427,8 @@ function TaskRowInteraction({
     objects: selected ? selection.selectedObjects : [object],
   });
   const drop = useTaskHierarchyDrop(object, tasks);
+  const proposed = proposedByTaskId?.has(row.id) ?? false;
+  const highlighted = highlightedIds?.has(row.id) ?? false;
   return (
     <>
       {children({
@@ -415,8 +443,17 @@ function TaskRowInteraction({
           'data-selected': selected,
           'data-drop-state': drop.rowProps['data-drop-state'],
           'data-drag-state': drag['data-drag-state'],
+          // The stable morph target: approving the proposal can transition this row's identity
+          // in place instead of popping the settled row in once the ghost disappears.
+          ...(proposed ? { style: { viewTransitionName: `proposal-task-${row.id}` } } : {}),
         },
-        className: cn(drop.className, drop.rowProps.className, drag.className),
+        className: cn(
+          drop.className,
+          drop.rowProps.className,
+          drag.className,
+          proposed && PROPOSED_ROW_CLASSNAME,
+          highlighted && HIGHLIGHTED_ROW_CLASSNAME,
+        ),
       })}
       {drop.status ? (
         <span className="sr-only" role="status">
@@ -425,6 +462,56 @@ function TaskRowInteraction({
       ) : null}
     </>
   );
+}
+
+/** Deps {@link resolveSelectableColumn} needs to wrap the glyph and title columns in place. */
+interface SelectableColumnDeps {
+  readonly displayByTaskId: ReadonlyMap<string, EntityDisplayOut> | undefined;
+  readonly proposedByTaskId: ReadonlyMap<string, string> | undefined;
+}
+
+/** Wrap the glyph column with the identity icon, and the title column with a proposal's sentence. */
+function resolveSelectableColumn(
+  column: Column<TaskOut>,
+  deps: SelectableColumnDeps,
+): Column<TaskOut> {
+  if (column.key === 'glyph') {
+    return {
+      ...column,
+      width: '3.25rem',
+      render: (task: TaskOut) => {
+        const display = deps.displayByTaskId?.get(task.id) ?? defaultEntityDisplay('task', task.id);
+        return (
+          <span className="flex items-center gap-1.5">
+            <EntityIconGlyph
+              subjectType="task"
+              glyph={display.glyph}
+              colorKey={display.colorKey}
+              customColor={display.customColor}
+              size={20}
+            />
+            {column.render(task)}
+          </span>
+        );
+      },
+    };
+  }
+  if (column.key === 'title') {
+    return {
+      ...column,
+      render: (task: TaskOut) => {
+        const sentence = deps.proposedByTaskId?.get(task.id);
+        if (sentence === undefined) return column.render(task);
+        return (
+          <span className="flex min-w-0 flex-col gap-0.5">
+            {column.render(task)}
+            <span className="text-body-small text-on-surface-variant truncate">{sentence}</span>
+          </span>
+        );
+      },
+    };
+  }
+  return column;
 }
 
 /** The table body rendered inside its selection provider. */
@@ -439,6 +526,8 @@ function SelectableTaskTable({
   defaultCollapsed,
   className,
   displayByTaskId,
+  proposedByTaskId,
+  highlightedIds,
 }: TaskTableProps): JSX.Element {
   const pickerOverlay = usePickerOverlay();
   const visibleTasks = taskTableRows(tasks, groups);
@@ -452,28 +541,7 @@ function SelectableTaskTable({
       render: (task) => <SelectionCheckbox object={taskObject(task)} />,
     },
     ...columns.map((column) =>
-      column.key === 'glyph'
-        ? {
-            ...column,
-            width: '3.25rem',
-            render: (task: TaskOut) => {
-              const display =
-                displayByTaskId?.get(task.id) ?? defaultEntityDisplay('task', task.id);
-              return (
-                <span className="flex items-center gap-1.5">
-                  <EntityIconGlyph
-                    subjectType="task"
-                    glyph={display.glyph}
-                    colorKey={display.colorKey}
-                    customColor={display.customColor}
-                    size={20}
-                  />
-                  {column.render(task)}
-                </span>
-              );
-            },
-          }
-        : column,
+      resolveSelectableColumn(column, { displayByTaskId, proposedByTaskId }),
     ),
   ];
   const openLabels = (task: TaskOut, anchor: HTMLElement | null): void => {
@@ -497,7 +565,12 @@ function SelectableTaskTable({
       rowHref={(task) => taskHref(task)}
       rowLinkColumnKey="title"
       renderRowInteraction={({ row, children }) => (
-        <TaskRowInteraction row={row} tasks={visibleTasks}>
+        <TaskRowInteraction
+          row={row}
+          tasks={visibleTasks}
+          proposedByTaskId={proposedByTaskId}
+          highlightedIds={highlightedIds}
+        >
           {children}
         </TaskRowInteraction>
       )}

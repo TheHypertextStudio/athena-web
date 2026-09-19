@@ -199,6 +199,9 @@ export const queryKeys = {
   agents: (orgId: string) => ['org', orgId, 'agents'] as const,
   sessions: (orgId: string) => ['org', orgId, 'sessions'] as const,
   chatThread: (orgId: string) => ['org', orgId, 'sessions', 'chat'] as const,
+  /** One org-scoped session's pending proposal groups (used for the chat thread's own proposals). */
+  orgSessionProposals: (orgId: string, sessionId: string) =>
+    ['org', orgId, 'sessions', sessionId, 'proposals'] as const,
   views: (orgId: string) => ['org', orgId, 'views'] as const,
   // The dependency-graph read carries its scope (`org` / `project:<id>` / `task:<id>:<depth>`)
   // so each embed caches apart; the coarse `['org',orgId,'task-graph']` prefix invalidates all.
@@ -274,6 +277,9 @@ export const queryKeys = {
   athenaChat: () => ['me', 'athena', 'chat'] as const,
   athenaPulse: () => ['me', 'athena', 'pulse'] as const,
   athenaSession: (sessionId: string) => ['me', 'athena', 'sessions', sessionId] as const,
+  /** One personal Athena session's pending proposal groups (a `needs_you` job's ghost source). */
+  athenaSessionProposals: (sessionId: string) =>
+    ['me', 'athena', 'sessions', sessionId, 'proposals'] as const,
   latticeConnection: () => ['me', 'athena', 'lattice'] as const,
   latticeDevices: () => ['me', 'athena', 'lattice', 'devices'] as const,
   calendarLayers: () => ['me', 'calendar-layers'] as const,

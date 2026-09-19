@@ -133,7 +133,6 @@
     "ad-hoc-border": 2
   },
   "apps/web/src/components/app-shell-frame.tsx": {
-    "raw-radius-utility": 3,
     "raw-type-utility": 1
   },
   "apps/web/src/components/athena/athena-conversation-browser.tsx": {

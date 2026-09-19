@@ -39,9 +39,9 @@ export interface AthenaJobCardProps {
   /** The queue row this card renders and keeps live. */
   readonly job: PersonalAthenaSessionSummary;
   readonly transport?: PersonalAthenaTransport;
-  /** Show every step even before the job finishes, rather than the collapsed last few. */
+  /** Open the steps disclosure from the start, instead of collapsed behind its "N steps" trigger. */
   readonly expanded?: boolean;
-  /** Override the `<article>` id, for a host that anchors scroll-to (e.g. the Working strip). */
+  /** Override the `<article>` id, for a host that anchors scroll-to. */
   readonly id?: string;
 }
 

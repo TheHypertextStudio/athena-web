@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 
+import { RailPresentationProvider } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { okResponse } from '../support/query';
@@ -69,6 +70,7 @@ function emptyQueueTransport(): PersonalAthenaTransport {
     decide: vi.fn(),
     lifecycle: vi.fn(),
     undoChange: vi.fn(),
+    proposals: vi.fn(),
   };
 }
 
@@ -97,9 +99,34 @@ describe('AthenaRailConversation', () => {
     expect(link).toHaveAttribute('href', `/athena?workspace=${ORG_ID}`);
     const form = await screen.findByRole('form', { name: /Message Athena/ });
     expect(within(form).getByRole('group', { name: /Fall fundraiser launch/ })).toBeVisible();
+    expect(within(screen.getByTestId('athena-rail-header')).getByText('Athena')).toBeVisible();
   });
 
-  it('shows the Working strip and the job as a thread card while work is running', async () => {
+  it('drops its own mark-and-name row when the mobile sheet already shows one', async () => {
+    chatGet.mockResolvedValue(okResponse(thread()));
+    pulseGet.mockResolvedValue(okResponse({ needsYou: 0, working: 0 }));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <PageContextProvider workspace={{ workspaceId: ORG_ID }}>
+          <AthenaPanelProvider railVisible onRevealRail={vi.fn()}>
+            <RailPresentationProvider value="sheet">
+              <AthenaRailConversation orgId={ORG_ID} transport={emptyQueueTransport()} />
+            </RailPresentationProvider>
+          </AthenaPanelProvider>
+        </PageContextProvider>
+      </QueryClientProvider>,
+    );
+
+    // The sheet host supplies the panel's name in its own title row, so this panel's copy of it
+    // (the mark + "Athena" span) must not render a second time.
+    const header = screen.getByTestId('athena-rail-header');
+    expect(within(header).queryByText('Athena')).not.toBeInTheDocument();
+    // Talk and the link to the wide view stay — neither is something the sheet's title row shows.
+    expect(within(header).getByRole('link', { name: /Open the Athena page/ })).toBeInTheDocument();
+  });
+
+  it('shows a running job as a flat thread entry, with no pinned strip above it', async () => {
     chatGet.mockResolvedValue(okResponse(thread()));
     pulseGet.mockResolvedValue(okResponse({ needsYou: 0, working: 1 }));
     const runningJob: PersonalAthenaSessionSummary = {
@@ -126,6 +153,7 @@ describe('AthenaRailConversation', () => {
       decide: vi.fn(),
       lifecycle: vi.fn(),
       undoChange: vi.fn(),
+      proposals: vi.fn(),
     };
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
@@ -138,11 +166,59 @@ describe('AthenaRailConversation', () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole('button', { name: /Working ·/ })).toBeVisible();
-    expect(screen.getByRole('article', { name: /Draft the launch update/ })).toBeVisible();
+    expect(await screen.findByRole('article', { name: /Draft the launch update/ })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /need you/ })).not.toBeInTheDocument();
   });
 
-  it('shows no strip when the working lane holds only the person’s own conversation', async () => {
+  it('shows a "needs you" line only for jobs waiting on a decision, and scrolls to the first one', async () => {
+    chatGet.mockResolvedValue(okResponse(thread()));
+    pulseGet.mockResolvedValue(okResponse({ needsYou: 1, working: 0 }));
+    const waitingJob: PersonalAthenaSessionSummary = {
+      id: 'job_1',
+      objective: 'Move the launch review',
+      status: 'awaiting_approval',
+      queueState: 'needs_you',
+      createdAt: '2026-09-18T09:00:00.000Z',
+      updatedAt: '2026-09-18T09:00:00.000Z',
+    };
+    const transport: PersonalAthenaTransport = {
+      pulse: vi.fn(),
+      queue: vi.fn().mockResolvedValue(
+        okResponse({
+          counts: { needsYou: 1, working: 0, finished: 0 },
+          currentChat: null,
+          sessions: { needsYou: [waitingJob], working: [], finished: [] },
+        }),
+      ),
+      detail: vi.fn().mockResolvedValue(okResponse({ ...waitingJob, activities: [] })),
+      activity: vi.fn(),
+      create: vi.fn(),
+      sendMessage: vi.fn(),
+      decide: vi.fn(),
+      lifecycle: vi.fn(),
+      undoChange: vi.fn(),
+      proposals: vi.fn(),
+    };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <PageContextProvider workspace={{ workspaceId: ORG_ID }}>
+          <AthenaPanelProvider railVisible onRevealRail={vi.fn()}>
+            <AthenaRailConversation orgId={ORG_ID} transport={transport} />
+          </AthenaPanelProvider>
+        </PageContextProvider>
+      </QueryClientProvider>,
+    );
+
+    const needsYou = await screen.findByRole('button', { name: '1 needs you' });
+    const card = await screen.findByRole('article', { name: /Move the launch review/ });
+    const scrollIntoView = vi.fn();
+    card.scrollIntoView = scrollIntoView;
+    fireEvent.click(needsYou);
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+  });
+
+  it('shows no "needs you" line when the working lane holds only the person’s own conversation', async () => {
     chatGet.mockResolvedValue(okResponse(thread()));
     pulseGet.mockResolvedValue(okResponse({ needsYou: 0, working: 1 }));
     const chatSession: PersonalAthenaSessionSummary = {
@@ -169,6 +245,7 @@ describe('AthenaRailConversation', () => {
       decide: vi.fn(),
       lifecycle: vi.fn(),
       undoChange: vi.fn(),
+      proposals: vi.fn(),
     };
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
@@ -182,6 +259,6 @@ describe('AthenaRailConversation', () => {
     );
 
     await screen.findByRole('form', { name: /Message Athena/ });
-    expect(screen.queryByRole('button', { name: /Working ·/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /need you/ })).not.toBeInTheDocument();
   });
 });

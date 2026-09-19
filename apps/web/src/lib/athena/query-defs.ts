@@ -1,4 +1,8 @@
-import { AthenaInvocationContext, type AthenaPulseOut } from '@docket/athena/agent-contract';
+import {
+  AthenaInvocationContext,
+  type AthenaPulseOut,
+  type ProposalGroupOut,
+} from '@docket/athena/agent-contract';
 import type { PhoneCallUndoOut as AthenaUndoOut } from '@docket/athena/voice';
 
 import { api } from '@/lib/api';
@@ -66,6 +70,8 @@ export interface PersonalAthenaTransport {
     action: PersonalAthenaLifecycle,
   ) => Promise<RpcResponse<PersonalAthenaSessionDetail>>;
   readonly undoChange: (changeSetId: string) => Promise<RpcResponse<AthenaUndoOut>>;
+  /** Still-pending proposal groups for one caller-owned session (a `needs_you` job's ghosts). */
+  readonly proposals: (sessionId: string) => Promise<RpcResponse<readonly ProposalGroupOut[]>>;
 }
 
 /** Adapt only successful JSON; retain an error body for the shared Problem reader. */
@@ -168,6 +174,11 @@ export const personalAthenaTransport: PersonalAthenaTransport = {
   },
   undoChange: (changeSetId) =>
     api.v1.me.athena.changes[':changeSetId'].undo.$post({ param: { changeSetId } }),
+  proposals: (sessionId) =>
+    adaptedResponse(
+      api.v1.me.athena.sessions[':id'].proposals.$get({ param: { id: sessionId } }),
+      (page) => page.items,
+    ),
 };
 
 /** Compact live-count definition for the closed ambient pulse. */
@@ -207,6 +218,19 @@ export function personalAthenaDetailDef(
     () => transport.detail(sessionId),
     'Could not load this Athena work.',
     { enabled: hostVisible && sessionId.length > 0, staleTime: STALE.volatile },
+  );
+}
+
+/** Typed pending-proposals definition for one personal Athena session (a `needs_you` job's ghosts). */
+export function personalAthenaProposalsDef(
+  sessionId: string,
+  transport: PersonalAthenaTransport = personalAthenaTransport,
+) {
+  return apiQueryOptions(
+    queryKeys.athenaSessionProposals(sessionId),
+    () => transport.proposals(sessionId),
+    'Could not load the proposed changes.',
+    { staleTime: STALE.volatile },
   );
 }
 

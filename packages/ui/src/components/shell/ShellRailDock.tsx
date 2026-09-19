@@ -26,6 +26,10 @@ export interface ShellRailDockProps {
   readonly tabBarPresent: boolean;
   /** Select or collapse a panel from the activity bar. */
   readonly onIconClick: (id: string) => void;
+  /** The viewer's own resized rail width in px; `undefined` keeps the viewport-share clamp. */
+  readonly width?: number | undefined;
+  /** Report a new width from the rail's resize handle, for the shell to persist. */
+  readonly onWidthChange?: ((px: number) => void) | undefined;
 }
 
 /**
@@ -42,12 +46,19 @@ export function ShellRailDock({
   collapsed,
   tabBarPresent,
   onIconClick,
+  width,
+  onWidthChange,
 }: ShellRailDockProps): React.JSX.Element {
   return (
     <div className="hidden h-full min-h-0 shrink-0 flex-col lg:flex">
       {tabBarPresent ? <div aria-hidden="true" className={TAB_BAR_BLOCK_SIZE_CLASS} /> : null}
       <div className="flex min-h-0 flex-1">
-        <ShellAside panel={panel} collapsed={collapsed} />
+        <ShellAside
+          panel={panel}
+          collapsed={collapsed}
+          width={width}
+          onWidthChange={onWidthChange}
+        />
         <ShellActivityBar
           panels={panels}
           activeId={activeId}

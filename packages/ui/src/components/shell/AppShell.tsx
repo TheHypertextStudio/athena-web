@@ -43,22 +43,25 @@
  * `<main>`, so the shell — not the screen — owns how much of the window a screen gets. Three
  * guarantees, in force at every width, in every rail state, after any sequence of interactions:
  *
- * 1. **Floor.** `<main>` is never narrower than 40% of the viewport, and never below 416px. Below
- *    `lg` it is the *entire* viewport; at `lg` and up it is the viewport minus a constant 328px of
- *    chrome (240px sidebar, 40px activity bar, 32px of gutters) minus the rail. Measured floor:
- *    40.6% (416px) at 1024px with the rail expanded, rising to 57.8% by 1440px.
+ * 1. **Floor.** `<main>` is never narrower than {@link SHELL_MAIN_MIN_VIEWPORT_SHARE} (27%) of the
+ *    viewport with an untouched shell. Below `lg` it is the *entire* viewport; at `lg` and up it is
+ *    the viewport minus a constant 328px of chrome (240px sidebar, 40px activity bar, 32px of
+ *    gutters) minus the rail's default width plus its gap. Measured floor: 27.7% (284px) at
+ *    1024px with the sidebar and the rail both expanded; every other combination — collapsing
+ *    either column — has more headroom, and the share only rises from there.
  *
- *    This floor used to be a *majority*, and the rail was sized by whatever was left under it —
- *    which is how the rail ended up 174px wide on a 1024px window, too narrow to read the panel it
- *    hosts. The two are one equation: `rail ≤ 0.5 × viewport − 328`, so a majority at 1024px caps
- *    the rail at 184px. Giving the rail a 280px floor ({@link RAIL_INLINE_SIZE}) spends `<main>`'s
- *    majority in the 1024–1279 band to buy it. Above 1280px `<main>` is a majority again anyway.
+ *    The rail's inline size is now a person-chosen pixel width (see the width law on
+ *    {@link ShellAside}), not a share of the viewport, so this floor is no longer the whole
+ *    contract: a viewer who drags the rail wider trades some of `<main>`'s width for more of the
+ *    rail's, up to half the window ({@link railResizeMaxPx}). That trade is deliberate — see
+ *    {@link SHELL_MAIN_MIN_VIEWPORT_SHARE} for why it sits outside this guarantee.
  * 2. **Monotonicity.** Within a layout regime, widening the window never narrows `<main>` — neither
  *    in pixels nor as a share of the viewport. The rail contributes no step to that curve at any
  *    width, because it never *appears* at a threshold: it is in the layout at every desktop width,
- *    and its width is `clamp(17.5rem, 17vw, 22rem)` — continuous, and with a slope below 1 in every
- *    regime so `<main>` still gains from every pixel the window gains. This is the guarantee the
- *    old fixed-width rail actually broke, and nothing here relaxes it.
+ *    and its default width is a fixed constant ({@link RAIL_DEFAULT_INLINE_SIZE_PX}) rather than a
+ *    function of the viewport, so it costs `<main>` zero marginal width per pixel of window growth
+ *    — a slope of exactly 0, comfortably under the 1 this guarantee requires. This is the guarantee
+ *    the old fixed-width-that-appears-at-a-threshold rail actually broke, and nothing here relaxes it.
  * 3. **No occlusion.** At `lg` and up the rail is a flex *sibling* of `<main>`, never a layer over
  *    it, so `<main>`'s rect is also its usable area. Below `lg` the rail is a modal {@link Sheet}
  *    that costs `<main>` nothing.
@@ -92,12 +95,11 @@ import {
 } from '../../primitives';
 import { MobilePanelSwitcher } from './MobilePanelSwitcher';
 import { useContextState } from './ContextProvider';
+import { RailPresentationProvider } from './RailPresentationContext';
 import {
   RAIL_GAP_PX,
-  RAIL_MAX_INLINE_SIZE_PX,
-  RAIL_MIN_INLINE_SIZE_PX,
-  RAIL_VIEWPORT_SHARE,
   SHELL_ASIDE_SHEET_ID,
+  railClampWidthPx,
   type AppShellAside,
 } from './ShellAside';
 import { usePageScrollOwner } from './page-scroll';
@@ -110,8 +112,10 @@ import {
   RAIL_COLLAPSED_KEY,
   type RailState,
   readRailState,
+  resolvedRailWidth,
   useCountedRequests,
   useRailPanelClicks,
+  useRailWidthChange,
   writeRailState,
 } from './rail-requests';
 import { ShellRailProvider } from './ShellRailContext';
@@ -184,22 +188,29 @@ export const SHELL_DESKTOP_CHROME_COLLAPSED_PX = 136;
 export const SHELL_SIDEBAR_EXPAND_MIN_PX = 1440;
 
 /**
- * The share of the viewport `<main>` is guaranteed at **every** width, in **every** rail state,
- * after any sequence of interactions — the floor the shell's layout test enforces over every
- * integer width from 320px to 3840px.
+ * The share of the viewport `<main>` is guaranteed at **every** width, with the sidebar and rail
+ * each at every combination of expanded/collapsed and the rail at its *default* width — the floor
+ * the shell's layout test enforces over every integer width from 320px to 3840px.
  *
  * @remarks
  * A screen may size itself against this without asking the shell anything: whatever the window is,
- * at least this much of it is the screen's. The binding case is the narrowest desktop width with the
- * rail open (1024px → 416px of `<main>`, 40.6%); every other width has more headroom, and the share
- * only rises from there — past 1280px it is a majority again.
+ * at least this much of it is the screen's. The binding case is the narrowest desktop width with
+ * both the sidebar and the rail expanded (1024px → 284px of `<main>`, 27.7%): the sidebar spends
+ * its full 240px and the rail its full 420px default in the same pixel of window, and neither
+ * shrinks to make room for the other. Every other combination has more headroom — sidebar
+ * collapsed alone already recovers 176px — and every combination's share only rises from there as
+ * the window widens, since the rail's default cost stops growing at 1024px (it never exceeds half
+ * the viewport, which only binds below that width) while `<main>` keeps gaining every pixel.
  *
- * It was 0.5 while the rail was sized by subtraction. Holding a majority at 1024px caps the rail at
- * 184px, and a 184px rail cannot show the panels it exists for, so the guarantee moved rather than
- * the panels getting narrower. Raising this back means shrinking {@link RAIL_INLINE_SIZE}'s floor
- * by exactly the same number of pixels; they are one equation, not two knobs.
+ * This is *not* a guarantee against a viewer's own resize: {@link railResizeMaxPx} lets them widen
+ * the rail to half the window, which by construction can take `<main>` under this floor. That is
+ * the trade a person-chosen width is for — the floor here describes what an *untouched* shell
+ * hands a screen, not the outer bound of what a viewer can choose to leave it. It was 0.4 while the
+ * rail's default was a viewport-share clamp with a 280px floor rather than a fixed 420px default;
+ * moving to a wider, fixed default (see {@link RAIL_DEFAULT_INLINE_SIZE_PX}) is what moved this
+ * number, not a change in what the guarantee promises.
  */
-export const SHELL_MAIN_MIN_VIEWPORT_SHARE = 0.4;
+export const SHELL_MAIN_MIN_VIEWPORT_SHARE = 0.27;
 
 /**
  * `<main>`'s inline size, in px, for a viewport width and rail state — the shell's layout contract
@@ -231,12 +242,10 @@ export function shellMainInlineSize(
 ): number {
   // Below the one breakpoint the nav is a drawer and the rail is modal, so `<main>` is the viewport.
   if (viewportWidth < SHELL_DESKTOP_MIN_PX) return viewportWidth;
-  const rail = railExpanded
-    ? Math.min(
-        Math.max(RAIL_VIEWPORT_SHARE * viewportWidth, RAIL_MIN_INLINE_SIZE_PX),
-        RAIL_MAX_INLINE_SIZE_PX,
-      ) + RAIL_GAP_PX
-    : 0;
+  // This is the *unstored* rail's cost — the one every fresh session actually renders. A viewer's
+  // own resized width can differ, but it is their trade to make (see `SHELL_MAIN_MIN_VIEWPORT_SHARE`
+  // below): the contract only promises the floor an untouched shell produces.
+  const rail = railExpanded ? railClampWidthPx(viewportWidth) + RAIL_GAP_PX : 0;
   const chrome = sidebarCollapsed ? SHELL_DESKTOP_CHROME_COLLAPSED_PX : SHELL_DESKTOP_CHROME_PX;
   return viewportWidth - chrome - rail;
 }
@@ -494,7 +503,7 @@ export function AppShell({
     if (!panels.some((panel) => panel.id === railRequest.panelId)) return;
     // A host's explicit reveal wins over a surface's standing collapse request, as the icon does.
     railCollapse.override();
-    setRail({ activeId: railRequest.panelId, collapsed: false });
+    setRail((current) => ({ ...current, activeId: railRequest.panelId, collapsed: false }));
     writeRailState(RAIL_ACTIVE_KEY, railRequest.panelId);
     writeRailState(RAIL_COLLAPSED_KEY, '0');
     if (!isDesktop) setOverlayPanelOpen(true);
@@ -521,6 +530,8 @@ export function AppShell({
     activePanelId: activePanelIdResolved,
     setRail,
   });
+
+  const handleRailWidthChange = useRailWidthChange(setRail);
 
   // Stable dismiss callback handed to the drawer-rendered sidebar so a nav selection closes the
   // drawer (the static desktop rail sits under a `null` provider, so it never closes anything).
@@ -710,6 +721,8 @@ export function AppShell({
             collapsed={railCollapsed}
             tabBarPresent={tabBarPresent}
             onIconClick={handlePanelIconClick}
+            width={resolvedRailWidth(rail.width)}
+            onWidthChange={handleRailWidthChange}
           />
         ) : null}
 
@@ -770,7 +783,7 @@ export function AppShell({
               data-slot="shell-utility-pane-body"
               className="@container"
             >
-              {activePanel?.node}
+              <RailPresentationProvider value="sheet">{activePanel?.node}</RailPresentationProvider>
             </SheetBody>
           </SheetContent>
         </Sheet>

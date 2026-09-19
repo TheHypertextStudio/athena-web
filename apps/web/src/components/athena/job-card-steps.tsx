@@ -9,16 +9,19 @@
  * once the job is finished, and the same {@link StepUndo} control also backs the receipt's own
  * Undo in `job-card-parts.tsx` — see §4.6 of the companion design.
  */
-import { cn } from '@docket/ui/lib/utils';
-import { Badge, Button, surfaceToneColor } from '@docket/ui/primitives';
-import { type JSX, useState } from 'react';
+import { ChevronDown } from '@docket/ui/icons';
+import {
+  Badge,
+  Button,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@docket/ui/primitives';
+import { type JSX } from 'react';
 
 import { McpAppPresentationCard } from '@/components/athena/mcp-app-presentation-card';
 import type { AthenaActivityPresentation } from '@/lib/athena/presentation';
 import { postWidgetMessage } from '@/lib/athena/mcp-app-defs';
-
-/** How many of the newest steps a running job shows before offering "Show all". */
-const COLLAPSED_STEP_COUNT = 3;
 
 /** Read the change set a step's tool output recorded, when it recorded one. */
 function changeSetIdFromTechnical(
@@ -146,12 +149,7 @@ function JobStepRow({
           <summary className="focus-visible:ring-ring min-h-10 w-fit cursor-pointer py-2 focus-visible:ring-2 focus-visible:outline-none">
             What Athena used
           </summary>
-          <pre
-            className={cn(
-              surfaceToneColor('floating'),
-              'text-label-small mt-1 max-w-full overflow-x-auto rounded-md p-3',
-            )}
-          >
+          <pre className="text-label-small mt-1 max-w-full overflow-x-auto">
             {JSON.stringify(entry.technical, null, 2)}
           </pre>
         </details>
@@ -161,12 +159,13 @@ function JobStepRow({
 }
 
 /**
- * The card's step list.
+ * The card's step list: collapsed behind a "N steps" trigger, one level of nesting deep.
  *
  * @remarks
- * A running job collapses to its newest {@link COLLAPSED_STEP_COUNT} steps behind a "Show all N"
- * control, so a long-running job's card does not grow without bound in the thread; a finished job,
- * or one the caller has already expanded, shows every step.
+ * Steps are the job entry's history, not its running status — the status line above already says
+ * what is happening now, so nothing here duplicates it. Collapsed by default so a long-running or
+ * many-stepped job never grows the thread on its own; `forceExpanded` opens it from the start for a
+ * caller that wants every step visible immediately (the finished-job and wide-view cases).
  */
 export function JobSteps({
   activities,
@@ -176,42 +175,34 @@ export function JobSteps({
   undoPending,
   onUndo,
 }: JobStepsProps): JSX.Element | null {
-  const [expanded, setExpanded] = useState(false);
   if (activities.length === 0) return null;
 
-  const collapsed = !forceExpanded && !expanded && activities.length > COLLAPSED_STEP_COUNT;
-  const visible = collapsed ? activities.slice(-COLLAPSED_STEP_COUNT) : activities;
-
   return (
-    <ol aria-label="What Athena did">
-      {collapsed ? (
-        <li className="pb-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="min-h-10"
-            onClick={() => {
-              setExpanded(true);
-            }}
-          >
-            {`Show all ${String(activities.length)}`}
-          </Button>
-        </li>
-      ) : null}
-      {visible.map((entry) => {
-        const changeSetId = isFinished ? changeSetIdFromTechnical(entry.technical) : null;
-        return (
-          <JobStepRow
-            key={entry.id}
-            entry={entry}
-            changeSetId={changeSetId}
-            undone={changeSetId !== null && undoneChangeSetIds.has(changeSetId)}
-            undoPending={undoPending}
-            onUndo={onUndo}
-          />
-        );
-      })}
-    </ol>
+    <Collapsible defaultOpen={forceExpanded}>
+      <CollapsibleTrigger className="group text-on-surface-variant text-label-medium hover:text-on-surface flex w-fit items-center gap-1">
+        <span>{`${String(activities.length)} steps`}</span>
+        <ChevronDown
+          aria-hidden="true"
+          className="size-4 transition-transform group-data-[state=open]:rotate-180"
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ol aria-label="What Athena did" className="mt-2">
+          {activities.map((entry) => {
+            const changeSetId = isFinished ? changeSetIdFromTechnical(entry.technical) : null;
+            return (
+              <JobStepRow
+                key={entry.id}
+                entry={entry}
+                changeSetId={changeSetId}
+                undone={changeSetId !== null && undoneChangeSetIds.has(changeSetId)}
+                undoPending={undoPending}
+                onUndo={onUndo}
+              />
+            );
+          })}
+        </ol>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

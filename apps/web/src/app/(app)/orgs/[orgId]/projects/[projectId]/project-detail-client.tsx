@@ -33,6 +33,8 @@ import {
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
+import { useHighlightedIds } from '@/components/athena/proposal-highlight';
+import { useProposedTaskChanges } from '@/lib/athena/proposed-changes';
 import { useCreateLabel } from '@/components/labels/queries';
 import { ConfirmDestructiveDialog, InlineBanner } from '@docket/ui/components';
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
@@ -303,6 +305,8 @@ export default function ProjectDetailPage(): JSX.Element {
   );
   const mutations = useProjectMutations(orgId, projectId);
   const createLabel = useCreateLabel(orgId);
+  const proposedByTaskId = useProposedTaskChanges(orgId);
+  const highlightedIds = useHighlightedIds();
   const canEdit = aggregate?.capabilities.contribute ?? false;
   const canDelete = aggregate?.capabilities.manage ?? false;
   const projectTaskCount = aggregate?.defaultView.progress.taskCount ?? 0;
@@ -844,6 +848,8 @@ export default function ProjectDetailPage(): JSX.Element {
             onQuickAdd={async () => undefined}
             onRename={() => undefined}
             canEdit={false}
+            proposedByTaskId={proposedByTaskId}
+            highlightedIds={highlightedIds}
           />
           <div className="bg-surface-container h-96 overflow-hidden rounded-xl">
             <TaskGraphPanel

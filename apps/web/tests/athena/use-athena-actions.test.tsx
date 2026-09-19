@@ -37,6 +37,7 @@ function transport(): PersonalAthenaTransport {
     decide: vi.fn().mockResolvedValue(failed('decision provider secret')),
     lifecycle: vi.fn().mockResolvedValue(failed('lifecycle provider secret')),
     undoChange: vi.fn().mockResolvedValue(failed('undo provider secret')),
+    proposals: vi.fn(),
   };
 }
 

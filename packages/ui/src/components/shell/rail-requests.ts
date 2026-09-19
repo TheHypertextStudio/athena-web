@@ -11,13 +11,26 @@
  */
 import * as React from 'react';
 
-import { readStoredBoolean, readStoredString, writeStoredValue } from '../../lib/browser-storage';
+import {
+  readStoredBoolean,
+  readStoredInteger,
+  readStoredString,
+  writeStoredValue,
+} from '../../lib/browser-storage';
 import type { ShellRailState } from './ShellRailContext';
 
 /** localStorage key for the rail's active panel, persisted across sessions. */
 export const RAIL_ACTIVE_KEY = 'docket.rail.active';
 /** localStorage key for whether the rail's panel host is collapsed, persisted across sessions. */
 export const RAIL_COLLAPSED_KEY = 'docket.rail.collapsed';
+/**
+ * localStorage key for the rail's person-chosen inline size in px, persisted across sessions.
+ *
+ * @remarks
+ * Unset until the viewer drags or keyboard-resizes the rail's edge — see the width law on
+ * {@link ShellAside}. Absent, the rail keeps its viewport-share clamp.
+ */
+export const RAIL_WIDTH_KEY = 'docket.rail.width';
 
 /** The shell-owned, persisted rail state: which panel is active, and whether its host is collapsed. */
 export interface RailState {
@@ -25,6 +38,8 @@ export interface RailState {
   readonly activeId: string | null;
   /** Whether the panel host is collapsed to zero width. */
   readonly collapsed: boolean;
+  /** The viewer's own resized width in px, or `null` to keep the viewport-share clamp. */
+  readonly width: number | null;
 }
 
 /**
@@ -41,7 +56,7 @@ export interface RailState {
  * varied by viewport would put the cliff this shell exists to prevent back in, across page loads
  * instead of across a resize.
  */
-export const INITIAL_RAIL_STATE: RailState = { activeId: null, collapsed: false };
+export const INITIAL_RAIL_STATE: RailState = { activeId: null, collapsed: false, width: null };
 
 /**
  * The persisted rail state, or {@link INITIAL_RAIL_STATE} when unset / unreadable.
@@ -57,12 +72,40 @@ export function readRailState(): RailState {
   return {
     activeId: readStoredString(RAIL_ACTIVE_KEY),
     collapsed: readStoredBoolean(RAIL_COLLAPSED_KEY) ?? INITIAL_RAIL_STATE.collapsed,
+    width: readStoredInteger(RAIL_WIDTH_KEY),
   };
 }
 
 /** Persist a rail-state value. Storage failures are absorbed by {@link writeStoredValue}. */
-export function writeRailState(key: string, value: string): void {
+export function writeRailState(key: string, value: string | number): void {
   writeStoredValue(key, value);
+}
+
+/** `rail.width` as the `undefined` {@link ShellAside} expects, rather than persistence's `null`. */
+export function resolvedRailWidth(width: number | null): number | undefined {
+  return width ?? undefined;
+}
+
+/**
+ * A stable handler for the rail's resize handle: rounds the reported px, merges it into rail
+ * state, and persists it under {@link RAIL_WIDTH_KEY} — the same shape as every other rail write
+ * ({@link RAIL_ACTIVE_KEY}, {@link RAIL_COLLAPSED_KEY}), so a host that renders `aside` never has to
+ * know the rail is resizable at all.
+ *
+ * @param setRail - The shell's rail-state setter.
+ * @returns a stable `(px: number) => void` to hand `ShellRailDock`'s `onWidthChange`.
+ */
+export function useRailWidthChange(
+  setRail: React.Dispatch<React.SetStateAction<RailState>>,
+): (px: number) => void {
+  return React.useCallback(
+    (px: number) => {
+      const rounded = Math.round(px);
+      setRail((current) => ({ ...current, width: rounded }));
+      writeRailState(RAIL_WIDTH_KEY, rounded);
+    },
+    [setRail],
+  );
 }
 
 /** What {@link useCountedRequests} returns. */
@@ -150,7 +193,7 @@ export function useRailPanelClicks({
         writeRailState(RAIL_COLLAPSED_KEY, '1');
         return;
       }
-      setRail({ activeId: id, collapsed: false });
+      setRail((current) => ({ ...current, activeId: id, collapsed: false }));
       writeRailState(RAIL_ACTIVE_KEY, id);
       writeRailState(RAIL_COLLAPSED_KEY, '0');
     },

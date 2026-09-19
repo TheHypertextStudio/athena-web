@@ -126,36 +126,59 @@ person is looking at. Rejected.
   context chip and nothing else.
 - The activity-bar icon keeps its `RailPanelStatus`. Its label and tone are derived from the
   thread: "attention" when a proposal or question is waiting, "active" while a job is running.
-- Below `lg` the same panel is the shell's right sheet, as today.
-- The rail width law is unchanged (`clamp(17.5rem, 17vw, 22rem)`). Everything in §4.2 is
-  designed for 280px first.
+- Below `lg` the same panel is the shell's right sheet; the sheet's own title row already shows
+  "Athena", so the panel drops its own mark-and-name row there (`useRailPresentation`) and keeps
+  only Talk and the link to the wide view.
+- The rail's inline size is a **person-chosen pixel width**, not a share of the viewport: 420px
+  until the viewer drags or keyboard-resizes the handle on its inner edge (the edge facing
+  `<main>`), 360px minimum, half the window's inline size maximum. The handle is a 6px hit area
+  with a `role="separator"` and a 2px tonal fill (`bg-outline-variant` on hover/focus/drag, never a
+  border); dragging it, or pressing Left/Right (16px steps) or Home/End while it has focus, sets
+  the width and persists it under `docket.rail.width` across sessions. `<main>` stays `flex-1`,
+  so both the rail and the content remain visible at every width the handle allows.
 
 ### 4.2 Panel anatomy, top to bottom
 
-1. **Header.** The Athena name with the Sparkles glyph, a `Talk` control (voice is a mode of the
-   thread, same as Today), and an icon-only "Open the Athena page" link to `/athena`. No Back
-   button, no counts, no lifecycle buttons.
-2. **Working strip.** Present only when at least one job is running or waiting. A collapsible
-   list of rows: objective, one-line status ("Reading 14 tasks in Launch plan"), and a state dot.
-   A row that needs the person shows the decision inline (approve / reject / answer) when it fits,
-   and otherwise scrolls the thread to its card. Pause and Cancel live in each row's overflow menu.
-3. **Thread.** The one personal conversation, newest at the bottom, with day dividers. Entry
+Two fixed regions only — the header and the composer — so nothing else competes for attention
+with the thread, which is the one place work actually shows.
+
+1. **Header (40px, fixed).** The Athena name with the Sparkles glyph, an icon-only `Talk` control
+   (voice is a mode of the thread, same as Today), and an icon-only "Open the Athena page" link to
+   `/athena`. No Back button, no counts, no lifecycle buttons.
+2. **"N need you" (fixed, conditional).** A single ghost button under the header, present only
+   while at least one job is waiting on a decision. Reads "1 needs you" or "N need you" and scrolls
+   the thread to the first such job's card. There is no separate pinned strip for running work —
+   a running job's status shows only in its own thread entry, and its steps hold the history.
+3. **Thread (scrolling).** The one personal conversation, newest at the bottom, 16px vertical gap
+   between entries and one 16px horizontal inset shared by every entry and the composer. Entry
    kinds:
    - the person's message (right-aligned bubble, with a small "from Launch plan" caption when it
      was sent with a page context);
    - Athena's reply (left-aligned, streamed);
    - a quiet work chip ("Searched tasks · 12 results") with an optional MCP app card below it;
-   - a **job card**: objective, live status line, progress of steps, the decision block when one
-     is pending, and a receipt when finished. This is the current workbench reduced to a card;
-   - a **proposal group** (`ProposalGroupCard`): one line per change, in plain words ("Set state
-     to In Progress") rather than the raw tool name, with a single `Approve` / `Reject` pair and
-     a checkbox only when the group holds more than one change;
+   - a **job entry**: a flat list row, not a tonal card — a heading line (state `Badge`, the
+     objective as an `h3`, the overflow menu), one status line (the single place running progress
+     shows), the decision as one row of buttons (`Approve` / `Reject`, or `Review` then `Approve`
+     for a change that would leave Docket), and the steps collapsed behind a `Collapsible` trigger
+     reading "N steps" — expanded, each step is its own flat row, and "What Athena used" stays a
+     disclosure inside the step it belongs to. A finished job's receipt is the same flat shape:
+     title line, receipt rows, Undo — never a box;
+   - a **proposal group** (`ProposalGroupCard`): a flat entry — a heading line ("N changes
+     proposed"), one row per change in plain words ("Set state to In Progress") rather than the raw
+     tool name, and a single `Approve` / `Reject` row with a checkbox only when the group holds
+     more than one change. Ghost rows keep their translucent tint; nothing else in the entry does;
    - a **question** (`ElicitationCard`, unchanged);
    - a **heads-up** posted by Athena (§4.5).
-4. **Composer.** One shared `AthenaComposer` primitive (§4.4). Above the textarea sits the
-   **context chip**: "Launch plan · Project" — the chip names the page and its kind — with an ×
-   to drop it for this message and a click to re-attach the current page. Attach and Talk sit in
-   the composer's trailing controls. Enter sends; Shift+Enter breaks a line.
+
+   Body text is `text-body-medium` (14/20); labels are `text-label-medium` (12/16) or
+   `text-label-small`. No tonal boxes anywhere in the thread except the composer and a ghost row's
+   own tint — a job entry, a proposal group, and a step are all one level deep, never a card nested
+   inside another card.
+
+4. **Composer (fixed).** One shared `AthenaComposer` primitive (§4.4), pinned at the bottom. Above
+   the textarea sits the **context chip**: "Launch plan · Project" — the chip names the page and
+   its kind — with an × to drop it for this message and a click to re-attach the current page.
+   Attach and Talk sit in the composer's trailing controls. Enter sends; Shift+Enter breaks a line.
 
 Empty thread: the composer plus three suggestions drawn from the current page (§4.5). The
 suggestions are buttons that fill the composer. There is no instructional paragraph.

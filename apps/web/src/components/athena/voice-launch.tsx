@@ -22,27 +22,42 @@ export interface VoiceLaunchProps {
   readonly workspaceId?: string | null;
   /** Recent conversation to show above the live turns. */
   readonly history?: readonly VoiceTurnOut[];
+  /**
+   * Render the launch control as a bare icon button (`aria-label="Talk"`, no visible "Talk" text).
+   *
+   * @remarks
+   * For a header row too narrow for a labeled button, e.g. the rail's fixed 40px header — the mic
+   * glyph alone is legible there and the accessible name still says what the control does.
+   */
+  readonly iconOnly?: boolean;
 }
 
 /**
  * The "Talk" control and the panel it opens.
  *
- * @param props - Workspace focus and the conversation so far.
+ * @param props - Workspace focus, the conversation so far, and whether to render icon-only.
  */
-export function VoiceLaunch({ workspaceId, history }: VoiceLaunchProps): JSX.Element {
+export function VoiceLaunch({
+  workspaceId,
+  history,
+  iconOnly = false,
+}: VoiceLaunchProps): JSX.Element {
   const [open, setOpen] = useState(false);
   return (
     <>
       <Button
         variant="secondary"
-        className="min-h-10"
+        className={iconOnly ? undefined : 'min-h-10'}
+        iconOnly={iconOnly}
+        aria-label={iconOnly ? 'Talk' : undefined}
+        title={iconOnly ? 'Talk' : undefined}
         onClick={() => {
           setOpen(true);
         }}
         data-voice-launch
       >
         <Mic aria-hidden="true" />
-        Talk
+        {iconOnly ? null : 'Talk'}
       </Button>
       <VoiceMode
         open={open}

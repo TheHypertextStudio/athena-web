@@ -12,6 +12,7 @@ import type { SessionActivityOut } from '@docket/athena/agent-contract';
 
 import type { PersonalAthenaQueuePayload } from './query-defs';
 import {
+  athenaQueueState,
   presentAthenaActivity,
   type PersonalAthenaSessionDetail,
   type PersonalAthenaSessionSummary,
@@ -114,6 +115,24 @@ export function jobsFromQueue(
     ...payload.sessions.finished,
   ];
   return currentChatId ? all.filter((job) => job.id !== currentChatId) : all;
+}
+
+/**
+ * The queue's jobs that are waiting on the person to decide something, in queue order.
+ *
+ * @remarks
+ * Backs the rail's single "N need you" line: rather than a pinned strip of every open job, the
+ * rail names only the ones that need a decision, and lets the thread itself carry the rest.
+ */
+export function jobsNeedingYou(
+  jobs: readonly PersonalAthenaSessionSummary[],
+): readonly PersonalAthenaSessionSummary[] {
+  return jobs.filter((job) => (job.queueState ?? athenaQueueState(job.status)) === 'needs_you');
+}
+
+/** The rail's "N need you" line, singular for exactly one job. */
+export function needsYouLabel(count: number): string {
+  return count === 1 ? '1 needs you' : `${String(count)} need you`;
 }
 
 /** A job rendered as a thread entry, ordered by when it started. */

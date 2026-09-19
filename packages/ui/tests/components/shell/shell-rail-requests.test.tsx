@@ -86,16 +86,15 @@ describe('AppShell rail requests', () => {
     vi.unstubAllGlobals();
   });
 
-  it('opens to a share of the viewport, never a fixed column', () => {
+  it('opens to its person-chosen default width, never a viewport share', () => {
     renderWithRail(<div>Main</div>);
 
-    // A viewport *share*, floored at 17.5rem and capped at 22rem. The bare fixed width this
-    // replaced is what let a docked rail take 352px out of a 1024px window the moment a media
-    // query flipped; the floor is what keeps the rail readable at the bottom of the range without
-    // reintroducing that step.
-    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass(
-      'w-[clamp(17.5rem,17vw,22rem)]',
-    );
+    // A fixed pixel default (see the width law on `ShellAside`), not a share of the viewport — the
+    // viewport-share clamp this replaced is what let the rail read as low as 174px on a 1024px
+    // window, too narrow for the panel it hosts.
+    const aside = screen.getByRole('complementary', { name: 'Tasks' });
+    expect(aside).toHaveStyle({ width: '420px' });
+    expect(aside).toHaveClass('mr-2');
   });
 
   it('collapses and re-expands from its own activity-bar icon', () => {
@@ -106,9 +105,9 @@ describe('AppShell rail requests', () => {
 
     const activityBar = screen.getByRole('navigation', { name: 'Panels' });
     fireEvent.click(within(activityBar).getByRole('button', { name: 'Tasks' }));
-    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass(
-      'w-[clamp(17.5rem,17vw,22rem)]',
-    );
+    const aside = screen.getByRole('complementary', { name: 'Tasks' });
+    expect(aside).toHaveStyle({ width: '420px' });
+    expect(aside).toHaveClass('mr-2');
   });
 
   it('adopts a persisted collapsed choice after mount rather than at hydration', () => {

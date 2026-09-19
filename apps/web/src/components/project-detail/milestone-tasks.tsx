@@ -32,7 +32,7 @@ import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { formatCalendarDate } from '@/lib/format-date';
 import { usePrefetchApi } from '@/lib/query';
 import { taskDetailDef } from '@/lib/use-task-detail';
-import { categoryRank } from '@/lib/work-category';
+import { categoryRank, type CategoryOfState } from '@/lib/work-category';
 
 /** A task enriched with its resolved milestone association. */
 export interface MilestoneTask {
@@ -67,11 +67,60 @@ export interface MilestoneTasksProps {
   canEdit: boolean;
   /** The org id, for building the per-row task-detail link target. */
   orgId: string;
+  /** A pending proposal's sentence for a task, keyed by task id — renders that row as a ghost. */
+  proposedByTaskId?: ReadonlyMap<string, string> | undefined;
+  /** Task ids to tint with the hover-highlight tone (the row a hovered proposal would change). */
+  highlightedIds?: ReadonlySet<string> | undefined;
 }
 
 /** Format an ISO date as a short day, or `null` when absent. */
 function shortDate(value: string | null | undefined): string | null {
   return formatCalendarDate(value, { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Bucket tasks into milestone sections, ordered by milestone display order then canonical
+ * workflow state.
+ *
+ * @remarks
+ * Split out of {@link MilestoneTasks} to keep that component's own function under the file's
+ * length ceiling; the grouping itself has no dependency on the component beyond its resolved
+ * milestone order, label lookup, and category resolver.
+ */
+function buildMilestoneGroups(
+  tasks: readonly MilestoneTask[],
+  milestoneRank: ReadonlyMap<string, number>,
+  milestoneLabel: (id: string) => string,
+  categoryOf: CategoryOfState,
+): EntityTableGroup<TaskOut>[] {
+  const milestoneOf = (t: MilestoneTask): string => t.milestoneId ?? UNSCHEDULED_ID;
+  const stateRank = (t: MilestoneTask): number => categoryRank(categoryOf(t.task.state));
+  const ordered = [...tasks].sort((a, b) => {
+    const ma = milestoneRank.get(milestoneOf(a)) ?? Number.MAX_SAFE_INTEGER;
+    const mb = milestoneRank.get(milestoneOf(b)) ?? Number.MAX_SAFE_INTEGER;
+    if (ma !== mb) return ma - mb;
+    return stateRank(a) - stateRank(b);
+  });
+
+  // Bucket the (already milestone-then-state ordered) tasks into milestone sections, in the
+  // order their milestone is first encountered (which is the milestone display order above).
+  const byId = new Map<string, TaskOut[]>();
+  const order: string[] = [];
+  for (const entry of ordered) {
+    const id = milestoneOf(entry);
+    let bucket = byId.get(id);
+    if (!bucket) {
+      bucket = [];
+      byId.set(id, bucket);
+      order.push(id);
+    }
+    bucket.push(entry.task);
+  }
+  return order.map((id) => ({
+    id,
+    label: id === UNSCHEDULED_ID ? 'Unscheduled' : milestoneLabel(id),
+    rows: byId.get(id) ?? [],
+  }));
 }
 
 /**
@@ -91,6 +140,8 @@ export function MilestoneTasks({
   onRename,
   canEdit,
   orgId,
+  proposedByTaskId,
+  highlightedIds,
 }: MilestoneTasksProps): JSX.Element {
   const prefetch = usePrefetchApi();
   const registry = useStatusRegistry();
@@ -140,36 +191,10 @@ export function MilestoneTasks({
   }, [statuses, resolveActor, canEdit, onRename, onOpenTask]);
 
   /** Tasks bucketed into milestone sections, ordered by milestone then canonical workflow state. */
-  const groups = useMemo<EntityTableGroup<TaskOut>[]>(() => {
-    const milestoneOf = (t: MilestoneTask): string => t.milestoneId ?? UNSCHEDULED_ID;
-    const stateRank = (t: MilestoneTask): number => categoryRank(categoryOf(t.task.state));
-    const ordered = [...tasks].sort((a, b) => {
-      const ma = milestoneRank.get(milestoneOf(a)) ?? Number.MAX_SAFE_INTEGER;
-      const mb = milestoneRank.get(milestoneOf(b)) ?? Number.MAX_SAFE_INTEGER;
-      if (ma !== mb) return ma - mb;
-      return stateRank(a) - stateRank(b);
-    });
-
-    // Bucket the (already milestone-then-state ordered) tasks into milestone sections, in the
-    // order their milestone is first encountered (which is the milestone display order above).
-    const byId = new Map<string, TaskOut[]>();
-    const order: string[] = [];
-    for (const entry of ordered) {
-      const id = milestoneOf(entry);
-      let bucket = byId.get(id);
-      if (!bucket) {
-        bucket = [];
-        byId.set(id, bucket);
-        order.push(id);
-      }
-      bucket.push(entry.task);
-    }
-    return order.map((id) => ({
-      id,
-      label: id === UNSCHEDULED_ID ? 'Unscheduled' : milestoneLabel(id),
-      rows: byId.get(id) ?? [],
-    }));
-  }, [tasks, milestoneRank, milestoneLabel, categoryOf]);
+  const groups = useMemo<EntityTableGroup<TaskOut>[]>(
+    () => buildMilestoneGroups(tasks, milestoneRank, milestoneLabel, categoryOf),
+    [tasks, milestoneRank, milestoneLabel, categoryOf],
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -197,6 +222,8 @@ export function MilestoneTasks({
           onOpenTask={(task) => {
             onOpenTask(task);
           }}
+          proposedByTaskId={proposedByTaskId}
+          highlightedIds={highlightedIds}
         />
       )}
     </div>

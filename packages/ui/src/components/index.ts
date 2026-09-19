@@ -207,11 +207,14 @@ export {
 } from './shell/page-scroll';
 export {
   type AppShellAside,
+  RAIL_DEFAULT_INLINE_SIZE_PX,
   RAIL_INLINE_SIZE,
   RAIL_GAP_PX,
   RAIL_MAX_INLINE_SIZE_PX,
   RAIL_MIN_INLINE_SIZE_PX,
-  RAIL_VIEWPORT_SHARE,
+  RAIL_RESIZE_STEP_PX,
+  railClampWidthPx,
+  railResizeMaxPx,
   type RailPanel,
   type RailPanelStatus,
 } from './shell/ShellAside';
@@ -221,6 +224,11 @@ export {
   useShellSidebar,
 } from './shell/ShellSidebarContext';
 export { ShellRailProvider, type ShellRailState, useShellRail } from './shell/ShellRailContext';
+export {
+  type RailPresentation,
+  RailPresentationProvider,
+  useRailPresentation,
+} from './shell/RailPresentationContext';
 export {
   ContextProvider,
   type ContextProviderProps,

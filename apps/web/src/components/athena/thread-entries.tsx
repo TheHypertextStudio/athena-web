@@ -48,14 +48,10 @@ export function ThreadEntries({
     <>
       {entries.map((entry) =>
         entry.kind === 'job' ? (
-          <Surface
-            key={`job-${entry.job.id}`}
-            tone="canvas"
-            shape="medium"
-            className="mr-auto w-full max-w-[85%] p-4"
-          >
+          // Flat: a job is a list entry, not a chat bubble — full width, no tonal card behind it.
+          <div key={`job-${entry.job.id}`} className="w-full">
             <AthenaJobCard job={entry.job} transport={transport} />
-          </Surface>
+          </div>
         ) : (
           <ChatEntry
             key={entry.activity.id}

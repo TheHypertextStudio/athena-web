@@ -25,6 +25,11 @@ import { type JSX, type SyntheticEvent, useMemo, useState } from 'react';
 
 import { JobSteps, newestChangeSetId, StepUndo } from '@/components/athena/job-card-steps';
 import { ProposalInputRows } from '@/components/athena/proposal-input-rows';
+import {
+  EMPTY_HIGHLIGHTED_IDS,
+  taskIdsFromInput,
+  useSetHighlightedIds,
+} from '@/components/athena/proposal-highlight';
 import MentionTextarea from '@/components/mentions/mention-textarea';
 import { isOutwardTool } from '@/lib/athena/describe-proposal';
 import {
@@ -121,6 +126,14 @@ function newestToolStep(
   return undefined;
 }
 
+/** The newest tool step's raw input, regardless of whether that tool is outward. */
+function newestToolInput(
+  activities: readonly AthenaActivityPresentation[],
+): Record<string, unknown> | null {
+  const input = newestToolStep(activities)?.technical?.input;
+  return input && typeof input === 'object' ? (input as Record<string, unknown>) : null;
+}
+
 /**
  * The newest tool step's raw input, only when that step's tool leaves Docket.
  *
@@ -134,8 +147,7 @@ export function outwardDecisionInput(
 ): Record<string, unknown> | null {
   const toolName = newestToolStep(activities)?.technical?.toolName;
   if (!toolName || !isOutwardTool(toolName)) return null;
-  const input = newestToolStep(activities)?.technical?.input;
-  return input && typeof input === 'object' ? (input as Record<string, unknown>) : null;
+  return newestToolInput(activities);
 }
 
 /** Props for {@link JobDecision}. */
@@ -145,6 +157,8 @@ export interface JobDecisionProps {
   readonly mentionOrgId: string | undefined;
   /** The proposed outward call's raw input, when the decision would send something out. */
   readonly outwardInput: Record<string, unknown> | null;
+  /** The task id(s) this decision's underlying tool call would change, for the hover highlight. */
+  readonly targetIds: ReadonlySet<string>;
   readonly onChoose: (optionId: string) => void;
   readonly onAnswer: (body: string) => void;
 }
@@ -168,7 +182,7 @@ function JobDecisionOptions({
   onChoose,
 }: JobDecisionOptionsProps): JSX.Element {
   return (
-    <div className="mt-3 flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-2">
       {options.map((option, index) => {
         const isPrimary = index === 0;
         return (
@@ -205,12 +219,14 @@ export function JobDecision({
   pending,
   mentionOrgId,
   outwardInput,
+  targetIds,
   onChoose,
   onAnswer,
 }: JobDecisionProps): JSX.Element {
   const freeform = decision.kind === 'question' && decision.options.length === 0;
   const [draft, setDraft] = useState('');
   const [reviewed, setReviewed] = useState(false);
+  const setHighlighted = useSetHighlightedIds();
 
   function submit(event: SyntheticEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -221,19 +237,24 @@ export function JobDecision({
   }
 
   return (
-    <div className="bg-primary-container/25 rounded-md p-3">
+    <div
+      className="flex flex-col gap-2"
+      onPointerEnter={() => {
+        if (targetIds.size > 0) setHighlighted(targetIds);
+      }}
+      onPointerLeave={() => {
+        if (targetIds.size > 0) setHighlighted(EMPTY_HIGHLIGHTED_IDS);
+      }}
+    >
       <h4 className="text-on-surface text-title-small">{decision.title}</h4>
       {decision.description ? (
-        <p className="text-on-surface-variant text-body-medium mt-1">{decision.description}</p>
+        <p className="text-on-surface-variant text-body-medium">{decision.description}</p>
       ) : null}
       {outwardInput && reviewed ? (
-        <ProposalInputRows
-          input={outwardInput}
-          className={cn(surfaceToneColor('floating'), 'mt-3')}
-        />
+        <ProposalInputRows input={outwardInput} className={surfaceToneColor('floating')} />
       ) : null}
       {freeform ? (
-        <form aria-label="Answer Athena" className="mt-3 flex items-end gap-2" onSubmit={submit}>
+        <form aria-label="Answer Athena" className="flex items-end gap-2" onSubmit={submit}>
           <label className={cn(surfaceToneColor('card'), 'min-w-0 flex-1 rounded-lg')}>
             <span className="sr-only">Answer Athena</span>
             <MentionTextarea
@@ -290,15 +311,15 @@ export function JobReceipt({
   onUndo,
 }: JobReceiptProps): JSX.Element {
   return (
-    <div className={cn(surfaceToneColor('card'), 'rounded-md p-3')}>
+    <div className="flex flex-col gap-2">
       <h4 className="text-on-surface text-title-small">{result.title}</h4>
-      <p className="text-on-surface-variant text-body-medium mt-1">{result.summary}</p>
+      <p className="text-on-surface-variant text-body-medium">{result.summary}</p>
       {result.receipt && result.receipt.length > 0 ? (
-        <dl className="mt-3">
+        <dl>
           {result.receipt.map((item) => (
             <div
               key={`${item.label}-${item.value}`}
-              className="text-body-medium grid gap-1 py-2 sm:grid-cols-[10rem_1fr]"
+              className="text-body-medium grid gap-1 py-1 sm:grid-cols-[10rem_1fr]"
             >
               <dt className="text-on-surface-variant">{item.label}</dt>
               <dd className="text-on-surface break-words">{item.value}</dd>
@@ -307,14 +328,7 @@ export function JobReceipt({
         </dl>
       ) : null}
       {changeSetId ? (
-        <div className="mt-3">
-          <StepUndo
-            changeSetId={changeSetId}
-            undone={undone}
-            pending={undoPending}
-            onUndo={onUndo}
-          />
-        </div>
+        <StepUndo changeSetId={changeSetId} undone={undone} pending={undoPending} onUndo={onUndo} />
       ) : null}
     </div>
   );
@@ -448,6 +462,7 @@ function JobCardDecisionAndReceipt({
           pending={pending}
           mentionOrgId={mentionOrgId}
           outwardInput={outwardDecisionInput(activities)}
+          targetIds={taskIdsFromInput(newestToolInput(activities))}
           onChoose={(optionId) => {
             onChoose(decision, optionId);
           }}
@@ -510,7 +525,7 @@ export function JobCardBody({
 
   return (
     <>
-      <p className="text-body-small text-on-surface-variant">
+      <p className="text-body-medium text-on-surface-variant">
         {jobStatusLine(detail ?? null, job)}
       </p>
 

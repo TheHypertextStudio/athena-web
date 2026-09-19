@@ -194,7 +194,6 @@ export function adaptAthenaDetail(detail: AthenaApiSessionDetail): PersonalAthen
           kind: 'approval',
           id: pendingApproval.id,
           title: string(pendingAction?.['summary']) ?? 'Approve this action',
-          description: 'Athena will recheck your current permission before applying it.',
           private: true,
           options: [
             { id: 'approve', label: 'Approve' },

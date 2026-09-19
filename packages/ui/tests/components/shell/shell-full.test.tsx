@@ -428,9 +428,7 @@ describe('AppShell rail', () => {
       </ContextProvider>,
     );
 
-    expect(screen.getByRole('complementary', { name: 'Agenda' })).toHaveClass(
-      'w-[clamp(17.5rem,17vw,22rem)]',
-    );
+    expect(screen.getByRole('complementary', { name: 'Agenda' })).toHaveStyle({ width: '420px' });
 
     view.rerender(
       <ContextProvider initialContext={ACME.id}>
@@ -445,9 +443,7 @@ describe('AppShell rail', () => {
       </ContextProvider>,
     );
 
-    expect(screen.getByRole('complementary', { name: 'Athena' })).toHaveClass(
-      'w-[clamp(17.5rem,17vw,22rem)]',
-    );
+    expect(screen.getByRole('complementary', { name: 'Athena' })).toHaveStyle({ width: '420px' });
     expect(onRailStateChange).toHaveBeenLastCalledWith({
       activePanelId: 'athena',
       expanded: true,

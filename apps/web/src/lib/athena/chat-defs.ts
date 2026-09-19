@@ -14,7 +14,11 @@
  * that accepts an attached page, and the thread is re-read through the org door afterward so
  * every reader still sees one shape.
  */
-import type { AgentSessionDetailOut, SessionActivityOut } from '@docket/athena/agent-contract';
+import type {
+  AgentSessionDetailOut,
+  ProposalGroupOut,
+  SessionActivityOut,
+} from '@docket/athena/agent-contract';
 import { useQueryClient, type QueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
@@ -45,6 +49,27 @@ export function orgChatThreadDef(orgId: string) {
     () => api.v1.orgs[':orgId'].sessions.chat.$get({ param: { orgId } }),
     'Could not open the conversation.',
     { staleTime: STALE.realtime },
+  );
+}
+
+/**
+ * Definition for one org-scoped session's still-pending proposal groups.
+ *
+ * @remarks
+ * Reads the same route `useSessionDetail` reads (`GET /v1/orgs/:orgId/sessions/:id/proposals`),
+ * but on its own rather than folded into that hook's heavier session+members+agents load — the
+ * project page's ghost-row read wants only this.
+ *
+ * @param orgId - The workspace the session belongs to.
+ * @param sessionId - The session whose pending proposals to read.
+ * @param enabled - Pass `false` to skip the read (e.g. no session is awaiting approval yet).
+ */
+export function orgSessionProposalsDef(orgId: string, sessionId: string, enabled = true) {
+  return apiQueryOptions<readonly ProposalGroupOut[]>(
+    queryKeys.orgSessionProposals(orgId, sessionId),
+    () => api.v1.orgs[':orgId'].sessions[':id'].proposals.$get({ param: { orgId, id: sessionId } }),
+    'Could not load the proposed changes.',
+    { enabled: enabled && sessionId.length > 0, staleTime: STALE.volatile },
   );
 }
 

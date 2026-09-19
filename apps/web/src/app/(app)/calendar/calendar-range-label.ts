@@ -94,6 +94,21 @@ function monthName(point: MonthPoint, style: 'long' | 'short'): string {
  * calendarRangeLabel('2026-12-29', '2027-01-04'); // 'Dec 2026 – Jan 2027'
  * ```
  */
+/** Whether one month point is before another. */
+function isReversed(a: MonthPoint, b: MonthPoint): boolean {
+  return b.year < a.year || (b.year === a.year && b.month < a.month);
+}
+
+/** Format a cross-year range label. */
+function crossYearLabel(start: MonthPoint, end: MonthPoint): string {
+  return `${monthName(start, 'short')} ${String(start.year)} – ${monthName(end, 'short')} ${String(end.year)}`;
+}
+
+/** Format a same-year, different-month range label. */
+function crossMonthLabel(start: MonthPoint, end: MonthPoint): string {
+  return `${monthName(start, 'short')} – ${monthName(end, 'short')} ${String(start.year)}`;
+}
+
 export function calendarRangeLabel(
   startDate: string,
   endDate: string,
@@ -108,15 +123,10 @@ export function calendarRangeLabel(
   /* v8 ignore next -- both bounds are non-null here; the guard above already returned. */
   if (!a || !b) return '';
 
-  const reversed = b.year < a.year || (b.year === a.year && b.month < a.month);
-  const start = reversed ? b : a;
-  const end = reversed ? a : b;
+  const start = isReversed(a, b) ? b : a;
+  const end = isReversed(a, b) ? a : b;
 
-  if (start.year !== end.year) {
-    return `${monthName(start, 'short')} ${String(start.year)} – ${monthName(end, 'short')} ${String(end.year)}`;
-  }
-  if (start.month !== end.month) {
-    return `${monthName(start, 'short')} – ${monthName(end, 'short')} ${String(start.year)}`;
-  }
+  if (start.year !== end.year) return crossYearLabel(start, end);
+  if (start.month !== end.month) return crossMonthLabel(start, end);
   return `${monthName(start, style)} ${String(start.year)}`;
 }

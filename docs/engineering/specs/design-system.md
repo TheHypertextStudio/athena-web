@@ -447,7 +447,7 @@ Dark mode follows the browser with `@media (prefers-color-scheme: dark)`. Do not
 
 **Daily Plan / Hub** (`components/hub/*`): `DailyPlan`, `DailyPlanColumn` (Plan), `DailyPlanGroup` (per‑org), `DailyPlanItem`, `PullFromOrgPicker`, `CalendarColumn`, `NeedsAttentionColumn`, `AttentionSection` (Approvals/Blocked/Due/Inbox), `ApprovalDigestItem`, `InboxList`, `InboxItem`, `ActivityFeed`, `PortfolioRoadmap` (composes `TimelineView` with org swimlanes), `OrgSwimlane`.
 
-**Feedback/util** (`components/feedback/*`): `Toaster` (sonner wrapper), `ConfirmDialog`, `KbarHelpDialog` (the `?` keyboard cheatsheet), `ErrorBoundaryFallback`, `LoadingRows`, `OptimisticBadge`.
+**Feedback/util** (`packages/ui/src/components/feedback/*`): `Toaster` with `notify`/`notifyFailure`/`dismissNotice` (sonner carries the queue; Docket owns the `ToastCard`), `InlineBanner` (page and compact overlay densities), `ConfirmDestructiveDialog`, `EmptyState` with its `critical` tone, and `FieldError` beside `Field`. Which situation uses which piece is fixed by [Error presentation](./error-presentation.md). Also: `KbarHelpDialog` (the `?` keyboard cheatsheet), `ErrorBoundaryFallback`, `LoadingRows`, `OptimisticBadge`.
 
 ---
 

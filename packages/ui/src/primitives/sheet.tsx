@@ -46,6 +46,7 @@ import { cn } from '../lib/utils';
 import { focusRing } from './focus';
 import type { OverlayInset, SheetPresentation, SheetSize } from './overlay-contract';
 import { OVERLAY_SCROLL_FALLBACK } from './overlay-inset';
+import { keepOpenForNotices } from './keep-open-for-notices';
 import { useOverlayFocusRestore } from './use-overlay-focus-restore';
 
 /**
@@ -150,6 +151,7 @@ export function SheetContent({
   size = 'navigation',
   onOpenAutoFocus,
   onCloseAutoFocus,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   /** Which window edge the panel anchors to (default `left`). */
@@ -175,6 +177,7 @@ export function SheetContent({
         data-surface-tone="floating"
         onOpenAutoFocus={focusRestore.onOpenAutoFocus}
         onCloseAutoFocus={focusRestore.onCloseAutoFocus}
+        onInteractOutside={keepOpenForNotices(onInteractOutside)}
         {...props}
       >
         {children}

@@ -29,6 +29,8 @@ export type PersonalAthenaLifecycle = 'run' | 'pause' | 'resume' | 'cancel';
 
 /** Lane-specific cursor used to continue one bounded queue independently. */
 export interface PersonalAthenaQueueCursorInput {
+  /** Only work started in this workspace; omit for every workspace. */
+  readonly workspaceId?: string;
   readonly needsYouCursor?: string;
   readonly workingCursor?: string;
   readonly finishedCursor?: string;
@@ -194,14 +196,22 @@ export function personalAthenaPulseDef(
   );
 }
 
-/** Typed live queue definition shared by the shell dock and full Athena workspace. */
+/**
+ * Typed live queue definition shared by the shell dock and full Athena workspace.
+ *
+ * @param transport - The personal Athena transport.
+ * @param enabled - Whether the read runs.
+ * @param workspaceId - Scope the queue to work started in this workspace; omit for all of it.
+ */
 export function personalAthenaQueueDef(
   transport: PersonalAthenaTransport = personalAthenaTransport,
   enabled = true,
+  workspaceId?: string,
 ) {
+  const scoped = workspaceId !== undefined;
   return apiQueryOptions(
-    queryKeys.athena(),
-    () => transport.queue(),
+    scoped ? queryKeys.athenaWorkspaceQueue(workspaceId) : queryKeys.athena(),
+    () => (scoped ? transport.queue({ workspaceId }) : transport.queue()),
     'Could not load Athena work.',
     { enabled, staleTime: STALE.volatile },
   );

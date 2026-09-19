@@ -7,7 +7,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Home } from '../../../src/icons';
 import { AppShell } from '../../../src/components/shell/AppShell';
 import { ContextProvider } from '../../../src/components/shell/ContextProvider';
-import { useRailPresentation } from '../../../src/components/shell/RailPresentationContext';
+import { createPortal } from 'react-dom';
+
+import {
+  useRailPresentation,
+  useRailSheetBarSlot,
+} from '../../../src/components/shell/RailPresentationContext';
 import { Sidebar } from '../../../src/components/shell/Sidebar';
 import type { Workspace } from '../../../src/components/shell/workspaces';
 
@@ -88,4 +93,57 @@ describe('AppShell rail presentation', () => {
     const overlay = await screen.findByRole('dialog', { name: 'Athena' });
     expect(within(overlay).getByText('Presentation: sheet')).toBeInTheDocument();
   });
+
+  it('hands a sheet-hosted panel a slot in the title bar, and the docked panel none', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(() => false),
+    }));
+    const athena = { id: 'athena', label: 'Athena', icon: <Home />, node: <SlotProbe /> };
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <AppShell
+          sidebar={
+            <Sidebar
+              workspaces={WORKSPACES}
+              hrefForHome={(key) => `/${key}`}
+              hrefForWorkspace={(orgId, key) => `/orgs/${orgId}/${key}`}
+              renderLink={renderLink}
+              onCreateWorkspace={() => undefined}
+              onSelectWorkspace={() => undefined}
+              onOpenSearch={() => undefined}
+            />
+          }
+          aside={{ panels: [athena], defaultPanelId: 'athena' }}
+        >
+          <div>Main</div>
+        </AppShell>
+      </ContextProvider>,
+    );
+
+    const dockedHost = document.getElementById('shell-aside');
+    expect(within(dockedHost ?? document.body).queryByRole('button', { name: 'Probe' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show Athena' }));
+    const bar = await screen.findByTestId('shell-utility-pane-bar');
+    expect(await within(bar).findByRole('button', { name: 'Probe' })).toBeInTheDocument();
+  });
 });
+
+/** A panel body that portals one control into the sheet's title-bar slot when it has one. */
+function SlotProbe(): React.JSX.Element | null {
+  const slot = useRailSheetBarSlot();
+  if (!slot) return null;
+  return createPortal(
+    <button type="button" aria-label="Probe">
+      P
+    </button>,
+    slot,
+  );
+}

@@ -85,6 +85,10 @@ export type PersonalAthenaActivity =
       readonly outcome?: string;
       readonly presentation?: McpAppPresentation;
       readonly presentationUnavailable?: boolean;
+      /** The call ran and did not do what it was asked (the result's `isError`). */
+      readonly failed?: boolean;
+      /** A gated change that was approved and landed. */
+      readonly applied?: boolean;
       readonly technical?: {
         readonly toolName?: string;
         readonly input?: unknown;
@@ -116,6 +120,8 @@ export interface AthenaActivityPresentation {
   readonly createdAt: string;
   readonly presentation?: McpAppPresentation;
   readonly presentationUnavailable?: boolean;
+  /** A tool step whose call ran and did not do what it was asked. */
+  readonly failed?: boolean;
   readonly technical?: {
     readonly toolName?: string;
     readonly input?: unknown;
@@ -148,10 +154,39 @@ function toolActivityDetail(
     : `${activity.service} · ${activity.outcome}`;
 }
 
-/** Convert one API tool activity to plain-language work-log presentation. */
+/**
+ * The sentence for a tool step that did not happen: "Could not set state to In Progress".
+ *
+ * @param activity - The failed tool step.
+ * @returns the step's own description, framed as the thing that did not happen.
+ */
+export function failedToolSentence(
+  activity: Extract<PersonalAthenaActivity, { type: 'tool' }>,
+): string {
+  const described = describeToolActivity(activity);
+  return `Could not ${described.charAt(0).toLowerCase()}${described.slice(1)}`;
+}
+
+/**
+ * Convert one API tool activity to plain-language work-log presentation.
+ *
+ * @remarks
+ * A failed call reads as what did not happen and drops its outcome line: that line is the tool's
+ * own result text, and a failure's text is never shown verbatim.
+ */
 function presentAthenaToolActivity(
   activity: Extract<PersonalAthenaActivity, { type: 'tool' }>,
 ): AthenaActivityPresentation {
+  if (activity.failed) {
+    return {
+      id: activity.id,
+      kind: 'tool',
+      title: failedToolSentence(activity),
+      createdAt: activity.createdAt,
+      failed: true,
+      ...(activity.technical ? { technical: activity.technical } : {}),
+    };
+  }
   const detail = toolActivityDetail(activity);
   return {
     id: activity.id,

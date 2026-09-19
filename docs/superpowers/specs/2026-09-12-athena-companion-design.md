@@ -127,8 +127,9 @@ person is looking at. Rejected.
 - The activity-bar icon keeps its `RailPanelStatus`. Its label and tone are derived from the
   thread: "attention" when a proposal or question is waiting, "active" while a job is running.
 - Below `lg` the same panel is the shell's right sheet; the sheet's own title row already shows
-  "Athena", so the panel drops its own mark-and-name row there (`useRailPresentation`) and keeps
-  only Talk and the link to the wide view.
+  "Athena", so the panel portals its header controls (the context chip, Talk, and the link to the
+  wide view) into that title row's slot (`useRailSheetBarSlot`) and paints no header row of its
+  own.
 - The rail's inline size is a **person-chosen pixel width**, not a share of the viewport: 420px
   until the viewer drags or keyboard-resizes the handle on its inner edge (the edge facing
   `<main>`), 360px minimum, half the window's inline size maximum. The handle is a 6px hit area
@@ -142,46 +143,52 @@ person is looking at. Rejected.
 Two fixed regions only — the header and the composer — so nothing else competes for attention
 with the thread, which is the one place work actually shows.
 
-1. **Header (40px, fixed).** The Athena name with the Sparkles glyph, an icon-only `Talk` control
-   (voice is a mode of the thread, same as Today), and an icon-only "Open the Athena page" link to
-   `/athena`. No Back button, no counts, no lifecycle buttons.
-2. **"N need you" (fixed, conditional).** A single ghost button under the header, present only
-   while at least one job is waiting on a decision. Reads "1 needs you" or "N need you" and scrolls
-   the thread to the first such job's card. There is no separate pinned strip for running work —
-   a running job's status shows only in its own thread entry, and its steps hold the history.
-3. **Thread (scrolling).** The one personal conversation, newest at the bottom, 16px vertical gap
-   between entries and one 16px horizontal inset shared by every entry and the composer. Entry
-   kinds:
+1. **Header (44px, fixed).** The **context chip** on the left ("Launch plan · Project", or just the
+   workspace's name on a workspace page) with an × to drop it for the next message and a click to
+   re-attach it; an icon-only `Talk` control and an icon-only "Open the Athena page" link to
+   `/athena` on the right, 32×32 each. No name, no glyph, no counts, no lifecycle buttons.
+2. **Thread (scrolling).** The one personal conversation, newest at the bottom and bottom-aligned,
+   32px between entries and one 16px horizontal inset shared by every entry and the composer.
+   Everything that is not the header or the composer is an entry here: a question, a heads-up, and
+   a failure to send included. When a job waiting on the person is scrolled out of view, a 28px
+   "Waiting on you" control floats at the bottom edge of the thread and scrolls to it; it is gone
+   whenever that entry is on screen. The thread holds this workspace's work started from the
+   current page (its source is the page's) or started while the conversation is open; everything
+   else is history and lives in the Work ledger. Entry kinds:
    - the person's message (right-aligned bubble, with a small "from Launch plan" caption when it
      was sent with a page context);
-   - Athena's reply (left-aligned, streamed);
-   - a quiet work chip ("Searched tasks · 12 results") with an optional MCP app card below it;
-   - a **job entry**: a flat list row, not a tonal card — a heading line (state `Badge`, the
-     objective as an `h3`, the overflow menu), one status line (the single place running progress
-     shows), the decision as one row of buttons (`Approve` / `Reject`, or `Review` then `Approve`
-     for a change that would leave Docket), and the steps collapsed behind a `Collapsible` trigger
-     reading "N steps" — expanded, each step is its own flat row, and "Details" stays a
-     disclosure inside the step it belongs to. A finished job's receipt is the same flat shape:
-     title line, receipt rows, Undo — never a box;
+   - Athena's reply (left-aligned text, no surface);
+   - a quiet work line ("Searched tasks · 12 results") with an optional MCP app card below it;
+   - a **work entry**: a list row with a body, capped at 640px. An 8px state dot in a 24px gutter
+     (primary for waiting, pulsing primary while running, muted when finished, error when
+     stopped); a one-line title with its relative time and an overflow menu that is always present
+     and disabled when it has nothing to offer (Reply, Pause, Resume, Cancel); one state line —
+     "Waiting on you", the running narration, "Finished 4m ago · 2 changes" / "· nothing changed",
+     or "Stopped · Could not …"; then, waiting, the decision's plain sentence and its `Approve` /
+     `Reject` row (or `Review` then `Approve` for a change that would leave Docket); finished, one
+     receipt line per change that landed and Undo, or "Nothing changed." with what did not happen;
+     then the steps behind a pluralised "1 step" / "3 steps" disclosure. "Details" inside a step
+     shows the call as labelled rows. No badge, no box;
    - a **proposal group** (`ProposalGroupCard`): a flat entry — a heading line ("N changes
      proposed"), one row per change in plain words ("Set state to In Progress") rather than the raw
      tool name, and a single `Approve` / `Reject` row with a checkbox only when the group holds
      more than one change. Ghost rows keep their translucent tint; nothing else in the entry does;
-   - a **question** (`ElicitationCard`, unchanged);
-   - a **heads-up** posted by Athena (§4.5).
+   - a **question** (`ElicitationCard`), at the time it was asked;
+   - a **heads-up** posted by Athena (§4.5), at the bottom of the thread.
 
    Body text is `text-body-medium` (14/20); labels are `text-label-medium` (12/16) or
    `text-label-small`. No tonal boxes anywhere in the thread except the composer and a ghost row's
    own tint — a job entry, a proposal group, and a step are all one level deep, never a card nested
    inside another card.
 
-4. **Composer (fixed).** One shared `AthenaComposer` primitive (§4.4), pinned at the bottom. Above
-   the textarea sits the **context chip**: "Launch plan · Project" — the chip names the page and
-   its kind — with an × to drop it for this message and a click to re-attach the current page.
-   Attach and Talk sit in the composer's trailing controls. Enter sends; Shift+Enter breaks a line.
+3. **Composer (fixed, 96px at rest).** One shared composer (§4.4), pinned at the bottom: a
+   two-row field that grows to six rows and then scrolls, over one 32px row of trailing controls
+   (attach, then send). A door with no header of its own carries the context chip and Talk in the
+   composer instead. Enter sends; Shift+Enter breaks a line.
 
-Empty thread: the composer plus three suggestions drawn from the current page (§4.5). The
-suggestions are buttons that fill the composer. There is no instructional paragraph.
+Empty thread: the composer plus three suggestions drawn from the current page (§4.5), as
+left-aligned 40px text buttons directly above it. They fill the composer. No icon, no name, no
+paragraph.
 
 ### 4.3 Context model
 
@@ -240,8 +247,8 @@ session.
   Undo sits on the finished step that recorded the change as well as on the receipt, and Review
   toggles the same primary button to Approve once the outward call's raw fields (`to`, `subject`,
   `body` first) have been expanded for reading.
-- A running card accepts a Reply: the message quotes the card and steers that work, and Athena
-  acknowledges it in the step list.
+- A running entry accepts a Reply from its overflow menu, beside Pause, Resume, and Cancel: the
+  message steers that work, and Athena acknowledges it in the step list.
 - The task the job was delegated from shows the same card in its own detail page's activity, so
   "sessions live on the task" holds without a second component.
 

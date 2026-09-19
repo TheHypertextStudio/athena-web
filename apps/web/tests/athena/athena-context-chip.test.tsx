@@ -56,6 +56,20 @@ describe('AthenaContextChip', () => {
     expect(onDetach).toHaveBeenCalledTimes(1);
   });
 
+  it('names a workspace page by the workspace alone, with no kind suffix', () => {
+    render(
+      <AthenaContextChip
+        context={{ workspaceId: 'org_1', workspaceName: 'Harbor Health' }}
+        attached
+        onDetach={vi.fn()}
+        onAttach={vi.fn()}
+      />,
+    );
+    const chip = screen.getByRole('group');
+    expect(chip).toHaveAccessibleName('Harbor Health');
+    expect(chip).toHaveTextContent(/^Harbor Health$/);
+  });
+
   it('offers to reattach a detached page', () => {
     const onAttach = vi.fn();
     render(

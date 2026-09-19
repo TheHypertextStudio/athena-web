@@ -273,6 +273,9 @@ export const queryKeys = {
   drafts: () => ['me', 'drafts'] as const,
   draft: (draftId: string) => ['me', 'drafts', draftId] as const,
   athena: () => ['me', 'athena'] as const,
+  /** The personal Athena queue read for one workspace; sits under {@link athena} for invalidation. */
+  athenaWorkspaceQueue: (workspaceId: string) =>
+    ['me', 'athena', 'workspace', workspaceId] as const,
   /** The person's one Athena conversation. */
   athenaChat: () => ['me', 'athena', 'chat'] as const,
   athenaPulse: () => ['me', 'athena', 'pulse'] as const,

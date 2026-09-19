@@ -224,7 +224,10 @@ export interface LiveElicitations {
  * @param enabled - Whether to read at all.
  */
 export function useLiveElicitations(enabled = true): LiveElicitations {
-  const query = useLiveApiQuery(elicitationsDef(), enabled ? ELICITATION_LIVE_INTERVAL_MS : 0);
+  const query = useLiveApiQuery(
+    { ...elicitationsDef(), enabled },
+    enabled ? ELICITATION_LIVE_INTERVAL_MS : 0,
+  );
   const items = query.data?.items ?? [];
   return {
     pending: items.filter((item) => item.status === 'pending'),

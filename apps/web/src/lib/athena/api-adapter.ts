@@ -77,6 +77,39 @@ export function adaptAthenaSummary(summary: AthenaApiSessionSummary): PersonalAt
   };
 }
 
+/** The flags a tool beat carries: an unrenderable presentation, a failed call, an applied change. */
+interface ToolResultFlags {
+  readonly presentationUnavailable?: true;
+  readonly failed?: true;
+  readonly applied?: true;
+}
+
+/**
+ * Read a tool beat's flags without widening the adapter's own branch count.
+ *
+ * @remarks
+ * `failed` mirrors the result's `isError`: the call ran and did not do what it was asked. The
+ * result's own `content` is provider or tool text, so a failed beat is described from its tool
+ * call, never from that text. `applied` marks a gated change that went through the approval gate
+ * and landed — the one kind of step a finished entry counts as a change.
+ */
+function toolResultFlags(
+  activity: AthenaApiActivity,
+  result: Readonly<Record<string, unknown>> | null,
+  presentation: ReturnType<typeof parseMcpAppPresentation>,
+): ToolResultFlags {
+  const rawPresentation = result?.['presentation'];
+  const unavailable =
+    result?.['presentationUnavailable'] === true ||
+    (rawPresentation !== undefined && !presentation);
+  const failed = result?.['isError'] === true;
+  return {
+    ...(unavailable ? { presentationUnavailable: true } : {}),
+    ...(failed ? { failed: true } : {}),
+    ...(!failed && activity.approvalStatus === 'applied' ? { applied: true } : {}),
+  };
+}
+
 /** Adapt one existing activity to a safe, structured work-log beat. */
 export function adaptAthenaActivity(activity: AthenaApiActivity): PersonalAthenaActivity | null {
   if (activity.type === 'thought') return null;
@@ -88,8 +121,7 @@ export function adaptAthenaActivity(activity: AthenaApiActivity): PersonalAthena
     const connection = string(toolCall?.['connection']);
     const outcome = string(result?.['content']);
     const toolName = string(toolCall?.['tool']);
-    const rawPresentation = result?.['presentation'];
-    const presentation = parseMcpAppPresentation(rawPresentation);
+    const presentation = parseMcpAppPresentation(result?.['presentation']);
     return {
       id: activity.id,
       type: 'tool',
@@ -98,10 +130,7 @@ export function adaptAthenaActivity(activity: AthenaApiActivity): PersonalAthena
       action: summary,
       ...(outcome ? { outcome } : {}),
       ...(presentation ? { presentation } : {}),
-      ...(result?.['presentationUnavailable'] === true ||
-      (rawPresentation !== undefined && !presentation)
-        ? { presentationUnavailable: true }
-        : {}),
+      ...toolResultFlags(activity, result, presentation),
       ...(toolCall
         ? {
             technical: {

@@ -179,22 +179,18 @@ test('delegated work is decided in the thread, and the ledger finds it after', a
   const rail = page.getByRole('complementary', { name: 'Athena' });
   await openAthenaPanel(page, rail);
 
-  // The Working strip pins the one open job above the thread.
-  await expect(rail.getByRole('button', { name: /Working · 1/ })).toBeVisible();
-
-  // The same job is a card in the thread, named by its objective.
+  // The job is a flat entry in the thread, named by its objective and waiting on the person.
   const railJobCard = rail.getByRole('article', { name: objective });
   await expect(railJobCard).toBeVisible();
+  await expect(railJobCard).toHaveAttribute('data-state', 'attention');
 
   // Its first decision option is Approve — clicking it settles the gated action.
   await railJobCard.getByRole('button', { name: 'Approve' }).click();
 
-  // The queue invalidation this triggers carries the job out of both open lanes: the strip has
-  // nothing left to pin, so it renders nothing at all.
-  await expect(rail.getByRole('button', { name: /Working/ })).toHaveCount(0);
-
-  // The card stays put and now shows the finished receipt.
-  await expect(railJobCard.getByRole('heading', { name: /Work finished/i })).toBeVisible();
+  // The entry stays put, now finished, with its receipt in place of the decision.
+  await expect(railJobCard).toHaveAttribute('data-state', 'done');
+  await expect(railJobCard.locator('[data-slot="athena-job-receipt"]')).toBeVisible();
+  await expect(railJobCard.getByRole('button', { name: 'More' })).toBeDisabled();
 
   // The wide view reads the same queue: the job now lives in the Done lane.
   await page.goto(`/athena?workspace=${orgId}`);

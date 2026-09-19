@@ -33,7 +33,11 @@ afterEach(() => {
 describe('ThreadEntries', () => {
   it('renders no chip for a proposal-mode action — the proposal card is its record', () => {
     const { container } = render(
-      <ThreadEntries entries={entries([actionActivity()])} onWidgetMessage={vi.fn()} />,
+      <ThreadEntries
+        entries={entries([actionActivity()])}
+        workspaceId="org_1"
+        onWidgetMessage={vi.fn()}
+      />,
     );
 
     expect(screen.queryByText('Update the task')).not.toBeInTheDocument();
@@ -49,6 +53,7 @@ describe('ThreadEntries', () => {
             body: { action: { kind: 'search', summary: 'searched tasks', mode: 'suggestion' } },
           }),
         ])}
+        workspaceId="org_1"
         onWidgetMessage={vi.fn()}
       />,
     );

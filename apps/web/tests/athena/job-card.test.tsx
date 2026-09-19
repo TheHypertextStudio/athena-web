@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AthenaJobCard } from '../../src/components/athena/athena-job-card';
 import type {
+  PersonalAthenaActivity,
   PersonalAthenaDecision,
   PersonalAthenaSessionDetail,
   PersonalAthenaSessionSummary,
@@ -36,6 +37,29 @@ function detailWith(
   };
 }
 
+/** A Docket `update_task` step with its raw call carried through. */
+function updateStep(overrides: Partial<Extract<PersonalAthenaActivity, { type: 'tool' }>> = {}) {
+  return {
+    id: 'tool_1',
+    type: 'tool' as const,
+    createdAt: '2026-07-15T16:02:00.000Z',
+    service: 'Docket',
+    action: 'update task',
+    technical: { toolName: 'update_task', input: { state: 'in_progress' } },
+    ...overrides,
+  };
+}
+
+const APPROVAL: PersonalAthenaDecision = {
+  kind: 'approval',
+  id: 'proposal_1',
+  title: 'update task',
+  options: [
+    { id: 'approve', label: 'Approve' },
+    { id: 'reject', label: 'Reject' },
+  ],
+};
+
 function transportFor(detail: PersonalAthenaSessionDetail): PersonalAthenaTransport {
   return {
     pulse: vi.fn(),
@@ -54,12 +78,15 @@ function transportFor(detail: PersonalAthenaSessionDetail): PersonalAthenaTransp
 function renderCard(
   session: PersonalAthenaSessionSummary,
   detail: PersonalAthenaSessionDetail,
+  copies = 1,
 ): PersonalAthenaTransport {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const api = transportFor(detail);
   render(
     <QueryClientProvider client={client}>
-      <AthenaJobCard job={session} transport={api} />
+      {Array.from({ length: copies }, (_, index) => (
+        <AthenaJobCard key={index} job={session} transport={api} />
+      ))}
     </QueryClientProvider>,
   );
   return api;
@@ -72,46 +99,65 @@ function openMenu(): void {
   });
 }
 
+function stateLine(): HTMLElement {
+  const line = document.querySelector<HTMLElement>('[data-slot="athena-job-state"]');
+  if (!line) throw new Error('no state line');
+  return line;
+}
+
 afterEach(() => {
   cleanup();
 });
 
 describe('AthenaJobCard', () => {
-  it('renders the objective and the plain-language state label', async () => {
+  it('renders the objective as a flat entry with a state dot and one state line, and no badge', async () => {
+    renderCard(job(), detailWith({ activities: [updateStep()] }));
+
+    const entry = await screen.findByRole('article', { name: job().objective });
+    expect(entry).toHaveAttribute('data-state', 'active');
+    expect(entry.querySelector('[data-slot="athena-job-dot"]')).not.toBeNull();
+    expect(entry.querySelectorAll('[data-slot="athena-job-state"]')).toHaveLength(1);
+    expect(entry.querySelector('[data-slot="badge"]')).toBeNull();
+  });
+
+  it('gives each copy of the same job its own ids, each labelled by its own title', async () => {
+    renderCard(job(), detailWith(), 2);
+
+    const entries = await screen.findAllByRole('article', { name: job().objective });
+    expect(entries).toHaveLength(2);
+    const [first, second] = entries as [HTMLElement, HTMLElement];
+    expect(first.id).not.toBe(second.id);
+    expect(first.getAttribute('aria-labelledby')).not.toBe(second.getAttribute('aria-labelledby'));
+    expect(first).toHaveAttribute('data-athena-job', 'session_1');
+  });
+
+  it('shows the decision sentence once, on the decision line and never in the state line', async () => {
     renderCard(
-      job(),
+      job({ status: 'awaiting_approval', queueState: 'needs_you' }),
       detailWith({
-        activities: [
-          {
-            id: 'tool_1',
-            type: 'tool',
-            createdAt: '2026-07-15T16:02:00.000Z',
-            service: 'Sunsama',
-            action: 'Protected focus time',
-          },
-        ],
+        status: 'awaiting_approval',
+        queueState: 'needs_you',
+        decision: APPROVAL,
+        activities: [updateStep()],
       }),
     );
 
-    expect(
-      await screen.findByRole('heading', { name: 'Protect two hours for the launch review' }),
-    ).toBeVisible();
-    expect(screen.getByText('Working', { selector: 'span' })).toBeVisible();
+    const decisionBlock = await waitFor(() => {
+      const block = document.querySelector<HTMLElement>('[data-slot="athena-job-decision"]');
+      if (!block) throw new Error('decision not rendered yet');
+      return block;
+    });
+    const sentence = decisionBlock.querySelector('p')?.textContent ?? '';
+    expect(sentence.length).toBeGreaterThan(0);
+    expect(stateLine()).not.toHaveTextContent(sentence);
+    expect(screen.queryByRole('heading', { level: 4 })).not.toBeInTheDocument();
+    expect(screen.getByRole('article')).toHaveAttribute('data-state', 'attention');
   });
 
   it('shows a pending approval and calls decide with the chosen option', async () => {
-    const decision: PersonalAthenaDecision = {
-      kind: 'approval',
-      id: 'proposal_1',
-      title: 'Move the launch review',
-      options: [
-        { id: 'approve', label: 'Approve' },
-        { id: 'reject', label: 'Keep current time' },
-      ],
-    };
     const api = renderCard(
       job({ status: 'awaiting_approval', queueState: 'needs_you' }),
-      detailWith({ status: 'awaiting_approval', queueState: 'needs_you', decision }),
+      detailWith({ status: 'awaiting_approval', queueState: 'needs_you', decision: APPROVAL }),
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
@@ -122,24 +168,12 @@ describe('AthenaJobCard', () => {
   });
 
   it('follows the loaded detail past the summary once a decision moves the job along', async () => {
-    // Regression for the badge, the overflow menu's gating, and the poll cadence all reading only
-    // `job.status` (fixed at `awaiting_approval` for the life of this card) instead of the loaded
-    // detail's own status once a decision has carried the job on to `running`.
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
-      const decision: PersonalAthenaDecision = {
-        kind: 'approval',
-        id: 'proposal_1',
-        title: 'Move the launch review',
-        options: [
-          { id: 'approve', label: 'Approve' },
-          { id: 'reject', label: 'Keep current time' },
-        ],
-      };
       const pendingDetail = detailWith({
         status: 'awaiting_approval',
         queueState: 'needs_you',
-        decision,
+        decision: APPROVAL,
       });
       const runningDetail = detailWith({
         status: 'running',
@@ -147,26 +181,15 @@ describe('AthenaJobCard', () => {
         decision: null,
       });
 
-      // The transport is stateful, like the real API: every `detail` call after the decision
-      // reflects the server's new status, whether that call comes from the mutation's own
-      // `invalidateKeys` reconciliation (which prefix-matches this session's key) or the
-      // re-armed poll — neither should ever hand the card a stale `awaiting_approval` again.
       let current = pendingDetail;
       const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       const api: PersonalAthenaTransport = {
-        pulse: vi.fn(),
-        queue: vi.fn(),
+        ...transportFor(pendingDetail),
         detail: vi.fn().mockImplementation(() => Promise.resolve(okResponse(current))),
-        activity: vi.fn(),
-        create: vi.fn(),
-        sendMessage: vi.fn(),
         decide: vi.fn().mockImplementation(() => {
           current = runningDetail;
           return Promise.resolve(okResponse(runningDetail));
         }),
-        lifecycle: vi.fn(),
-        undoChange: vi.fn(),
-        proposals: vi.fn(),
       };
 
       render(
@@ -179,18 +202,16 @@ describe('AthenaJobCard', () => {
       );
 
       fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
-
       await waitFor(() => {
         expect(api.decide).toHaveBeenCalledWith('session_1', 'proposal_1', 'approve');
       });
 
-      // The badge follows the loaded detail's status, not the summary's fixed `awaiting_approval`.
-      expect(await screen.findByText(/Working/, { selector: 'span' })).toBeVisible();
+      // The entry's state follows the loaded detail, not the summary's fixed `awaiting_approval`.
+      await waitFor(() => {
+        expect(screen.getByRole('article')).toHaveAttribute('data-state', 'active');
+      });
       const callsAfterDecision = vi.mocked(api.detail).mock.calls.length;
 
-      // The live status now reads `running` (tone `active`), so the poll interval re-arms at 3s
-      // — advancing fake time by more than that proves the card is polling again, not stuck at
-      // `false` the way it was while the interval was still keyed off the stale summary status.
       await act(async () => {
         await vi.advanceTimersByTimeAsync(3_500);
       });
@@ -215,7 +236,7 @@ describe('AthenaJobCard', () => {
       detailWith({ status: 'awaiting_input', queueState: 'needs_you', decision }),
     );
 
-    fireEvent.change(await screen.findByRole('combobox', { name: 'Answer Athena' }), {
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Answer' }), {
       target: { value: 'Update the launch checklist.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -227,12 +248,13 @@ describe('AthenaJobCard', () => {
     });
   });
 
-  it('shows lifecycle items only when allowed and calls lifecycle', async () => {
+  it('offers Reply, Pause, and Cancel in the overflow menu while running, and calls lifecycle', async () => {
     const api = renderCard(job({ status: 'running' }), detailWith({ status: 'running' }));
     await screen.findByRole('heading', { name: job().objective });
 
     openMenu();
-    expect(await screen.findByRole('menuitem', { name: 'Pause' })).toBeInTheDocument();
+    expect(await screen.findByRole('menuitem', { name: 'Reply' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Pause' })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Resume' })).not.toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Cancel' })).toBeInTheDocument();
 
@@ -243,12 +265,14 @@ describe('AthenaJobCard', () => {
     });
   });
 
-  it('sends a reply through sendMessage', async () => {
+  it('opens the reply field from the overflow menu and sends through sendMessage', async () => {
     const api = renderCard(job(), detailWith());
     await screen.findByRole('heading', { name: job().objective });
+    expect(screen.queryByRole('button', { name: 'Reply' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
-    fireEvent.change(screen.getByRole('combobox', { name: 'Reply' }), {
+    openMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Reply' }));
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Reply' }), {
       target: { value: 'Keep going.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -258,30 +282,81 @@ describe('AthenaJobCard', () => {
     });
   });
 
-  it('names the technical disclosure inside the expanded steps', async () => {
+  it('keeps the overflow menu in place on a finished entry, disabled', async () => {
     renderCard(
-      job(),
+      job({ status: 'completed', queueState: 'finished' }),
+      detailWith({ status: 'completed', queueState: 'finished' }),
+    );
+
+    const heading = await screen.findByRole('heading', { name: job().objective });
+    const more = screen.getByRole('button', { name: 'More' });
+    expect(more).toBeDisabled();
+    expect(heading.parentElement).toBe(more.parentElement);
+  });
+
+  it('never reads as a success when the only change failed: nothing changed, and why', async () => {
+    renderCard(
+      job({ status: 'completed', queueState: 'finished' }),
       detailWith({
+        status: 'completed',
+        queueState: 'finished',
+        activities: [updateStep({ failed: true, outcome: 'This action could not be completed.' })],
+        result: { title: 'Work finished', summary: 'Moved the task to In Progress.' },
+      }),
+    );
+
+    const receipt = await waitFor(() => {
+      const block = document.querySelector<HTMLElement>('[data-slot="athena-job-receipt"]');
+      if (!block) throw new Error('receipt not rendered yet');
+      return block;
+    });
+    expect(receipt.querySelector('ul')).toBeNull();
+    expect(receipt).toHaveTextContent('set state to In Progress');
+    expect(screen.getByRole('article')).not.toHaveTextContent('Moved the task to In Progress.');
+    expect(screen.getByRole('article')).not.toHaveTextContent('could not be completed');
+    expect(stateLine()).not.toHaveTextContent(/\d+ change/);
+  });
+
+  it('lists one receipt line per change that landed', async () => {
+    renderCard(
+      job({ status: 'completed', queueState: 'finished' }),
+      detailWith({
+        status: 'completed',
+        queueState: 'finished',
         activities: [
-          {
-            id: 'tool_1',
-            type: 'tool',
-            createdAt: '2026-07-15T16:02:00.000Z',
-            service: 'Sunsama',
-            action: 'Protected focus time',
-            outcome: 'Added 2 blocks to Thursday',
-            technical: { toolName: 'sunsama_create_task' },
-          },
+          updateStep({ id: 'a', applied: true }),
+          updateStep({ id: 'b', applied: true }),
         ],
       }),
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: '1 steps' }));
-    fireEvent.click(await screen.findByText('Details'));
-    expect(screen.getByText(/sunsama_create_task/)).toBeVisible();
+    const receipt = await waitFor(() => {
+      const block = document.querySelector<HTMLElement>('[data-slot="athena-job-receipt"]');
+      if (!block) throw new Error('receipt not rendered yet');
+      return block;
+    });
+    expect(within(receipt).getAllByRole('listitem')).toHaveLength(2);
+    expect(stateLine()).toHaveTextContent(/2 changes$/);
   });
 
-  it('collapses the steps behind an "N steps" trigger, listing every step flat once opened', async () => {
+  it('shows no receipt on a stopped entry; its state line carries the outcome', async () => {
+    renderCard(
+      job({ status: 'failed', queueState: 'finished' }),
+      detailWith({
+        status: 'failed',
+        queueState: 'finished',
+        activities: [updateStep({ failed: true })],
+      }),
+    );
+
+    await waitFor(() => {
+      expect(stateLine()).toHaveTextContent('set state to In Progress');
+    });
+    expect(screen.getByRole('article')).toHaveAttribute('data-state', 'stopped');
+    expect(document.querySelector('[data-slot="athena-job-receipt"]')).toBeNull();
+  });
+
+  it('collapses the steps behind a pluralised count, listing every step flat once opened', async () => {
     const activities = Array.from({ length: 5 }, (_, index) => ({
       id: `tool_${String(index)}`,
       type: 'tool' as const,
@@ -291,65 +366,15 @@ describe('AthenaJobCard', () => {
     }));
     renderCard(job({ status: 'running' }), detailWith({ status: 'running', activities }));
 
-    const trigger = await screen.findByRole('button', { name: '5 steps' });
-    expect(screen.queryByRole('list', { name: 'What Athena did' })).not.toBeInTheDocument();
+    const trigger = await screen.findByRole('button', { name: /^5 steps$/ });
+    expect(screen.queryByRole('list', { name: 'Steps' })).not.toBeInTheDocument();
 
     fireEvent.click(trigger);
-    const steps = within(await screen.findByRole('list', { name: 'What Athena did' }));
-    expect(steps.getByText(/Step 0/)).toBeInTheDocument();
-    expect(steps.getByText(/Step 4/)).toBeInTheDocument();
+    const steps = await screen.findByRole('list', { name: 'Steps' });
+    expect(within(steps).getAllByRole('listitem')).toHaveLength(5);
   });
 
-  it('shows one result line and the receipt rows when the work is finished, with no lifecycle menu, Reply, or repeated summary', async () => {
-    renderCard(
-      job({ status: 'completed', queueState: 'finished' }),
-      detailWith({
-        status: 'completed',
-        queueState: 'finished',
-        activities: [
-          {
-            id: 'tool_1',
-            type: 'tool',
-            createdAt: '2026-07-15T16:02:00.000Z',
-            service: 'Docket',
-            action: 'Moved the review',
-          },
-        ],
-        result: {
-          title: 'Launch review moved',
-          summary: 'Thursday at 2:00 PM is confirmed.',
-          receipt: [{ label: 'New time', value: 'Thu 2:00 PM' }],
-        },
-      }),
-    );
-
-    expect(await screen.findAllByText('Thursday at 2:00 PM is confirmed.')).toHaveLength(1);
-    expect(screen.getByText('Thu 2:00 PM')).toBeVisible();
-    expect(screen.queryByText('Launch review moved')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Reply' })).not.toBeInTheDocument();
-
-    // The steps stay collapsed behind their trigger even though the job is finished — nothing
-    // forces them open on its own.
-    expect(screen.queryByRole('list', { name: 'What Athena did' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '1 steps' })).toBeInTheDocument();
-  });
-
-  it('shows only the result line when a finished job left no receipt rows and nothing to undo', async () => {
-    renderCard(
-      job({ status: 'completed', queueState: 'finished' }),
-      detailWith({
-        status: 'completed',
-        queueState: 'finished',
-        result: { title: 'Launch review moved', summary: 'Thursday at 2:00 PM is confirmed.' },
-      }),
-    );
-
-    expect(await screen.findAllByText('Thursday at 2:00 PM is confirmed.')).toHaveLength(1);
-    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
-  });
-
-  it('offers Undo on a finished step and its receipt, marking both Undone once reversed', async () => {
+  it('offers Undo on a finished step and its receipt, and clears both once reversed', async () => {
     const detail = detailWith({
       status: 'completed',
       queueState: 'finished',
@@ -360,19 +385,14 @@ describe('AthenaJobCard', () => {
           createdAt: '2026-07-15T16:02:00.000Z',
           service: 'Docket',
           action: 'Created task',
+          applied: true,
           technical: { toolName: 'create_task', output: { changeSetId: 'cs_1' } },
         },
       ],
-      result: {
-        title: 'Task created',
-        summary: 'Booked the inspection.',
-      },
     });
     const api = renderCard(job({ status: 'completed', queueState: 'finished' }), detail);
 
-    // The step's own Undo sits behind the collapsed "N steps" trigger; the receipt's copy sits
-    // in the open, so opening the steps is what brings both into view.
-    fireEvent.click(await screen.findByRole('button', { name: '1 steps' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^1 step$/ }));
 
     const undoButtons = await screen.findAllByRole('button', { name: 'Undo' });
     expect(undoButtons).toHaveLength(2);
@@ -382,26 +402,18 @@ describe('AthenaJobCard', () => {
     await waitFor(() => {
       expect(api.undoChange).toHaveBeenCalledWith('cs_1');
     });
-    expect(await screen.findAllByText('Undone')).toHaveLength(2);
-    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+    });
   });
 
   it('reads Review on an outward decision and reveals what would go out before it reads Approve', async () => {
-    const decision: PersonalAthenaDecision = {
-      kind: 'approval',
-      id: 'proposal_1',
-      title: 'Send the launch update',
-      options: [
-        { id: 'approve', label: 'Approve' },
-        { id: 'reject', label: 'Keep it a draft' },
-      ],
-    };
     const api = renderCard(
       job({ status: 'awaiting_approval', queueState: 'needs_you' }),
       detailWith({
         status: 'awaiting_approval',
         queueState: 'needs_you',
-        decision,
+        decision: APPROVAL,
         activities: [
           {
             id: 'tool_1',
@@ -424,51 +436,10 @@ describe('AthenaJobCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Review' }));
     expect(api.decide).not.toHaveBeenCalled();
     expect(screen.getByText('team@example.com')).toBeVisible();
-    expect(screen.getByText('Launch update')).toBeVisible();
-    expect(screen.getByText('It shipped.')).toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
     await waitFor(() => {
       expect(api.decide).toHaveBeenCalledWith('session_1', 'proposal_1', 'approve');
     });
-  });
-
-  it('names the pending decision from the tool call, not the API title, in both the status line and the decision block', async () => {
-    const decision: PersonalAthenaDecision = {
-      kind: 'approval',
-      id: 'proposal_1',
-      title: 'update task',
-      options: [{ id: 'approve', label: 'Approve' }],
-    };
-    renderCard(
-      job({ status: 'awaiting_approval', queueState: 'needs_you' }),
-      detailWith({
-        status: 'awaiting_approval',
-        queueState: 'needs_you',
-        decision,
-        activities: [
-          {
-            id: 'tool_1',
-            type: 'tool',
-            createdAt: '2026-07-15T16:02:00.000Z',
-            service: 'Docket',
-            action: 'update task',
-            technical: { toolName: 'update_task', input: { state: 'in_progress' } },
-          },
-        ],
-      }),
-    );
-
-    expect(await screen.findAllByText('Set state to In Progress')).toHaveLength(2);
-    expect(screen.queryByText('update task')).not.toBeInTheDocument();
-  });
-
-  it('puts the More menu button beside the heading, in the same row, at any width', async () => {
-    renderCard(job({ status: 'running' }), detailWith({ status: 'running' }));
-
-    const heading = await screen.findByRole('heading', { name: job().objective });
-    const menuButton = await screen.findByRole('button', { name: 'More' });
-
-    expect(heading.parentElement).toBe(menuButton.parentElement);
   });
 });

@@ -1,29 +1,35 @@
 'use client';
 
 /**
- * `athena-job-card` — one piece of delegated work, rendered as a card in the thread.
+ * `athena-job-card` — one piece of delegated work, rendered as a flat work entry.
  *
  * @remarks
- * A job is a `kind: 'job'` session read through the same personal queue and detail definitions as
- * the full Athena workspace. This card fetches its own detail lazily
- * ({@link personalAthenaDetailDef}) and drives its own actions ({@link useAthenaActions}), so
- * `AthenaConversation` and the wide Work ledger can drop one of these into the thread without
- * threading session state down from a parent. Its step list and receipt are the workbench's own
- * rendering, reduced to a card — see §4.2 and §4.6 of
- * `docs/superpowers/specs/2026-09-12-athena-companion-design.md`.
+ * A list row with a body, not a card: an 8px state dot in a 24px gutter, a one-line title with its
+ * time and an always-present overflow menu, one state line, then the decision (waiting) or receipt
+ * (finished), then the step disclosure. It renders the same in the rail, the wide view's ledger,
+ * and a task page, and never grows past a 640px measure. See "What to build instead" §1 of
+ * `docs/design/audits/2026-09-18-athena-companion.md`.
+ *
+ * The entry fetches its own detail lazily ({@link personalAthenaDetailDef}) and drives its own
+ * actions ({@link useAthenaActions}), so any host can drop one in without threading session state
+ * down. Its ids are scoped per render with `useId`, so two hosts showing the same job never share
+ * an id; a host that needs to find the entry reads `data-athena-job` inside its own container.
  */
 import { useQueryClient } from '@tanstack/react-query';
-import { Badge, type BadgeVariant } from '@docket/ui/primitives';
-import { type JSX } from 'react';
+import { relativeTime } from '@docket/ui';
+import { RelativeTime } from '@docket/ui/components';
+import { cn } from '@docket/ui/lib/utils';
+import { type JSX, useId, useState } from 'react';
 
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 import {
   athenaQueueState,
   type AthenaQueueState,
+  type PersonalAthenaSessionDetail,
   type PersonalAthenaSessionSummary,
   type PersonalAthenaStatus,
 } from '@/lib/athena/presentation';
-import { jobStateLabel, jobTone, type JobTone } from '@/lib/athena/job-presentation';
+import { jobStatusLine, jobTone, type JobTone } from '@/lib/athena/job-presentation';
 import {
   personalAthenaDetailDef,
   personalAthenaTransport,
@@ -31,35 +37,37 @@ import {
 } from '@/lib/athena/query-defs';
 import { queryKeys, useApiQuery } from '@/lib/query';
 
-import { JobCardBody, type JobLifecycleAction, JobLifecycleMenu } from './job-card-parts';
+import { JobCardBody, type JobMenuAction, JobOverflowMenu, JobReplyForm } from './job-card-parts';
 import { useAthenaActions } from './use-athena-actions';
 
 /** Props for {@link AthenaJobCard}. */
 export interface AthenaJobCardProps {
-  /** The queue row this card renders and keeps live. */
+  /** The queue row this entry renders and keeps live. */
   readonly job: PersonalAthenaSessionSummary;
   readonly transport?: PersonalAthenaTransport;
-  /** Override the `<article>` id, for a host that anchors scroll-to. */
+  /** Override the `<article>` id, for a host that anchors a link to it. */
   readonly id?: string;
+  /** Extra classes for the entry's root, e.g. a host's own vertical rhythm. */
+  readonly className?: string;
 }
 
 /** Statuses a job never leaves: no more lifecycle actions, and no more Reply. */
-const TERMINAL_STATUSES: ReadonlySet<PersonalAthenaSessionSummary['status']> = new Set([
+const TERMINAL_STATUSES: ReadonlySet<PersonalAthenaStatus> = new Set([
   'completed',
   'failed',
   'canceled',
 ]);
 
-/** The badge colour treatment for each tone — see {@link JobTone}. */
-const BADGE_VARIANT_BY_TONE: Readonly<Record<JobTone, BadgeVariant>> = {
-  attention: 'default',
-  active: 'secondary',
-  done: 'secondary',
-  stopped: 'destructive',
+/** The state dot's fill for each tone: solid primary while open, muted when done, error stopped. */
+const DOT_CLASS_BY_TONE: Readonly<Record<JobTone, string>> = {
+  attention: 'bg-primary',
+  active: 'bg-primary animate-pulse motion-reduce:animate-none',
+  done: 'bg-on-surface-variant/30',
+  stopped: 'bg-error',
 };
 
-/** The overflow menu's three permissions, derived from a job's current status. */
-interface JobLifecyclePermissions {
+/** The overflow menu's permissions, derived from a job's current status. */
+interface JobPermissions {
   readonly isFinished: boolean;
   readonly canPause: boolean;
   readonly canResume: boolean;
@@ -71,10 +79,10 @@ interface JobLifecyclePermissions {
  * "current" is the live status, not necessarily the summary's, since the loaded detail can have
  * moved on (e.g. a decision that just carried the job from `awaiting_approval` to `running`).
  */
-function lifecyclePermissions(
+function jobPermissions(
   status: PersonalAthenaStatus,
   queueState: AthenaQueueState,
-): JobLifecyclePermissions {
+): JobPermissions {
   return {
     isFinished: TERMINAL_STATUSES.has(status),
     canPause: status === 'running',
@@ -83,16 +91,62 @@ function lifecyclePermissions(
   };
 }
 
+/** Props for {@link JobTitleLine}. */
+interface JobTitleLineProps {
+  readonly titleId: string;
+  readonly objective: string;
+  readonly createdAt: string;
+  readonly permissions: JobPermissions;
+  readonly onAction: (action: JobMenuAction) => void;
+}
+
+/** Line 1: the objective, when it started, and the overflow menu that never moves. */
+function JobTitleLine({
+  titleId,
+  objective,
+  createdAt,
+  permissions,
+  onAction,
+}: JobTitleLineProps): JSX.Element {
+  return (
+    <div className="flex min-h-8 items-center gap-2">
+      <h3 id={titleId} className="text-on-surface text-title-small min-w-0 flex-1 truncate">
+        {objective}
+      </h3>
+      <RelativeTime iso={createdAt} className="text-on-surface-variant text-label-small shrink-0">
+        {relativeTime(createdAt)}
+      </RelativeTime>
+      <JobOverflowMenu
+        canPause={permissions.canPause}
+        canResume={permissions.canResume}
+        canCancel={permissions.canCancel}
+        canReply={!permissions.isFinished}
+        onAction={onAction}
+      />
+    </div>
+  );
+}
+
+/** A job's loaded detail, its actions, and the state both derive. */
+interface JobEntryState {
+  readonly detail: PersonalAthenaSessionDetail | undefined;
+  readonly actions: ReturnType<typeof useAthenaActions>;
+  readonly tone: JobTone;
+  readonly permissions: JobPermissions;
+}
+
 /**
- * One piece of delegated work: the objective, a live status line, its steps, a pending decision or
- * finished receipt, and a Reply control — no "session", "job", "tool", "execute", or "queue" in
- * sight, and no type label on the card itself.
+ * Load one job's detail, poll it while it runs, and wire its actions.
+ *
+ * @remarks
+ * The detail can outpace the summary the host handed us — e.g. right after a decision carries the
+ * job from `awaiting_approval` to `running` — so the dot, the menu, and the poll cadence all follow
+ * the loaded detail's status once it exists.
  */
-export function AthenaJobCard({
-  job,
-  transport = personalAthenaTransport,
-  id,
-}: AthenaJobCardProps): JSX.Element {
+function useJobEntry(
+  job: PersonalAthenaSessionSummary,
+  transport: PersonalAthenaTransport,
+): JobEntryState {
   const queryClient = useQueryClient();
   const detail = useApiQuery({
     ...personalAthenaDetailDef(job.id, transport, true),
@@ -106,50 +160,80 @@ export function AthenaJobCard({
       queryClient.setQueryData(queryKeys.athenaSession(next.id), next);
     },
   });
-  const mentionOrgId = useMentionOrgId(job.workspace?.id);
-
-  const articleId = id ?? `athena-job-${job.id}`;
-  const titleId = `${articleId}-title`;
-
-  // The detail query can outpace the summary the host handed us — e.g. right after a decision
-  // carries the job from `awaiting_approval` to `running` — so the badge, the menu, and the poll
-  // cadence all follow the loaded detail's status once it exists, falling back to the summary
-  // only until that first load resolves.
   const liveStatus: PersonalAthenaStatus = detail.data?.status ?? job.status;
   const liveQueueState: AthenaQueueState =
     detail.data?.queueState ?? job.queueState ?? athenaQueueState(liveStatus);
-  const tone = jobTone(liveStatus);
-  const permissions = lifecyclePermissions(liveStatus, liveQueueState);
+  return {
+    detail: detail.data,
+    actions,
+    tone: jobTone(liveStatus),
+    permissions: jobPermissions(liveStatus, liveQueueState),
+  };
+}
 
-  function handleLifecycle(action: JobLifecycleAction): void {
+/**
+ * One piece of delegated work as a flat entry: title line, state line, decision or receipt, and
+ * steps — with no badge, no box, and no permanent Reply.
+ */
+export function AthenaJobCard({
+  job,
+  transport = personalAthenaTransport,
+  id,
+  className,
+}: AthenaJobCardProps): JSX.Element {
+  const { detail, actions, tone, permissions } = useJobEntry(job, transport);
+  const mentionOrgId = useMentionOrgId(job.workspace?.id);
+  const [replyOpen, setReplyOpen] = useState(false);
+
+  const scope = useId();
+  const articleId = id ?? `athena-job-${scope}`;
+  const titleId = `${articleId}-title`;
+
+  function handleAction(action: JobMenuAction): void {
+    if (action === 'reply') {
+      setReplyOpen(true);
+      return;
+    }
     actions.lifecycle(action);
   }
 
   return (
-    <article id={articleId} aria-labelledby={titleId} className="flex flex-col gap-3">
-      <header className="flex items-start gap-2">
-        <Badge variant={BADGE_VARIANT_BY_TONE[tone]} className="shrink-0">
-          {jobStateLabel(liveStatus)}
-        </Badge>
-        <h3
-          id={titleId}
-          className="text-on-surface text-title-medium line-clamp-2 min-w-0 flex-1 break-words"
-        >
-          {job.objective}
-        </h3>
-        <JobLifecycleMenu
-          canPause={permissions.canPause}
-          canResume={permissions.canResume}
-          canCancel={permissions.canCancel}
-          onLifecycle={handleLifecycle}
-          className="ml-auto shrink-0"
+    <article
+      id={articleId}
+      aria-labelledby={titleId}
+      data-athena-job={job.id}
+      data-state={tone}
+      className={cn('relative flex w-full max-w-160 flex-col gap-2 py-3 pl-6', className)}
+    >
+      <span
+        aria-hidden="true"
+        data-slot="athena-job-dot"
+        className={cn('absolute top-6 left-2 size-2 rounded-full', DOT_CLASS_BY_TONE[tone])}
+      />
+      <JobTitleLine
+        titleId={titleId}
+        objective={job.objective}
+        createdAt={job.createdAt}
+        permissions={permissions}
+        onAction={handleAction}
+      />
+      <p data-slot="athena-job-state" className="text-on-surface-variant text-body-small -mt-1">
+        {jobStatusLine(detail ?? null, job)}
+      </p>
+      {replyOpen && !permissions.isFinished ? (
+        <JobReplyForm
+          pending={actions.pending}
+          mentionOrgId={mentionOrgId}
+          onSend={(body) => {
+            actions.sendMessage(body);
+            setReplyOpen(false);
+          }}
         />
-      </header>
-
+      ) : null}
       <JobCardBody
-        job={job}
-        detail={detail.data}
+        detail={detail}
         isFinished={permissions.isFinished}
+        showReceipt={tone === 'done'}
         mentionOrgId={mentionOrgId}
         pending={actions.pending}
         undoPending={actions.undoPending}
@@ -158,9 +242,6 @@ export function AthenaJobCard({
         }}
         onAnswer={(decision, body) => {
           actions.decide({ id: decision.id, option: body, kind: decision.kind });
-        }}
-        onSend={(body) => {
-          actions.sendMessage(body);
         }}
         onUndo={(changeSetId, onReverted) => {
           actions.undo(changeSetId, { onSuccess: onReverted });

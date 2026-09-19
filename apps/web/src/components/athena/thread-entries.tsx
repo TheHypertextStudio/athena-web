@@ -1,21 +1,20 @@
 'use client';
 
 /**
- * `thread-entries` — one merged conversation thread, rendered as bubbles, quiet work chips, and
- * delegated-work cards.
+ * `thread-entries` — one merged conversation thread: your messages, replies, quiet work lines,
+ * work entries, and questions.
  *
  * @remarks
  * Split out of `athena-conversation.tsx` so {@link mergeThreadEntries}'s output has its own home:
- * an activity renders through the existing chat presentation (a bubble, a quiet work chip with its
- * MCP app card, or a plan-start card), and a job renders as {@link AthenaJobCard} inside the same
- * bubble treatment Athena's own replies use — it fetches its own detail and drives its own actions
- * independently of the thread around it. See §4.2 and §4.6 of
+ * an activity renders through the chat presentation (your right-aligned bubble, a left-aligned
+ * reply with no surface, a quiet work line with its MCP app card, or a plan-start card), a job
+ * renders as the flat {@link AthenaJobCard} entry, and a question as its card at the time it was
+ * asked. Every entry is one level deep. See §4.2 and §4.6 of
  * `docs/superpowers/specs/2026-09-12-athena-companion-design.md`.
  */
 import { parseMcpAppPresentation } from '@docket/integrations/mcp-apps-contract';
 import { type SessionActivityOut } from '@docket/athena/agent-contract';
-import { cn } from '@docket/ui/lib/utils';
-import { Surface, surfaceToneColor, Text } from '@docket/ui/primitives';
+import { Text } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { PLAN_TOOL_NAMES } from '@docket/work/plan-draft-contract';
@@ -27,39 +26,67 @@ import type { ThreadEntry } from '@/lib/athena/job-presentation';
 import { personalAthenaTransport, type PersonalAthenaTransport } from '@/lib/athena/query-defs';
 
 import { AthenaJobCard } from './athena-job-card';
+import { ThreadQuestion } from './elicitation-queue';
 
 /** Props for {@link ThreadEntries}. */
 export interface ThreadEntriesProps {
-  /** The thread's activities and jobs, merged and ordered by {@link mergeThreadEntries}. */
+  /** The thread's activities, jobs, and questions, merged and ordered by {@link mergeThreadEntries}. */
   readonly entries: readonly ThreadEntry[];
-  /** Transport a job entry's card drives its own detail read and actions through. */
+  /** The workspace the thread belongs to, for a question whose task names none. */
+  readonly workspaceId: string;
+  /** The question a notification landed on, rung and scrolled to. */
+  readonly landingQuestionId?: string | null | undefined;
+  /** Transport a job entry drives its own detail read and actions through. */
   readonly transport?: PersonalAthenaTransport;
   /** Posts a widget-composed `ui/message` into this thread, as the user. */
   readonly onWidgetMessage: (text: string) => Promise<boolean>;
 }
 
-/** Render the thread's merged activities and jobs, in the order {@link mergeThreadEntries} gave them. */
+/** Props for {@link ThreadEntryView}. */
+interface ThreadEntryViewProps extends Omit<ThreadEntriesProps, 'entries'> {
+  readonly entry: ThreadEntry;
+  readonly transport: PersonalAthenaTransport;
+}
+
+/** One merged entry: a work entry, a question, or a conversational beat. */
+function ThreadEntryView({
+  entry,
+  workspaceId,
+  landingQuestionId,
+  transport,
+  onWidgetMessage,
+}: ThreadEntryViewProps): JSX.Element | null {
+  if (entry.kind === 'job') return <AthenaJobCard job={entry.job} transport={transport} />;
+  if (entry.kind === 'question') {
+    return (
+      <ThreadQuestion
+        question={entry.question}
+        workspaceId={workspaceId}
+        focused={entry.question.id === landingQuestionId}
+      />
+    );
+  }
+  return <ChatEntry activity={entry.activity} onWidgetMessage={onWidgetMessage} />;
+}
+
+/** The key one merged entry renders under, unique across the three kinds. */
+function entryKey(entry: ThreadEntry): string {
+  if (entry.kind === 'job') return `job-${entry.job.id}`;
+  if (entry.kind === 'question') return `question-${entry.question.id}`;
+  return entry.activity.id;
+}
+
+/** Render the thread's merged entries, in the order {@link mergeThreadEntries} gave them. */
 export function ThreadEntries({
   entries,
   transport = personalAthenaTransport,
-  onWidgetMessage,
+  ...rest
 }: ThreadEntriesProps): JSX.Element {
   return (
     <>
-      {entries.map((entry) =>
-        entry.kind === 'job' ? (
-          // Flat: a job is a list entry, not a chat bubble — full width, no tonal card behind it.
-          <div key={`job-${entry.job.id}`} className="w-full">
-            <AthenaJobCard job={entry.job} transport={transport} />
-          </div>
-        ) : (
-          <ChatEntry
-            key={entry.activity.id}
-            activity={entry.activity}
-            onWidgetMessage={onWidgetMessage}
-          />
-        ),
-      )}
+      {entries.map((entry) => (
+        <ThreadEntryView key={entryKey(entry)} entry={entry} transport={transport} {...rest} />
+      ))}
     </>
   );
 }
@@ -107,13 +134,9 @@ function ChatEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element |
   }
   if (activity.type === 'response' || activity.type === 'elicitation') {
     return (
-      <Surface
-        tone="canvas"
-        shape="medium"
-        className="text-body-medium rounded-bl-corner-xs mr-auto max-w-[85%] px-4 py-2.5 whitespace-pre-wrap"
-      >
+      <p className="text-on-surface text-body-medium mr-auto max-w-160 whitespace-pre-wrap">
         {text}
-      </Surface>
+      </p>
     );
   }
   if (activity.type === 'error') {
@@ -165,16 +188,16 @@ function deriveActionPresentation(
   };
 }
 
-/** The quiet chip naming what Athena did. */
-function WorkChip({ summary }: { readonly summary: string }): JSX.Element {
+/** Props for {@link WorkChip}. */
+interface WorkChipProps {
+  readonly summary: string;
+}
+
+/** The quiet line naming a step of the conversation's own work — plain text, no pill. */
+function WorkChip({ summary }: WorkChipProps): JSX.Element {
   return (
-    <span
-      className={cn(
-        surfaceToneColor('canvas'),
-        'text-on-surface-variant text-label-small mr-auto inline-flex max-w-[85%] items-center gap-1.5 rounded-full px-2.5 py-0.5',
-      )}
-    >
-      <span className="truncate">{summary}</span>
+    <span className="text-on-surface-variant text-body-small mr-auto block max-w-full truncate">
+      {summary}
     </span>
   );
 }

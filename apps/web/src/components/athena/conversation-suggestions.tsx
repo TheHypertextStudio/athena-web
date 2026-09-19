@@ -5,7 +5,7 @@
  *
  * @remarks
  * Split out of `athena-conversation.tsx` to keep that file under the repository's file-length
- * gate; it has no state of its own and exists purely to keep the parent's render small.
+ * gate; it has no state of its own. Picking a prompt fills the composer rather than sending.
  */
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
@@ -21,19 +21,23 @@ export interface ConversationSuggestionsProps {
   onPick: (prompt: string) => void;
 }
 
-/** The empty thread's three prompts, drawn from the attached page (or the day, with none). */
+/**
+ * The empty thread's three prompts, drawn from the attached page (or the day, with none): quiet
+ * left-aligned text buttons that sit directly above the composer.
+ */
 export function ConversationSuggestions({
   context,
   onPick,
 }: ConversationSuggestionsProps): JSX.Element {
   return (
-    <ul aria-label="Suggestions" className="flex flex-col gap-1">
+    <ul aria-label="Suggestions" className="flex flex-col">
       {athenaSuggestions(context).map((prompt) => (
         <li key={prompt}>
           <Button
             type="button"
-            variant="secondary"
-            className="h-10 w-full justify-start"
+            variant="ghost"
+            controlSize="xl"
+            className="text-on-surface-variant text-body-medium w-full justify-start"
             onClick={() => {
               onPick(prompt);
             }}

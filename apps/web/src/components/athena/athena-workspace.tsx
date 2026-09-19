@@ -54,9 +54,15 @@ export interface AthenaWorkspaceProps {
   readonly transport?: PersonalAthenaTransport | undefined;
 }
 
-/** Scroll one job's card into view if it is currently mounted; report whether it was found. */
+/**
+ * Scroll one job's entry in this view's own thread into view; report whether it was found.
+ *
+ * @remarks
+ * Queries inside `[data-athena-workspace]`, never the whole document: the docked rail can show the
+ * same job, and that copy must not be the one that moves.
+ */
 function scrollToMountedCard(jobId: string): boolean {
-  const card = document.getElementById(`athena-job-${jobId}`);
+  const card = document.querySelector(`[data-athena-workspace] [data-athena-job="${jobId}"]`);
   if (!card) return false;
   card.scrollIntoView({ block: 'center' });
   return true;
@@ -172,6 +178,7 @@ export function AthenaWorkspace({
               jobs={jobs}
               transport={transport}
               context={invocationContext}
+              composerChip
               contextAttached={contextAttached}
               onDetachContext={() => {
                 setContextAttached(false);

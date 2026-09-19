@@ -82,20 +82,12 @@ import * as React from 'react';
 
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { readStoredBoolean } from '../../lib/browser-storage';
-import { Menu, X } from '../../icons';
+import { Menu } from '../../icons';
 import { cn } from '../../lib/utils';
 import { focusRing } from '../../primitives/focus';
-import {
-  Sheet,
-  SheetBody,
-  SheetClose,
-  SheetContent,
-  SheetTitle,
-  surfaceToneColor,
-} from '../../primitives';
-import { MobilePanelSwitcher } from './MobilePanelSwitcher';
+import { Sheet, SheetContent, SheetTitle, surfaceToneColor } from '../../primitives';
 import { useContextState } from './ContextProvider';
-import { RailPresentationProvider } from './RailPresentationContext';
+import { ShellUtilitySheet } from './ShellUtilitySheet';
 import {
   RAIL_GAP_PX,
   SHELL_ASIDE_SHEET_ID,
@@ -727,66 +719,20 @@ export function AppShell({
         ) : null}
 
         {/* The same panels as one full-window pane below `lg`, opened from the mobile top-bar
-          trigger. Material's adaptive supporting-pane model shows only the current pane at compact
-          and medium widths, so no strip of the unusable page remains visible underneath. Mounted
-          only when the desktop query does *not* match, so Radix's focus trap and scroll-lock never
-          activate over a docked rail; it carries its own id ({@link SHELL_ASIDE_SHEET_ID}) because
-          the docked host is now in the DOM at every width and the two can no longer share one. A
-          single active-panel menu replaces the desktop activity bar. The explicit close action,
-          Escape, and browser dismissal all return to the invoking page. */}
-        <Sheet
+          trigger — see {@link ShellUtilitySheet}. */}
+        <ShellUtilitySheet
+          panels={panels}
+          activePanel={activePanel}
           open={activePanel != null && !isDesktop && overlayPanelOpen}
-          onOpenChange={(next) => {
-            if (!next) setOverlayPanelOpen(false);
+          isDesktop={isDesktop}
+          onClose={() => {
+            setOverlayPanelOpen(false);
           }}
-        >
-          <SheetContent
-            side="right"
-            presentation="fullscreen"
-            id={SHELL_ASIDE_SHEET_ID}
-            aria-label={activePanel?.label}
-            aria-describedby={undefined}
-          >
-            <SheetTitle className="sr-only">{activePanel?.label}</SheetTitle>
-            {!isDesktop && activePanel ? (
-              <div
-                data-testid="shell-utility-pane-bar"
-                className="flex min-h-12 shrink-0 items-center px-2 pt-[env(safe-area-inset-top)]"
-              >
-                <div className="min-w-0 flex-1">
-                  <MobilePanelSwitcher
-                    panels={panels}
-                    activePanel={activePanel}
-                    onSelect={(panelId) => {
-                      setRail((current) => ({ ...current, activeId: panelId }));
-                      writeRailState(RAIL_ACTIVE_KEY, panelId);
-                    }}
-                  />
-                </div>
-                <SheetClose asChild>
-                  <button
-                    type="button"
-                    aria-label={`Close ${activePanel.label}`}
-                    className={cn(
-                      'text-on-surface-variant hover:bg-surface-container-high flex size-10 shrink-0 items-center justify-center rounded-full transition-colors',
-                      focusRing,
-                    )}
-                  >
-                    <X aria-hidden="true" className="size-5" />
-                  </button>
-                </SheetClose>
-              </div>
-            ) : null}
-            <SheetBody
-              inset="none"
-              scroll="visible"
-              data-slot="shell-utility-pane-body"
-              className="@container"
-            >
-              <RailPresentationProvider value="sheet">{activePanel?.node}</RailPresentationProvider>
-            </SheetBody>
-          </SheetContent>
-        </Sheet>
+          onSelectPanel={(panelId) => {
+            setRail((current) => ({ ...current, activeId: panelId }));
+            writeRailState(RAIL_ACTIVE_KEY, panelId);
+          }}
+        />
       </div>
     </ShellOverlayProvider>
   );

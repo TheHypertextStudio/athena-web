@@ -181,7 +181,7 @@ describe('AthenaWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: /Prepare the launch review/ }));
 
     await waitFor(() => {
-      expect(scrollTargets.at(-1)?.id).toBe('athena-job-working_1');
+      expect(scrollTargets.at(-1)?.getAttribute('data-athena-job')).toBe('working_1');
     });
     expect(screen.getAllByRole('article', { name: /Prepare the launch review/ })).toHaveLength(1);
   });

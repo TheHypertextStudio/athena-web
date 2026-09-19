@@ -1,28 +1,31 @@
 /**
- * Pure helpers that describe one piece of delegated work in a card's words.
+ * Pure helpers that describe one piece of delegated work in an entry's words.
  *
  * @remarks
  * These sit on top of {@link presentAthenaActivity} and the personal Athena presentation
- * contracts: a job's tone, its short state label, and the single line that says what it is
- * doing right now. They also merge a thread's raw activity stream with the jobs running
- * alongside it into one chronological list, so the conversation and the Working strip read
- * from the same order.
+ * contracts: a job's tone, the single state line that says where it stands, the changes a finished
+ * job made, and what a stopped one did not do. They also decide which jobs belong in the panel's
+ * thread and merge them with the thread's own activity stream into one chronological list.
  */
+import type { ElicitationOut } from '@docket/athena/elicitation-api';
 import type { SessionActivityOut } from '@docket/athena/agent-contract';
+import { relativeTime } from '@docket/ui';
 
 import { describeToolActivity } from './describe-proposal';
 import type { PersonalAthenaQueuePayload } from './query-defs';
 import {
   athenaQueueState,
+  failedToolSentence,
   presentAthenaActivity,
   type AthenaActivityPresentation,
   type PersonalAthenaActivity,
   type PersonalAthenaSessionDetail,
   type PersonalAthenaSessionSummary,
+  type PersonalAthenaSource,
   type PersonalAthenaStatus,
 } from './presentation';
 
-/** The visual weight a job card takes on, driven by its lifecycle status. */
+/** The state a work entry is drawn in: waiting on you, running, finished, or stopped. */
 export type JobTone = 'attention' | 'active' | 'done' | 'stopped';
 
 const JOB_TONE_BY_STATUS: Readonly<Record<PersonalAthenaStatus, JobTone>> = {
@@ -35,51 +38,48 @@ const JOB_TONE_BY_STATUS: Readonly<Record<PersonalAthenaStatus, JobTone>> = {
   canceled: 'stopped',
 };
 
-const JOB_STATE_LABEL_BY_TONE: Readonly<Record<JobTone, string>> = {
-  attention: 'Needs you',
-  active: 'Working',
-  done: 'Done',
-  stopped: 'Stopped',
-};
-
-/** Map a job's lifecycle status to the tone its card is drawn in. */
+/** Map a job's lifecycle status to the tone its entry is drawn in. */
 export function jobTone(status: PersonalAthenaStatus): JobTone {
   return JOB_TONE_BY_STATUS[status];
 }
 
-/** The short, plain-language label for a job's current status. */
-export function jobStateLabel(status: PersonalAthenaStatus): string {
-  return JOB_STATE_LABEL_BY_TONE[jobTone(status)];
+/**
+ * A count with its noun, singular for exactly one: "1 step", "3 steps", "1 change".
+ *
+ * @param count - How many.
+ * @param singular - The noun for one.
+ * @param plural - The noun for any other count; defaults to `singular` plus "s".
+ */
+export function countLabel(count: number, singular: string, plural = `${singular}s`): string {
+  return `${String(count)} ${count === 1 ? singular : plural}`;
 }
 
-/** The detail's newest `tool`-type activity, or `null` when it has taken none yet. */
-function newestToolActivity(
-  activities: readonly PersonalAthenaActivity[],
-): Extract<PersonalAthenaActivity, { type: 'tool' }> | null {
-  for (let index = activities.length - 1; index >= 0; index -= 1) {
-    const activity = activities[index];
-    if (activity?.type === 'tool') return activity;
-  }
-  return null;
+/** The tool beat of the personal activity union. */
+type ToolActivity = Extract<PersonalAthenaActivity, { type: 'tool' }>;
+
+/** The detail's `tool`-type activities, oldest first. */
+function toolActivities(activities: readonly PersonalAthenaActivity[]): readonly ToolActivity[] {
+  return activities.filter((activity): activity is ToolActivity => activity.type === 'tool');
 }
 
 /**
- * The sentence that names a pending decision, shared by the status line and the decision block's
- * own heading.
+ * The sentence that names a pending decision, for the decision line of a waiting entry.
  *
  * @remarks
- * The API's `decision.title` is a generic label ("update task"), which is why a job's status line
- * and its decision block used to repeat the same generic phrase. The newest `tool` activity, when
+ * The API's `decision.title` is a generic label ("update task"). The newest `tool` activity, when
  * it carried its raw call through (`technical.toolName` + `technical.input`), describes the same
  * change through {@link describeToolActivity} — the same helper the batch-review card uses — which
  * reads "Set state to In Progress" instead. Falls back to `decision.title` when the newest tool
  * step carries no raw call, or when the detail has no pending decision at all.
  *
+ * This sentence appears on the decision line and nowhere else: the state line above it reads
+ * "Waiting on you", so an entry never says the same thing twice.
+ *
  * @param detail - The loaded session detail.
  * @returns the plain-language sentence for the detail's pending decision.
  */
 export function decisionSentence(detail: PersonalAthenaSessionDetail): string {
-  const toolActivity = newestToolActivity(detail.activities);
+  const toolActivity = toolActivities(detail.activities).at(-1);
   if (
     toolActivity?.technical?.toolName !== undefined &&
     toolActivity.technical.input !== undefined
@@ -89,7 +89,38 @@ export function decisionSentence(detail: PersonalAthenaSessionDetail): string {
   return detail.decision?.title ?? '';
 }
 
-/** The longest an activity's detail can be before it is dropped from the status line. */
+/** One change a finished job made, for its receipt. */
+export interface JobChange {
+  /** The step that made the change. */
+  readonly id: string;
+  /** The change in plain words: "Set state to In Progress". */
+  readonly text: string;
+}
+
+/** Every gated change that was approved and landed, oldest first. */
+export function jobChanges(detail: PersonalAthenaSessionDetail): readonly JobChange[] {
+  return toolActivities(detail.activities)
+    .filter((activity) => activity.applied === true && activity.failed !== true)
+    .map((activity) => ({ id: activity.id, text: describeToolActivity(activity) }));
+}
+
+/**
+ * What did not happen, from the newest failed step: "Could not set state to In Progress".
+ *
+ * @remarks
+ * Derived from the step's own tool call, never from its result text — that text is the tool's or
+ * provider's, and a failure's text is never shown verbatim.
+ *
+ * @returns the sentence, or `null` when no step failed.
+ */
+export function jobFailureCause(detail: PersonalAthenaSessionDetail): string | null {
+  const failed = toolActivities(detail.activities)
+    .filter((activity) => activity.failed === true)
+    .at(-1);
+  return failed ? failedToolSentence(failed) : null;
+}
+
+/** The longest an activity's detail can be before it is dropped from a running state line. */
 const STATUS_LINE_DETAIL_LIMIT = 60;
 
 /** The most recent non-reasoning activity's own presentation, or `null` when there is none. */
@@ -104,81 +135,94 @@ function newestActivity(detail: PersonalAthenaSessionDetail): AthenaActivityPres
   return newest;
 }
 
-/** Find the most recent non-reasoning activity's rendered status line, or `null` when there is none. */
+/**
+ * A running job's narration: the newest step, naming its object.
+ *
+ * @remarks
+ * A progress beat or Athena's own message is its own sentence ("Drafting email 2 of 3"); any other
+ * step reads as its title
+ * with a short detail appended, and drops a detail too long to share one line.
+ */
 function newestActivityLine(detail: PersonalAthenaSessionDetail): string | null {
   const newest = newestActivity(detail);
   if (!newest) return null;
+  const narration =
+    newest.kind === 'progress' || (newest.kind === 'message' && newest.title !== 'You asked');
+  if (narration && newest.detail) return newest.detail;
   if (newest.detail !== undefined && newest.detail.length <= STATUS_LINE_DETAIL_LIMIT) {
     return `${newest.title} · ${newest.detail}`;
   }
   return newest.title;
 }
 
-/**
- * The most recent non-reasoning activity's own text, with no length limit — its detail when it
- * has one, its title otherwise — for a finished job's one status line.
- *
- * @remarks
- * Unlike {@link newestActivityLine}, this never drops a long detail: a finished entry shows this
- * text in place of both the old running-status line and the receipt's own summary, so it needs
- * to carry the full sentence rather than the trimmed one a still-open job can afford to shorten.
- */
-function newestActivityText(detail: PersonalAthenaSessionDetail): string | null {
-  const newest = newestActivity(detail);
-  if (!newest) return null;
-  return newest.detail ?? newest.title;
+/** The state line a waiting entry shows; the decision line below it names what is waiting. */
+const WAITING_LINE = 'Waiting on you';
+
+/** "nothing changed", "1 change", or "3 changes". */
+function changesPhrase(detail: PersonalAthenaSessionDetail): string {
+  const count = jobChanges(detail).length;
+  return count === 0 ? 'nothing changed' : countLabel(count, 'change');
 }
 
-/**
- * A finished job's one status line: the result's own summary, or — when it left no result — the
- * newest step's own text.
- *
- * @remarks
- * Never falls back to the bare state label for a finished job that left either one, since the
- * heading badge already says "Done" or "Stopped" and repeating a generic "Progress" line
- * duplicates nothing useful.
- */
-function finishedStatusLine(
-  detail: PersonalAthenaSessionDetail | null,
-  liveStatus: PersonalAthenaStatus,
-): string {
-  if (detail?.result) return detail.result.summary;
-  const stepText = detail ? newestActivityText(detail) : null;
-  return stepText ?? jobStateLabel(liveStatus);
-}
-
-/**
- * A still-open job's one status line: a decision awaiting the owner, then the newest
- * non-reasoning activity, then the result, then the state label so the line is never blank.
- */
-function openStatusLine(
+/** When a finished job ended: the loaded detail's `updatedAt`, else the summary's. */
+function finishedAt(
   detail: PersonalAthenaSessionDetail | null,
   summary: PersonalAthenaSessionSummary,
 ): string {
-  if (detail?.decision) return decisionSentence(detail);
-
-  const activityLine = detail ? newestActivityLine(detail) : null;
-  if (activityLine !== null) return activityLine;
-
-  if (detail?.result) return detail.result.summary;
-
-  return jobStateLabel(summary.status);
+  return detail?.updatedAt ?? summary.updatedAt;
 }
 
+/** The inputs every state line is derived from. */
+interface StateLineInput {
+  readonly detail: PersonalAthenaSessionDetail | null;
+  readonly summary: PersonalAthenaSessionSummary;
+  readonly now: Date;
+}
+
+/** A running job's line: its newest step, or when it started. */
+function runningLine({ detail, summary, now }: StateLineInput): string {
+  const narration = detail ? newestActivityLine(detail) : null;
+  return narration ?? `Started ${relativeTime(summary.createdAt, now)}`;
+}
+
+/** A finished job's line: when it finished, and how many changes landed. */
+function finishedLine({ detail, summary, now }: StateLineInput): string {
+  const when = `Finished ${relativeTime(finishedAt(detail, summary), now)}`;
+  return detail ? `${when} · ${changesPhrase(detail)}` : when;
+}
+
+/** A stopped job's line: what did not happen, or how many changes landed before it stopped. */
+function stoppedLine({ detail }: StateLineInput): string {
+  if (!detail) return 'Stopped';
+  return `Stopped · ${jobFailureCause(detail) ?? changesPhrase(detail)}`;
+}
+
+const STATE_LINE_BY_TONE: Readonly<Record<JobTone, (input: StateLineInput) => string>> = {
+  attention: () => WAITING_LINE,
+  active: runningLine,
+  done: finishedLine,
+  stopped: stoppedLine,
+};
+
 /**
- * The single line that says what a job is doing right now — {@link finishedStatusLine} once the
- * job is `done` or `stopped`, {@link openStatusLine} while it is still open.
+ * The one line that says where a job stands — the only place an entry writes its state.
+ *
+ * @remarks
+ * Waiting: "Waiting on you". Running: the newest step, naming its object. Finished: "Finished 4m
+ * ago · 2 changes" or "… · nothing changed". Stopped: "Stopped · Could not set state to In
+ * Progress", or the changes that landed when no step failed.
+ *
+ * @param detail - The loaded detail, or `null` before it loads (or on a host that never loads it).
+ * @param summary - The queue row, for the lifecycle status and timestamps.
+ * @param now - The reference time for relative phrasing; injectable for tests.
  */
 export function jobStatusLine(
   detail: PersonalAthenaSessionDetail | null,
   summary: PersonalAthenaSessionSummary,
+  now: Date = new Date(),
 ): string {
-  const liveStatus = detail?.status ?? summary.status;
-  const tone = jobTone(liveStatus);
-
-  if (tone === 'done' || tone === 'stopped') return finishedStatusLine(detail, liveStatus);
-
-  return openStatusLine(detail, summary);
+  const tone = jobTone(detail?.status ?? summary.status);
+  return STATE_LINE_BY_TONE[tone]({ detail, summary, now });
 }
 
 /**
@@ -187,8 +231,7 @@ export function jobStatusLine(
  * @remarks
  * Drops the session named by `payload.currentChat`: that session is the person's own conversation,
  * identified by the queue payload rather than by any lane it happens to also appear in, and it is
- * not a piece of delegated work — showing it in the Working strip or the thread as a job duplicates
- * the conversation the person is already having.
+ * not a piece of delegated work.
  */
 export function jobsFromQueue(
   payload: PersonalAthenaQueuePayload,
@@ -202,22 +245,42 @@ export function jobsFromQueue(
   return currentChatId ? all.filter((job) => job.id !== currentChatId) : all;
 }
 
-/**
- * The queue's jobs that are waiting on the person to decide something, in queue order.
- *
- * @remarks
- * Backs the rail's single "N need you" line: rather than a pinned strip of every open job, the
- * rail names only the ones that need a decision, and lets the thread itself carry the rest.
- */
+/** The jobs that are waiting on the person to decide something, in the order given. */
 export function jobsNeedingYou(
   jobs: readonly PersonalAthenaSessionSummary[],
 ): readonly PersonalAthenaSessionSummary[] {
   return jobs.filter((job) => (job.queueState ?? athenaQueueState(job.status)) === 'needs_you');
 }
 
-/** The rail's "N need you" line, singular for exactly one job. */
-export function needsYouLabel(count: number): string {
-  return count === 1 ? '1 needs you' : `${String(count)} need you`;
+/** Whether two page sources name the same object; two absent sources (a workspace page) match. */
+function sameSource(
+  a: PersonalAthenaSource | undefined,
+  b: PersonalAthenaSource | undefined,
+): boolean {
+  if (!a || !b) return a === b;
+  return a.type === b.type && a.id === b.id;
+}
+
+/**
+ * The jobs that belong in the panel's thread for the page the person is on.
+ *
+ * @remarks
+ * A job belongs when it was started from this page — its source is the page's source, or both are
+ * the workspace itself — or when it was started in this conversation (`startedHere`). Everything
+ * else is history, and history lives in the Work ledger on the wide view.
+ *
+ * @param jobs - The workspace's jobs.
+ * @param pageSource - The object the current page is about, or `undefined` on a workspace page.
+ * @param startedHere - Ids of jobs started while this conversation was open.
+ */
+export function threadJobs(
+  jobs: readonly PersonalAthenaSessionSummary[],
+  pageSource: PersonalAthenaSource | undefined,
+  startedHere: ReadonlySet<string>,
+): readonly PersonalAthenaSessionSummary[] {
+  return jobs.filter(
+    (job) => startedHere.has(job.id) || sameSource(job.context?.source, pageSource),
+  );
 }
 
 /** A job rendered as a thread entry, ordered by when it started. */
@@ -234,33 +297,50 @@ export interface ThreadActivityEntry {
   readonly activity: SessionActivityOut;
 }
 
-/** One row in the merged conversation thread. */
-export type ThreadEntry = ThreadJobEntry | ThreadActivityEntry;
+/** A question Athena asked, rendered as a thread entry at the time it was asked. */
+export interface ThreadQuestionEntry {
+  readonly kind: 'question';
+  readonly at: string;
+  readonly question: ElicitationOut;
+}
 
-/** Break a tie between entries with the same timestamp: the activity goes first. */
+/** One row in the merged conversation thread. */
+export type ThreadEntry = ThreadJobEntry | ThreadActivityEntry | ThreadQuestionEntry;
+
+/** Same-timestamp order: the conversation's own activity, then questions, then work. */
+const KIND_ORDER: Readonly<Record<ThreadEntry['kind'], number>> = {
+  activity: 0,
+  question: 1,
+  job: 2,
+};
+
+/** Order entries by time, breaking a tie by {@link KIND_ORDER}. */
 function compareThreadEntries(a: ThreadEntry, b: ThreadEntry): number {
   if (a.at !== b.at) return a.at < b.at ? -1 : 1;
-  if (a.kind === b.kind) return 0;
-  return a.kind === 'activity' ? -1 : 1;
+  return KIND_ORDER[a.kind] - KIND_ORDER[b.kind];
 }
 
 /**
- * Merge a thread's raw activities with the jobs running alongside it into one list, sorted by
- * time ascending. An activity and a job that land on the same timestamp keep the activity first.
+ * Merge a thread's raw activities, the jobs that belong in it, and its questions into one list,
+ * sorted by time ascending.
  */
 export function mergeThreadEntries(
   activities: readonly SessionActivityOut[],
   jobs: readonly PersonalAthenaSessionSummary[],
+  questions: readonly ElicitationOut[] = [],
 ): readonly ThreadEntry[] {
-  const activityEntries: readonly ThreadEntry[] = activities.map((activity) => ({
-    kind: 'activity',
-    at: activity.createdAt,
-    activity,
-  }));
-  const jobEntries: readonly ThreadEntry[] = jobs.map((job) => ({
-    kind: 'job',
-    at: job.createdAt,
-    job,
-  }));
-  return [...activityEntries, ...jobEntries].sort(compareThreadEntries);
+  const entries: ThreadEntry[] = [
+    ...activities.map((activity): ThreadEntry => ({
+      kind: 'activity',
+      at: activity.createdAt,
+      activity,
+    })),
+    ...jobs.map((job): ThreadEntry => ({ kind: 'job', at: job.createdAt, job })),
+    ...questions.map((question): ThreadEntry => ({
+      kind: 'question',
+      at: question.createdAt,
+      question,
+    })),
+  ];
+  return entries.sort(compareThreadEntries);
 }

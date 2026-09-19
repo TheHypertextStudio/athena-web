@@ -227,7 +227,9 @@ export { ShellRailProvider, type ShellRailState, useShellRail } from './shell/Sh
 export {
   type RailPresentation,
   RailPresentationProvider,
+  RailSheetBarSlotProvider,
   useRailPresentation,
+  useRailSheetBarSlot,
 } from './shell/RailPresentationContext';
 export {
   ContextProvider,

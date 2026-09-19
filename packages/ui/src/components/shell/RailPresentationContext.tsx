@@ -46,3 +46,39 @@ export function RailPresentationProvider({
 export function useRailPresentation(): RailPresentation {
   return React.useContext(RailPresentationContext);
 }
+
+const RailSheetBarSlotContext = React.createContext<HTMLElement | null>(null);
+
+/** Props for {@link RailSheetBarSlotProvider}. */
+export interface RailSheetBarSlotProviderProps {
+  /** The element in the sheet's title bar a panel may portal its own header controls into. */
+  readonly slot: HTMLElement | null;
+  readonly children: React.ReactNode;
+}
+
+/**
+ * Provider for the sheet title bar's trailing slot.
+ *
+ * @remarks
+ * The sheet's title bar already holds the panel switcher and the close button. A panel whose own
+ * header carries controls (a page chip, Talk, a link out) portals them into this slot while the
+ * sheet hosts it, so the compact width paints one header row instead of the bar plus a second,
+ * mostly empty row of the panel's own.
+ */
+export function RailSheetBarSlotProvider({
+  slot,
+  children,
+}: RailSheetBarSlotProviderProps): React.JSX.Element {
+  return (
+    <RailSheetBarSlotContext.Provider value={slot}>{children}</RailSheetBarSlotContext.Provider>
+  );
+}
+
+/**
+ * Read the sheet title bar's trailing slot.
+ *
+ * @returns the slot element while the mobile sheet hosts the calling panel, else `null`.
+ */
+export function useRailSheetBarSlot(): HTMLElement | null {
+  return React.useContext(RailSheetBarSlotContext);
+}

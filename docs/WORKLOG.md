@@ -371,6 +371,21 @@ event-stream `Accept` with `406`, and errors on a stream route stay `application
   `docs/engineering/specs/athena-agent.md`'s system-shape section to describe the shipped
   companion rather than the retired queue/workbench. Full design-review audit is out of scope for
   this pass — see the deferred item above about the mockup artboards.
+- **Audit rebuild, entry and panel (2026-09-19)**: rebuilt the work entry and the rail panel per
+  §1–§2 of `docs/design/audits/2026-09-18-athena-companion.md`. One flat entry (state dot in a
+  24px gutter, title line with an always-present overflow menu, one state line, decision or
+  receipt, pluralised step disclosure, labelled Details rows); a finished job whose change failed
+  reads "nothing changed" with what did not happen instead of a success. The panel is a 44px
+  header (chip, Talk, wide view — portalled into the sheet's title bar below `lg`), a
+  bottom-aligned thread holding questions, the heads-up, and send failures as entries, a floating
+  jump to waiting work, and a 96px composer. The queue read is scoped to the workspace
+  (`GET /v1/me/athena?workspaceId=`), and the thread holds only work from this page or started
+  while the conversation is open. Deleted: the mark-and-name row, the "N needs you" band and
+  `needsYouLabel`, the state badge and `jobStateLabel`, the decision heading, the permanent Reply,
+  the questions band, the fixed error line, the empty state's icon and title, the tonal suggestion
+  slabs, "· Workspace", and "Athena is working…". Screenshots:
+  `apps/web/.data/design-review/2026-09-19-rebuild/`. Learnings: dev PGlite stamps `createdAt` in
+  local time as UTC, so title-line times read hours off in local screenshots only.
 
 ---
 

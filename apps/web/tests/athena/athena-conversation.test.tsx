@@ -263,10 +263,24 @@ describe('AthenaConversation MCP app cards', () => {
 });
 
 describe('AthenaConversation page context', () => {
-  it('shows the attached page above the composer and sends it with the message', async () => {
+  it('leaves the page chip out of the composer unless the door asks for it', async () => {
+    chatGet.mockResolvedValue(okResponse(thread([])));
+    renderConversation({
+      context: {
+        workspaceId: ORG_ID,
+        source: { type: 'project', id: 'project_1', label: 'Fall fundraiser launch' },
+      },
+    });
+    const form = await screen.findByRole('form', { name: /Message Athena/ });
+    expect(within(form).queryByRole('group')).not.toBeInTheDocument();
+    expect(within(form).getByRole('combobox')).toHaveAttribute('rows', '2');
+  });
+
+  it('shows the attached page in the composer when asked, and sends it with the message', async () => {
     chatGet.mockResolvedValue(okResponse(thread([])));
     personalPost.mockResolvedValue(okResponse(thread([])));
     renderConversation({
+      composerChip: true,
       context: {
         workspaceId: ORG_ID,
         source: { type: 'project', id: 'project_1', label: 'Fall fundraiser launch' },
@@ -299,6 +313,7 @@ describe('AthenaConversation page context', () => {
       return (
         <AthenaConversation
           orgId={ORG_ID}
+          composerChip
           context={{
             workspaceId: ORG_ID,
             source: { type: 'project', id: 'project_1', label: 'Fall fundraiser launch' },
@@ -360,7 +375,7 @@ describe('AthenaConversation heads-up', () => {
     localStorage.clear();
   });
 
-  it('shows one heads-up with Review and Dismiss, and Dismiss removes it', async () => {
+  it('shows one heads-up at the bottom of the thread; Review scrolls the thread’s own entry', async () => {
     chatGet.mockResolvedValue(okResponse(thread([])));
     const waitingJob = job({
       id: 'job_waiting',
@@ -370,14 +385,24 @@ describe('AthenaConversation heads-up', () => {
     });
     renderConversation({ jobs: [waitingJob], transport: jobTransport(waitingJob) });
 
-    expect(await screen.findByText('Heads-up')).toBeVisible();
-    const review = screen.getByRole('button', { name: 'Review' });
-    const dismiss = screen.getByRole('button', { name: 'Dismiss' });
-    expect(review).toBeVisible();
+    const article = await screen.findByRole('article', { name: /Draft the launch update/ });
+    const headsUp = await waitFor(() => {
+      const row = document.querySelector<HTMLElement>('[data-slot="athena-heads-up"]');
+      if (!row) throw new Error('no heads-up yet');
+      return row;
+    });
+    expect(
+      article.compareDocumentPosition(headsUp) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(headsUp.closest('[data-slot="athena-thread"]')).not.toBeNull();
 
-    fireEvent.click(dismiss);
+    const scrollIntoView = vi.fn();
+    article.scrollIntoView = scrollIntoView;
+    fireEvent.click(within(headsUp).getByRole('button', { name: 'Review' }));
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
 
-    expect(screen.queryByText('Heads-up')).not.toBeInTheDocument();
+    fireEvent.click(within(headsUp).getByRole('button', { name: 'Dismiss' }));
+    expect(document.querySelector('[data-slot="athena-heads-up"]')).toBeNull();
   });
 });
 

@@ -1,10 +1,11 @@
 'use client';
 
 /**
- * The chip above an Athena composer that shows which page is attached to the next message.
+ * The chip in the Athena panel's header that shows which page is attached to the next message.
  *
- * Attached: "Fall fundraiser launch · Project" with a remove control. Detached: an assist
- * chip that reattaches the page. No context, nothing rendered.
+ * Attached: "Fall fundraiser launch · Project" with a remove control, or just the workspace's name
+ * on a workspace page. Detached: an assist chip that reattaches the page. No context, nothing
+ * rendered.
  */
 import { Sparkles } from '@docket/ui/icons';
 import { Chip } from '@docket/ui/primitives';
@@ -45,17 +46,26 @@ export function AthenaContextChip({
   if (!context) return null;
   const label = contextChipLabel(context);
   if (!label) return null;
-  const kind = context.source ? KIND_LABEL[context.source.type] : 'Workspace';
+  const kind = context.source ? KIND_LABEL[context.source.type] : null;
 
   if (!attached) {
     return (
-      <Chip variant="assist" icon={<Sparkles aria-hidden="true" />} onClick={onAttach}>
-        Include {label}
+      <Chip
+        variant="assist"
+        icon={<Sparkles aria-hidden="true" />}
+        onClick={onAttach}
+        className="max-w-full min-w-0 shrink"
+      >
+        <span className="truncate">Include {label}</span>
       </Chip>
     );
   }
   return (
-    <div role="group" aria-label={`${label}, ${kind}`} className="flex max-w-full min-w-0">
+    <div
+      role="group"
+      aria-label={kind ? `${label}, ${kind}` : label}
+      className="flex max-w-full min-w-0"
+    >
       <Chip
         variant="input"
         icon={<Sparkles aria-hidden="true" />}
@@ -64,7 +74,7 @@ export function AthenaContextChip({
         className="max-w-full min-w-0 shrink"
       >
         <span className="truncate">{label}</span>
-        <span className="text-on-surface-variant shrink-0"> · {kind}</span>
+        {kind ? <span className="text-on-surface-variant shrink-0"> · {kind}</span> : null}
       </Chip>
     </div>
   );

@@ -143,6 +143,42 @@ describe('personal Athena API adapter', () => {
     });
   });
 
+  it('flags a failed call and an applied change on their tool beats', () => {
+    const action = (id: string, approvalStatus: 'applied' | null, isError: boolean) => ({
+      id,
+      sessionId: '01J00000000000000000000000',
+      organizationId: null,
+      type: 'action',
+      approvalStatus,
+      createdAt: '2026-07-15T16:00:00.000Z',
+      body: {
+        action: {
+          summary: 'update task',
+          toolCall: { connection: 'docket', tool: 'update_task', input: { state: 'done' } },
+          result: { content: 'result text', isError },
+        },
+      },
+    });
+    const detail = adaptAthenaDetail(
+      AthenaSessionDetailOut.parse({
+        ...base,
+        status: 'completed',
+        queueState: 'finished',
+        activities: [
+          action('01J55555555555555555555555', 'applied', true),
+          action('01J66666666666666666666666', 'applied', false),
+        ],
+      }),
+    );
+
+    expect(detail.activities).toEqual([
+      expect.objectContaining({ failed: true }),
+      expect.objectContaining({ applied: true }),
+    ]);
+    expect(detail.activities[0]).not.toHaveProperty('applied');
+    expect(detail.activities[1]).not.toHaveProperty('failed');
+  });
+
   it('converts an existing action into a service outcome while filtering thought rows', () => {
     const detail = adaptAthenaDetail(
       AthenaSessionDetailOut.parse({

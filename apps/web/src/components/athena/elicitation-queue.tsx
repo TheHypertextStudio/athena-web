@@ -1,143 +1,105 @@
 'use client';
 
 /**
- * Everything Athena is waiting on, in the conversation where she asked it.
+ * The questions Athena is waiting on, as entries in the conversation where she asked them.
  *
  * @remarks
- * Mounted inside the Athena surface rather than given a page of its own, because a question exists
- * to unblock work you are already looking at — a separate inbox of questions would recreate exactly
- * the context-hunting the product deletes.
+ * A question exists to unblock work you are already looking at, so it lives in the thread at the
+ * time it was asked rather than in a band of its own. This module owns what the thread does not:
  *
- * The component owns three responsibilities the cards deliberately do not:
- *
- * - **Presence.** While it is mounted and the tab is focused, the server knows you are reachable,
- *   which is what makes a new question live rather than a notification.
- * - **Liveness.** It re-reads on a short live poll, so a question raised by an agent working in the
- *   background appears here without a refresh.
- * - **Landing.** `?elicitation=<id>` (the path a notification's body-click lands on) scrolls that
- *   question into view and rings it, so arriving from a banner puts you on the question, in the
- *   context of its task, rather than at the top of a list.
+ * - **Presence.** While the thread is mounted and the tab is focused, the server knows you are
+ *   reachable, which is what makes a new question live rather than a notification.
+ * - **Liveness.** A short live poll, so a question raised by work in the background appears without
+ *   a refresh.
+ * - **Landing.** `?elicitation=<id>` (the path a notification's body-click lands on) names the
+ *   question to ring and scroll to, so arriving from a banner puts you on the question.
  */
 import type { ElicitationOut } from '@docket/athena/elicitation-api';
-import { Inbox } from '@docket/ui/icons';
-import { cn } from '@docket/ui/lib/utils';
-import { Skeleton, Text } from '@docket/ui/primitives';
-import { type JSX, useEffect, useRef, useState } from 'react';
+import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { ElicitationCard } from './elicitation-card';
 import { useAthenaPresence, useLiveElicitations } from './elicitation-data';
 import { EnableNotificationsPrompt } from './elicitation-notifications';
 
-/** Props for {@link ElicitationQueue}. */
-export interface ElicitationQueueProps {
-  /** The workspace whose uploads a file answer is stored in. */
-  readonly organizationId?: string | null;
-  /** Show recently settled questions under the pending ones. */
-  readonly showSettled?: boolean;
-  /** Extra class names for the root element. */
-  readonly className?: string;
-}
+/** How many recently settled questions stay in the thread as records. */
+const SETTLED_KEPT = 3;
 
 /**
  * The workspace one question's own task lives in, read off its link.
  *
  * @remarks
  * A file answer is stored as an attachment on that task, so the upload has to target the task's
- * workspace — not whichever workspace the surrounding surface happens to be filtered to. Reading it
+ * workspace — not whichever workspace the surrounding surface happens to be showing. Reading it
  * from the server-rendered link keeps the two in step by construction.
  */
-function workspaceOf(elicitation: ElicitationOut): string | null {
+export function workspaceOfQuestion(elicitation: ElicitationOut): string | null {
   return /^\/orgs\/([^/]+)\//.exec(elicitation.task.href)?.[1] ?? null;
 }
 
-/** Render the caller's open questions, live. */
-export function ElicitationQueue({
-  organizationId = null,
-  showSettled = true,
-  className,
-}: ElicitationQueueProps): JSX.Element | null {
-  const { pending, settled, loading, failed } = useLiveElicitations();
-  const [target, setTarget] = useState<string | null>(null);
-  const containerRef = useRef<HTMLElement | null>(null);
+/** What the thread needs to render its questions. */
+export interface ThreadQuestions {
+  /** Pending questions and the few most recently settled, for this workspace. */
+  readonly questions: readonly ElicitationOut[];
+  /** The question a notification landed on, to ring and scroll to. */
+  readonly landingId: string | null;
+}
 
-  useAthenaPresence();
+/**
+ * Read the caller's questions for one workspace, live, and keep the caller present while mounted.
+ *
+ * @param workspaceId - Questions whose task lives in another workspace stay out of this thread.
+ * @param enabled - Exactly one mounted thread should own presence and the live read.
+ */
+export function useThreadQuestions(workspaceId: string, enabled: boolean): ThreadQuestions {
+  const { pending, settled } = useLiveElicitations(enabled);
+  const [landingId, setLandingId] = useState<string | null>(null);
 
-  // Read from `location` rather than `useSearchParams`: this component is mounted inside surfaces
-  // that are not otherwise client-navigation-aware, and `useSearchParams` both requires a Suspense
-  // boundary in the App Router and throws outright when the component is rendered without a router
-  // (which is exactly how its host is unit-tested). The landing behaviour is a one-shot scroll, so
-  // a mount-time read is all it needs.
+  useAthenaPresence(enabled);
+
+  // Read from `location` rather than `useSearchParams`: the thread is mounted inside surfaces that
+  // are not otherwise client-navigation-aware, and `useSearchParams` requires a Suspense boundary
+  // in the App Router and throws outright without a router. Landing is a one-shot read on mount.
   useEffect(() => {
-    setTarget(new URLSearchParams(window.location.search).get('elicitation'));
-  }, []);
+    if (!enabled) return;
+    setLandingId(new URLSearchParams(window.location.search).get('elicitation'));
+  }, [enabled]);
 
-  useEffect(() => {
-    if (!target) return;
-    const card = containerRef.current?.querySelector(`[data-elicitation="${target}"]`);
-    card?.scrollIntoView({ block: 'center' });
-  }, [target, pending.length]);
+  const questions = useMemo(() => {
+    if (!enabled) return [];
+    const inWorkspace = (question: ElicitationOut): boolean => {
+      const owner = workspaceOfQuestion(question);
+      return owner === null || owner === workspaceId;
+    };
+    return [...pending, ...settled.slice(0, SETTLED_KEPT)].filter(inWorkspace);
+  }, [enabled, pending, settled, workspaceId]);
 
-  if (loading) {
-    return (
-      <section
-        aria-label="What Athena is waiting on"
-        className={cn('flex flex-col gap-3', className)}
-      >
-        {/* placeholder: how many questions are open and how tall each card is. The surface around
-            it is already painted and interactive. */}
-        <Skeleton className="h-40 w-full rounded-xl" />
-      </section>
-    );
-  }
+  return { questions, landingId };
+}
 
-  if (failed) {
-    return (
-      <section aria-label="What Athena is waiting on" className={className}>
-        <Text token="body-medium" tone="muted" role="status">
-          Could not load what Athena is waiting on. We&apos;ll keep checking.
-        </Text>
-      </section>
-    );
-  }
+/** Props for {@link ThreadQuestion}. */
+export interface ThreadQuestionProps {
+  readonly question: ElicitationOut;
+  /** The workspace the surrounding thread belongs to, for a question whose task names none. */
+  readonly workspaceId: string;
+  /** Whether a notification landed on this question. */
+  readonly focused: boolean;
+}
 
-  const visibleSettled = showSettled ? settled.slice(0, 3) : [];
-  if (pending.length === 0 && visibleSettled.length === 0) return null;
-
+/** One question as a thread entry, with the notification offer when the question is urgent. */
+export function ThreadQuestion({
+  question,
+  workspaceId,
+  focused,
+}: ThreadQuestionProps): JSX.Element {
+  const urgent = question.status === 'pending' && question.timeSensitive;
   return (
-    <section
-      ref={containerRef}
-      aria-label="What Athena is waiting on"
-      className={cn('flex flex-col gap-3', className)}
-    >
-      <EnableNotificationsPrompt
-        relevant={pending.some((elicitation) => elicitation.timeSensitive)}
+    <div className="flex w-full max-w-160 flex-col gap-2">
+      {urgent ? <EnableNotificationsPrompt relevant /> : null}
+      <ElicitationCard
+        elicitation={question}
+        organizationId={workspaceOfQuestion(question) ?? workspaceId}
+        focused={focused}
       />
-      {pending.map((elicitation) => (
-        <ElicitationCard
-          key={elicitation.id}
-          elicitation={elicitation}
-          organizationId={workspaceOf(elicitation) ?? organizationId}
-          focused={elicitation.id === target}
-        />
-      ))}
-      {visibleSettled.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          <div className="text-on-surface-variant flex items-center gap-1.5">
-            <Inbox aria-hidden="true" className="size-4" />
-            <Text token="label-medium" tone="muted">
-              Recently decided
-            </Text>
-          </div>
-          {visibleSettled.map((elicitation) => (
-            <ElicitationCard
-              key={elicitation.id}
-              elicitation={elicitation}
-              organizationId={workspaceOf(elicitation) ?? organizationId}
-              focused={elicitation.id === target}
-            />
-          ))}
-        </div>
-      ) : null}
-    </section>
+    </div>
   );
 }

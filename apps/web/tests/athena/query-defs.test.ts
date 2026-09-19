@@ -76,6 +76,17 @@ describe('personal Athena query definitions', () => {
     expect(detailRequest).toHaveBeenCalledWith('session_1');
   });
 
+  it('scopes the queue to one workspace under its own key when asked', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const api = transport();
+
+    await client.fetchQuery(personalAthenaQueueDef(api, true, 'workspace_1'));
+
+    expect(vi.mocked(api.queue)).toHaveBeenCalledWith({ workspaceId: 'workspace_1' });
+    expect(client.getQueryData(['me', 'athena', 'workspace', 'workspace_1'])).toBeDefined();
+    expect(client.getQueryData(['me', 'athena'])).toBeUndefined();
+  });
+
   it('uses the compact pulse without loading personal history for a closed dock', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const api = transport();

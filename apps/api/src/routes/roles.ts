@@ -69,6 +69,26 @@ function roleBaseGrantWhere(orgId: string, roleId: string) {
   );
 }
 
+/** Validate that the caller can modify a system role (must be an owner). */
+async function validateSystemRoleModification(
+  tx: typeof db,
+  orgId: string,
+  targetRole: RoleRow,
+  callerRoleId: string | null,
+): Promise<void> {
+  if (!targetRole.isSystem) return;
+  const callerRole = callerRoleId
+    ? await tx
+        .select({ key: role.key })
+        .from(role)
+        .where(and(eq(role.id, callerRoleId), eq(role.organizationId, orgId)))
+        .limit(1)
+    : [];
+  if (callerRole[0]?.key !== 'owner') {
+    throw new CapabilityError('Only an owner can modify a system role');
+  }
+}
+
 /** Roles router: org-scoped CRUD; system roles are immutable-key and non-deletable. */
 const roles = new Hono<AppEnv>()
   .get(
@@ -188,18 +208,7 @@ Notably the update body has **no \`key\` field**: a role's \`key\` is immutable 
           .limit(1);
         const target = existing[0];
         if (!target) throw new NotFoundError('Role not found');
-        if (target.isSystem) {
-          const callerRole = callerRoleId
-            ? await tx
-                .select({ key: role.key })
-                .from(role)
-                .where(and(eq(role.id, callerRoleId), eq(role.organizationId, orgId)))
-                .limit(1)
-            : [];
-          if (callerRole[0]?.key !== 'owner') {
-            throw new CapabilityError('Only an owner can modify a system role');
-          }
-        }
+        await validateSystemRoleModification(tx, orgId, target, callerRoleId);
 
         const updated = await tx
           .update(role)

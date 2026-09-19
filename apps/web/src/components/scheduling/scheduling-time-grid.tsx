@@ -76,6 +76,160 @@ function transitionLabel(band: ScheduleTransitionBand): string {
   return `${band.transition === 'skipped' ? 'Skipped' : 'Repeated'} ${duration} · DST`;
 }
 
+/** Render the sticky time-label gutter. */
+function TimeGridGutter({
+  ticks,
+  labelStyle,
+  pixelsPerHour,
+  gutterWidth,
+}: {
+  ticks: ScheduleTick[];
+  labelStyle: ScheduleTickLabelStyle;
+  pixelsPerHour: number;
+  gutterWidth: number;
+}): JSX.Element {
+  return (
+    <div className="bg-surface sticky left-0 z-[50] shrink-0" style={{ width: gutterWidth }}>
+      {ticks
+        .filter((tick) => tick.kind === 'major')
+        .map((tick) => (
+          <span
+            key={tick.wallMinutes}
+            className={`text-on-surface-variant text-label-large absolute -translate-y-1/2 whitespace-nowrap tabular-nums ${
+              labelStyle === 'hour' ? 'right-1' : 'right-2'
+            }`}
+            data-schedule-label={tick.wallMinutes}
+            style={{ top: tickTop(tick.wallMinutes, pixelsPerHour) }}
+          >
+            {tick.label}
+          </span>
+        ))}
+    </div>
+  );
+}
+
+/** Render the major/minor tick rules. */
+function TimeGridRules({
+  ticks,
+  pixelsPerHour,
+  contentWidth,
+  gridHeight,
+}: {
+  ticks: ScheduleTick[];
+  pixelsPerHour: number;
+  contentWidth: number;
+  gridHeight: number;
+}): JSX.Element {
+  return (
+    <div
+      className="relative shrink-0"
+      data-schedule-lane-region=""
+      style={{ width: contentWidth, height: gridHeight }}
+    >
+      {ticks.map((tick) => (
+        <div
+          key={tick.wallMinutes}
+          aria-hidden="true"
+          className={
+            tick.kind === 'major'
+              ? 'border-outline-variant/30 pointer-events-none absolute inset-x-0 border-t'
+              : 'pointer-events-none absolute inset-x-0'
+          }
+          data-hour-line={tick.wallMinutes % 60 === 0 ? tick.wallMinutes / 60 : undefined}
+          data-schedule-tick={tick.kind}
+          data-schedule-tick-minutes={tick.wallMinutes}
+          style={{ top: tickTop(tick.wallMinutes, pixelsPerHour) }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Render daylight-saving transition bands. */
+function TimeGridTransitions({
+  lanes,
+  transitionsByDate,
+  laneWidth,
+  gridHeight,
+  pixelsPerHour,
+}: {
+  lanes: ScheduleLane[];
+  transitionsByDate: Map<string, ScheduleTransitionBand[]>;
+  laneWidth: number;
+  gridHeight: number;
+  pixelsPerHour: number;
+}): JSX.Element {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-0 flex"
+      data-schedule-transition-layer=""
+    >
+      {lanes.map((lane) => (
+        <div
+          key={lane.id}
+          className="relative shrink-0"
+          style={{ width: laneWidth, height: gridHeight }}
+        >
+          {(transitionsByDate.get(lane.date) ?? []).map((band) => (
+            <span
+              key={`${String(band.startWallMinutes)}:${band.transition}`}
+              className="text-on-surface-variant bg-surface-container-high/50 border-outline-variant text-label-medium absolute inset-x-1 overflow-hidden border-y border-dashed px-1"
+              data-schedule-transition={band.transition}
+              data-schedule-transition-lane={lane.id}
+              style={{
+                top: tickTop(band.startWallMinutes, pixelsPerHour),
+                height: tickTop(band.endWallMinutes - band.startWallMinutes, pixelsPerHour),
+              }}
+            >
+              {transitionLabel(band)}
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Render the current-time indicator line. */
+function TimeGridCurrentLine({
+  lanes,
+  currentPosition,
+  laneWidth,
+  gridHeight,
+  pixelsPerHour,
+}: {
+  lanes: ScheduleLane[];
+  currentPosition: { date: string; wallMinutes: number } | null;
+  laneWidth: number;
+  gridHeight: number;
+  pixelsPerHour: number;
+}): JSX.Element {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-30 flex"
+      data-schedule-current-layer=""
+    >
+      {lanes.map((lane) => (
+        <div
+          key={lane.id}
+          className="relative shrink-0"
+          style={{ width: laneWidth, height: gridHeight }}
+        >
+          {currentPosition?.date === lane.date ? (
+            <span
+              className="bg-error absolute inset-x-0 h-0.5"
+              data-current-time-line={lane.id}
+              style={{ top: tickTop(currentPosition.wallMinutes, pixelsPerHour) }}
+            />
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Render adaptive labels, major/minor rules, DST annotations, and a deterministic current line.
  *
@@ -120,105 +274,34 @@ export function SchedulingTimeGrid({
 
   return (
     <div className="relative flex" style={{ height: gridHeight }}>
-      <div
-        // No rule down the gutter: the labels sit on `bg-surface` with real padding, which reads as
-        // a gutter without drawing a line through the middle of the schedule.
-        className="bg-surface sticky left-0 z-[50] shrink-0"
-        style={{ width: gutterWidth }}
-      >
-        {ticks
-          .filter((tick) => tick.kind === 'major')
-          .map((tick) => (
-            <span
-              key={tick.wallMinutes}
-              // `whitespace-nowrap` because the compact gutter is sized to the label's exact
-              // measured width: without it a 44px box wraps `12 AM` onto two lines.
-              className={`text-on-surface-variant text-label-large absolute -translate-y-1/2 whitespace-nowrap tabular-nums ${
-                labelStyle === 'hour' ? 'right-1' : 'right-2'
-              }`}
-              data-schedule-label={tick.wallMinutes}
-              style={{ top: tickTop(tick.wallMinutes, pixelsPerHour) }}
-            >
-              {tick.label}
-            </span>
-          ))}
-      </div>
-
-      <div
-        className="relative shrink-0"
-        data-schedule-lane-region=""
-        style={{ width: contentWidth, height: gridHeight }}
-      >
-        {ticks.map((tick) => (
-          <div
-            key={tick.wallMinutes}
-            aria-hidden="true"
-            // Only hour (major) ticks draw a visible rule, softened so the grid reads as a
-            // quiet scaffold rather than harsh banding. Half-hour (minor) ticks keep their
-            // positioned element and data attributes (geometry + e2e hooks) but no line.
-            className={
-              tick.kind === 'major'
-                ? 'border-outline-variant/30 pointer-events-none absolute inset-x-0 border-t'
-                : 'pointer-events-none absolute inset-x-0'
-            }
-            data-hour-line={tick.wallMinutes % 60 === 0 ? tick.wallMinutes / 60 : undefined}
-            data-schedule-tick={tick.kind}
-            data-schedule-tick-minutes={tick.wallMinutes}
-            style={{ top: tickTop(tick.wallMinutes, pixelsPerHour) }}
-          />
-        ))}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-0 flex"
-          data-schedule-transition-layer=""
-        >
-          {lanes.map((lane) => (
-            <div
-              key={lane.id}
-              className="relative shrink-0"
-              style={{ width: laneWidth, height: gridHeight }}
-            >
-              {(transitionsByDate.get(lane.date) ?? []).map((band) => (
-                <span
-                  key={`${String(band.startWallMinutes)}:${band.transition}`}
-                  // The dashed edge is kept deliberately: it marks a wall-clock anomaly, which is
-                  // meaning, not decoration — unlike the structural rules removed elsewhere.
-                  className="text-on-surface-variant bg-surface-container-high/50 border-outline-variant text-label-medium absolute inset-x-1 overflow-hidden border-y border-dashed px-1"
-                  data-schedule-transition={band.transition}
-                  data-schedule-transition-lane={lane.id}
-                  style={{
-                    top: tickTop(band.startWallMinutes, pixelsPerHour),
-                    height: tickTop(band.endWallMinutes - band.startWallMinutes, pixelsPerHour),
-                  }}
-                >
-                  {transitionLabel(band)}
-                </span>
-              ))}
-            </div>
-          ))}
-        </div>
+      <TimeGridGutter
+        ticks={ticks}
+        labelStyle={labelStyle}
+        pixelsPerHour={pixelsPerHour}
+        gutterWidth={gutterWidth}
+      />
+      <div className="relative shrink-0" style={{ width: contentWidth, height: gridHeight }}>
+        <TimeGridRules
+          ticks={ticks}
+          pixelsPerHour={pixelsPerHour}
+          contentWidth={contentWidth}
+          gridHeight={gridHeight}
+        />
+        <TimeGridTransitions
+          lanes={lanes}
+          transitionsByDate={transitionsByDate}
+          laneWidth={laneWidth}
+          gridHeight={gridHeight}
+          pixelsPerHour={pixelsPerHour}
+        />
         {children}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-30 flex"
-          data-schedule-current-layer=""
-        >
-          {lanes.map((lane) => (
-            <div
-              key={lane.id}
-              className="relative shrink-0"
-              style={{ width: laneWidth, height: gridHeight }}
-            >
-              {currentPosition?.date === lane.date ? (
-                <span
-                  className="bg-error absolute inset-x-0 h-0.5"
-                  data-current-time-line={lane.id}
-                  style={{ top: tickTop(currentPosition.wallMinutes, pixelsPerHour) }}
-                />
-              ) : null}
-            </div>
-          ))}
-        </div>
+        <TimeGridCurrentLine
+          lanes={lanes}
+          currentPosition={currentPosition}
+          laneWidth={laneWidth}
+          gridHeight={gridHeight}
+          pixelsPerHour={pixelsPerHour}
+        />
       </div>
     </div>
   );

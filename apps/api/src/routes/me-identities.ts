@@ -61,6 +61,198 @@ const identityParam = z.object({ provider: IdentityProvider, accountId: z.string
 const externalAgentCompleteInput = z.object({ token: z.string().min(1) });
 const externalAgentCompleteOutput = z.object({ status: z.literal(true), sessionId: z.string() });
 
+/**
+ * Validate external agent control and fetch linked session and actor data.
+ */
+async function validateExternalAgentControl(
+  token: string,
+  userId: string,
+): Promise<{
+  control: ReturnType<typeof verifyExternalAgentControl>;
+  linked: {
+    organizationId: string;
+    provider: IdentityProvider;
+    initiatorId: string | null;
+  } | null;
+  identity: { id: string } | null;
+  member: { id: string } | null;
+}> {
+  const control = verifyExternalAgentControl(token);
+  if (control?.kind !== 'authentication' || control.provider !== 'linear') {
+    throw new ConflictError(
+      'This account-link request is invalid or expired.',
+      'external_identity_mismatch',
+    );
+  }
+
+  const [linked] = await db
+    .select({
+      organizationId: agentSessionExternalLink.organizationId,
+      provider: agentSessionExternalLink.provider,
+      initiatorId: agentSession.initiatorId,
+    })
+    .from(agentSessionExternalLink)
+    .innerJoin(agentSession, eq(agentSession.id, agentSessionExternalLink.sessionId))
+    .where(eq(agentSessionExternalLink.sessionId, control.sessionId))
+    .limit(1);
+
+  const [identity] = await db
+    .select({ id: account.id })
+    .from(account)
+    .where(
+      and(
+        eq(account.userId, userId),
+        eq(account.providerId, 'linear'),
+        eq(account.accountId, control.externalActorId),
+      ),
+    )
+    .limit(1);
+
+  const [member] = linked
+    ? await db
+        .select({ id: actor.id })
+        .from(actor)
+        .where(
+          and(
+            eq(actor.organizationId, linked.organizationId),
+            eq(actor.userId, userId),
+            eq(actor.kind, 'human'),
+            eq(actor.status, 'active'),
+          ),
+        )
+        .limit(1)
+    : [];
+
+  return { control, linked: linked ?? null, identity: identity ?? null, member: member ?? null };
+}
+
+/**
+ * Validate that the external agent control matches the linked session and identity.
+ * Throws if validation fails; returns nothing if successful.
+ */
+function validateExternalAgentMatch(
+  control: ReturnType<typeof verifyExternalAgentControl>,
+  linked: { organizationId: string; provider: IdentityProvider; initiatorId: string | null } | null,
+  identity: { id: string } | null,
+  member: { id: string } | null,
+): asserts linked is {
+  organizationId: string;
+  provider: IdentityProvider;
+  initiatorId: string | null;
+} {
+  if (!linked || !identity || !member) {
+    throw new ConflictError(
+      'Link the Linear account that opened this Athena session before continuing.',
+      'external_identity_mismatch',
+    );
+  }
+
+  const isValid =
+    linked.provider === control.provider &&
+    linked.organizationId === control.organizationId &&
+    (linked.initiatorId === null || linked.initiatorId === member.id);
+
+  if (!isValid) {
+    throw new ConflictError(
+      'Link the Linear account that opened this Athena session before continuing.',
+      'external_identity_mismatch',
+    );
+  }
+}
+
+/**
+ * Resume an external agent session with a linked member.
+ */
+async function resumeExternalAgentSession(
+  sessionId: string,
+  organizationId: string,
+  memberId: string,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [resumed] = await tx
+      .update(agentSession)
+      .set({ initiatorId: memberId, status: 'pending' })
+      .where(and(eq(agentSession.id, sessionId), eq(agentSession.status, 'awaiting_input')))
+      .returning({ id: agentSession.id });
+
+    if (!resumed) return;
+
+    await tx.insert(sessionActivity).values({
+      sessionId,
+      organizationId,
+      type: 'thought',
+      body: { text: 'Account connected. Athena is resuming.' },
+    });
+
+    await tx
+      .insert(agentSessionRun)
+      .values({
+        sessionId,
+        organizationId,
+        generation: 0,
+        workflowInstanceId: workflowIdFor(sessionId, 0),
+        status: 'queued',
+        dispatchOrigin: 'unclassified',
+      })
+      .onConflictDoNothing();
+  });
+}
+
+/**
+ * Validate and delete a linked identity, checking for in-use connections and account reachability.
+ */
+async function deleteLinkedIdentity(
+  userId: string,
+  provider: IdentityProvider,
+  accountId: string,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .select({ id: userTable.id })
+      .from(userTable)
+      .where(eq(userTable.id, userId))
+      .for('update');
+
+    const identities = await linkedIdentities(userId, tx);
+    const identity = identities.find(
+      (candidate) => candidate.provider === provider && candidate.accountId === accountId,
+    );
+
+    if (!identity) throw new NotFoundError('Linked identity not found');
+    if (identity.connectionCount > 0) {
+      throw new ConflictError(
+        'Disconnect or rebind every Docket connection using this account before removing it.',
+        'identity_in_use',
+      );
+    }
+
+    const passkeys = await tx
+      .select({ id: passkey.id })
+      .from(passkey)
+      .where(eq(passkey.userId, userId))
+      .limit(1);
+
+    if (identities.length <= 1 && passkeys.length === 0) {
+      throw new ConflictError(
+        'Add a passkey or another sign-in account before removing your last linked identity.',
+      );
+    }
+
+    const removed = await tx
+      .delete(account)
+      .where(
+        and(
+          eq(account.userId, userId),
+          eq(account.providerId, provider),
+          eq(account.accountId, accountId),
+        ),
+      )
+      .returning({ id: account.id });
+
+    if (!removed[0]) throw new NotFoundError('Linked identity not found');
+  });
+}
+
 const meIdentities = new Hono<AppEnv>()
   .get(
     '/',
@@ -95,92 +287,17 @@ The display \`email\`/\`name\`/\`picture\` are **decoded server-side from the st
     zJson(externalAgentCompleteInput),
     async (c) => {
       const current = requireSession(c);
-      const control = verifyExternalAgentControl(c.req.valid('json').token);
-      if (control?.kind !== 'authentication' || control.provider !== 'linear') {
-        throw new ConflictError(
-          'This account-link request is invalid or expired.',
-          'external_identity_mismatch',
-        );
-      }
-      const [linked] = await db
-        .select({
-          organizationId: agentSessionExternalLink.organizationId,
-          provider: agentSessionExternalLink.provider,
-          initiatorId: agentSession.initiatorId,
-        })
-        .from(agentSessionExternalLink)
-        .innerJoin(agentSession, eq(agentSession.id, agentSessionExternalLink.sessionId))
-        .where(eq(agentSessionExternalLink.sessionId, control.sessionId))
-        .limit(1);
-      const [identity] = await db
-        .select({ id: account.id })
-        .from(account)
-        .where(
-          and(
-            eq(account.userId, current.user.id),
-            eq(account.providerId, 'linear'),
-            eq(account.accountId, control.externalActorId),
-          ),
-        )
-        .limit(1);
-      const [member] = linked
-        ? await db
-            .select({ id: actor.id })
-            .from(actor)
-            .where(
-              and(
-                eq(actor.organizationId, linked.organizationId),
-                eq(actor.userId, current.user.id),
-                eq(actor.kind, 'human'),
-                eq(actor.status, 'active'),
-              ),
-            )
-            .limit(1)
-        : [];
-      if (
-        linked?.provider !== control.provider ||
-        linked.organizationId !== control.organizationId ||
-        !identity ||
-        !member ||
-        (linked.initiatorId !== null && linked.initiatorId !== member.id)
-      ) {
-        throw new ConflictError(
-          'Link the Linear account that opened this Athena session before continuing.',
-          'external_identity_mismatch',
-        );
-      }
+      const { control, linked, identity, member } = await validateExternalAgentControl(
+        c.req.valid('json').token,
+        current.user.id,
+      );
+
+      validateExternalAgentMatch(control, linked, identity, member);
+
       if (linked.initiatorId === null) {
-        await db.transaction(async (tx) => {
-          const [resumed] = await tx
-            .update(agentSession)
-            .set({ initiatorId: member.id, status: 'pending' })
-            .where(
-              and(
-                eq(agentSession.id, control.sessionId),
-                eq(agentSession.status, 'awaiting_input'),
-              ),
-            )
-            .returning({ id: agentSession.id });
-          if (!resumed) return;
-          await tx.insert(sessionActivity).values({
-            sessionId: control.sessionId,
-            organizationId: linked.organizationId,
-            type: 'thought',
-            body: { text: 'Account connected. Athena is resuming.' },
-          });
-          await tx
-            .insert(agentSessionRun)
-            .values({
-              sessionId: control.sessionId,
-              organizationId: linked.organizationId,
-              generation: 0,
-              workflowInstanceId: workflowIdFor(control.sessionId, 0),
-              status: 'queued',
-              dispatchOrigin: 'unclassified',
-            })
-            .onConflictDoNothing();
-        });
+        await resumeExternalAgentSession(control.sessionId, linked.organizationId, member.id);
       }
+
       return ok(c, externalAgentCompleteOutput, { status: true, sessionId: control.sessionId });
     },
   )
@@ -197,50 +314,7 @@ The display \`email\`/\`name\`/\`picture\` are **decoded server-side from the st
       const session = requireSession(c);
       requireFreshSession(session);
       const { provider, accountId } = c.req.valid('param');
-      const userId = session.user.id;
-
-      await db.transaction(async (tx) => {
-        // Share the passkey-deletion lock so removing different credential kinds cannot lock out the owner.
-        await tx
-          .select({ id: userTable.id })
-          .from(userTable)
-          .where(eq(userTable.id, userId))
-          .for('update');
-        const identities = await linkedIdentities(userId, tx);
-        const identity = identities.find(
-          (candidate) => candidate.provider === provider && candidate.accountId === accountId,
-        );
-        if (!identity) throw new NotFoundError('Linked identity not found');
-        if (identity.connectionCount > 0) {
-          throw new ConflictError(
-            'Disconnect or rebind every Docket connection using this account before removing it.',
-            'identity_in_use',
-          );
-        }
-
-        const passkeys = await tx
-          .select({ id: passkey.id })
-          .from(passkey)
-          .where(eq(passkey.userId, userId))
-          .limit(1);
-        if (identities.length <= 1 && passkeys.length === 0) {
-          throw new ConflictError(
-            'Add a passkey or another sign-in account before removing your last linked identity.',
-          );
-        }
-
-        const removed = await tx
-          .delete(account)
-          .where(
-            and(
-              eq(account.userId, userId),
-              eq(account.providerId, provider),
-              eq(account.accountId, accountId),
-            ),
-          )
-          .returning({ id: account.id });
-        if (!removed[0]) throw new NotFoundError('Linked identity not found');
-      });
+      await deleteLinkedIdentity(session.user.id, provider, accountId);
       return ok(c, IdentityDeleteOut, { status: true });
     },
   );

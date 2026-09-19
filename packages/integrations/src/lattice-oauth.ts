@@ -250,6 +250,22 @@ function parseTokenBody(text: string): TokenResponseBody {
   }
 }
 
+/** Check a token response for errors; return the access token if valid. */
+function validateTokenResponse(response: Response, parsed: TokenResponseBody): string {
+  if (!response.ok) {
+    const code = typeof parsed.error === 'string' ? parsed.error : `http_${response.status}`;
+    const detail =
+      typeof parsed.error_description === 'string'
+        ? parsed.error_description
+        : `token endpoint returned HTTP ${response.status}`;
+    throw new LatticeOAuthError(code, detail);
+  }
+  if (typeof parsed.access_token !== 'string' || parsed.access_token.length === 0) {
+    throw new LatticeOAuthError('invalid_grant', 'token response carried no access token');
+  }
+  return parsed.access_token;
+}
+
 /** POST the token endpoint and normalize both success and failure shapes. */
 async function postToken(
   config: LatticeOAuthClientConfig,
@@ -280,23 +296,12 @@ async function postToken(
   const text = await response.text();
   const parsed: TokenResponseBody = parseTokenBody(text);
 
-  if (!response.ok) {
-    const code = typeof parsed.error === 'string' ? parsed.error : `http_${response.status}`;
-    const detail =
-      typeof parsed.error_description === 'string'
-        ? parsed.error_description
-        : `token endpoint returned HTTP ${response.status}`;
-    throw new LatticeOAuthError(code, detail);
-  }
-
-  if (typeof parsed.access_token !== 'string' || parsed.access_token.length === 0) {
-    throw new LatticeOAuthError('invalid_grant', 'token response carried no access token');
-  }
+  const accessToken = validateTokenResponse(response, parsed);
 
   return {
     kind: 'lattice_oauth',
     clientId: config.clientId,
-    accessToken: parsed.access_token,
+    accessToken,
     refreshToken: typeof parsed.refresh_token === 'string' ? parsed.refresh_token : null,
     expiresInSeconds: typeof parsed.expires_in === 'number' ? parsed.expires_in : null,
     scope: typeof parsed.scope === 'string' ? parsed.scope : null,

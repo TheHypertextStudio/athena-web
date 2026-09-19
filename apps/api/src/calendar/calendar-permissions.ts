@@ -53,10 +53,7 @@ function resolveProviderEventPermission(
   if (!layerEditable) {
     return { canEditCore: false, canDelete: false, readOnlyReason: 'layer_access_role' };
   }
-  if (item.permissions !== null) {
-    return item.permissions;
-  }
-  return { canEditCore: true, canDelete: true, readOnlyReason: null };
+  return item.permissions ?? { canEditCore: true, canDelete: true, readOnlyReason: null };
 }
 
 /** Kinds with fixed, context-free permissions. */

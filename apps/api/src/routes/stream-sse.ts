@@ -27,12 +27,12 @@ const HEARTBEAT_MS = 25_000;
 /**
  * Process a batch of pending stream events, sending them to the client.
  *
- * @param stream - The SSE stream writer.
+ * @param stream - The SSE stream writer (with writeSSE method).
  * @param userId - The authenticated user id.
  * @param batch - The events to send.
  */
 async function deliverBatch(
-  stream: Parameters<typeof streamSSE>[1],
+  stream: { writeSSE: (message: { event: string; data: string }) => Promise<void> },
   userId: string,
   batch: StreamEvent[],
 ): Promise<void> {

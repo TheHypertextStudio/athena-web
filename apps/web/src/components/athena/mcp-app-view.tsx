@@ -504,43 +504,38 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
     });
     hostRef.current = host;
 
+    const handlerState = { disposed, lifecycleResource, host } as MessageHandlerState;
     onWindowMessage = (event: MessageEvent): void => {
-      if (disposed) return;
-      if (event.source !== frame.contentWindow) {
-        return;
-      }
+      if (handlerState.disposed) return;
+      if (event.source !== frame.contentWindow) return;
       proxyWindow = event.source;
-      if (proxyOrigin && event.origin !== proxyOrigin) {
-        return;
-      }
+      if (proxyOrigin && event.origin !== proxyOrigin) return;
+
       const data: unknown = event.data;
-      if (typeof data !== 'object' || data === null) {
-        return;
-      }
+      if (typeof data !== 'object' || data === null) return;
+
       const method: unknown = Reflect.get(data, 'method');
       if (method === MCP_UI_METHODS.sandboxProxyReady) {
-        // The proxy is up. Hand it the document plus the policy computed from what the resource
-        // declared — the host decides the CSP, never a script running on the sandbox origin.
-        const readyResource = lifecycleResource;
+        const readyResource = handlerState.lifecycleResource as McpAppResource | null;
         if (!readyResource) return;
         post({
           jsonrpc: '2.0',
           method: MCP_UI_METHODS.sandboxResourceReady,
           params: sandboxResourceParams(readyResource),
         });
+        handlerState.lifecycleResource = null;
         lifecycleResource = null;
         return;
       }
-      const receivingHost = host;
+
+      const receivingHost = handlerState.host as McpAppHost | null;
       if (!receivingHost) return;
       void receivingHost
         .receive(data)
         .then(() => {
           if (receivingHost.initialized) clearInitializationDeadline();
         })
-        .catch(() => {
-          fail();
-        });
+        .catch(fail);
     };
     window.addEventListener('message', onWindowMessage);
     initializationDeadline = window.setTimeout(fail, MCP_APP_INITIALIZATION_TIMEOUT_MS);

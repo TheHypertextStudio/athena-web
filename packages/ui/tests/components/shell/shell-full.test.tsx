@@ -428,7 +428,11 @@ describe('AppShell rail', () => {
       </ContextProvider>,
     );
 
-    expect(screen.getByRole('complementary', { name: 'Agenda' })).toHaveStyle({ width: '420px' });
+    const rail = screen.getByRole('complementary', { name: 'Agenda' });
+    expect(rail).toHaveStyle({ width: '360px' });
+    // One tonal step off `<main>`'s `bg-surface`, so the rail reads as its own region.
+    expect(rail).toHaveClass('bg-surface-container-low');
+    expect(rail).not.toHaveClass('bg-surface');
 
     view.rerender(
       <ContextProvider initialContext={ACME.id}>
@@ -443,7 +447,7 @@ describe('AppShell rail', () => {
       </ContextProvider>,
     );
 
-    expect(screen.getByRole('complementary', { name: 'Athena' })).toHaveStyle({ width: '420px' });
+    expect(screen.getByRole('complementary', { name: 'Athena' })).toHaveStyle({ width: '360px' });
     expect(onRailStateChange).toHaveBeenLastCalledWith({
       activePanelId: 'athena',
       expanded: true,

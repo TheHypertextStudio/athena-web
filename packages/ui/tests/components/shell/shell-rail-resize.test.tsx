@@ -241,14 +241,28 @@ describe('AppShell rail resize', () => {
     );
   });
 
-  it('keeps the maximum resizable width at half the window even on a very wide display', async () => {
+  it('caps the resizable width at the ceiling even on a very wide display', async () => {
     Object.defineProperty(window, 'innerWidth', { value: 2400, configurable: true });
     window.localStorage.setItem('docket.rail.width', String(RAIL_MAX_INLINE_SIZE_PX));
     renderShell();
 
     expect(await screen.findByRole('separator', { name: 'Resize Athena' })).toHaveAttribute(
       'aria-valuemax',
-      '1200',
+      String(RAIL_MAX_INLINE_SIZE_PX),
     );
+  });
+
+  it('clamps a stored width from before the ceiling into range', async () => {
+    Object.defineProperty(window, 'innerWidth', { value: 1920, configurable: true });
+    window.localStorage.setItem('docket.rail.width', '700');
+    renderShell();
+
+    expect(await screen.findByRole('separator', { name: 'Resize Athena' })).toHaveAttribute(
+      'aria-valuenow',
+      String(RAIL_MAX_INLINE_SIZE_PX),
+    );
+    expect(screen.getByRole('complementary', { name: 'Athena' })).toHaveStyle({
+      width: `${String(RAIL_MAX_INLINE_SIZE_PX)}px`,
+    });
   });
 });

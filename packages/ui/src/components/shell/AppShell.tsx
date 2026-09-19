@@ -43,17 +43,17 @@
  * `<main>`, so the shell — not the screen — owns how much of the window a screen gets. Three
  * guarantees, in force at every width, in every rail state, after any sequence of interactions:
  *
- * 1. **Floor.** `<main>` is never narrower than {@link SHELL_MAIN_MIN_VIEWPORT_SHARE} (27%) of the
+ * 1. **Floor.** `<main>` is never narrower than {@link SHELL_MAIN_MIN_VIEWPORT_SHARE} (33%) of the
  *    viewport with an untouched shell. Below `lg` it is the *entire* viewport; at `lg` and up it is
- *    the viewport minus a constant 328px of chrome (240px sidebar, 40px activity bar, 32px of
- *    gutters) minus the rail's default width plus its gap. Measured floor: 27.7% (284px) at
+ *    the viewport minus a constant 312px of chrome (240px sidebar, 40px activity bar, 32px of
+ *    gutters) minus the rail's default width plus its gap. Measured floor: 33.6% (344px) at
  *    1024px with the sidebar and the rail both expanded; every other combination — collapsing
  *    either column — has more headroom, and the share only rises from there.
  *
- *    The rail's inline size is now a person-chosen pixel width (see the width law on
- *    {@link ShellAside}), not a share of the viewport, so this floor is no longer the whole
- *    contract: a viewer who drags the rail wider trades some of `<main>`'s width for more of the
- *    rail's, up to half the window ({@link railResizeMaxPx}). That trade is deliberate — see
+ *    The rail's inline size is a person-chosen pixel width (see the width law on
+ *    {@link ShellAside}), so this floor is not the whole contract: a viewer who drags the rail
+ *    wider trades some of `<main>`'s width for more of the rail's, up to 480px
+ *    ({@link railResizeMaxPx}). That trade is deliberate — see
  *    {@link SHELL_MAIN_MIN_VIEWPORT_SHARE} for why it sits outside this guarantee.
  * 2. **Monotonicity.** Within a layout regime, widening the window never narrows `<main>` — neither
  *    in pixels nor as a share of the viewport. The rail contributes no step to that curve at any
@@ -187,22 +187,21 @@ export const SHELL_SIDEBAR_EXPAND_MIN_PX = 1440;
  * @remarks
  * A screen may size itself against this without asking the shell anything: whatever the window is,
  * at least this much of it is the screen's. The binding case is the narrowest desktop width with
- * both the sidebar and the rail expanded (1024px → 284px of `<main>`, 27.7%): the sidebar spends
- * its full 240px and the rail its full 420px default in the same pixel of window, and neither
+ * both the sidebar and the rail expanded (1024px → 344px of `<main>`, 33.6%): the sidebar spends
+ * its full 240px and the rail its full 360px default in the same pixel of window, and neither
  * shrinks to make room for the other. Every other combination has more headroom — sidebar
  * collapsed alone already recovers 176px — and every combination's share only rises from there as
- * the window widens, since the rail's default cost stops growing at 1024px (it never exceeds half
- * the viewport, which only binds below that width) while `<main>` keeps gaining every pixel.
+ * the window widens, since the rail's default cost is a constant while `<main>` keeps gaining
+ * every pixel.
  *
  * This is *not* a guarantee against a viewer's own resize: {@link railResizeMaxPx} lets them widen
- * the rail to half the window, which by construction can take `<main>` under this floor. That is
- * the trade a person-chosen width is for — the floor here describes what an *untouched* shell
- * hands a screen, not the outer bound of what a viewer can choose to leave it. It was 0.4 while the
- * rail's default was a viewport-share clamp with a 280px floor rather than a fixed 420px default;
- * moving to a wider, fixed default (see {@link RAIL_DEFAULT_INLINE_SIZE_PX}) is what moved this
- * number, not a change in what the guarantee promises.
+ * the rail to 480px, which can take `<main>` under this floor at the narrowest desktop widths. That
+ * is the trade a person-chosen width is for — the floor here describes what an *untouched* shell
+ * hands a screen. It was 0.27 while the default was 420px; the 360px default is what raised it.
+ * The older 0.4 belonged to a viewport-share rail with a 280px floor, which a 360px panel cannot
+ * reach at 1024px beside a 240px sidebar.
  */
-export const SHELL_MAIN_MIN_VIEWPORT_SHARE = 0.27;
+export const SHELL_MAIN_MIN_VIEWPORT_SHARE = 0.33;
 
 /**
  * `<main>`'s inline size, in px, for a viewport width and rail state — the shell's layout contract
@@ -223,8 +222,8 @@ export const SHELL_MAIN_MIN_VIEWPORT_SHARE = 0.27;
  *
  * @example
  * ```ts
- * shellMainInlineSize(1440, true); // 840 — a majority of the viewport
- * shellMainInlineSize(1024, true, true); // 600 — the same window, sidebar collapsed
+ * shellMainInlineSize(1440, true); // 760 — a majority of the viewport
+ * shellMainInlineSize(1024, true, true); // 520 — sidebar collapsed
  * ```
  */
 export function shellMainInlineSize(

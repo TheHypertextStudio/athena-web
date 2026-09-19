@@ -19,26 +19,22 @@
  * **internal-only** — a curated set of Docket-native panels, never a gallery of third-party add-ons.
  *
  * @remarks **The width law.** The rail's inline size is a *person-chosen* pixel width, never a
- * function of the viewport: {@link RAIL_DEFAULT_INLINE_SIZE_PX} (420px) until the viewer drags or
- * keyboard-resizes the handle on its inner edge, and whatever they set it to after that. Both are
- * plain constants rather than a share of the window, which is what replaced the previous
- * `clamp(17.5rem, 17vw, 22rem)` viewport-share expression — that clamp existed only to keep
- * `<main>` from narrowing as the window widened, and a *fixed* rail width satisfies that same
- * guarantee more directly: since the rail contributes zero marginal width per pixel of window
- * growth, `<main>` gains every one of those pixels, one-for-one, with no slope arithmetic needed
- * to prove it. See the contract on {@link AppShell}.
+ * function of the viewport: {@link RAIL_DEFAULT_INLINE_SIZE_PX} (360px) until the viewer drags or
+ * keyboard-resizes the handle on its inner edge, and whatever they set it to after that, always
+ * between {@link RAIL_MIN_INLINE_SIZE_PX} (360px) and {@link RAIL_MAX_INLINE_SIZE_PX} (480px). Since
+ * the rail contributes zero marginal width per pixel of window growth, `<main>` gains every one of
+ * those pixels, one-for-one. See the contract on {@link AppShell}.
  *
- * A fixed default is also legible at every desktop width, unlike the old share's 174px floor at
- * 1024px — the floor here is {@link RAIL_MIN_INLINE_SIZE_PX} (360px), a number the resize handle
- * enforces rather than one a narrow window could shrink the rail to on its own.
+ * The rail is a companion that sits beside the work, so its default is the floor rather than
+ * something above it: at 1024px a wider default made the panel nearly as wide as `<main>` itself.
+ * The 480px ceiling holds for the same reason. A person who wants the conversation large opens the
+ * wide `/athena` view, which is what it is for.
  *
- * **The only ceiling is the window itself.** Dragging or keyboard-resizing the rail's inner edge
- * (the {@link ShellAsideProps.onWidthChange} handle below) hands the shell a new pixel width, up to
- * half the window's current inline size ({@link railResizeMaxPx}) and down to
- * {@link RAIL_MIN_INLINE_SIZE_PX}. {@link AppShell} persists the result under the
- * `docket.rail.width` rail state key (`RAIL_WIDTH_KEY` in `./rail-requests`) and feeds it back in
- * as {@link ShellAsideProps.width} on every render after that, in place of the default, until the
- * viewer resizes again.
+ * The handle hands the shell each new width ({@link ShellAsideProps.onWidthChange}), and
+ * {@link AppShell} persists it under the `docket.rail.width` rail state key (`RAIL_WIDTH_KEY` in
+ * `./rail-requests`) and feeds it back in as {@link ShellAsideProps.width}. A stored width from
+ * before the ceiling existed is clamped into range on the way in ({@link railClampWidthPx}), so an
+ * old 700px choice renders at 480px rather than taking `<main>`'s room.
  */
 import * as React from 'react';
 
@@ -64,13 +60,11 @@ export const SHELL_ASIDE_SHEET_ID = 'shell-aside-sheet';
  * function of the viewport.
  *
  * @remarks
- * Exported so the shell's layout contract reads from the same number the component renders from,
- * rather than a class string repeated in two places. 420px is comfortably above
- * {@link RAIL_MIN_INLINE_SIZE_PX} and well under half of any desktop-width window
- * ({@link railResizeMaxPx}), so it never needs clamping in practice — {@link railClampWidthPx}
- * still guards the arithmetic for a hypothetically narrow one.
+ * Exported so the shell's layout contract reads from the same number the component renders from.
+ * It equals {@link RAIL_MIN_INLINE_SIZE_PX}: the floor a panel reads comfortably at is also the
+ * width that leaves `<main>` the most room beside it.
  */
-export const RAIL_DEFAULT_INLINE_SIZE_PX = 420;
+export const RAIL_DEFAULT_INLINE_SIZE_PX = 360;
 
 /** {@link RAIL_DEFAULT_INLINE_SIZE_PX} as the CSS length {@link ShellAside} paints an unstored rail with. */
 export const RAIL_INLINE_SIZE = `${String(RAIL_DEFAULT_INLINE_SIZE_PX)}px`;
@@ -80,22 +74,18 @@ export const RAIL_INLINE_SIZE = `${String(RAIL_DEFAULT_INLINE_SIZE_PX)}px`;
  *
  * @remarks
  * A hard number a person can always read a panel at, rather than a share of the window that could
- * shrink below it. Every desktop viewport (1024px and up) leaves half its width comfortably above
- * this floor, so the two bounds {@link railResizeMaxPx} enforces never invert.
+ * shrink below it.
  */
 export const RAIL_MIN_INLINE_SIZE_PX = 360;
 
 /**
- * A generous upper-bound guess for how wide a person would ever resize the rail to, used only to
- * seed {@link useWindowInlineSize}'s SSR fallback viewport size.
+ * The rail's maximum inline size in px — the ceiling every resize and every stored width obey.
  *
  * @remarks
- * Not an enforced ceiling — the real one is dynamic: half the window's own inline size, via
- * {@link railResizeMaxPx}. This constant only needs to be safely larger than any width a person
- * could actually reach, so the fallback viewport it derives never makes an SSR-rendered handle
- * look clamped when the client's first measurement lands.
+ * A companion wider than this stops sitting beside the work and starts replacing it; the wide
+ * `/athena` view is where a conversation gets the whole width.
  */
-export const RAIL_MAX_INLINE_SIZE_PX = 640;
+export const RAIL_MAX_INLINE_SIZE_PX = 480;
 
 /**
  * The gap between an open rail and the activity bar, in px. It belongs to the rail: a collapsed
@@ -107,37 +97,46 @@ export const RAIL_GAP_PX = 8;
 export const RAIL_RESIZE_STEP_PX = 16;
 
 /**
- * The largest inline size a person may drag or keyboard-resize the rail to: half the window's
- * inline size.
+ * The largest inline size a person may drag or keyboard-resize the rail to: half the window, and
+ * never past {@link RAIL_MAX_INLINE_SIZE_PX}.
  *
  * @remarks
- * Only meaningful at `lg` and up, where the docked rail is the one thing this handle resizes — at
- * every width it renders at, half the viewport is comfortably above {@link RAIL_MIN_INLINE_SIZE_PX},
- * so the two bounds never invert.
+ * At every desktop width (1024px and up) half the window is above the ceiling, so the ceiling is
+ * what binds; the half-window bound only guards a hypothetically narrow window, and never drops
+ * below {@link RAIL_MIN_INLINE_SIZE_PX}, so the two bounds never invert.
  *
  * @param viewportInlineSizePx - The window's current inline size, in px.
- * @returns half of `viewportInlineSizePx`, rounded to the nearest px.
+ * @returns the largest width the handle may report, in px.
  */
 export function railResizeMaxPx(viewportInlineSizePx: number): number {
-  return Math.max(Math.round(viewportInlineSizePx / 2), RAIL_MIN_INLINE_SIZE_PX);
+  const half = Math.max(Math.round(viewportInlineSizePx / 2), RAIL_MIN_INLINE_SIZE_PX);
+  return Math.min(half, RAIL_MAX_INLINE_SIZE_PX);
 }
 
 /**
- * The rail's inline size in px when no person-chosen width is stored: {@link RAIL_DEFAULT_INLINE_SIZE_PX},
- * clamped down only if the window is too narrow to fit it at all.
+ * The rail's inline size in px: a stored width, or {@link RAIL_DEFAULT_INLINE_SIZE_PX}, clamped into
+ * the range the handle allows.
  *
  * @remarks
- * Named for what it does, not just the default it falls back to: {@link AppShell}'s width
- * arithmetic (`shellMainInlineSize`) calls this directly to know what the *unstored* rail costs
- * `<main>` at a given viewport, since that is the one width every fresh session actually renders.
+ * {@link AppShell}'s width arithmetic (`shellMainInlineSize`) calls this with no stored width to
+ * know what the *unstored* rail costs `<main>`. A stored width is clamped too, so a width saved
+ * before the ceiling existed renders inside today's range rather than wherever it was left.
  *
  * @param viewportInlineSizePx - The window's current inline size, in px.
- * @returns {@link RAIL_DEFAULT_INLINE_SIZE_PX}, or {@link railResizeMaxPx} of the viewport when that
- * is smaller.
+ * @param storedPx - The viewer's saved width, when they have one.
+ * @returns the width the rail paints at, in px.
  */
-export function railClampWidthPx(viewportInlineSizePx: number): number {
-  return Math.min(RAIL_DEFAULT_INLINE_SIZE_PX, railResizeMaxPx(viewportInlineSizePx));
+export function railClampWidthPx(viewportInlineSizePx: number, storedPx?: number): number {
+  const wanted = storedPx ?? RAIL_DEFAULT_INLINE_SIZE_PX;
+  const floored = Math.max(wanted, RAIL_MIN_INLINE_SIZE_PX);
+  return Math.min(floored, railResizeMaxPx(viewportInlineSizePx));
 }
+
+/**
+ * The viewport width the server assumes, wide enough that no SSR-rendered handle looks clamped when
+ * the client's first measurement lands.
+ */
+const SSR_VIEWPORT_INLINE_SIZE_PX = 1920;
 
 /** How long the collapse/expand motion is armed for — matches the `--dur-slow` token (240ms). */
 const RAIL_TOGGLE_DURATION_MS = 240;
@@ -191,8 +190,8 @@ export interface ShellAsideProps {
   /** Whether the host is collapsed to zero width (the activity bar stays visible). */
   readonly collapsed: boolean;
   /**
-   * The viewer's own resized width in px, read from storage by {@link AppShell}. `undefined` keeps
-   * {@link RAIL_INLINE_SIZE}'s viewport-share clamp — see the width law above.
+   * The viewer's own resized width in px, read from storage by {@link AppShell} and clamped into
+   * range here. `undefined` keeps {@link RAIL_DEFAULT_INLINE_SIZE_PX} — see the width law above.
    */
   readonly width?: number | undefined;
   /**
@@ -221,7 +220,7 @@ function useWindowInlineSize(): number {
     };
   }, []);
   const getSnapshot = React.useCallback(() => window.innerWidth, []);
-  const getServerSnapshot = React.useCallback(() => RAIL_MAX_INLINE_SIZE_PX * 4, []);
+  const getServerSnapshot = React.useCallback(() => SSR_VIEWPORT_INLINE_SIZE_PX, []);
   return React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
@@ -340,7 +339,7 @@ interface RailWidthPresentation {
  * hydration, so every width here is a plain inline style.
  *
  * @param open - Whether the rail is expanded (`!collapsed`).
- * @param width - A stored width in px, or `undefined` to keep {@link railClampWidthPx}'s default.
+ * @param width - A stored width in px, clamped into range, or `undefined` for the default.
  * @param viewportPx - The window's current inline size, for resolving the default's own bound.
  */
 function resolveRailWidthPresentation(
@@ -348,7 +347,7 @@ function resolveRailWidthPresentation(
   width: number | undefined,
   viewportPx: number,
 ): RailWidthPresentation {
-  const resolvedWidthPx = width ?? railClampWidthPx(viewportPx);
+  const resolvedWidthPx = railClampWidthPx(viewportPx, width);
   const style: React.CSSProperties = { width: `${String(resolvedWidthPx)}px` };
   return {
     resolvedWidthPx,
@@ -415,12 +414,13 @@ export function ShellAside({
       inert={open ? undefined : true}
       style={presentation.asideStyle}
       className={cn(
-        // Tonal surface (no border and no shadow — the surface step off the canvas carries the
-        // separation, and a second shadowed box beside `<main>` framed the content twice); width is
-        // the only animated property, and it's a flex sibling of `<main>`, so the panel reflows in one
-        // continuous motion. Collapsed → zero width; the always-visible activity bar is the reopen.
-        // `relative` gives the resize handle below a positioning root scoped to this rail alone.
-        surfaceToneColor('page'),
+        // One tonal step, `card` (`surface-container-low`), and no border or shadow. That step
+        // differs from `<main>` (`page`) and from the canvas gutter (`canvas`) in both themes, so the
+        // rail reads as its own region without a line; with `page` it was `<main>`'s own tone and
+        // nothing separated the two. Panels paint no background of their own over it. Width is the
+        // only animated property, and it's a flex sibling of `<main>`, so the panel reflows in one
+        // continuous motion. `relative` scopes the resize handle's positioning to this rail.
+        surfaceToneColor('card'),
         '@container relative hidden h-full min-h-0 shrink-0 overflow-hidden rounded-xl lg:block',
         animating && 'transition-[width,margin] duration-(--dur-slow) ease-in-out',
         presentation.asideWidthClassName,

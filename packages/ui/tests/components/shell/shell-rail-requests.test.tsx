@@ -93,7 +93,7 @@ describe('AppShell rail requests', () => {
     // viewport-share clamp this replaced is what let the rail read as low as 174px on a 1024px
     // window, too narrow for the panel it hosts.
     const aside = screen.getByRole('complementary', { name: 'Tasks' });
-    expect(aside).toHaveStyle({ width: '420px' });
+    expect(aside).toHaveStyle({ width: '360px' });
     expect(aside).toHaveClass('mr-2');
   });
 
@@ -106,7 +106,7 @@ describe('AppShell rail requests', () => {
     const activityBar = screen.getByRole('navigation', { name: 'Panels' });
     fireEvent.click(within(activityBar).getByRole('button', { name: 'Tasks' }));
     const aside = screen.getByRole('complementary', { name: 'Tasks' });
-    expect(aside).toHaveStyle({ width: '420px' });
+    expect(aside).toHaveStyle({ width: '360px' });
     expect(aside).toHaveClass('mr-2');
   });
 

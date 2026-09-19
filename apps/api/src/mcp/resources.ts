@@ -377,7 +377,6 @@ export function registerResources(server: McpRegistrar, ctx: McpContext): void {
       const typeRaw = firstVar(variables['type']);
       const id = firstVar(variables['id']);
       if (!orgId || !typeRaw || !id || !isReadableType(typeRaw)) throw new NotFoundError();
-
       // Two-layer authorization (mcp-surface.md §2.2): the `work:read` scope gate first,
       // then the per-org `view` grant cascade. The URI is addressing only; the actor is
       // re-derived from the verified token.

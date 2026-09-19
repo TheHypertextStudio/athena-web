@@ -310,5 +310,4 @@ This is a hard delete of the \`role\` row and its role-subject grants. The role 
       return ok(c, RoleOut, toOut(deletedRole.row));
     },
   );
-
 export default roles;

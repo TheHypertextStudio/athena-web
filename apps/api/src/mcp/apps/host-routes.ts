@@ -477,6 +477,5 @@ const mcpAppHostRoutes = new Hono<AppEnv>()
   );
 
 export default mcpAppHostRoutes;
-
 /** The mimeType every widget document must carry, re-exported for the route tests. */
 export { MCP_UI_MIME_TYPE };

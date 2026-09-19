@@ -204,5 +204,4 @@ Removing a cascading org-root role grant strips that role's org-wide baseline, a
       return ok(c, GrantOut, toOut(row));
     },
   );
-
 export default grants;

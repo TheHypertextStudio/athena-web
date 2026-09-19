@@ -4,9 +4,9 @@
  * `components/plan-canvas/plan-link-edge` — an initiative-to-project membership link.
  *
  * @remarks
- * Dashed and quiet, because it states a relationship rather than an order: a project belongs to
- * an initiative, it is not blocked by it. It shares the dependency edge's stroke so it stays
- * legible in both themes, and it carries no arrowhead, so a dependency still reads heavier. It is
+ * A solid, low-contrast stroke (`on-surface-variant` at 35%), because it states a relationship
+ * rather than an order: a project belongs to an initiative. It carries no arrowhead and sits
+ * lighter than the dependency edge, so a dependency still reads heavier. It is
  * never selectable and never removable from the canvas — membership changes in the inspector — so
  * it carries no hit area and no control.
  */
@@ -36,9 +36,9 @@ function PlanLinkEdgeComponent({
       path={path}
       interactionWidth={0}
       style={{
-        stroke: 'var(--color-outline)',
+        stroke: 'var(--color-on-surface-variant)',
+        strokeOpacity: 0.35,
         strokeWidth: 1.5,
-        strokeDasharray: '6 4',
         pointerEvents: 'none',
       }}
     />

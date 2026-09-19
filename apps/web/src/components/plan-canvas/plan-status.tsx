@@ -117,7 +117,7 @@ export type PlanHandleSize = '!size-1.5' | '!size-2';
  */
 export function planHandleClasses(size: PlanHandleSize): string {
   return cn(
-    '!bg-outline opacity-0 transition-opacity',
+    '!bg-outline !border-0 opacity-0 transition-opacity',
     'group-hover:opacity-100 group-focus-within:opacity-100 [.react-flow__node.selected_&]:opacity-100',
     size,
   );

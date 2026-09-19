@@ -33,9 +33,7 @@ function PlanStartHint({
       data-testid="plan-start-hint"
     >
       <Sparkles aria-hidden="true" className="text-primary size-4 shrink-0" />
-      <span className="min-w-0">
-        Tell Athena what this initiative involves and she will draft the projects here.
-      </span>
+      <span className="min-w-0">No projects yet</span>
       {onAddProject ? (
         <Button type="button" size="sm" variant="secondary" onClick={onAddProject}>
           <Plus className="size-4" /> Add project
@@ -72,7 +70,6 @@ export function PlanStartOverlay({
       <EmptyState
         icon={Sparkles}
         title="Nothing on the canvas yet"
-        body="Tell Athena what you are planning, or add a project to start by hand."
         {...(onAddProject
           ? {
               action: (

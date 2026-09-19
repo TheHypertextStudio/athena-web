@@ -205,6 +205,7 @@ const DEFINITIONS: readonly NavigationDefinition[] = [
     rail: false,
     icon: ListChecks,
     label: label('Tasks'),
+    sharedWorkspaceOnly: true,
   },
   {
     id: 'workspace:stream',
@@ -214,6 +215,7 @@ const DEFINITIONS: readonly NavigationDefinition[] = [
     rail: false,
     icon: Activity,
     label: label('Stream'),
+    sharedWorkspaceOnly: true,
   },
   {
     id: 'workspace:library',

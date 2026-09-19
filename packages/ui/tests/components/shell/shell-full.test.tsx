@@ -1067,7 +1067,7 @@ describe('Sidebar', () => {
     ).toHaveAttribute('href', '/tasks');
   });
 
-  it('keeps the Workspace Tasks row in a personal workspace', () => {
+  it('lists Tasks once, in Home, in a personal workspace', () => {
     render(
       <ContextProvider initialContext={PERSONAL.id}>
         <Sidebar
@@ -1081,10 +1081,9 @@ describe('Sidebar', () => {
     );
 
     const workspaceNav = screen.getByRole('navigation', { name: 'Workspace' });
-    expect(within(workspaceNav).getByRole('link', { name: 'Tasks' })).toHaveAttribute(
-      'href',
-      `/orgs/${PERSONAL.id}/tasks`,
-    );
+    expect(within(workspaceNav).queryByRole('link', { name: 'Tasks' })).toBeNull();
+    const homeNav = screen.getByRole('navigation', { name: 'Home' });
+    expect(within(homeNav).getByRole('link', { name: 'Tasks' })).toBeInTheDocument();
   });
 
   it('never produces an /orgs/null href when no org is bound yet', () => {

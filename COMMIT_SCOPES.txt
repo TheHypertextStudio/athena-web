@@ -43,6 +43,7 @@ permissions
 planning
 programs
 projects
+sidebar
 takeout
 tasks
 time

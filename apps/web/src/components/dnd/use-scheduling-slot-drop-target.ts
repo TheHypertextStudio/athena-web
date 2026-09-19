@@ -42,6 +42,51 @@ function clientYFor(event: Event | undefined, fallback: number): number {
     : fallback;
 }
 
+/** Handle drag-end event with action invocation. */
+async function handleDragEnd(
+  event: Parameters<Parameters<typeof useDragDropMonitor>[0]['onDragEnd']>[0],
+  opts: {
+    droppableId: string;
+    nodeRef: { current: Element | null };
+    registry: ReturnType<typeof useOptionalActionRegistry>;
+    dragController: ReturnType<typeof useDragController>;
+    targetAt: (minutes: number) => ObjectRef | null;
+    startMinutesAt: (clientY: number, bounds: DOMRect) => number;
+  },
+): Promise<void> {
+  if (event.operation.target?.id !== opts.droppableId) return;
+  if (opts.registry === null || opts.nodeRef.current === null) return;
+  const dragData = event.operation.source?.data;
+  if (!isObjectDragData(dragData) || dragData.actionScope !== 'all') return;
+  const bounds = opts.nodeRef.current.getBoundingClientRect();
+  const finalMinutes = opts.startMinutesAt(
+    clientYFor(event.nativeEvent, event.operation.position.current.y),
+    bounds,
+  );
+  const finalTarget = opts.targetAt(finalMinutes);
+  if (!finalTarget) return;
+  const finalResolution = resolveObjectRelation(dragData.objects, finalTarget);
+  if (!finalResolution.accepted) return;
+  const definition = opts.registry.getByRelation(finalResolution.intent.relationId);
+  if (!definition) return;
+  const result = await opts.registry.invoke(definition.id, () => ({
+    objects: dragData.objects,
+    target: finalTarget,
+    source: 'drag' as const,
+    organizationId: finalTarget.organizationId ?? dragData.object.organizationId,
+    actionScope: dragData.actionScope,
+    ...(dragData.sourceSurfaceId === null ? {} : { surfaceId: dragData.sourceSurfaceId }),
+    params: { relationId: finalResolution.intent.relationId },
+  }));
+  opts.dragController.announce(
+    result.status === 'ran'
+      ? `Completed: Schedule at ${finalTarget.title}`
+      : result.status === 'failed'
+        ? `Could not schedule at ${finalTarget.title}`
+        : (result.detail ?? 'This time cannot receive this item'),
+  );
+}
+
 /** Register an empty calendar lane as an exact, snapped relation destination. */
 export function useSchedulingSlotDropTarget(
   options: UseSchedulingSlotDropTargetOptions,
@@ -95,39 +140,14 @@ export function useSchedulingSlotDropTarget(
     onDragEnd: (event) => {
       if (event.operation.target?.id !== droppableId) return;
       setStartMinutes(null);
-      if (registry === null || nodeRef.current === null) return;
-      const dragData = event.operation.source?.data;
-      if (!isObjectDragData(dragData) || dragData.actionScope !== 'all') return;
-      const bounds = nodeRef.current.getBoundingClientRect();
-      const finalMinutes = startMinutesAt(
-        clientYFor(event.nativeEvent, event.operation.position.current.y),
-        bounds,
-      );
-      const finalTarget = targetAt(finalMinutes);
-      if (!finalTarget) return;
-      const finalResolution = resolveObjectRelation(dragData.objects, finalTarget);
-      if (!finalResolution.accepted) return;
-      const definition = registry.getByRelation(finalResolution.intent.relationId);
-      if (!definition) return;
-      void registry
-        .invoke(definition.id, () => ({
-          objects: dragData.objects,
-          target: finalTarget,
-          source: 'drag',
-          organizationId: finalTarget.organizationId ?? dragData.object.organizationId,
-          actionScope: dragData.actionScope,
-          ...(dragData.sourceSurfaceId === null ? {} : { surfaceId: dragData.sourceSurfaceId }),
-          params: { relationId: finalResolution.intent.relationId },
-        }))
-        .then((result) => {
-          dragController.announce(
-            result.status === 'ran'
-              ? `Completed: Schedule at ${finalTarget.title}`
-              : result.status === 'failed'
-                ? `Could not schedule at ${finalTarget.title}`
-                : (result.detail ?? 'This time cannot receive this item'),
-          );
-        });
+      void handleDragEnd(event, {
+        droppableId,
+        nodeRef,
+        registry,
+        dragController,
+        targetAt,
+        startMinutesAt,
+      });
     },
   });
 

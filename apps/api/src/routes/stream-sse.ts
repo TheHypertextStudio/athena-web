@@ -13,14 +13,37 @@
  */
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
+
 import type { AppEnv } from '../context';
 import { AuthError } from '../error';
 import { type StreamEvent, subscribe } from '../lib/event-bus';
 import { declareStreaming } from '../lib/sse-headers';
+
 import { canDeliverQueuedStreamEvent } from './stream-helpers';
 
 /** Heartbeat cadence (ms) — a comment-frame ping that keeps the connection warm. */
 const HEARTBEAT_MS = 25_000;
+
+/**
+ * Process a batch of pending stream events, sending them to the client.
+ *
+ * @param stream - The SSE stream writer.
+ * @param userId - The authenticated user id.
+ * @param batch - The events to send.
+ */
+async function deliverBatch(
+  stream: Parameters<typeof streamSSE>[1],
+  userId: string,
+  batch: StreamEvent[],
+): Promise<void> {
+  for (const event of batch) {
+    // Recipient rows are historical routing hints, not a durable access grant. Recheck
+    // the canonical task decision at the actual socket-delivery edge so a queued event
+    // cannot cross a grant revocation that happened after it was published.
+    if (!(await canDeliverQueuedStreamEvent(userId, event.id))) continue;
+    await stream.writeSSE({ event: 'stream-event', data: JSON.stringify(event) });
+  }
+}
 
 /** Live stream router: a single SSE subscription per connection. */
 const streamSse = new Hono<AppEnv>().get('/sse', (c) => {
@@ -47,13 +70,7 @@ const streamSse = new Hono<AppEnv>().get('/sse', (c) => {
           if (pending.length > 0) {
             const batch = pending;
             pending = [];
-            for (const event of batch) {
-              // Recipient rows are historical routing hints, not a durable access grant. Recheck
-              // the canonical task decision at the actual socket-delivery edge so a queued event
-              // cannot cross a grant revocation that happened after it was published.
-              if (!(await canDeliverQueuedStreamEvent(userId, event.id))) continue;
-              await stream.writeSSE({ event: 'stream-event', data: JSON.stringify(event) });
-            }
+            await deliverBatch(stream, userId, batch);
             continue;
           }
           // Wait for the next event or the heartbeat deadline, whichever comes first.
@@ -77,4 +94,5 @@ const streamSse = new Hono<AppEnv>().get('/sse', (c) => {
     }),
   );
 });
+
 export default streamSse;

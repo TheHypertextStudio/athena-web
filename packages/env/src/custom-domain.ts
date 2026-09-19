@@ -132,6 +132,15 @@ const IPV4_PATTERN = /^\d{1,3}(\.\d{1,3}){3}$/;
  * // { ok: true, host: 'example.com' }
  * ```
  */
+/** Validate each DNS label in the host. */
+function validateLabels(labels: string[]): CustomDomainRejection | null {
+  for (const label of labels) {
+    if (label.length > MAX_LABEL_LENGTH) return 'label-too-long';
+    if (!LABEL_PATTERN.test(label)) return 'invalid-label';
+  }
+  return null;
+}
+
 export function normalizeCustomDomain(input: string | undefined | null): CustomDomainNormalization {
   if (input === undefined || input === null || input.trim().length === 0) {
     return { ok: false, reason: 'empty' };
@@ -154,10 +163,8 @@ export function normalizeCustomDomain(input: string | undefined | null): CustomD
   if (labels.length < 2) return { ok: false, reason: 'not-a-domain' };
   if (IPV4_PATTERN.test(host)) return { ok: false, reason: 'not-a-domain' };
 
-  for (const label of labels) {
-    if (label.length > MAX_LABEL_LENGTH) return { ok: false, reason: 'label-too-long' };
-    if (!LABEL_PATTERN.test(label)) return { ok: false, reason: 'invalid-label' };
-  }
+  const labelError = validateLabels(labels);
+  if (labelError) return { ok: false, reason: labelError };
 
   return { ok: true, host };
 }

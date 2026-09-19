@@ -148,6 +148,64 @@ export interface TaskAssociationCommandDependencies {
   ) => Promise<'applied' | 'unchanged'>;
 }
 
+async function handleParentRelation(
+  organizationId: string,
+  intent: TaskAssociationRelationIntent,
+  dependencies: TaskAssociationCommandDependencies,
+): Promise<boolean> {
+  await dependencies.reparent(
+    organizationId,
+    intent.subjects.map(({ id }) => ({ taskId: id, parentTaskId: intent.target.id })),
+  );
+  return true;
+}
+
+async function handleBlocksRelation(
+  organizationId: string,
+  subject: RelationEndpoint,
+  targetId: string,
+  dependencies: TaskAssociationCommandDependencies,
+): Promise<'applied' | 'unchanged'> {
+  return dependencies.addDependency(organizationId, subject.id, targetId);
+}
+
+async function handleLabelRelation(
+  organizationId: string,
+  subject: RelationEndpoint,
+  targetId: string,
+  dependencies: TaskAssociationCommandDependencies,
+): Promise<'applied' | 'unchanged'> {
+  return dependencies.addLabel(organizationId, subject.id, targetId);
+}
+
+async function handleCalendarItemRelation(
+  organizationId: string,
+  subject: RelationEndpoint,
+  targetId: string,
+  dependencies: TaskAssociationCommandDependencies,
+): Promise<'applied' | 'unchanged'> {
+  return dependencies.linkCalendarItem(organizationId, subject.id, targetId);
+}
+
+async function handleCalendarSlotRelation(
+  organizationId: string,
+  subject: RelationEndpoint,
+  target: RelationEndpoint,
+  dependencies: TaskAssociationCommandDependencies,
+): Promise<'applied' | 'unchanged' | null> {
+  const startsAt = target.meta?.['startsAt'];
+  const endsAt = target.meta?.['endsAt'];
+  if (typeof startsAt !== 'string' || typeof endsAt !== 'string') return null;
+  const title = subject.meta?.['title'];
+  return dependencies.scheduleCalendarSlot(
+    organizationId,
+    subject.id,
+    typeof title === 'string' ? title : 'Task',
+    startsAt,
+    endsAt,
+  );
+}
+
 /** Build the Task-owned port for associations that are not property patches. */
 export function createTaskAssociationCommandPort(
   dependencies: TaskAssociationCommandDependencies,
@@ -159,36 +217,39 @@ export function createTaskAssociationCommandPort(
         return { status: 'unchanged' };
       }
       if (intent.relationId === 'task.parent') {
-        await dependencies.reparent(
-          organizationId,
-          intent.subjects.map(({ id }) => ({ taskId: id, parentTaskId: intent.target.id })),
-        );
-        return { status: 'applied' };
+        const applied = await handleParentRelation(organizationId, intent, dependencies);
+        return { status: applied ? 'applied' : 'unchanged' };
       }
       let applied = false;
       for (const subject of intent.subjects) {
-        let status: 'applied' | 'unchanged';
+        let status: 'applied' | 'unchanged' | null;
         if (intent.relationId === 'task.blocks') {
-          status = await dependencies.addDependency(organizationId, subject.id, intent.target.id);
-        } else if (intent.relationId === 'task.label') {
-          status = await dependencies.addLabel(organizationId, subject.id, intent.target.id);
-        } else if (intent.relationId === 'task.calendar-item') {
-          status = await dependencies.linkCalendarItem(
+          status = await handleBlocksRelation(
             organizationId,
-            subject.id,
+            subject,
             intent.target.id,
+            dependencies,
+          );
+        } else if (intent.relationId === 'task.label') {
+          status = await handleLabelRelation(
+            organizationId,
+            subject,
+            intent.target.id,
+            dependencies,
+          );
+        } else if (intent.relationId === 'task.calendar-item') {
+          status = await handleCalendarItemRelation(
+            organizationId,
+            subject,
+            intent.target.id,
+            dependencies,
           );
         } else {
-          const startsAt = intent.target.meta?.['startsAt'];
-          const endsAt = intent.target.meta?.['endsAt'];
-          if (typeof startsAt !== 'string' || typeof endsAt !== 'string') continue;
-          const title = subject.meta?.['title'];
-          status = await dependencies.scheduleCalendarSlot(
+          status = await handleCalendarSlotRelation(
             organizationId,
-            subject.id,
-            typeof title === 'string' ? title : 'Task',
-            startsAt,
-            endsAt,
+            subject,
+            intent.target,
+            dependencies,
           );
         }
         if (status === 'applied') applied = true;

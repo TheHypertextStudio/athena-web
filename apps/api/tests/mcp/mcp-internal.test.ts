@@ -226,6 +226,184 @@ describe('in-process MCP as the agent principal', () => {
     expect(res.isError).toBe(true);
   });
 
+  /** Capture a task as the agent, then make it private so only a grant can reveal it. */
+  async function capturePrivateTask(client: Client, orgId: string, text: string): Promise<string> {
+    const res = (await client.callTool({
+      name: 'capture',
+      arguments: { orgId, text },
+    })) as CallToolResult;
+    expect(res.isError ?? false).toBe(false);
+    const [row] = await db
+      .update(schema.task)
+      .set({ visibility: 'private' })
+      .where(and(eq(schema.task.organizationId, orgId), eq(schema.task.title, text)))
+      .returning({ id: schema.task.id });
+    return assertDefined(row).id;
+  }
+
+  /** Read a task's stored priority. */
+  async function taskPriority(taskId: string): Promise<string> {
+    const [row] = await db
+      .select({ priority: schema.task.priority })
+      .from(schema.task)
+      .where(eq(schema.task.id, taskId));
+    return assertDefined(row).priority;
+  }
+
+  /** Parse a tool's JSON text result. */
+  function payload(res: CallToolResult): Record<string, unknown> {
+    const text = res.content[0]?.type === 'text' ? res.content[0].text : '';
+    return JSON.parse(text) as Record<string, unknown>;
+  }
+
+  it('updates, reads, and lists a private task through its workspace grant', async () => {
+    const seed = await seedOrg();
+    const client = await connect(await internalAgentContext(seed.orgId, seed.agentId));
+    const taskId = await capturePrivateTask(client, seed.orgId, 'Draft the agenda');
+
+    const updated = (await client.callTool({
+      name: 'update',
+      arguments: {
+        orgId: seed.orgId,
+        entity: 'task',
+        scope: { ids: [taskId] },
+        set: { priority: 'high' },
+      },
+    })) as CallToolResult;
+    expect(updated.isError ?? false).toBe(false);
+    expect(payload(updated)).toMatchObject({ matched: 1, changed: 1 });
+    expect(await taskPriority(taskId)).toBe('high');
+
+    const read = (await client.callTool({
+      name: 'get_tasks',
+      arguments: { orgId: seed.orgId, refs: [taskId] },
+    })) as CallToolResult;
+    expect(payload(read)).toMatchObject({ items: [{ id: taskId }], missing: [] });
+
+    const listed = (await client.callTool({
+      name: 'list_work',
+      arguments: { orgId: seed.orgId, entity: 'task' },
+    })) as CallToolResult;
+    const items = payload(listed)['items'] as { id: string }[];
+    expect(items.map((item) => item.id)).toContain(taskId);
+  });
+
+  it('refuses the update once the workspace grant is gone', async () => {
+    const seed = await seedOrg();
+    const client = await connect(await internalAgentContext(seed.orgId, seed.agentId));
+    const taskId = await capturePrivateTask(client, seed.orgId, 'Hidden follow-up');
+    const before = await taskPriority(taskId);
+    await db
+      .delete(schema.grant)
+      .where(
+        and(eq(schema.grant.subjectKind, 'actor'), eq(schema.grant.subjectId, seed.agentActorId)),
+      );
+
+    const res = (await client.callTool({
+      name: 'update',
+      arguments: {
+        orgId: seed.orgId,
+        entity: 'task',
+        scope: { ids: [taskId] },
+        set: { priority: 'high' },
+      },
+    })) as CallToolResult;
+    expect(res.isError).toBe(true);
+    expect(before).not.toBe('high');
+    expect(await taskPriority(taskId)).toBe(before);
+  });
+
+  it('archives and comments on a private task through its workspace grant', async () => {
+    const seed = await seedOrg();
+    const client = await connect(await internalAgentContext(seed.orgId, seed.agentId));
+    const commentedId = await capturePrivateTask(client, seed.orgId, 'Confirm the caterer');
+    const archivedId = await capturePrivateTask(client, seed.orgId, 'Old venue shortlist');
+
+    const commented = (await client.callTool({
+      name: 'comment',
+      arguments: {
+        orgId: seed.orgId,
+        subjectType: 'task',
+        subjectId: commentedId,
+        body: 'Called them.',
+      },
+    })) as CallToolResult;
+    expect(commented.isError ?? false).toBe(false);
+    const comments = await db
+      .select({ id: schema.comment.id })
+      .from(schema.comment)
+      .where(eq(schema.comment.subjectId, commentedId));
+    expect(comments).toHaveLength(1);
+
+    const archived = (await client.callTool({
+      name: 'archive',
+      arguments: { orgId: seed.orgId, entity: 'task', scope: { ids: [archivedId] } },
+    })) as CallToolResult;
+    expect(archived.isError ?? false).toBe(false);
+    expect(payload(archived)).toMatchObject({ matched: 1 });
+    const [row] = await db
+      .select({ archivedAt: schema.task.archivedAt })
+      .from(schema.task)
+      .where(eq(schema.task.id, archivedId));
+    expect(assertDefined(row).archivedAt).not.toBeNull();
+  });
+
+  it('finds a private task through its workspace grant', async () => {
+    const seed = await seedOrg();
+    const client = await connect(await internalAgentContext(seed.orgId, seed.agentId));
+    const taskId = await capturePrivateTask(client, seed.orgId, 'Draft the agenda');
+    // Indexing runs through an async outbox in production; write the projection row directly.
+    await db.insert(schema.searchDocument).values({
+      id: `task:${seed.orgId}:${taskId}`,
+      organizationId: seed.orgId,
+      kind: 'task',
+      family: 'work',
+      sourceTable: 'task',
+      entityId: taskId,
+      title: 'Draft the agenda',
+      facet: {},
+      route: {
+        type: 'entity',
+        organizationId: seed.orgId,
+        entityKind: 'task',
+        entityId: taskId,
+        href: `/orgs/${seed.orgId}/tasks/${taskId}`,
+      },
+      visibility: { mode: 'grantable', subjectKind: 'task', subjectId: taskId },
+      baseRank: 100,
+    });
+
+    const res = (await client.callTool({
+      name: 'find',
+      arguments: { orgId: seed.orgId, query: 'agenda' },
+    })) as CallToolResult;
+    expect(res.isError ?? false).toBe(false);
+    const items = payload(res)['items'] as { id: string }[];
+    expect(items.map((item) => item.id)).toContain(taskId);
+  });
+
+  it('reads no public task for an agent holding no grants', async () => {
+    const seed = await seedOrg();
+    const granted = await connect(await internalAgentContext(seed.orgId, seed.agentId));
+    const taskId = await capturePrivateTask(granted, seed.orgId, 'Public note');
+    await db.update(schema.task).set({ visibility: 'public' }).where(eq(schema.task.id, taskId));
+    const [bareActor] = await db
+      .insert(schema.actor)
+      .values({ organizationId: seed.orgId, kind: 'agent', displayName: 'Bare' })
+      .returning({ id: schema.actor.id });
+    const [bare] = await db
+      .insert(schema.agent)
+      .values({ organizationId: seed.orgId, actorId: assertDefined(bareActor).id })
+      .returning({ id: schema.agent.id });
+    const client = await connect(await internalAgentContext(seed.orgId, assertDefined(bare).id));
+
+    const res = (await client.callTool({
+      name: 'get_tasks',
+      arguments: { orgId: seed.orgId, refs: [taskId] },
+    })) as CallToolResult;
+    expect(payload(res)).toMatchObject({ items: [], missing: [{ ref: taskId }] });
+  });
+
   it('enforces the scope layer: connectors:link tools refuse the agent principal', async () => {
     const seed = await seedOrg();
     const ctx = await internalAgentContext(seed.orgId, seed.agentId);

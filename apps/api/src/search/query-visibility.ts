@@ -13,6 +13,7 @@ import type { searchDocument } from '@docket/db';
 import {
   resourceAccessKey,
   resolveResourceAccess,
+  resolveResourceAccessForActors,
   type ResourceAccessRef,
   type ResourceAccessResult,
 } from '../permissions/resource-access';
@@ -96,7 +97,9 @@ export async function resolveCallerAccess(caller: SearchCaller): Promise<CallerO
     organizationId: row.organizationId,
     actorId: row.actorId,
     roleId: row.roleId,
-    isGuest: row.roleKey === 'guest' || row.roleDefaultVisibility === 'private',
+    // A registered agent sees grantable work only through its own grants.
+    isGuest:
+      caller.kind === 'agent' || row.roleKey === 'guest' || row.roleDefaultVisibility === 'private',
   }));
 }
 
@@ -117,8 +120,8 @@ export async function filterVisibleRows(
 
   // Grant resolution and recipient fan-out both key off the caller's own user id but read
   // otherwise-independent tables, so they run concurrently rather than as two sequential round
-  // trips. An agent caller has no personal grants or recipient fan-out to resolve — it reaches
-  // grantable resources through `org_members` and its own actor scope instead.
+  // trips. An agent caller has no user or recipient fan-out; its grants resolve through its own
+  // actor, the same actor the task tools read.
   const [subjectAccess, recipientEventIds]: [
     ReadonlyMap<string, ResourceAccessResult>,
     ReadonlySet<string>,
@@ -127,7 +130,13 @@ export async function filterVisibleRows(
         resolveResourceAccess(caller.ownerUserId, [...subjectRefs.values()]),
         loadRecipientEventIds(caller.ownerUserId, eventIds),
       ])
-    : [new Map(), new Set()];
+    : [
+        await resolveResourceAccessForActors(
+          [...caller.accessByOrg.values()],
+          [...subjectRefs.values()],
+        ),
+        new Set(),
+      ];
 
   const visibleRows = rows.filter((row) => {
     const visibility = readVisibility(row.visibility);

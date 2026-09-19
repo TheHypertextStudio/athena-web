@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import type * as DbModule from '@docket/db';
 
@@ -146,6 +146,14 @@ async function assignGuestRole(fixture: PrivateTaskFixture): Promise<void> {
   await fixture.schema.db
     .update(fixture.schema.actor)
     .set({ roleId: guest.id })
+    .where(eq(fixture.schema.actor.id, fixture.actorId));
+}
+
+/** Turn the fixture's actor into a registered agent. */
+async function makeAgent(fixture: PrivateTaskFixture): Promise<void> {
+  await fixture.schema.db
+    .update(fixture.schema.actor)
+    .set({ kind: 'agent', userId: null })
     .where(eq(fixture.schema.actor.id, fixture.actorId));
 }
 
@@ -317,6 +325,86 @@ describe('buildTaskViewFilter', () => {
       expect(canView(fixture.task)).toBe(false);
     },
   );
+
+  it.each([
+    ['organization', (fixture: PrivateTaskFixture) => fixture.orgId],
+    ['project', (fixture: PrivateTaskFixture) => fixture.projectId],
+  ] as const)(
+    'lets a registered agent see a private task through a cascading %s grant',
+    async (kind, resourceId) => {
+      const fixture = await seedPrivateTask();
+      await makeAgent(fixture);
+      await grantView(fixture, kind, resourceId(fixture), true);
+
+      const canView = await buildTaskViewFilter(fixture.orgId, fixture.actorId);
+
+      expect(canView(fixture.task)).toBe(true);
+    },
+  );
+
+  it('keeps a private task from a registered agent without a grant', async () => {
+    const fixture = await seedPrivateTask();
+    await makeAgent(fixture);
+
+    const canView = await buildTaskViewFilter(fixture.orgId, fixture.actorId);
+
+    expect(canView(fixture.task)).toBe(false);
+  });
+
+  it('keeps a public task from a registered agent without a grant', async () => {
+    const fixture = await seedPrivateTask();
+    const publicTask = await setTaskVisibility(fixture, 'public');
+    await makeAgent(fixture);
+
+    const canView = await buildTaskViewFilter(fixture.orgId, fixture.actorId);
+
+    expect(canView(publicTask)).toBe(false);
+  });
+
+  it.each([
+    ['suspended', { status: 'suspended' as const }],
+    ['archived', { archivedAt: new Date('2026-09-01T00:00:00.000Z') }],
+  ] as const)('shows nothing to a %s agent, even with a workspace grant', async (_, change) => {
+    const fixture = await seedPrivateTask();
+    await makeAgent(fixture);
+    await grantView(fixture, 'organization', fixture.orgId, true);
+    await fixture.schema.db
+      .update(fixture.schema.actor)
+      .set(change)
+      .where(eq(fixture.schema.actor.id, fixture.actorId));
+
+    const canView = await buildTaskViewFilter(fixture.orgId, fixture.actorId);
+
+    expect(canView(fixture.task)).toBe(false);
+  });
+});
+
+describe('buildTaskViewCondition for a registered agent', () => {
+  /** Return the fixture task ids the agent's SQL predicate admits. */
+  async function visibleIds(fixture: PrivateTaskFixture): Promise<string[]> {
+    const condition = await buildTaskViewCondition(fixture.orgId, fixture.actorId);
+    const rows = await fixture.schema.db
+      .select({ id: fixture.schema.task.id })
+      .from(fixture.schema.task)
+      .where(and(eq(fixture.schema.task.id, fixture.task.id), condition));
+    return rows.map((row) => row.id);
+  }
+
+  it('admits a private task under the agent project grant', async () => {
+    const fixture = await seedPrivateTask();
+    await makeAgent(fixture);
+    await grantView(fixture, 'project', fixture.projectId, true);
+
+    expect(await visibleIds(fixture)).toEqual([fixture.task.id]);
+  });
+
+  it('admits no public task without a grant', async () => {
+    const fixture = await seedPrivateTask();
+    await setTaskVisibility(fixture, 'public');
+    await makeAgent(fixture);
+
+    expect(await visibleIds(fixture)).toEqual([]);
+  });
 });
 
 describe('toOut', () => {

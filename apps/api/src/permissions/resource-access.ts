@@ -26,7 +26,8 @@ export interface ResourceAccessResult {
   readonly effectiveCapability: Capability | null;
 }
 
-interface CallerOrgAccess {
+/** One actor the caller acts as in one organization, with the role its grants inherit. */
+export interface CallerOrgAccess {
   readonly organizationId: string;
   readonly actorId: string;
   readonly roleId: string | null;
@@ -80,14 +81,37 @@ export async function resolveResourceAccess(
   refs: readonly ResourceAccessRef[],
   database?: ResourceAccessDatabase,
 ): Promise<Map<string, ResourceAccessResult>> {
+  if (refs.length === 0) return new Map();
+  const organizationIds = [...new Set(refs.map((ref) => ref.organizationId))];
+  const accesses = await loadCallerOrgAccess(userId, organizationIds, database);
+  return resolveResourceAccessForActors(accesses, refs, database);
+}
+
+/**
+ * Resolve view access for a batch of resources on behalf of already-resolved actors.
+ *
+ * @remarks
+ * This is the grant evaluation behind {@link resolveResourceAccess}, for a caller that is not a
+ * user, such as a registered agent acting through its own actor. Each access record names one
+ * active actor in one organization; resources in any other organization resolve to no access.
+ *
+ * @param accesses - The caller's actor, role, and guest status per organization.
+ * @param refs - Resource references to resolve in one batch.
+ * @param database - Optional transaction or database that owns the authorization snapshot.
+ * @returns A map containing an entry for every input reference, keyed by
+ * {@link resourceAccessKey}.
+ */
+export async function resolveResourceAccessForActors(
+  accesses: readonly CallerOrgAccess[],
+  refs: readonly ResourceAccessRef[],
+  database?: ResourceAccessDatabase,
+): Promise<Map<string, ResourceAccessResult>> {
   const result = new Map<string, ResourceAccessResult>();
   for (const ref of refs) {
     result.set(resourceAccessKey(ref), { canView: false, effectiveCapability: null });
   }
-  if (refs.length === 0) return result;
+  if (refs.length === 0 || accesses.length === 0) return result;
 
-  const organizationIds = [...new Set(refs.map((ref) => ref.organizationId))];
-  const accesses = await loadCallerOrgAccess(userId, organizationIds, database);
   const accessByOrg = new Map(accesses.map((access) => [access.organizationId, access]));
   const [facts, grants] = await Promise.all([
     loadResourceFacts(refs, database),

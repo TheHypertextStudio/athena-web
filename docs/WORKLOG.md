@@ -10946,6 +10946,38 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [MCP-AGENT-TASKS-001] Let a registered agent find the tasks its grant covers
+
+- **Completed**: 2026-09-19
+- **Started**: 2026-09-19
+- **Priority**: P1
+- **Summary**: A registered agent calling `update` on a task got `matched: 0` even with a
+  workspace-wide grant. `get_tasks`, `list_work`, `archive`, and `comment` hid tasks from it the
+  same way, and `find` never returned a private task to it. It now sees exactly the tasks its
+  grants cover, and nothing else.
+- **Approach**: The shared task-view scope (`loadTaskViewScope` in
+  `apps/api/src/routes/task-helpers.ts`) admitted only `human` actors, so an agent resolved to no
+  scope and every task was filtered out before the per-task `contribute` check ran. It now admits
+  `agent` actors and reads their grants the same way. Agents do not get the public-task baseline
+  that members get: `get_tasks` has no workspace-level gate, so the baseline would have let an
+  agent with no grants read every public task. Search resolved private (`grantable`) rows only
+  through a user id, so it now resolves them through the agent's own actor
+  (`resolveResourceAccessForActors` in `apps/api/src/permissions/resource-access.ts`), and treats
+  agents as grant-only there too. Team actors stay excluded.
+- **Files Changed**: `apps/api/src/routes/task-helpers.ts`,
+  `apps/api/src/permissions/resource-access.ts`, `apps/api/src/search/query-visibility.ts`,
+  `apps/api/tests/routes/task-helpers.test.ts`, `apps/api/tests/mcp/mcp-internal.test.ts`,
+  `docs/engineering/specs/mcp-surface.md`.
+- **Validation**: The in-process MCP tests failed first (`matched: 0`, no private task from
+  `find`, a public task returned to an agent with no grants) and pass after the fix. They cover
+  update with the stored value read back, `get_tasks`, `list_work`, `archive`, `comment`, `find`,
+  and the refusal with no grant. The helper tests cover workspace and project grants, an agent with
+  no grant on public and private tasks, suspended and archived agents, and the SQL predicate.
+- **Learnings**: Task reads and search evaluated grants in two separate places, and both assumed
+  the caller was a person. No existing test ran a task tool as an agent, which is why this went
+  unnoticed. A narrower grant still leaves an agent unable to use `find`, `list_work`, `update`,
+  or `archive`, because those tools first check `view` on the workspace.
+
 ### [CREATE-COMPOSERS-003] Remove the stacked title-to-editor gap
 
 - **Completed**: 2026-09-08

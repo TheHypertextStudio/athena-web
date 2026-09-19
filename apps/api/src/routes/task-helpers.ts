@@ -153,6 +153,27 @@ interface TaskViewScope {
   readonly cascadingGrants: Readonly<Record<GrantResourceKind, ReadonlySet<string>>>;
 }
 
+/** The caller facts that decide whether public Tasks are visible without a grant. */
+interface TaskViewCaller {
+  readonly kind: string;
+  readonly roleKey: string | null;
+  readonly roleDefaultVisibility: string | null;
+}
+
+/**
+ * Whether the caller sees only the Tasks its grants cover, with no public-task baseline.
+ *
+ * @remarks
+ * The public baseline is for members. Guests and registered agents see only what they are granted.
+ */
+function seesOnlyGrantedTasks(caller: TaskViewCaller): boolean {
+  return (
+    caller.kind === 'agent' ||
+    caller.roleKey === 'guest' ||
+    caller.roleDefaultVisibility === 'private'
+  );
+}
+
 /** Load the one grant scope consumed by both in-memory and SQL task visibility predicates. */
 async function loadTaskViewScope(
   orgId: string,
@@ -162,6 +183,7 @@ async function loadTaskViewScope(
   const rows = await database
     .select({
       id: actor.id,
+      kind: actor.kind,
       roleId: role.id,
       roleKey: role.key,
       roleDefaultVisibility: role.defaultVisibility,
@@ -187,7 +209,8 @@ async function loadTaskViewScope(
       and(
         eq(actor.id, actorId),
         eq(actor.organizationId, orgId),
-        eq(actor.kind, 'human'),
+        // A registered agent reads Tasks through its own grants, the same way a person does.
+        inArray(actor.kind, ['human', 'agent']),
         eq(actor.status, 'active'),
         isNull(actor.archivedAt),
       ),
@@ -233,10 +256,8 @@ async function loadTaskViewScope(
     }
   }
   const orgRootView = cascadingGrants.organization.has(orgId);
-  const isGuest = caller.roleKey === 'guest' || caller.roleDefaultVisibility === 'private';
-
   return {
-    isGuest,
+    isGuest: seesOnlyGrantedTasks(caller),
     orgRootView,
     exactTaskGrants,
     cascadingGrants,
@@ -251,7 +272,7 @@ async function loadTaskViewScope(
  * which keeps aggregate reads from drifting away from ordinary Task visibility.
  *
  * @param orgId - The caller's organization.
- * @param actorId - The caller's human actor id.
+ * @param actorId - The caller's actor id, a person or a registered agent.
  * @param database - The database or active transaction that owns the visibility read.
  * @returns a predicate over the minimal task columns.
  */
@@ -280,7 +301,7 @@ export async function buildTaskViewFilter(
  * application memory just to discard inaccessible rows or count the remainder.
  *
  * @param orgId - The caller's organization.
- * @param actorId - The caller's human actor id.
+ * @param actorId - The caller's actor id, a person or a registered agent.
  * @returns a Drizzle condition scoped to the task table.
  */
 export async function buildTaskViewCondition(orgId: string, actorId: string): Promise<SQL> {
@@ -372,7 +393,7 @@ export async function loadTask(orgId: string, id: string): Promise<TaskRow> {
  * that can view it but lacks the requested write capability receives the normal 403.
  *
  * @param orgId - The task's owning organization.
- * @param actorId - The human actor attempting the operation.
+ * @param actorId - The actor attempting the operation, a person or a registered agent.
  * @param target - The active in-org task previously loaded by the caller.
  * @param required - The capability required by the operation.
  * @throws {NotFoundError} When the caller has no effective access to the task.
@@ -494,7 +515,7 @@ export interface ProjectTaskCounts {
  * it on every load, per concurrent request, on one vCPU.
  *
  * @param orgId - The caller's organization.
- * @param actorId - The caller's human actor id, for the visibility policy.
+ * @param actorId - The caller's actor id, a person or a registered agent, for the visibility policy.
  * @returns totals keyed by Project id; a Project with no visible Tasks is simply absent.
  */
 export async function visibleProjectTaskCounts(

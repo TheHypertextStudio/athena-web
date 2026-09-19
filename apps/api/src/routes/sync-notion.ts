@@ -71,6 +71,16 @@ export interface SyncConflictRow {
   readonly conflict: SyncConflictRecord;
 }
 
+/** Options for recording a sync conflict. */
+export interface RecordSyncConflictOptions {
+  readonly orgId: string;
+  readonly actorId: string | null;
+  readonly integrationId: string;
+  readonly provider: string;
+  readonly taskId: string;
+  readonly conflict: TaskSyncConflict;
+}
+
 /**
  * Persist one losing external value, before the push that overwrites it is issued.
  *
@@ -92,32 +102,25 @@ export interface SyncConflictRow {
  * await recordSyncConflict(orgId, actorId, row.id, row.provider, local.id, action.conflict);
  * ```
  */
-export async function recordSyncConflict(
-  orgId: string,
-  actorId: string | null,
-  integrationId: string,
-  provider: string,
-  taskId: string,
-  conflict: TaskSyncConflict,
-): Promise<void> {
+export async function recordSyncConflict(opts: RecordSyncConflictOptions): Promise<void> {
   const record: SyncConflictRecord = {
     kind: SYNC_CONFLICT_METADATA_KIND,
-    provider,
-    integrationId,
+    provider: opts.provider,
+    integrationId: opts.integrationId,
     resolution: 'docket_wins',
-    externalId: conflict.externalId,
-    remoteUpdatedAt: conflict.remoteUpdatedAt,
-    localUpdatedAt: conflict.localUpdatedAt,
-    remoteTitle: conflict.remoteTitle,
-    remoteBody: conflict.remoteBody,
-    remoteDueDate: conflict.remoteDueDate ?? null,
-    remoteCompleted: conflict.remoteCompleted ?? null,
+    externalId: opts.conflict.externalId,
+    remoteUpdatedAt: opts.conflict.remoteUpdatedAt,
+    localUpdatedAt: opts.conflict.localUpdatedAt,
+    remoteTitle: opts.conflict.remoteTitle,
+    remoteBody: opts.conflict.remoteBody,
+    remoteDueDate: opts.conflict.remoteDueDate ?? null,
+    remoteCompleted: opts.conflict.remoteCompleted ?? null,
   };
   await db.insert(auditEvent).values({
-    organizationId: orgId,
-    ...(actorId !== null ? { actorId } : {}),
+    organizationId: opts.orgId,
+    ...(opts.actorId !== null ? { actorId: opts.actorId } : {}),
     subjectType: 'task',
-    subjectId: taskId,
+    subjectId: opts.taskId,
     type: 'updated',
     metadata: record as unknown as Record<string, unknown>,
   });

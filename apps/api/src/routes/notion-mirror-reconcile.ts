@@ -938,13 +938,13 @@ export async function pullBackEntity(
       // Recorded first, always. The push immediately below destroys the remote value, so the
       // order is what decides whether a crash loses a write or loses the evidence of one. The
       // conflict log is a task history, so other entities keep the merge without a log entry.
-      await recordSyncConflict(
-        ctx.orgId,
-        ctx.actorId,
-        ctx.integrationId,
-        'notion',
-        local.entityId,
-        {
+      await recordSyncConflict({
+        orgId: ctx.orgId,
+        actorId: ctx.actorId,
+        integrationId: ctx.integrationId,
+        provider: 'notion',
+        taskId: local.entityId,
+        conflict: {
           externalId: local.externalPageId,
           remoteUpdatedAt: action.conflict.remoteUpdatedAt,
           localUpdatedAt: action.conflict.localUpdatedAt,
@@ -953,7 +953,7 @@ export async function pullBackEntity(
           remoteDueDate: mirrorDate(contestedValues, 'dueDate'),
           remoteCompleted: undefined,
         },
-      );
+      });
       conflicts += 1;
     }
 

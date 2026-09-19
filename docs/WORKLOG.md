@@ -60,6 +60,17 @@ Quick-win files to process:
 - [x] Batch processing started (2026-09-19)
   - 1 file committed: apps/api/src/routes/stream-sse.ts (max-depth)
   - Agent processing 5-10 additional excess-1 files
+- [x] `apps/api/src/routes/object-commands.ts` cleared (2026-09-19) — the single largest entry in
+      the ledger at 4,902 excess points across six rules. The route kept its whole command engine in
+      one file: a 720-line `executeForward`, a 380-line `executeReplay`, and every validation,
+      capability, and edge query they leaned on. It is now an 80-line Hono file over eighteen modules
+      under `apps/api/src/lib/object-command/`, split along the seams the engine already had —
+      receipt validation, capability checks, reference checks, graph-cycle probes, set-based writes,
+      one handler per forward operation, and the replay preflight and write phases. Deduplicating the
+      relation edge queries into `relation-edges.ts` let the forward and replay paths share one copy
+      of each insert and delete. The file now passes the gate with no relaxation, so its ledger entry
+      was deleted rather than lowered. Behaviour is unchanged; the 146 tests covering the route and
+      its replay-owner, idempotency, and CORS contracts all pass.
 - [ ] All Phase 1 (1-10 excess) files complete
 - [ ] Verify complexity ledger reaches target
 

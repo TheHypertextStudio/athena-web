@@ -60,14 +60,14 @@ describe('sync conflict log', () => {
       })
       .returning({ id: schema.task.id });
 
-    await recordSyncConflict(
+    await recordSyncConflict({
       orgId,
-      humanActorId,
-      assertDefined(integration).id,
-      'notion',
-      assertDefined(task).id,
-      CONFLICT,
-    );
+      actorId: humanActorId,
+      integrationId: assertDefined(integration).id,
+      provider: 'notion',
+      taskId: assertDefined(task).id,
+      conflict: CONFLICT,
+    });
 
     const [row] = await db
       .select()
@@ -108,14 +108,14 @@ describe('sync conflict log', () => {
       })
       .returning({ id: schema.task.id });
 
-    await recordSyncConflict(
+    await recordSyncConflict({
       orgId,
-      null,
-      assertDefined(integration).id,
-      'notion',
-      assertDefined(task).id,
-      CONFLICT,
-    );
+      actorId: null,
+      integrationId: assertDefined(integration).id,
+      provider: 'notion',
+      taskId: assertDefined(task).id,
+      conflict: CONFLICT,
+    });
 
     const [row] = await db
       .select()
@@ -141,18 +141,18 @@ describe('sync conflict log', () => {
       })
       .returning({ id: schema.task.id });
 
-    await recordSyncConflict(
+    await recordSyncConflict({
       orgId,
-      null,
-      assertDefined(integration).id,
-      'notion',
-      assertDefined(task).id,
-      {
+      actorId: null,
+      integrationId: assertDefined(integration).id,
+      provider: 'notion',
+      taskId: assertDefined(task).id,
+      conflict: {
         ...CONFLICT,
         remoteDueDate: undefined,
         remoteCompleted: undefined,
       },
-    );
+    });
 
     const [row] = await db
       .select()
@@ -194,38 +194,38 @@ describe('sync conflict log', () => {
       metadata: { note: 'plain audit row' },
     });
     // A conflict on a different integration must not leak into this integration's list.
-    await recordSyncConflict(
+    await recordSyncConflict({
       orgId,
-      null,
-      assertDefined(otherIntegration).id,
-      'linear',
-      assertDefined(task).id,
-      CONFLICT,
-    );
+      actorId: null,
+      integrationId: assertDefined(otherIntegration).id,
+      provider: 'linear',
+      taskId: assertDefined(task).id,
+      conflict: CONFLICT,
+    });
 
-    await recordSyncConflict(
+    await recordSyncConflict({
       orgId,
-      null,
-      assertDefined(integration).id,
-      'notion',
-      assertDefined(task).id,
-      {
+      actorId: null,
+      integrationId: assertDefined(integration).id,
+      provider: 'notion',
+      taskId: assertDefined(task).id,
+      conflict: {
         ...CONFLICT,
         externalId: 'first',
       },
-    );
+    });
     await new Promise((resolve) => setTimeout(resolve, 5));
-    await recordSyncConflict(
+    await recordSyncConflict({
       orgId,
-      null,
-      assertDefined(integration).id,
-      'notion',
-      assertDefined(task).id,
-      {
+      actorId: null,
+      integrationId: assertDefined(integration).id,
+      provider: 'notion',
+      taskId: assertDefined(task).id,
+      conflict: {
         ...CONFLICT,
         externalId: 'second',
       },
-    );
+    });
 
     const conflicts = await listSyncConflicts(orgId, assertDefined(integration).id);
     expect(conflicts.map((c) => c.conflict.externalId)).toEqual(['second', 'first']);
@@ -251,14 +251,14 @@ describe('sync conflict log', () => {
         statusId: orgA.statusId('task', 'backlog'),
       })
       .returning({ id: schema.task.id });
-    await recordSyncConflict(
-      orgA.orgId,
-      null,
-      assertDefined(integrationA).id,
-      'notion',
-      assertDefined(taskA).id,
-      CONFLICT,
-    );
+    await recordSyncConflict({
+      orgId: orgA.orgId,
+      actorId: null,
+      integrationId: assertDefined(integrationA).id,
+      provider: 'notion',
+      taskId: assertDefined(taskA).id,
+      conflict: CONFLICT,
+    });
 
     expect(await listSyncConflicts(orgB.orgId, assertDefined(integrationA).id)).toEqual([]);
   });

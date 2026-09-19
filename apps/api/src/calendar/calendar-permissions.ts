@@ -68,32 +68,31 @@ export function resolveItemPermissions(input: {
   const kind = CalendarItemKind.parse(item.kind);
   const syncState = CalendarItemSyncState.parse(item.syncState);
 
-  let base: CalendarItemPermission;
-  if (
-    kind === 'native_block' ||
-    kind === 'native_event' ||
-    kind === 'timebox' ||
-    kind === 'task_timebox' ||
-    kind === 'availability_block'
-  ) {
-    base = defaultItemPermissionsForKind(kind);
-  } else {
-    // kind === 'provider_event' (the only remaining case).
-    const hasWriteScope = connection !== null && connection.scopeState?.calendarWrite === true;
-    const layerEditable = layer?.editableCore === true;
-    if (!hasWriteScope) {
-      base = { canEditCore: false, canDelete: false, readOnlyReason: 'provider_scope' };
-    } else if (!layerEditable) {
-      base = { canEditCore: false, canDelete: false, readOnlyReason: 'layer_access_role' };
-    } else if (item.permissions !== null) {
-      base = item.permissions;
-    } else {
-      base = { canEditCore: true, canDelete: true, readOnlyReason: null };
-    }
-  }
-
   if (syncState === 'conflict') {
     return { canEditCore: false, canDelete: false, readOnlyReason: 'conflict' };
   }
-  return base;
+
+  const builtInKinds = new Set([
+    'native_block',
+    'native_event',
+    'timebox',
+    'task_timebox',
+    'availability_block',
+  ] as const);
+  if (builtInKinds.has(kind)) {
+    return defaultItemPermissionsForKind(kind);
+  }
+
+  const hasWriteScope = connection !== null && connection.scopeState?.calendarWrite === true;
+  const layerEditable = layer?.editableCore === true;
+  if (!hasWriteScope) {
+    return { canEditCore: false, canDelete: false, readOnlyReason: 'provider_scope' };
+  }
+  if (!layerEditable) {
+    return { canEditCore: false, canDelete: false, readOnlyReason: 'layer_access_role' };
+  }
+  if (item.permissions !== null) {
+    return item.permissions;
+  }
+  return { canEditCore: true, canDelete: true, readOnlyReason: null };
 }

@@ -25,9 +25,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createPublishedProcessDefinition } from '../../src/lib/recurrence/process-definition';
 import {
   createRecurrenceSeries,
-  editRecurrenceSeries,
   transitionRecurrenceSeries,
 } from '../../src/lib/recurrence/series';
+import { editRecurrenceSeries } from '../../src/lib/recurrence/series-edit';
 import {
   materializeRecurrenceSeriesWindow,
   sweepRecurrenceMaterialization,

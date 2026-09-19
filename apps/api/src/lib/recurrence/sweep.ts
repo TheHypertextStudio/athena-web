@@ -150,48 +150,32 @@ async function applyMissedDate(
   return input.missedPolicy;
 }
 
+/** One series' trigger revisions, with the rows each revision's expansion reads. */
+interface SeriesTimeline {
+  readonly revisions: readonly (typeof recurrenceSeriesRevision.$inferSelect)[];
+  readonly weekdaysByRevision: ReadonlyMap<string, number[]>;
+  readonly exceptionsByRevision: ReadonlyMap<string, (typeof recurrenceException.$inferSelect)[]>;
+  /** Occurrences that already exist, keyed by date; written to as this sweep creates more. */
+  readonly existingByDate: Map<string, (typeof processOccurrence.$inferSelect)[]>;
+}
+
 /**
- * Materialize and reconcile one active series around `asOf`.
+ * Read one series' trigger revisions and everything their expansion has to account for.
  *
  * @param database - Docket database handle.
- * @param input - Workspace, series, actor attribution, and civil sweep date.
- * @returns Work and missed-policy counts for this series.
+ * @param organizationId - The workspace that owns the series.
+ * @param seriesId - The series being swept.
+ * @returns The revisions in effect order, with their weekdays, exceptions, and occurrences.
  */
-export async function materializeRecurrenceSeriesWindow(
+async function loadSeriesTimeline(
   database: Database,
-  input: {
-    readonly organizationId: string;
-    readonly seriesId: string;
-    readonly actorId?: string | undefined;
-    readonly asOf: string;
-    readonly now?: Date | undefined;
-  },
-): Promise<RecurrenceSeriesSweepResult> {
-  const now = input.now ?? new Date();
-  const seriesRows = await database
-    .select()
-    .from(recurrenceSeries)
-    .where(
-      and(
-        eq(recurrenceSeries.id, input.seriesId),
-        eq(recurrenceSeries.organizationId, input.organizationId),
-        eq(recurrenceSeries.status, 'active'),
-      ),
-    )
-    .limit(1);
-  if (!seriesRows[0]) {
-    return {
-      seriesId: input.seriesId,
-      materialized: 0,
-      skipped: 0,
-      needsResolution: 0,
-      carried: 0,
-    };
-  }
+  organizationId: string,
+  seriesId: string,
+): Promise<SeriesTimeline> {
   const revisions = await database
     .select()
     .from(recurrenceSeriesRevision)
-    .where(eq(recurrenceSeriesRevision.seriesId, input.seriesId))
+    .where(eq(recurrenceSeriesRevision.seriesId, seriesId))
     .orderBy(asc(recurrenceSeriesRevision.effectiveFrom), asc(recurrenceSeriesRevision.number));
   const revisionIds = revisions.map((revision) => revision.id);
   const [weekdays, exceptionRows, occurrenceRows] = await Promise.all([
@@ -212,11 +196,12 @@ export async function materializeRecurrenceSeriesWindow(
       .from(processOccurrence)
       .where(
         and(
-          eq(processOccurrence.organizationId, input.organizationId),
-          eq(processOccurrence.seriesId, input.seriesId),
+          eq(processOccurrence.organizationId, organizationId),
+          eq(processOccurrence.seriesId, seriesId),
         ),
       ),
   ]);
+
   const weekdaysByRevision = new Map<string, number[]>();
   for (const value of weekdays) {
     const current = weekdaysByRevision.get(value.seriesRevisionId) ?? [];
@@ -235,100 +220,196 @@ export async function materializeRecurrenceSeriesWindow(
     current.push(occurrence);
     existingByDate.set(occurrence.scheduledFor, current);
   }
+  return { revisions, weekdaysByRevision, exceptionsByRevision, existingByDate };
+}
 
-  let materialized = 0;
-  let skipped = 0;
-  let needsResolution = 0;
-  let carried = 0;
+/** The stretch of calendar one trigger revision governs. */
+interface RevisionSegment {
+  readonly start: string;
+  /** The last date this revision governs, or `null` when it is the latest one. */
+  readonly end: string | null;
+  readonly exceptions: ReturnType<typeof expansionExceptions>;
+}
+
+/** One revision's share of a sweep. */
+interface SweepPass {
+  readonly database: Database;
+  readonly input: {
+    readonly organizationId: string;
+    readonly seriesId: string;
+    readonly actorId?: string | undefined;
+    readonly asOf: string;
+  };
+  readonly now: Date;
+  readonly timeline: SeriesTimeline;
+  readonly revision: typeof recurrenceSeriesRevision.$inferSelect;
+  readonly trigger: Extract<ReturnType<typeof triggerFromStorage>, { kind: 'calendar' }>;
+  readonly segment: RevisionSegment;
+}
+
+/** Running counts across one series' revisions. */
+interface SweepTally {
+  materialized: number;
+  skipped: number;
+  needsResolution: number;
+  carried: number;
+}
+
+/**
+ * Apply the series' missed-occurrence policy to every date it should already have produced.
+ *
+ * @param pass - The revision being swept.
+ * @param tally - The running counts, updated in place.
+ */
+async function resolveMissedDates(pass: SweepPass, tally: SweepTally): Promise<void> {
+  const { segment, input, revision, trigger } = pass;
   const yesterday = addCalendarDays(input.asOf, -1);
-  for (const [index, revision] of revisions.entries()) {
-    const trigger = triggerFromStorage(revision, weekdaysByRevision.get(revision.id) ?? []);
-    if (trigger.kind !== 'calendar') continue;
-    const nextRevision = revisions[index + 1];
-    const segmentStart = later(revision.effectiveFrom, trigger.schedule.startDate);
-    const segmentEnd = nextRevision ? addCalendarDays(nextRevision.effectiveFrom, -1) : null;
-    const exceptions = expansionExceptions(exceptionsByRevision.get(revision.id) ?? []);
+  const missedThrough = segment.end ? earlier(yesterday, segment.end) : yesterday;
+  if (compareCalendarDates(segment.start, missedThrough) > 0) return;
 
-    const missedThrough = segmentEnd ? earlier(yesterday, segmentEnd) : yesterday;
-    if (compareCalendarDates(segmentStart, missedThrough) <= 0) {
-      const missedDates = expandCalendarSchedule(trigger.schedule, {
-        from: segmentStart,
-        through: missedThrough,
-        exceptions,
-      }).filter((date) => compareCalendarDates(date, missedThrough) <= 0);
-      for (const scheduledFor of missedDates) {
-        const outcome = await applyMissedDate(database, {
-          organizationId: input.organizationId,
-          seriesId: input.seriesId,
-          seriesRevisionId: revision.id,
-          processRevisionId: revision.processRevisionId,
-          scheduledFor,
-          missedPolicy: trigger.missedPolicy,
-          actorId: input.actorId,
-          existingByDate,
-          now,
-        });
-        if (outcome === 'skip') skipped += 1;
-        if (outcome === 'resolve') needsResolution += 1;
-        if (outcome === 'carry') carried += 1;
-      }
-    }
+  const missedDates = expandCalendarSchedule(trigger.schedule, {
+    from: segment.start,
+    through: missedThrough,
+    exceptions: segment.exceptions,
+  }).filter((date) => compareCalendarDates(date, missedThrough) <= 0);
+  for (const scheduledFor of missedDates) {
+    const outcome = await applyMissedDate(pass.database, {
+      organizationId: input.organizationId,
+      seriesId: input.seriesId,
+      seriesRevisionId: revision.id,
+      processRevisionId: revision.processRevisionId,
+      scheduledFor,
+      missedPolicy: trigger.missedPolicy,
+      actorId: input.actorId,
+      existingByDate: pass.timeline.existingByDate,
+      now: pass.now,
+    });
+    if (outcome === 'skip') tally.skipped += 1;
+    if (outcome === 'resolve') tally.needsResolution += 1;
+    if (outcome === 'carry') tally.carried += 1;
+  }
+}
 
-    const futureFrom = later(input.asOf, segmentStart);
-    const policyWindow = materializationWindow(input.asOf, trigger.materialization);
-    const nominalThrough = later(policyWindow.through, futureFrom);
-    const futureThrough = segmentEnd ? earlier(nominalThrough, segmentEnd) : nominalThrough;
-    if (compareCalendarDates(futureFrom, futureThrough) > 0) continue;
-    const upcomingDates = expandCalendarSchedule(trigger.schedule, {
-      from: futureFrom,
-      through: futureThrough,
-      minimumOccurrences: trigger.materialization.minimumOccurrences,
-      exceptions,
-    }).filter((date) => segmentEnd === null || compareCalendarDates(date, segmentEnd) <= 0);
-    for (const scheduledFor of upcomingDates) {
-      const existing = existingByDate.get(scheduledFor) ?? [];
-      const sameRevision = existing.find((row) => row.seriesRevisionId === revision.id);
-      if (sameRevision?.status === 'expected') {
-        await materializeOccurrence(database, {
-          organizationId: input.organizationId,
-          actorId: input.actorId,
-          seriesId: input.seriesId,
-          seriesRevisionId: revision.id,
-          scheduledFor,
-        });
-        materialized += 1;
-        continue;
-      }
-      if (existing.some((row) => blocksReplacement(row.status))) continue;
-      await materializeOccurrence(database, {
+/**
+ * Materialize the dates ahead of the sweep that the policy window asks for.
+ *
+ * @remarks
+ * A date whose occurrence is still `expected` is materialized in place; one already resolved some
+ * other way is left alone, so re-running a sweep neither duplicates work nor undoes a decision.
+ *
+ * @param pass - The revision being swept.
+ * @param tally - The running counts, updated in place.
+ */
+async function materializeUpcomingDates(pass: SweepPass, tally: SweepTally): Promise<void> {
+  const { segment, input, revision, trigger } = pass;
+  const futureFrom = later(input.asOf, segment.start);
+  const policyWindow = materializationWindow(input.asOf, trigger.materialization);
+  const nominalThrough = later(policyWindow.through, futureFrom);
+  const futureThrough = segment.end ? earlier(nominalThrough, segment.end) : nominalThrough;
+  if (compareCalendarDates(futureFrom, futureThrough) > 0) return;
+
+  const upcomingDates = expandCalendarSchedule(trigger.schedule, {
+    from: futureFrom,
+    through: futureThrough,
+    minimumOccurrences: trigger.materialization.minimumOccurrences,
+    exceptions: segment.exceptions,
+  }).filter((date) => segment.end === null || compareCalendarDates(date, segment.end) <= 0);
+
+  for (const scheduledFor of upcomingDates) {
+    const existing = pass.timeline.existingByDate.get(scheduledFor) ?? [];
+    const sameRevision = existing.find((row) => row.seriesRevisionId === revision.id);
+    if (
+      sameRevision?.status !== 'expected' &&
+      existing.some((row) => blocksReplacement(row.status))
+    )
+      continue;
+    await materializeOccurrence(pass.database, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      seriesId: input.seriesId,
+      seriesRevisionId: revision.id,
+      scheduledFor,
+    });
+    tally.materialized += 1;
+    if (sameRevision?.status === 'expected') continue;
+    pass.timeline.existingByDate.set(scheduledFor, [
+      ...existing,
+      {
+        id: '',
         organizationId: input.organizationId,
-        actorId: input.actorId,
+        createdBy: input.actorId ?? null,
+        createdAt: pass.now,
+        updatedAt: pass.now,
+        archivedAt: null,
         seriesId: input.seriesId,
         seriesRevisionId: revision.id,
         scheduledFor,
-      });
-      existingByDate.set(scheduledFor, [
-        ...existing,
-        {
-          id: '',
-          organizationId: input.organizationId,
-          createdBy: input.actorId ?? null,
-          createdAt: now,
-          updatedAt: now,
-          archivedAt: null,
-          seriesId: input.seriesId,
-          seriesRevisionId: revision.id,
-          scheduledFor,
-          originalScheduledFor: null,
-          status: 'materialized',
-          externalOccurrenceKey: null,
-          resolvedAt: null,
-        },
-      ]);
-      materialized += 1;
-    }
+        originalScheduledFor: null,
+        status: 'materialized',
+        externalOccurrenceKey: null,
+        resolvedAt: null,
+      },
+    ]);
   }
-  return { seriesId: input.seriesId, materialized, skipped, needsResolution, carried };
+}
+
+/**
+ * Materialize and reconcile one active series around `asOf`.
+ *
+ * @param database - Docket database handle.
+ * @param input - Workspace, series, actor attribution, and civil sweep date.
+ * @returns Work and missed-policy counts for this series.
+ */
+export async function materializeRecurrenceSeriesWindow(
+  database: Database,
+  input: {
+    readonly organizationId: string;
+    readonly seriesId: string;
+    readonly actorId?: string | undefined;
+    readonly asOf: string;
+    readonly now?: Date | undefined;
+  },
+): Promise<RecurrenceSeriesSweepResult> {
+  const now = input.now ?? new Date();
+  const empty: RecurrenceSeriesSweepResult = {
+    seriesId: input.seriesId,
+    materialized: 0,
+    skipped: 0,
+    needsResolution: 0,
+    carried: 0,
+  };
+  const seriesRows = await database
+    .select()
+    .from(recurrenceSeries)
+    .where(
+      and(
+        eq(recurrenceSeries.id, input.seriesId),
+        eq(recurrenceSeries.organizationId, input.organizationId),
+        eq(recurrenceSeries.status, 'active'),
+      ),
+    )
+    .limit(1);
+  if (!seriesRows[0]) return empty;
+
+  const timeline = await loadSeriesTimeline(database, input.organizationId, input.seriesId);
+  const tally = { materialized: 0, skipped: 0, needsResolution: 0, carried: 0 };
+  for (const [index, revision] of timeline.revisions.entries()) {
+    const trigger = triggerFromStorage(
+      revision,
+      timeline.weekdaysByRevision.get(revision.id) ?? [],
+    );
+    if (trigger.kind !== 'calendar') continue;
+    const nextRevision = timeline.revisions[index + 1];
+    const segment = {
+      start: later(revision.effectiveFrom, trigger.schedule.startDate),
+      end: nextRevision ? addCalendarDays(nextRevision.effectiveFrom, -1) : null,
+      exceptions: expansionExceptions(timeline.exceptionsByRevision.get(revision.id) ?? []),
+    };
+    const pass = { database, input, now, timeline, revision, trigger, segment };
+    await resolveMissedDates(pass, tally);
+    await materializeUpcomingDates(pass, tally);
+  }
+  return { seriesId: input.seriesId, ...tally };
 }
 
 /** Sweep every active recurrence series, isolating one series failure from the rest. */

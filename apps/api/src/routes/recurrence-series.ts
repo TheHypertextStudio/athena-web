@@ -25,7 +25,6 @@ import { createScheduledProcess } from '../lib/recurrence/authoring';
 import { bindProcessToCalendarItem } from '../lib/recurrence/calendar-binding';
 import { createRecurringTask } from '../lib/recurrence/recurring-task';
 import {
-  editRecurrenceSeries,
   listRecurrenceSeries,
   loadGeneratedWorkRecurrence,
   loadRecurrenceSeriesDetail,
@@ -33,6 +32,7 @@ import {
   transitionRecurrenceSeries,
   utcCalendarDate,
 } from '../lib/recurrence/series';
+import { editRecurrenceSeries } from '../lib/recurrence/series-edit';
 import { materializeRecurrenceSeriesWindow } from '../lib/recurrence/sweep';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';

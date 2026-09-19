@@ -34,6 +34,7 @@ import {
   materializeOccurrence,
   type MaterializedStepDelta,
 } from './materialize';
+import type { ProcessTransaction } from './process-contracts';
 import type { TaskStateMutation } from '../task-state';
 
 /** Command emitted from an actual task transition into a completed workflow state. */
@@ -87,7 +88,7 @@ function nextCompletionDate(
 
 /** Update already-created all-at-once items whose planning date awaited this completion. */
 async function dateCompletionRelativeItems(
-  tx: Parameters<Parameters<Database['transaction']>[0]>[0],
+  tx: ProcessTransaction,
   input: {
     readonly instanceId: string;
     readonly completedStepId: string;
@@ -101,66 +102,85 @@ async function dateCompletionRelativeItems(
   for (const step of waiting) {
     const date = addCalendarDays(input.completedOn, step.offsetDays ?? 0);
     const timestamp = new Date(`${date}T00:00:00.000Z`);
-    if (step.kind === 'task') {
-      const mapping = await tx
-        .select({ taskId: processInstanceTask.taskId })
-        .from(processInstanceTask)
-        .where(
-          and(
-            eq(processInstanceTask.instanceId, input.instanceId),
-            eq(processInstanceTask.stepId, step.id),
-          ),
-        )
-        .limit(1);
-      if (mapping[0]) {
-        await tx
-          .update(task)
-          .set({ dueDate: timestamp })
-          .where(and(eq(task.id, mapping[0].taskId), isNull(task.dueDate)));
-      }
-    }
-    if (step.kind === 'milestone') {
-      const mapping = await tx
-        .select({ milestoneId: processInstanceMilestone.milestoneId })
-        .from(processInstanceMilestone)
-        .where(
-          and(
-            eq(processInstanceMilestone.instanceId, input.instanceId),
-            eq(processInstanceMilestone.stepId, step.id),
-          ),
-        )
-        .limit(1);
-      if (mapping[0]) {
-        await tx
-          .update(milestone)
-          .set({ targetDate: timestamp })
-          .where(and(eq(milestone.id, mapping[0].milestoneId), isNull(milestone.targetDate)));
-      }
-    }
-    if (step.kind === 'project') {
-      const mapping = await tx
-        .select({ projectId: processInstanceProject.projectId })
-        .from(processInstanceProject)
-        .where(
-          and(
-            eq(processInstanceProject.instanceId, input.instanceId),
-            eq(processInstanceProject.stepId, step.id),
-          ),
-        )
-        .limit(1);
-      if (mapping[0]) {
-        await tx
-          .update(project)
-          .set({ startDate: timestamp })
-          .where(and(eq(project.id, mapping[0].projectId), isNull(project.startDate)));
-      }
-    }
+    await dateOneWaitingStep(tx, input.instanceId, step, timestamp);
   }
+}
+
+/**
+ * Give one waiting step's generated entity the date this completion resolved.
+ *
+ * @remarks
+ * Only when that date is still unset: a person who already chose a date for the generated work
+ * outranks the template's arithmetic.
+ *
+ * @param tx - The open transaction.
+ * @param instanceId - The instance the step belongs to.
+ * @param step - The waiting step.
+ * @param timestamp - The resolved planning date.
+ */
+async function dateOneWaitingStep(
+  tx: ProcessTransaction,
+  instanceId: string,
+  step: { readonly id: string; readonly kind: string },
+  timestamp: Date,
+): Promise<void> {
+  if (step.kind === 'task') {
+    const mapping = await tx
+      .select({ taskId: processInstanceTask.taskId })
+      .from(processInstanceTask)
+      .where(
+        and(
+          eq(processInstanceTask.instanceId, instanceId),
+          eq(processInstanceTask.stepId, step.id),
+        ),
+      )
+      .limit(1);
+    if (!mapping[0]) return;
+    await tx
+      .update(task)
+      .set({ dueDate: timestamp })
+      .where(and(eq(task.id, mapping[0].taskId), isNull(task.dueDate)));
+    return;
+  }
+  if (step.kind === 'milestone') {
+    const mapping = await tx
+      .select({ milestoneId: processInstanceMilestone.milestoneId })
+      .from(processInstanceMilestone)
+      .where(
+        and(
+          eq(processInstanceMilestone.instanceId, instanceId),
+          eq(processInstanceMilestone.stepId, step.id),
+        ),
+      )
+      .limit(1);
+    if (!mapping[0]) return;
+    await tx
+      .update(milestone)
+      .set({ targetDate: timestamp })
+      .where(and(eq(milestone.id, mapping[0].milestoneId), isNull(milestone.targetDate)));
+    return;
+  }
+  if (step.kind !== 'project') return;
+  const mapping = await tx
+    .select({ projectId: processInstanceProject.projectId })
+    .from(processInstanceProject)
+    .where(
+      and(
+        eq(processInstanceProject.instanceId, instanceId),
+        eq(processInstanceProject.stepId, step.id),
+      ),
+    )
+    .limit(1);
+  if (!mapping[0]) return;
+  await tx
+    .update(project)
+    .set({ startDate: timestamp })
+    .where(and(eq(project.id, mapping[0].projectId), isNull(project.startDate)));
 }
 
 /** Whether every task specification has one concrete completed Task. */
 async function processTasksComplete(
-  tx: Parameters<Parameters<Database['transaction']>[0]>[0],
+  tx: ProcessTransaction,
   revisionId: string,
   instanceId: string,
 ): Promise<boolean> {
@@ -187,6 +207,194 @@ async function processTasksComplete(
   );
 }
 
+/** The occurrence a completed task belongs to, once it is known to be a process task. */
+interface CompletedProcessMapping {
+  readonly instanceId: string;
+  readonly completedStepId: string;
+  readonly revisionId: string;
+  readonly occurrenceId: string;
+  readonly instanceStatus: string;
+  readonly scheduledFor: string;
+  readonly seriesId: string;
+  readonly seriesRevisionId: string;
+}
+
+/**
+ * Resolve a completed task back to the process occurrence it belongs to.
+ *
+ * @param tx - The open transaction.
+ * @param command - The completion being advanced.
+ * @returns The mapping, or `null` when the task is not process-generated.
+ */
+async function loadCompletedMapping(
+  tx: ProcessTransaction,
+  command: AdvanceCompletedProcessTaskCommand,
+): Promise<CompletedProcessMapping | null> {
+  const mappedRows = await tx
+    .select({
+      instanceId: processInstanceTask.instanceId,
+      completedStepId: processInstanceTask.stepId,
+      revisionId: processInstance.revisionId,
+      occurrenceId: processInstance.occurrenceId,
+      instanceStatus: processInstance.status,
+      scheduledFor: processOccurrence.scheduledFor,
+      seriesId: processOccurrence.seriesId,
+      seriesRevisionId: processOccurrence.seriesRevisionId,
+    })
+    .from(processInstanceTask)
+    .innerJoin(processInstance, eq(processInstance.id, processInstanceTask.instanceId))
+    .leftJoin(processOccurrence, eq(processOccurrence.id, processInstance.occurrenceId))
+    .where(
+      and(
+        eq(processInstanceTask.taskId, command.completedTaskId),
+        eq(processInstanceTask.organizationId, command.organizationId),
+      ),
+    )
+    .limit(1);
+  const mapped = mappedRows[0];
+  if (!mapped?.occurrenceId || !mapped.scheduledFor || !mapped.seriesId || !mapped.seriesRevisionId)
+    return null;
+  return {
+    ...mapped,
+    occurrenceId: mapped.occurrenceId,
+    scheduledFor: mapped.scheduledFor,
+    seriesId: mapped.seriesId,
+    seriesRevisionId: mapped.seriesRevisionId,
+  };
+}
+
+/** The next occurrence a completion-anchored series owes, once this instance is finished. */
+interface NextOccurrence {
+  readonly seriesId: string;
+  readonly seriesRevisionId: string;
+  readonly scheduledFor: string;
+}
+
+/**
+ * Decide the next occurrence a completion-anchored series should run.
+ *
+ * @remarks
+ * The revision in force on the *computed* date decides, not the one that produced the occurrence
+ * just finished — a this-and-future edit made while the instance was open takes effect from here.
+ *
+ * @param tx - The open transaction.
+ * @param mapped - The occurrence that just completed.
+ * @param completedOn - The civil date it completed on.
+ * @returns The next occurrence, or `null` when the series is not completion-anchored.
+ */
+async function nextCompletionOccurrence(
+  tx: ProcessTransaction,
+  mapped: CompletedProcessMapping,
+  completedOn: string,
+): Promise<NextOccurrence | null> {
+  const currentSeriesRevision = await tx
+    .select()
+    .from(recurrenceSeriesRevision)
+    .where(eq(recurrenceSeriesRevision.id, mapped.seriesRevisionId))
+    .limit(1);
+  const trigger = currentSeriesRevision[0];
+  if (
+    trigger?.triggerKind !== 'after_completion' ||
+    trigger.interval === null ||
+    trigger.intervalUnit === null
+  ) {
+    return null;
+  }
+  const nextDate = nextCompletionDate(completedOn, trigger.interval, trigger.intervalUnit);
+  const futureRevision = await tx
+    .select({ id: recurrenceSeriesRevision.id })
+    .from(recurrenceSeriesRevision)
+    .where(
+      and(
+        eq(recurrenceSeriesRevision.seriesId, mapped.seriesId),
+        lte(recurrenceSeriesRevision.effectiveFrom, nextDate),
+      ),
+    )
+    .orderBy(desc(recurrenceSeriesRevision.effectiveFrom), desc(recurrenceSeriesRevision.number))
+    .limit(1);
+  const revision = futureRevision[0];
+  if (!revision) return null;
+  return {
+    seriesId: mapped.seriesId,
+    seriesRevisionId: revision.id,
+    scheduledFor: nextDate,
+  };
+}
+
+/** What one completion released, inside its own transaction. */
+interface AdvanceTransition {
+  readonly delta: MaterializedStepDelta;
+  readonly complete: boolean;
+  readonly next: NextOccurrence | null;
+}
+
+/**
+ * Release the work one task completion unblocks, and settle the instance if it is finished.
+ *
+ * @param tx - The open transaction.
+ * @param command - The completion being advanced.
+ * @param postCommitStateTransitions - Cascading transitions for the caller to publish after commit.
+ * @returns What this completion released.
+ */
+async function advanceInTransaction(
+  tx: ProcessTransaction,
+  command: AdvanceCompletedProcessTaskCommand,
+  postCommitStateTransitions: TaskStateMutation[],
+): Promise<AdvanceTransition> {
+  const mapped = await loadCompletedMapping(tx, command);
+  if (!mapped) return { delta: EMPTY_DELTA, complete: false, next: null };
+  await tx
+    .select({ id: processInstance.id })
+    .from(processInstance)
+    .where(eq(processInstance.id, mapped.instanceId))
+    .for('update')
+    .limit(1);
+
+  const completedTask = await tx
+    .select({ completedAt: task.completedAt })
+    .from(task)
+    .where(
+      and(eq(task.id, command.completedTaskId), eq(task.organizationId, command.organizationId)),
+    )
+    .limit(1);
+  const completedAt = completedTask[0]?.completedAt;
+  if (!completedAt) return { delta: EMPTY_DELTA, complete: false, next: null };
+
+  await dateCompletionRelativeItems(tx, {
+    instanceId: mapped.instanceId,
+    completedStepId: mapped.completedStepId,
+    completedOn: command.completedOn,
+  });
+  const delta = await materializeInstanceSteps(tx, {
+    organizationId: command.organizationId,
+    actorId: command.actorId,
+    instanceId: mapped.instanceId,
+    revisionId: mapped.revisionId,
+    scheduledFor: mapped.scheduledFor,
+    completionDatesByStepId: new Map([[mapped.completedStepId, command.completedOn]]),
+    postCommitStateTransitions,
+  });
+  if (!(await processTasksComplete(tx, mapped.revisionId, mapped.instanceId))) {
+    return { delta, complete: false, next: null };
+  }
+
+  if (mapped.instanceStatus !== 'completed') {
+    await tx
+      .update(processInstance)
+      .set({ status: 'completed', completedAt })
+      .where(eq(processInstance.id, mapped.instanceId));
+    await tx
+      .update(processOccurrence)
+      .set({ status: 'completed', resolvedAt: completedAt })
+      .where(eq(processOccurrence.id, mapped.occurrenceId));
+  }
+  return {
+    delta,
+    complete: true,
+    next: await nextCompletionOccurrence(tx, mapped, command.completedOn),
+  };
+}
+
 /** Release process work and completion-anchored continuation from one actual task completion. */
 export async function advanceCompletedProcessTask(
   database: Database,
@@ -194,127 +402,9 @@ export async function advanceCompletedProcessTask(
 ): Promise<ProcessAdvanceResult> {
   parseCalendarDate(command.completedOn);
   const postCommitStateTransitions: TaskStateMutation[] = [];
-  const transition = await database.transaction(async (tx) => {
-    const mappedRows = await tx
-      .select({
-        instanceId: processInstanceTask.instanceId,
-        completedStepId: processInstanceTask.stepId,
-        revisionId: processInstance.revisionId,
-        occurrenceId: processInstance.occurrenceId,
-        instanceStatus: processInstance.status,
-        scheduledFor: processOccurrence.scheduledFor,
-        seriesId: processOccurrence.seriesId,
-        seriesRevisionId: processOccurrence.seriesRevisionId,
-      })
-      .from(processInstanceTask)
-      .innerJoin(processInstance, eq(processInstance.id, processInstanceTask.instanceId))
-      .leftJoin(processOccurrence, eq(processOccurrence.id, processInstance.occurrenceId))
-      .where(
-        and(
-          eq(processInstanceTask.taskId, command.completedTaskId),
-          eq(processInstanceTask.organizationId, command.organizationId),
-        ),
-      )
-      .limit(1);
-    const mapped = mappedRows[0];
-    if (
-      !mapped?.occurrenceId ||
-      !mapped.scheduledFor ||
-      !mapped.seriesId ||
-      !mapped.seriesRevisionId
-    ) {
-      return { delta: EMPTY_DELTA, complete: false, next: null };
-    }
-    await tx
-      .select({ id: processInstance.id })
-      .from(processInstance)
-      .where(eq(processInstance.id, mapped.instanceId))
-      .for('update')
-      .limit(1);
-
-    const completedTask = await tx
-      .select({ completedAt: task.completedAt })
-      .from(task)
-      .where(
-        and(eq(task.id, command.completedTaskId), eq(task.organizationId, command.organizationId)),
-      )
-      .limit(1);
-    if (!completedTask[0]?.completedAt) {
-      return { delta: EMPTY_DELTA, complete: false, next: null };
-    }
-
-    await dateCompletionRelativeItems(tx, {
-      instanceId: mapped.instanceId,
-      completedStepId: mapped.completedStepId,
-      completedOn: command.completedOn,
-    });
-    const delta = await materializeInstanceSteps(tx, {
-      organizationId: command.organizationId,
-      actorId: command.actorId,
-      instanceId: mapped.instanceId,
-      revisionId: mapped.revisionId,
-      scheduledFor: mapped.scheduledFor,
-      completionDatesByStepId: new Map([[mapped.completedStepId, command.completedOn]]),
-      postCommitStateTransitions,
-    });
-    const complete = await processTasksComplete(tx, mapped.revisionId, mapped.instanceId);
-    if (!complete) return { delta, complete: false, next: null };
-
-    if (mapped.instanceStatus !== 'completed') {
-      await tx
-        .update(processInstance)
-        .set({ status: 'completed', completedAt: completedTask[0].completedAt })
-        .where(eq(processInstance.id, mapped.instanceId));
-      await tx
-        .update(processOccurrence)
-        .set({ status: 'completed', resolvedAt: completedTask[0].completedAt })
-        .where(eq(processOccurrence.id, mapped.occurrenceId));
-    }
-
-    const currentSeriesRevision = await tx
-      .select()
-      .from(recurrenceSeriesRevision)
-      .where(eq(recurrenceSeriesRevision.id, mapped.seriesRevisionId))
-      .limit(1);
-    const trigger = currentSeriesRevision[0];
-    if (
-      trigger?.triggerKind !== 'after_completion' ||
-      trigger.interval === null ||
-      trigger.intervalUnit === null
-    ) {
-      return { delta, complete: true, next: null };
-    }
-    const nextDate = nextCompletionDate(
-      command.completedOn,
-      trigger.interval,
-      trigger.intervalUnit,
-    );
-    const futureRevision = await tx
-      .select({
-        id: recurrenceSeriesRevision.id,
-        processRevisionId: recurrenceSeriesRevision.processRevisionId,
-      })
-      .from(recurrenceSeriesRevision)
-      .where(
-        and(
-          eq(recurrenceSeriesRevision.seriesId, mapped.seriesId),
-          lte(recurrenceSeriesRevision.effectiveFrom, nextDate),
-        ),
-      )
-      .orderBy(desc(recurrenceSeriesRevision.effectiveFrom), desc(recurrenceSeriesRevision.number))
-      .limit(1);
-    return {
-      delta,
-      complete: true,
-      next: futureRevision[0]
-        ? {
-            seriesId: mapped.seriesId,
-            seriesRevisionId: futureRevision[0].id,
-            scheduledFor: nextDate,
-          }
-        : null,
-    };
-  });
+  const transition = await database.transaction((tx) =>
+    advanceInTransaction(tx, command, postCommitStateTransitions),
+  );
 
   if (postCommitStateTransitions.length > 0) {
     const { finishTaskStateTransition } = await import('../task-state');

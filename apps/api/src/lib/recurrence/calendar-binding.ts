@@ -15,6 +15,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '../../error';
+import type { ProcessTransaction as RecurrenceTransaction } from './process-contracts';
 import { createRecurrenceSeriesInTransaction, materializeSeriesOccurrence } from './series';
 
 /** Command for binding one user-owned calendar item to an org-owned process definition. */
@@ -94,6 +95,107 @@ function itemCalendarDate(
   return calendarOccurrenceDate(item, layer.timezone ?? 'UTC');
 }
 
+/** One calendar item's binding to a recurrence series, with the rows the response reads. */
+interface ResolvedBinding {
+  readonly binding: typeof calendarProcessBinding.$inferSelect;
+  readonly series: { readonly id: string; readonly name: string };
+  readonly item: typeof calendarItem.$inferSelect;
+  readonly layer: typeof calendarLayer.$inferSelect;
+  readonly scope: 'single_event' | 'event_series';
+  readonly externalSeriesId: string;
+}
+
+/**
+ * Find or create the binding between one calendar item's series and a process.
+ *
+ * @remarks
+ * Keyed on the provider's own series id rather than the individual event, so binding any instance
+ * of a standing meeting binds the meeting. Re-binding the same series to the same process is the
+ * retry path and returns what exists; re-binding it to a *different* process is refused, because
+ * one calendar series cannot drive two processes without the work becoming ambiguous.
+ *
+ * @param tx - The open transaction.
+ * @param rawCommand - The binding request.
+ * @param selected - The validated calendar item and process definition.
+ * @returns The binding and the rows the response is built from.
+ * @throws {NotFoundError} When the calendar item is not this person's.
+ * @throws {ConflictError} When the series already drives a different process.
+ */
+async function ensureBinding(
+  tx: RecurrenceTransaction,
+  rawCommand: BindProcessToCalendarItemCommand,
+  selected: CalendarProcessBindingCreateValue,
+): Promise<ResolvedBinding> {
+  const rows = await tx
+    .select({ item: calendarItem, layer: calendarLayer })
+    .from(calendarItem)
+    .innerJoin(calendarLayer, eq(calendarLayer.id, calendarItem.layerId))
+    .where(
+      and(
+        eq(calendarItem.id, selected.calendarItemId),
+        eq(calendarItem.userId, rawCommand.userId),
+        eq(calendarLayer.userId, rawCommand.userId),
+        isNull(calendarItem.archivedAt),
+      ),
+    )
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new NotFoundError('Calendar item not found');
+
+  const externalSeriesId = row.item.recurringEventId ?? row.item.externalEventId ?? row.item.id;
+  const scope = row.item.recurringEventId === null ? 'single_event' : 'event_series';
+  const existing = await tx
+    .select({ binding: calendarProcessBinding, series: recurrenceSeries })
+    .from(calendarProcessBinding)
+    .innerJoin(recurrenceSeries, eq(recurrenceSeries.id, calendarProcessBinding.seriesId))
+    .where(
+      and(
+        eq(calendarProcessBinding.organizationId, rawCommand.organizationId),
+        eq(calendarProcessBinding.calendarLayerId, row.layer.id),
+        eq(calendarProcessBinding.externalSeriesId, externalSeriesId),
+        isNull(recurrenceSeries.archivedAt),
+      ),
+    )
+    .limit(1);
+  const current = existing[0];
+  if (current && current.binding.definitionId !== selected.processDefinitionId) {
+    throw new ConflictError('This calendar series already uses a different process');
+  }
+  if (current) return { ...current, item: row.item, layer: row.layer, scope, externalSeriesId };
+
+  const name = `${row.item.title} work`;
+  const seriesId = await createRecurrenceSeriesInTransaction(tx, {
+    organizationId: rawCommand.organizationId,
+    actorId: rawCommand.actorId,
+    series: {
+      processDefinitionId: selected.processDefinitionId,
+      name,
+      trigger: { kind: 'event', event: { kind: 'calendar.item', source: 'calendar' } },
+      effectiveFrom: itemCalendarDate(row.item, row.layer),
+    },
+  });
+  const inserted = await tx
+    .insert(calendarProcessBinding)
+    .values({
+      organizationId: rawCommand.organizationId,
+      calendarLayerId: row.layer.id,
+      externalSeriesId,
+      definitionId: selected.processDefinitionId,
+      seriesId,
+    })
+    .returning();
+  const binding = inserted[0];
+  if (!binding) throw new ConflictError('Calendar process binding could not be created');
+  return {
+    binding,
+    series: { id: seriesId, name },
+    item: row.item,
+    layer: row.layer,
+    scope,
+    externalSeriesId,
+  };
+}
+
 /**
  * Create the stable event-series binding and materialize the selected event immediately.
  *
@@ -109,77 +211,7 @@ export async function bindProcessToCalendarItem(
     calendarItemId: rawCommand.calendarItemId,
     processDefinitionId: rawCommand.processDefinitionId,
   }) satisfies CalendarProcessBindingCreateValue;
-  const bound = await database.transaction(async (tx) => {
-    const rows = await tx
-      .select({ item: calendarItem, layer: calendarLayer })
-      .from(calendarItem)
-      .innerJoin(calendarLayer, eq(calendarLayer.id, calendarItem.layerId))
-      .where(
-        and(
-          eq(calendarItem.id, selected.calendarItemId),
-          eq(calendarItem.userId, rawCommand.userId),
-          eq(calendarLayer.userId, rawCommand.userId),
-          isNull(calendarItem.archivedAt),
-        ),
-      )
-      .limit(1);
-    const row = rows[0];
-    if (!row) throw new NotFoundError('Calendar item not found');
-    const externalSeriesId = row.item.recurringEventId ?? row.item.externalEventId ?? row.item.id;
-    const scope = row.item.recurringEventId === null ? 'single_event' : 'event_series';
-    const existing = await tx
-      .select({ binding: calendarProcessBinding, series: recurrenceSeries })
-      .from(calendarProcessBinding)
-      .innerJoin(recurrenceSeries, eq(recurrenceSeries.id, calendarProcessBinding.seriesId))
-      .where(
-        and(
-          eq(calendarProcessBinding.organizationId, rawCommand.organizationId),
-          eq(calendarProcessBinding.calendarLayerId, row.layer.id),
-          eq(calendarProcessBinding.externalSeriesId, externalSeriesId),
-          isNull(recurrenceSeries.archivedAt),
-        ),
-      )
-      .limit(1);
-    const current = existing[0];
-    if (current && current.binding.definitionId !== selected.processDefinitionId) {
-      throw new ConflictError('This calendar series already uses a different process');
-    }
-    if (current) {
-      return { ...current, item: row.item, layer: row.layer, scope, externalSeriesId };
-    }
-
-    const name = `${row.item.title} work`;
-    const seriesId = await createRecurrenceSeriesInTransaction(tx, {
-      organizationId: rawCommand.organizationId,
-      actorId: rawCommand.actorId,
-      series: {
-        processDefinitionId: selected.processDefinitionId,
-        name,
-        trigger: { kind: 'event', event: { kind: 'calendar.item', source: 'calendar' } },
-        effectiveFrom: itemCalendarDate(row.item, row.layer),
-      },
-    });
-    const inserted = await tx
-      .insert(calendarProcessBinding)
-      .values({
-        organizationId: rawCommand.organizationId,
-        calendarLayerId: row.layer.id,
-        externalSeriesId,
-        definitionId: selected.processDefinitionId,
-        seriesId,
-      })
-      .returning();
-    const binding = inserted[0];
-    if (!binding) throw new ConflictError('Calendar process binding could not be created');
-    return {
-      binding,
-      series: { id: seriesId, name },
-      item: row.item,
-      layer: row.layer,
-      scope,
-      externalSeriesId,
-    };
-  });
+  const bound = await database.transaction((tx) => ensureBinding(tx, rawCommand, selected));
 
   await materializeSeriesOccurrence(database, {
     organizationId: rawCommand.organizationId,

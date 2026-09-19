@@ -12,37 +12,31 @@ import {
   processInstanceTask,
   processOccurrence,
   processRevision,
-  recurrenceException,
   recurrenceSeries,
   recurrenceSeriesRevision,
   recurrenceSeriesWeekday,
-  project,
-  task,
   type Database,
 } from '@docket/db';
 import {
   OccurrenceOut,
-  ProcessTrigger,
   RecurrenceSeriesCreate,
   RecurrenceSeriesDetailOut,
   GeneratedWorkRecurrenceOut,
   RecurrenceSeriesLifecycle,
   RecurrenceSeriesOut,
   RecurrenceSeriesRevisionOut,
-  SeriesEdit,
-  type CalendarRecurrenceSchedule as CalendarRecurrenceScheduleValue,
   type ProcessTrigger as ProcessTriggerValue,
   type RecurrenceSeriesCreate as RecurrenceSeriesCreateValue,
   type RecurrenceSeriesLifecycle as RecurrenceSeriesLifecycleValue,
-  type SeriesEdit as SeriesEditValue,
 } from '../../contracts/recurrence';
-import { and, desc, eq, gte, inArray, isNull, lte } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lte } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '../../error';
-import { compareCalendarDates } from '@docket/planning/calendar-date';
 import { materializeOccurrence, type MaterializedOccurrence } from './materialize';
-import type { TaskStateMutation } from '../task-state';
+import { triggerFromStorage, triggerStorage, utcCalendarDate } from './series-trigger';
+
+export { triggerFromStorage, utcCalendarDate } from './series-trigger';
 
 /** Database transaction surface shared by atomic recurrence authoring operations. */
 export type RecurrenceTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -67,262 +61,8 @@ export interface GeneratedProjectLookup {
 /** Any ordinary generated entity that may link back to its recurrence series. */
 export type GeneratedWorkLookup = GeneratedTaskLookup | GeneratedProjectLookup;
 
-const WEEKDAY_NUMBER = {
-  monday: 1,
-  tuesday: 2,
-  wednesday: 3,
-  thursday: 4,
-  friday: 5,
-  saturday: 6,
-  sunday: 7,
-} as const;
-const NUMBER_WEEKDAY = {
-  1: 'monday',
-  2: 'tuesday',
-  3: 'wednesday',
-  4: 'thursday',
-  5: 'friday',
-  6: 'saturday',
-  7: 'sunday',
-} as const;
-
-/** Fields and selected weekdays persisted for one trigger revision. */
-interface TriggerStorage {
-  readonly values: Omit<
-    typeof recurrenceSeriesRevision.$inferInsert,
-    | 'id'
-    | 'organizationId'
-    | 'seriesId'
-    | 'processRevisionId'
-    | 'number'
-    | 'effectiveFrom'
-    | 'createdBy'
-  >;
-  readonly weekdays: readonly number[];
-}
-
-/** Command for creating a series over a process's latest published revision. */
-export interface CreateRecurrenceSeriesCommand {
-  /** Owning Docket workspace. */
-  readonly organizationId: string;
-  /** Actor credited with the series and first trigger revision. */
-  readonly actorId?: string | undefined;
-  /** Validated series body. */
-  readonly series: RecurrenceSeriesCreateValue;
-}
-
-/** Command for materializing one explicit occurrence through the public API. */
-export interface MaterializeSeriesCommand {
-  /** Owning Docket workspace. */
-  readonly organizationId: string;
-  /** Actor credited with generated work. */
-  readonly actorId?: string | undefined;
-  /** Series to execute. */
-  readonly seriesId: string;
-  /** Civil date to execute. */
-  readonly scheduledFor: string;
-  /** Optional stable key allowing distinct, retry-safe manual/event occurrences on one date. */
-  readonly occurrenceKey?: string | undefined;
-}
-
-/** Convert a clock instant to a stable UTC civil date for non-calendar trigger defaults. */
-export function utcCalendarDate(now = new Date()): string {
-  return now.toISOString().slice(0, 10);
-}
-
-/** Normalize a trigger union into relational columns and selected weekday rows. */
-function triggerStorage(trigger: ProcessTriggerValue): TriggerStorage {
-  const parsed = ProcessTrigger.parse(trigger);
-  if (parsed.kind === 'manual') return { values: { triggerKind: 'manual' }, weekdays: [] };
-  if (parsed.kind === 'after_completion') {
-    return {
-      values: {
-        triggerKind: 'after_completion',
-        interval: parsed.interval,
-        intervalUnit: parsed.unit,
-      },
-      weekdays: [],
-    };
-  }
-  if (parsed.kind === 'event') {
-    return {
-      values: {
-        triggerKind: 'event',
-        eventKind: parsed.event.kind,
-        eventSubjectType: parsed.event.subjectType,
-        eventSource: parsed.event.source,
-        eventEntityKind: parsed.event.entityKind,
-      },
-      weekdays: [],
-    };
-  }
-
-  const schedule = parsed.schedule;
-  const endValues =
-    schedule.end.kind === 'never'
-      ? { endKind: 'never' as const }
-      : schedule.end.kind === 'on_date'
-        ? { endKind: 'on_date' as const, endDate: schedule.end.date }
-        : { endKind: 'after_count' as const, endCount: schedule.end.count };
-  const common = {
-    triggerKind: 'calendar' as const,
-    scheduleKind: schedule.kind,
-    interval: schedule.interval,
-    startDate: schedule.startDate,
-    timezone: schedule.timezone,
-    ...endValues,
-    missedPolicy: parsed.missedPolicy,
-    horizonDays: parsed.materialization.horizonDays,
-    minimumOccurrences: parsed.materialization.minimumOccurrences,
-  };
-  if (schedule.kind === 'daily') return { values: common, weekdays: [] };
-  if (schedule.kind === 'weekly') {
-    return {
-      values: common,
-      weekdays: schedule.weekdays.map((weekday) => WEEKDAY_NUMBER[weekday]),
-    };
-  }
-  if (schedule.kind === 'monthly') {
-    return schedule.pattern.kind === 'day_of_month'
-      ? {
-          values: {
-            ...common,
-            monthlyPatternKind: 'day_of_month',
-            monthDay: schedule.pattern.day,
-            overflow: schedule.pattern.overflow,
-          },
-          weekdays: [],
-        }
-      : {
-          values: {
-            ...common,
-            monthlyPatternKind: 'nth_weekday',
-            nthWeekdayOrdinal: schedule.pattern.ordinal,
-            nthWeekday: WEEKDAY_NUMBER[schedule.pattern.weekday],
-          },
-          weekdays: [],
-        };
-  }
-  return {
-    values: {
-      ...common,
-      yearMonth: schedule.month,
-      yearDay: schedule.day,
-      overflow: schedule.overflow,
-    },
-    weekdays: [],
-  };
-}
-
-/** Reconstruct a canonical trigger union from one normalized revision. */
-export function triggerFromStorage(
-  row: SeriesRevisionRow,
-  weekdayNumbers: readonly number[],
-): ProcessTriggerValue {
-  if (row.triggerKind === 'manual') return { kind: 'manual' };
-  if (row.triggerKind === 'after_completion') {
-    if (row.interval === null || row.intervalUnit === null) {
-      throw new ConflictError('Completion trigger is incomplete');
-    }
-    return { kind: 'after_completion', interval: row.interval, unit: row.intervalUnit };
-  }
-  if (row.triggerKind === 'event') {
-    return ProcessTrigger.parse({
-      kind: 'event',
-      event: {
-        ...(row.eventKind === null ? {} : { kind: row.eventKind }),
-        ...(row.eventSubjectType === null ? {} : { subjectType: row.eventSubjectType }),
-        ...(row.eventSource === null ? {} : { source: row.eventSource }),
-        ...(row.eventEntityKind === null ? {} : { entityKind: row.eventEntityKind }),
-      },
-    });
-  }
-  if (
-    row.scheduleKind === null ||
-    row.interval === null ||
-    row.startDate === null ||
-    row.timezone === null ||
-    row.endKind === null ||
-    row.missedPolicy === null ||
-    row.horizonDays === null ||
-    row.minimumOccurrences === null
-  ) {
-    throw new ConflictError('Calendar trigger is incomplete');
-  }
-  const end =
-    row.endKind === 'never'
-      ? { kind: 'never' as const }
-      : row.endKind === 'on_date' && row.endDate !== null
-        ? { kind: 'on_date' as const, date: row.endDate }
-        : row.endKind === 'after_count' && row.endCount !== null
-          ? { kind: 'after_count' as const, count: row.endCount }
-          : null;
-  if (!end) throw new ConflictError('Calendar recurrence end is incomplete');
-  const common = {
-    interval: row.interval,
-    startDate: row.startDate,
-    timezone: row.timezone,
-    end,
-  };
-  let schedule: CalendarRecurrenceScheduleValue;
-  if (row.scheduleKind === 'daily') schedule = { kind: 'daily', ...common };
-  else if (row.scheduleKind === 'weekly') {
-    const weekdays = weekdayNumbers.map(
-      (number) => NUMBER_WEEKDAY[number as keyof typeof NUMBER_WEEKDAY],
-    );
-    schedule = { kind: 'weekly', ...common, weekdays };
-  } else if (row.scheduleKind === 'monthly') {
-    if (
-      row.monthlyPatternKind === 'day_of_month' &&
-      row.monthDay !== null &&
-      row.overflow !== null
-    ) {
-      schedule = {
-        kind: 'monthly',
-        ...common,
-        pattern: { kind: 'day_of_month', day: row.monthDay, overflow: row.overflow },
-      };
-    } else if (
-      row.monthlyPatternKind === 'nth_weekday' &&
-      row.nthWeekdayOrdinal !== null &&
-      row.nthWeekday !== null
-    ) {
-      const weekday = NUMBER_WEEKDAY[row.nthWeekday as keyof typeof NUMBER_WEEKDAY];
-      schedule = {
-        kind: 'monthly',
-        ...common,
-        pattern: {
-          kind: 'nth_weekday',
-          ordinal: row.nthWeekdayOrdinal as 1 | 2 | 3 | 4 | 5 | -1,
-          weekday,
-        },
-      };
-    } else throw new ConflictError('Monthly trigger is incomplete');
-  } else {
-    if (row.yearMonth === null || row.yearDay === null || row.overflow === null) {
-      throw new ConflictError('Yearly trigger is incomplete');
-    }
-    schedule = {
-      kind: 'yearly',
-      ...common,
-      month: row.yearMonth,
-      day: row.yearDay,
-      overflow: row.overflow,
-    };
-  }
-  return ProcessTrigger.parse({
-    kind: 'calendar',
-    schedule,
-    missedPolicy: row.missedPolicy,
-    materialization: {
-      horizonDays: row.horizonDays,
-      minimumOccurrences: row.minimumOccurrences,
-    },
-  });
-}
-
 /** Load the latest published process revision available to future series occurrences. */
-async function latestProcessRevision(
+export async function latestProcessRevision(
   tx: Transaction,
   organizationId: string,
   definitionId: string,
@@ -347,7 +87,7 @@ async function latestProcessRevision(
 }
 
 /** Persist one immutable trigger revision and its normalized weekdays. */
-async function persistSeriesRevision(
+export async function persistSeriesRevision(
   tx: Transaction,
   input: {
     readonly organizationId: string;
@@ -386,6 +126,30 @@ async function persistSeriesRevision(
 function effectiveDate(body: RecurrenceSeriesCreateValue): string {
   if (body.effectiveFrom) return body.effectiveFrom;
   return body.trigger.kind === 'calendar' ? body.trigger.schedule.startDate : utcCalendarDate();
+}
+
+/** Command for creating a series over a process's latest published revision. */
+export interface CreateRecurrenceSeriesCommand {
+  /** Owning Docket workspace. */
+  readonly organizationId: string;
+  /** Actor credited with the series and first trigger revision. */
+  readonly actorId?: string | undefined;
+  /** Validated series body. */
+  readonly series: RecurrenceSeriesCreateValue;
+}
+
+/** Command for materializing one explicit occurrence through the public API. */
+export interface MaterializeSeriesCommand {
+  /** Owning Docket workspace. */
+  readonly organizationId: string;
+  /** Actor credited with generated work. */
+  readonly actorId?: string | undefined;
+  /** Series to execute. */
+  readonly seriesId: string;
+  /** Civil date to execute. */
+  readonly scheduledFor: string;
+  /** Optional stable key allowing distinct, retry-safe manual/event occurrences on one date. */
+  readonly occurrenceKey?: string | undefined;
 }
 
 /** Create a recurrence series over the process revision current at authoring time. */
@@ -751,329 +515,4 @@ export async function loadGeneratedWorkRecurrence(
   return rows[0]
     ? GeneratedWorkRecurrenceOut.parse({ kind: 'project', projectId: lookup.projectId, ...rows[0] })
     : null;
-}
-
-/** Append a future trigger revision without changing any prior occurrence or instance. */
-async function appendFutureSeriesRevision(
-  database: Database,
-  input: {
-    readonly organizationId: string;
-    readonly actorId?: string | undefined;
-    readonly seriesId: string;
-    readonly effectiveFrom: string;
-    /** Civil date used to enforce future-only revision boundaries. */
-    readonly asOf?: string | undefined;
-    readonly trigger: ProcessTriggerValue;
-    readonly onRetired?: ((work: RetiredFutureWork) => Promise<void>) | undefined;
-  },
-): Promise<void> {
-  const retired = await database.transaction(async (tx) => {
-    const rows = await tx
-      .select()
-      .from(recurrenceSeries)
-      .where(
-        and(
-          eq(recurrenceSeries.id, input.seriesId),
-          eq(recurrenceSeries.organizationId, input.organizationId),
-        ),
-      )
-      .for('update')
-      .limit(1);
-    const series = rows[0];
-    if (!series) throw new NotFoundError('Recurrence series not found');
-    if (series.status === 'ended') throw new ConflictError('Ended recurrence series cannot change');
-    const latest = await tx
-      .select({
-        number: recurrenceSeriesRevision.number,
-        effectiveFrom: recurrenceSeriesRevision.effectiveFrom,
-      })
-      .from(recurrenceSeriesRevision)
-      .where(eq(recurrenceSeriesRevision.seriesId, input.seriesId))
-      .orderBy(desc(recurrenceSeriesRevision.number))
-      .limit(1);
-    const asOf = input.asOf ?? utcCalendarDate();
-    if (compareCalendarDates(input.effectiveFrom, asOf) < 0) {
-      throw new ConflictError('Future schedule changes cannot begin in the past');
-    }
-    if (latest[0] && compareCalendarDates(input.effectiveFrom, latest[0].effectiveFrom) <= 0) {
-      throw new ConflictError('Future schedule changes must follow the latest schedule version');
-    }
-    const process = await latestProcessRevision(tx, input.organizationId, series.definitionId);
-    await persistSeriesRevision(tx, {
-      organizationId: input.organizationId,
-      actorId: input.actorId,
-      seriesId: input.seriesId,
-      processRevisionId: process.id,
-      number: (latest[0]?.number ?? 0) + 1,
-      effectiveFrom: input.effectiveFrom,
-      trigger: input.trigger,
-    });
-    return retireUnfinishedFutureOccurrences(tx, {
-      organizationId: input.organizationId,
-      seriesId: input.seriesId,
-      effectiveFrom: input.effectiveFrom,
-    });
-  });
-  await finishRetiredTaskCascades(retired.cascades);
-  await input.onRetired?.({ taskIds: retired.taskIds, projectIds: retired.projectIds });
-}
-
-/** Retired generated entities from superseded unfinished future occurrences. */
-interface RetiredFutureWork {
-  readonly taskIds: string[];
-  readonly projectIds: string[];
-}
-
-/** Retired work plus task-parent state transitions that commit with the retirement. */
-interface RetiredFutureWorkWithCascades extends RetiredFutureWork {
-  readonly cascades: TaskStateMutation[];
-}
-
-/** One occurrence and its optional generated instance selected for retirement. */
-interface OccurrenceRetirementCandidate {
-  readonly occurrenceId: string;
-  readonly instanceId: string | null;
-}
-
-/** Internal retirement result including occurrences protected by completed work. */
-interface OccurrenceRetirementResult extends RetiredFutureWorkWithCascades {
-  readonly completedOccurrenceIds: string[];
-}
-
-/** Archive generated work and cancel instances without deciding the occurrence's final outcome. */
-async function retireGeneratedOccurrenceWork(
-  tx: Transaction,
-  organizationId: string,
-  candidates: readonly OccurrenceRetirementCandidate[],
-  now: Date,
-): Promise<OccurrenceRetirementResult> {
-  const taskIds: string[] = [];
-  const projectIds: string[] = [];
-  const parentTaskIds: (string | null)[] = [];
-  const completedOccurrenceIds: string[] = [];
-  for (const candidate of candidates) {
-    const mappedTasks = candidate.instanceId
-      ? await tx
-          .select({ id: task.id, completedAt: task.completedAt, parentTaskId: task.parentTaskId })
-          .from(processInstanceTask)
-          .innerJoin(task, eq(task.id, processInstanceTask.taskId))
-          .where(eq(processInstanceTask.instanceId, candidate.instanceId))
-      : [];
-    if (mappedTasks.some((row) => row.completedAt !== null)) {
-      completedOccurrenceIds.push(candidate.occurrenceId);
-      continue;
-    }
-    const mappedProjects = candidate.instanceId
-      ? await tx
-          .select({ id: project.id })
-          .from(processInstanceProject)
-          .innerJoin(project, eq(project.id, processInstanceProject.projectId))
-          .where(eq(processInstanceProject.instanceId, candidate.instanceId))
-      : [];
-    if (mappedTasks.length > 0) {
-      const ids = mappedTasks.map((row) => row.id);
-      await tx.update(task).set({ archivedAt: now }).where(inArray(task.id, ids));
-      taskIds.push(...ids);
-      parentTaskIds.push(...mappedTasks.map((row) => row.parentTaskId));
-    }
-    if (mappedProjects.length > 0) {
-      const ids = mappedProjects.map((row) => row.id);
-      await tx.update(project).set({ archivedAt: now }).where(inArray(project.id, ids));
-      projectIds.push(...ids);
-    }
-    if (candidate.instanceId) {
-      await tx
-        .update(processInstance)
-        .set({ status: 'canceled' })
-        .where(eq(processInstance.id, candidate.instanceId));
-    }
-  }
-  const { applySubtaskCompletionPolicyForParents } = await import('../task-state');
-  const cascades = await applySubtaskCompletionPolicyForParents(tx, organizationId, parentTaskIds);
-  return { taskIds, projectIds, completedOccurrenceIds, cascades };
-}
-
-/** Publish task-parent transitions after their recurrence retirement transaction commits. */
-async function finishRetiredTaskCascades(cascades: readonly TaskStateMutation[]): Promise<void> {
-  const { finishTaskStateTransition } = await import('../task-state');
-  for (const cascade of cascades) {
-    await finishTaskStateTransition({ actorId: null }, cascade);
-  }
-}
-
-/**
- * Retire only unfinished materialized work at and after a future revision boundary.
- *
- * @remarks
- * A rolling horizon means future occurrences already have ordinary rows. Saving a new cadence must
- * not leave those stale rows visible. Completed-early work is preserved and blocks replacement for
- * its date; every other generated task/project is soft-archived and its old instance is canceled.
- */
-async function retireUnfinishedFutureOccurrences(
-  tx: Transaction,
-  input: {
-    readonly organizationId: string;
-    readonly seriesId: string;
-    readonly effectiveFrom: string;
-  },
-): Promise<RetiredFutureWorkWithCascades> {
-  const candidates = await tx
-    .select({ occurrenceId: processOccurrence.id, instanceId: processInstance.id })
-    .from(processOccurrence)
-    .leftJoin(processInstance, eq(processInstance.occurrenceId, processOccurrence.id))
-    .where(
-      and(
-        eq(processOccurrence.organizationId, input.organizationId),
-        eq(processOccurrence.seriesId, input.seriesId),
-        gte(processOccurrence.scheduledFor, input.effectiveFrom),
-        inArray(processOccurrence.status, ['expected', 'materialized', 'needs_resolution']),
-      ),
-    );
-  const now = new Date();
-  const retired = await retireGeneratedOccurrenceWork(tx, input.organizationId, candidates, now);
-  const supersededIds = candidates
-    .map((candidate) => candidate.occurrenceId)
-    .filter((id) => !retired.completedOccurrenceIds.includes(id));
-  if (supersededIds.length > 0) {
-    await tx
-      .update(processOccurrence)
-      .set({ status: 'superseded', resolvedAt: now })
-      .where(inArray(processOccurrence.id, supersededIds));
-  }
-  return { taskIds: retired.taskIds, projectIds: retired.projectIds, cascades: retired.cascades };
-}
-
-/** Apply a one-occurrence resolution or a this-and-future trigger edit. */
-export async function editRecurrenceSeries(
-  database: Database,
-  input: {
-    readonly organizationId: string;
-    readonly actorId?: string | undefined;
-    readonly seriesId: string;
-    /** Civil date used to enforce future-only revision boundaries. */
-    readonly asOf?: string | undefined;
-    readonly edit: SeriesEditValue;
-    readonly onRetired?: ((work: RetiredFutureWork) => Promise<void>) | undefined;
-  },
-): Promise<z.input<typeof RecurrenceSeriesDetailOut>> {
-  const edit = SeriesEdit.parse(input.edit);
-  if (edit.scope === 'future') {
-    await appendFutureSeriesRevision(database, {
-      organizationId: input.organizationId,
-      actorId: input.actorId,
-      seriesId: input.seriesId,
-      effectiveFrom: edit.effectiveFrom,
-      asOf: input.asOf,
-      trigger: edit.trigger,
-      onRetired: input.onRetired,
-    });
-    return loadRecurrenceSeriesDetail(database, input.organizationId, input.seriesId);
-  }
-
-  const revision = await seriesRevisionAt(
-    database,
-    input.organizationId,
-    input.seriesId,
-    edit.scheduledFor,
-  );
-  const now = new Date();
-  if (edit.resolution.kind === 'complete') {
-    const updated = await database
-      .update(processOccurrence)
-      .set({ status: 'completed', resolvedAt: now })
-      .where(
-        and(
-          eq(processOccurrence.organizationId, input.organizationId),
-          eq(processOccurrence.seriesId, input.seriesId),
-          eq(processOccurrence.scheduledFor, edit.scheduledFor),
-        ),
-      )
-      .returning({ id: processOccurrence.id });
-    if (!updated[0]) throw new NotFoundError('Occurrence not found');
-  } else {
-    const kind = edit.resolution.kind === 'reschedule' ? 'reschedule' : 'exclude';
-    const retired = await database.transaction(async (tx) => {
-      const candidates = await tx
-        .select({ occurrenceId: processOccurrence.id, instanceId: processInstance.id })
-        .from(processOccurrence)
-        .leftJoin(processInstance, eq(processInstance.occurrenceId, processOccurrence.id))
-        .where(
-          and(
-            eq(processOccurrence.organizationId, input.organizationId),
-            eq(processOccurrence.seriesId, input.seriesId),
-            eq(processOccurrence.scheduledFor, edit.scheduledFor),
-            inArray(processOccurrence.status, ['expected', 'materialized', 'needs_resolution']),
-          ),
-        );
-      const retirement = await retireGeneratedOccurrenceWork(
-        tx,
-        input.organizationId,
-        candidates,
-        now,
-      );
-      if (retirement.completedOccurrenceIds.length > 0) {
-        throw new ConflictError('Completed occurrence work cannot be skipped or moved');
-      }
-      await tx
-        .insert(recurrenceException)
-        .values({
-          organizationId: input.organizationId,
-          seriesRevisionId: revision.id,
-          kind,
-          scheduledFor: edit.scheduledFor,
-          replacementDate:
-            edit.resolution.kind === 'reschedule' ? edit.resolution.scheduledFor : undefined,
-          createdBy: input.actorId,
-        })
-        .onConflictDoUpdate({
-          target: [recurrenceException.seriesRevisionId, recurrenceException.scheduledFor],
-          set: {
-            kind,
-            replacementDate:
-              edit.resolution.kind === 'reschedule' ? edit.resolution.scheduledFor : null,
-          },
-        });
-      await tx
-        .insert(processOccurrence)
-        .values({
-          organizationId: input.organizationId,
-          seriesId: input.seriesId,
-          seriesRevisionId: revision.id,
-          scheduledFor: edit.scheduledFor,
-          status: edit.resolution.kind === 'skip' ? 'skipped' : 'canceled',
-          resolvedAt: now,
-          createdBy: input.actorId,
-        })
-        .onConflictDoUpdate({
-          target: [
-            processOccurrence.seriesId,
-            processOccurrence.seriesRevisionId,
-            processOccurrence.scheduledFor,
-          ],
-          targetWhere: isNull(processOccurrence.externalOccurrenceKey),
-          set: {
-            status: edit.resolution.kind === 'skip' ? 'skipped' : 'canceled',
-            resolvedAt: now,
-          },
-        });
-      return {
-        taskIds: retirement.taskIds,
-        projectIds: retirement.projectIds,
-        cascades: retirement.cascades,
-      };
-    });
-    await finishRetiredTaskCascades(retired.cascades);
-    await input.onRetired?.({ taskIds: retired.taskIds, projectIds: retired.projectIds });
-    if (edit.resolution.kind === 'reschedule') {
-      await materializeOccurrence(database, {
-        organizationId: input.organizationId,
-        actorId: input.actorId,
-        seriesId: input.seriesId,
-        seriesRevisionId: revision.id,
-        scheduledFor: edit.resolution.scheduledFor,
-        originalScheduledFor: edit.scheduledFor,
-      });
-    }
-  }
-  return loadRecurrenceSeriesDetail(database, input.organizationId, input.seriesId);
 }

@@ -112,51 +112,68 @@ function ordinalWeekdayDate(
   return day <= lastDay ? formatCalendarDate({ year, month, day }) : null;
 }
 
-/** Infinite ordered candidate stream for a validated calendar schedule. */
-function* scheduleCandidates(schedule: CalendarRecurrenceSchedule): Generator<string> {
-  assertInterval(schedule.interval);
-  parseCalendarDate(schedule.startDate);
+/** Every date a daily cadence names, in order. */
+function* dailyCandidates(
+  schedule: Extract<CalendarRecurrenceSchedule, { kind: 'daily' }>,
+): Generator<string> {
+  for (let index = 0; ; index += 1) {
+    yield addCalendarDays(schedule.startDate, index * schedule.interval);
+  }
+}
 
-  if (schedule.kind === 'daily') {
-    for (let index = 0; ; index += 1) {
-      yield addCalendarDays(schedule.startDate, index * schedule.interval);
+/** Every date a weekly cadence names, in order, across its selected weekdays. */
+function* weeklyCandidates(
+  schedule: Extract<CalendarRecurrenceSchedule, { kind: 'weekly' }>,
+): Generator<string> {
+  const startWeek = addCalendarDays(schedule.startDate, -mondayWeekdayIndex(schedule.startDate));
+  const weekdays = [...new Set(schedule.weekdays.map((day) => WEEKDAY_INDEX[day]))].sort(
+    (left, right) => left - right,
+  );
+  for (let week = 0; ; week += schedule.interval) {
+    for (const weekday of weekdays) {
+      const candidate = addCalendarDays(startWeek, week * 7 + weekday);
+      if (compareCalendarDates(candidate, schedule.startDate) >= 0) yield candidate;
     }
   }
+}
 
-  if (schedule.kind === 'weekly') {
-    const startWeek = addCalendarDays(schedule.startDate, -mondayWeekdayIndex(schedule.startDate));
-    const weekdays = [...new Set(schedule.weekdays.map((day) => WEEKDAY_INDEX[day]))].sort(
-      (left, right) => left - right,
-    );
-    for (let week = 0; ; week += schedule.interval) {
-      for (const weekday of weekdays) {
-        const candidate = addCalendarDays(startWeek, week * 7 + weekday);
-        if (compareCalendarDates(candidate, schedule.startDate) >= 0) yield candidate;
-      }
-    }
+/** Every date a monthly cadence names, in order, skipping months its pattern misses. */
+function* monthlyCandidates(
+  schedule: Extract<CalendarRecurrenceSchedule, { kind: 'monthly' }>,
+): Generator<string> {
+  for (let monthOffset = 0; ; monthOffset += schedule.interval) {
+    const month = addCalendarMonths(schedule.startDate, monthOffset);
+    const candidate =
+      schedule.pattern.kind === 'day_of_month'
+        ? numberedMonthDate(
+            month.year,
+            month.month,
+            schedule.pattern.day,
+            schedule.pattern.overflow,
+          )
+        : ordinalWeekdayDate(
+            month.year,
+            month.month,
+            schedule.pattern.ordinal,
+            schedule.pattern.weekday,
+          );
+    if (candidate && compareCalendarDates(candidate, schedule.startDate) >= 0) yield candidate;
   }
+}
 
-  if (schedule.kind === 'monthly') {
-    for (let monthOffset = 0; ; monthOffset += schedule.interval) {
-      const month = addCalendarMonths(schedule.startDate, monthOffset);
-      const candidate =
-        schedule.pattern.kind === 'day_of_month'
-          ? numberedMonthDate(
-              month.year,
-              month.month,
-              schedule.pattern.day,
-              schedule.pattern.overflow,
-            )
-          : ordinalWeekdayDate(
-              month.year,
-              month.month,
-              schedule.pattern.ordinal,
-              schedule.pattern.weekday,
-            );
-      if (candidate && compareCalendarDates(candidate, schedule.startDate) >= 0) yield candidate;
-    }
-  }
-
+/**
+ * Every date a yearly cadence names, in order.
+ *
+ * @remarks
+ * A February 29th that skips on overflow names no date at all, so the stream ends immediately
+ * rather than looping to the year limit finding nothing.
+ *
+ * @param schedule - The yearly schedule.
+ * @yields Each candidate date.
+ */
+function* yearlyCandidates(
+  schedule: Extract<CalendarRecurrenceSchedule, { kind: 'yearly' }>,
+): Generator<string> {
   const start = parseCalendarDate(schedule.startDate);
   const maximumPossibleDay = schedule.month === 2 ? 29 : daysInMonth(2000, schedule.month);
   if (schedule.overflow === 'skip' && schedule.day > maximumPossibleDay) return;
@@ -165,6 +182,22 @@ function* scheduleCandidates(schedule: CalendarRecurrenceSchedule): Generator<st
     if (year > 9999) return;
     const candidate = numberedMonthDate(year, schedule.month, schedule.day, schedule.overflow);
     if (candidate && compareCalendarDates(candidate, schedule.startDate) >= 0) yield candidate;
+  }
+}
+
+/** Infinite ordered candidate stream for a validated calendar schedule. */
+function scheduleCandidates(schedule: CalendarRecurrenceSchedule): Generator<string> {
+  assertInterval(schedule.interval);
+  parseCalendarDate(schedule.startDate);
+  switch (schedule.kind) {
+    case 'daily':
+      return dailyCandidates(schedule);
+    case 'weekly':
+      return weeklyCandidates(schedule);
+    case 'monthly':
+      return monthlyCandidates(schedule);
+    default:
+      return yearlyCandidates(schedule);
   }
 }
 
@@ -190,6 +223,67 @@ function normalizeExceptions(exceptions: RecurrenceDateExceptions | undefined): 
     reschedule.set(replacement.from, replacement.to);
   }
   return { exclude, include, reschedule };
+}
+
+/**
+ * The date one candidate actually lands on, after exclusions and reschedules.
+ *
+ * @param candidate - The date the schedule named.
+ * @param from - The window's inclusive start.
+ * @param exceptions - The normalized one-off exceptions.
+ * @returns The date to emit, or `null` when this candidate produces none.
+ */
+function resolvedDate(
+  candidate: string,
+  from: string,
+  exceptions: ReturnType<typeof normalizeExceptions>,
+): string | null {
+  if (compareCalendarDates(candidate, from) < 0) return null;
+  if (exceptions.exclude.has(candidate)) return null;
+  const resolved = exceptions.reschedule.get(candidate) ?? candidate;
+  return compareCalendarDates(resolved, from) < 0 ? null : resolved;
+}
+
+/**
+ * Check an expansion window's bounds and minimum.
+ *
+ * @param window - The requested window.
+ * @returns The minimum occurrence count, defaulted to zero.
+ * @throws {RangeError} When the bounds are reversed or the minimum is not a count.
+ */
+function validatedWindow(window: RecurrenceExpansionWindow): number {
+  parseCalendarDate(window.from);
+  parseCalendarDate(window.through);
+  if (compareCalendarDates(window.from, window.through) > 0) {
+    throw new RangeError('Recurrence expansion start must not follow its horizon');
+  }
+  const minimum = window.minimumOccurrences ?? 0;
+  if (!Number.isSafeInteger(minimum) || minimum < 0) {
+    throw new RangeError('Minimum occurrence count must be a nonnegative safe integer');
+  }
+  return minimum;
+}
+
+/**
+ * Whether the series' own stop condition has been reached.
+ *
+ * @remarks
+ * Counted against the schedule's *expected* dates rather than the ones this window emits, so
+ * "after twelve occurrences" means twelve occurrences of the series, not twelve rows on one page.
+ *
+ * @param end - The schedule's stop condition.
+ * @param candidate - The date about to be considered.
+ * @param expectedCount - How many expected dates the stream has produced so far.
+ * @returns `true` when the stream should stop.
+ */
+function seriesEnded(
+  end: CalendarRecurrenceSchedule['end'],
+  candidate: string,
+  expectedCount: number,
+): boolean {
+  if (end.kind === 'after_count') return expectedCount >= end.count;
+  if (end.kind === 'on_date') return compareCalendarDates(candidate, end.date) > 0;
+  return false;
 }
 
 /** Add explicit dates through the current effective horizon. */
@@ -220,44 +314,32 @@ export function expandCalendarSchedule(
   if (schedule.kind === 'after_completion') {
     throw new TypeError('Completion-anchored schedules advance from a completion event');
   }
-  parseCalendarDate(window.from);
-  parseCalendarDate(window.through);
-  if (compareCalendarDates(window.from, window.through) > 0) {
-    throw new RangeError('Recurrence expansion start must not follow its horizon');
-  }
-  const minimum = window.minimumOccurrences ?? 0;
-  if (!Number.isSafeInteger(minimum) || minimum < 0) {
-    throw new RangeError('Minimum occurrence count must be a nonnegative safe integer');
-  }
-
+  const minimum = validatedWindow(window);
   const exceptions = normalizeExceptions(window.exceptions);
   const output = new Set<string>();
   let effectiveThrough = window.through;
   addIncludedDates(output, exceptions.include, window.from, effectiveThrough);
   let expectedCount = 0;
 
+  /** Push the horizon out to `date` and pick up any explicit dates that now fall inside it. */
+  const extendThrough = (date: string): void => {
+    effectiveThrough = date;
+    addIncludedDates(output, exceptions.include, window.from, effectiveThrough);
+  };
+
   for (const candidate of scheduleCandidates(schedule)) {
-    if (schedule.end.kind === 'after_count' && expectedCount >= schedule.end.count) break;
-    if (schedule.end.kind === 'on_date' && compareCalendarDates(candidate, schedule.end.date) > 0) {
-      break;
-    }
+    if (seriesEnded(schedule.end, candidate, expectedCount)) break;
     expectedCount += 1;
 
     if (compareCalendarDates(candidate, effectiveThrough) > 0) {
+      // Past the horizon and the window is satisfied; otherwise keep going until it is.
       if (output.size >= minimum) break;
-      effectiveThrough = candidate;
-      addIncludedDates(output, exceptions.include, window.from, effectiveThrough);
+      extendThrough(candidate);
     }
-    if (compareCalendarDates(candidate, window.from) < 0) continue;
-    if (exceptions.exclude.has(candidate)) continue;
-
-    const resolved = exceptions.reschedule.get(candidate) ?? candidate;
-    if (compareCalendarDates(resolved, window.from) < 0) continue;
+    const resolved = resolvedDate(candidate, window.from, exceptions);
+    if (resolved === null) continue;
     output.add(resolved);
-    if (compareCalendarDates(resolved, effectiveThrough) > 0) {
-      effectiveThrough = resolved;
-      addIncludedDates(output, exceptions.include, window.from, effectiveThrough);
-    }
+    if (compareCalendarDates(resolved, effectiveThrough) > 0) extendThrough(resolved);
   }
 
   return [...output].sort(compareCalendarDates);

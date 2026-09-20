@@ -234,7 +234,7 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       summary text,
       workflow_states jsonb not null default '[]'::jsonb,
       triage_enabled boolean not null default true,
-      cycle_cadence_weeks integer not null default 1,
+      cycle_cadence_days integer not null default 7, cycle_cadence_anchor date not null default '2024-01-01', cycle_cadence_revision integer not null default 1,
       agent_guidance text,
       approval_routing jsonb,
       visibility visibility not null default 'public',

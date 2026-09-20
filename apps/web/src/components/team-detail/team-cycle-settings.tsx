@@ -1,7 +1,7 @@
 'use client';
 
 import { cycleWindowsThrough } from '@docket/work/cycle-schedule';
-import { InlineBanner } from '@docket/ui/components';
+import { DatePicker, InlineBanner } from '@docket/ui/components';
 import { Button, Field, Input, Surface } from '@docket/ui/primitives';
 import { type ChangeEventHandler, type JSX, useMemo, useState } from 'react';
 
@@ -135,12 +135,15 @@ function CycleCadenceForm({
           label="New cadence starts"
           description={`The old schedule is preserved through ${dateAfter(earliestAnchor, -1)}.`}
         >
-          <Input
-            aria-label="New cadence starts"
-            type="date"
+          <DatePicker
+            ariaLabel="New cadence starts"
             min={earliestAnchor}
             value={effectiveAnchor}
-            onChange={inputValue(onAnchorChange)}
+            placeholder="Pick a day"
+            triggerVariant="secondary"
+            onChange={(value) => {
+              if (value) onAnchorChange(value);
+            }}
           />
         </Field>
       </div>

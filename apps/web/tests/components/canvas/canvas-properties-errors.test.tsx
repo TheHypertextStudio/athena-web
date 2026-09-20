@@ -41,6 +41,9 @@ vi.mock('@/components/pickers/use-composer-options', () => ({
     retry: sources.retryOptions,
   }),
 }));
+vi.mock('@/components/pickers/future-cycle-picker', () => ({
+  FutureCyclePicker: () => <button type="button">Cycle</button>,
+}));
 vi.mock('@/components/statuses/status-registry', () => ({
   useStatusRegistry: () => ({
     loaded: false,

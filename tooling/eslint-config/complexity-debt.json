@@ -5499,12 +5499,6 @@
       "excess": 3
     }
   },
-  "domains/athena/src/real-digest.ts": {
-    "complexity": {
-      "max": 14,
-      "excess": 2
-    }
-  },
   "domains/athena/src/task-expansion/service.ts": {
     "complexity": {
       "max": 25,

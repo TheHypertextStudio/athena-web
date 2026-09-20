@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,278 entries, 155,511 excess points across 728 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,277 entries, 155,509 excess points across 727 files.
 
 #### Analysis Complete
 
@@ -217,6 +217,9 @@ Quick-win files to process:
   - Workflow generation response validation now lives in a focused parser, clearing the runner's
     final complexity excess while preserving all five durable-workflow tests. The ledger is 728
     files and 1,278 entries.
+  - Digest highlight-row validation now lives in a focused parser, clearing the narrator's final
+    complexity excess while preserving all 23 digest tests. The ledger is 727 files and 1,277
+    entries.
 
 ---
 

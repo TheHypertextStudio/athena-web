@@ -94,6 +94,15 @@ export function extractText(message: Message): string {
     .trim();
 }
 
+/** Validate one model highlight row and return its normalized key and sentence. */
+function parseHighlightEntry(entry: unknown): readonly [string, string] | undefined {
+  if (typeof entry !== 'object' || entry === null) return undefined;
+  const { key, sentence } = entry as { key?: unknown; sentence?: unknown };
+  if (typeof key !== 'string' || typeof sentence !== 'string') return undefined;
+  const trimmed = sentence.trim();
+  return trimmed.length > 0 ? [key, trimmed] : undefined;
+}
+
 /**
  * Parse model JSON into the first nonblank sentence for each returned episode key.
  *
@@ -121,11 +130,8 @@ export function parseHighlights(text: string): Map<string, string> {
   if (!Array.isArray(highlights)) return byKey;
 
   for (const entry of highlights) {
-    if (typeof entry !== 'object' || entry === null) continue;
-    const { key, sentence } = entry as { key?: unknown; sentence?: unknown };
-    if (typeof key !== 'string' || typeof sentence !== 'string') continue;
-    const trimmed = sentence.trim();
-    if (trimmed.length > 0 && !byKey.has(key)) byKey.set(key, trimmed);
+    const parsed = parseHighlightEntry(entry);
+    if (parsed !== undefined && !byKey.has(parsed[0])) byKey.set(parsed[0], parsed[1]);
   }
   return byKey;
 }

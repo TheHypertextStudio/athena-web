@@ -122,6 +122,9 @@ Quick-win files to process:
   - `OptionPicker` now builds its optional clear row through a small helper, removing its final
     complexity excess while preserving all 86 picker tests. The ledger is 759 files and 1,313
     entries.
+  - Responsive toolbar selection now lives in a pure width-allocation helper, removing the
+    measurement callback's final complexity excess while preserving the toolbar test. The ledger
+    is 758 files and 1,312 entries.
 
 ---
 

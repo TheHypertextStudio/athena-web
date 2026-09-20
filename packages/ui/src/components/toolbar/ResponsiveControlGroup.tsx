@@ -70,6 +70,31 @@ function equalIds(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((id, index) => id === right[index]);
 }
 
+function chooseInlineIds(
+  items: readonly ResponsiveControlItem[],
+  widths: ReadonlyMap<string, number>,
+  available: number,
+  overflowWidth: number,
+): string[] {
+  const widthFor = (
+    selection: readonly ResponsiveControlItem[],
+    includesOverflow: boolean,
+  ): number =>
+    selection.reduce((total, item) => total + (widths.get(item.id) ?? 0), 0) +
+    Math.max(0, selection.length - 1 + (includesOverflow ? 1 : 0)) * GAP_PX +
+    (includesOverflow ? overflowWidth : 0);
+  if (widthFor(items, false) <= available) return items.map((item) => item.id);
+
+  const ordered = [...items].sort((left, right) => left.priority - right.priority);
+  const selected = ordered.filter((item) => item.alwaysVisible);
+  for (const item of ordered.filter((candidate) => !candidate.alwaysVisible)) {
+    if (widthFor([...selected, item], true) > available) break;
+    selected.push(item);
+  }
+  const chosen = new Set(selected.map((item) => item.id));
+  return items.filter((item) => chosen.has(item.id)).map((item) => item.id);
+}
+
 /**
  * Measure a prioritized control collection without giving the caller a horizontal scroll escape.
  *
@@ -101,34 +126,11 @@ export function useResponsiveControlLayout(
     const available = container.clientWidth;
     if (available <= 0) return;
 
-    const ordered = [...items].sort((left, right) => left.priority - right.priority);
-    const alwaysVisible = ordered.filter((item) => item.alwaysVisible);
-    const optional = ordered.filter((item) => !item.alwaysVisible);
     const measuredOverflowWidth =
       overflowMeasurementRef.current?.getBoundingClientRect().width ?? 0;
     const overflowWidth =
       measuredOverflowWidth > 0 ? measuredOverflowWidth : OVERFLOW_FALLBACK_WIDTH_PX;
-    const widthFor = (
-      selection: readonly ResponsiveControlItem[],
-      includesOverflow: boolean,
-    ): number =>
-      selection.reduce((total, item) => total + (widthsRef.current.get(item.id) ?? 0), 0) +
-      Math.max(0, selection.length - 1 + (includesOverflow ? 1 : 0)) * GAP_PX +
-      (includesOverflow ? overflowWidth : 0);
-
-    if (widthFor(items, false) <= available) {
-      const next = items.map((item) => item.id);
-      setInlineIds((current) => (equalIds(current, next) ? current : next));
-      return;
-    }
-
-    const selected = [...alwaysVisible];
-    for (const item of optional) {
-      if (widthFor([...selected, item], true) > available) break;
-      selected.push(item);
-    }
-    const chosen = new Set(selected.map((item) => item.id));
-    const next = items.filter((item) => chosen.has(item.id)).map((item) => item.id);
+    const next = chooseInlineIds(items, widthsRef.current, available, overflowWidth);
     setInlineIds((current) => (equalIds(current, next) ? current : next));
   }, [items]);
 

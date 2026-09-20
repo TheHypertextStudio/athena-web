@@ -94,8 +94,6 @@ export function cleanPublicProse(value: string): string {
       return `\`${name}\``;
     })
     .replaceAll('workflow_states', 'workflowStates')
-    .replaceAll('docket-api.hypertext.studio', 'api.clearthedocket.com')
-    .replaceAll('docket.hypertext.studio', 'clearthedocket.com')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\s+—\s+/g, '. ')
     .replace(/[\u2013\u2014]/g, '-')

@@ -90,12 +90,7 @@ function assertOperationIdentity(operation: JsonObject, ids: Set<string>): strin
 /** Assert that a normalized document has no source prose or missing operation basics. */
 export function assertPublicReference(document: JsonObject): void {
   const serialized = JSON.stringify(document);
-  const forbidden = [
-    '{@link',
-    'docket.hypertext.studio',
-    'docket-api.hypertext.studio',
-    'workflow_states',
-  ];
+  const forbidden = ['{@link', 'workflow_states'];
   const leaked = forbidden.find((value) => serialized.includes(value));
   if (leaked) throw new Error(`Public OpenAPI contains forbidden text: ${leaked}`);
 

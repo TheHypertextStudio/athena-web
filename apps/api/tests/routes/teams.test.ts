@@ -39,6 +39,8 @@ interface TeamBody {
   cycleCadenceDays: number;
   cycleCadenceAnchor: string;
   cycleCadenceRevision: number;
+  cycleCadenceEarliestAnchor: string;
+  cycleCadenceProviderOwned: boolean;
   agentGuidance: string | null;
   archivedAt?: string;
 }
@@ -68,6 +70,8 @@ describe('teams router', () => {
     expect(team.cycleCadenceDays).toBe(7);
     expect(team.cycleCadenceAnchor).toBe('2024-01-01');
     expect(team.cycleCadenceRevision).toBe(1);
+    expect(team.cycleCadenceEarliestAnchor).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(team.cycleCadenceProviderOwned).toBe(false);
     expect(team.description).toBeNull();
     expect(team.agentGuidance).toBeNull();
     // Default workflow seeded (5 canonical states, backlog first).

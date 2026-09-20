@@ -191,6 +191,119 @@ function isSelected<TValue extends string>(
   return selected === value;
 }
 
+interface PickerOptionRowProps<TValue extends string> {
+  readonly row: PickerRow<TValue>;
+  readonly previousGroup?: string | undefined;
+  readonly listId: string;
+  readonly index: number;
+  readonly rowCount: number;
+  readonly searchable: boolean;
+  readonly active: boolean;
+  readonly modality: ReturnType<typeof useInputModality>;
+  readonly multiple: boolean;
+  readonly selected: TValue | readonly TValue[] | null;
+  readonly hasAnyIcon: boolean;
+  readonly rowElements: React.RefObject<Map<string, HTMLLIElement>>;
+  readonly onSelect: (value: TValue) => void;
+  readonly setActiveRow: (row: PickerRow<TValue>, source: NavigationSource) => void;
+}
+
+/** Render one ordinary option and its optional group heading. */
+function PickerOptionRow<TValue extends string>({
+  row,
+  previousGroup,
+  listId,
+  index,
+  rowCount,
+  searchable,
+  active,
+  modality,
+  multiple,
+  selected,
+  hasAnyIcon,
+  rowElements,
+  onSelect,
+  setActiveRow,
+}: PickerOptionRowProps<TValue>): React.JSX.Element | null {
+  const option = row.option;
+  /* v8 ignore start -- ordinary rows always carry their option. */
+  if (!option) return null;
+  /* v8 ignore stop */
+  const chosen = isSelected(option.value, selected);
+  return (
+    <>
+      {option.group && option.group !== previousGroup ? (
+        <li role="presentation" className="text-on-surface-variant text-label-small px-3 pt-2 pb-1">
+          {option.group}
+        </li>
+      ) : null}
+      <li
+        id={pickerRowId(listId, row)}
+        ref={(element) => {
+          const key = pickerRowKey(row);
+          if (element) rowElements.current.set(key, element);
+          else rowElements.current.delete(key);
+        }}
+        role="option"
+        aria-selected={chosen}
+        aria-disabled={option.disabled}
+        data-active={active || undefined}
+      >
+        <button
+          type="button"
+          tabIndex={-1}
+          disabled={option.disabled}
+          onClick={() => {
+            if (!option.disabled) onSelect(option.value);
+          }}
+          onMouseEnter={() => {
+            setActiveRow(row, 'pointer');
+          }}
+          data-nav={active ? modality : undefined}
+          className={cn(
+            pickerRowClass(multiple && chosen),
+            { [menuActiveDescendantLayer]: active && !(multiple && chosen) },
+            pickerRowShape(index, rowCount, searchable),
+            menuActiveDescendantRing,
+          )}
+        >
+          {hasAnyIcon ? (
+            <span
+              aria-hidden="true"
+              className={cn('flex shrink-0 items-center justify-center', MENU_METRICS.iconBox)}
+            >
+              {option.icon}
+            </span>
+          ) : null}
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate">{option.label}</span>
+            {option.supporting ? (
+              <span
+                className={cn(menuSupporting('standard'), {
+                  'text-on-tertiary-container': multiple && chosen,
+                })}
+              >
+                {option.supporting}
+              </span>
+            ) : null}
+          </span>
+          {option.hint ? (
+            <span
+              className={cn(
+                'text-label-large shrink-0 tabular-nums',
+                multiple && chosen ? 'text-on-tertiary-container' : 'text-on-surface-variant',
+              )}
+            >
+              {option.hint}
+            </span>
+          ) : null}
+          {chosen ? <Check aria-hidden="true" className="shrink-0" /> : null}
+        </button>
+      </li>
+    </>
+  );
+}
+
 /**
  * The searchable picker listbox.
  *
@@ -524,86 +637,24 @@ export function PickerList<TValue extends string = string>({
                 </li>
               );
             }
-            const option = row.option;
-            /* v8 ignore start -- unreachable: `rows` (built above) always pairs a `'row'`-kind
-               entry with a defined `option`; this only narrows the discriminated union's optional
-               field for TypeScript. */
-            if (!option) return null;
-            /* v8 ignore stop */
-            const chosen = isSelected(option.value, selected);
             return (
-              <li
-                key={option.value}
-                id={pickerRowId(listId, row)}
-                ref={(element) => {
-                  const key = pickerRowKey(row);
-                  if (element) rowElements.current.set(key, element);
-                  else rowElements.current.delete(key);
-                }}
-                role="option"
-                aria-selected={chosen}
-                aria-disabled={option.disabled}
-                data-active={active || undefined}
-              >
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  disabled={option.disabled}
-                  onClick={() => {
-                    if (!option.disabled) onSelect(option.value);
-                  }}
-                  onMouseEnter={() => {
-                    setActiveRow(row, 'pointer');
-                  }}
-                  data-nav={active ? modality : undefined}
-                  className={cn(
-                    // A single-select row already has a trailing check and semantic leading glyph,
-                    // so it stays on the neutral menu surface. Multi-select needs a persistent
-                    // fill because several checked rows can remain in view at once.
-                    pickerRowClass(multiple && chosen),
-                    { [menuActiveDescendantLayer]: active && !(multiple && chosen) },
-                    pickerRowShape(index, rows.length, searchable),
-                    menuActiveDescendantRing,
-                  )}
-                >
-                  {hasAnyIcon ? (
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        'flex shrink-0 items-center justify-center',
-                        MENU_METRICS.iconBox,
-                      )}
-                    >
-                      {option.icon}
-                    </span>
-                  ) : null}
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate">{option.label}</span>
-                    {option.supporting ? (
-                      <span
-                        className={cn(menuSupporting('standard'), {
-                          'text-on-tertiary-container': multiple && chosen,
-                        })}
-                      >
-                        {option.supporting}
-                      </span>
-                    ) : null}
-                  </span>
-                  {option.hint ? (
-                    <span
-                      className={cn(
-                        'text-label-large shrink-0 tabular-nums',
-                        multiple && chosen
-                          ? 'text-on-tertiary-container'
-                          : 'text-on-surface-variant',
-                      )}
-                    >
-                      {option.hint}
-                    </span>
-                  ) : null}
-                  {chosen ? <Check aria-hidden="true" className="shrink-0" /> : null}
-                </button>
-              </li>
+              <PickerOptionRow
+                key={row.option?.value}
+                row={row}
+                previousGroup={rows[index - 1]?.option?.group}
+                listId={listId}
+                index={index}
+                rowCount={rows.length}
+                searchable={searchable}
+                active={active}
+                modality={modality}
+                multiple={multiple}
+                selected={selected}
+                hasAnyIcon={hasAnyIcon}
+                rowElements={rowElements}
+                onSelect={onSelect}
+                setActiveRow={setActiveRow}
+              />
             );
           })
         )}

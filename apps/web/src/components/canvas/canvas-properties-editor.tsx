@@ -21,6 +21,7 @@ import {
 } from '@/components/pickers/options';
 import { formatWindow } from '@/components/cycles/format-window';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
+import { FutureCyclePicker } from '@/components/pickers/future-cycle-picker';
 import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { EstimatePicker } from '@/components/task-detail/EstimatePicker';
 import type { CanvasPropertySnapshot } from '@/lib/actions';
@@ -406,11 +407,6 @@ export default function CanvasPropertiesEditor({
       options.milestones,
       options.milestoneDisplays,
     );
-    const cycleOptionsForTeam = cycleOptions(
-      options.cycles.filter((item) => teamId !== null && item.teamId === teamId),
-      formatWindow,
-      options.cycleDisplays,
-    );
     return (
       <>
         <SelectionIssue message={selectionIssue} />
@@ -508,20 +504,23 @@ export default function CanvasPropertiesEditor({
           />
         </Field>
         <Field label="Cycle">
-          <EntityPicker
-            options={cycleOptionsForTeam}
-            value={scalarValue(cycle)}
-            onChange={(value) => {
-              executeScalar('cycleId', value, 'cycle');
-            }}
-            placeholder={scalarPlaceholder(
-              cycle,
-              teamId === null ? 'Select Tasks on one Team' : 'Set cycle',
-            )}
-            clearLabel="No cycle"
-            ariaLabel="Cycle"
-            disabled={optionDisabled('cycles')}
-          />
+          {teamId ? (
+            <FutureCyclePicker
+              orgId={organizationId}
+              teamId={teamId}
+              value={scalarValue(cycle)}
+              onChange={(value) => {
+                executeScalar('cycleId', value, 'cycle');
+              }}
+              displays={options.cycleDisplays}
+              placeholder={scalarPlaceholder(cycle, 'Set cycle')}
+              disabled={disabled}
+            />
+          ) : (
+            <span className="text-on-surface-variant text-body-medium px-2 py-1.5">
+              Select Tasks on one Team
+            </span>
+          )}
         </Field>
         <AssociationField
           label="Labels"

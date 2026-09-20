@@ -6,12 +6,19 @@ import { cycleWindowContaining } from '../lib/cycle-window';
 
 type TeamRow = typeof team.$inferSelect;
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type Database = Pick<typeof db, 'select'>;
 
 /** Result metadata shown after a cadence change. */
 export interface TeamCycleCadenceChange {
   readonly team: TeamRow;
   readonly effectiveAnchor: string;
   readonly removedEmptyCycles: number;
+}
+
+/** Read-only policy metadata needed to render the cadence editor safely. */
+export interface TeamCycleCadencePolicy {
+  readonly earliestAnchor: string;
+  readonly providerOwned: boolean;
 }
 
 function nextDate(date: string): string {
@@ -55,18 +62,19 @@ async function assertNativeCadenceOwner(
   }
 }
 
-async function preservedScheduleEnd(
-  tx: Transaction,
-  currentTeam: TeamRow,
-  now: Date,
-): Promise<Date> {
+async function preservedScheduleEnd(tx: Database, currentTeam: TeamRow, now: Date): Promise<Date> {
+  const today = now.toISOString().slice(0, 10);
   const currentWindow = cycleWindowContaining(
     {
       anchorDate: currentTeam.cycleCadenceAnchor,
       cadenceDays: currentTeam.cycleCadenceDays,
     },
-    now.toISOString().slice(0, 10),
+    today < currentTeam.cycleCadenceAnchor ? currentTeam.cycleCadenceAnchor : today,
   );
+  const baselineEnd =
+    today < currentTeam.cycleCadenceAnchor
+      ? new Date(currentWindow.startsAt.getTime() - 1)
+      : currentWindow.endsAt;
   const occupied = await tx
     .select({ endsAt: cycle.endsAt })
     .from(cycle)
@@ -76,13 +84,38 @@ async function preservedScheduleEnd(
         eq(cycle.organizationId, currentTeam.organizationId),
         eq(cycle.teamId, currentTeam.id),
         eq(cycle.source, 'native'),
-        gt(cycle.endsAt, currentWindow.endsAt),
+        gt(cycle.endsAt, baselineEnd),
       ),
     );
   return occupied.reduce(
     (latest, row) => (row.endsAt.getTime() > latest.getTime() ? row.endsAt : latest),
-    currentWindow.endsAt,
+    baselineEnd,
   );
+}
+
+/** Return the authoritative safe boundary and ownership state for one team's cadence editor. */
+export async function readTeamCycleCadencePolicy(
+  currentTeam: TeamRow,
+  now: Date,
+): Promise<TeamCycleCadencePolicy> {
+  const providerRows = await db
+    .select({ id: cycle.id })
+    .from(cycle)
+    .innerJoin(integration, eq(cycle.sourceIntegrationId, integration.id))
+    .where(
+      and(
+        eq(cycle.organizationId, currentTeam.organizationId),
+        eq(cycle.teamId, currentTeam.id),
+        eq(cycle.source, 'linked'),
+        inArray(integration.status, ['connected', 'error']),
+      ),
+    )
+    .limit(1);
+  const preservedThrough = await preservedScheduleEnd(db, currentTeam, now);
+  return {
+    earliestAnchor: nextDate(preservedThrough.toISOString().slice(0, 10)),
+    providerOwned: providerRows.length > 0,
+  };
 }
 
 async function deleteEmptyCyclesAfter(

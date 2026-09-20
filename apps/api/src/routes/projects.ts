@@ -30,7 +30,6 @@ import {
 import { ProjectDetailAggregate } from '../contracts/detail-aggregate';
 import { ProjectId } from '@docket/work/ids';
 import type { ProgramOut } from '@docket/work/program-contract';
-import type { TeamOut } from '../contracts/team';
 import { and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -54,6 +53,7 @@ import { created, ok } from '../lib/ok';
 import { resolveContainerStatus } from '../lib/work-status';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
+import { teamOut } from '../lib/team-output';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
@@ -90,25 +90,6 @@ function toOut(p: ProjectRow): z.input<typeof ProjectOut> {
     targetDateFiscalYearStartMonth: p.targetDateFiscalYearStartMonth,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
-  };
-}
-
-/** Project one Team row into the bounded detail reference contract. */
-function teamToOut(row: typeof team.$inferSelect): z.input<typeof TeamOut> {
-  return {
-    id: row.id,
-    organizationId: row.organizationId,
-    name: row.name,
-    key: row.key,
-    description: row.description,
-    summary: row.summary,
-    workflowStates: row.workflowStates,
-    triageEnabled: row.triageEnabled,
-    cycleCadenceDays: row.cycleCadenceDays,
-    cycleCadenceAnchor: row.cycleCadenceAnchor,
-    cycleCadenceRevision: row.cycleCadenceRevision,
-    agentGuidance: row.agentGuidance,
-    approvalRouting: row.approvalRouting,
   };
 }
 
@@ -681,7 +662,7 @@ const projects = new Hono<AppEnv>()
         references: {
           lead: leadRow ? actorReference(leadRow) : null,
           program: programRow ? programToOut(programRow) : null,
-          team: teamRow ? teamToOut(teamRow) : null,
+          team: teamRow ? teamOut(teamRow) : null,
           initiatives: initiativeReferences,
         },
         defaultView: {

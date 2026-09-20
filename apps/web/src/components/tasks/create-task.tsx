@@ -58,8 +58,7 @@ import {
 import { useCreationContext } from '@/components/create-object/creation-context';
 import { WorkspacePicker } from '@/components/create-object/workspace-picker';
 import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
-import { cycleOptions, milestoneOptions, workflowStateOptions } from '@/components/pickers/options';
-import { formatWindow } from '@/components/cycles/format-window';
+import { milestoneOptions, workflowStateOptions } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
 import { TeamPicker } from '@/components/teams/team-picker';
@@ -77,7 +76,7 @@ import { TaskComposerPickers } from './task-form-pickers';
 import { useTaskDraftPersistence } from './use-task-draft-persistence';
 
 /** The lists this composer's pickers draw from. */
-const COMPOSER_INCLUDE = ['actors', 'projects', 'cycles', 'labels', 'milestones'] as const;
+const COMPOSER_INCLUDE = ['actors', 'projects', 'labels', 'milestones'] as const;
 
 /** Every field the task composer holds, as one value. */
 export interface TaskDraft {
@@ -317,17 +316,6 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
     };
   }, [destinationReady, open, teamId, options, updateDraft]);
 
-  // Cycles are org-wide; scope the picker to the chosen team's cadence. The label is the cycle's
-  // server-derived `displayName` (its author name, else its window) — never the stored `number`,
-  // which is the auto-roll idempotency key and reads as "Cycle 1000137".
-  const cycleOptionsForTeam = useMemo(() => {
-    return cycleOptions(
-      options.cycles.filter((cycle) => cycle.teamId === teamId),
-      formatWindow,
-      options.cycleDisplays,
-    );
-  }, [options.cycleDisplays, options.cycles, teamId]);
-
   // A milestone always belongs to exactly one project, so the picker is scoped to whichever
   // project is currently chosen — same rule the task detail rail applies post-creation.
   const milestoneOptionsForProject = useMemo(() => {
@@ -550,6 +538,8 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       }
     >
       <TaskComposerPickers
+        orgId={orgId}
+        teamId={teamId}
         statusOptions={statusOptions}
         state={draft.state}
         priority={draft.priority}
@@ -561,7 +551,6 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         milestoneId={draft.milestoneId}
         milestoneOptionsForProject={milestoneOptionsForProject}
         cycleId={draft.cycleId}
-        cycleOptionsForTeam={cycleOptionsForTeam}
         cycleNoun={cycleNoun}
         startDate={draft.startDate}
         dueDate={draft.dueDate}

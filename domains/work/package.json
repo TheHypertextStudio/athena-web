@@ -19,6 +19,7 @@
     "./initiative-contract": "./src/contracts/initiative.ts",
     "./program-contract": "./src/contracts/program.ts",
     "./cycle-contract": "./src/contracts/cycle.ts",
+    "./cycle-schedule": "./src/cycle-schedule.ts",
     "./milestone-contract": "./src/contracts/milestone.ts",
     "./task-model": "./src/contracts/task.ts",
     "./work-status-contract": "./src/contracts/work-status.ts",

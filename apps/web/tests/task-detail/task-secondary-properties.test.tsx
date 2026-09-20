@@ -33,6 +33,29 @@ import {
 import { EntityMetadataRow } from '../../src/components/views/entity-detail-layout';
 import { mockWideMetadataRow } from '../support/metadata-row-layout';
 
+vi.mock('@/components/pickers/future-cycle-picker', () => ({
+  FutureCyclePicker: ({
+    noun = 'Cycle',
+    onChange,
+    triggerClassName,
+  }: {
+    noun?: string;
+    onChange: (id: string, revision: number) => void;
+    triggerClassName?: string;
+  }) => (
+    <button
+      type="button"
+      aria-label={`${noun} — not set`}
+      className={triggerClassName}
+      onClick={() => {
+        onChange('cycle_1', 3);
+      }}
+    >
+      Set {noun.toLowerCase()}
+    </button>
+  ),
+}));
+
 beforeEach(() => {
   mockWideMetadataRow();
 });
@@ -90,7 +113,6 @@ function propsFor(overrides: CaseOverrides = {}): TaskSecondaryPropertiesProps {
         onCreateLabel: () => undefined,
         programOptions: [],
         milestoneOptions: [],
-        cycleOptions: [],
         estimationScale: 'fibonacci',
         ...secondary,
       },
@@ -350,16 +372,12 @@ describe('TaskSecondaryProperties chips', () => {
     );
   });
 
-  it('patches the cycle through its chip', async () => {
+  it('patches the cycle through its chip', () => {
     const onPatch = vi.fn();
-    renderChips({
-      onPatch,
-      cycleOptions: [{ value: 'cycle_1', label: 'Sprint 12' }],
-    });
+    renderChips({ onPatch });
 
     fireEvent.click(inlineLane().getByRole('button', { name: /^Cycle/ }));
-    fireEvent.click(await screen.findByRole('button', { name: /Sprint 12/ }));
 
-    expect(onPatch).toHaveBeenCalledWith({ cycleId: 'cycle_1' });
+    expect(onPatch).toHaveBeenCalledWith({ cycleId: 'cycle_1', cycleCadenceRevision: 3 });
   });
 });

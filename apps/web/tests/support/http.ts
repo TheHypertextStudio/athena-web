@@ -3,8 +3,8 @@ type MockCalls = readonly (readonly unknown[])[];
 class JsonResponseDouble<T> extends Response {
   readonly #body: T;
 
-  constructor(ok: boolean, body: T) {
-    super(null, { status: ok ? 200 : 400 });
+  constructor(ok: boolean, body: T, status?: number) {
+    super(null, { status: status ?? (ok ? 200 : 400) });
     this.#body = body;
   }
 
@@ -13,9 +13,9 @@ class JsonResponseDouble<T> extends Response {
   }
 }
 
-/** Build a real JSON {@link Response} with the requested success state. */
-export function jsonResponse(ok: boolean, body: unknown): Response {
-  return new JsonResponseDouble(ok, body);
+/** Build a real JSON {@link Response} with the requested success state and optional HTTP status. */
+export function jsonResponse(ok: boolean, body: unknown, status?: number): Response {
+  return new JsonResponseDouble(ok, body, status);
 }
 
 /** Read the `json` payload from the first call to an RPC-style mock. */

@@ -10,15 +10,18 @@ import {
   LabelsPicker,
   type PickerOption,
 } from '@docket/ui/components';
-import { Flag, FolderKanban, RefreshCw } from '@docket/ui/icons';
+import { Flag, FolderKanban } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
 import { PRIORITY_OPTIONS } from '@/components/pickers/options';
+import { FutureCyclePicker } from '@/components/pickers/future-cycle-picker';
 import { EstimatePicker } from '@/components/task-detail/EstimatePicker';
 import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 import { formatCalendarDate } from '@/lib/format-date';
 
 interface TaskComposerPickersProps {
+  orgId: string;
+  teamId: string | null;
   statusOptions: readonly { value: string; label: string }[];
   state: string | null;
   priority: Priority;
@@ -30,7 +33,6 @@ interface TaskComposerPickersProps {
   milestoneId: string | null;
   milestoneOptionsForProject: readonly { value: string; label: string }[];
   cycleId: string | null;
-  cycleOptionsForTeam: readonly { value: string; label: string }[];
   cycleNoun: string;
   startDate: string | null;
   dueDate: string | null;
@@ -58,6 +60,8 @@ function triggerDate(value: string | null): string | undefined {
 
 /** TaskComposerPickers renders the task UI control for its parent workflow. */
 export function TaskComposerPickers({
+  orgId,
+  teamId,
   statusOptions,
   state,
   priority,
@@ -69,7 +73,6 @@ export function TaskComposerPickers({
   milestoneId,
   milestoneOptionsForProject,
   cycleId,
-  cycleOptionsForTeam,
   cycleNoun,
   startDate,
   dueDate,
@@ -90,7 +93,6 @@ export function TaskComposerPickers({
   onEstimateChange,
 }: TaskComposerPickersProps): JSX.Element {
   const projectNounLower = projectNoun.toLowerCase();
-  const cycleNounLower = cycleNoun.toLowerCase();
 
   return (
     <>
@@ -160,18 +162,16 @@ export function TaskComposerPickers({
           disabled={creating || !projectId}
         />
       </EntityMetadataItem>
-      {cycleOptionsForTeam.length > 0 ? (
+      {teamId ? (
         <EntityMetadataItem priority={5}>
-          <EntityPicker
-            options={cycleOptionsForTeam}
+          <FutureCyclePicker
+            orgId={orgId}
+            teamId={teamId}
             value={cycleId}
             onChange={onCycleChange}
-            placeholder={`No ${cycleNounLower}`}
-            triggerIcon={<RefreshCw className="text-on-surface-variant size-4" />}
-            clearLabel={`No ${cycleNounLower}`}
-            searchPlaceholder={`Search ${cycleNounLower}s…`}
-            ariaLabel={cycleNoun}
+            noun={cycleNoun}
             disabled={creating}
+            triggerVariant="secondary"
           />
         </EntityMetadataItem>
       ) : null}

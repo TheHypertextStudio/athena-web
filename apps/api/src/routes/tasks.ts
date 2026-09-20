@@ -5,7 +5,6 @@ import {
   auditEvent,
   changeSet,
   changeSetEntry,
-  cycle,
   db,
   label,
   program,
@@ -67,11 +66,12 @@ import { encodeListCursor, pageResult, seekAfter } from '../lib/list-cursor';
 import { landingStatus, terminalStampsFor } from '../lib/work-status';
 import { apiDoc } from '../lib/openapi-route';
 import { serializableTx } from '../lib/serializable-tx';
+import { assertTaskWindowOrdered, dayOf } from '../lib/task-window';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { productCapabilityGuard } from '../product-capability';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
-import { planTaskReparents, reparentTasks } from '../services/task-hierarchy';
+import { assertTeamCycle, planTaskReparents, reparentTasks } from '../services/task-hierarchy';
 import { getContainer } from '../container';
 import {
   recordChangeSetInTransaction,
@@ -100,11 +100,6 @@ import { taskActivityRoutes } from './task-activity-routes';
 import { taskDependencyRoutes } from './task-dependency-routes';
 import { taskStateRoutes } from './task-state-routes';
 import { closePatchTimers, finishTaskPatch } from './task-update-effects';
-
-/** Project a stored timestamp column onto the calendar day it names, or null when unset. */
-function dayOf(value: Date | null): string | null {
-  return value === null ? null : value.toISOString().slice(0, 10);
-}
 
 /** Require a caller-visible task template that can originate a task. */
 async function assertTaskTemplate(
@@ -283,38 +278,6 @@ async function loadTaskDetailAggregate(
 const aggregateIdParam = z.object({ id: TaskId });
 
 /**
- * Reject a PATCH that would leave the task due before it is anticipated to start.
- *
- * @remarks
- * {@link TaskUpdate} catches the case where one request supplies both days, but not the sequential
- * one — moving the anticipated start past a due date already stored, or the due date back before a
- * start already stored. Only the route can see that, because only the route has the pre-image. It
- * is checked here rather than as a CHECK constraint on purpose: a constraint violation surfaces as
- * a storage error with no field attribution, while this is a 422 naming the field the caller sent
- * and carrying copy the application owns.
- *
- * @param before - The task as stored, supplying whichever day the body omits.
- * @param patch - The columns this request is about to write.
- * @throws {ValidationError} When the resulting window would run backwards.
- */
-function assertTaskWindowOrdered(
-  before: { startDate: Date | null; dueDate: Date | null },
-  patch: { startDate?: Date | null; dueDate?: Date | null },
-): void {
-  const start = dayOf(patch.startDate === undefined ? before.startDate : patch.startDate);
-  const due = dayOf(patch.dueDate === undefined ? before.dueDate : patch.dueDate);
-  // Lexicographic comparison is exact for zero-padded `YYYY-MM-DD` and keeps the question about
-  // calendar days rather than about the server's timezone.
-  if (start === null || due === null || due >= start) return;
-  throw new ValidationError([
-    {
-      message: 'Due date cannot fall before the anticipated start date',
-      path: [patch.dueDate === undefined ? 'startDate' : 'dueDate'],
-    },
-  ]);
-}
-
-/**
  * Ride the shared write-through seam for every task write.
  *
  * @remarks
@@ -487,7 +450,7 @@ const tasks = new Hono<AppEnv>()
       response: TaskOut,
       description: `Create a new native task inside the org. A task is the atomic unit of work in Docket; it always belongs to exactly one team (\`teamId\`, required) and inherits that team's workflow. Requires the \`contribute\` capability — the privilege to create or edit work content.
 
-The team must exist in the caller's org or the request 404s. Tenant isolation is strict: every optional reference in the body (\`assigneeId\`, \`projectId\`, \`cycleId\`, \`milestoneId\`, \`parentTaskId\`) is checked to live in the same org, and any cross-org or unknown id 404s before insert — the existence of out-of-tenant rows is never leaked.
+The team must exist in the caller's org or the request 404s. Tenant isolation is strict: every optional reference in the body (\`assigneeId\`, \`projectId\`, \`cycleId\`, \`milestoneId\`, \`parentTaskId\`) is checked to live in the same org, and any cross-org or unknown id 404s before insert — the existence of out-of-tenant rows is never leaked. A cycle must also belong to the task's team; a cross-team cycle returns 409 \`cadence_changed\`.
 
 Workflow state: if \`state\` is omitted the task lands in the team's first \`workflow_states\` entry (typically \`backlog\`); if supplied, the key is validated against the team's states and the transition is resolved so that a task created directly in a terminal state (\`completed\`/\`canceled\`) lands with the correct derived \`completedAt\`/\`canceledAt\` timestamps. \`priority\` defaults to \`none\`.
 
@@ -520,7 +483,6 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       await guardsInOrder([
         assertRefInOrg(actor, orgId, body.assigneeId, 'Assignee not found'),
         assertRefInOrg(project, orgId, body.projectId, 'Project not found'),
-        assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found'),
         assertMilestoneInOrg(orgId, body.milestoneId, body.projectId),
         assertTaskTemplate(orgId, actorId, body.templateId),
         ...(parentTaskRead ? [parentTaskRead] : []),
@@ -561,6 +523,7 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       ]);
 
       const result = await db.transaction(async (tx) => {
+        await assertTeamCycle(tx, orgId, body.cycleId, body.teamId);
         // A row lock makes a concurrent hard delete wait until this mutation commits. The
         // subsequent relation insert therefore cannot strand a newly-created task when one of its
         // requested endpoints disappears between the preflight read and the write.
@@ -1467,7 +1430,7 @@ A cross-org or unknown id 404s (existence-hiding: another tenant's task is indis
       response: TaskOut,
       description: `Partially update a task's editable fields; only fields present in the body change, and an empty body is a valid no-op that returns the task unchanged (the storage layer rejects an empty \`SET\`, so the handler short-circuits). Base mutation requires \`contribute\`.
 
-Reassigning (\`assigneeId\`) or delegating (\`delegateId\`) additionally requires the \`assign\` capability — \`contribute\` alone cannot move work onto another actor; without \`assign\` those two fields 403. Reparenting is RESTful: set \`parentTaskId\` to nest the task under another (its subtask) or null to detach to top-level; a task cannot be its own parent (422) or its own descendant (409 \`dependency_cycle\`), and the acyclic check + write run in one SERIALIZABLE transaction. Every referenced id (\`assigneeId\`, \`delegateId\`, \`projectId\`, \`programId\`, \`parentTaskId\`, \`cycleId\`, \`milestoneId\`) must live in the caller's org or the request 404s (existence-hiding tenant isolation).
+Reassigning (\`assigneeId\`) or delegating (\`delegateId\`) additionally requires the \`assign\` capability — \`contribute\` alone cannot move work onto another actor; without \`assign\` those two fields 403. Reparenting is RESTful: set \`parentTaskId\` to nest the task under another (its subtask) or null to detach to top-level; a task cannot be its own parent (422) or its own descendant (409 \`dependency_cycle\`), and the acyclic check + write run in one SERIALIZABLE transaction. Every referenced id (\`assigneeId\`, \`delegateId\`, \`projectId\`, \`programId\`, \`parentTaskId\`, \`cycleId\`, \`milestoneId\`) must live in the caller's org or the request 404s (existence-hiding tenant isolation). A target cycle must also belong to the task's team. When \`cycleCadenceRevision\` is supplied, a stale selection returns 409 \`cadence_changed\` before the move.
 
 Changing \`state\` runs the team's workflow-state transition: the key is validated against the team's \`workflow_states\`, and \`completedAt\`/\`canceledAt\` are derived (set when entering a terminal state, cleared when leaving one) — the timestamps are never client-supplied. Side effects: a state change emits a \`completed\` observation when it lands terminal, otherwise a \`status_change\`; setting an assignee emits an \`assignment\` observation. A missing/archived task 404s. Returns the updated {@link TaskOut}. To change only state, the dedicated \`POST /:id/state\` exists.`,
     }),
@@ -1495,7 +1458,6 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
       await assertRefInOrg(actor, orgId, body.delegateId, 'Delegate not found');
       await assertRefInOrg(project, orgId, body.projectId, 'Project not found');
       await assertRefInOrg(program, orgId, body.programId, 'Program not found');
-      await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
       await assertTaskTemplate(orgId, ctx.actorId, body.templateId);
       // Effective project for milestone scoping: the incoming `projectId` when the patch
       // re-points the task, otherwise its current one — loaded lazily, only when a
@@ -1597,6 +1559,7 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
       // reparenting guarantee. Related-link replacement reads its own snapshot, so a link added
       // after that snapshot cannot be deleted without being authorized on a retry.
       const result = await serializableTx(async (tx) => {
+        await assertTeamCycle(tx, orgId, body.cycleId, before.teamId, body.cycleCadenceRevision);
         // Both sides of a replacement are locked before reading its edge snapshot. The same
         // canonical order for `A → B` and `B → A` prevents each request from holding one endpoint
         // while waiting on the other, and makes the unique canonical-pair insert serializable.

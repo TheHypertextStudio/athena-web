@@ -3,7 +3,6 @@ import {
   actor,
   changeSet,
   changeSetEntry,
-  cycle,
   db,
   initiative,
   initiativeProject,
@@ -81,6 +80,8 @@ import {
   writeTaskChangeGroups,
   type RecordTaskChangesInput,
 } from '../lib/task-audit';
+import { assertCycle } from '../services/task-cycle-assignment';
+import { lockTargets, receiptId, type Tx } from '../services/object-command-targets';
 
 type CommandEntry = ObjectCommandReceipt['entries'][number];
 
@@ -470,13 +471,6 @@ async function assertReceiptMatchesDurableChange(
   }
 }
 
-function receiptId(value: unknown, field: string): string | null {
-  if (value === null) return null;
-  if (typeof value === 'string') return value;
-  throw ownedValidation(`Receipt contains an invalid ${field}`);
-}
-
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Dbh = typeof db | Tx;
 const closeTimers = taskState.closeCompletingUserTaskTimersBatch;
 
@@ -820,7 +814,7 @@ async function assertMilestonesRemainInProject(
 
 async function assertReference(
   database: Dbh,
-  table: typeof actor | typeof program | typeof cycle | typeof team,
+  table: typeof actor | typeof program | typeof team,
   orgId: string,
   id: string | null,
   message: string,
@@ -916,7 +910,7 @@ async function validateReferences(
         }
       }
       if (op.property === 'cycleId')
-        await assertReference(database, cycle, orgId, op.value, 'Cycle not found');
+        await assertCycle(database, orgId, op.value, rows as readonly { teamId: string }[]);
       if (op.property === 'milestoneId') {
         if (op.value !== null) {
           const projectIds = new Set(
@@ -991,23 +985,13 @@ async function executeForward(
 ): Promise<CommandExecution> {
   const apply = async (tx: Tx): Promise<CommandExecution> => {
     const effects = createCommandEffects();
-    const rows =
-      command.objectKind === 'task'
-        ? await tx
-            .select()
-            .from(task)
-            .where(and(eq(task.organizationId, orgId), inArray(task.id, command.objectIds)))
-            .for('update')
-        : await tx
-            .select()
-            .from(project)
-            .where(and(eq(project.organizationId, orgId), inArray(project.id, command.objectIds)))
-            .for('update');
-    if (rows.length !== command.objectIds.length)
-      throw new NotFoundError(`${command.objectKind === 'task' ? 'Task' : 'Project'} not found`);
-    if (command.operation.type !== 'restore' && rows.some((row) => row.archivedAt !== null)) {
-      throw new NotFoundError(`${command.objectKind === 'task' ? 'Task' : 'Project'} not found`);
-    }
+    const rows = await lockTargets(
+      tx,
+      orgId,
+      command.objectKind,
+      command.objectIds,
+      command.operation.type,
+    );
     await assertResourceCapabilities(
       tx,
       orgId,
@@ -2076,7 +2060,7 @@ async function assertReplayObjectTarget(
       await assertReference(database, program, orgId, String(target), 'Program not found');
     }
     if (property === 'cycleId')
-      await assertReference(database, cycle, orgId, String(target), 'Cycle not found');
+      await assertCycle(database, orgId, String(target), [{ teamId: String(row['teamId']) }]);
     if (property === 'milestoneId')
       await assertMilestoneForProject(database, orgId, String(target), String(row['projectId']));
     if (property === 'parentTaskId') {

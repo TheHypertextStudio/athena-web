@@ -58,6 +58,8 @@ export interface EntityPickerProps<TValue extends string = string> {
   triggerVariant?: 'ghost' | 'secondary';
   /** Extra classes for the trigger. */
   triggerClassName?: string;
+  /** Optional action area below the option list. */
+  footer?: React.ReactNode;
 }
 
 /**
@@ -86,6 +88,7 @@ export function EntityPicker<TValue extends string = string>({
   readOnly,
   triggerVariant = 'ghost',
   triggerClassName,
+  footer,
 }: EntityPickerProps<TValue>): React.JSX.Element {
   return (
     <OptionPicker<TValue>
@@ -108,6 +111,7 @@ export function EntityPicker<TValue extends string = string>({
       readOnly={readOnly}
       triggerVariant={triggerVariant}
       triggerClassName={triggerClassName}
+      footer={footer}
     />
   );
 }

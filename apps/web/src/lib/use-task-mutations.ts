@@ -8,7 +8,7 @@
  */
 import { ActorId } from '@docket/identity-access/ids';
 import { type CommentOut } from '@docket/work/comment-contract';
-import { CycleId, LabelId, MilestoneId, ProgramId, ProjectId, TaskId } from '@docket/work/ids';
+import { LabelId, MilestoneId, ProgramId, ProjectId, TaskId } from '@docket/work/ids';
 import { type ObjectCommandResult } from './contracts/object-command';
 import { TaskSubjectRef } from '@docket/work/subject-ref-contract';
 import { TaskStatusKey } from '@docket/work/work-view-contract';
@@ -24,6 +24,7 @@ import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { api } from './api';
 import { userErrorMessage, UserFacingError } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
+import { cycleAssignmentRequest, isCycleCadenceConflict } from './task-cycle-mutation';
 
 /** Fields accepted by the task patch mutation. All are optional; `null` clears the field. */
 export interface TaskPatch {
@@ -44,6 +45,8 @@ export interface TaskPatch {
   programId?: string | null | undefined;
   milestoneId?: string | null | undefined;
   cycleId?: string | null | undefined;
+  /** Cadence revision observed by the cycle picker. */
+  cycleCadenceRevision?: number | undefined;
   /** New point estimate, or `null` to clear it. */
   estimate?: number | null | undefined;
   /**
@@ -273,9 +276,7 @@ export function useTaskMutations(
               milestoneId: patch.milestoneId === null ? null : MilestoneId.parse(patch.milestoneId),
             }
           : {}),
-        ...(patch.cycleId !== undefined
-          ? { cycleId: patch.cycleId === null ? null : CycleId.parse(patch.cycleId) }
-          : {}),
+        ...cycleAssignmentRequest(patch),
         ...(patch.estimate !== undefined ? { estimate: patch.estimate } : {}),
         ...(patch.startDate !== undefined ? { startDate: patch.startDate } : {}),
         ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate } : {}),
@@ -298,11 +299,13 @@ export function useTaskMutations(
       // `writeDetail` blindly spreads its argument onto the cache, so the key must actually be
       // absent from the object here (not just from its type) or the optimistic write stamps ids
       // in where label records belong.
-      const { labels, ...detailPatch } = patch;
+      const { labels, cycleCadenceRevision, ...detailPatch } = patch;
       return { previous: writeDetail(detailPatch as Partial<TaskDetail>) };
     },
-    onError: (_err, _patch, ctx) => {
+    onError: (error, patch, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
+      if (isCycleCadenceConflict(error, patch))
+        void queryClient.invalidateQueries({ queryKey: queryKeys.cycles(orgId) });
     },
     onSuccess: (updated) => {
       if (!('receipt' in updated)) adoptTaskOut(updated);

@@ -15,7 +15,6 @@
  */
 import type { AgentOut } from '@docket/athena/agent-contract';
 import type { MemberOut } from '@docket/identity-access/member-contract';
-import type { CycleOut } from '@docket/work/cycle-contract';
 import type { MilestoneOut } from '@docket/work/milestone-contract';
 import type { ProgramOut } from '@docket/work/program-contract';
 import type { TaskDetail } from '@docket/work/task-model';
@@ -28,7 +27,7 @@ import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { orgMembersDef } from '@/lib/use-org-membership';
 
 /** The rosters a task's pickers can draw on. */
-export type TaskRoster = 'members' | 'projects' | 'programs' | 'milestones' | 'cycles';
+export type TaskRoster = 'members' | 'projects' | 'programs' | 'milestones';
 
 /** The rosters with their loading state and the hooks for the pickers that open them. */
 export interface TaskRosters {
@@ -37,7 +36,6 @@ export interface TaskRosters {
   readonly projects: readonly ProjectOut[];
   readonly programs: readonly ProgramOut[];
   readonly milestones: readonly MilestoneOut[];
-  readonly cycles: readonly CycleOut[];
   /** Whether the roster is switched on: its picker was opened, or the task holds a value from it. */
   readonly wanted: Readonly<Record<TaskRoster, boolean>>;
   /** Whether the roster was requested and has not answered yet. */
@@ -61,7 +59,6 @@ function heldRosters(task: TaskDetail | null): Record<TaskRoster, boolean> {
     projects: Boolean(task?.projectId),
     programs: Boolean(task?.programId),
     milestones: Boolean(task?.milestoneId),
-    cycles: Boolean(task?.cycleId),
   };
 }
 
@@ -84,7 +81,6 @@ function useOpenedRosters(): {
       projects: handler('projects'),
       programs: handler('programs'),
       milestones: handler('milestones'),
-      cycles: handler('cycles'),
     }),
     [handler],
   );
@@ -106,7 +102,6 @@ export function useTaskRosters(orgId: string, task: TaskDetail | null): TaskRost
     projects: opened.has('projects') || held.projects,
     programs: opened.has('programs') || held.programs,
     milestones: opened.has('milestones') || held.milestones,
-    cycles: opened.has('cycles') || held.cycles,
   };
   const wants = (roster: TaskRoster): boolean => wanted[roster];
 
@@ -135,14 +130,6 @@ export function useTaskRosters(orgId: string, task: TaskDetail | null): TaskRost
       { enabled: wants('programs'), staleTime: STALE.static },
     ),
   );
-  const cyclesQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.cycles(orgId),
-      () => api.v1.orgs[':orgId'].cycles.$get({ param: { orgId }, query: {} }),
-      'Could not load cycles.',
-      { enabled: wants('cycles'), staleTime: STALE.static },
-    ),
-  );
   const milestonesQ = useApiQuery(
     projectMilestonesDef(orgId, task?.projectId, wants('milestones')),
   );
@@ -155,14 +142,12 @@ export function useTaskRosters(orgId: string, task: TaskDetail | null): TaskRost
     projects: itemsOf(projectsQ.data),
     programs: itemsOf(programsQ.data),
     milestones: itemsOf(milestonesQ.data),
-    cycles: itemsOf(cyclesQ.data),
     wanted,
     loading: {
       members: isLoading('members', membersQ.isPending),
       projects: isLoading('projects', projectsQ.isPending),
       programs: isLoading('programs', programsQ.isPending),
       milestones: isLoading('milestones', milestonesQ.isPending),
-      cycles: isLoading('cycles', cyclesQ.isPending),
     },
     onOpenChange,
   };

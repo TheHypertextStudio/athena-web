@@ -24,7 +24,7 @@
  * anyone else, and nothing here treats it as a lesser sort of team.
  */
 import { TeamId } from '@docket/identity-access/ids';
-import { EmptyState } from '@docket/ui/components';
+import { EmptyState, InlineBanner } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft, Folder } from '@docket/ui/icons';
 import { Button, Skeleton, Tabs } from '@docket/ui/primitives';
@@ -40,7 +40,10 @@ import { CapacityChart } from '@/components/team-detail/capacity-chart';
 import { ThroughputChart } from '@/components/team-detail/throughput-chart';
 import { TeamPeople, TeamPeopleSkeleton } from '@/components/team-detail/team-people';
 import { TeamCover } from '@/components/teams/team-cover';
+import { TeamCycleSettings } from '@/components/team-detail/team-cycle-settings';
+import { teamDetailTabs } from '@/components/team-detail/team-detail-tabs';
 import { EntityDetailLayout } from '@/components/views/entity-detail-layout';
+import { useDetailTab } from '@/components/views/use-detail-tab';
 import { api } from '@/lib/api';
 import { fetchAllTeamMembers } from '@/lib/org-collection-pages';
 import { useTypedRoute } from '@/lib/app-location';
@@ -52,15 +55,50 @@ import {
   useApiMutation,
   useApiQuery,
 } from '@/lib/query';
+import { userErrorMessage } from '@/lib/problem';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useOrgMembership } from '@/lib/use-org-membership';
 
 /** The team page's sections. */
-type TabId = 'overview' | 'activity' | 'library' | 'people';
+type TabId = 'overview' | 'activity' | 'library' | 'people' | 'settings';
 
 /** Which activity lens is showing. */
 type ActivityLens = 'capacity' | 'throughput';
+
+const TEAM_TABS = ['overview', 'activity', 'library', 'people'] as const;
+const MANAGE_TEAM_TABS = [...TEAM_TABS, 'settings'] as const;
+
+function useTeamDetailTab(canManage: boolean): ReturnType<typeof useDetailTab<TabId>> {
+  return useDetailTab<TabId>(canManage ? MANAGE_TEAM_TABS : TEAM_TABS);
+}
+
+function useTeamCapabilities(orgId: string): readonly [boolean, boolean] {
+  const membership = useOrgMembership(orgId);
+  return [
+    useOrgCapability(membership.members, membership.roles, 'contribute'),
+    useOrgCapability(membership.members, membership.roles, 'manage'),
+  ];
+}
+
+function teamSettingsContent(
+  tab: TabId,
+  canManage: boolean,
+  orgId: string,
+  team: Parameters<typeof TeamCycleSettings>[0]['team'],
+): JSX.Element | null {
+  return tab === 'settings' && canManage ? <TeamCycleSettings orgId={orgId} team={team} /> : null;
+}
+
+function TeamDisplayError({ error }: { readonly error: unknown }): JSX.Element | null {
+  return error ? (
+    <InlineBanner
+      tone="critical"
+      density="compact"
+      title={userErrorMessage(error, 'Could not customize this team.')}
+    />
+  ) : null;
+}
 
 /**
  * The team detail page.
@@ -71,7 +109,6 @@ export default function TeamDetailClient(): JSX.Element {
   const {
     params: { orgId, teamId },
   } = useTypedRoute('/orgs/[orgId]/teams/[teamId]');
-  const [tab, setTab] = useState<TabId>('overview');
   const [lens, setLens] = useState<ActivityLens>('capacity');
   const [weightByEstimate, setWeightByEstimate] = useState(false);
 
@@ -80,8 +117,8 @@ export default function TeamDetailClient(): JSX.Element {
   // The entity-display PUT route is gated at `contribute`, a lower bar than the `manage`
   // capability team CRUD itself requires — mirrors how program-detail-client.tsx resolves its
   // own `canEdit` from the org-wide roster rather than a team-scoped one.
-  const membership = useOrgMembership(orgId);
-  const canEdit = useOrgCapability(membership.members, membership.roles, 'contribute');
+  const [canEdit, canManage] = useTeamCapabilities(orgId);
+  const { tab, setTab } = useTeamDetailTab(canManage);
 
   const teamQ = useApiQuery(
     apiQueryOptions(
@@ -195,12 +232,7 @@ export default function TeamDetailClient(): JSX.Element {
             setTab(value as TabId);
           }}
           label="Team sections"
-          items={[
-            { value: 'overview', label: 'Overview' },
-            { value: 'activity', label: 'Activity' },
-            { value: 'library', label: 'Library' },
-            { value: 'people', label: 'People' },
-          ]}
+          items={teamDetailTabs(canManage)}
         />
       }
     >
@@ -308,6 +340,9 @@ export default function TeamDetailClient(): JSX.Element {
           )}
         </section>
       ) : null}
+      {teamSettingsContent(tab, canManage, orgId, team)}
+
+      <TeamDisplayError error={entityDisplay.mutation.error} />
     </EntityDetailLayout>
   );
 }

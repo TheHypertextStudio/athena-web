@@ -473,9 +473,8 @@ export const TaskUpdate = z
       .describe('Re-target this milestone, or null to clear. Must belong to the caller’s org.'),
     cycleId: CycleId.nullable()
       .optional()
-      .describe(
-        'Re-commit to this cycle, or null to remove from its cycle. Must be a cycle in the caller’s org.',
-      ),
+      .describe('Cycle for the task’s team, or null to remove its cycle assignment.'),
+    cycleCadenceRevision: z.number().int().positive().optional(),
     estimate: z
       .number()
       .int()

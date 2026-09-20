@@ -23,6 +23,14 @@ import {
 } from '../../src/components/views/entity-detail-layout';
 import { mockWideMetadataRow } from '../support/metadata-row-layout';
 
+vi.mock('@/components/pickers/future-cycle-picker', () => ({
+  FutureCyclePicker: ({ triggerClassName }: { triggerClassName?: string }) => (
+    <button type="button" aria-label="Cycle — not set" className={triggerClassName}>
+      Set cycle
+    </button>
+  ),
+}));
+
 beforeEach(() => {
   mockWideMetadataRow();
 });
@@ -74,7 +82,6 @@ function modelFor(overrides: Partial<TaskPropertyModel> = {}): TaskPropertyModel
       cycleLabel: 'Cycle',
       programOptions: [],
       milestoneOptions: [],
-      cycleOptions: [],
       labelOptions: [],
       onCreateLabel: vi.fn(),
       estimationScale: 'fibonacci',

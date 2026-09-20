@@ -27,6 +27,8 @@ export interface PickerOption<TValue extends string = string> {
   value: TValue;
   /** The human-readable text shown and matched against the search query. */
   label: string;
+  /** Optional section heading rendered before the first adjacent option carrying this value. */
+  group?: string | undefined;
   /** Optional leading glyph or avatar node. */
   icon?: ReactNode | undefined;
   /** Optional muted trailing hint (e.g. a count, a date, an email). */

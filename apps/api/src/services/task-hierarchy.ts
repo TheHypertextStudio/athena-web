@@ -13,6 +13,8 @@ import {
 } from '../lib/task-state';
 import { enqueueSearchUpsert } from '../search/write-through';
 
+export { assertTeamCycle } from './task-cycle-assignment';
+
 type TaskRow = typeof task.$inferSelect;
 interface RequestedMove {
   readonly taskId: string;

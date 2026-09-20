@@ -78,6 +78,22 @@ export interface OptionPickerProps<TValue extends string = string> {
   triggerVariant?: 'ghost' | 'secondary' | undefined;
   /** Extra classes for the trigger. */
   triggerClassName?: string | undefined;
+  /** Optional action area below the option list. */
+  footer?: React.ReactNode | undefined;
+}
+
+function usePickerOpen(
+  onOpenChange?: (open: boolean) => void,
+): readonly [boolean, (open: boolean) => void] {
+  const [open, setOpen] = React.useState(false);
+  const setOpenState = React.useCallback(
+    (next: boolean) => {
+      setOpen(next);
+      onOpenChange?.(next);
+    },
+    [onOpenChange],
+  );
+  return [open, setOpenState];
 }
 
 /**
@@ -119,12 +135,9 @@ export function OptionPicker<TValue extends string = string>({
   readOnly,
   triggerVariant = 'ghost',
   triggerClassName,
+  footer,
 }: OptionPickerProps<TValue>): React.JSX.Element {
-  const [open, setOpen] = React.useState(false);
-  const setOpenState = (next: boolean): void => {
-    setOpen(next);
-    onOpenChange?.(next);
-  };
+  const [open, setOpenState] = usePickerOpen(onOpenChange);
   const active = value !== null ? options.find((option) => option.value === value) : undefined;
 
   // A read-only or disabled picker never opens; render the trigger affordance only.
@@ -177,6 +190,7 @@ export function OptionPicker<TValue extends string = string>({
               : null
           }
         />
+        {footer}
       </PopoverContent>
     </Popover>
   );

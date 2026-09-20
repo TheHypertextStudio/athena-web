@@ -153,14 +153,15 @@ async function refreshNativeStatuses(rows: CycleRow[], now: Date): Promise<Cycle
 }
 
 /** Materialize and return the native schedule windows intersecting an explicit date range. */
-export async function ensureCycleRange(
-  orgId: string,
-  teamRow: TeamRow,
-  actorId: string | null,
-  fromDate: string,
-  throughDate: string,
-  now: Date,
-): Promise<CycleRow[]> {
+export async function ensureCycleRange(input: {
+  readonly orgId: string;
+  readonly teamRow: TeamRow;
+  readonly actorId: string | null;
+  readonly fromDate: string;
+  readonly throughDate: string;
+  readonly now: Date;
+}): Promise<CycleRow[]> {
+  const { orgId, teamRow, actorId, fromDate, throughDate, now } = input;
   const schedule: CycleSchedule = {
     anchorDate: teamRow.cycleCadenceAnchor,
     cadenceDays: teamRow.cycleCadenceDays,
@@ -230,13 +231,21 @@ export async function ensureCycleWindow(
       anchorDate: teamRow.cycleCadenceAnchor,
       cadenceDays: teamRow.cycleCadenceDays,
     };
-    const current = cycleWindowContaining(schedule, now.toISOString().slice(0, 10));
-    const fromDate = calendarDateOffset(current.startDate, -WINDOW_PAST * teamRow.cycleCadenceDays);
+    const today = now.toISOString().slice(0, 10);
+    const current = cycleWindowContaining(
+      schedule,
+      today < schedule.anchorDate ? schedule.anchorDate : today,
+    );
+    const candidateFrom = calendarDateOffset(
+      current.startDate,
+      -WINDOW_PAST * teamRow.cycleCadenceDays,
+    );
+    const fromDate = candidateFrom < schedule.anchorDate ? schedule.anchorDate : candidateFrom;
     const throughDate = calendarDateOffset(
       current.endDate,
       WINDOW_FUTURE * teamRow.cycleCadenceDays,
     );
-    await ensureCycleRange(orgId, teamRow, actorId, fromDate, throughDate, now);
+    await ensureCycleRange({ orgId, teamRow, actorId, fromDate, throughDate, now });
   }
 
   const rows = await db

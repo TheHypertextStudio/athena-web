@@ -20,10 +20,8 @@ import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { useCallback, useMemo } from 'react';
 
-import { formatWindow } from '@/components/cycles/format-window';
 import { labelsDef, useCreateLabel } from '@/components/labels/queries';
 import {
-  cycleOptions as toCycleOptions,
   labelOptions as toLabelOptions,
   memberActorOptions,
   milestoneOptions as toMilestoneOptions,
@@ -99,9 +97,8 @@ function useDelegate(task: TaskDetail, rosters: TaskRosters): TaskDelegate | nul
 
 /** The picker options, built from the rosters and the workspace's icon overrides. */
 function useTaskPickerOptions(orgId: string, task: TaskDetail, rosters: TaskRosters) {
-  const { members, projects, programs, cycles, milestones, wanted } = rosters;
+  const { members, projects, programs, milestones, wanted } = rosters;
   const projectDisplays = useEntityDisplays(orgId, 'project', wanted.projects);
-  const cycleDisplays = useEntityDisplays(orgId, 'cycle', wanted.cycles);
   const milestoneDisplays = useEntityDisplays(orgId, 'milestone', wanted.milestones);
   const labelsQ = useApiListQuery(labelsDef(orgId));
   return {
@@ -111,10 +108,6 @@ function useTaskPickerOptions(orgId: string, task: TaskDetail, rosters: TaskRost
       [projectDisplays, projects],
     ),
     programOptions: useMemo(() => toProgramOptions(programs), [programs]),
-    cycleOptions: useMemo(
-      () => toCycleOptions(cycles, formatWindow, cycleDisplays),
-      [cycleDisplays, cycles],
-    ),
     // Milestones are scoped to the task's own project: the server refuses one from any other, so
     // a wider list could only offer choices that cannot be saved.
     milestoneOptions: useMemo(
@@ -197,14 +190,11 @@ export function useTaskPropertyModel({
       cycleLabel,
       programOptions: options.programOptions,
       milestoneOptions: options.milestoneOptions,
-      cycleOptions: options.cycleOptions,
       labelOptions: options.labelOptions,
       programLoading: rosters.loading.programs,
       milestoneLoading: rosters.loading.milestones,
-      cycleLoading: rosters.loading.cycles,
       onProgramOpenChange: rosters.onOpenChange.programs,
       onMilestoneOpenChange: rosters.onOpenChange.milestones,
-      onCycleOpenChange: rosters.onOpenChange.cycles,
       onCreateLabel,
       estimationScale,
       delegate,

@@ -36,7 +36,7 @@ import {
   LabelsPicker,
   type PickerOption,
 } from '@docket/ui/components';
-import { Flag, Layers, RefreshCw, Schedule, Tag } from '@docket/ui/icons';
+import { Flag, Layers, Schedule, Tag } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX, ReactNode } from 'react';
 
@@ -47,6 +47,7 @@ import {
 } from '@/components/views/entity-detail-layout';
 import { formatCalendarDate, isoDateOf } from '@/lib/format-date';
 import type { TaskPatch } from '@/lib/use-task-mutations';
+import { FutureCyclePicker } from '@/components/pickers/future-cycle-picker';
 import { EstimatePicker } from './EstimatePicker';
 import { PropertyRow } from './PropertyRow';
 
@@ -75,15 +76,12 @@ export interface TaskSecondaryModel {
   cycleLabel: string;
   programOptions: readonly PickerOption[];
   milestoneOptions: readonly PickerOption[];
-  cycleOptions: readonly PickerOption[];
   /** Every label offerable to this task, each carrying its colour swatch as its `icon`. */
   labelOptions: readonly PickerOption[];
   programLoading?: boolean | undefined;
   milestoneLoading?: boolean | undefined;
-  cycleLoading?: boolean | undefined;
   onProgramOpenChange?: ((open: boolean) => void) | undefined;
   onMilestoneOpenChange?: ((open: boolean) => void) | undefined;
-  onCycleOpenChange?: ((open: boolean) => void) | undefined;
   /** Create a label from a name typed into the picker, and attach it. */
   onCreateLabel: (name: string) => void;
   /**
@@ -199,23 +197,19 @@ function MilestoneField({ model, triggerClassName }: FieldProps): JSX.Element {
 
 function CycleField({ model, triggerClassName }: FieldProps): JSX.Element {
   const { task, canEdit, onPatch, secondary } = model;
-  const { cycleLabel, cycleOptions, cycleLoading, onCycleOpenChange } = secondary;
+  const { cycleLabel } = secondary;
   const noun = cycleLabel.toLowerCase();
   return (
-    <EntityPicker
-      options={cycleOptions}
+    <FutureCyclePicker
+      orgId={task.organizationId}
+      teamId={task.teamId}
       value={task.cycleId ?? null}
-      onChange={(cycleId) => {
-        onPatch({ cycleId });
+      onChange={(cycleId, cycleCadenceRevision) => {
+        onPatch({ cycleId, cycleCadenceRevision });
       }}
       placeholder={`Set ${noun}`}
-      triggerIcon={<RefreshCw className="text-on-surface-variant size-4" />}
-      clearLabel={`No ${noun}`}
-      searchPlaceholder={`Search ${noun}s…`}
-      ariaLabel={cycleLabel}
+      noun={cycleLabel}
       readOnly={!canEdit}
-      loading={cycleLoading ?? false}
-      {...(onCycleOpenChange ? { onOpenChange: onCycleOpenChange } : {})}
       triggerClassName={triggerClassName}
     />
   );

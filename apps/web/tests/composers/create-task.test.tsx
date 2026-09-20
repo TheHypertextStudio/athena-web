@@ -29,7 +29,6 @@ const {
   membersGet,
   agentsGet,
   projectsGet,
-  cyclesGet,
   labelsGet,
   milestonesGet,
   teamGet,
@@ -52,7 +51,6 @@ const {
     membersGet: vi.fn(),
     agentsGet: vi.fn(),
     projectsGet: vi.fn(),
-    cyclesGet: vi.fn(),
     labelsGet: vi.fn(),
     milestonesGet: vi.fn(),
     teamGet: vi.fn(),
@@ -78,7 +76,6 @@ vi.mock('../../src/lib/api', () => ({
             { $get: projectsGet },
             { ':id': { milestones: { $get: milestonesGet } } },
           ),
-          cycles: { $get: cyclesGet },
           labels: { $get: labelsGet },
           templates: { $get: templatesGet },
           settings: { 'work-structure': { $get: workStructureGet } },
@@ -87,6 +84,19 @@ vi.mock('../../src/lib/api', () => ({
       },
     },
   },
+}));
+
+vi.mock('../../src/components/pickers/future-cycle-picker', () => ({
+  FutureCyclePicker: ({ onChange }: { onChange: (id: string, revision: number) => void }) => (
+    <button
+      type="button"
+      onClick={() => {
+        onChange('CYC1E000000000000000000009', 1);
+      }}
+    >
+      Cycle
+    </button>
+  ),
 }));
 
 vi.mock('../../src/components/create-object/create-object-provider', () => ({
@@ -121,7 +131,6 @@ const BUG_ID = 'BG000000000000000000000005';
 const TARGET_ORG_ID = '0RG00000000000000000000006';
 const TARGET_TEAM_ID = 'TEAM0000000000000000000007';
 const SECOND_TEAM_ID = 'TEAM0000000000000000000008';
-const CYCLE_ID = 'CYC1E000000000000000000009';
 const MILESTONE_ID = 'MILESTONE000000000000000010';
 
 /** The single (implicit) team the composer creates tasks in. */
@@ -172,15 +181,6 @@ const LABELS = [
 ];
 
 /** The cycle and milestone choices used to prove a workspace switch clears foreign ids. */
-const CYCLES = [
-  {
-    id: CYCLE_ID,
-    teamId: TEAM_ID,
-    displayName: 'Cycle 1',
-    startsAt: '2026-01-05T00:00:00.000Z',
-    endsAt: '2026-01-11T23:59:59.999Z',
-  },
-];
 const MILESTONES = [{ id: MILESTONE_ID, projectId: APOLLO_ID, name: 'Launch' }];
 
 const GLOBAL_TEAMS: readonly TeamOut[] = [
@@ -215,7 +215,6 @@ beforeEach(() => {
   membersGet.mockReset().mockResolvedValue(jsonResponse(true, { items: MEMBERS }));
   agentsGet.mockReset().mockResolvedValue(jsonResponse(true, { items: AGENTS }));
   projectsGet.mockReset().mockResolvedValue(jsonResponse(true, { items: PROJECTS }));
-  cyclesGet.mockReset().mockResolvedValue(jsonResponse(true, { items: CYCLES }));
   labelsGet.mockReset().mockResolvedValue(jsonResponse(true, { items: LABELS }));
   milestonesGet.mockReset().mockResolvedValue(jsonResponse(true, { items: MILESTONES }));
   templatesGet.mockReset().mockResolvedValue(jsonResponse(true, { items: [] }));
@@ -714,7 +713,6 @@ describe('CreateTaskDialog — robust composer', () => {
 
     fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Retargeted' } });
     fireEvent.click(screen.getByRole('button', { name: /Cycle/ }));
-    fireEvent.click(await screen.findByText('Cycle 1'));
     fireEvent.pointerDown(screen.getByRole('button', { name: /Team — currently General/ }), {
       button: 0,
       ctrlKey: false,
@@ -753,7 +751,6 @@ describe('CreateTaskDialog — robust composer', () => {
     fireEvent.click(screen.getByRole('button', { name: /Milestone/ }));
     fireEvent.click(await screen.findByText('Launch'));
     fireEvent.click(screen.getByRole('button', { name: /Cycle/ }));
-    fireEvent.click(await screen.findByText('Cycle 1'));
     const labelsTrigger = screen.getByRole('button', { name: /Labels/ });
     fireEvent.click(labelsTrigger);
     fireEvent.click(await screen.findByText('Bug'));
@@ -1263,11 +1260,7 @@ describe('CreateTaskDialog — robust composer', () => {
     fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Invalidate' } });
     fireEvent.click(screen.getByRole('button', { name: /Project/ }));
     fireEvent.click(await screen.findByText('Apollo'));
-    fireEvent.click(screen.getByRole('button', { name: /Cycle/ }));
-    fireEvent.click(await screen.findByText('Cycle 1'));
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Cycle — Cycle 1/ })).toBeVisible();
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Cycle' }));
     const createMore = screen.getByRole('switch', { name: 'Create more' });
     fireEvent.click(createMore);
     expect(createMore).toHaveAttribute('aria-checked', 'true');

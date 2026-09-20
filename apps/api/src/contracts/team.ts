@@ -305,6 +305,12 @@ export const TeamDetail = TeamOut.extend({
   cycleCadenceDays: z.number().int().min(1).max(365),
   cycleCadenceAnchor: z.iso.date(),
   cycleCadenceRevision: z.number().int().positive(),
+  cycleCadenceEarliestAnchor: z.iso
+    .date()
+    .describe('First date on which a replacement cadence may start without moving planned work.'),
+  cycleCadenceProviderOwned: z
+    .boolean()
+    .describe('Whether a connected provider currently owns this team’s cycle cadence.'),
   cadenceChange: z
     .object({
       effectiveAnchor: z.iso.date(),

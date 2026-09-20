@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CanvasPropertySnapshot } from '@/lib/actions';
@@ -105,6 +105,10 @@ vi.mock('@/components/pickers/use-composer-options', () => ({
     failedKinds: new Set(),
     retry: vi.fn(),
   }),
+}));
+vi.mock('@/components/pickers/future-cycle-picker', () => ({
+  FutureCyclePicker: (props: { onChange: (id: string) => void; placeholder?: string }) =>
+    createElement('button', { onClick: props.onChange.bind(null, 'cycle-1') }, props.placeholder),
 }));
 vi.mock('@/components/statuses/status-registry', () => ({
   useStatusRegistry: () => ({
@@ -291,14 +295,11 @@ describe('canvas bulk Properties editor', () => {
     expect(screen.getAllByText('Mixed')).toHaveLength(8);
   });
 
-  it('sends one atomic scalar command and leaves the editor and selection open', async () => {
-    const snapshots = [task('task-a'), task('task-b', { priority: 'urgent' })];
+  it('sends one atomic cycle command and leaves the editor and selection open', async () => {
+    const snapshots = [task('task-a'), task('task-b')];
     openEditor(snapshots);
 
-    fireEvent.click(screen.getByRole('button', { name: /Priority — Mixed/ }));
-    fireEvent.click(
-      within(await screen.findByRole('option', { name: /High/ })).getByRole('button'),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Set cycle' }));
 
     await waitFor(() => {
       expect(state.execute).toHaveBeenCalledOnce();
@@ -306,7 +307,7 @@ describe('canvas bulk Properties editor', () => {
     expect(state.execute.mock.calls[0]?.[0]).toMatchObject({
       objectKind: 'task',
       objectIds: ['task-a', 'task-b'],
-      operation: { type: 'replace_property', property: 'priority', value: 'high' },
+      operation: { type: 'replace_property', property: 'cycleId', value: 'cycle-1' },
     });
     expect(screen.getByRole('heading', { name: 'Properties' })).toBeInTheDocument();
     expect(state.commands.selectedObjects.map(({ id }) => id)).toEqual(['task-a', 'task-b']);

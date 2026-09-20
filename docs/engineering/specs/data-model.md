@@ -505,6 +505,13 @@ export const project = pgTable(
 
 ### 4.4 `cycle` (team-scoped recurring window)
 
+A team owns a 1–365 day calendar cadence through `cycle_cadence_days`,
+`cycle_cadence_anchor`, and `cycle_cadence_revision`. Native windows are generated on demand. The
+partial `(team_id, starts_at) WHERE source = 'native'` unique index is their idempotency key. The
+legacy `number` remains compatibility metadata and must not identify a cycle in product copy.
+Cadence changes preserve the old schedule through the latest assigned future native cycle and
+delete only empty generated windows after that boundary.
+
 ```ts
 export const cycle = pgTable(
   'cycle',
@@ -522,6 +529,9 @@ export const cycle = pgTable(
   (t) => [
     index('cycle_team_idx').on(t.teamId),
     uniqueIndex('cycle_team_number_uq').on(t.teamId, t.number),
+    uniqueIndex('cycle_team_native_start_uq')
+      .on(t.teamId, t.startsAt)
+      .where(sql`${t.source} = 'native'`),
   ],
 );
 ```

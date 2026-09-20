@@ -32,10 +32,11 @@ import { clearableTextPatch } from '../lib/clearable-text';
 import { created, ok } from '../lib/ok';
 import { pageResultById, pageResultByTuple, seekAfterId } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
+import { teamOut } from '../lib/team-output';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
-import { changeTeamCycleCadence } from '../services/team-cycle-cadence';
+import { changeTeamCycleCadence, readTeamCycleCadencePolicy } from '../services/team-cycle-cadence';
 import { entityMentionRoutes } from './entity-mentions';
 import { archiveTeamActor, createTeamActor, findTeamActorId, renameTeamActor } from './team-actor';
 import {
@@ -48,23 +49,16 @@ import {
 
 type TeamRow = typeof team.$inferSelect;
 
-/** Map a `team` row to its `TeamOut`/`TeamDetail` wire shape. */
-function toOut(t: TeamRow, actorId?: string | null): z.input<typeof TeamDetail> {
+async function toDetail(t: TeamRow, actorId?: string | null): Promise<z.input<typeof TeamDetail>> {
+  const policy = await readTeamCycleCadencePolicy(t, new Date());
   return {
-    id: t.id,
-    ...(actorId ? { actorId } : {}),
-    organizationId: t.organizationId,
-    name: t.name,
-    key: t.key,
-    summary: t.summary ?? null,
-    description: t.description ?? null,
+    ...teamOut(t, actorId),
     workflowStates: t.workflowStates,
-    triageEnabled: t.triageEnabled,
     cycleCadenceDays: t.cycleCadenceDays,
     cycleCadenceAnchor: t.cycleCadenceAnchor,
     cycleCadenceRevision: t.cycleCadenceRevision,
-    agentGuidance: t.agentGuidance ?? null,
-    approvalRouting: t.approvalRouting ?? null,
+    cycleCadenceEarliestAnchor: policy.earliestAnchor,
+    cycleCadenceProviderOwned: policy.providerOwned,
   };
 }
 
@@ -170,7 +164,7 @@ Results use stable team-id order, default to 50 items, accept at most 100, and o
         c,
         pageOf(TeamOut),
         pageResultById(
-          rows.map(({ row, actorId }) => toOut(row, actorId)),
+          rows.map(({ row, actorId }) => teamOut(row, actorId)),
           limit,
         ),
       );
@@ -224,7 +218,7 @@ Defaults applied when omitted: \`workflowStates\` seeds the canonical five-state
         return { row: created, actorId };
       });
       await enqueueSearchUpsert(orgId, 'team', createdTeam.row.id);
-      return created(c, TeamDetail, toOut(createdTeam.row, createdTeam.actorId));
+      return created(c, TeamDetail, await toDetail(createdTeam.row, createdTeam.actorId));
     },
   )
   .get(
@@ -255,7 +249,7 @@ Results use stable \`teamId, actorId\` order, default to 50 items, accept at mos
       tag: 'Teams',
       summary: 'Get a team',
       response: TeamDetail,
-      description: `Fetch one active team by id, returning the full \`TeamDetail\` — name, unique \`key\`, description, the complete \`workflowStates\` list, \`triageEnabled\`, and any \`agentGuidance\`/\`approvalRouting\`. The lookup is scoped to \`(teamId, orgId)\` AND \`archived_at IS NULL\`, so an archived team or a team id from another org returns **404** (existence-hiding). Requires only org membership (the \`view\` capability) to read. See \`GET /\` to list teams.`,
+      description: `Fetch one active team by id, returning the full \`TeamDetail\` — name, unique \`key\`, description, the complete \`workflowStates\` list, \`triageEnabled\`, native cycle cadence, its safe replacement anchor, provider ownership, and any \`agentGuidance\`/\`approvalRouting\`. The lookup is scoped to \`(teamId, orgId)\` AND \`archived_at IS NULL\`, so an archived team or a team id from another org returns **404** (existence-hiding). Requires only org membership (the \`view\` capability) to read. See \`GET /\` to list teams.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -272,7 +266,7 @@ Results use stable \`teamId, actorId\` order, default to 50 items, accept at mos
         .limit(1);
       const result = rows[0];
       if (!result) throw new NotFoundError('Team not found');
-      return ok(c, TeamDetail, toOut(result.row, result.actorId));
+      return ok(c, TeamDetail, await toDetail(result.row, result.actorId));
     },
   )
   .patch(
@@ -285,7 +279,7 @@ Results use stable \`teamId, actorId\` order, default to 50 items, accept at mos
       response: TeamDetail,
       description: `Patch an active team's settings. Requires the \`manage\` capability. Every field is optional; only supplied fields change. The team must be active and in this org — otherwise **404** (the where-clause enforces \`(teamId, orgId)\` AND \`archived_at IS NULL\`). Changing \`key\` re-checks org-wide uniqueness and returns **409** on a collision with another team (the row being patched is excluded from the check).
 
-Setting \`workflowStates\` **replaces the entire array** (it is not a merge). \`description\`, \`agentGuidance\`, and \`approvalRouting\` accept \`null\` to clear. An **empty patch body is a valid no-op**: since the DB rejects an empty \`SET\`, the handler re-reads the row (still enforcing the org-scoped existence check) and returns it unchanged. Returns the updated \`TeamDetail\`. To archive a team use \`DELETE /:teamId\`.`,
+Setting \`workflowStates\` **replaces the entire array** (it is not a merge). A cadence change accepts 1–365 calendar days, requires the loaded \`cycleCadenceRevision\`, preserves assigned windows, and returns 409 \`cadence_changed\` when that revision is stale. \`description\`, \`agentGuidance\`, and \`approvalRouting\` accept \`null\` to clear. An **empty patch body is a valid no-op**: since the DB rejects an empty \`SET\`, the handler re-reads the row (still enforcing the org-scoped existence check) and returns it unchanged. Returns the updated \`TeamDetail\`. To archive a team use \`DELETE /:teamId\`.`,
     }),
     zParam(idParam),
     zJson(TeamUpdate),
@@ -307,7 +301,10 @@ Setting \`workflowStates\` **replaces the entire array** (it is not a merge). \`
       if (Object.keys(patch).length === 0) {
         if (cadenceChange) {
           return ok(c, TeamDetail, {
-            ...toOut(cadenceChange.team, await findTeamActorId(db, orgId, cadenceChange.team.id)),
+            ...(await toDetail(
+              cadenceChange.team,
+              await findTeamActorId(db, orgId, cadenceChange.team.id),
+            )),
             cadenceChange: {
               effectiveAnchor: cadenceChange.effectiveAnchor,
               removedEmptyCycles: cadenceChange.removedEmptyCycles,
@@ -317,7 +314,11 @@ Setting \`workflowStates\` **replaces the entire array** (it is not a merge). \`
         const rows = await db.select().from(team).where(where).limit(1);
         const existing = rows[0];
         if (!existing) throw new NotFoundError('Team not found');
-        return ok(c, TeamDetail, toOut(existing, await findTeamActorId(db, orgId, existing.id)));
+        return ok(
+          c,
+          TeamDetail,
+          await toDetail(existing, await findTeamActorId(db, orgId, existing.id)),
+        );
       }
 
       const updatedTeam = await db.transaction(async (tx) => {
@@ -331,7 +332,7 @@ Setting \`workflowStates\` **replaces the entire array** (it is not a merge). \`
       });
       await enqueueSearchUpsert(orgId, 'team', updatedTeam.row.id);
       return ok(c, TeamDetail, {
-        ...toOut(updatedTeam.row, updatedTeam.actorId),
+        ...(await toDetail(updatedTeam.row, updatedTeam.actorId)),
         ...(cadenceChange
           ? {
               cadenceChange: {

@@ -171,14 +171,14 @@ const cycles = new Hono<AppEnv>()
       }
 
       try {
-        const rows = await ensureCycleRange(
+        const rows = await ensureCycleRange({
           orgId,
           teamRow,
           actorId,
           fromDate,
-          body.throughDate,
-          new Date(),
-        );
+          throughDate: body.throughDate,
+          now: new Date(),
+        });
         return ok(c, CycleEnsureOut, { items: rows.map((row) => toOut(row)) });
       } catch (error) {
         if (error instanceof CycleRangeLimitError) {

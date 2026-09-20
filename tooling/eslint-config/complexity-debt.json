@@ -4477,12 +4477,6 @@
       "excess": 13
     }
   },
-  "apps/web/src/components/statuses/delete-status-dialog.tsx": {
-    "max-lines-per-function": {
-      "max": 81,
-      "excess": 1
-    }
-  },
   "apps/web/src/components/statuses/status-editor-dialog.tsx": {
     "complexity": {
       "max": 15,

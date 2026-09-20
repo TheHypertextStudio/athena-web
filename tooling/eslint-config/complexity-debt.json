@@ -4445,12 +4445,6 @@
       "excess": 29
     }
   },
-  "apps/web/src/components/stream/stream-event-line.tsx": {
-    "max-lines-per-function": {
-      "max": 83,
-      "excess": 3
-    }
-  },
   "apps/web/src/components/stream/stream-meta.ts": {
     "complexity": {
       "max": 26,

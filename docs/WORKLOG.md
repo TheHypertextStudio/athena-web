@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,270 entries, 155,493 excess points across 720 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,269 entries, 155,490 excess points across 719 files.
 
 #### Analysis Complete
 
@@ -243,6 +243,9 @@ Quick-win files to process:
     helpers, clearing its final complexity excess. The scheduling package remains green except for
     the documented stale canvas scroll fixture (expected 1,400, received 1,500); 312 sibling tests
     pass.
+  - Stream event detail expansion now lives in a focused component, clearing the line's final
+    max-lines-per-function excess while preserving all seven stream-event-line tests. The ledger
+    is 719 files and 1,269 entries.
 
 ---
 

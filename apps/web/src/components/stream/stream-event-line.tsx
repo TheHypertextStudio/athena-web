@@ -62,6 +62,32 @@ export interface StreamEventLineProps {
   readonly terminal?: boolean;
 }
 
+/** The animated detail panel revealed beneath one stream event line. */
+function StreamEventExpansion({
+  row,
+  expanded,
+  panelId,
+  buttonId,
+}: Pick<StreamEventLineProps, 'row' | 'expanded'> & {
+  panelId: string;
+  buttonId: string;
+}): JSX.Element {
+  return (
+    <div
+      className={cn(
+        'grid transition-[grid-template-rows]',
+        expanded
+          ? 'grid-rows-[1fr] duration-(--dur-base) ease-(--ease-emphasized-decel)'
+          : 'grid-rows-[0fr] duration-(--dur-fast) ease-(--ease-emphasized-accel)',
+      )}
+    >
+      <div className="overflow-hidden">
+        {expanded ? <StreamEventDetail row={row} id={panelId} labelledBy={buttonId} /> : null}
+      </div>
+    </div>
+  );
+}
+
 /** One event as a disclosure: action, typed detail, occurrence time, and its full record. */
 export function StreamEventLine({
   row,
@@ -136,18 +162,7 @@ export function StreamEventLine({
 
       {/* `0fr → 1fr` on a grid row animates height with no measurement, no ResizeObserver, and
           no layout thrash inside an infinitely-scrolling list. */}
-      <div
-        className={cn(
-          'grid transition-[grid-template-rows]',
-          expanded
-            ? 'grid-rows-[1fr] duration-(--dur-base) ease-(--ease-emphasized-decel)'
-            : 'grid-rows-[0fr] duration-(--dur-fast) ease-(--ease-emphasized-accel)',
-        )}
-      >
-        <div className="overflow-hidden">
-          {expanded ? <StreamEventDetail row={row} id={panelId} labelledBy={buttonId} /> : null}
-        </div>
-      </div>
+      <StreamEventExpansion row={row} expanded={expanded} panelId={panelId} buttonId={buttonId} />
     </>
   );
 }

@@ -51,6 +51,12 @@ function day(iso: string): string | null {
   return formatCalendarDate(iso);
 }
 
+interface BriefFactRow {
+  key: string;
+  label: string;
+  value: string;
+}
+
 /**
  * The published brief document.
  *
@@ -58,7 +64,7 @@ function day(iso: string): string | null {
  * @returns The rendered document.
  */
 export function BriefDocument({ brief, imageRoute }: BriefDocumentProps): JSX.Element {
-  const facts = brief.facts
+  const facts: BriefFactRow[] = brief.facts
     .map((fact) => ({
       key: fact.key,
       label: briefFactLabel(brief.subjectKind, fact.key),
@@ -66,7 +72,7 @@ export function BriefDocument({ brief, imageRoute }: BriefDocumentProps): JSX.El
     }))
     // A masthead is a summary, not a form: an unset field is omitted rather than printed as a
     // row of em-dashes that tells the reader nothing.
-    .filter((fact): fact is { key: string; label: string; value: string } => fact.value !== null);
+    .filter((fact): fact is BriefFactRow => fact.value !== null);
 
   const sections = brief.sections.filter((section) => section.items.length > 0);
   const updated = day(brief.updatedAt);
@@ -83,39 +89,7 @@ export function BriefDocument({ brief, imageRoute }: BriefDocumentProps): JSX.El
 
   return (
     <article className="brief-column mx-auto flex w-full max-w-[36rem] flex-col gap-10 px-5 py-12 sm:px-8 sm:py-16">
-      <header className="flex flex-col gap-5">
-        {/* Sentence case, not an uppercase overline: the repo's visual contract forbids
-            uppercasing semantic labels, and a document masthead reads better without shouting. */}
-        <Text as="p" token="label-medium" className="brief-muted">
-          {brief.workspaceName} · {briefKindLabel(brief.vocabulary, brief.subjectKind)}
-        </Text>
-        <Text as="h1" token="headline-large">
-          {brief.title}
-        </Text>
-        {brief.summary ? (
-          <Text as="p" token="body-large" className="brief-muted">
-            {brief.summary}
-          </Text>
-        ) : null}
-
-        {facts.length > 0 ? (
-          <dl className="brief-rule flex flex-col gap-0 border-t pt-4">
-            {facts.map((fact) => (
-              <div
-                key={fact.key}
-                className="brief-fact flex items-baseline justify-between gap-6 py-1.5"
-              >
-                <Text as="dt" token="label-medium" className="brief-muted">
-                  {fact.label}
-                </Text>
-                <Text as="dd" token="body-medium" className="text-right">
-                  {fact.value}
-                </Text>
-              </div>
-            ))}
-          </dl>
-        ) : null}
-      </header>
+      <BriefMasthead brief={brief} facts={facts} />
 
       {brief.description ? (
         <div className="brief-prose">
@@ -144,6 +118,50 @@ export function BriefDocument({ brief, imageRoute }: BriefDocumentProps): JSX.El
         ) : null}
       </footer>
     </article>
+  );
+}
+
+function BriefMasthead({
+  brief,
+  facts,
+}: {
+  readonly brief: PublicBriefOut;
+  readonly facts: readonly BriefFactRow[];
+}): JSX.Element {
+  return (
+    <header className="flex flex-col gap-5">
+      {/* Sentence case, not an uppercase overline: the repo's visual contract forbids uppercasing
+          semantic labels, and a document masthead reads better without shouting. */}
+      <Text as="p" token="label-medium" className="brief-muted">
+        {brief.workspaceName} · {briefKindLabel(brief.vocabulary, brief.subjectKind)}
+      </Text>
+      <Text as="h1" token="headline-large">
+        {brief.title}
+      </Text>
+      {brief.summary ? (
+        <Text as="p" token="body-large" className="brief-muted">
+          {brief.summary}
+        </Text>
+      ) : null}
+
+      {facts.length > 0 ? (
+        <dl className="brief-rule flex flex-col gap-0 border-t pt-4">
+          {facts.map((fact) => (
+            <div
+              key={fact.key}
+              className="brief-fact flex items-baseline justify-between gap-6 py-1.5"
+            >
+              <Text as="dt" token="label-medium" className="brief-muted">
+                {fact.label}
+              </Text>
+              <Text as="dd" token="body-medium" className="text-right">
+                {fact.value}
+              </Text>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+    </header>
   );
 }
 

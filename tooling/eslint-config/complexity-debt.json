@@ -3807,12 +3807,6 @@
       "excess": 19
     }
   },
-  "apps/web/src/components/publishing/brief-document.tsx": {
-    "max-lines-per-function": {
-      "max": 81,
-      "excess": 1
-    }
-  },
   "apps/web/src/components/publishing/publish-action.tsx": {
     "complexity": {
       "max": 29,

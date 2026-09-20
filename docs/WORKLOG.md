@@ -125,6 +125,9 @@ Quick-win files to process:
   - Responsive toolbar selection now lives in a pure width-allocation helper, removing the
     measurement callback's final complexity excess while preserving the toolbar test. The ledger
     is 758 files and 1,312 entries.
+  - Graph annotation now delegates edge-tone derivation to a focused helper, clearing its final
+    complexity excess while preserving all five graph annotation tests. The ledger is 757 files
+    and 1,311 entries.
 
 ---
 

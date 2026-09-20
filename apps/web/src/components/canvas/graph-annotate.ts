@@ -74,6 +74,22 @@ export interface GraphAnnotations {
   edgeTone: Map<string, EdgeTone>;
 }
 
+function annotateEdgeTones(
+  edges: readonly AnnotateEdge[],
+  categoryById: ReadonlyMap<string, WorkStatusCategory>,
+): Map<string, EdgeTone> {
+  const edgeTone = new Map<string, EdgeTone>();
+  for (const edge of edges) {
+    if (edge.kind !== 'dependency') {
+      edgeTone.set(edge.id, 'neutral');
+      continue;
+    }
+    const blocker = categoryById.get(edge.source);
+    edgeTone.set(edge.id, blocker !== undefined && isEnded(blocker) ? 'done' : 'open');
+  }
+  return edgeTone;
+}
+
 /**
  * Compute blocked/ready flags and edge tones for a dependency graph.
  *
@@ -103,14 +119,5 @@ export function annotateGraph(graph: AnnotateInput): GraphAnnotations {
     });
   }
 
-  const edgeTone = new Map<string, EdgeTone>();
-  for (const e of graph.edges) {
-    if (e.kind !== 'dependency') {
-      edgeTone.set(e.id, 'neutral');
-      continue;
-    }
-    const blocker = categoryById.get(e.source);
-    edgeTone.set(e.id, blocker !== undefined && isEnded(blocker) ? 'done' : 'open');
-  }
-  return { nodeFlags, edgeTone };
+  return { nodeFlags, edgeTone: annotateEdgeTones(graph.edges, categoryById) };
 }

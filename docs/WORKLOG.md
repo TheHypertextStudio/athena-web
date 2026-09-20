@@ -143,6 +143,9 @@ Quick-win files to process:
   - Authentication interlock dialog rendering now lives in a dedicated component, clearing its
     one-point provider function-length excess while preserving all eight interlock tests. The
     ledger is 752 files and 1,306 entries.
+  - Voice engine timing assertions now use a focused trace helper, clearing the test's final
+    complexity excess while preserving all nine voice-engine tests. The ledger is 751 files and
+    1,305 entries.
 
 ---
 

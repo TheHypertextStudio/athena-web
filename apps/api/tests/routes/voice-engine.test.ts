@@ -6,7 +6,12 @@
  * actions run *during* speech, barge-in halts audio before anything is written and
  * records what was actually heard, and no reply is ever assembled before being spoken.
  */
-import type { VoiceActionOut, VoiceEndReason, VoiceTurnOut } from '@docket/athena/voice';
+import type {
+  VoiceActionOut,
+  VoiceEndReason,
+  VoiceTraceEntry,
+  VoiceTurnOut,
+} from '@docket/athena/voice';
 import { describe, expect, it } from 'vitest';
 import {
   VoiceSessionEngine,
@@ -133,6 +138,19 @@ function tickingClock(): () => Date {
   };
 }
 
+function expectToolInsideAudioSegment(trace: readonly VoiceTraceEntry[]): void {
+  const segmentEnd = trace.find((entry) => entry.kind === 'audio.segment.end');
+  const toolStart = trace.find((entry) => entry.kind === 'tool.start');
+  const segmentStart = trace.find((entry) => entry.kind === 'audio.segment.start');
+  expect(segmentStart).toBeTruthy();
+  expect(toolStart).toBeTruthy();
+  expect(segmentEnd).toBeTruthy();
+  if (!segmentStart || !toolStart || !segmentEnd) return;
+  expect(toolStart.seq).toBeGreaterThan(segmentStart.seq);
+  expect(toolStart.seq).toBeLessThan(segmentEnd.seq);
+  expect(Date.parse(toolStart.at)).toBeLessThan(Date.parse(segmentEnd.at));
+}
+
 describe('voice session engine', () => {
   it('runs a tool while it is speaking, and starts it before the audio segment ends', async () => {
     const store = new RecordingStore();
@@ -157,15 +175,8 @@ describe('voice session engine', () => {
     // The tool observed the session mid-utterance rather than after it.
     expect(tools.calls).toEqual([{ name: 'create_task', stateWhenRun: 'speaking' }]);
 
-    const trace = engine.trace;
-    const segmentEnd = trace.find((e) => e.kind === 'audio.segment.end');
-    const toolStart = trace.find((e) => e.kind === 'tool.start');
-    const segmentStart = trace.find((e) => e.kind === 'audio.segment.start');
-    expect(segmentStart && toolStart && segmentEnd).toBeTruthy();
     // Ordered strictly inside the segment, by monotonic sequence and by wall clock.
-    expect(toolStart?.seq).toBeGreaterThan(segmentStart?.seq ?? 0);
-    expect(toolStart?.seq).toBeLessThan(segmentEnd?.seq ?? 0);
-    expect(Date.parse(toolStart?.at ?? '')).toBeLessThan(Date.parse(segmentEnd?.at ?? ''));
+    expectToolInsideAudioSegment(engine.trace);
   });
 
   it('does not batch three requests to the end of the turn', async () => {

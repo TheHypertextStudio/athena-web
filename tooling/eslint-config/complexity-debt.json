@@ -3989,12 +3989,6 @@
       "excess": 80
     }
   },
-  "apps/web/src/components/scheduling/scheduling-time-label.ts": {
-    "complexity": {
-      "max": 15,
-      "excess": 3
-    }
-  },
   "apps/web/src/components/scheduling/use-scheduling-all-day-gesture.ts": {
     "max-lines-per-function": {
       "max": 134,

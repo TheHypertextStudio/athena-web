@@ -120,6 +120,58 @@ function clippedItemRange(
   return startsAt && endsAt ? { startsAt, endsAt } : null;
 }
 
+/** Resolve a move preview to exact instants or its ambiguity/invalid reason. */
+function resolveMovePreview(
+  item: ScheduleItem,
+  targetLane: ScheduleLane,
+  preview: ScheduleGesturePreview,
+  displayTimezone: string,
+): SchedulePreviewRangeResolution {
+  const target = resolveScheduleWallInstant(
+    targetLane.date,
+    preview.startMinutes,
+    displayTimezone,
+    item.startsAt,
+  );
+  if (target.kind !== 'resolved') return target;
+  const moved = moveScheduleInstantRange({
+    startsAt: item.startsAt,
+    endsAt: item.endsAt,
+    targetDate: targetLane.date,
+    startMinutes: preview.startMinutes,
+    displayTimezone,
+  });
+  return moved ? { kind: 'resolved', range: moved } : { kind: 'invalid' };
+}
+
+/** Resolve a resize preview to exact instants or its ambiguity/invalid reason. */
+function resolveResizePreview(
+  item: ScheduleItem,
+  targetLane: ScheduleLane,
+  preview: ScheduleGesturePreview,
+  previewMode: ScheduleGestureMode,
+  displayTimezone: string,
+): SchedulePreviewRangeResolution {
+  const edge = previewMode === 'resize-start' ? 'start' : 'end';
+  const edgeMinutes = edge === 'start' ? preview.startMinutes : preview.endMinutes;
+  const target = resolveScheduleWallInstant(
+    targetLane.date,
+    edgeMinutes,
+    displayTimezone,
+    edge === 'start' ? item.startsAt : item.endsAt,
+  );
+  if (target.kind !== 'resolved') return target;
+  const resized = resizeScheduleInstantRange({
+    startsAt: item.startsAt,
+    endsAt: item.endsAt,
+    edge,
+    targetDate: targetLane.date,
+    edgeMinutes,
+    displayTimezone,
+  });
+  return resized ? { kind: 'resolved', range: resized } : { kind: 'invalid' };
+}
+
 /** Resolve exact instants and the reason an ambiguous live preview cannot commit. */
 function previewRange(
   options: ScheduleItemTimeRangeOptions,
@@ -137,40 +189,10 @@ function previewRange(
 
   const targetLane = lanes[preview.laneIndex];
   if (!targetLane) return { kind: 'invalid' };
-  const exactItemRange = { startsAt: item.startsAt, endsAt: item.endsAt };
   if (previewMode === 'move') {
-    const target = resolveScheduleWallInstant(
-      targetLane.date,
-      preview.startMinutes,
-      displayTimezone,
-      item.startsAt,
-    );
-    if (target.kind !== 'resolved') return target;
-    const moved = moveScheduleInstantRange({
-      ...exactItemRange,
-      targetDate: targetLane.date,
-      startMinutes: preview.startMinutes,
-      displayTimezone,
-    });
-    return moved ? { kind: 'resolved', range: moved } : { kind: 'invalid' };
+    return resolveMovePreview(item, targetLane, preview, displayTimezone);
   }
-  const edge = previewMode === 'resize-start' ? 'start' : 'end';
-  const edgeMinutes = edge === 'start' ? preview.startMinutes : preview.endMinutes;
-  const target = resolveScheduleWallInstant(
-    targetLane.date,
-    edgeMinutes,
-    displayTimezone,
-    edge === 'start' ? item.startsAt : item.endsAt,
-  );
-  if (target.kind !== 'resolved') return target;
-  const resized = resizeScheduleInstantRange({
-    ...exactItemRange,
-    edge,
-    targetDate: targetLane.date,
-    edgeMinutes,
-    displayTimezone,
-  });
-  return resized ? { kind: 'resolved', range: resized } : { kind: 'invalid' };
+  return resolveResizePreview(item, targetLane, preview, previewMode, displayTimezone);
 }
 
 /** Present the exact label and commit policy represented by one scheduling card. */

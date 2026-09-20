@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,271 entries, 155,496 excess points across 721 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,270 entries, 155,493 excess points across 720 files.
 
 #### Analysis Complete
 
@@ -239,6 +239,10 @@ Quick-win files to process:
   - Overlap sweep column release now lives in a focused helper, clearing the sweep's final
     complexity excess while preserving 46 overlap, dense-overflow, and composition tests. The
     ledger is 721 files and 1,271 entries.
+  - Scheduling time-label preview resolution now delegates move and resize branches to focused
+    helpers, clearing its final complexity excess. The scheduling package remains green except for
+    the documented stale canvas scroll fixture (expected 1,400, received 1,500); 312 sibling tests
+    pass.
 
 ---
 

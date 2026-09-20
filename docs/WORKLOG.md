@@ -137,6 +137,9 @@ Quick-win files to process:
   - Task relation association dispatch now lives in a focused subject handler, clearing its final
     complexity excess while preserving all eight relation-port tests. The ledger is 754 files and
     1,308 entries.
+  - The public privacy page now renders its long policy register through a dedicated section
+    component, clearing its one-point function-length excess without changing policy copy. The
+    ledger is 753 files and 1,307 entries.
 
 ---
 

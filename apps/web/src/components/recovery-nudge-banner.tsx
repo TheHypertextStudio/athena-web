@@ -27,7 +27,7 @@ import { readRecoveryNudgeDismissed, writeRecoveryNudgeDismissed } from './app-s
 const LOW_THRESHOLD = 2;
 
 interface RecoveryNudgeCopy {
-  readonly message: string;
+  readonly body: string;
   readonly actionLabel: string;
   readonly title: string;
   readonly tone: 'critical' | 'info';
@@ -39,7 +39,7 @@ function recoveryNudgeCopy(status: {
 }): RecoveryNudgeCopy | null {
   if (!status.enabled) {
     return {
-      message: 'Set up recovery codes — they’re the only way back in if you lose your passkey.',
+      body: 'Set up recovery codes — they’re the only way back in if you lose your passkey.',
       actionLabel: 'Set up recovery codes',
       title: 'Recovery codes needed',
       tone: 'critical',
@@ -47,7 +47,7 @@ function recoveryNudgeCopy(status: {
   }
   if (status.remaining <= LOW_THRESHOLD) {
     return {
-      message: `You’re low on recovery codes (${status.remaining} left). Regenerate a fresh set.`,
+      body: `You’re low on recovery codes (${status.remaining} left). Regenerate a fresh set.`,
       actionLabel: 'Regenerate recovery codes',
       title: 'Recovery codes running low',
       tone: 'info',
@@ -114,7 +114,7 @@ export function RecoveryNudgeBanner({
       dismissLabel="Dismiss recovery-code reminder"
       onDismiss={dismiss}
     >
-      {copy.message}
+      {copy.body}
     </InlineBanner>
   );
 }

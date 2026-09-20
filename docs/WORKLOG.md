@@ -249,6 +249,10 @@ Quick-win files to process:
   - Service-worker route security, dev-request, and asset-strategy checks now use focused helpers,
     clearing the routing module's final complexity excess while preserving all 16 routing tests.
     The ledger is 718 files and 1,268 entries.
+  - The full pre-push coverage hook exposed an existing source-policy false positive on the
+    recovery nudge's application-owned `message` field. Renaming that presentation field to
+    `body` keeps the copy unchanged while satisfying the raw-error-message policy; both policy
+    tests now pass.
 
 ---
 

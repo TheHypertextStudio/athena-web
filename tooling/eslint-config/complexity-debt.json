@@ -6349,12 +6349,6 @@
       "excess": 103
     }
   },
-  "packages/ui/src/hooks/useListKeyboard.tsx": {
-    "complexity": {
-      "max": 14,
-      "excess": 2
-    }
-  },
   "packages/ui/src/icons/strategic-work-rounded.ts": {
     "max-lines": {
       "max": 531,

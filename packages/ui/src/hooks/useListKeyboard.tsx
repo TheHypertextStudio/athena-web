@@ -141,6 +141,53 @@ function handlePropertyShortcut(
   return true;
 }
 
+/** Inputs for {@link handleNavigationEvent}. */
+interface NavigationEventOptions {
+  event: ListKeyboardEvent;
+  activeIndex: number;
+  rowCount: number;
+  setActiveIndex: (index: number) => void;
+  onActivate: UseListKeyboardOptions['onActivate'];
+  onMove: UseListKeyboardOptions['onMove'];
+  onToggle: UseListKeyboardOptions['onToggle'];
+  onClear: UseListKeyboardOptions['onClear'];
+}
+
+/** Dispatch navigation, activation, clearing, and Space-toggle keys after shortcut guards. */
+function handleNavigationEvent({
+  event,
+  activeIndex,
+  rowCount,
+  setActiveIndex,
+  onActivate,
+  onMove,
+  onToggle,
+  onClear,
+}: NavigationEventOptions): void {
+  const next = navigationIndex(event.key, activeIndex, rowCount);
+  if (next !== null) {
+    event.preventDefault();
+    setActiveIndex(next);
+    onMove?.(next, event);
+    return;
+  }
+  if (event.key === 'Enter' && activeIndex >= 0) {
+    event.preventDefault();
+    onActivate?.(activeIndex);
+    return;
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    onClear?.(activeIndex, event);
+    setActiveIndex(-1);
+    return;
+  }
+  if (event.key === ' ' && onToggle && activeIndex >= 0) {
+    event.preventDefault();
+    onToggle(activeIndex, event);
+  }
+}
+
 /**
  * Manage arrow / Enter / Esc / property-key grid keyboard navigation over flattened list rows.
  *
@@ -185,29 +232,16 @@ export function useListKeyboard({
       if (isTextEntryTarget(event.target)) return;
       if (handleSelectAllShortcut(event, activeIndex, onSelectAll)) return;
       if (handlePropertyShortcut(event, activeIndex, onPropertyKey)) return;
-
-      const next = navigationIndex(event.key, activeIndex, rowCount);
-      if (next !== null) {
-        event.preventDefault();
-        setActiveIndex(next);
-        onMove?.(next, event);
-        return;
-      }
-      if (event.key === 'Enter' && activeIndex >= 0) {
-        event.preventDefault();
-        onActivate?.(activeIndex);
-        return;
-      }
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClear?.(activeIndex, event);
-        setActiveIndexState(-1);
-        return;
-      }
-      if (event.key === ' ' && onToggle && activeIndex >= 0) {
-        event.preventDefault();
-        onToggle(activeIndex, event);
-      }
+      handleNavigationEvent({
+        event,
+        activeIndex,
+        rowCount,
+        setActiveIndex,
+        onActivate,
+        onMove,
+        onToggle,
+        onClear,
+      });
     },
     [
       activeIndex,

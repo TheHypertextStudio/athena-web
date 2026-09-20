@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,277 entries, 155,509 excess points across 727 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,276 entries, 155,507 excess points across 726 files.
 
 #### Analysis Complete
 
@@ -220,6 +220,9 @@ Quick-win files to process:
   - Digest highlight-row validation now lives in a focused parser, clearing the narrator's final
     complexity excess while preserving all 23 digest tests. The ledger is 727 files and 1,277
     entries.
+  - List keyboard navigation now delegates post-guard key handling to a focused dispatcher,
+    clearing the hook's final complexity excess while preserving all 34 UI hook tests. The ledger
+    is 726 files and 1,276 entries.
 
 ---
 

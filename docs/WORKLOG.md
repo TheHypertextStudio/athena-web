@@ -134,6 +134,9 @@ Quick-win files to process:
   - Recovery nudge copy now comes from a focused status-to-copy helper, clearing the banner's final
     complexity excess while preserving its eight component tests. The ledger is 755 files and
     1,309 entries.
+  - Task relation association dispatch now lives in a focused subject handler, clearing its final
+    complexity excess while preserving all eight relation-port tests. The ledger is 754 files and
+    1,308 entries.
 
 ---
 

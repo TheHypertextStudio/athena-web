@@ -206,6 +206,24 @@ async function handleCalendarSlotRelation(
   );
 }
 
+async function handleAssociationSubject(
+  organizationId: string,
+  subject: RelationEndpoint,
+  intent: TaskAssociationRelationIntent,
+  dependencies: TaskAssociationCommandDependencies,
+): Promise<'applied' | 'unchanged' | null> {
+  if (intent.relationId === 'task.blocks') {
+    return handleBlocksRelation(organizationId, subject, intent.target.id, dependencies);
+  }
+  if (intent.relationId === 'task.label') {
+    return handleLabelRelation(organizationId, subject, intent.target.id, dependencies);
+  }
+  if (intent.relationId === 'task.calendar-item') {
+    return handleCalendarItemRelation(organizationId, subject, intent.target.id, dependencies);
+  }
+  return handleCalendarSlotRelation(organizationId, subject, intent.target, dependencies);
+}
+
 /** Build the Task-owned port for associations that are not property patches. */
 export function createTaskAssociationCommandPort(
   dependencies: TaskAssociationCommandDependencies,
@@ -222,36 +240,12 @@ export function createTaskAssociationCommandPort(
       }
       let applied = false;
       for (const subject of intent.subjects) {
-        let status: 'applied' | 'unchanged' | null;
-        if (intent.relationId === 'task.blocks') {
-          status = await handleBlocksRelation(
-            organizationId,
-            subject,
-            intent.target.id,
-            dependencies,
-          );
-        } else if (intent.relationId === 'task.label') {
-          status = await handleLabelRelation(
-            organizationId,
-            subject,
-            intent.target.id,
-            dependencies,
-          );
-        } else if (intent.relationId === 'task.calendar-item') {
-          status = await handleCalendarItemRelation(
-            organizationId,
-            subject,
-            intent.target.id,
-            dependencies,
-          );
-        } else {
-          status = await handleCalendarSlotRelation(
-            organizationId,
-            subject,
-            intent.target,
-            dependencies,
-          );
-        }
+        const status = await handleAssociationSubject(
+          organizationId,
+          subject,
+          intent,
+          dependencies,
+        );
         if (status === 'applied') applied = true;
       }
       return { status: applied ? 'applied' : 'unchanged' };

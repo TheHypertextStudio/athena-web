@@ -134,6 +134,36 @@ function formatSkippedWallTime(
   );
 }
 
+interface ScheduleTickFormatContext {
+  readonly date: string;
+  readonly zone: string;
+  readonly plainDate: Temporal.PlainDate;
+  readonly majorMinutes: number;
+  readonly labelStyle: ScheduleTickLabelStyle;
+  readonly zonedFormatter: Intl.DateTimeFormat;
+  readonly skippedFormatter: Intl.DateTimeFormat;
+  readonly zonedHourFormatter: Intl.DateTimeFormat;
+  readonly skippedHourFormatter: Intl.DateTimeFormat;
+}
+
+function scheduleTickAt(wallMinutes: number, context: ScheduleTickFormatContext): ScheduleTick {
+  const resolution = resolveScheduleWallTime(context.date, wallMinutes, context.zone);
+  const transition = resolution?.kind ?? 'skipped';
+  const plainDateTime = context.plainDate.toPlainDateTime().add({ minutes: wallMinutes });
+  const instant = resolution?.kind === 'normal' ? resolution.instant : null;
+  const kind = wallMinutes % context.majorMinutes === 0 ? 'major' : 'minor';
+  const compact = context.labelStyle === 'hour' && kind === 'major';
+  const label =
+    transition !== 'normal' || !instant
+      ? formatSkippedWallTime(
+          compact ? context.skippedHourFormatter : context.skippedFormatter,
+          plainDateTime,
+        )
+      : (compact ? context.zonedHourFormatter : context.zonedFormatter).format(new Date(instant));
+
+  return { wallMinutes, label, kind, transition };
+}
+
 /**
  * Emit locale-aware major and minor wall-clock ticks for one scheduling date.
  *
@@ -164,19 +194,19 @@ export function deriveScheduleTicks({
   });
   const ticks: ScheduleTick[] = [];
 
+  const tickContext: ScheduleTickFormatContext = {
+    date,
+    zone,
+    plainDate,
+    majorMinutes,
+    labelStyle,
+    zonedFormatter,
+    skippedFormatter,
+    zonedHourFormatter,
+    skippedHourFormatter,
+  };
   for (let wallMinutes = 0; wallMinutes <= MINUTES_PER_DAY; wallMinutes += snapMinutes) {
-    const resolution = resolveScheduleWallTime(date, wallMinutes, zone);
-    const transition = resolution?.kind ?? 'skipped';
-    const plainDateTime = plainDate.toPlainDateTime().add({ minutes: wallMinutes });
-    const instant = resolution?.kind === 'normal' ? resolution.instant : null;
-    const kind = wallMinutes % majorMinutes === 0 ? 'major' : 'minor';
-    const compact = labelStyle === 'hour' && kind === 'major';
-    const label =
-      transition !== 'normal' || !instant
-        ? formatSkippedWallTime(compact ? skippedHourFormatter : skippedFormatter, plainDateTime)
-        : (compact ? zonedHourFormatter : zonedFormatter).format(new Date(instant));
-
-    ticks.push({ wallMinutes, label, kind, transition });
+    ticks.push(scheduleTickAt(wallMinutes, tickContext));
   }
 
   return ticks;

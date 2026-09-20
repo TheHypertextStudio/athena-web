@@ -104,6 +104,9 @@ Quick-win files to process:
   - The shared `fieldSurface` recipe now delegates its closed variant treatment to a typed helper,
     removing its final one-point complexity excess while preserving all primitive snapshots. The
     UI primitive suites pass; the ledger is 765 files and 1,319 entries.
+  - `scheduling-time-axis.ts` now formats each tick through a small context-driven helper, removing
+    its final complexity excess. Axis tests pass; the unrelated canvas fixture still reports the
+    documented stale ancestor failure. The ledger is 764 files and 1,318 entries.
 
 ---
 

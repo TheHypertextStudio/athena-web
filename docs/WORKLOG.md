@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,288 entries, 155,531 excess points across 738 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,287 entries, 155,529 excess points across 737 files.
 
 #### Analysis Complete
 
@@ -189,6 +189,8 @@ Quick-win files to process:
   - Template document and label merge branches now use focused helpers, clearing the merge
     function's final two cognitive-complexity points while preserving all 10 template-merge tests.
     The ledger is 738 files and 1,288 entries.
+  - Discord role-member expansion now uses a focused helper, clearing its final two complexity
+    points while preserving all 12 mention/relay tests. The ledger is 737 files and 1,287 entries.
 
 ---
 

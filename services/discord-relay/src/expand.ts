@@ -37,6 +37,16 @@ export interface ExpandOptions {
   readonly dmRecipientIds?: readonly string[];
 }
 
+function addRoleMembers(
+  ids: Set<string>,
+  roleIds: readonly string[],
+  membersOfRole: ExpandOptions['membersOfRole'],
+): void {
+  for (const roleId of roleIds) {
+    for (const userId of membersOfRole(roleId)) ids.add(userId);
+  }
+}
+
 /**
  * Expand a message's direct/`@role`/reply/DM mentions into a flat, de-duplicated set of user ids,
  * excluding the author.
@@ -48,9 +58,7 @@ export interface ExpandOptions {
 export function expandMentionedUserIds(message: DiscordMessage, opts: ExpandOptions): string[] {
   const ids = new Set<string>();
   for (const m of message.mentions ?? []) ids.add(m.id);
-  for (const roleId of message.mention_roles ?? []) {
-    for (const uid of opts.membersOfRole(roleId)) ids.add(uid);
-  }
+  addRoleMembers(ids, message.mention_roles ?? [], opts.membersOfRole);
   const replyTarget = message.referenced_message?.author?.id;
   if (replyTarget) ids.add(replyTarget);
   if (!message.guild_id) {

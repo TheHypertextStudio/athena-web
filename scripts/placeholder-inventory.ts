@@ -205,6 +205,22 @@ function isCommentLine(text: string): boolean {
   return trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('{/*');
 }
 
+/** Join a marker with immediately following line comments in the same declaration span. */
+function readAnnotationLines(
+  lines: readonly string[],
+  cursor: number,
+  to: number,
+  head: string,
+): string {
+  const parts = [head];
+  for (let follow = cursor + 1; follow < to; follow += 1) {
+    const text = (lines[follow] ?? '').trimStart();
+    if (!text.startsWith('//')) break;
+    parts.push(text.slice(2).trim());
+  }
+  return parts.join(' ').trim();
+}
+
 /**
  * Classify a line as a placeholder render site, or `null` when it is not one.
  *
@@ -257,13 +273,7 @@ function annotationFor(
     const match = ANNOTATION.exec(lines[cursor] ?? '');
     const head = match?.[1];
     if (head === undefined || head.length === 0) continue;
-    const parts = [head];
-    for (let follow = cursor + 1; follow < to; follow += 1) {
-      const text = (lines[follow] ?? '').trimStart();
-      if (!text.startsWith('//')) break;
-      parts.push(text.slice(2).trim());
-    }
-    return parts.join(' ').trim();
+    return readAnnotationLines(lines, cursor, to, head);
   }
   return null;
 }

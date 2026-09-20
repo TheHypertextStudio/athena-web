@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,274 entries, 155,503 excess points across 724 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,273 entries, 155,501 excess points across 723 files.
 
 #### Analysis Complete
 
@@ -229,6 +229,10 @@ Quick-win files to process:
   - Sunsama fixture input and task lookup now use focused helpers, clearing the fixture server's
     final complexity excess while preserving 27 migration fixture/reader tests. The ledger is 724
     files and 1,274 entries.
+  - Placeholder inventory annotation scanning now delegates continuation-line joining to a focused
+    helper, clearing its final complexity excess. The inventory check still reports five existing
+    UI components with 11 unannotated placeholders against its budget of 6; no placeholder policy
+    or source-contract tests were changed for this lint slice.
 
 ---
 

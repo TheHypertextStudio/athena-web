@@ -6511,12 +6511,6 @@
       "excess": 51
     }
   },
-  "scripts/placeholder-inventory.ts": {
-    "complexity": {
-      "max": 14,
-      "excess": 2
-    }
-  },
   "scripts/secret-scan.ts": {
     "complexity": {
       "max": 29,

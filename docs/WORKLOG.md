@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,290 entries, 155,535 excess points across 740 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,289 entries, 155,533 excess points across 739 files.
 
 #### Analysis Complete
 
@@ -183,6 +183,9 @@ Quick-win files to process:
   - Menu option content now renders through a focused helper, clearing MenuOption's final
     function-length excess while preserving all nine menu-listbox tests. The ledger is 740 files
     and 1,290 entries.
+  - Schedule-lane repeated-hour correction now lives in a focused projection helper, clearing its
+    final two complexity points while preserving all 12 scheduling-geometry tests. The ledger is
+    739 files and 1,289 entries.
 
 ---
 

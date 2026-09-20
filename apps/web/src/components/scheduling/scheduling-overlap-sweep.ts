@@ -84,6 +84,21 @@ function finalizeCluster(
   }
 }
 
+/** Return every column whose interval ended before the next interval starts to the free pool. */
+function releaseReusableColumns(
+  activeColumns: MinHeap<ActiveColumn>,
+  reusableColumns: MinHeap<number>,
+  startMinutes: number,
+): void {
+  while (
+    activeColumns.peek() !== undefined &&
+    (activeColumns.peek()?.endMinutes ?? Number.POSITIVE_INFINITY) <= startMinutes
+  ) {
+    const released = activeColumns.pop();
+    if (released) reusableColumns.push(released.columnIndex);
+  }
+}
+
 /**
  * Assign visual interval columns with a stable lowest-free-column sweep.
  *
@@ -106,13 +121,7 @@ export function layoutVisualOverlapSweep(
   for (let index = 0; index < intervals.length; index += 1) {
     const interval = intervals[index];
     if (!interval) continue;
-    while (
-      activeColumns.peek() !== undefined &&
-      (activeColumns.peek()?.endMinutes ?? Number.POSITIVE_INFINITY) <= interval.startMinutes
-    ) {
-      const released = activeColumns.pop();
-      if (released) reusableColumns.push(released.columnIndex);
-    }
+    releaseReusableColumns(activeColumns, reusableColumns, interval.startMinutes);
 
     if (activeColumns.size === 0 && index > clusterStartIndex) {
       finalizeCluster(results, clusterStartIndex, index, nextColumnIndex);

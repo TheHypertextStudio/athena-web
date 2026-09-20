@@ -3983,12 +3983,6 @@
       "excess": 3
     }
   },
-  "apps/web/src/components/scheduling/scheduling-overlap-sweep.ts": {
-    "complexity": {
-      "max": 15,
-      "excess": 3
-    }
-  },
   "apps/web/src/components/scheduling/scheduling-pointer-session.ts": {
     "max-lines-per-function": {
       "max": 160,

@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,272 entries, 155,499 excess points across 722 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,271 entries, 155,496 excess points across 721 files.
 
 #### Analysis Complete
 
@@ -236,6 +236,9 @@ Quick-win files to process:
   - Calendar schedule conversion now delegates object, editability, comparison ids, and comparison
     item mapping to focused helpers, clearing its final complexity excess while preserving all 36
     calendar schedule-model tests. The ledger is 722 files and 1,272 entries.
+  - Overlap sweep column release now lives in a focused helper, clearing the sweep's final
+    complexity excess while preserving 46 overlap, dense-overflow, and composition tests. The
+    ledger is 721 files and 1,271 entries.
 
 ---
 

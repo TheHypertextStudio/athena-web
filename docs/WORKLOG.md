@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,291 entries, 155,536 excess points across 741 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,290 entries, 155,535 excess points across 740 files.
 
 #### Analysis Complete
 
@@ -180,6 +180,9 @@ Quick-win files to process:
   - Anthropic draft-field parsing now lives in a focused helper, clearing parseDraft's final
     complexity excess while preserving 15 task-drafting/provider tests. The ledger is 741 files and
     1,291 entries.
+  - Menu option content now renders through a focused helper, clearing MenuOption's final
+    function-length excess while preserving all nine menu-listbox tests. The ledger is 740 files
+    and 1,290 entries.
 
 ---
 

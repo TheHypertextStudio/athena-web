@@ -6263,12 +6263,6 @@
       "excess": 59
     }
   },
-  "packages/ui/src/components/menus/MenuListbox.tsx": {
-    "max-lines-per-function": {
-      "max": 81,
-      "excess": 1
-    }
-  },
   "packages/ui/src/components/pickers/CalendarGrid.tsx": {
     "complexity": {
       "max": 15,

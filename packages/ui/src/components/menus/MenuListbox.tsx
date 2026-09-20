@@ -121,6 +121,31 @@ export function MenuOption({
       }}
       {...props}
     >
+      <MenuOptionContent
+        leading={leading}
+        supporting={supporting}
+        secondary={secondary}
+        badge={badge}
+        trailing={trailing}
+      >
+        {children}
+      </MenuOptionContent>
+    </li>
+  );
+}
+
+function MenuOptionContent({
+  leading,
+  supporting,
+  secondary,
+  badge,
+  trailing,
+  children,
+}: Pick<MenuOptionProps, 'leading' | 'supporting' | 'secondary' | 'badge' | 'trailing'> & {
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <>
       {leading ? (
         <span className="flex size-5 shrink-0 items-center justify-center">{leading}</span>
       ) : null}
@@ -139,7 +164,7 @@ export function MenuOption({
       )}
       {badge ? <span className="shrink-0">{badge}</span> : null}
       {trailing ? <span className="shrink-0">{trailing}</span> : null}
-    </li>
+    </>
   );
 }
 

@@ -15,6 +15,7 @@ import { compileAuthorizationSql } from './authorization-sql';
 import { WORK_VIEW_SQL_CONTRACTS } from './contracts';
 import { cycleDisplayNameSql } from './cycle-label-sql';
 
+/** Return the fixed option values for an enum-backed facet. */
 export function staticEnumCatalog(
   target: WorkViewFacetRequest['target'],
   field: string,
@@ -190,6 +191,7 @@ const LABEL_CATALOG_FIELDS = new Set([
   'initiative.labels',
 ]);
 
+/** Compile the organization-scoped SQL catalog for a requested facet. */
 export function optionCatalog(input: {
   target: WorkViewFacetRequest['target'];
   field: string;

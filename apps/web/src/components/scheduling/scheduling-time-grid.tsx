@@ -153,7 +153,7 @@ function TimeGridTransitions({
   gridHeight,
   pixelsPerHour,
 }: {
-  lanes: ScheduleLane[];
+  lanes: readonly ScheduleLane[];
   transitionsByDate: Map<string, ScheduleTransitionBand[]>;
   laneWidth: number;
   gridHeight: number;
@@ -199,7 +199,7 @@ function TimeGridCurrentLine({
   gridHeight,
   pixelsPerHour,
 }: {
-  lanes: ScheduleLane[];
+  lanes: readonly ScheduleLane[];
   currentPosition: { date: string; wallMinutes: number } | null;
   laneWidth: number;
   gridHeight: number;

@@ -279,6 +279,7 @@ function validateToolVisibility(
   }
 }
 
+/** Run a visible remote tool through the connector session for an MCP app widget. */
 export async function runWidgetTool(
   ownerUserId: string,
   connectionId: string,

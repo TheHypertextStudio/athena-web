@@ -43,6 +43,7 @@ function relativeOffset(anchor: string, value: Date | null): number | undefined 
   return value === null ? undefined : calendarDaysBetween(anchor, civilDate(value));
 }
 
+/** Publish a recurrence process definition from the current project snapshot. */
 export async function createProcessDefinitionFromProject(
   database: Database,
   command: CreateProcessDefinitionFromProjectCommand,

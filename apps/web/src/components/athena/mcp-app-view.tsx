@@ -378,7 +378,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
     }
 
     let proxyWindow: Window | null = frame.contentWindow;
-    let lifecycleResource: McpAppResource | null = resource;
+    let readyResource: McpAppResource | null = resource;
     const lifecycleCallbacks = {
       identity: presentationIdentity,
       onCallTool,
@@ -408,7 +408,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
       host?.close();
       host = null;
       proxyWindow = null;
-      lifecycleResource = null;
+      readyResource = null;
     };
     const dispose = (graceful: boolean): Promise<void> => {
       if (disposal) return disposal;
@@ -504,7 +504,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
     });
     hostRef.current = host;
 
-    const handlerState = { disposed, lifecycleResource, host } as MessageHandlerState;
+    const handlerState = { disposed, host };
     onWindowMessage = (event: MessageEvent): void => {
       if (handlerState.disposed) return;
       if (event.source !== frame.contentWindow) return;
@@ -516,20 +516,17 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
 
       const method: unknown = Reflect.get(data, 'method');
       if (method === MCP_UI_METHODS.sandboxProxyReady) {
-        const readyResource = handlerState.lifecycleResource as McpAppResource | null;
         if (!readyResource) return;
         post({
           jsonrpc: '2.0',
           method: MCP_UI_METHODS.sandboxResourceReady,
           params: sandboxResourceParams(readyResource),
         });
-        handlerState.lifecycleResource = null;
-        lifecycleResource = null;
+        readyResource = null;
         return;
       }
 
-      const receivingHost = handlerState.host as McpAppHost | null;
-      if (!receivingHost) return;
+      const receivingHost = handlerState.host;
       void receivingHost
         .receive(data)
         .then(() => {

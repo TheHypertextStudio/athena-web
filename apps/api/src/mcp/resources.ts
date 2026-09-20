@@ -75,6 +75,29 @@ export const READABLE_TYPES = [
 /** One readable entity type. */
 type ReadableType = (typeof READABLE_TYPES)[number];
 
+/** Hydrates one readable entity type into its MCP projection. */
+type ResourceHydrator = (
+  orgId: string,
+  id: string,
+  canViewTask: TaskViewFilter,
+) => Promise<unknown>;
+
+/** The projection hydrator for each readable entity type. */
+const RESOURCE_HYDRATORS: Readonly<Record<ReadableType, ResourceHydrator>> = {
+  org: (orgId, id) => hydrateOrg(orgId, id),
+  task: (orgId, id, canViewTask) => hydrateTask(orgId, id, canViewTask),
+  project: (orgId, id, canViewTask) => hydrateProject(orgId, id, canViewTask),
+  program: (orgId, id, canViewTask) => hydrateProgram(orgId, id, canViewTask),
+  initiative: (orgId, id) => hydrateInitiative(orgId, id),
+  cycle: (orgId, id, canViewTask) => hydrateCycle(orgId, id, canViewTask),
+  team: (orgId, id) => hydrateTeam(orgId, id),
+  update: (orgId, id) => hydrateUpdate(orgId, id),
+  comment: (orgId, id, canViewTask) => hydrateComment(orgId, id, canViewTask),
+  session: (orgId, id, canViewTask) => hydrateSession(orgId, id, canViewTask),
+  agent: (orgId, id) => hydrateAgent(orgId, id),
+  view: (orgId, id) => hydrateView(orgId, id),
+};
+
 /**
  * The `source_table` names that map onto a readable resource type.
  *
@@ -316,33 +339,7 @@ async function hydrate(
   id: string,
   canViewTask: TaskViewFilter,
 ): Promise<unknown> {
-  switch (type) {
-    case 'org':
-      return hydrateOrg(orgId, id);
-    case 'task':
-      return hydrateTask(orgId, id, canViewTask);
-    case 'project':
-      return hydrateProject(orgId, id, canViewTask);
-    case 'program':
-      return hydrateProgram(orgId, id, canViewTask);
-    case 'initiative':
-      return hydrateInitiative(orgId, id);
-    case 'cycle':
-      return hydrateCycle(orgId, id, canViewTask);
-    case 'team':
-      return hydrateTeam(orgId, id);
-    case 'update':
-      return hydrateUpdate(orgId, id);
-    case 'comment':
-      return hydrateComment(orgId, id, canViewTask);
-    case 'session':
-      return hydrateSession(orgId, id, canViewTask);
-    case 'agent':
-      return hydrateAgent(orgId, id);
-    /* v8 ignore next 2 -- @preserve exhaustive: the only remaining case is `view` */
-    case 'view':
-      return hydrateView(orgId, id);
-  }
+  return RESOURCE_HYDRATORS[type](orgId, id, canViewTask);
 }
 
 /**

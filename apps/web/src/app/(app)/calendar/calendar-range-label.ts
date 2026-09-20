@@ -109,6 +109,7 @@ function crossMonthLabel(start: MonthPoint, end: MonthPoint): string {
   return `${monthName(start, 'short')} – ${monthName(end, 'short')} ${String(start.year)}`;
 }
 
+/** Format a calendar range using the requested long or short month style. */
 export function calendarRangeLabel(
   startDate: string,
   endDate: string,

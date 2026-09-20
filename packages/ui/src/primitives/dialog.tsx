@@ -186,7 +186,9 @@ const DEFAULT_DIALOG_PRESENTATION: DialogPresentation = {
 
 type PresentationClassBuilder = (size: string, height: string, heightSm: string) => string;
 
-const PRESENTATION_CLASS_BUILDERS: Readonly<Record<string, PresentationClassBuilder>> = {
+const PRESENTATION_CLASS_BUILDERS: Readonly<
+  Record<DialogPresentation['kind'], PresentationClassBuilder>
+> = {
   fullscreen: () => 'inset-0 h-[100dvh] w-[100vw] rounded-none border-0',
   'bottom-sheet': (_, height) =>
     `inset-x-0 bottom-0 ${height} w-full rounded-t-xl border-x-0 border-b-0`,
@@ -202,8 +204,7 @@ function dialogPresentationClass(presentation: DialogPresentation): string {
   const size = DIALOG_SIZE[presentation.size ?? 'standard'];
   const height = DIALOG_HEIGHT[presentation.height ?? 'content'];
   const heightSm = DIALOG_HEIGHT_SM[presentation.height ?? 'content'];
-  const builder =
-    PRESENTATION_CLASS_BUILDERS[presentation.kind] ?? PRESENTATION_CLASS_BUILDERS.centered;
+  const builder = PRESENTATION_CLASS_BUILDERS[presentation.kind];
   return builder(size, height, heightSm);
 }
 

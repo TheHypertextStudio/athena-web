@@ -14,6 +14,7 @@ interface SearchIntegration {
   readonly evidenceFile: string;
   readonly evidenceText: string;
   readonly integrationFile?: string;
+  readonly integrationFiles?: readonly string[];
   readonly primitive: VirtualPrimitive;
 }
 
@@ -34,6 +35,11 @@ const SEARCH_INTEGRATIONS: Readonly<Record<string, SearchIntegration>> = {
     adapter: 'server-cursor',
     evidenceFile: 'apps/web/src/components/library/library-client.tsx',
     evidenceText: 'apiInfiniteQueryOptions<SearchOut>',
+    integrationFiles: [
+      'apps/web/src/components/library/library-client.tsx',
+      'apps/web/src/components/library/library-toolbar.tsx',
+      'apps/web/src/components/library/library-search-field.tsx',
+    ],
     primitive: 'EntityTable',
   },
   'apps/web/src/components/views/view-runner.tsx': {
@@ -157,10 +163,11 @@ describe('virtualized in-page search policy', () => {
       expect(integration, `${path} has no reviewed search adapter`).toBeDefined();
       if (!integration) continue;
       const absolutePath = resolve(WORKSPACE_ROOT, path);
-      const integrationSource = readFileSync(
-        resolve(WORKSPACE_ROOT, integration.integrationFile ?? path),
-        'utf8',
-      );
+      const integrationSource = (
+        integration.integrationFiles ?? [integration.integrationFile ?? path]
+      )
+        .map((file) => readFileSync(resolve(WORKSPACE_ROOT, file), 'utf8'))
+        .join('\n');
       expect(usesPrimitive(sourceFile(absolutePath), integration.primitive)).toBe(true);
       expect(
         readFileSync(resolve(WORKSPACE_ROOT, integration.evidenceFile), 'utf8'),

@@ -156,6 +156,11 @@ function useNotificationActions(
     return intent.id;
   }, []);
 
+  const refreshReview = useCallback(async () => {
+    if (!selectedIntent) return;
+    await loadIntentData(selectedIntent.id);
+  }, [selectedIntent, loadIntentData]);
+
   const testSend = useCallback(async () => {
     if (!selectedIntent) return;
     const res = await productApi.v1.notifications[':id'].test.$post({
@@ -204,7 +209,7 @@ function useNotificationActions(
     [onError],
   );
 
-  return { createDraft, testSend, approve, sendNow, cancel, runAction };
+  return { createDraft, refreshReview, testSend, approve, sendNow, cancel, runAction };
 }
 
 /** Wrapper for actions that manage pending state, errors, and status messages. */
@@ -286,9 +291,8 @@ export default function NotificationsPage(): JSX.Element {
         });
       }}
       onRefreshReview={() => {
-        if (!notificationList.selectedIntent) return;
         void runWithState('refresh', async () => {
-          await notificationList.loadIntentData(notificationList.selectedIntent.id);
+          await actions.refreshReview();
           setStatusMessage('Preview refreshed');
         });
       }}

@@ -54,7 +54,10 @@ function MoreActionsMenu({
   commands,
   taskActions,
   count,
-}: BulkSelectionProps & { taskActions: ReturnType<typeof useCanvasActions> | null; count: number }): React.JSX.Element {
+}: BulkSelectionProps & {
+  taskActions: ReturnType<typeof useCanvasActions> | null;
+  count: number;
+}): React.JSX.Element {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -69,7 +72,10 @@ function MoreActionsMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {commands.objectKind === 'task' && commands.canEdit && taskActions !== null && count === 1 ? (
+        {commands.objectKind === 'task' &&
+        commands.canEdit &&
+        taskActions !== null &&
+        count === 1 ? (
           <DropdownMenuItem
             onSelect={() => {
               const task = commands.selectedObjects[0];

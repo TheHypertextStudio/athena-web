@@ -53,7 +53,13 @@ export interface WizardShellProps {
 /**
  * Render the progress bar when step count is known.
  */
-function KnownProgressBar({ stepNumber, totalSteps }: { stepNumber: number; totalSteps: number }): JSX.Element {
+function KnownProgressBar({
+  stepNumber,
+  totalSteps,
+}: {
+  stepNumber: number;
+  totalSteps: number;
+}): JSX.Element {
   return (
     <div
       className="flex gap-1.5"

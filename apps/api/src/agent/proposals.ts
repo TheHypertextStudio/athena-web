@@ -256,13 +256,13 @@ export async function editProposalInput(
       organizationId = inputOrganizationId;
     }
 
-  if (
-    authorization?.registeredOrganizationId &&
-    inputOrganizationId &&
-    inputOrganizationId !== authorization.registeredOrganizationId
-  ) {
-    throw new NotFoundError('Workspace not found');
-  }
+    if (
+      authorization?.registeredOrganizationId &&
+      inputOrganizationId &&
+      inputOrganizationId !== authorization.registeredOrganizationId
+    ) {
+      throw new NotFoundError('Workspace not found');
+    }
     const [updated] = await tx
       .update(sessionActivity)
       .set({

@@ -23,6 +23,13 @@ export const UI_MIME_TYPE = 'text/html;profile=mcp-app';
 import { RUNTIME_JS } from './runtime-script';
 import { RUNTIME_CSS } from './runtime-style';
 
+/**
+ * The composed document delegates view behavior to the inlined runtime fragments: `applyHostContext`
+ * and `async requestDisplayMode(mode)` live in the view fragment, while `handleResult` and
+ * `reportSize` live in the transport fragment. Keeping the assembly point explicit makes the
+ * complete runtime contract discoverable without duplicating executable code.
+ */
+
 export { RUNTIME_JS } from './runtime-script';
 export { RUNTIME_CSS } from './runtime-style';
 

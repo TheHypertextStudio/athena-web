@@ -299,6 +299,7 @@ function createScopeColumn(deps: ProjectColumnDeps): Column<ProjectOut> {
   };
 }
 
+/** Build the project table columns from the available facet catalog and display dependencies. */
 export function projectColumns(
   catalog: FieldCatalog<ProjectOut>,
   deps: ProjectColumnDeps,

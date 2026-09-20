@@ -97,9 +97,7 @@ export function buildInitiativeCreateRequest(
 /**
  * Build a POST request body for creating a Program.
  */
-export function buildProgramCreateRequest(
-  overrides?: Partial<{ name: string; ownerId: string }>,
-) {
+export function buildProgramCreateRequest(overrides?: Partial<{ name: string; ownerId: string }>) {
   return {
     name: overrides?.name ?? 'Test Program',
     ...(overrides?.ownerId && { ownerId: overrides.ownerId }),
@@ -122,9 +120,7 @@ export function buildProjectCreateRequest(
 /**
  * Build a POST request body for linking a work item.
  */
-export function buildWorkLinkRequest(
-  overrides: { projectId?: string; programId?: string },
-) {
+export function buildWorkLinkRequest(overrides: { projectId?: string; programId?: string }) {
   if (overrides.projectId) return { projectId: overrides.projectId };
   if (overrides.programId) return { programId: overrides.programId };
   throw new Error('Either projectId or programId required');

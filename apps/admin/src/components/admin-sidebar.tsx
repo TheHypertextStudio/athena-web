@@ -106,6 +106,7 @@ function SidebarFooter({
   );
 }
 
+/** Render the admin navigation rail and its account actions. */
 export function AdminSidebar({
   pathname,
   queues,

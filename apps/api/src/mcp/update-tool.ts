@@ -424,6 +424,7 @@ async function selectTargetIds(
   return rows.map((row) => row.id);
 }
 
+/** Register the MCP update tool and its authorization-aware mutation handler. */
 export function registerUpdateTool(
   server: McpRegistrar,
   ctx: McpContext,

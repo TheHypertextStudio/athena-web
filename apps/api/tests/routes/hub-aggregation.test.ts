@@ -30,7 +30,6 @@ import {
   seedUserWithHub,
   joinOrg,
   joinContributingOrg,
-  searchRoute,
 } from './hub-aggregation-test-helpers';
 
 let schema!: typeof DbModule;

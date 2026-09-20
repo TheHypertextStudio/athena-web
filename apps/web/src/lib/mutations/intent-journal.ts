@@ -34,6 +34,7 @@ interface AuthoritativeSettle<T> {
   readonly hasAuthoritative?: boolean;
 }
 
+/** Track optimistic field intents while preserving authoritative server values. */
 export class IntentJournal<T> {
   private readonly fields = new Map<string, FieldState<T>>();
   private readonly authoritative = new Map<string, T>();

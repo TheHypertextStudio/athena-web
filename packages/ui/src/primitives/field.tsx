@@ -209,6 +209,8 @@ export interface InputProps extends Omit<React.ComponentProps<'input'>, 'size'> 
    * Decorative, and marked `aria-hidden`; the field's own label carries the meaning.
    */
   readonly leading?: React.ReactNode;
+  /** Additional classes applied to the nested input when a prefix or leading adornment is present. */
+  readonly inputClassName?: string;
 }
 
 /**
@@ -224,6 +226,7 @@ export function Input({
   type,
   prefix,
   leading,
+  inputClassName,
   'aria-invalid': ariaInvalid,
   ...props
 }: InputProps): React.JSX.Element {
@@ -279,6 +282,7 @@ export function Input({
             typeClass(metrics.fieldToken),
             'text-on-surface min-w-0 flex-1 border-0 bg-transparent p-0 outline-none',
             'placeholder:text-on-surface-variant file:text-on-surface file:border-0 file:bg-transparent',
+            inputClassName,
           )}
           {...props}
         />

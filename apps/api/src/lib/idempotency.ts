@@ -652,6 +652,7 @@ async function reclaimExpiredKey(
     );
 }
 
+/** Replay or claim idempotent POST requests before their handlers execute. */
 export const idempotency: MiddlewareHandler<AppEnv> = async (c, next) => {
   const key = c.req.header('Idempotency-Key');
   const userId = c.get('session')?.user.id;

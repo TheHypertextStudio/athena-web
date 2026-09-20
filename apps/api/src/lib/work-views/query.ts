@@ -435,6 +435,7 @@ async function resolveExecution(
   };
 }
 
+/** Execute a validated work-view query and return its page, grouping, and cursor metadata. */
 export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkViewQueryResponse> {
   const request = internalRequest(input.request);
   const contract = WORK_VIEW_SQL_CONTRACTS[request.target];

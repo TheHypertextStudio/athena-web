@@ -4,7 +4,7 @@
 import type { HubTodayPlanItem } from '../../lib/contracts/hub';
 import type { SearchOut, SearchResult } from '../../lib/contracts/search';
 import { Plus, Search } from '@docket/ui/icons';
-import { Skeleton, surfaceToneColor, Text } from '@docket/ui/primitives';
+import { Input, Skeleton, surfaceToneColor, Text } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
@@ -130,25 +130,24 @@ export default function FocusTaskQueue({
       <h3 id="focus-up-next" className="text-on-surface text-title-small">
         Up next
       </h3>
-      <div className="border-outline-variant focus-within:border-primary flex min-h-11 items-center gap-2 rounded-lg border px-3">
-        <Search aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
-        <input
-          type="search"
-          value={query}
-          aria-label="Find or create a task"
-          placeholder="Find or create a task"
-          disabled={starting}
-          className="text-on-surface text-body-medium placeholder:text-on-surface-variant min-h-11 min-w-0 flex-1 bg-transparent outline-none"
-          onChange={(event) => {
-            setQuery(event.target.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter' || trimmed.length === 0) return;
-            event.preventDefault();
-            void start({ label: trimmed });
-          }}
-        />
-      </div>
+      <Input
+        type="search"
+        value={query}
+        aria-label="Find or create a task"
+        placeholder="Find or create a task"
+        disabled={starting}
+        leading={<Search aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />}
+        inputClassName="min-h-11"
+        className="min-h-11 w-full"
+        onChange={(event) => {
+          setQuery(event.target.value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' || trimmed.length === 0) return;
+          event.preventDefault();
+          void start({ label: trimmed });
+        }}
+      />
 
       {trimmed.length > 0 ? (
         <div className="flex flex-col gap-2">

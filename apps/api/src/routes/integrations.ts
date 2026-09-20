@@ -849,7 +849,12 @@ Requires \`contribute\` (it creates tasks, the same bar as authoring work direct
 
       // Onboarding sends `assignToImporter: true` so the owner's freshly-mirrored work lands
       // under My Work's "Assigned to me". The general sync path omits it (Triage instead).
-      const created = await importItems(orgId, actorId, row.id, teamId, items, {
+      const created = await importItems({
+        orgId,
+        actorId,
+        integrationId: row.id,
+        teamId,
+        items,
         assigneeId: assignToImporter ? actorId : null,
       });
       // The import succeeded against the real provider, so the connection is proven healthy.

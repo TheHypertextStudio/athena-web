@@ -182,6 +182,21 @@ function isApplicationHost(host: string, canonicalHost: string): boolean {
   );
 }
 
+/** Rewrite a request for a public brief host, or leave application-host requests alone. */
+function publicBriefRewrite(request: NextRequest): NextResponse | undefined {
+  const own = ownHostname();
+  const host = requestHost(request).split(':')[0];
+  if (own === undefined || host === undefined || isApplicationHost(host, own)) return undefined;
+
+  const briefUrl = request.nextUrl.clone();
+  // Bare root (`/`) must not become a trailing-slash target (`/briefs`): Next's own
+  // trailing-slash redirect never resolves for a path that arrived via `rewrite()` rather than a
+  // real navigation, so the request hangs indefinitely instead of reaching a 404.
+  const suffix = briefUrl.pathname === '/' ? '' : briefUrl.pathname;
+  briefUrl.pathname = host === briefHostname() ? `/briefs${suffix}` : `/briefs/domain${suffix}`;
+  return NextResponse.rewrite(briefUrl);
+}
+
 /**
  * Two request-time responsibilities: restore the browser-facing host for proxied API calls, and
  * gate the authenticated `(app)` surfaces.
@@ -245,17 +260,8 @@ function isApplicationHost(host: string, canonicalHost: string): boolean {
  *   request headers.
  */
 export function proxy(request: NextRequest): NextResponse {
-  const own = ownHostname();
-  const host = requestHost(request).split(':')[0];
-  if (own !== undefined && host !== undefined && !isApplicationHost(host, own)) {
-    const briefUrl = request.nextUrl.clone();
-    // Bare root (`/`) must not become a trailing-slash target (`/briefs/`): Next's own
-    // trailing-slash redirect never resolves for a path that arrived via `rewrite()` rather than a
-    // real navigation, so the request hangs indefinitely instead of reaching a 404.
-    const suffix = briefUrl.pathname === '/' ? '' : briefUrl.pathname;
-    briefUrl.pathname = host === briefHostname() ? `/briefs${suffix}` : `/briefs/domain${suffix}`;
-    return NextResponse.rewrite(briefUrl);
-  }
+  const briefRewrite = publicBriefRewrite(request);
+  if (briefRewrite) return briefRewrite;
 
   const { pathname, search } = request.nextUrl;
   const protectedPath = isProtectedPath(pathname);

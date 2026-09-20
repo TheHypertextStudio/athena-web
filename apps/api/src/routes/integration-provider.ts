@@ -193,11 +193,16 @@ async function resolveActorUser(actorId: string | null): Promise<string | null> 
 }
 
 function selectLinkedAccount(
-  linked: readonly { readonly accountId: string; readonly scope: string }[],
+  linked: readonly { readonly accountId: string; readonly scope: string | null }[],
   externalAccountId: string | undefined,
 ): (typeof linked)[0] | null {
   if (externalAccountId) return linked.find((row) => row.accountId === externalAccountId) ?? null;
-  return linked.length === 1 ? linked[0] : null;
+  return linked.length === 1 ? (linked[0] ?? null) : null;
+}
+
+/** Whether a provider account has every scope needed to perform its connector work. */
+function hasRequiredConnectorScope(provider: ConnectorProvider, scope: string | null): boolean {
+  return provider !== 'linear' || parseOAuthScopes(scope).includes('write');
 }
 
 /**
@@ -251,10 +256,10 @@ export async function resolveLiveConnectorToken(
     };
   }
 
-  const selected = selectLinkedAccount(linked, externalAccountId);
+  const selected = selectLinkedAccount(linked, externalAccountId ?? undefined);
   if (!selected) return needsReauth;
 
-  if (provider === 'linear' && !parseOAuthScopes(selected.scope).includes('write')) {
+  if (!hasRequiredConnectorScope(provider, selected.scope)) {
     return needsReauth;
   }
 

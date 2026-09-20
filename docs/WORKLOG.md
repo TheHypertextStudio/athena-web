@@ -73,6 +73,28 @@ Quick-win files to process:
       its replay-owner, idempotency, and CORS contracts all pass.
 - [ ] All Phase 1 (1-10 excess) files complete
 - [ ] Verify complexity ledger reaches target
+- [x] Removed two additional one-point entries (2026-09-19)
+  - `apps/api/src/mcp/resources.ts`: replaced the exhaustive projection switch with a typed
+    hydrator registry; strict, no-relaxation ESLint passes and the resource entry is gone.
+  - `apps/web/src/proxy.ts`: isolated public-brief rewriting from the request dispatcher; strict,
+    no-relaxation ESLint passes and the proxy entry is gone.
+  - Follow-up validation repairs keep the API, admin, UI, and web packages type-safe: nullable
+    account scopes and the options-object import call now match their contracts; the dialog map,
+    notification refresh action, MCP app state, scheduling lanes, and Library search types are
+    corrected without new lint exemptions. The Library toolbar/search extraction is covered by the
+    workspace policy's multi-file integration descriptor.
+  - The ledger now measures 768 files and 1,322 entries. Root `pnpm typecheck` and `pnpm lint`
+    both pass; no new `prettier-ignore` directives were introduced.
+  - The remaining focused test blockers were repaired without exemptions: Focus now uses the shared
+    `Input` primitive instead of ad-hoc border classes, and the 14 declarations reported by
+    doc-coverage have concise TSDoc. `@docket/test-utils` coverage now passes all 23 suites and
+    197 tests. Existing generated `apps/runner/worker-configuration.d.ts` ignores were left
+    untouched; no new `prettier-ignore` directives were added.
+  - The full root test run reached 4,063 passing web tests and 3 unrelated baseline failures:
+    the scheduling canvas fixture targets a stale DOM ancestor, the work-schedule fixture selects
+    a date now rejected by its current-date minimum, and the Focus assertion needed the nested
+    input height class. The Focus regression is fixed through the shared primitive's explicit
+    `inputClassName`; the two stale fixtures remain documented blockers and were not weakened.
 
 ---
 

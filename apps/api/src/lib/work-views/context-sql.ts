@@ -280,6 +280,7 @@ export interface RosterCtesInput {
   readonly authorizationScope?: SQL;
 }
 
+/** Compile the authorized and context-filtered roster CTEs for a work view. */
 export function compileRosterCtes(input: RosterCtesInput): SQL {
   const {
     target,

@@ -141,6 +141,7 @@ function validateLabels(labels: string[]): CustomDomainRejection | null {
   return null;
 }
 
+/** Normalize and validate a user-provided custom domain hostname. */
 export function normalizeCustomDomain(input: string | undefined | null): CustomDomainNormalization {
   if (input === undefined || input === null || input.trim().length === 0) {
     return { ok: false, reason: 'empty' };

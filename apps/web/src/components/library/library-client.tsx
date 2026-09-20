@@ -19,14 +19,11 @@ import {
 } from 'react';
 
 import { SEARCH_KIND_ICON } from '@/components/command-palette/use-hub-search';
-import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
-import { InPageFindButton } from '@/components/in-page-search/in-page-find-button';
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
 import ResourceDetailPanel from '@/components/library/resource-detail-panel';
 import { RESOURCE_TYPE_ICON } from '@/components/mentions/mention-glyphs';
 import { relativeTime } from '@/components/project-detail/format-time';
-import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
-import { FilterToolbar } from '@/components/views/filter-toolbar';
+import { type AppliedView, applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
 import { ListPageLayout } from '@/components/views/page-layout';
 import { type UseViewStateDefaults, useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
@@ -42,6 +39,7 @@ import {
 import { useDebouncedValue } from '@/lib/use-debounced-value';
 
 import { buildLibrarySearchQuery, libraryQueryKeyPart, mergeLibraryPages } from './library-data';
+import { LibraryToolbar } from './library-toolbar';
 import { primaryResourceAction } from './resource-actions';
 import {
   buildResourceCatalog,
@@ -178,7 +176,7 @@ function buildLibraryColumns(
  * @returns EntityTableGroup definitions
  */
 function buildLibraryGroups(
-  appliedGroups: ReturnType<typeof applyView>['groups'],
+  appliedGroups: AppliedView<SearchResult>['groups'],
 ): readonly EntityTableGroup<SearchResult>[] {
   return (appliedGroups ?? []).map((group) => {
     const Icon = group.id === EMPTY_GROUP_ID ? null : contextIcon(group.hint);
@@ -188,56 +186,11 @@ function buildLibraryGroups(
       rows: group.rows,
       ...(Icon
         ? {
-            decoration: (
-              <Icon aria-hidden className="text-on-surface-variant size-4! shrink-0" />
-            ),
+            decoration: <Icon aria-hidden className="text-on-surface-variant size-4! shrink-0" />,
           }
         : {}),
     };
   });
-}
-
-/** Props for the search field component. */
-interface LibrarySearchFieldProps {
-  readonly findOpen: boolean;
-  readonly searchInputRef: React.RefObject<HTMLInputElement>;
-  readonly draft: string;
-  readonly query: string;
-  readonly isFetching: boolean;
-  readonly resultCount: number;
-  readonly onDraftChange: (value: string) => void;
-  readonly onFindClose: () => void;
-  readonly restoreFocus: () => void;
-}
-
-/** Search field component. */
-function LibrarySearchFieldComponent({
-  findOpen,
-  searchInputRef,
-  draft,
-  query,
-  isFetching,
-  resultCount,
-  onDraftChange,
-  onFindClose,
-  restoreFocus,
-}: LibrarySearchFieldProps): JSX.Element | null {
-  if (!findOpen) return null;
-  return (
-    <InPageSearchField
-      inputRef={searchInputRef}
-      value={draft}
-      onValueChange={onDraftChange}
-      onEscapeEmpty={() => {
-        onFindClose();
-        restoreFocus();
-      }}
-      label="Search the Library"
-      placeholder="Search Library"
-      resultCount={resultCount}
-      pending={draft.trim() !== query || isFetching}
-    />
-  );
 }
 
 /** Props for the end adornment component. */
@@ -257,10 +210,7 @@ function LibraryEndAdornmentComponent({
   refillingSparsePage,
   onRetry,
 }: LibraryEndAdornmentProps): JSX.Element | undefined {
-  if (
-    isFetchingNextPage ||
-    (refillingSparsePage && hasNextPage && !isFetchNextPageError)
-  ) {
+  if (isFetchingNextPage || (refillingSparsePage && hasNextPage && !isFetchNextPageError)) {
     return (
       <div
         role="status"
@@ -279,12 +229,7 @@ function LibraryEndAdornmentComponent({
         className="text-error text-body-small flex min-h-14 items-center justify-between gap-3 px-3"
       >
         <span>Could not load more resources.</span>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onRetry}
-        >
+        <Button type="button" variant="outline" size="sm" onClick={onRetry}>
           Retry
         </Button>
       </div>
@@ -312,13 +257,7 @@ function LibraryDetailPanelComponent({
   onClose,
 }: LibraryDetailPanelProps): JSX.Element | null {
   if (opened) {
-    return (
-      <ResourceDetailPanel
-        orgId={orgId}
-        resource={opened}
-        onClose={onClose}
-      />
-    );
+    return <ResourceDetailPanel orgId={orgId} resource={opened} onClose={onClose} />;
   }
 
   if (panelOpen) {
@@ -345,12 +284,7 @@ function LibraryDetailPanelComponent({
         <p className="text-on-surface-variant text-body-medium">
           That entry is no longer here, or you do not have access to it.
         </p>
-        <Button
-          variant="outline"
-          controlSize="lg"
-          className="self-start"
-          onClick={onClose}
-        >
+        <Button variant="outline" controlSize="lg" className="self-start" onClick={onClose}>
           Back to the library
         </Button>
       </aside>
@@ -507,27 +441,23 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
       title="Library"
       fill
       toolbar={
-        <div className="flex min-w-0 flex-col gap-3">
-          <LibrarySearchFieldComponent
-            findOpen={findOpen}
-            searchInputRef={searchInputRef}
-            draft={draft}
-            query={query}
-            isFetching={resourcesQ.isFetching}
-            resultCount={applied.rows.length}
-            onDraftChange={setDraft}
-            onFindClose={() => { setFindOpen(false); }}
-            restoreFocus={restoreFocus}
-          />
-          <FilterToolbar
-            catalog={catalog}
-            state={state}
-            onFiltersChange={setFilters}
-            onGroupByChange={setGroupBy}
-            onSortChange={setSort}
-            saveSlot={<InPageFindButton onClick={openSearch} />}
-          />
-        </div>
+        <LibraryToolbar
+          findOpen={findOpen}
+          searchInputRef={searchInputRef}
+          draft={draft}
+          query={query}
+          isFetching={resourcesQ.isFetching}
+          resultCount={applied.rows.length}
+          onDraftChange={setDraft}
+          onFindClose={setFindOpen.bind(null, false)}
+          restoreFocus={restoreFocus}
+          catalog={catalog}
+          state={state}
+          onFiltersChange={setFilters}
+          onGroupByChange={setGroupBy}
+          onSortChange={setSort}
+          openSearch={openSearch}
+        />
       }
     >
       {resourcesQ.isPending ? (
@@ -645,7 +575,9 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
                     ? {
                         cta: {
                           label: 'Clear filters',
-                          onClick: () => { setFilters([]); },
+                          onClick: () => {
+                            setFilters([]);
+                          },
                         },
                       }
                     : {})}
@@ -658,7 +590,9 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
             opened={opened}
             panelOpen={panelOpen}
             openedId={openedId}
-            onClose={() => { setOpened(null); }}
+            onClose={() => {
+              setOpened(null);
+            }}
           />
         </div>
       )}

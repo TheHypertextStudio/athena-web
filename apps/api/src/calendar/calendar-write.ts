@@ -647,6 +647,7 @@ async function applyLocalOnlyPatch(
   return row;
 }
 
+/** Apply an authenticated patch to a calendar item and synchronize provider-owned fields. */
 export async function updateCalendarItem(
   db: Database,
   input: { userId: string; itemId: string; patch: CalendarItemUpdate; syncModules?: SyncModules },

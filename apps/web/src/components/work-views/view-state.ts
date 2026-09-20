@@ -471,14 +471,14 @@ function validateGroupDraft<TTarget extends ViewTarget>(
 /**
  * Validate predicate operand for a given operator and field.
  */
-function validatePredicateOperand(field: WorkViewFieldMetadata, operator: string, operand: unknown): string | null {
+function validatePredicateOperand(
+  field: WorkViewFieldMetadata,
+  operator: string,
+  operand: unknown,
+): string | null {
   if (operator === 'isEmpty' || operator === 'isNotEmpty') return null;
   if (operator === 'between') {
-    if (
-      !Array.isArray(operand) ||
-      operand.length !== 2 ||
-      operand.some((o) => o === undefined)
-    ) {
+    if (!Array.isArray(operand) || operand.length !== 2 || operand.some((o) => o === undefined)) {
       return `Enter both ${field.label} endpoints.`;
     }
     return null;

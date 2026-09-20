@@ -107,7 +107,8 @@ function legacyGrantCandidate(evidence: LegacyIntrospectionEvidence): OAuthClien
     evidence.consents.length > 0,
     evidence.refreshes.length > 0,
   ];
-  return invalid.some(Boolean) ? null : (client ?? null);
+  if (invalid.some(Boolean) || !client) return null;
+  return client;
 }
 
 function legacyWindowIsCurrent(

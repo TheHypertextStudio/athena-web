@@ -7,6 +7,23 @@
 
 ## Active Tasks
 
+### [OAUTH-PROVIDER-COVERAGE-001] Restore the OAuth trust-spine coverage gate
+
+- **Status**: COMPLETED
+- **Started**: 2026-09-19
+- **Completed**: 2026-09-19
+- **Priority**: P0
+- **Description**: Restore complete behavior coverage for the OAuth provider wrappers without
+  excluding trust-spine files or lowering repository thresholds.
+- **Decision**: Test the public provider seams and transaction boundaries. Keep production changes
+  limited to removing impossible branches and normalizing authorization-code invocation state.
+- **Validation**: `@docket/auth` passes 46 test files and 551 tests with one worker. V8 reports 100%
+  statements (1604/1604), branches (1195/1195), functions (289/289), and lines (1414/1414).
+  Package typecheck, ESLint, Prettier, and `git diff --check` pass.
+- **Blockers**: None.
+
+---
+
 ### [CANVAS-A11Y-001] Complete Canvas accessibility follow-ups
 
 - **Status**: COMPLETED

@@ -74,12 +74,22 @@ async function invokeCodeProviderInSavepoint(
   adapter: DBTransactionAdapter,
   prepared: PreparedIssuance | DelegatedAuthorizationCode,
 ): Promise<{ readonly response: unknown } | CommittedTokenError> {
-  const verificationIdentifier =
+  const invocation =
     prepared.kind === 'issue'
-      ? prepared.state.verificationIdentifier
-      : prepared.verificationIdentifier;
-  const codeGrant = prepared.kind === 'issue' ? prepared.codeGrant : undefined;
-  if (!verificationIdentifier || (prepared.kind === 'issue' && !codeGrant)) oauthServerError();
+      ? {
+          kind: prepared.kind,
+          body: prepared.body,
+          state: prepared.state,
+          codeGrant: prepared.codeGrant ?? oauthServerError(),
+          verificationIdentifier: prepared.state.verificationIdentifier,
+        }
+      : {
+          kind: prepared.kind,
+          body: prepared.body,
+          verificationIdentifier: prepared.verificationIdentifier,
+        };
+  const verificationIdentifier = invocation.verificationIdentifier;
+  if (!verificationIdentifier) oauthServerError();
   const transaction = await savepointState.get();
   if (!transaction) oauthServerError();
   const nestedCoordinator: DBAdapter = {
@@ -94,20 +104,19 @@ async function invokeCodeProviderInSavepoint(
         await codeIssuanceReachedState.set(false);
         try {
           const response = await raw(
-            rawInput(ctx, nested, prepared.body as unknown as Record<string, unknown>),
+            rawInput(ctx, nested, invocation.body as unknown as Record<string, unknown>),
           );
-          if (prepared.kind === 'delegate-authorization-code') return response;
-          if (!codeGrant) oauthServerError();
+          if (invocation.kind === 'delegate-authorization-code') return response;
           const parsedResponse = parseTokenResponse(response);
-          const grant = await materializeCodeGrant(nested, prepared.state, codeGrant);
+          const grant = await materializeCodeGrant(nested, invocation.state, invocation.codeGrant);
           await nested.create<Record<string, unknown>, OAuthGrantRecord>({
             model: 'oauthResourceGrant',
             forceAllowId: true,
             data: grant as unknown as Record<string, unknown>,
           });
-          const refresh = await bindReturnedRefresh(nested, parsedResponse, prepared.state);
-          const claims = assertReturnedAccess(parsedResponse, prepared.state);
-          await extendGrantDeadline(nested, prepared.state, claims, refresh);
+          const refresh = await bindReturnedRefresh(nested, parsedResponse, invocation.state);
+          const claims = assertReturnedAccess(parsedResponse, invocation.state);
+          await extendGrantDeadline(nested, invocation.state, claims, refresh);
           return response;
         } catch (error) {
           if (!(await codeIssuanceReachedState.get())) {
@@ -371,9 +380,7 @@ async function revokePresentedRefresh(
           ],
           limit: 1,
         });
-  if (descendants.length > 0) {
-    await revokeGrant(adapter, refresh.docketGrantId, target.now);
-  }
+  return descendants.length ? revokeGrant(adapter, refresh.docketGrantId, target.now) : undefined;
 }
 
 async function revokePresentedJwt(

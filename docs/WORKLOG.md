@@ -253,6 +253,9 @@ Quick-win files to process:
     recovery nudge's application-owned `message` field. Renaming that presentation field to
     `body` keeps the copy unchanged while satisfying the raw-error-message policy; both policy
     tests now pass.
+  - The same hook exposed runner function coverage at 81.81% after the workflow parser split. A
+    normal valid-continuation `advanceDocket` test now exercises that path; runner coverage is
+    84.84% functions / 88.52% lines across 28 tests.
 
 ---
 

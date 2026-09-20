@@ -42,6 +42,33 @@ describe('durable generation Workflow', () => {
     expect((fetch.mock.calls[0]?.[1]?.signal as AbortSignal | undefined)?.aborted).toBe(true);
   });
 
+  it('parses a valid continuation returned by Docket', async () => {
+    const next: ExecutionMessage = {
+      sessionId: '01SESSION',
+      generation: 5,
+      workflowId: '01SESSION:5',
+    };
+    const fetch = vi.fn(async (): Promise<Response> => {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ state: 'continue', next }),
+      } as Response;
+    });
+
+    await expect(
+      advanceDocket(
+        {
+          DOCKET_API_URL: 'https://api.example',
+          CLOUDFLARE_TO_DOCKET_HMAC_SECRET: 'cloudflare-to-docket-secret',
+        },
+        message,
+        'run',
+        { fetch },
+      ),
+    ).resolves.toEqual({ state: 'continue', next });
+  });
+
   it('waits through yearly epochs without a product duration cap and dispatches the next generation', async () => {
     const waitForEvent = vi
       .fn()

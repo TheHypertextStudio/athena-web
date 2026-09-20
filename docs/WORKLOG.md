@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,298 entries, 155,543 excess points across 748 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,297 entries, 155,542 excess points across 747 files.
 
 #### Analysis Complete
 
@@ -159,6 +159,9 @@ Quick-win files to process:
   - Integration sync success stamping now receives one typed options object instead of six positional
     parameters, clearing its final max-params excess while preserving 69 sync/graph tests. The
     ledger is 748 files and 1,298 entries.
+  - Recovery-code status copy now renders through a focused helper, clearing SecurityTab's final
+    cognitive-complexity excess without changing its loading, error, or recovery actions. The ledger
+    is 747 files and 1,297 entries.
 
 ---
 

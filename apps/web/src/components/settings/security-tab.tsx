@@ -80,37 +80,12 @@ function RecoveryCodesSection(): JSX.Element {
 
   const status: RecoveryCodesStatusOut = statusQ.data;
   const mode: RecoveryCodesMode = status.enabled ? 'regenerate' : 'generate';
-  const lowOnCodes = status.enabled && status.remaining <= 3;
   const generatedOn = formatCalendarDate(status.generatedAt);
 
   return (
     <>
       <SettingsGroup capability={SETTINGS_NODES.securityRecoveryCodes}>
-        {status.enabled ? (
-          <div className="flex flex-col gap-1">
-            <p
-              className={
-                lowOnCodes
-                  ? 'text-error text-body-medium'
-                  : 'text-on-surface-variant text-body-medium'
-              }
-            >
-              {status.remaining === 0
-                ? 'You have no recovery codes left. Regenerate a fresh set now.'
-                : `${status.remaining} recovery ${status.remaining === 1 ? 'code' : 'codes'} remaining.`}
-            </p>
-            {generatedOn ? (
-              <p className="text-on-surface-variant text-body-small">
-                Last generated on {generatedOn}.
-              </p>
-            ) : null}
-          </div>
-        ) : (
-          <p className="text-error text-body-medium">
-            You haven&apos;t set up recovery codes. Without them, losing your passkey means losing
-            access to your account for good.
-          </p>
-        )}
+        <RecoveryCodesStatusMessage status={status} generatedOn={generatedOn} />
 
         <div>
           <Button
@@ -134,5 +109,44 @@ function RecoveryCodesSection(): JSX.Element {
         }}
       />
     </>
+  );
+}
+
+interface RecoveryCodesStatusMessageProps {
+  status: RecoveryCodesStatusOut;
+  generatedOn: string | null;
+}
+
+function RecoveryCodesStatusMessage({
+  status,
+  generatedOn,
+}: RecoveryCodesStatusMessageProps): JSX.Element {
+  if (!status.enabled) {
+    return (
+      <p className="text-error text-body-medium">
+        You haven&apos;t set up recovery codes. Without them, losing your passkey means losing
+        access to your account for good.
+      </p>
+    );
+  }
+
+  const lowOnCodes = status.remaining <= 3;
+  const remainingMessage =
+    status.remaining === 0
+      ? 'You have no recovery codes left. Regenerate a fresh set now.'
+      : `${status.remaining} recovery ${status.remaining === 1 ? 'code' : 'codes'} remaining.`;
+  return (
+    <div className="flex flex-col gap-1">
+      <p
+        className={
+          lowOnCodes ? 'text-error text-body-medium' : 'text-on-surface-variant text-body-medium'
+        }
+      >
+        {remainingMessage}
+      </p>
+      {generatedOn ? (
+        <p className="text-on-surface-variant text-body-small">Last generated on {generatedOn}.</p>
+      ) : null}
+    </div>
   );
 }

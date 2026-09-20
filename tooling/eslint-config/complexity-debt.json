@@ -4397,12 +4397,6 @@
       "excess": 1
     }
   },
-  "apps/web/src/components/settings/security-tab.tsx": {
-    "sonarjs/cognitive-complexity": {
-      "max": 16,
-      "excess": 1
-    }
-  },
   "apps/web/src/components/settings/sessions-section.tsx": {
     "complexity": {
       "max": 16,

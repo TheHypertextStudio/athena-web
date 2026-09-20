@@ -110,6 +110,70 @@ function calendarReadOnlyLabel(item: CalendarItemOut): string | undefined {
   return !item.permissions.canEditCore ? 'Read-only' : undefined;
 }
 
+/** Map a calendar item to the openable scheduling object, omitting derived read-only items. */
+function calendarScheduleObject(item: CalendarItemOut): ScheduleItem['object'] {
+  if (item.kind === 'task_timebox' || item.kind === 'availability_block') return undefined;
+  return {
+    kind: item.kind === 'native_block' || item.kind === 'timebox' ? 'time_block' : 'calendar_event',
+    id: item.id,
+    organizationId: null,
+    title: item.title,
+  };
+}
+
+/** Resolve whether the calendar item can accept an exact-time drag or resize. */
+function calendarItemIsEditable(
+  item: CalendarItemOut,
+  allDay: boolean,
+  displayTimezone: string,
+): boolean {
+  if (!canPersistCalendarItemBounds(item)) return false;
+  if (allDay) return true;
+  return isInlineEditableScheduleItem({
+    canPersistBounds: true,
+    allDay: false,
+    startsAt: item.startsAt,
+    endsAt: item.endsAt,
+    displayTimezone,
+  });
+}
+
+/** Resolve the stable id shown for a detailed or redacted comparison item. */
+function comparisonItemId(
+  person: ScheduleComparisonOut['people'][number],
+  item: ScheduleComparisonOut['people'][number]['items'][number],
+  index: number,
+): string {
+  if (item.access === 'details') return item.itemId;
+  const startsAt = item.startsAt ?? item.allDayStartDate ?? 'unknown';
+  const endsAt = item.endsAt ?? item.allDayEndDate ?? 'unknown';
+  return `busy:${person.actorId}:${startsAt}:${endsAt}:${index}`;
+}
+
+/** Convert one permission-filtered comparison item into a redacted schedule item when needed. */
+function toComparisonScheduleItem(
+  person: ScheduleComparisonOut['people'][number],
+  item: ScheduleComparisonOut['people'][number]['items'][number],
+  date: string,
+  displayTimezone: string,
+  index: number,
+): ScheduleLane['items'][number] {
+  const allDay = item.allDayStartDate !== null && item.allDayEndDate !== null;
+  return {
+    id: comparisonItemId(person, item, index),
+    title: item.access === 'details' ? item.title : 'Busy',
+    startsAt:
+      item.startsAt ?? requiredScheduleInstant(item.allDayStartDate ?? date, 0, displayTimezone),
+    endsAt:
+      item.endsAt ??
+      requiredScheduleInstant(item.allDayEndDate ?? shiftISODate(date, 1), 0, displayTimezone),
+    allDay,
+    appearance: item.access === 'details' ? calendarScheduleItemAppearance(item.kind) : 'busy',
+    editable: false,
+    openable: item.access === 'details',
+  };
+}
+
 /** Convert one calendar item into the domain-neutral scheduling contract and appearance. */
 export function toScheduleItem(
   item: CalendarItemOut,
@@ -131,29 +195,9 @@ export function toScheduleItem(
     allDay,
     color: color ?? undefined,
     appearance: calendarScheduleItemAppearance(item.kind),
-    editable:
-      canPersistCalendarItemBounds(item) &&
-      (allDay ||
-        isInlineEditableScheduleItem({
-          canPersistBounds: true,
-          allDay: false,
-          startsAt: item.startsAt,
-          endsAt: item.endsAt,
-          displayTimezone,
-        })),
+    editable: calendarItemIsEditable(item, allDay, displayTimezone),
     readOnlyLabel: calendarReadOnlyLabel(item),
-    object:
-      item.kind === 'task_timebox' || item.kind === 'availability_block'
-        ? undefined
-        : {
-            kind:
-              item.kind === 'native_block' || item.kind === 'timebox'
-                ? 'time_block'
-                : 'calendar_event',
-            id: item.id,
-            organizationId: null,
-            title: item.title,
-          },
+    object: calendarScheduleObject(item),
     dropTarget: ['provider_event', 'native_event', 'native_block', 'timebox'].includes(item.kind),
   };
 }
@@ -190,30 +234,6 @@ export function buildComparisonLane(
     editable: false,
     items: person.items
       .filter((item) => overlapsDate(item, date, displayTimezone))
-      .map((item, index) => {
-        const allDay = item.allDayStartDate !== null && item.allDayEndDate !== null;
-        return {
-          id:
-            item.access === 'details'
-              ? item.itemId
-              : `busy:${person.actorId}:${item.startsAt ?? item.allDayStartDate ?? 'unknown'}:${item.endsAt ?? item.allDayEndDate ?? 'unknown'}:${index}`,
-          title: item.access === 'details' ? item.title : 'Busy',
-          startsAt:
-            item.startsAt ??
-            requiredScheduleInstant(item.allDayStartDate ?? date, 0, displayTimezone),
-          endsAt:
-            item.endsAt ??
-            requiredScheduleInstant(
-              item.allDayEndDate ?? shiftISODate(date, 1),
-              0,
-              displayTimezone,
-            ),
-          allDay,
-          appearance:
-            item.access === 'details' ? calendarScheduleItemAppearance(item.kind) : 'busy',
-          editable: false,
-          openable: item.access === 'details',
-        };
-      }),
+      .map((item, index) => toComparisonScheduleItem(person, item, date, displayTimezone, index)),
   };
 }

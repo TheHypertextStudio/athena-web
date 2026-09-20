@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,273 entries, 155,501 excess points across 723 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,272 entries, 155,499 excess points across 722 files.
 
 #### Analysis Complete
 
@@ -233,6 +233,9 @@ Quick-win files to process:
     helper, clearing its final complexity excess. The inventory check still reports five existing
     UI components with 11 unannotated placeholders against its budget of 6; no placeholder policy
     or source-contract tests were changed for this lint slice.
+  - Calendar schedule conversion now delegates object, editability, comparison ids, and comparison
+    item mapping to focused helpers, clearing its final complexity excess while preserving all 36
+    calendar schedule-model tests. The ledger is 722 files and 1,272 entries.
 
 ---
 

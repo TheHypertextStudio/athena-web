@@ -2155,12 +2155,6 @@
       "excess": 15
     }
   },
-  "apps/web/src/app/(app)/calendar/calendar-schedule-model.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 2
-    }
-  },
   "apps/web/src/app/(app)/calendar/calendar-scheduling-surface.tsx": {
     "complexity": {
       "max": 17,

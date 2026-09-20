@@ -26,6 +26,36 @@ import { readRecoveryNudgeDismissed, writeRecoveryNudgeDismissed } from './app-s
 /** At or below this many remaining codes, prompt the user to regenerate. */
 const LOW_THRESHOLD = 2;
 
+interface RecoveryNudgeCopy {
+  readonly message: string;
+  readonly actionLabel: string;
+  readonly title: string;
+  readonly tone: 'critical' | 'info';
+}
+
+function recoveryNudgeCopy(status: {
+  enabled: boolean;
+  remaining: number;
+}): RecoveryNudgeCopy | null {
+  if (!status.enabled) {
+    return {
+      message: 'Set up recovery codes — they’re the only way back in if you lose your passkey.',
+      actionLabel: 'Set up recovery codes',
+      title: 'Recovery codes needed',
+      tone: 'critical',
+    };
+  }
+  if (status.remaining <= LOW_THRESHOLD) {
+    return {
+      message: `You’re low on recovery codes (${status.remaining} left). Regenerate a fresh set.`,
+      actionLabel: 'Regenerate recovery codes',
+      title: 'Recovery codes running low',
+      tone: 'info',
+    };
+  }
+  return null;
+}
+
 /** Props for {@link RecoveryNudgeBanner}. */
 export interface RecoveryNudgeBannerProps {
   /** The user's personal org id (recovery codes live under its Security settings); null hides the nudge. */
@@ -62,16 +92,8 @@ export function RecoveryNudgeBanner({
     }
   }, [healthy, userId]);
 
-  if (!status || dismissed || !personalOrgId) return null;
-
-  const noCodes = !status.enabled;
-  const lowCodes = status.enabled && status.remaining <= LOW_THRESHOLD;
-  if (!noCodes && !lowCodes) return null;
-
-  const message = noCodes
-    ? 'Set up recovery codes — they’re the only way back in if you lose your passkey.'
-    : `You’re low on recovery codes (${status.remaining} left). Regenerate a fresh set.`;
-  const actionLabel = noCodes ? 'Set up recovery codes' : 'Regenerate recovery codes';
+  const copy = status ? recoveryNudgeCopy(status) : null;
+  if (!status || dismissed || !personalOrgId || !copy) return null;
 
   function dismiss(): void {
     writeRecoveryNudgeDismissed(userId, true);
@@ -80,11 +102,11 @@ export function RecoveryNudgeBanner({
 
   return (
     <InlineBanner
-      tone={noCodes ? 'critical' : 'info'}
-      title={noCodes ? 'Recovery codes needed' : 'Recovery codes running low'}
+      tone={copy.tone}
+      title={copy.title}
       icon={<Shield aria-hidden="true" className="size-4" />}
       action={{
-        label: actionLabel,
+        label: copy.actionLabel,
         onSelect: () => {
           router.push(sectionHref(personalOrgId, 'security'));
         },
@@ -92,7 +114,7 @@ export function RecoveryNudgeBanner({
       dismissLabel="Dismiss recovery-code reminder"
       onDismiss={dismiss}
     >
-      {message}
+      {copy.message}
     </InlineBanner>
   );
 }

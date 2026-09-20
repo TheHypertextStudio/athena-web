@@ -131,6 +131,9 @@ Quick-win files to process:
   - Object context-menu subject resolution now delegates selection membership to a focused helper,
     clearing its final complexity excess while preserving all 18 context-menu tests. The ledger is
     756 files and 1,310 entries.
+  - Recovery nudge copy now comes from a focused status-to-copy helper, clearing the banner's final
+    complexity excess while preserving its eight component tests. The ledger is 755 files and
+    1,309 entries.
 
 ---
 

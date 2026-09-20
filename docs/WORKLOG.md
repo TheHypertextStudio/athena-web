@@ -101,6 +101,9 @@ Quick-win files to process:
   - `packages/ui/src/primitives/dialog.tsx` is now below the complexity ceiling by extracting its
     backdrop, hosted-style, and close-button render helpers. The dialog primitive suite passes and
     the ledger is 766 files and 1,320 entries.
+  - The shared `fieldSurface` recipe now delegates its closed variant treatment to a typed helper,
+    removing its final one-point complexity excess while preserving all primitive snapshots. The
+    UI primitive suites pass; the ledger is 765 files and 1,319 entries.
 
 ---
 

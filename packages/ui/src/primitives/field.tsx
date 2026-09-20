@@ -124,6 +124,13 @@ export interface FieldSurfaceOptions {
   readonly ringOn?: 'self' | 'within' | undefined;
 }
 
+/** Return the closed Material-inspired treatment for one field variant. */
+function fieldVariantClasses(variant: FieldVariant): string {
+  if (variant === 'outlined') return 'hover:border-on-surface border-outline bg-transparent';
+  if (variant === 'filled') return 'bg-surface-container-highest border-transparent';
+  return 'hover:bg-surface-container-high border-transparent bg-transparent';
+}
+
 /**
  * The one field recipe — every input, textarea, and select in the product is this string plus its
  * element.
@@ -157,24 +164,7 @@ export function fieldSurface({
       ? cn(metrics.minHeight, COARSE_FLOOR.growable, 'py-2')
       : cn(metrics.height, COARSE_FLOOR.fixed),
     variant === 'plain' ? 'px-0' : metrics.paddingX,
-    // Values below are `md.comp.*-text-field`, transcribed with provenance in
-    // `docs/design/references/md3-text-fields.md`. The resting outline had drifted onto
-    // `outline-variant`, a role the spec never names for a field, which measured 1.17:1 against a
-    // dialog panel — under WCAG 1.4.11's 3:1 for a component boundary, and a hairline to hunt for.
-    // `md.comp.outlined-text-field`: `outline` at 1px, `on-surface` on hover, and no container
-    // token at all — the outline is the whole affordance.
-    variant === 'outlined' && 'hover:border-on-surface border-outline bg-transparent',
-    // `md.comp.filled-text-field` in its expressive reading: `surface-container-highest` on the
-    // control radius, no outline, and no activation indicator. The indicator's straight line and
-    // the square bottom corners it needs are what made a filled field read as a box on a line
-    // rather than as a control; the container carries the field, and focus carries the ring. The
-    // transparent border keeps the same 1px box every other variant has, so swapping variants
-    // shifts nothing.
-    variant === 'filled' && 'bg-surface-container-highest border-transparent',
-    // `plain` is the exception on purpose: it is the inline editor for a row title or a page
-    // heading, where a resting box would draw a rectangle around text that is not being edited.
-    // Its affordance is hover and focus.
-    variant === 'plain' && 'hover:bg-surface-container-high border-transparent bg-transparent',
+    fieldVariantClasses(variant),
     invalid && 'border-error',
     ringOn === 'self' ? focusRing : 'focus-within:ring-ring focus-within:ring-2',
   );

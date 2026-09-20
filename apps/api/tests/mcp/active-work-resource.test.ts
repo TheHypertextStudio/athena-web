@@ -103,7 +103,7 @@ async function seedTask(
 async function seedRecord(
   seed: Seed,
   taskId: string | null,
-  status: 'open' | 'paused',
+  status: 'open' | 'paused' | 'closed',
   updatedAt?: Date,
 ): Promise<string> {
   const [row] = await db
@@ -115,6 +115,8 @@ async function seedRecord(
       title: taskId ? 'Tracked task' : 'Unnamed work',
       status,
       startedAt: new Date('2026-09-07T12:00:00.000Z'),
+      ...(status === 'open' || !updatedAt ? {} : { endedAt: updatedAt }),
+      ...(status === 'closed' && updatedAt ? { closedAt: updatedAt } : {}),
       ...(updatedAt ? { updatedAt } : {}),
     })
     .returning({ id: schema.timeRecord.id });
@@ -208,6 +210,23 @@ describe('docket://hub/active-work', () => {
 
   it('reports idle when the caller has no open or paused record', async () => {
     const seed = await seedWorkspace();
+    const client = await connect(seed.ctx);
+
+    await expect(read(client)).resolves.toEqual({
+      schemaVersion: 'active-work/1',
+      observedAt: expect.any(String),
+      tracking: 'idle',
+      recordId: null,
+      task: null,
+    });
+  });
+
+  it('reports idle after newer work stops instead of resurfacing an older paused record', async () => {
+    const seed = await seedWorkspace();
+    const pausedTaskId = await seedTask(seed, { title: 'Old paused work' });
+    const stoppedTaskId = await seedTask(seed, { title: 'Just-finished work' });
+    await seedRecord(seed, pausedTaskId, 'paused', new Date('2026-09-07T12:30:00.000Z'));
+    await seedRecord(seed, stoppedTaskId, 'closed', new Date('2026-09-07T13:00:00.000Z'));
     const client = await connect(seed.ctx);
 
     await expect(read(client)).resolves.toEqual({

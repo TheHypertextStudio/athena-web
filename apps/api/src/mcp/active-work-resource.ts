@@ -3,7 +3,7 @@
  */
 import { db, timeRecord } from '@docket/db';
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 
 import { ActiveWorkOut, type ActiveWorkOut as ActiveWorkPayload } from '../contracts/active-work';
 import { loadVisibleTaskContext } from './active-work-task-context';
@@ -20,7 +20,7 @@ interface CurrentRecord {
   readonly taskId: string | null;
 }
 
-/** Return the most relevant active record, prioritizing work that is still open. */
+/** Return the latest live timer state, using terminal records as idle-state sentinels. */
 async function currentRecord(userId: string): Promise<CurrentRecord | null> {
   const [record] = await db
     .select({
@@ -29,16 +29,15 @@ async function currentRecord(userId: string): Promise<CurrentRecord | null> {
       taskId: timeRecord.taskId,
     })
     .from(timeRecord)
-    .where(
-      and(eq(timeRecord.createdByUserId, userId), inArray(timeRecord.status, ['open', 'paused'])),
-    )
+    .where(eq(timeRecord.createdByUserId, userId))
     .orderBy(
       sql`case when ${timeRecord.status} = 'open' then 0 else 1 end`,
-      desc(timeRecord.updatedAt),
+      desc(sql`coalesce(${timeRecord.endedAt}, ${timeRecord.updatedAt})`),
       desc(timeRecord.id),
     )
     .limit(1);
-  return record ?? null;
+  if (!record || (record.status !== 'open' && record.status !== 'paused')) return null;
+  return record;
 }
 
 /** Convert a Time Ledger row into a response that has no task context. */

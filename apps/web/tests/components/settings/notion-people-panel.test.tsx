@@ -99,6 +99,9 @@ describe('NotionPeoplePanel — deciding about a person', () => {
     );
     renderPanel();
 
+    await waitFor(() => {
+      expect(peopleGet).toHaveBeenCalledTimes(2);
+    });
     expect(await screen.findByRole('combobox')).toBeInTheDocument();
     expect(peopleGet).toHaveBeenNthCalledWith(1, {
       param: { orgId: ORG_ID, id: INTEGRATION_ID },

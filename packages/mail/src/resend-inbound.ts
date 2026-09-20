@@ -106,6 +106,30 @@ function readAttachments(source: Record<string, unknown>): readonly InboundAttac
   return out;
 }
 
+/** Build the normalized inbound notification after the envelope's required fields are present. */
+function buildResendNotification(
+  envelope: Record<string, unknown>,
+  data: Record<string, unknown>,
+  emailId: string,
+  from: string,
+): ResendInboundNotification {
+  const inlineText = str(data, 'text');
+  const inlineHtml = str(data, 'html');
+  return {
+    emailId,
+    from,
+    to: strings(data, 'to'),
+    cc: strings(data, 'cc'),
+    receivedFor: strings(data, 'received_for'),
+    messageId: str(data, 'message_id'),
+    subject: str(data, 'subject') ?? '',
+    createdAt: str(data, 'created_at') ?? str(envelope, 'created_at') ?? new Date().toISOString(),
+    attachments: readAttachments(data),
+    inline:
+      inlineText !== null || inlineHtml !== null ? { text: inlineText, html: inlineHtml } : null,
+  };
+}
+
 /**
  * The result of reading an inbound webhook body.
  *
@@ -152,24 +176,9 @@ export function readResendInboundPayload(rawBody: string): ResendPayloadRead {
   const from = str(data, 'from');
   if (!emailId || !from) return { kind: 'malformed' };
 
-  const inlineText = str(data, 'text');
-  const inlineHtml = str(data, 'html');
-
   return {
     kind: 'inbound',
-    notification: {
-      emailId,
-      from,
-      to: strings(data, 'to'),
-      cc: strings(data, 'cc'),
-      receivedFor: strings(data, 'received_for'),
-      messageId: str(data, 'message_id'),
-      subject: str(data, 'subject') ?? '',
-      createdAt: str(data, 'created_at') ?? str(envelope, 'created_at') ?? new Date().toISOString(),
-      attachments: readAttachments(data),
-      inline:
-        inlineText !== null || inlineHtml !== null ? { text: inlineText, html: inlineHtml } : null,
-    },
+    notification: buildResendNotification(envelope, data, emailId, from),
   };
 }
 

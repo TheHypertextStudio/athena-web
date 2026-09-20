@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,276 entries, 155,507 excess points across 726 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,275 entries, 155,505 excess points across 725 files.
 
 #### Analysis Complete
 
@@ -223,6 +223,9 @@ Quick-win files to process:
   - List keyboard navigation now delegates post-guard key handling to a focused dispatcher,
     clearing the hook's final complexity excess while preserving all 34 UI hook tests. The ledger
     is 726 files and 1,276 entries.
+  - Resend inbound notification construction now lives in a focused helper, clearing the adapter's
+    final complexity excess while preserving all 29 inbound-mail tests. The ledger is 725 files
+    and 1,275 entries.
 
 ---
 

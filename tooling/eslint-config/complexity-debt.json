@@ -6077,12 +6077,6 @@
       "excess": 88
     }
   },
-  "packages/mail/src/resend-inbound.ts": {
-    "complexity": {
-      "max": 14,
-      "excess": 2
-    }
-  },
   "packages/service-worker/src/worker/routing.ts": {
     "complexity": {
       "max": 15,

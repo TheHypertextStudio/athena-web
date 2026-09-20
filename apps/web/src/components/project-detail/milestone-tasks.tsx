@@ -58,7 +58,7 @@ export interface MilestoneTasksProps {
   /** Open a task's detail. */
   onOpenTask: (task: TaskOut) => void;
   /** Open the full task composer scoped to this Project. */
-  onCreate: () => void;
+  onCreate: (title?: string, restore?: () => void) => void;
   /** Inline quick-add: create a task in this Project from a typed title. */
   onQuickAdd: (title: string) => Promise<void>;
   /** Rename a task in place (double-click its title in the table). */
@@ -204,7 +204,14 @@ export function MilestoneTasks({
         </Button>
       </div>
 
-      <QuickAddRow onAdd={onQuickAdd} canEdit={canEdit} noun={taskNoun} />
+      <QuickAddRow
+        onAdd={onQuickAdd}
+        onExpand={(title, restore) => {
+          onCreate(title, restore);
+        }}
+        canEdit={canEdit}
+        noun={taskNoun}
+      />
 
       {tasks.length === 0 ? (
         <div className="text-on-surface-variant text-body-medium rounded-xl p-8 text-center">

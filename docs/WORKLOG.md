@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,280 entries, 155,515 excess points across 730 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,279 entries, 155,513 excess points across 729 files.
 
 #### Analysis Complete
 
@@ -211,6 +211,9 @@ Quick-win files to process:
   - Exact-instant overlap detection now lives in a focused helper, clearing its final two
     complexity points while preserving 33 overlap/dense-overflow tests. The ledger is 730 files and
     1,280 entries.
+  - Suggestions card header and action rendering now live in a focused component, clearing the
+    lane's final max-lines-per-function excess while preserving all three suggestions-lane tests.
+    The ledger is 729 files and 1,279 entries.
 
 ---
 

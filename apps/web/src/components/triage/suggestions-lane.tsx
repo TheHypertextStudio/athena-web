@@ -170,6 +170,58 @@ interface SuggestionCardProps {
   onDismiss: () => void;
 }
 
+/** Props for {@link SuggestionCardHeader}. */
+interface SuggestionCardHeaderProps {
+  suggestion: EmailSuggestionOut;
+  canAct: boolean;
+  onAccept: () => void;
+  onEdit: () => void;
+  onDismiss: () => void;
+}
+
+/** The synthesized task summary and actions shown at the top of a suggestion card. */
+function SuggestionCardHeader({
+  suggestion,
+  canAct,
+  onAccept,
+  onEdit,
+  onDismiss,
+}: SuggestionCardHeaderProps): JSX.Element {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-medium">{suggestion.title}</span>
+          <ConfidenceBadge confidence={suggestion.confidence} />
+        </div>
+        {suggestion.description ? (
+          <span className="text-on-surface-variant line-clamp-2 text-xs">
+            {suggestion.description}
+          </span>
+        ) : null}
+        {suggestion.dueDate ? (
+          <span className="text-on-surface-variant text-xs">
+            Due {suggestion.dueDate.slice(0, 10)}
+          </span>
+        ) : null}
+      </div>
+      {canAct ? (
+        <div className="flex shrink-0 gap-1.5">
+          <Button size="sm" onClick={onAccept}>
+            Accept
+          </Button>
+          <Button variant="outline" size="sm" onClick={onEdit}>
+            Edit
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onDismiss}>
+            Dismiss
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** One suggestion card: synthesized task + email preview + expand/edit/accept/dismiss. */
 function SuggestionCard({
   orgId,
@@ -185,48 +237,17 @@ function SuggestionCard({
   return (
     <Card>
       <CardContent className="flex flex-col gap-2 p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-medium">{suggestion.title}</span>
-              <ConfidenceBadge confidence={suggestion.confidence} />
-            </div>
-            {suggestion.description ? (
-              <span className="text-on-surface-variant line-clamp-2 text-xs">
-                {suggestion.description}
-              </span>
-            ) : null}
-            {suggestion.dueDate ? (
-              <span className="text-on-surface-variant text-xs">
-                Due {suggestion.dueDate.slice(0, 10)}
-              </span>
-            ) : null}
-          </div>
-          {canAct && !editing ? (
-            <div className="flex shrink-0 gap-1.5">
-              <Button
-                size="sm"
-                onClick={() => {
-                  onAccept({});
-                }}
-              >
-                Accept
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setEditing(true);
-                }}
-              >
-                Edit
-              </Button>
-              <Button variant="ghost" size="sm" onClick={onDismiss}>
-                Dismiss
-              </Button>
-            </div>
-          ) : null}
-        </div>
+        <SuggestionCardHeader
+          suggestion={suggestion}
+          canAct={canAct && !editing}
+          onAccept={() => {
+            onAccept({});
+          }}
+          onEdit={() => {
+            setEditing(true);
+          }}
+          onDismiss={onDismiss}
+        />
 
         {editing ? (
           <SuggestionEditor

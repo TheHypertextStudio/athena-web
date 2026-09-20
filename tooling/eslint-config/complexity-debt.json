@@ -4825,12 +4825,6 @@
       "excess": 200
     }
   },
-  "apps/web/src/components/triage/suggestions-lane.tsx": {
-    "max-lines-per-function": {
-      "max": 82,
-      "excess": 2
-    }
-  },
   "apps/web/src/components/triage/triage-actions.tsx": {
     "max-lines-per-function": {
       "max": 104,

@@ -95,6 +95,9 @@ Quick-win files to process:
     a date now rejected by its current-date minimum, and the Focus assertion needed the nested
     input height class. The Focus regression is fixed through the shared primitive's explicit
     `inputClassName`; the two stale fixtures remain documented blockers and were not weakened.
+  - The next one-point entry is also cleared: `hub-aggregation-test-helpers.ts` now accepts
+    optional actor status and role values as an options object. Its 29-route-test focused suite,
+    API typecheck, and ESLint pass; the ledger is 767 files and 1,321 entries.
 
 ---
 

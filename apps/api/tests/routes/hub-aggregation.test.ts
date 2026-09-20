@@ -125,7 +125,7 @@ describe('hub /activity (cross-org audit feed)', () => {
   it('a suspended membership does not grant cross-org scope', async () => {
     const { userId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    await joinOrg(schema, db, userId, org.orgId, 'suspended');
+    await joinOrg(schema, db, userId, org.orgId, { status: 'suspended' });
     await db.insert(schema.auditEvent).values({
       organizationId: org.orgId,
       subjectType: 'task',
@@ -901,7 +901,7 @@ describe('hub /today (daily operating projection)', () => {
         capabilities: ['view'],
       })
       .returning({ id: schema.role.id });
-    await joinOrg(schema, db, userId, org.orgId, 'active', assertDefined(viewerRole).id);
+    await joinOrg(schema, db, userId, org.orgId, { roleId: assertDefined(viewerRole).id });
     const [work] = await db
       .insert(schema.task)
       .values({
@@ -1367,7 +1367,7 @@ describe('hub /search (cross-org typed hits)', () => {
   it('a deactivated membership row is excluded from search scope', async () => {
     const { userId } = await seedUserWithHub(schema, db);
     const org = await seedBaseOrg(db, schema);
-    await joinOrg(schema, db, userId, org.orgId, 'suspended');
+    await joinOrg(schema, db, userId, org.orgId, { status: 'suspended' });
     await db.insert(schema.searchDocument).values({
       id: `task:${org.orgId}:nebula_item`,
       organizationId: org.orgId,

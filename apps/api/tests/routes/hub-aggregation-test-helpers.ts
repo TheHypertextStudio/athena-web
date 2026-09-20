@@ -36,14 +36,18 @@ export async function seedUserWithHub(schema: typeof DbModule, db: typeof DbModu
   return { userId: assertDefined(user).id, hubId: assertDefined(h).id };
 }
 
+interface JoinOrgOptions {
+  readonly status?: 'active' | 'suspended';
+  readonly roleId?: string | null;
+}
+
 /** Make `userId` an active human Actor in `orgId`; returns the actor id. */
 export async function joinOrg(
   schema: typeof DbModule,
   db: typeof DbModule.db,
   userId: string,
   orgId: string,
-  status: 'active' | 'suspended' = 'active',
-  roleId: string | null = null,
+  { status = 'active', roleId = null }: JoinOrgOptions = {},
 ) {
   const [a] = await db
     .insert(schema.actor)
@@ -68,7 +72,9 @@ export async function joinContributingOrg(
       capabilities: ['contribute'],
     })
     .returning({ id: schema.role.id });
-  return joinOrg(schema, db, userId, orgId, 'active', assertDefined(memberRole).id);
+  return joinOrg(schema, db, userId, orgId, {
+    roleId: assertDefined(memberRole).id,
+  });
 }
 
 /** Create a search route object. */

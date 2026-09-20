@@ -141,18 +141,7 @@ export function ViewRunner({
     [groupOfTask],
   );
 
-  /** Adapt a task DTO to the design-system {@link TaskRow} view-model. */
-  const toRow = (task: TaskOut): TaskRowData => {
-    const actor = task.assigneeId ? resolveActor(task.assigneeId) : null;
-    return {
-      id: task.id,
-      title: task.title,
-      stateType: categoryOf(task.state),
-      assigneeName: actor?.name ?? null,
-      assigneeKind: actor?.kind ?? 'human',
-      assigneeAvatarUrl: actor?.avatarUrl ?? null,
-    };
-  };
+  const toRow = (task: TaskOut): TaskRowData => runnerTaskRow(task, resolveActor, categoryOf);
 
   return (
     <div ref={rootRef} className="flex h-full min-h-0 flex-col gap-3 p-3">
@@ -216,4 +205,24 @@ export function ViewRunner({
       </div>
     </div>
   );
+}
+
+function runnerTaskRow(
+  task: TaskOut,
+  resolveActor: ViewRunnerProps['resolveActor'],
+  categoryOf: ReturnType<typeof useCategoryOf>,
+): TaskRowData {
+  const actor = task.assigneeId ? resolveActor(task.assigneeId) : null;
+  const sourceNames = task.sourcePeople
+    ?.filter((source) => source.field === 'assignee')
+    .map((source) => source.canonicalDisplayName ?? source.displayName)
+    .join(', ');
+  return {
+    id: task.id,
+    title: task.title,
+    stateType: categoryOf(task.state),
+    assigneeName: actor?.name ?? sourceNames ?? null,
+    assigneeKind: actor?.kind ?? 'human',
+    assigneeAvatarUrl: actor?.avatarUrl ?? null,
+  };
 }

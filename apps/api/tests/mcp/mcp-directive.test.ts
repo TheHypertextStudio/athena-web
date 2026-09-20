@@ -28,7 +28,7 @@ import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import type { sweepDirectivePosture as SweepDirectivePosture } from '../../src/routes/directive-sweep';
 import { resetAuthMocks, verifyAccessToken } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-import { seedSkipConsentClient } from '../support/oauth-grant';
+import { mcpClaims, seedSkipConsentClient } from '../support/oauth-grant';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -414,11 +414,8 @@ function app(): Hono {
 
 /** Authenticate the next `mcpHandler` call with a verified OAuth bearer token. */
 function authAs(seed: Seed): void {
-  verifyAccessToken.mockResolvedValue({
-    sub: seed.userId,
-    azp: seed.clientId,
-    scope: 'work:read work:write agents:run connectors:link',
-  });
+  const scope = 'work:read work:write agents:run connectors:link';
+  verifyAccessToken.mockResolvedValue(mcpClaims({ sub: seed.userId, azp: seed.clientId, scope }));
 }
 
 function authorization(seed: Seed): string {

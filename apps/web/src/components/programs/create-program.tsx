@@ -1,4 +1,7 @@
 'use client';
+import { usesInitialWorkspace } from '@/components/composer/uses-initial-workspace';
+
+import { WorkspaceActorPicker } from '@/components/people/workspace-actor-picker';
 
 /**
  * The robust "New {program}" create composer for the Programs list.
@@ -22,7 +25,7 @@
 import { ActorId } from '@docket/identity-access/ids';
 import { type Health, type Visibility } from '@docket/work/capability-contract';
 import { type ProgramOut, type ProgramStatus } from '@docket/work/program-contract';
-import { ActorPicker } from '@docket/ui/components';
+
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight } from '@docket/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
@@ -131,9 +134,7 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
 }: CreateProgramDialogProps): JSX.Element {
   const programNounLower = programNoun.toLowerCase();
   const previousWorkspaceId = useRef(globalCreation?.targetWorkspaceId ?? null);
-  const contextualRequestDefaultsApply =
-    globalCreation === undefined ||
-    globalCreation.targetWorkspaceId === globalCreation.initialWorkspaceId;
+  const contextualRequestDefaultsApply = usesInitialWorkspace(globalCreation);
   const destinationReady = globalCreation?.ready ?? true;
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady);
@@ -279,7 +280,8 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
             </EntityMetadataItem>
             <EntityMetadataItem priority={1} className="flex max-w-none gap-2">
               <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
-              <ActorPicker
+              <WorkspaceActorPicker
+                orgId={orgId}
                 options={options.actorOptions}
                 value={draft.ownerId}
                 onChange={(next) => {
@@ -331,6 +333,7 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
       submitLabel={`Create ${programNoun}`}
     >
       <ProgramComposerPickers
+        orgId={orgId}
         actorOptions={options.actorOptions}
         {...(globalCreation === undefined
           ? {

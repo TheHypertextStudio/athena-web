@@ -90,22 +90,22 @@ async function loadRow(integrationId: string) {
 }
 
 describe('syncExternalActors', () => {
-  it('matches by email case-insensitively', async () => {
+  it('keeps a new matching email unresolved until confirmed', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const { actorId: memberActorId } = await seedMemberWithEmail(orgId, 'sam@example.com');
+    await seedMemberWithEmail(orgId, 'sam@example.com');
     const id = await seedIntegration(orgId, humanActorId);
 
     const map = await syncExternalActors(orgId, id, [
       extUser({ externalId: 'ext-1', displayName: 'Sam', email: 'SAM@EXAMPLE.COM' }),
     ]);
-    expect(map.get('ext-1')).toBe(memberActorId);
+    expect(map.get('ext-1')).toBeNull();
 
     const row = await loadRow(id);
-    expect(row.actorId).toBe(memberActorId);
-    expect(row.matchedBy).toBe('email');
+    expect(row.actorId).toBeNull();
+    expect(row.matchedBy).toBeNull();
   });
 
-  it('leaves an unmatched row null, then updates it once a matching member appears', async () => {
+  it('does not infer identity when a matching member later appears', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const id = await seedIntegration(orgId, humanActorId);
 
@@ -117,14 +117,14 @@ describe('syncExternalActors', () => {
     expect(unmatchedRow.actorId).toBeNull();
     expect(unmatchedRow.matchedBy).toBeNull();
 
-    const { actorId: memberActorId } = await seedMemberWithEmail(orgId, 'nobody@example.com');
+    await seedMemberWithEmail(orgId, 'nobody@example.com');
     const second = await syncExternalActors(orgId, id, [
       extUser({ externalId: 'ext-2', displayName: 'Nobody', email: 'nobody@example.com' }),
     ]);
-    expect(second.get('ext-2')).toBe(memberActorId);
+    expect(second.get('ext-2')).toBeNull();
     const matchedRow = await loadRow(id);
-    expect(matchedRow.actorId).toBe(memberActorId);
-    expect(matchedRow.matchedBy).toBe('email');
+    expect(matchedRow.actorId).toBeNull();
+    expect(matchedRow.matchedBy).toBeNull();
   });
 
   it('a manual match survives a re-sync whose email now points at a different member', async () => {
@@ -193,7 +193,7 @@ describe('syncExternalActors', () => {
     expect(after.ignoredAt).toEqual(ignoredAt);
   });
 
-  it('an email-matched row unmatches once the member email no longer agrees', async () => {
+  it('keeps unresolved identity separate after account email changes', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const id = await seedIntegration(orgId, humanActorId);
     const { userId: memberUserId } = await seedMemberWithEmail(orgId, 'drift@example.com');
@@ -201,8 +201,8 @@ describe('syncExternalActors', () => {
     const first = await syncExternalActors(orgId, id, [
       extUser({ externalId: 'ext-4', displayName: 'Drift', email: 'drift@example.com' }),
     ]);
-    expect(first.get('ext-4')).not.toBeNull();
-    expect((await loadRow(id)).matchedBy).toBe('email');
+    expect(first.get('ext-4')).toBeNull();
+    expect((await loadRow(id)).matchedBy).toBeNull();
 
     // The member's account email changes; the provider's external-user email is unchanged, so
     // no candidate matches it on the next sync.
@@ -239,7 +239,7 @@ describe('syncExternalActors', () => {
     expect(row.matchedBy).toBeNull();
   });
 
-  it('an email-matched row unmatches on the next sync after its actor is suspended', async () => {
+  it('keeps unresolved identity separate after actor suspension', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const id = await seedIntegration(orgId, humanActorId);
     const { actorId: memberActorId } = await seedMemberWithEmail(orgId, 'later-susp@example.com');
@@ -247,7 +247,7 @@ describe('syncExternalActors', () => {
     const first = await syncExternalActors(orgId, id, [
       extUser({ externalId: 'ext-susp-2', displayName: 'Later', email: 'later-susp@example.com' }),
     ]);
-    expect(first.get('ext-susp-2')).toBe(memberActorId);
+    expect(first.get('ext-susp-2')).toBeNull();
 
     // Suspending the actor drops it from the candidate set, so the match honestly dissolves.
     await db
@@ -316,6 +316,10 @@ describe('externalActorReverseMap', () => {
       extUser({ externalId: 'ext-unmatched', displayName: 'Unmatched' }),
     ]);
 
+    await db
+      .update(schema.externalActor)
+      .set({ actorId: matchedActorId, matchedBy: 'manual' })
+      .where(eq(schema.externalActor.externalId, 'ext-matched'));
     const reverse = await externalActorReverseMap(id);
     expect(reverse.get(matchedActorId)).toBe('ext-matched');
     expect(reverse.size).toBe(1);
@@ -332,6 +336,10 @@ describe('external-actor endpoints', () => {
       extUser({ externalId: 'ext-get-2', displayName: 'Unmatched' }),
     ]);
 
+    await db
+      .update(schema.externalActor)
+      .set({ actorId: matchedActorId, matchedBy: 'manual' })
+      .where(eq(schema.externalActor.externalId, 'ext-get-1'));
     const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
     const res = await w.request(`/${id}/external-actors`);
     expect(res.status).toBe(200);
@@ -340,7 +348,7 @@ describe('external-actor endpoints', () => {
 
     const matched = assertDefined(out.items.find((r) => r.externalId === 'ext-get-1'));
     expect(matched.actorId).toBe(matchedActorId);
-    expect(matched.matchedBy).toBe('email');
+    expect(matched.matchedBy).toBe('manual');
 
     const unmatched = assertDefined(out.items.find((r) => r.externalId === 'ext-get-2'));
     expect(unmatched.actorId).toBeNull();
@@ -384,15 +392,15 @@ describe('external-actor endpoints', () => {
     expect(bad.status).toBe(404);
   });
 
-  it('PATCH null unlinks and clears matchedBy back to null', async () => {
+  it('PATCH null records a durable manual unlink', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const id = await seedIntegration(orgId, humanActorId);
-    const { actorId: memberActorId } = await seedMemberWithEmail(orgId, 'linked@example.com');
+    await seedMemberWithEmail(orgId, 'linked@example.com');
     await syncExternalActors(orgId, id, [
       extUser({ externalId: 'ext-patch-2', displayName: 'Linked', email: 'linked@example.com' }),
     ]);
     const row = await loadRow(id);
-    expect(row.actorId).toBe(memberActorId);
+    expect(row.actorId).toBeNull();
 
     const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
     const res = await w.request(`/${id}/external-actors/${row.id}`, {
@@ -403,19 +411,19 @@ describe('external-actor endpoints', () => {
     expect(res.status).toBe(200);
     const out = await body<ExternalActorRes>(res);
     expect(out.actorId).toBeNull();
-    expect(out.matchedBy).toBeNull();
+    expect(out.matchedBy).toBe('manual');
 
     // Unlinking is a genuine reset, not a manual pin: a later sync may re-match by email.
     const resynced = await syncExternalActors(orgId, id, [
       extUser({ externalId: 'ext-patch-2', displayName: 'Linked', email: 'linked@example.com' }),
     ]);
-    expect(resynced.get('ext-patch-2')).toBe(memberActorId);
+    expect(resynced.get('ext-patch-2')).toBeNull();
   });
 
-  it('PATCH clears a prior exclusion, restoring the automatic matching it promises', async () => {
+  it('PATCH clears exclusion and preserves deliberate unlink', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const id = await seedIntegration(orgId, humanActorId);
-    const { actorId: memberActorId } = await seedMemberWithEmail(orgId, 'unskip@example.com');
+    await seedMemberWithEmail(orgId, 'unskip@example.com');
     await syncExternalActors(orgId, id, [
       extUser({ externalId: 'ext-patch-3', displayName: 'Skipped', email: 'unskip@example.com' }),
     ]);
@@ -439,7 +447,7 @@ describe('external-actor endpoints', () => {
     const resynced = await syncExternalActors(orgId, id, [
       extUser({ externalId: 'ext-patch-3', displayName: 'Skipped', email: 'unskip@example.com' }),
     ]);
-    expect(resynced.get('ext-patch-3')).toBe(memberActorId);
+    expect(resynced.get('ext-patch-3')).toBeNull();
   });
 
   it('404 PATCH for an external-actor row that does not belong to the integration', async () => {

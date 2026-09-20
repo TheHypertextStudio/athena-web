@@ -28,9 +28,14 @@ export type TaskRow = typeof task.$inferSelect;
  * @param labels - The task's labels, from `labelsForSubject(s)`.
  * @returns The serialized task.
  */
-export function toOut(t: TaskRow, labels: readonly LabelRefRow[]): z.input<typeof TaskOut> {
+export function toOut(
+  t: TaskRow,
+  labels: readonly LabelRefRow[],
+  sourcePeople?: z.input<typeof TaskOut>['sourcePeople'],
+): z.input<typeof TaskOut> {
   return {
     labels: [...labels],
+    ...(sourcePeople ? { sourcePeople } : {}),
     id: t.id,
     organizationId: t.organizationId,
     title: t.title,

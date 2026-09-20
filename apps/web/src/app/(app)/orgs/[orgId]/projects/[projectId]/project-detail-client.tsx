@@ -623,6 +623,8 @@ export default function ProjectDetailPage(): JSX.Element {
       metadata={
         <div className="flex min-w-0 flex-col gap-2">
           <ProjectPeopleRow
+            orgId={orgId}
+            sourcePeople={project.sourcePeople}
             ownerId={project.leadId ?? null}
             ownerOptions={memberOptions}
             assignedPeople={[]}

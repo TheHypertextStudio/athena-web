@@ -1,4 +1,7 @@
 'use client';
+import { usesInitialWorkspace } from '@/components/composer/uses-initial-workspace';
+
+import { WorkspaceActorPicker } from '@/components/people/workspace-actor-picker';
 
 /**
  * The "New {initiative}" create composer for the Initiatives list.
@@ -32,7 +35,7 @@ import {
   type InitiativeUpdateCadence,
 } from '@docket/work/initiative-contract';
 import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
-import { ActorPicker } from '@docket/ui/components';
+
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight } from '@docket/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
@@ -157,9 +160,7 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
 }: CreateInitiativeDialogProps): JSX.Element {
   const initiativeNounLower = initiativeNoun.toLowerCase();
   const previousWorkspaceId = useRef(globalCreation?.targetWorkspaceId ?? null);
-  const contextualRequestDefaultsApply =
-    globalCreation === undefined ||
-    globalCreation.targetWorkspaceId === globalCreation.initialWorkspaceId;
+  const contextualRequestDefaultsApply = usesInitialWorkspace(globalCreation);
   const destinationReady = globalCreation?.ready ?? true;
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady);
@@ -318,7 +319,8 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
             </EntityMetadataItem>
             <EntityMetadataItem priority={1} className="flex max-w-none gap-2">
               <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
-              <ActorPicker
+              <WorkspaceActorPicker
+                orgId={orgId}
                 options={options.actorOptions}
                 value={draft.ownerId}
                 onChange={(next) => {
@@ -370,6 +372,7 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
       submitLabel={`Create ${initiativeNoun}`}
     >
       <InitiativeComposerPickers
+        orgId={orgId}
         actorOptions={options.actorOptions}
         {...(globalCreation === undefined
           ? {

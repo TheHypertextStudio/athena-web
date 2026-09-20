@@ -174,6 +174,8 @@ export interface PickerListProps<TValue extends string = string> {
         render: (query: string) => string;
         canCreate: (query: string, options: readonly PickerOption<TValue>[]) => boolean;
         onCreate: (query: string) => void;
+        /** Keep the query while a nested creation confirmation is active. */
+        preserveQuery?: boolean;
       }
     | null
     | undefined;
@@ -452,7 +454,7 @@ export function PickerList<TValue extends string = string>({
       }
       if (row.kind === 'create') {
         create?.onCreate(trimmedQuery);
-        setQuery('');
+        if (!create?.preserveQuery) setQuery('');
         return;
       }
       if (row.option && !row.option.disabled) onSelect(row.option.value);
@@ -617,7 +619,7 @@ export function PickerList<TValue extends string = string>({
                     tabIndex={-1}
                     onClick={() => {
                       create?.onCreate(trimmedQuery);
-                      setQuery('');
+                      if (!create?.preserveQuery) setQuery('');
                     }}
                     onMouseEnter={() => {
                       setActiveRow(row, 'pointer');

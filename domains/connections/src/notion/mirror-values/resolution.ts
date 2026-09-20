@@ -17,6 +17,32 @@ import type {
   ResolvedMirrorValues,
 } from './contracts';
 
+/** Keep source-only people distinct from an intentionally empty relation. */
+function unresolvedPersonRelation(value: {
+  sourceExternalIds?: readonly string[];
+}): MirrorValue | undefined {
+  return value.sourceExternalIds?.length ? undefined : { kind: 'relation', externalPageIds: [] };
+}
+
+function resolveNativePerson(
+  field: string,
+  value: MirrorActorValue,
+  refs: MirrorReferences,
+  unresolved: MirrorUnresolvedRef[],
+): MirrorValue | undefined {
+  if (value.actorId === null || value.sourceExternalIds?.length)
+    return { kind: 'people', externalIds: value.sourceExternalIds ?? [] };
+  const notionUserId = refs.notionUserByActor.get(value.actorId);
+  if (notionUserId !== undefined) return { kind: 'people', externalIds: [notionUserId] };
+  unresolved.push({
+    field,
+    targetId: value.actorId,
+    reason: 'no_notion_account',
+    retryable: false,
+  });
+  return undefined;
+}
+
 /** Resolve one actor according to the kind provisioned for its column. */
 function resolveActor(
   field: string,
@@ -26,18 +52,10 @@ function resolveActor(
   unresolved: MirrorUnresolvedRef[],
 ): MirrorValue | undefined {
   const actorId = value.actorId;
-  if (kind === 'people') {
-    if (actorId === null) return { kind: 'people', externalIds: [] };
-    const notionUserId = refs.notionUserByActor.get(actorId);
-    if (notionUserId === undefined) {
-      unresolved.push({ field, targetId: actorId, reason: 'no_notion_account', retryable: false });
-      return { kind: 'people', externalIds: [] };
-    }
-    return { kind: 'people', externalIds: [notionUserId] };
-  }
+  if (kind === 'people') return resolveNativePerson(field, value, refs, unresolved);
 
   if (kind === 'relation') {
-    if (actorId === null) return { kind: 'relation', externalPageIds: [] };
+    if (actorId === null) return unresolvedPersonRelation(value);
     const people = refs.pages.get('person');
     const pageId = people?.pageByEntityId.get(actorId);
     if (pageId !== undefined) return { kind: 'relation', externalPageIds: [pageId] };
@@ -48,7 +66,7 @@ function resolveActor(
         reason: 'related_page_impossible',
         retryable: false,
       });
-      return { kind: 'relation', externalPageIds: [] };
+      return undefined;
     }
     unresolved.push({ field, targetId: actorId, reason: 'person_page_missing', retryable: true });
     return undefined;

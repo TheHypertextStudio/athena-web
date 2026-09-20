@@ -8,14 +8,14 @@
  * single inbound signal (an event-drain draft actor, a Linear Agent webhook, …) actually asks:
  * "who is this, right now, as a Docket actor?" — without writing anything.
  */
-import { account, actor, db, externalActor, integration, user } from '@docket/db';
+import { account, actor, db, externalActor, integration } from '@docket/db';
 import {
   PROVIDER_CATALOG,
   sourceIdentityProvider,
 } from '@docket/connections/provider-catalog-contract';
 import type { DirectoryProviderId } from '@docket/connections/provider-catalog-contract';
 import type { SourceSystemKind } from '@docket/connections/event-contract';
-import { and, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, or } from 'drizzle-orm';
 
 /**
  * How a resolved `actorId` was determined; mirrors {@link externalActorMatch} plus the
@@ -35,6 +35,8 @@ export interface ResolvedExternalActor {
 export interface ResolveExternalActorInput {
   /** The canonical source system the actor was observed in. */
   readonly source: SourceSystemKind;
+  /** Scope native IDs to one connection when the provider uses workspace-local IDs. */
+  readonly integrationId?: string;
   /** The actor's native id in that source. */
   readonly externalId: string;
   /** The actor's email at the source, when the caller has one (fuels the ad-hoc fallback). */
@@ -80,10 +82,8 @@ function connectorProviderForSource(source: SourceSystemKind): DirectoryProvider
  *    consented identity link is authoritative in a way a coincidental email match is not.
  * 3. **Email-matched `external_actor` row.** The sync engine's own email match
  *    ({@link syncExternalActors}), scoped to the org's connector integration for this source.
- * 4. **Ad-hoc email fallback.** For callers that only have a raw email and no prior
- *    `external_actor` row (e.g. a source that has never run a full sync), match it
- *    case-insensitively against an active org member's account email — mirroring the case-fold
- *    convention {@link syncExternalActors} uses for its own email matching.
+ * Unverified provider email is only matching evidence for suggestions. It never
+ * creates a new automatic link. Historical email links remain compatible.
  *
  * No match at any rung returns `{ actorId: null, matchedBy: null }` — an explicit, queryable
  * "unresolved" state, never a fallback assignment.
@@ -100,7 +100,37 @@ export async function resolveExternalActor(
 
   // Rung 1 — manual external_actor override (checked first: a human's decision always wins).
   if (connectorProviderId) {
-    const [manualRow] = await db
+    const manualRows = await db
+      .select({ actorId: externalActor.actorId, ignoredAt: externalActor.ignoredAt })
+      .from(externalActor)
+      .innerJoin(integration, eq(externalActor.integrationId, integration.id))
+      .where(
+        and(
+          eq(integration.organizationId, orgId),
+          eq(integration.provider, connectorProviderId),
+          integrationScope(input.integrationId),
+          eq(externalActor.externalId, input.externalId),
+          or(eq(externalActor.matchedBy, 'manual'), isNotNull(externalActor.ignoredAt)),
+        ),
+      )
+      .limit(2);
+    if (manualRows.length > 1) return { actorId: null, matchedBy: null };
+    const manualRow = manualRows[0];
+    if (manualRow) {
+      // A manual row always terminates resolution here — even a null actorId (an admin
+      // explicitly unbinding this identity) is a deliberate decision, not a cue to keep looking.
+      return manualRow.actorId && !manualRow.ignoredAt
+        ? { actorId: manualRow.actorId, matchedBy: 'manual' }
+        : { actorId: null, matchedBy: null };
+    }
+  }
+
+  const linked = await resolveLinkedAccount(orgId, input);
+  if (linked) return linked;
+
+  // Rung 3 — email-matched external_actor row from the sync engine.
+  if (connectorProviderId) {
+    const emailRows = await db
       .select({ actorId: externalActor.actorId })
       .from(externalActor)
       .innerJoin(integration, eq(externalActor.integrationId, integration.id))
@@ -108,20 +138,26 @@ export async function resolveExternalActor(
         and(
           eq(integration.organizationId, orgId),
           eq(integration.provider, connectorProviderId),
+          integrationScope(input.integrationId),
           eq(externalActor.externalId, input.externalId),
-          eq(externalActor.matchedBy, 'manual'),
+          eq(externalActor.matchedBy, 'email'),
+          isNotNull(externalActor.actorId),
         ),
       )
-      .limit(1);
-    if (manualRow) {
-      // A manual row always terminates resolution here — even a null actorId (an admin
-      // explicitly unbinding this identity) is a deliberate decision, not a cue to keep looking.
-      return manualRow.actorId
-        ? { actorId: manualRow.actorId, matchedBy: 'manual' }
-        : { actorId: null, matchedBy: null };
-    }
+      .limit(2);
+    if (emailRows.length > 1) return { actorId: null, matchedBy: null };
+    const emailRow = emailRows[0];
+    if (emailRow?.actorId) return { actorId: emailRow.actorId, matchedBy: 'email' };
   }
 
+  // Unverified email alone is a suggestion, never an automatic identity link.
+  return { actorId: null, matchedBy: null };
+}
+
+async function resolveLinkedAccount(
+  orgId: string,
+  input: ResolveExternalActorInput,
+): Promise<ResolvedExternalActor | null> {
   // Rung 2 — linked Better Auth account (the person's own OAuth consent).
   const identityProviderId = sourceIdentityProvider(input.source);
   if (identityProviderId) {
@@ -148,42 +184,9 @@ export async function resolveExternalActor(
     }
   }
 
-  // Rung 3 — email-matched external_actor row from the sync engine.
-  if (connectorProviderId) {
-    const [emailRow] = await db
-      .select({ actorId: externalActor.actorId })
-      .from(externalActor)
-      .innerJoin(integration, eq(externalActor.integrationId, integration.id))
-      .where(
-        and(
-          eq(integration.organizationId, orgId),
-          eq(integration.provider, connectorProviderId),
-          eq(externalActor.externalId, input.externalId),
-          eq(externalActor.matchedBy, 'email'),
-          isNotNull(externalActor.actorId),
-        ),
-      )
-      .limit(1);
-    if (emailRow?.actorId) return { actorId: emailRow.actorId, matchedBy: 'email' };
-  }
+  return null;
+}
 
-  // Rung 4 — ad-hoc email fallback (case-insensitive, mirroring syncExternalActors).
-  if (input.email) {
-    const emailLower = input.email.toLowerCase();
-    const [matchedActor] = await db
-      .select({ actorId: actor.id })
-      .from(actor)
-      .innerJoin(user, eq(actor.userId, user.id))
-      .where(
-        and(
-          eq(actor.organizationId, orgId),
-          eq(actor.status, 'active'),
-          eq(sql`lower(${user.email})`, emailLower),
-        ),
-      )
-      .limit(1);
-    if (matchedActor) return { actorId: matchedActor.actorId, matchedBy: 'email' };
-  }
-
-  return { actorId: null, matchedBy: null };
+function integrationScope(id: string | undefined) {
+  return id ? eq(integration.id, id) : undefined;
 }

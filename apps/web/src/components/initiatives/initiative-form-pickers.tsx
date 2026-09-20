@@ -1,5 +1,7 @@
 'use client';
 
+import { PersonMetadataPicker } from '@/components/people/person-metadata-picker';
+
 /**
  * The initiative composer's property row, split out so the template editor renders the same
  * controls the create dialog does.
@@ -16,7 +18,7 @@ import type {
   InitiativeUpdateCadence,
 } from '@docket/work/initiative-contract';
 import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
-import { ActorPicker, EnumPicker, type PickerOption, TimeframePicker } from '@docket/ui/components';
+import { EnumPicker, type PickerOption, TimeframePicker } from '@docket/ui/components';
 import { Activity } from '@docket/ui/icons';
 import { type JSX, useMemo } from 'react';
 
@@ -48,6 +50,8 @@ const CADENCE_LABEL: Record<InitiativeUpdateCadence, string> = {
 
 /** Props for {@link InitiativeComposerPickers}. */
 export interface InitiativeComposerPickersProps {
+  /** Destination workspace when the composer is opened outside a workspace route. */
+  orgId?: string;
   /** The owner options, from `useComposerOptions`. */
   actorOptions: readonly PickerOption[];
   /** The chosen owner, or null. Omitted entirely when the composer has no owner axis. */
@@ -95,6 +99,7 @@ export interface InitiativeComposerPickersProps {
  * @returns the rendered pickers.
  */
 export function InitiativeComposerPickers({
+  orgId,
   actorOptions,
   ownerId,
   onOwnerChange,
@@ -121,17 +126,15 @@ export function InitiativeComposerPickers({
   return (
     <>
       {onOwnerChange ? (
-        <EntityMetadataItem priority={1}>
-          <ActorPicker
-            options={actorOptions}
-            value={ownerId ?? null}
-            onChange={onOwnerChange}
-            placeholder="No owner"
-            clearLabel="No owner"
-            ariaLabel="Owner"
-            disabled={disabled}
-          />
-        </EntityMetadataItem>
+        <PersonMetadataPicker
+          priority={1}
+          field="Owner"
+          orgId={orgId}
+          options={actorOptions}
+          value={ownerId ?? null}
+          onChange={onOwnerChange}
+          disabled={disabled}
+        />
       ) : null}
       <EntityMetadataItem priority={0}>
         <EnumPicker

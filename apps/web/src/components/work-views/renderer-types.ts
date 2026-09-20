@@ -108,3 +108,28 @@ export function formatWorkViewValue(value: unknown, kind?: string): string {
 export function workViewGroupPathKey(path: readonly string[]): string {
   return path.map((part) => encodeURIComponent(part)).join('/');
 }
+
+/** A synthetic source group is readable but cannot supply assignment mutation values. */
+export function isMutableWorkViewGroupPath(
+  groups: readonly WorkViewGroupSummary[],
+  path: readonly string[],
+): boolean {
+  return path.every((part, index) => {
+    if (part.startsWith('source-person:')) return false;
+    const prefix = workViewGroupPathKey(path.slice(0, index + 1));
+    return groups.find((group) => workViewGroupPathKey(group.path) === prefix)?.mutable !== false;
+  });
+}
+
+/** Accept a board move only when both paths represent writable native group values. */
+export function isMutableWorkViewMove(
+  groups: readonly WorkViewGroupSummary[],
+  source: readonly string[] | null,
+  destination: readonly string[],
+): source is readonly string[] {
+  return (
+    source !== null &&
+    isMutableWorkViewGroupPath(groups, source) &&
+    isMutableWorkViewGroupPath(groups, destination)
+  );
+}

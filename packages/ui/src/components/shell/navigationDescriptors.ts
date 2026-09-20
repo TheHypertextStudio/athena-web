@@ -212,7 +212,6 @@ export const WORKSPACE_NAVIGATION_DESCRIPTORS: readonly WorkspaceNavigationDescr
     aliases: ['members', 'contacts'],
     icon: User,
     segment: 'people',
-    sharedOnly: true,
   },
   {
     key: 'views',

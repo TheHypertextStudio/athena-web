@@ -1,3 +1,4 @@
+import { sourcePersonProjection } from '../identity/source-person-projection';
 import { sql, type SQL } from 'drizzle-orm';
 
 import type { ViewTarget } from '@docket/work/view-contract';
@@ -101,6 +102,7 @@ const projections = {
     ${entityDisplay()} as display,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'assignee_id')} as assignee,
     ${actorIdentity('assignee_id')} as assignee_actor,
+    ${sourcePersonProjection(sql`e.organization_id`, 'task', sql`e.id`)} as source_people,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'delegate_id')} as delegate,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.team, 'team_id')} as team,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.project, 'project_id')} as project,
@@ -120,6 +122,7 @@ const projections = {
     e.id, e.name, e.summary, e.status, e.priority, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'lead_id')} as lead,
     ${actorIdentity('lead_id')} as lead_actor,
+    ${sourcePersonProjection(sql`e.organization_id`, 'project', sql`e.id`)} as source_people,
     ${entityDisplay()} as display,
     ${compileTenantRelationArraySql(
       WORK_VIEW_RELATIONS.projectMembers,

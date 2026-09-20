@@ -1,3 +1,11 @@
+import { assertInitiativeInOrg } from './order-validation';
+import {
+  stringValue,
+  nullableStringValue,
+  assertMutableGroupRequest,
+  detachGroupedSourcePerson,
+  contextId,
+} from './order-values';
 import type { Database, db } from '@docket/db';
 import { initiative, program, project, projectTeam, task, workItemOrder } from '@docket/db';
 import { satisfies, type Capability } from '@docket/authz';
@@ -54,21 +62,6 @@ async function executeRows<TSchema extends z.ZodType>(
 ): Promise<z.output<TSchema>[]> {
   const result: unknown = await database.execute(statement);
   return z.array(schema).parse(rawResultRows<unknown>(result));
-}
-
-function contextId(context: WorkViewOrderRequest['context'], organizationId: string): string {
-  switch (context.kind) {
-    case 'organization':
-      return organizationId;
-    case 'team':
-      return context.teamId;
-    case 'project':
-      return context.projectId;
-    case 'program':
-      return context.programId;
-    case 'initiative':
-      return context.initiativeId;
-  }
 }
 
 function betweenRanks(lower: string | null, upper: string | null): string {
@@ -243,15 +236,6 @@ async function replaceOneLabel(
   await replaceLabels(tx, target, itemId, organizationId, next);
 }
 
-function stringValue(value: unknown, field: string): string {
-  if (typeof value === 'string') return value;
-  throw new TypeError(`Mutable group ${field} requires a string value.`);
-}
-
-function nullableStringValue(value: unknown, field: string): string | null {
-  return value === null ? null : stringValue(value, field);
-}
-
 async function taskTransitionAfterCommit(
   tx: WorkViewTransaction,
   actorId: string,
@@ -274,15 +258,8 @@ async function mutateGroup(
 ): Promise<AfterCommit> {
   const { request, organizationId, actorId } = input;
   if (request.groupField === null) return noAfterCommit;
-  if (request.target === 'initiative') {
-    const owned = await executeOne(
-      tx,
-      sql`select count(*)::int count from initiative
-        where id=${request.itemId} and organization_id=${organizationId}`,
-      countRow,
-    );
-    if (owned.count !== 1) throw new NotFoundError('Work item not found');
-  }
+  if (request.target === 'initiative')
+    await assertInitiativeInOrg(tx, organizationId, request.itemId);
   const value = request.groupValue;
   if (request.groupField === 'labels') {
     await replaceOneLabel(
@@ -894,6 +871,7 @@ export interface ReorderWorkViewInput {
 export async function reorderWorkView(
   input: ReorderWorkViewInput,
 ): Promise<WorkViewOrderResponseValue> {
+  assertMutableGroupRequest(input.request);
   if (input.request.target === 'task') {
     const target = await loadTask(input.organizationId, input.request.itemId);
     await assertTaskCapability(input.organizationId, input.actorId, target, 'contribute');
@@ -923,6 +901,7 @@ export async function reorderWorkView(
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
     const rank = await rankForMove(tx, input);
     const finish = await mutateGroup(tx, input);
+    await detachGroupedSourcePerson(tx, input.organizationId, input.request);
     await tx
       .insert(workItemOrder)
       .values({

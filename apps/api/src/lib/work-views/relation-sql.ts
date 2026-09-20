@@ -86,6 +86,10 @@ export const WORK_VIEW_RELATIONS = {
   },
 } as const satisfies Record<string, TenantRelationDefinition>;
 
+function canonicalPersonOperand(operand: unknown, organizationId: SQL): SQL {
+  return sql`coalesce((select canonical_actor_id from actor_alias where actor_id=${operand} and organization_id=${organizationId}), ${operand}::text)`;
+}
+
 /**
  * Resolve a scalar relation id only when the related entity belongs to the row organization.
  *
@@ -136,7 +140,7 @@ export function compileTenantScalarRelationHasValueSql(
   operand: unknown,
 ): SQL {
   return sql`exists (select 1 from ${sql.raw(definition.valueTable)} related
-    where related.id=${relatedId} and related.id=${operand}
+    where related.id=${relatedId} and related.id=${definition.valueTable === 'actor' ? canonicalPersonOperand(operand, organizationId) : operand}
       and related.organization_id=${organizationId})`;
 }
 
@@ -153,6 +157,12 @@ export function tenantScalarRelationFilter(
 ): ScalarFilterCompiler {
   return {
     kind: 'relation-one',
+    ...(definition.valueTable === 'actor'
+      ? {
+          resolveOperand: (operand: unknown) =>
+            canonicalPersonOperand(operand, sql`e.organization_id`),
+        }
+      : {}),
     value: compileTenantScalarRelationIdSql(definition, relatedId, sql`e.organization_id`),
   };
 }
@@ -201,7 +211,7 @@ export function compileTenantRelationHasValueSql(
       entityId,
       organizationId,
     )}) relation_memberships
-    where relation_memberships.value_id=${operand}
+    where relation_memberships.value_id=${definition.valueTable === 'actor' ? canonicalPersonOperand(operand, organizationId) : operand}
   )`;
 }
 

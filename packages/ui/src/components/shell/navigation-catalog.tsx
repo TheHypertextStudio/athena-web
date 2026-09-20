@@ -280,7 +280,6 @@ const DEFINITIONS: readonly NavigationDefinition[] = [
     rail: false,
     icon: User,
     label: label('People'),
-    sharedWorkspaceOnly: true,
   },
   {
     id: 'workspace:views',

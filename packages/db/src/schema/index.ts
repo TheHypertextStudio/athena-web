@@ -34,3 +34,6 @@ export * from './athena-mail';
 export * from './recurrence';
 export * from './plan-draft';
 export * from './composer-draft';
+export * from './source-person';
+
+export * from './actor-alias';

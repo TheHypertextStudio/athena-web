@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import { appWithActor, fakeSession, getDb, grantDocketPro } from '../support/routes-harness';
+import { seedPeopleWorkspace, seedPeopleUser } from '../support/people-fixtures';
 import type membersRouter from '../../src/routes/members';
 import { assertDefined } from '@docket/test-utils';
 
@@ -23,66 +24,8 @@ async function body<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-/**
- * Seed a non-personal org with an owner role + owner actor and a plain member role.
- *
- * @param opts.personal - When true, marks the org `is_personal` (blocks invites).
- * @returns the org id plus the seeded owner/member role ids and owner actor id.
- */
-async function seedOrgWithOwner(opts: { personal?: boolean } = {}) {
-  const slug = `mi-${Math.random().toString(36).slice(2, 10)}`;
-  const [org] = await db
-    .insert(schema.organization)
-    .values({ name: slug, slug, lifecycleState: 'active', isPersonal: opts.personal ?? false })
-    .returning({ id: schema.organization.id });
-  const orgId = assertDefined(org).id;
-  await grantDocketPro(db, schema, orgId);
-  const [ownerRole] = await db
-    .insert(schema.role)
-    .values({
-      organizationId: orgId,
-      key: 'owner',
-      name: 'Owner',
-      isSystem: true,
-      capabilities: ['manage'],
-    })
-    .returning({ id: schema.role.id });
-  const [memberRole] = await db
-    .insert(schema.role)
-    .values({
-      organizationId: orgId,
-      key: 'member',
-      name: 'Member',
-      isSystem: true,
-      capabilities: ['view'],
-    })
-    .returning({ id: schema.role.id });
-  const [owner] = await db
-    .insert(schema.actor)
-    .values({
-      organizationId: orgId,
-      kind: 'human',
-      displayName: 'Owner',
-      roleId: assertDefined(ownerRole).id,
-    })
-    .returning({ id: schema.actor.id });
-  return {
-    orgId,
-    ownerRoleId: assertDefined(ownerRole).id,
-    memberRoleId: assertDefined(memberRole).id,
-    ownerActorId: assertDefined(owner).id,
-  };
-}
-
-/** Insert a fresh global user; returns its id + email. */
-async function seedUser(name = 'New'): Promise<{ id: string; email: string }> {
-  const email = `mi-${Math.random().toString(36).slice(2)}@e.com`;
-  const [user] = await db
-    .insert(schema.user)
-    .values({ name, email })
-    .returning({ id: schema.user.id, email: schema.user.email });
-  return { id: assertDefined(user).id, email: assertDefined(user).email };
-}
+const seedOrgWithOwner = (opts: { personal?: boolean } = {}) => seedPeopleWorkspace(schema, opts);
+const seedUser = (name = 'New') => seedPeopleUser(schema, name);
 
 /** Insert an invitation row; returns the row id + token. */
 async function makeInvite(
@@ -190,6 +133,44 @@ describe('members router — invitation flow', () => {
         })
       ).status,
     ).toBe(409);
+  });
+
+  it('attaches an invitation to an existing person without replacing their identity', async () => {
+    const { orgId, memberRoleId, ownerActorId } = await seedOrgWithOwner();
+    const user = await seedUser('Sam account');
+    const [person] = await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: 'Sam Rivera' })
+      .returning();
+    const personId = assertDefined(person).id;
+    const w = appWithActor(members, orgId, ['manage'], ownerActorId);
+    const response = await w.request('/invitations', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ email: user.email, roleId: memberRoleId, personActorId: personId }),
+    });
+    expect(response.status).toBe(201);
+    const [invite] = await db
+      .select()
+      .from(schema.invitation)
+      .where(eq(schema.invitation.personActorId, personId));
+    const accepting = appWithActor(
+      members,
+      orgId,
+      ['view'],
+      ownerActorId,
+      fakeSession(user.id, 'Sam account', user.email),
+    );
+    const accepted = await accepting.request(`/invitations/${assertDefined(invite).token}/accept`, {
+      method: 'POST',
+    });
+    expect(accepted.status).toBe(200);
+    expect(await body(accepted)).toMatchObject({
+      actorId: personId,
+      displayName: 'Sam Rivera',
+      userId: user.id,
+      roleId: memberRoleId,
+    });
   });
 
   it('POST /invitations/:token/accept creates the human actor and flips the invite to accepted', async () => {
@@ -322,10 +303,16 @@ describe('members router — member removal', () => {
     expect(out.removed).toBe(true);
 
     const rows = await db
-      .select({ id: schema.actor.id })
+      .select()
       .from(schema.actor)
       .where(eq(schema.actor.id, memberId));
-    expect(rows).toHaveLength(0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      userId: null,
+      roleId: null,
+      status: 'suspended',
+      archivedAt: expect.any(Date),
+    });
   });
 
   it('DELETE /:actorId 403 without manage and 404 for unknown/non-human/cross-tenant actors', async () => {
@@ -402,10 +389,25 @@ describe('members router — member removal', () => {
     const w = appWithActor(members, orgId, ['manage'], ownerActorId);
     expect((await w.request(`/${ownerActorId}`, { method: 'DELETE' })).status).toBe(409);
 
-    // Add a second active owner; now removing the first owner is allowed.
+    // An accountless owner cannot satisfy the access invariant.
+    await db.insert(schema.actor).values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'Recorded owner',
+      roleId: ownerRoleId,
+    });
+    expect((await w.request(`/${ownerActorId}`, { method: 'DELETE' })).status).toBe(409);
+    const secondUser = await seedUser('Owner2');
+    // An account-backed second owner makes removal safe.
     const [secondOwner] = await db
       .insert(schema.actor)
-      .values({ organizationId: orgId, kind: 'human', displayName: 'Owner2', roleId: ownerRoleId })
+      .values({
+        organizationId: orgId,
+        kind: 'human',
+        displayName: 'Owner2',
+        roleId: ownerRoleId,
+        userId: secondUser.id,
+      })
       .returning({ id: schema.actor.id });
     const ok = await w.request(`/${ownerActorId}`, { method: 'DELETE' });
     expect(ok.status).toBe(200);

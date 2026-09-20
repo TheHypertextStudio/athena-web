@@ -125,19 +125,19 @@ async function resolveLinkedIdentityRecipients(
  * enriching it with the Docket actor it maps to (if any) via {@link resolveExternalActor}.
  *
  * @remarks
- * Passes the draft's email through when the provider exposed one, which is what reaches the ad-hoc
- * email fallback — the only rung of {@link resolveExternalActor} that can match a person who has
- * neither linked their account nor been seen by a full sync. Providers that expose no email still
- * resolve through the manual-override, linked-account and email-matched-`external_actor` rungs.
+ * Preserves the provider identity while resolving confirmed or authoritative links
+ * within the originating integration. Unverified email never establishes identity.
  */
 async function toActorRef(
   orgId: string,
   draftActor: EventDraft['actor'],
   source: SourceSystemKind,
+  integrationId: string | null,
 ): Promise<ActorRef | null> {
   if (!draftActor) return null;
   const resolved = await resolveExternalActor(orgId, {
     source,
+    ...(integrationId ? { integrationId } : {}),
     externalId: draftActor.externalId,
     ...(draftActor.email ? { email: draftActor.email } : {}),
   });
@@ -203,6 +203,17 @@ function associationFor(
   };
 }
 
+/** Resolve participants under the same connection scope as the event actor. */
+async function resolveParticipants(ctx: DraftWriteContext, draft: EventDraft): Promise<ActorRef[]> {
+  return (
+    await Promise.all(
+      (draft.participants ?? []).map((person) =>
+        toActorRef(ctx.organizationId, person, ctx.sourceSystem, ctx.integrationId),
+      ),
+    )
+  ).filter((ref): ref is ActorRef => ref !== null);
+}
+
 /**
  * Persist a batch of canonical event drafts, fan them out, and report what they produced.
  *
@@ -252,10 +263,8 @@ export async function writeEventDrafts(
     );
     // Resolved outside the transaction (like externalRecipients above): read-only Docket-actor
     // lookups, not part of the event write's atomicity.
-    const actorRef = await toActorRef(orgId, draft.actor, source);
-    const participantRefs = (
-      await Promise.all((draft.participants ?? []).map((p) => toActorRef(orgId, p, source)))
-    ).filter((ref): ref is ActorRef => ref !== null);
+    const actorRef = await toActorRef(orgId, draft.actor, source, ctx.integrationId);
+    const participantRefs = await resolveParticipants(ctx, draft);
 
     // Insert + fan-out in one transaction (the routing Strategy writes the recipient rows).
     const result = await db.transaction(async (tx) => {

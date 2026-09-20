@@ -197,16 +197,16 @@ describe('resolveExternalActor', () => {
     expect(result).toEqual({ actorId, matchedBy: 'email' });
   });
 
-  it('rung 4 — falls back to an ad-hoc, case-insensitive email match when no external_actor row exists', async () => {
+  it('rung 4 — does not use unverified email to invent an identity link', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
-    const { actorId } = await seedMemberWithEmail(orgId, 'adhoc@example.com');
+    await seedMemberWithEmail(orgId, 'adhoc@example.com');
 
     const result = await resolveExternalActor(orgId, {
       source: 'linear',
       externalId: 'ext-never-seen',
       email: 'ADHOC@EXAMPLE.COM',
     });
-    expect(result).toEqual({ actorId, matchedBy: 'email' });
+    expect(result).toEqual({ actorId: null, matchedBy: null });
   });
 
   it('rung 4 — the ad-hoc email fallback never resolves to a suspended actor', async () => {
@@ -250,5 +250,44 @@ describe('resolveExternalActor', () => {
       externalId: 'ext-cross-org',
     });
     expect(result).toEqual({ actorId: null, matchedBy: null });
+  });
+  it('scopes a reused provider user ID to its connection and rejects unscoped ambiguity', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const first = await seedIntegration(orgId, humanActorId);
+    const second = await seedIntegration(orgId, humanActorId);
+    const target = await seedMemberWithEmail(orgId, 'scoped-person@example.com');
+    await seedExternalActor(orgId, first, 'workspace-local-user', {
+      actorId: humanActorId,
+      matchedBy: 'manual',
+    });
+    await seedExternalActor(orgId, second, 'workspace-local-user', {
+      actorId: target.actorId,
+      matchedBy: 'manual',
+    });
+    expect(
+      await resolveExternalActor(orgId, { source: 'linear', externalId: 'workspace-local-user' }),
+    ).toEqual({ actorId: null, matchedBy: null });
+    expect(
+      await resolveExternalActor(orgId, {
+        source: 'linear',
+        integrationId: second,
+        externalId: 'workspace-local-user',
+      }),
+    ).toEqual({ actorId: target.actorId, matchedBy: 'manual' });
+  });
+
+  it('does not override an ignored identity with a linked account', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const integrationId = await seedIntegration(orgId, humanActorId);
+    const target = await seedMemberWithEmail(orgId, 'ignored-linked@example.com');
+    await seedLinkedAccount(target.userId, 'linear', 'ignored-linked');
+    await seedExternalActor(orgId, integrationId, 'ignored-linked', { ignoredAt: new Date() });
+    expect(
+      await resolveExternalActor(orgId, {
+        source: 'linear',
+        integrationId,
+        externalId: 'ignored-linked',
+      }),
+    ).toEqual({ actorId: null, matchedBy: null });
   });
 });

@@ -1,3 +1,5 @@
+import { WorkViewGroup } from './work-view-group';
+import { TaskOut } from './task';
 /**
  * Typed contracts and transport schemas for server-executed work views.
  *
@@ -1256,6 +1258,7 @@ export const TaskViewRow = z
     display: EntityDisplayOut.nullable().default(null),
     assignee: nullableActor,
     assigneeActor: WorkViewActor.nullable().default(null),
+    sourcePeople: TaskOut.shape.sourcePeople,
     delegate: nullableActor,
     team: TeamId,
     project: ProjectId.nullable(),
@@ -1293,6 +1296,7 @@ export const ProjectViewRow = z
     health: Health.nullable(),
     lead: nullableActor,
     leadActor: WorkViewActor.nullable().default(null),
+    sourcePeople: TaskOut.shape.sourcePeople,
     display: EntityDisplayOut.nullable().default(null),
     members: z.array(ActorId),
     teams: z.array(TeamId),
@@ -1397,17 +1401,7 @@ export const InitiativeViewRow = z
 /** A validated Initiative work-view row. */
 export type InitiativeViewRow = z.infer<typeof InitiativeViewRow>;
 
-/** One materialized group or subgroup with a distinct matched-item count. */
-export const WorkViewGroup = z
-  .object({
-    path: z.array(z.string()).min(1).max(2),
-    key: z.string(),
-    label: z.string(),
-    count: count,
-  })
-  .strict();
-/** A validated materialized group or subgroup summary. */
-export type WorkViewGroup = z.infer<typeof WorkViewGroup>;
+export { WorkViewGroup } from './work-view-group';
 
 function queryResponse<const TTarget extends ViewTarget, const TRow extends z.ZodType>(
   target: TTarget,

@@ -1,3 +1,9 @@
+import { toProjectOut as toOut, projectTeamId, loadProjectAggregateRow } from './project-read';
+import {
+  detachEditedSourcePeople,
+  sourcePeopleForSubject,
+  sourcePeopleForSubjects,
+} from '../lib/identity/source-people';
 /**
  * `@docket/api` — projects router (mounted at `/v1/orgs/:orgId/projects`).
  */
@@ -66,32 +72,6 @@ import {
   buildTaskViewFilter,
   visibleProjectTaskCounts,
 } from './task-helpers';
-
-type ProjectRow = typeof project.$inferSelect;
-
-function toOut(p: ProjectRow): z.input<typeof ProjectOut> {
-  return {
-    id: p.id,
-    organizationId: p.organizationId,
-    name: p.name,
-    summary: p.summary,
-    description: p.description,
-    status: p.status,
-    priority: p.priority,
-    health: p.health,
-    leadId: p.leadId,
-    teamId: p.teamId,
-    programId: p.programId,
-    startDate: p.startDate?.toISOString() ?? null,
-    startDateResolution: p.startDateResolution,
-    startDateFiscalYearStartMonth: p.startDateFiscalYearStartMonth,
-    targetDate: p.targetDate?.toISOString() ?? null,
-    targetDateResolution: p.targetDateResolution,
-    targetDateFiscalYearStartMonth: p.targetDateFiscalYearStartMonth,
-    createdAt: p.createdAt.toISOString(),
-    updatedAt: p.updatedAt.toISOString(),
-  };
-}
 
 /** Project one Program row into the bounded Project detail reference contract. */
 function programToOut(row: typeof program.$inferSelect): z.input<typeof ProgramOut> {
@@ -439,7 +419,15 @@ const projects = new Hono<AppEnv>()
         .orderBy(desc(project.createdAt), desc(project.id))
         .limit(limit + 1);
       const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
-      return ok(c, pageOf(ProjectOut), { items: items.map(toOut), nextCursor });
+      const sources = await sourcePeopleForSubjects(
+        orgId,
+        'project',
+        items.map((row) => row.id),
+      );
+      return ok(c, pageOf(ProjectOut), {
+        items: items.map((row) => toOut(row, sources.get(row.id))),
+        nextCursor,
+      });
     },
   )
   .get(
@@ -554,12 +542,17 @@ const projects = new Hono<AppEnv>()
         milestonesByProject.set(row.projectId, bucket);
       }
 
+      const sourcePeopleByProject = await sourcePeopleForSubjects(
+        orgId,
+        'project',
+        projectRows.map((row) => row.id),
+      );
       return ok(c, ProjectOverviewOut, {
         items: projectRows.map((row) => {
           const counts = taskCounts.get(row.id) ?? { total: 0, completed: 0 };
           const display = displays.get(row.id);
           return {
-            ...toOut(row),
+            ...toOut(row, sourcePeopleByProject.get(row.id) ?? []),
             labelIds: labelIdsByProject.get(row.id) ?? [],
             initiativeIds: initiativeIdsByProject.get(row.id) ?? [],
             display: display
@@ -588,20 +581,7 @@ const projects = new Hono<AppEnv>()
     async (c) => {
       const { orgId, actorId, capabilities } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const aggregateRows = await db
-        .select({ row: project, programRow: program, teamRow: team, leadRow: actor })
-        .from(project)
-        .leftJoin(
-          program,
-          and(eq(project.programId, program.id), eq(program.organizationId, orgId)),
-        )
-        .leftJoin(team, and(eq(project.teamId, team.id), eq(team.organizationId, orgId)))
-        .leftJoin(actor, and(eq(project.leadId, actor.id), eq(actor.organizationId, orgId)))
-        .where(
-          and(eq(project.id, id), eq(project.organizationId, orgId), isNull(project.archivedAt)),
-        )
-        .limit(1);
-      const aggregateRow = aggregateRows[0];
+      const aggregateRow = await loadProjectAggregateRow(orgId, id);
       if (!aggregateRow) throw new NotFoundError('Project not found');
       const { row, programRow, teamRow, leadRow } = aggregateRow;
 
@@ -666,7 +646,7 @@ const projects = new Hono<AppEnv>()
           initiatives: initiativeReferences,
         },
         defaultView: {
-          project: toOut(row),
+          project: toOut(row, aggregateRow.sourcePeople),
           progress: progressFromAggregate(
             progressRow ?? {
               taskCount: 0,
@@ -701,7 +681,7 @@ const projects = new Hono<AppEnv>()
         .limit(1);
       const row = rows[0];
       if (!row) throw new NotFoundError('Project not found');
-      return ok(c, ProjectOut, toOut(row));
+      return ok(c, ProjectOut, toOut(row, await sourcePeopleForSubject(orgId, 'project', row.id)));
     },
   )
   .patch(
@@ -729,15 +709,7 @@ const projects = new Hono<AppEnv>()
       await assertRefInOrg(program, orgId, body.programId, 'Program not found');
       await assertRefInOrg(team, orgId, body.teamId, 'Team not found');
       // The project's team can move in the same request; resolve against whichever it ends up on.
-      const existingTeam = (
-        await db
-          .select({ teamId: project.teamId })
-          .from(project)
-          .where(
-            and(eq(project.id, id), eq(project.organizationId, orgId), isNull(project.archivedAt)),
-          )
-          .limit(1)
-      )[0]?.teamId;
+      const existingTeam = await projectTeamId(orgId, id);
       const labels = await resolveLabelSet(orgId, body.labelIds, {
         teamId: body.teamId ?? existingTeam ?? null,
       });
@@ -757,6 +729,10 @@ const projects = new Hono<AppEnv>()
       );
 
       const row = await db.transaction(async (tx) => {
+        await detachEditedSourcePeople(
+          { orgId, subjectType: 'project', subjectId: id, field: 'lead', value: body.leadId },
+          tx,
+        );
         const [current] = await tx.select().from(project).where(where).limit(1).for('update');
         if (!current) return undefined;
         const [settings] = await tx
@@ -851,7 +827,7 @@ const projects = new Hono<AppEnv>()
         });
       }
       await enqueueSearchUpsert(orgId, 'project', row.id);
-      return ok(c, ProjectOut, toOut(row));
+      return ok(c, ProjectOut, toOut(row, await sourcePeopleForSubject(orgId, 'project', row.id)));
     },
   )
   .post(
@@ -930,7 +906,7 @@ const projects = new Hono<AppEnv>()
       });
       if (!row) throw new NotFoundError('Project not found');
       await enqueueSearchDelete(orgId, 'project', row.id);
-      return ok(c, ProjectOut, toOut(row));
+      return ok(c, ProjectOut, toOut(row, await sourcePeopleForSubject(orgId, 'project', row.id)));
     },
   )
   .get(

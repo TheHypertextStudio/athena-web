@@ -1,5 +1,7 @@
 'use client';
 
+import { renderSourcePeople } from '@/components/people/source-person-references';
+
 /**
  * `views` — the shared, aligned-column **task table**: the one surface every in-app task
  * *list* renders through, so a project's tasks, a cycle's committed tasks, and any other task
@@ -212,21 +214,7 @@ export function buildTaskColumns({
       header: headerFor(catalog, 'assigneeId', 'Assignee'),
       minWidth: '8rem',
       priority: 2,
-      render: (task) => {
-        const actor = task.assigneeId ? resolveActor(task.assigneeId) : null;
-        if (!actor) return <span className="text-on-surface-variant">—</span>;
-        return (
-          <span className="text-on-surface flex min-w-0 items-center gap-1.5">
-            <ActorAvatar
-              kind={actor.kind}
-              name={actor.name}
-              avatarUrl={actor.avatarUrl}
-              size={18}
-            />
-            <span className="truncate">{actor.name}</span>
-          </span>
-        );
-      },
+      render: (task) => renderTaskAssignee(task, resolveActor),
     },
     // Due date — end-aligned, tabular so dates line up.
     {
@@ -600,5 +588,22 @@ function SelectableTaskTable({
       {...(defaultCollapsed !== undefined ? { defaultCollapsed } : {})}
       {...(className !== undefined ? { className } : {})}
     />
+  );
+}
+
+function renderTaskAssignee(
+  task: TaskOut,
+  resolveActor: TaskColumnsDeps['resolveActor'],
+): JSX.Element {
+  const actor = task.assigneeId ? resolveActor(task.assigneeId) : null;
+  if (!actor)
+    return (
+      renderSourcePeople(task, 'assignee') ?? <span className="text-on-surface-variant">—</span>
+    );
+  return (
+    <span className="text-on-surface flex min-w-0 items-center gap-1.5">
+      <ActorAvatar kind={actor.kind} name={actor.name} avatarUrl={actor.avatarUrl} size={18} />
+      <span className="truncate">{actor.name}</span>
+    </span>
   );
 }

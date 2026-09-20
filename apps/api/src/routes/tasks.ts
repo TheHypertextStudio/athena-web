@@ -1,7 +1,9 @@
+import { loadTaskDetailRow } from './task-detail-row';
+import { assertTaskAssignmentEdit, detachTaskAssigneeEdit } from './task-person-edit';
+import { taskListOutput } from './task-list-output';
 /** `@docket/api` — tasks router (mounted at `/v1/orgs/:orgId/tasks`). */
 import {
   actor,
-  attachment,
   auditEvent,
   changeSet,
   changeSetEntry,
@@ -44,7 +46,6 @@ import { guardsInOrder } from '../lib/guards-in-order';
 import {
   applyExclusivity,
   labelsForSubject,
-  labelsForSubjects,
   replaceLabels,
   resolveAttachedLabels,
   resolveLabelSet,
@@ -81,7 +82,7 @@ import {
 } from '../mcp/change-set';
 
 import { emitEvent } from './event-emit';
-import { loadEntityMentions } from '../content/entity-mentions';
+import { loadTaskExpansionResources } from './task-expansion-resources';
 import {
   assertTaskCapability,
   assertMilestoneInOrg,
@@ -173,12 +174,7 @@ async function loadTaskDetailAggregate(
   readonly workflowStates: z.input<typeof TaskDetailAggregate>['references']['workflowStates'];
 }> {
   const [taskWithTeamRows, canView] = await Promise.all([
-    db
-      .select({ row: task, workflowStates: team.workflowStates })
-      .from(task)
-      .innerJoin(team, and(eq(task.teamId, team.id), eq(team.organizationId, orgId)))
-      .where(and(eq(task.id, id), eq(task.organizationId, orgId), isNull(task.archivedAt)))
-      .limit(1),
+    loadTaskDetailRow(orgId, id),
     buildTaskViewFilter(orgId, actorId),
   ]);
   const taskWithTeam = taskWithTeamRows[0];
@@ -259,6 +255,7 @@ async function loadTaskDetailAggregate(
     workflowStates,
     detail: {
       ...toOut(row, labels),
+      sourcePeople: taskWithTeam.sourcePeople,
       milestoneId: row.milestoneId,
       cycleId: row.cycleId,
       parentTaskId: visibleParentId,
@@ -293,39 +290,6 @@ async function enqueueTaskSearchIndex(
   await (operation === 'upsert'
     ? enqueueSearchUpsert(organizationId, 'task', entityId)
     : enqueueSearchDelete(organizationId, 'task', entityId));
-}
-
-/** Load only resources that are already direct or visibility-filtered context for one task. */
-async function loadTaskExpansionResources(
-  orgId: string,
-  actorId: string,
-  taskId: string,
-): Promise<readonly { title: string; url: string | null }[]> {
-  const [attachments, mentions] = await Promise.all([
-    db
-      .select({ title: attachment.title, url: attachment.url })
-      .from(attachment)
-      .where(
-        and(
-          eq(attachment.organizationId, orgId),
-          eq(attachment.subjectType, 'task'),
-          eq(attachment.subjectId, taskId),
-          isNull(attachment.archivedAt),
-        ),
-      )
-      .orderBy(asc(attachment.createdAt)),
-    loadEntityMentions({
-      caller: { kind: 'agent', actorId, organizationId: orgId },
-      orgId,
-      subjectType: 'task',
-      subjectId: taskId,
-    }),
-  ]);
-  return [
-    ...attachments,
-    ...mentions.external.map((mention) => ({ title: mention.label, url: mention.href })),
-    ...mentions.entities.map((mention) => ({ title: mention.label, url: null })),
-  ];
 }
 
 /** The task representation and one opaque operation token returned by description expansion. */
@@ -840,7 +804,7 @@ The new task appears in the organization's activity stream. An assigned task als
           throw new ConflictError('Task changed while expansion was running');
         }
         if (expansion.patch.assigneeId !== undefined) {
-          await assertTaskCapability(orgId, actorId, lockedBefore, 'assign', tx);
+          await assertTaskAssignmentEdit(orgId, actorId, lockedBefore, tx);
         }
         const childStatus =
           expansion.subtasks.length > 0
@@ -1332,14 +1296,8 @@ The new task appears in the organization's activity stream. An assigned task als
         scanCursor = encodeListCursor(lastScanned.createdAt, lastScanned.id);
       }
       const { items, nextCursor } = pageResult(visible, limit, (r) => r.createdAt);
-      // One extra query for the whole page rather than one per row.
-      const labelsByTask = await labelsForSubjects(
-        'task',
-        orgId,
-        items.map((t) => t.id),
-      );
       return ok(c, pageOf(TaskOut), {
-        items: items.map((t) => toOut(t, labelsByTask.get(t.id) ?? [])),
+        items: await taskListOutput(orgId, items),
         nextCursor,
       });
     },
@@ -1582,8 +1540,10 @@ Changing \`assigneeId\` or \`delegateId\` requires \`assign\`; other changes req
           or(eq(taskRelatedTask.taskId, id), eq(taskRelatedTask.relatedTaskId, id)),
         );
         await assertTaskCapability(orgId, ctx.actorId, current, 'contribute', tx);
-        if (body.assigneeId !== undefined || body.delegateId !== undefined)
+        if (body.assigneeId !== undefined || body.delegateId !== undefined) {
           await assertTaskCapability(orgId, ctx.actorId, current, 'assign', tx);
+        }
+        await detachTaskAssigneeEdit(orgId, id, body.assigneeId, tx);
 
         if (newParentId !== null) {
           const activeTasks = await tx

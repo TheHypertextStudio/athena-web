@@ -341,6 +341,8 @@ export const invitation = pgTable(
     roleId: text('role_id')
       .notNull()
       .references(() => role.id, { onDelete: 'restrict' }),
+    /** Existing accountless person to attach on acceptance; null creates a new person. */
+    personActorId: text('person_actor_id').references(() => actor.id, { onDelete: 'restrict' }),
     asGuest: boolean('as_guest').notNull().default(false),
     token: text('token').notNull(),
     status: invitationStatus('status').notNull().default('pending'),

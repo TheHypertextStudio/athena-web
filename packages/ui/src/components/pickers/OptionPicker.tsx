@@ -19,12 +19,20 @@ import * as React from 'react';
 
 import { Popover, PopoverContent, PopoverTrigger } from '../../primitives';
 
-import { PickerList } from './PickerList';
+import { PickerList, type PickerListProps } from './PickerList';
 import { PropertyTrigger } from './PropertyTrigger';
 import type { PickerOption } from './types';
 
 /** Props for {@link OptionPicker}. */
 export interface OptionPickerProps<TValue extends string = string> {
+  /** Optional creation action in the searchable list. */
+  create?: PickerListProps<TValue>['create'];
+  /** Replace the list with an inline confirmation while keeping the popover mounted. */
+  confirmation?: React.ReactNode;
+  /** Optional controlled visibility for async creation completion. */
+  open?: boolean | undefined;
+  /** Cancel the nested confirmation before dismissing the picker. */
+  onCancelConfirmation?: (() => void) | undefined;
   /** The full set of choices (already resolved + vocabulary-skinned by the caller). */
   options: readonly PickerOption<TValue>[];
   /** The currently-selected value, or `null` when the property is unset. */
@@ -82,20 +90,6 @@ export interface OptionPickerProps<TValue extends string = string> {
   footer?: React.ReactNode | undefined;
 }
 
-function usePickerOpen(
-  onOpenChange?: (open: boolean) => void,
-): readonly [boolean, (open: boolean) => void] {
-  const [open, setOpen] = React.useState(false);
-  const setOpenState = React.useCallback(
-    (next: boolean) => {
-      setOpen(next);
-      onOpenChange?.(next);
-    },
-    [onOpenChange],
-  );
-  return [open, setOpenState];
-}
-
 /**
  * The generic searchable single-select picker.
  *
@@ -114,30 +108,27 @@ function usePickerOpen(
  * />
  * ```
  */
-export function OptionPicker<TValue extends string = string>({
-  options,
-  value,
-  onChange,
-  placeholder,
-  triggerIcon,
-  searchable = true,
-  searchPlaceholder = 'Search…',
-  emptyText = 'No matches',
-  idleText,
-  query,
-  onQueryChange,
-  filter,
-  loading,
-  onOpenChange,
-  clearLabel,
-  ariaLabel,
-  disabled,
-  readOnly,
-  triggerVariant = 'ghost',
-  triggerClassName,
-  footer,
-}: OptionPickerProps<TValue>): React.JSX.Element {
-  const [open, setOpenState] = usePickerOpen(onOpenChange);
+export function OptionPicker<TValue extends string = string>(
+  props: OptionPickerProps<TValue>,
+): React.JSX.Element {
+  const {
+    options,
+    value,
+    placeholder,
+    triggerIcon,
+    ariaLabel,
+    disabled,
+    readOnly,
+    triggerClassName,
+    confirmation,
+    onCancelConfirmation,
+  } = props;
+  const [localOpen, setOpen] = React.useState(false);
+  const open = props.open ?? localOpen;
+  const setOpenState = (next: boolean): void => {
+    setOpen(next);
+    props.onOpenChange?.(next);
+  };
   const active = value !== null ? options.find((option) => option.value === value) : undefined;
 
   // A read-only or disabled picker never opens; render the trigger affordance only.
@@ -149,7 +140,7 @@ export function OptionPicker<TValue extends string = string>({
       ariaLabel={ariaLabel ? `${ariaLabel} — ${active ? active.label : 'not set'}` : undefined}
       disabled={disabled}
       readOnly={readOnly}
-      variant={triggerVariant}
+      variant={props.triggerVariant ?? 'ghost'}
       className={triggerClassName}
     />
   );
@@ -161,37 +152,57 @@ export function OptionPicker<TValue extends string = string>({
       <PopoverTrigger asChild disabled={disabled}>
         {trigger}
       </PopoverTrigger>
-      <PopoverContent width="lg">
-        <PickerList<TValue>
-          options={options}
-          selected={value}
-          onSelect={(next) => {
-            onChange(next);
-            setOpenState(false);
-          }}
-          searchable={searchable}
-          searchPlaceholder={searchPlaceholder}
-          emptyText={emptyText}
-          idleText={idleText}
-          query={query}
-          onQueryChange={onQueryChange}
-          filter={filter}
-          loading={loading}
-          ariaLabel={ariaLabel}
-          clear={
-            clearLabel
-              ? {
-                  label: clearLabel,
-                  onClear: () => {
-                    onChange(null);
-                    setOpenState(false);
-                  },
-                }
-              : null
+      <PopoverContent
+        width="lg"
+        onEscapeKeyDown={(event) => {
+          if (confirmation) {
+            event.preventDefault();
+            onCancelConfirmation?.();
           }
-        />
-        {footer}
+        }}
+      >
+        {confirmation ?? (
+          <>
+            <OptionPickerList
+              {...props}
+              close={() => {
+                setOpenState(false);
+              }}
+            />
+            {props.footer}
+          </>
+        )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+function OptionPickerList<TValue extends string>({
+  value,
+  onChange,
+  close,
+  clearLabel,
+  ...props
+}: Omit<OptionPickerProps<TValue>, 'placeholder'> & { close: () => void }): React.JSX.Element {
+  const select = (next: TValue | null): void => {
+    onChange(next);
+    close();
+  };
+  return (
+    <PickerList
+      {...props}
+      selected={value}
+      onSelect={select}
+      clear={
+        clearLabel
+          ? {
+              label: clearLabel,
+              onClear: () => {
+                select(null);
+              },
+            }
+          : null
+      }
+    />
   );
 }

@@ -37,6 +37,8 @@ import {
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { createElement, useCallback, useMemo } from 'react';
 
+import { ActorAvatar } from '@docket/ui/components';
+import { useCachedPersonSearch, mergeCachedPeople } from '@/components/people/cached-person-search';
 import { useActiveOrg } from '@/components/active-org';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { api } from '@/lib/api';
@@ -78,7 +80,7 @@ export const SEARCH_KIND_ICON: Record<SearchDocumentKind, LucideIcon> = {
 export const SEARCH_KIND_LABEL: Record<SearchDocumentKind, string> = {
   organization: 'Workspace',
   team: 'Team',
-  member: 'Member',
+  member: 'Person',
   agent: 'Agent',
   agent_session: 'Agent session',
   task: 'Task',
@@ -152,6 +154,8 @@ export function searchResultToPaletteItem(
 
 /** Return the custom entity identity when this search kind has one. */
 function searchResultIcon(hit: SearchResult) {
+  if (hit.kind === 'member')
+    return createElement(ActorAvatar, { kind: 'human', name: hit.title, size: 20 });
   const subjectType = searchDisplaySubjectType(hit.kind);
   if (!subjectType || !hit.organizationId) return SEARCH_KIND_ICON[hit.kind];
   const display = hit.display ?? defaultEntityDisplay(subjectType, hit.entityId);
@@ -256,7 +260,7 @@ interface HubSearchInput {
  */
 export function useHubSearch({ query, scope, close, open }: HubSearchInput): HubSearchState {
   const router = useRouter();
-  const { activeOrgId, orgName } = useActiveOrg();
+  const { activeOrgId, orgName, orgs } = useActiveOrg();
 
   const trimmed = query.trim();
   const hasQuery = trimmed.length > 0;
@@ -291,6 +295,14 @@ export function useHubSearch({ query, scope, close, open }: HubSearchInput): Hub
             },
           }),
     fallbackMessage: 'Could not search your workspace.',
+    options: {
+      placeholderData: (previous, previousQuery) => {
+        const previousKey = previousQuery?.queryKey;
+        return previousKey?.[1] === scope && previousKey[2] === (activeOrgId ?? 'all')
+          ? previous
+          : undefined;
+      },
+    },
   });
 
   const toResultItem = useCallback(
@@ -305,9 +317,13 @@ export function useHubSearch({ query, scope, close, open }: HubSearchInput): Hub
     [close, orgName, router],
   );
 
+  const cachedPeople = useCachedPersonSearch(
+    open ? (orgFilter ? [orgFilter] : orgs.map((org) => org.id)) : [],
+    query,
+  );
   const results = useMemo<readonly PaletteItem[]>(
-    () => (searchQ.data?.items ?? []).map(toResultItem),
-    [searchQ.data, toResultItem],
+    () => mergeCachedPeople(searchQ.data?.items ?? [], cachedPeople).map(toResultItem),
+    [searchQ.data, cachedPeople, toResultItem],
   );
 
   // Neither signal is gated on there being a query: with an empty box the same request is still

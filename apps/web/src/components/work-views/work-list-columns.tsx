@@ -11,6 +11,7 @@ import type { ViewTarget } from '@docket/work/view-contract';
 import type { WorkViewActor } from '@docket/work/work-view-contract';
 import type { JSX } from 'react';
 
+import { renderWorkRowSources, rowActor } from './work-row-source-people';
 import DocketLink from '@/components/docket-link';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { HealthLabel } from '@/components/entity-display/health';
@@ -119,15 +120,6 @@ export function workRosterIdentityWidthAt(containerWidthPx: number): number {
 /** Resolve the first shared container tier that satisfies a cumulative pixel requirement. */
 function priorityForRequirement(requiredWidthPx: number): Exclude<ColumnPriority, 'always'> {
   return PRIORITY_BREAKPOINTS.find(({ maximum }) => requiredWidthPx <= maximum)?.priority ?? 9;
-}
-
-/** Resolve a projected actor relation without weakening the row type. */
-function rowActor(row: WorkViewRowFor<ViewTarget>, field: string): WorkViewActor | null {
-  if (row.target === 'task' && field === 'assignee') return row.assigneeActor;
-  if (row.target === 'project' && field === 'lead') return row.leadActor;
-  if (row.target === 'program' && field === 'owner') return row.ownerActor;
-  if (row.target === 'initiative' && field === 'owner') return row.ownerActor;
-  return null;
 }
 
 /** Resolve the optional secondary line for one work row. */
@@ -500,6 +492,7 @@ function PropertyValue<TTarget extends ViewTarget>({
     renderPriorityPropertyValue({ fieldKey, value }) ??
     renderHealthPropertyValue({ fieldKey, value }) ??
     renderActorPropertyValue({ actor }) ??
+    renderWorkRowSources(displayRow, fieldKey) ??
     renderDatePropertyValue({ kind: field.kind, value }) ??
     renderProgressPropertyValue({ fieldKey, value }) ??
     renderCollectionPropertyValue(value) ??

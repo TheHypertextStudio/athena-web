@@ -1,5 +1,7 @@
 'use client';
 
+import { WorkspaceActorPicker } from '@/components/people/workspace-actor-picker';
+
 /**
  * The program properties chips — status, health, owner, and visibility.
  *
@@ -19,7 +21,7 @@
  */
 import { type Health, type Visibility } from '@docket/work/capability-contract';
 import { type ProgramStatus } from '@docket/work/program-contract';
-import { ActorPicker, EnumPicker, type PickerOption } from '@docket/ui/components';
+import { EnumPicker, type PickerOption } from '@docket/ui/components';
 import { Activity } from '@docket/ui/icons';
 import { type JSX, useMemo } from 'react';
 
@@ -118,7 +120,7 @@ export function ProgramPropertiesPanel({
         />
       </EntityMetadataItem>
       <EntityMetadataItem priority={2}>
-        <ActorPicker
+        <WorkspaceActorPicker
           options={memberOptions}
           value={ownerId}
           onChange={onOwnerChange}

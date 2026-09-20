@@ -1,3 +1,4 @@
+import { sourceAwarePersonFilter, sourceAwarePersonGroup } from './source-person-sql';
 import { sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -77,7 +78,11 @@ const booleanSort = (value: SQL) => ({ value, cursor: booleanCursor });
 const taskFilter = {
   status: { kind: 'enum', value: column('state') },
   priority: { kind: 'enum', value: column('priority') },
-  assignee: tenantScalarRelationFilter(WORK_VIEW_SCALAR_RELATIONS.actor, column('assignee_id')),
+  assignee: sourceAwarePersonFilter({
+    subjectType: 'task',
+    field: 'assignee',
+    column: 'assignee_id',
+  }),
   delegate: tenantScalarRelationFilter(WORK_VIEW_SCALAR_RELATIONS.actor, column('delegate_id')),
   team: tenantScalarRelationFilter(WORK_VIEW_SCALAR_RELATIONS.team, column('team_id')),
   project: tenantScalarRelationFilter(WORK_VIEW_SCALAR_RELATIONS.project, column('project_id')),
@@ -163,7 +168,11 @@ const statusGroup = (name: string) =>
 const taskGroup = {
   status: statusGroup('state'),
   priority: scalar('priority'),
-  assignee: actorGroup('assignee_id'),
+  assignee: sourceAwarePersonGroup({
+    subjectType: 'task',
+    field: 'assignee',
+    column: 'assignee_id',
+  }),
   delegate: actorGroup('delegate_id'),
   team: namedGroup('team_id', 'team'),
   project: namedGroup('project_id', 'project'),
@@ -186,7 +195,7 @@ const projectFilter = {
   status: { kind: 'enum', value: column('status') },
   priority: { kind: 'enum', value: column('priority') },
   health: { kind: 'enum', value: column('health') },
-  lead: tenantScalarRelationFilter(WORK_VIEW_SCALAR_RELATIONS.actor, column('lead_id')),
+  lead: sourceAwarePersonFilter({ subjectType: 'project', field: 'lead', column: 'lead_id' }),
   members: tenantRelationFilter(WORK_VIEW_RELATIONS.projectMembers),
   teams: {
     kind: 'relation-many',
@@ -238,7 +247,7 @@ const projectGroup = {
   status: statusGroup('status'),
   priority: scalar('priority'),
   health: scalar('health'),
-  lead: actorGroup('lead_id'),
+  lead: sourceAwarePersonGroup({ subjectType: 'project', field: 'lead', column: 'lead_id' }),
   members: relationGroup(WORK_VIEW_RELATIONS.projectMembers),
   teams: {
     kind: 'fanout',

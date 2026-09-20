@@ -42,7 +42,7 @@ function hrefForEntity(
     case 'team':
       return `/orgs/${organizationId}/teams`;
     case 'member':
-      return withQuery(`/orgs/${organizationId}/settings/members`, 'actorId', entityId);
+      return `/orgs/${organizationId}/people/${entityId}`;
     case 'agent':
       return withQuery('/athena', 'workspace', organizationId);
     case 'agent_session':

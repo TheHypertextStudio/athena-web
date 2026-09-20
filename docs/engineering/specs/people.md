@@ -1,162 +1,108 @@
-# People — the actor system, and every place account-holders are treated differently
+# People and external identities
 
-> **Status**: normative
-> **Requirement ids**: ENT-43, ENT-44, ENT-45, ENT-46, ENT-47, ENT-48
-> **Last updated**: 2026-08-02
+This specification is for engineers changing person creation, assignment, attribution, or access.
+Preserve the distinction between recording a person and granting account access.
 
-## The rule
+## Person records
 
-> "all actors that are tracked by Docket will have a user profile or account with Docket. Our actor
-> system and schema should be able to support this. For example, a nonprofit may have volunteers
-> that are not given Docket accounts, but they may need to be treated like staff who can be assigned
-> work. Docket should ensure that all actors are treated equally from a UI and UX perspective unless
-> there are clear and convincing reasons not to."
+A workspace person is a human `actor`. Its stable ID identifies assignments, ownership, profiles,
+search results, and mentions. `userId: null` means that the person has no login; it does not make the
+person incomplete. People receive the same visual treatment regardless of account presence.
 
-A workspace tracks **people**. Some of them sign in. Whether someone signs in is a fact about their
-relationship to the _software_, not about their standing in the _organization_ — and in a nonprofit
-it is often inversely related to how much of the work they do. So the default is equality, and every
-departure from it has to earn its place on the list below.
+Contributors can create people by name through `POST /v1/orgs/:orgId/members`. The default role is
+null. Explicit role submissions require management authority. Creation sends no invitation and
+creates no account or grants. Personal workspaces allow accountless people while retaining their
+single account-backed owner and prohibition on invitations.
 
-**If you find a divergence in the product that is not in §3, it is a bug.** That is the whole
-contract of this document (ENT-48): the list is exhaustive by construction, so an unlisted
-difference is either removed or added here with a written reason — never left to be discovered by a
-volunteer wondering why their name is grey.
+The existing authorization ladder governs two named people operations: creating people requires
+`contribute`; changing workspace-wide identity links or consolidating people requires `manage`.
+Accountless people do not satisfy last-owner protection and cannot receive account notifications.
 
-## 1. What a person is
+Removing a person archives the actor and revokes its account access, grants, and memberships.
+Historical assignments, mentions, invitations, and consolidation records retain their stable actor
+references. Pending invitations targeting that person are revoked. The last-owner check runs inside
+the same workspace-locked transaction as removal.
 
-One row: `actor` where `kind = 'human'` (`packages/db/src/schema/identity.ts`).
+## Inline creation
 
-| Column          | Account-holder            | Account-less person |
-| --------------- | ------------------------- | ------------------- |
-| `kind`          | `'human'`                 | `'human'`           |
-| `userId`        | their Better Auth user id | **`null`**          |
-| `roleId`        | an org role               | an org role         |
-| everything else | identical                 | identical           |
+Assignment and ownership controls use the shared workspace person picker. Typing searches existing
+people and offers an explicit Add action. Confirmation shows the name and destination workspace and
+states that no invitation will be sent. Success creates and selects the person without closing the
+parent editor. An exact name match does not prevent explicitly creating another person with that
+name; names are not unique identifiers.
 
-`user_id` is nullable, and the uniqueness index that keeps one account from joining a workspace
-twice is explicitly partial — `where user_id is not null` — so account-less people are not competing
-for a slot they cannot fill. The schema has permitted this from the beginning; what did not exist
-until ENT-44 was a way to _create_ one.
+Typing, blur, Escape, and cancellation do not create records. A confirmed person remains if the
+parent draft is discarded. Failed requests retain the name and draft, and retries reuse the same
+Idempotency-Key. A workspace switch must not apply the result of an earlier workspace's request to
+the new editor.
 
-Two ways in, converging on the same row:
+The same confirmation is available from editable @mention menus. Insertion retains the caret range
+and surrounding content. Mentions persist actor IDs and resolve the current display name. Global
+search discovers people but does not create records on an empty result. Cached workspace roster records supplement search results while indexing catches up, with actor-ID deduplication and the same workspace scope as the query.
 
-- `POST /v1/orgs/:orgId/members/invitations` → email → the invitee redeems it →
-  `acceptInvitation` materializes the actor **with** `user_id`.
-- `POST /v1/orgs/:orgId/members` → a name (and optionally a role) → the actor exists immediately
-  **without** `user_id`.
+## Source identities
 
-Both return the same `MemberOut`. Nothing downstream can tell which path produced a row except by
-reading `user_id`, and §3 is the complete list of things allowed to read it.
+An external identity retains its provider scope and stable external ID. Multiple identities can
+link to one workspace person. Confirmed mappings outrank automatic resolution. Names and unverified
+email addresses suggest matches but never prove identity. Historical mappings are retained rather
+than silently rewritten by a new matching policy.
 
-## 2. What is identical, and where that is enforced
+A source-person reference records the source identity, target entity and field, original display
+name, and the person link. An unresolved assignment remains visible using its source name, or a
+provider-qualified identifier when a name is absent. It is not an unassigned task. Source-only assignees and leads form named, read-only groups. Empty-person filters include only work with neither a native person nor active source evidence.
 
-| Capability                | Mechanism                                                                     | Why it is already equal                                                                                                                                                                    |
-| ------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Assigned a task           | `task.assignee_id → actor.id`                                                 | The FK targets `actor`, and `assertRefInOrg` validates only tenancy. No account check exists on any assignment path.                                                                       |
-| Leading a project         | `project.lead_id → actor.id`                                                  | Same.                                                                                                                                                                                      |
-| Owning an initiative      | `initiative.owner_id → actor.id`                                              | Same.                                                                                                                                                                                      |
-| Owning a program          | `program.owner_id → actor.id`                                                 | Same.                                                                                                                                                                                      |
-| Appearing in the roster   | `GET /v1/orgs/:orgId/members`                                                 | Filters on `kind = 'human'` only, and orders by `lower(display_name)`. Insertion order would have grouped every account-less person after every account-holder for no reason anyone chose. |
-| Appearing in every picker | `memberActorOptions` (`apps/web/src/components/property-pickers/options.tsx`) | Built from that one roster read, so the assignee / lead / owner pickers cannot diverge from it.                                                                                            |
-| Having a profile          | `GET /v1/orgs/:orgId/members/:actorId/profile`                                | Resolves for every human actor. The payload has no account field, so no client can branch on one.                                                                                          |
-| Renaming                  | `PATCH /v1/orgs/:orgId/members/:actorId/profile`                              | Offered on the same terms to both. For an account-less person this workspace is the only place their name exists; refusing the edit would strand it.                                       |
-| Role and status           | `PATCH /v1/orgs/:orgId/members/:actorId`                                      | Unchanged, and unchanged in what it accepts.                                                                                                                                               |
-| Removal                   | `DELETE /v1/orgs/:orgId/members/:actorId`                                     | Same endpoint, same last-owner guard.                                                                                                                                                      |
-| Search + activity         | `enqueueSearchUpsert(orgId, 'actor', …)`                                      | Fired on create, rename, role change and removal, exactly as for members.                                                                                                                  |
-| Visual treatment          | `apps/web/src/components/people/person-row.tsx`                               | The row component never receives `userId`. There is no branch to drift.                                                                                                                    |
+Managers can resolve an identity where it appears or inspect linked identities on a person profile.
+They can select a suggested person, search the roster, or create a person and link the identity in
+one transaction. Confirmation explains that the mapping applies throughout the workspace. Dismissing
+the surface leaves it unresolved; it does not ignore the identity.
 
-## 3. The complete list of intentional divergences
+Changing an identity link updates only references still derived from that identity. Explicit local
+assignment changes detach the source reference so later identity corrections cannot overwrite them.
+Provider sync preserves explicit links, deliberate unlinking, and ignored identities. Unmappable
+outbound assignments must not silently clear the provider's assignee.
 
-Each one exists because a person who does not sign in has no session, no inbox, and no consent to
-carry — not because they are a lesser participant. Nothing on this list is visible as a marker
-_on_ the person; each is an absence of something that would have nowhere to go.
+## Account attachment and consolidation
 
-### 3.1 They have no account settings
+An invitation may name an existing accountless person through `personActorId`. Acceptance attaches
+the authenticated user to that record and applies the invitation's authorized role. The person's
+ID, name, work, and mentions survive. The server rejects foreign, already linked, or inactive targets.
 
-**What differs**: Settings → Profile, Security, Passkeys, Sessions, Recovery codes, Connected
-accounts, and Account deletion exist only for the signed-in caller, about themselves.
+Managers can preview duplicate consolidation and select the surviving person. The account-backed
+record must survive when one exists; two account-backed people cannot be combined. Consolidation
+moves current work references and external links transactionally, retains original audit attribution,
+and records an alias from the old actor ID. Historical mentions and profile links resolve through
+that alias. Access grants are not transferred.
 
-**Why**: these surfaces edit an authentication identity. There is no identity to edit, and no one
-who could be authorized to edit it — an admin changing "a volunteer's passkey" is not a coherent
-action. Their workspace-facing identity (name, avatar, role, status) _is_ editable by managers,
-through the same endpoints used for anyone else.
+The preview includes the source and surviving names, linked identities, and counts of current work.
+The confirmation rejects changed identity records rather than applying a stale decision.
 
-**Where it shows**: the caller's own Settings area only. Nothing on another person's profile
-mentions it, so a reader never learns from the UI which kind of person they are looking at.
+## Validation contract
 
-### 3.2 They receive no notifications
+Behavior tests cover personal and contributor creation, explicit confirmation, duplicate names,
+retry idempotency, workspace switches, mention caret preservation, invitation attachment, owner
+protection, source resolution, and consolidation. Visual acceptance requires seeded authenticated
+screenshots at desktop/mobile widths in both themes. Compilation and unit tests alone do not prove
+interactive acceptance.
 
-**What differs**: notification preferences, contact points, email digests and push are per **user**
-(`me-notifications`, `contact-points`), and event routing resolves recipients to user ids
-(`apps/api/src/consumers/routing.ts`).
+## Migration and release
 
-**Why**: a notification needs a destination. Docket holds no email address, phone number or device
-for an account-less person, deliberately — collecting contact details for someone who never agreed
-to be contacted is a privacy decision, not a feature gap. Their work is still routed and still
-appears in every workspace surface; it simply is not pushed at them.
+The September 19, 2026 implementation preserves existing actor IDs, `member` search kinds, and
+`actor` mention payloads. For example, Sam Rivera can own a task with `userId: null` and later
+accept an invitation without changing the task's assignee ID.
 
-**Consequence to hold**: assigning work to an account-less person is a real assignment, and the
-person who _made_ it is expected to tell them. The product must not imply Docket did.
+Deploy the additive actor-alias and source-person persistence migration before clients use the
+new read fields. Existing rows with an empty assignee provide no proof of a source identity.
+Only stored source evidence or a supported provider refresh can populate those references.
 
-### 3.3 They cannot be an Owner in practice
+Use the existing search projection and reindex mechanisms for persisted discoverability. The
+workspace roster cache provides immediate local results while indexing finishes. Do not create
+a second person directory or require identity resolution before assigning work.
 
-**What differs**: the last-owner guard requires an org to retain at least one **active Owner**, and
-that guard is what protects the org from being locked out. Giving the Owner role to someone who
-cannot sign in satisfies the guard's letter while defeating its purpose.
+The component diagram in [people-components.mmd](people-components.mmd) shows API modules.
+Person creation and invitation acceptance share actor persistence. Integration ingestion and
+identity resolution share source attribution. Profile, search, and mention readers resolve aliases
+so historical references continue to identify the surviving person.
 
-**Why**: this is a safety property of the organization, not a judgement about the person.
-
-**Status**: the API does **not** currently block it — `POST /` and `PATCH /:actorId` accept any
-in-org role for any human actor, so this is a divergence in _advice_, not in enforcement. It is
-recorded here rather than quietly enforced because the enforcement (refusing the Owner role to an
-account-less actor, or requiring at least one account-backed Owner) is a behavioural change that
-should be designed, not slipped in.
-
-### 3.4 They are not a target for "invite" flows
-
-**What differs**: `POST /invitations` takes an email address, so it cannot name an existing
-account-less person; there is no "invite this row" action on a profile.
-
-**Why**: nothing prevents inviting the same human by email — that creates a _second_ actor for
-them, which is a genuine gap rather than a designed divergence. Merging an invitation into an
-existing account-less actor (so the volunteer who later gets a login keeps their assigned work) is
-**not built**. Until it is, an admin who invites someone already on the roster gets two rows.
-
-**Recorded as**: an open gap, not a justified difference. It is on this list so it cannot be
-mistaken for one.
-
-### 3.5 A personal workspace has no roster at all
-
-**What differs**: `POST /v1/orgs/:orgId/members` returns 409 for a personal workspace, and the
-People and Teams nav rows are not rendered for one.
-
-**Why**: this is not an actor-treatment divergence — it applies identically to account-holders
-(`POST /invitations` has always returned 409 there). A personal workspace is an org-of-one, and its
-org backing is an implementation detail the reader should never have to meet.
-
-## 4. What this rules out
-
-For the avoidance of future doubt, none of the following is permitted, and none of it exists today:
-
-- a badge, tag, tooltip, icon, or asterisk on a person because they have no account;
-- muted, italic, or lower-contrast text for their name;
-- a separate "Invited", "Pending", "External", or "No account" section in any list;
-- sorting or grouping any list by account presence;
-- a disabled, read-only, or absent control on their row that an account-holder's row has;
-- an empty state or 404 where an account-holder would have had a surface;
-- copy describing them as incomplete, unregistered, or not yet real.
-
-## 5. Where the code lives
-
-| Concern                                        | File                                                   |
-| ---------------------------------------------- | ------------------------------------------------------ |
-| Schema                                         | `packages/db/src/schema/identity.ts` (`actor`)         |
-| DTOs + profile read                            | `apps/api/src/routes/actors.ts`                        |
-| Roster, create, profile, rename, role, removal | `apps/api/src/routes/members.ts`                       |
-| API contract tests                             | `apps/api/tests/routes/actors-accountless.test.ts`     |
-| Roster surface                                 | `apps/web/src/components/people/people-list.tsx`       |
-| Roster row                                     | `apps/web/src/components/people/person-row.tsx`        |
-| Profile surface                                | `apps/web/src/components/people/person-profile.tsx`    |
-| Add-a-person dialog                            | `apps/web/src/components/people/add-person-dialog.tsx` |
-| Data layer                                     | `apps/web/src/components/people/people-queries.ts`     |
-| Routes                                         | `apps/web/src/app/(app)/orgs/[orgId]/people/`          |
+Managers can correct stored external identity mappings without an active integration subscription.
+Connector setup, synchronization, and shared-workspace mutations retain their existing product requirements. This keeps recorded
+work maintainable after a subscription ends.

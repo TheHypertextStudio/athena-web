@@ -15,9 +15,6 @@
  * records someone who will not sign in, and **Invite** (Settings → Members & Access) sends an
  * email to someone who will. Neither is the "real" one.
  *
- * The roster is deliberately not shown for a personal workspace: a personal space is an
- * org-of-one, and its org backing is an implementation detail the reader should never meet.
- *
  * @see {@link file://../../../../../docs/engineering/specs/people.md}
  */
 import { EmptyState } from '@docket/ui/components';
@@ -27,10 +24,11 @@ import Link from '@/components/docket-link';
 import { QueryLoadFailure } from '@/components/feedback';
 import { type JSX, useMemo, useState } from 'react';
 
+import { useActiveOrg } from '@/components/active-org';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { useApiListQuery } from '@/lib/query';
 
-import { AddPersonDialog, type PersonRoleOption } from './add-person-dialog';
+import { AddPersonDialog } from './add-person-dialog';
 import { peopleQuery, rolesQuery } from './people-queries';
 import { PersonRow, type PersonRowModel } from './person-row';
 
@@ -76,16 +74,8 @@ export function PeopleList({ orgId }: PeopleListProps): JSX.Element {
 
   // The same owner/admin gate the API enforces, resolved from the members + roles reads this
   // surface already holds — the hook shares their cache keys, so it costs no extra request.
-  const { canManage } = useCanManageOrg(orgId);
-
-  const roleOptions = useMemo<readonly PersonRoleOption[]>(
-    () => roles.map((role) => ({ id: role.id, name: role.name })),
-    [roles],
-  );
-  const defaultRoleId = useMemo(
-    () => roles.find((role) => role.key === 'member')?.id ?? null,
-    [roles],
-  );
+  const { canManage, canContribute } = useCanManageOrg(orgId);
+  const { activeOrg } = useActiveOrg();
 
   const loading = peopleQ.isPending;
 
@@ -101,32 +91,18 @@ export function PeopleList({ orgId }: PeopleListProps): JSX.Element {
           </Text>
         }
         trailing={
-          canManage ? (
-            <>
-              <Button variant="ghost" asChild>
-                <Link href={`/orgs/${orgId}/settings/members`}>Invite by email</Link>
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  setAddOpen(true);
-                }}
-              >
-                <Plus aria-hidden="true" />
-                Add person
-              </Button>
-            </>
-          ) : null
+          <PeopleActions
+            orgId={orgId}
+            canContribute={canContribute}
+            canInvite={canManage && !activeOrg?.isPersonal}
+            onAdd={() => {
+              setAddOpen(true);
+            }}
+          />
         }
       />
-      {canManage ? (
-        <AddPersonDialog
-          orgId={orgId}
-          open={addOpen}
-          onOpenChange={setAddOpen}
-          roleOptions={roleOptions}
-          defaultRoleId={defaultRoleId}
-        />
+      {canContribute ? (
+        <AddPersonDialog orgId={orgId} open={addOpen} onOpenChange={setAddOpen} />
       ) : null}
 
       {loading ? (
@@ -143,7 +119,7 @@ export function PeopleList({ orgId }: PeopleListProps): JSX.Element {
         <EmptyState
           icon={Users}
           title="No one here yet"
-          {...(canManage
+          {...(canContribute
             ? {
                 cta: {
                   label: 'Add the first person',
@@ -166,5 +142,32 @@ export function PeopleList({ orgId }: PeopleListProps): JSX.Element {
         </ul>
       )}
     </div>
+  );
+}
+
+function PeopleActions({
+  orgId,
+  canContribute,
+  canInvite,
+  onAdd,
+}: {
+  orgId: string;
+  canContribute: boolean;
+  canInvite: boolean;
+  onAdd: () => void;
+}): JSX.Element | null {
+  if (!canContribute) return null;
+  return (
+    <>
+      {canInvite ? (
+        <Button variant="ghost" asChild>
+          <Link href={`/orgs/${orgId}/settings/members`}>Invite by email</Link>
+        </Button>
+      ) : null}
+      <Button type="button" onClick={onAdd}>
+        <Plus aria-hidden="true" />
+        Add person
+      </Button>
+    </>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+import { usesInitialWorkspace } from '@/components/composer/uses-initial-workspace';
 
 /**
  * The robust "New {project}" create composer for the Projects list.
@@ -256,9 +257,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
   const projectNounLower = projectNoun.toLowerCase();
   const programNoun = useVocabulary('program');
   const previousWorkspaceId = useRef(globalCreation?.targetWorkspaceId ?? null);
-  const contextualRequestDefaultsApply =
-    globalCreation === undefined ||
-    globalCreation.targetWorkspaceId === globalCreation.initialWorkspaceId;
+  const contextualRequestDefaultsApply = usesInitialWorkspace(globalCreation);
   const destinationReady = globalCreation?.ready ?? true;
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady);
@@ -513,6 +512,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       submitLabel={`Create ${projectNoun}`}
     >
       <ProjectComposerPickers
+        orgId={orgId}
         status={draft.status}
         onStatusChange={(next) => {
           setField('status', next);

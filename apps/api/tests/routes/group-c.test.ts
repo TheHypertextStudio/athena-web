@@ -54,12 +54,17 @@ async function seedOrgWithOwner(opts: { personal?: boolean } = {}) {
       capabilities: ['view'],
     })
     .returning({ id: schema.role.id });
+  const [ownerUser] = await db
+    .insert(schema.user)
+    .values({ name: 'Owner', email: `${slug}@example.test` })
+    .returning({ id: schema.user.id });
   const [owner] = await db
     .insert(schema.actor)
     .values({
       organizationId: orgId,
       kind: 'human',
       displayName: 'Owner',
+      userId: assertDefined(ownerUser).id,
       roleId: assertDefined(ownerRole).id,
     })
     .returning({ id: schema.actor.id });
@@ -420,10 +425,15 @@ describe('members router', () => {
     ).toBe(409);
 
     // With a SECOND active owner, downgrading the first owner is allowed.
+    const [secondUser] = await db
+      .insert(schema.user)
+      .values({ name: 'Owner2', email: `${orgId}-second@example.test` })
+      .returning({ id: schema.user.id });
     await db.insert(schema.actor).values({
       organizationId: orgId,
       kind: 'human',
       displayName: 'Owner2',
+      userId: assertDefined(secondUser).id,
       roleId: ownerRoleId,
       status: 'active',
     });

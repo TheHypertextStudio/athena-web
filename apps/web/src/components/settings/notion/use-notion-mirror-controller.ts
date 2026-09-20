@@ -30,7 +30,7 @@ import {
 import { useState } from 'react';
 
 import { api } from '@/lib/api';
-import { fetchAllNotionPeople } from '@/lib/org-collection-pages';
+import { fetchAllMembers, fetchAllNotionPeople } from '@/lib/org-collection-pages';
 import { UserFacingError } from '@/lib/problem';
 import {
   STALE,
@@ -624,7 +624,7 @@ export function useNotionPeople(orgId: string, integrationId: string): NotionPeo
   const rosterQ = useApiQuery({
     ...apiQueryOptions(
       queryKeys.members(orgId),
-      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId }, query: { limit: '100' } }),
+      () => fetchAllMembers(api, orgId),
       'Could not load your people.',
     ),
     enabled,

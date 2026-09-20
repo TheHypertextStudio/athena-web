@@ -1,3 +1,10 @@
+import {
+  lifecycleStamps,
+  toDate,
+  deriveCycleStatus,
+  mapProjectCategory,
+} from './integration-work-item-values';
+import { preserveSourceAssignee } from '../lib/identity/source-people';
 /**
  * `@docket/api` — work-graph reconciliation (the two-way mirror for Linear).
  *
@@ -36,7 +43,7 @@
  */
 import { createHash } from 'node:crypto';
 
-import { and, eq, gt, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNotNull, sql } from 'drizzle-orm';
 import {
   cycle,
   db,
@@ -236,44 +243,6 @@ export function planWorkItemReconcile(
  * reading it has always had here — committed to, not currently running — which is the
  * `unstarted` category the default `Planned` status carries.
  */
-function mapProjectCategory(state: ExternalProject['state']): WorkStatusCategory {
-  switch (state) {
-    case 'backlog':
-      return 'backlog';
-    case 'planned':
-    case 'paused':
-      return 'unstarted';
-    case 'started':
-      return 'started';
-    case 'completed':
-      return 'completed';
-    case 'canceled':
-      return 'canceled';
-  }
-}
-
-/**
- * Derive a Docket {@link cycleStatus} from an external cycle's dates.
- *
- * @remarks
- * The `cycle` table has no external status field to mirror — its model is date-driven — so we
- * classify from `completedAt`/`startsAt`/`endsAt` against the reconcile clock: an explicit
- * `completedAt` (or a window fully in the past) is `completed`, a window not yet begun is
- * `upcoming`, and an in-flight window is `active`.
- */
-function deriveCycleStatus(
-  external: ExternalCycle,
-  now: Date,
-): 'upcoming' | 'active' | 'completed' {
-  if (external.completedAt) return 'completed';
-  const startsMs = Date.parse(external.startsAt);
-  const endsMs = Date.parse(external.endsAt);
-  const nowMs = now.getTime();
-  if (nowMs < startsMs) return 'upcoming';
-  if (nowMs >= endsMs) return 'completed';
-  return 'active';
-}
-
 /** The Docket category an external state type maps onto (triage folds into backlog). */
 function toStatusCategory(stateType: ExternalStateType): WorkStatusCategory {
   return stateType === 'triage' ? 'backlog' : stateType;
@@ -324,20 +293,6 @@ function categoryOfKey(statuses: readonly ResolvedStatus[], key: string): WorkSt
 }
 
 /** Parse an RFC3339 date/timestamp to a Date, or null when absent. */
-function toDate(value: string | undefined): Date | null {
-  return value ? new Date(value) : null;
-}
-
-/** The task-completion/cancel timestamps a pulled item implies (explicit stamp, else the anchor). */
-function lifecycleStamps(
-  item: ExternalWorkItem,
-  anchor: Date,
-): { completedAt: Date | null; canceledAt: Date | null } {
-  const completedAt = toDate(item.completedAt) ?? (item.stateType === 'completed' ? anchor : null);
-  const canceledAt = toDate(item.canceledAt) ?? (item.stateType === 'canceled' ? anchor : null);
-  return { completedAt, canceledAt };
-}
-
 /** The scope key a label dedupes on: its Docket team (or the org, when workspace-level) + name. */
 function labelScopeKey(teamId: string | null, name: string): string {
   return `${teamId ?? '@org'}::${name}`;
@@ -708,22 +663,34 @@ async function insertLinkedItem(
   teamId: string,
 ): Promise<string> {
   const cols = itemColumns(ctx, item, teamId);
-  const inserted = await db
-    .insert(task)
-    .values({
-      organizationId: ctx.orgId,
-      source: 'linked',
-      sourceIntegrationId: ctx.integrationId,
-      externalId: item.externalId,
-      sourceSyncMode: 'mirror',
-      createdBy: ctx.actorId,
-      ...cols,
-    })
-    .returning({ id: task.id });
-  const row = inserted[0];
-  /* v8 ignore next -- @preserve defensive: insert always returns a row */
-  if (!row) throw new Error('linked task insert returned no row');
-  return row.id;
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`people:${ctx.orgId}`}, 0))`,
+    );
+    const inserted = await tx
+      .insert(task)
+      .values({
+        organizationId: ctx.orgId,
+        source: 'linked',
+        sourceIntegrationId: ctx.integrationId,
+        externalId: item.externalId,
+        sourceSyncMode: 'mirror',
+        createdBy: ctx.actorId,
+        ...cols,
+      })
+      .returning({ id: task.id });
+    const row = inserted[0];
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
+    if (!row) throw new Error('linked task insert returned no row');
+    await preserveSourceAssignee(
+      ctx.orgId,
+      ctx.integrationId,
+      row.id,
+      item.assigneeExternalId ?? null,
+      tx,
+    );
+    return row.id;
+  });
 }
 
 /** Publish task-state cascades only after the provider row write has committed. */
@@ -742,6 +709,9 @@ async function applyItemFields(
 ): Promise<void> {
   const { state, statusId, completedAt, canceledAt, ...patch } = itemColumns(ctx, item, teamId);
   const cascades = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`people:${ctx.orgId}`}, 0))`,
+    );
     const before = await tx
       .select()
       .from(task)
@@ -749,7 +719,8 @@ async function applyItemFields(
       .for('update')
       .limit(1);
     const current = before[0];
-    if (!current) return [];
+    if (!current || planWorkItemReconcile(current, item, { writeBack: ctx.writeBack }) !== 'pull')
+      return [];
     await tx.update(task).set(patch).where(eq(task.id, taskId)).returning();
     const mutation = await writeTaskStateTransition(tx, {
       before: current,
@@ -759,6 +730,13 @@ async function applyItemFields(
       canceledAt,
       updatedAt: patch.updatedAt,
     });
+    await preserveSourceAssignee(
+      ctx.orgId,
+      ctx.integrationId,
+      taskId,
+      item.assigneeExternalId ?? null,
+      tx,
+    );
     if (!mutation) return [];
     return [
       mutation,

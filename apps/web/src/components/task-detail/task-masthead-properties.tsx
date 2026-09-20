@@ -12,7 +12,8 @@
 import type { Priority } from '@docket/work/task-contract';
 import type { TaskDetail } from '@docket/work/task-model';
 import type { WorkflowState } from '@docket/work/workflow';
-import { ActorPicker, DatePicker, EntityPicker, type PickerOption } from '@docket/ui/components';
+import { SourceAwareActorPicker } from '@/components/people/source-person-references';
+import { DatePicker, EntityPicker, type PickerOption } from '@docket/ui/components';
 import { FolderKanban } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';
@@ -135,7 +136,9 @@ export function TaskMastheadProperties({ model }: TaskMastheadPropertiesProps): 
         />
       </EntityMetadataItem>
       <EntityMetadataItem priority={1}>
-        <ActorPicker
+        <SourceAwareActorPicker
+          entity={task}
+          field="assignee"
           options={model.memberOptions}
           value={task.assigneeId ?? null}
           onChange={(assigneeId) => {

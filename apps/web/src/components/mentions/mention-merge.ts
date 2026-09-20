@@ -143,13 +143,13 @@ export function flattenMentionGroups(groups: readonly MentionGroup[]): MentionIt
 /** Everything the highlight decision depends on. */
 export interface ActiveKeyInput {
   /** The rows as they exist now. */
-  readonly items: readonly MentionItem[];
+  readonly items: readonly { readonly id: string }[];
   /** The row the user last arrowed to, if any. */
   readonly activeKey: string | undefined;
   /** Whether the user has taken control of the highlight. */
   readonly hasArrowed: boolean;
   /** The rows from the previous render, used to hold position when one disappears. */
-  readonly previousItems: readonly MentionItem[];
+  readonly previousItems: readonly { readonly id: string }[];
 }
 
 /**
@@ -185,7 +185,7 @@ export function resolveActiveKey(input: ActiveKeyInput): string | undefined {
  * @returns The newly highlighted key.
  */
 export function stepActiveKey(
-  items: readonly MentionItem[],
+  items: readonly { readonly id: string }[],
   activeKey: string | undefined,
   delta: 1 | -1,
 ): string | undefined {

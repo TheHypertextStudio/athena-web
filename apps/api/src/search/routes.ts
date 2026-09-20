@@ -15,7 +15,7 @@ export function entityHref(
     case 'team':
       return `/orgs/${organizationId}/teams`;
     case 'member':
-      return `/orgs/${organizationId}/settings/members`;
+      return `/orgs/${organizationId}/people/${entityId}`;
     case 'agent':
       return `/orgs/${organizationId}/agents`;
     case 'agent_session':

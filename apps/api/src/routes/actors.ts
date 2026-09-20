@@ -16,7 +16,8 @@
  * @see {@link file://../../../../docs/engineering/specs/people.md} for the enumeration of every
  * place a person WITH an account is deliberately treated differently from one without.
  */
-import { actor, db, initiative, project, role, task } from '@docket/db';
+import { actor, db, externalActor, integration, initiative, project, role, task } from '@docket/db';
+import { PEOPLE_CAPABILITIES } from '@docket/identity-access/capabilities';
 import { ActorId, OrganizationId, RoleId } from '@docket/identity-access/ids';
 import { Health } from '@docket/work/capability-contract';
 import { InitiativeId, ProjectId, TaskId } from '@docket/work/ids';
@@ -26,6 +27,7 @@ import { Priority } from '@docket/work/task-contract';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { resolvePersonAlias } from '../lib/identity/person-alias';
 import { NotFoundError } from '../error';
 
 import { buildTaskViewFilter } from './task-helpers';
@@ -61,7 +63,7 @@ export const PersonCreate = z
     roleId: RoleId.nullable()
       .optional()
       .describe(
-        "The org role this person holds. MUST belong to this org (a foreign or unknown role yields 404). Omitted → the org's `member` role when it exists, otherwise no role. A role on an account-less person confers nothing at sign-in (they never sign in); it is what makes them appear and sort identically to everyone else, and it is honored the moment an account is linked.",
+        'An optional workspace role. Omitted or null creates a person without access privileges. Supplying this field requires manage permission; a non-null role must belong to this workspace.',
       ),
   })
   .meta({
@@ -165,6 +167,20 @@ export const PersonProfileOut = z
       .array(ProfileTask)
       .describe('Active (non-archived) tasks assigned to this person, soonest-due first.'),
     ledProjects: z.array(ProfileProject).describe('Projects this person leads, by name.'),
+    linkedIdentities: z.array(
+      z.object({
+        id: z.string(),
+        updatedAt: z.string(),
+        externalActorId: z.string(),
+        integrationId: z.string(),
+        provider: z.string(),
+        externalId: z.string(),
+        displayName: z.string(),
+        avatarUrl: z.string().nullable(),
+        actorId: ActorId.nullable(),
+        field: z.literal('identity'),
+      }),
+    ),
     ownedInitiatives: z.array(ProfileInitiative).describe('Initiatives this person owns, by name.'),
   })
   .meta({ id: 'PersonProfileOut', description: "A person's workspace profile." });
@@ -185,6 +201,7 @@ export type PersonProfileOut = z.infer<typeof PersonProfileOut>;
  * @param orgId - The active organization id (from the verified actor context).
  * @param actorId - The person's Actor id.
  * @param viewerActorId - The current actor, whose task visibility gates assigned-work metadata.
+ * @param capabilities - Verified workspace capabilities; identity details require management.
  * @returns the assembled {@link PersonProfileOut} payload.
  * @throws {NotFoundError} when no human Actor with that id exists in this org.
  */
@@ -192,7 +209,9 @@ export async function loadPersonProfile(
   orgId: string,
   actorId: string,
   viewerActorId: string,
+  capabilities: readonly string[] = [],
 ): Promise<z.input<typeof PersonProfileOut>> {
+  actorId = await resolvePersonAlias(orgId, actorId);
   const rows = await db
     .select({
       id: actor.id,
@@ -260,7 +279,9 @@ export async function loadPersonProfile(
       .orderBy(asc(initiative.name)),
   ]);
 
+  const linkedIdentities = await loadPersonIdentities(orgId, actorId, capabilities);
   return {
+    linkedIdentities,
     actorId: person.id,
     organizationId: person.organizationId,
     displayName: person.displayName,
@@ -278,12 +299,42 @@ export async function loadPersonProfile(
       dueDate: t.dueDate?.toISOString() ?? null,
       projectId: t.projectId,
     })),
-    ledProjects: projects.map((p) => ({
-      id: p.id,
-      name: p.name,
-      status: p.status,
-      health: p.health,
-    })),
+    ledProjects: projects,
     ownedInitiatives: initiatives.map((i) => ({ id: i.id, name: i.name, status: i.status })),
   };
+}
+
+async function loadPersonIdentities(
+  orgId: string,
+  actorId: string,
+  capabilities: readonly string[],
+): Promise<PersonProfileOut['linkedIdentities']> {
+  if (!capabilities.includes(PEOPLE_CAPABILITIES.manageIdentities)) return [];
+  const linkedIdentities = await db
+    .select({
+      id: externalActor.id,
+      updatedAt: externalActor.updatedAt,
+      externalActorId: externalActor.id,
+      integrationId: externalActor.integrationId,
+      provider: integration.provider,
+      externalId: externalActor.externalId,
+      displayName: externalActor.displayName,
+      avatarUrl: externalActor.avatarUrl,
+      actorId: externalActor.actorId,
+    })
+    .from(externalActor)
+    .innerJoin(integration, eq(integration.id, externalActor.integrationId))
+    .where(
+      and(
+        eq(externalActor.organizationId, orgId),
+        eq(integration.organizationId, orgId),
+        eq(externalActor.actorId, actorId),
+      ),
+    );
+  return linkedIdentities.map((identity) => ({
+    ...identity,
+    actorId: identity.actorId === null ? null : ActorId.parse(identity.actorId),
+    updatedAt: identity.updatedAt.toISOString(),
+    field: 'identity' as const,
+  }));
 }

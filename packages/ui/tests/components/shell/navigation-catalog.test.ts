@@ -98,7 +98,7 @@ describe('navigation catalog', () => {
     });
 
     expect(catalog.map(({ id }) => id)).not.toContain('workspace:teams');
-    expect(catalog.map(({ id }) => id)).not.toContain('workspace:people');
+    expect(catalog.map(({ id }) => id)).toContain('workspace:people');
   });
 
   it('keeps workspace labels but disables them until context resolves', () => {

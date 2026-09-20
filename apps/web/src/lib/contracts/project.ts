@@ -226,6 +226,7 @@ export type ProjectResourceCreate = z.infer<typeof ProjectResourceCreate>;
 /** Full project representation returned by reads. */
 export const ProjectOut = z
   .object({
+    sourcePeople: TaskOut.shape.sourcePeople,
     id: ProjectId.describe('Stable unique identifier of the project.'),
     organizationId: OrganizationId.describe('The owning organization (tenant).'),
     name: z.string().describe('Human-readable project name.'),

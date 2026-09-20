@@ -5,7 +5,7 @@ import type * as DbModule from '@docket/db';
 
 import type { AppEnv, AuthSession } from '../../src/context';
 import { onError } from '../../src/error';
-import { fakeSession, getDb } from '../support/routes-harness';
+import { fakeSession, getDb, principalForSession } from '../support/routes-harness';
 import { capabilityGuard } from '../../src/permissions/capability-guard';
 import { orgContextMiddleware } from '../../src/permissions/org-context-middleware';
 import { assertDefined } from '@docket/test-utils';
@@ -23,6 +23,7 @@ function ctxApp(session: AuthSession) {
   const app = new Hono<AppEnv>();
   app.use('*', async (c, next) => {
     c.set('session', session);
+    c.set('principal', principalForSession(session));
     await next();
   });
   app.use('/:orgId/*', orgContextMiddleware);
@@ -217,6 +218,7 @@ describe('orgContextMiddleware', () => {
     const app = new Hono<AppEnv>();
     app.use('*', async (c, next) => {
       c.set('session', fakeSession('u1'));
+      c.set('principal', principalForSession(fakeSession('u1')));
       await next();
     });
     app.use('*', orgContextMiddleware);

@@ -1,5 +1,5 @@
 import type { InvitationOut, MemberOut } from '@docket/identity-access/member-contract';
-import { RoleId } from '@docket/identity-access/ids';
+import { ActorId, RoleId } from '@docket/identity-access/ids';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
@@ -44,22 +44,7 @@ export function useMembersMutations(
 ): MembersMutationState {
   const queryClient = useQueryClient();
 
-  const inviteMutation = useApiMutation({
-    mutationFn: ({ email, roleId, asGuest }: InvitePayload) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].members.invitations.$post({
-            param: { orgId },
-            json: { email, roleId: RoleId.parse(roleId), asGuest },
-          }),
-        'Could not send the invitation.',
-      ),
-    onSuccess: (created) => {
-      seedListItem(queryClient, invitationsKey, created);
-    },
-    invalidateKeys: [invitationsKey],
-    failureTitle: 'Could not send the invitation.',
-  });
+  const inviteMutation = useMemberInvitation(orgId, invitationsKey);
 
   const roleMutation = useApiMutation({
     mutationFn: ({ actorId, roleId }: { actorId: string; roleId: string }) =>
@@ -172,4 +157,29 @@ export function useMembersMutations(
     removingFor,
     revokingFor,
   };
+}
+
+function useMemberInvitation(orgId: string, invitationsKey: readonly string[]) {
+  const queryClient = useQueryClient();
+  return useApiMutation({
+    mutationFn: ({ email, roleId, asGuest, personActorId }: InvitePayload) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].members.invitations.$post({
+            param: { orgId },
+            json: {
+              email,
+              roleId: RoleId.parse(roleId),
+              asGuest,
+              ...(personActorId ? { personActorId: ActorId.parse(personActorId) } : {}),
+            },
+          }),
+        'Could not send the invitation.',
+      ),
+    onSuccess: (created) => {
+      seedListItem(queryClient, invitationsKey, created);
+    },
+    invalidateKeys: [invitationsKey],
+    failureTitle: 'Could not send the invitation.',
+  });
 }

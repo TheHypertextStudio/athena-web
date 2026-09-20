@@ -115,12 +115,12 @@ describe('the two Tasks altitudes', () => {
     expect(within(home).getByRole('link', { name: 'Stream' })).toBeInTheDocument();
   });
 
-  it('shows Tasks and Stream once, in Home, for a personal workspace', () => {
+  it('keeps People in the workspace and Tasks and Stream in Home for personal workspaces', () => {
     renderSidebar({ personalWorkspace: true });
 
     const labels = workspaceRowLabels();
     expect(labels).not.toContain('Teams');
-    expect(labels).not.toContain('People');
+    expect(labels).toContain('People');
     expect(labels).not.toContain('Tasks');
     expect(labels).not.toContain('Stream');
     const home = screen.getByRole('navigation', { name: 'Home' });

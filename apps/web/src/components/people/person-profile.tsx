@@ -1,5 +1,9 @@
 'use client';
 
+import type { SourcePersonReferenceOut } from '@docket/connections/integration-contract';
+import { SourcePersonControl } from './source-person-control';
+import { PersonConsolidationControl } from './person-consolidation-control';
+
 /**
  * A person's workspace profile — who they are and what they are carrying.
  *
@@ -107,6 +111,13 @@ function WorkRow({
   );
 }
 
+function profileActionActorId(
+  profile: { readonly actorId: string } | undefined,
+  routeActorId: string,
+): string {
+  return profile?.actorId ?? routeActorId;
+}
+
 /**
  * The person profile surface.
  *
@@ -119,7 +130,7 @@ export function PersonProfileView({
   canManage,
 }: PersonProfileViewProps): JSX.Element {
   const profileQ = useApiQuery(personProfileQuery(orgId, actorId));
-  const rename = useRenamePerson(orgId, actorId);
+  const rename = useRenamePerson(orgId, profileActionActorId(profileQ.data, actorId));
   const [draftName, setDraftName] = useState<string | null>(null);
   const [renameError, setRenameError] = useState<string | null>(null);
 
@@ -246,14 +257,7 @@ export function PersonProfileView({
                 ) : null}
               </div>
             )}
-            <div className="flex items-center gap-2">
-              {profile.roleName ? (
-                <Text as="span" token="body-medium" tone="muted">
-                  {profile.roleName}
-                </Text>
-              ) : null}
-              {profile.status === 'suspended' ? <Badge variant="secondary">Suspended</Badge> : null}
-            </div>
+            <PersonStatus roleName={profile.roleName} status={profile.status} />
           </div>
         </div>
         {renameError ? (
@@ -262,6 +266,13 @@ export function PersonProfileView({
           </Text>
         ) : null}
       </header>
+      {canManage ? (
+        <LinkedIdentities
+          orgId={orgId}
+          actorId={profile.actorId}
+          identities={profile.linkedIdentities}
+        />
+      ) : null}
 
       <WorkSection
         icon={<ListChecks />}
@@ -322,6 +333,61 @@ export function PersonProfileView({
           />
         ))}
       </WorkSection>
+    </div>
+  );
+}
+
+function LinkedIdentities({
+  orgId,
+  actorId,
+  identities,
+}: {
+  orgId: string;
+  actorId: string;
+  identities: readonly Omit<SourcePersonReferenceOut, 'id' | 'field'>[];
+}): JSX.Element {
+  return (
+    <section className="flex flex-col gap-3" aria-label="Linked identities">
+      <Text as="h2" token="title-small">
+        Linked identities
+      </Text>
+      {identities.length ? (
+        identities.map((identity) => (
+          <div key={identity.externalActorId} className="flex min-w-0 flex-col gap-1">
+            <SourcePersonControl
+              orgId={orgId}
+              source={{ ...identity, id: identity.externalActorId, field: 'identity' }}
+            />
+            <Text token="body-small" tone="muted" className="break-words">
+              {identity.provider} · {identity.externalId}
+            </Text>
+          </div>
+        ))
+      ) : (
+        <Text token="body-small" tone="muted">
+          No linked identities.
+        </Text>
+      )}
+      <PersonConsolidationControl orgId={orgId} actorId={actorId} />
+    </section>
+  );
+}
+
+function PersonStatus({
+  roleName,
+  status,
+}: {
+  roleName: string | null;
+  status: string;
+}): JSX.Element {
+  return (
+    <div className="flex items-center gap-2">
+      {roleName ? (
+        <Text as="span" token="body-medium" tone="muted">
+          {roleName}
+        </Text>
+      ) : null}
+      {status === 'suspended' ? <Badge variant="secondary">Suspended</Badge> : null}
     </div>
   );
 }

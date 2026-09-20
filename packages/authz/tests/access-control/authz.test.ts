@@ -32,12 +32,7 @@ import {
   satisfies as authzSatisfies,
 } from '../../src/index';
 import { effectiveVisibility, visibilityGrantsView } from '../../src/visibility';
-import {
-  lastOwnerGuard,
-  LastOwnerError,
-  noSelfEscalation,
-  SelfEscalationError,
-} from '../../src/write-guards';
+import { lastOwnerGuard, LastOwnerError } from '../../src/write-guards';
 import { assertDefined } from '@docket/test-utils';
 import { seedWorkspaceStatuses, statusLookupKey } from '@docket/db';
 
@@ -421,7 +416,13 @@ beforeAll(async () => {
     (
       await db
         .insert(actor)
-        .values({ organizationId: orgId, kind: 'human', displayName: 'Owner', roleId: ownerRoleId })
+        .values({
+          organizationId: orgId,
+          kind: 'human',
+          displayName: 'Owner',
+          roleId: ownerRoleId,
+          userId: 'owner-account',
+        })
         .returning()
     )[0],
   ).id;
@@ -1375,6 +1376,7 @@ describe('lastOwnerGuard', () => {
             organizationId: orgId,
             kind: 'human',
             displayName: 'Owner2',
+            userId: 'second-owner-account',
             roleId: ownerRoleId,
           })
           .returning()
@@ -1422,6 +1424,7 @@ describe('lastOwnerGuard', () => {
           organizationId: guardedOrg,
           kind: 'human',
           displayName: 'Archived owner',
+          userId: 'archived-owner-account',
           roleId: guardedOwnerRoleId,
           archivedAt: new Date('2026-08-14T00:00:00.000Z'),
         },
@@ -1473,29 +1476,5 @@ describe('lastOwnerGuard', () => {
     expect(err).toBeInstanceOf(Error);
     expect(err.name).toBe('LastOwnerError');
     expect(err.message).toMatch(/at least one active owner/);
-  });
-});
-
-describe('noSelfEscalation', () => {
-  it('allows granting at or below the writer’s own rank', () => {
-    expect(() => {
-      noSelfEscalation('manage', 'manage');
-    }).not.toThrow();
-    expect(() => {
-      noSelfEscalation('manage', 'view');
-    }).not.toThrow();
-  });
-
-  it('throws when granting above the writer’s own rank', () => {
-    expect(() => {
-      noSelfEscalation('contribute', 'manage');
-    }).toThrow(SelfEscalationError);
-  });
-
-  it('SelfEscalationError carries a default message and name', () => {
-    const err = new SelfEscalationError();
-    expect(err).toBeInstanceOf(Error);
-    expect(err.name).toBe('SelfEscalationError');
-    expect(err.message).toMatch(/above your own/);
   });
 });

@@ -19,6 +19,11 @@ Brings the whole stack up on four adjacent HTTP ports with branch-prefixed hostn
 Portless completely and blocks until all four processes, the auth routes, API health, and OIDC
 discovery answer `200`. It prints `READY` plus the exact env to export.
 
+When launching through `exec_command`, use a persistent PTY and leave `read -r dev_stack_hold`
+running after this command. The tool can clean up background descendants when its session exits,
+even after the launcher prints `READY`. Run browser commands in separate sessions, stop the stack
+with `scripts/dev-stack.sh stop`, then close the holding terminal.
+
 **Each checkout gets its own port block, and this matters.** The primary checkout uses web `1355`,
 API `1356`, admin `1357`, runner `1358`. A worktree hashes its git dir into a stride-4 block from
 `1400` up, and probes forward if that block is taken. Read the ports off `dev-stack.sh env` rather
@@ -123,6 +128,10 @@ the session; the shared workspace is created through the session if it does not 
 
 Do not write your own Playwright screenshot script. This one already handles cold-route compilation,
 theme emulation, the settled-page check, and the overflow assertion.
+
+For a contextual surface, pass `--click-button="Identity: Sam Rivera"` with a literal route.
+The tool opens that exact accessible button before each frame. This captures the open surface;
+its owning interaction tests must still verify editing and persistence.
 
 For a full craft review rather than raw captures, use the `design-review` skill
 (`.claude/skills/design-review/`), which consumes exactly this shot set.

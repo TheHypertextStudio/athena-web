@@ -3,7 +3,6 @@
 import type { EstimationScale } from '../../lib/contracts/organization';
 import type { Priority } from '@docket/work/task-contract';
 import {
-  ActorPicker,
   DatePicker,
   EntityPicker,
   EnumPicker,
@@ -15,6 +14,7 @@ import type { JSX } from 'react';
 
 import { PRIORITY_OPTIONS } from '@/components/pickers/options';
 import { FutureCyclePicker } from '@/components/pickers/future-cycle-picker';
+import { PersonMetadataPicker } from '@/components/people/person-metadata-picker';
 import { EstimatePicker } from '@/components/task-detail/EstimatePicker';
 import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -122,17 +122,15 @@ export function TaskComposerPickers({
           disabled={creating}
         />
       </EntityMetadataItem>
-      <EntityMetadataItem priority={2}>
-        <ActorPicker
-          options={actorOptions}
-          value={assigneeId}
-          onChange={onAssigneeChange}
-          placeholder="Unassigned"
-          clearLabel="Unassigned"
-          ariaLabel="Assignee"
-          disabled={creating}
-        />
-      </EntityMetadataItem>
+      <PersonMetadataPicker
+        priority={2}
+        field="Assignee"
+        orgId={orgId}
+        options={actorOptions}
+        value={assigneeId}
+        onChange={onAssigneeChange}
+        disabled={creating}
+      />
       <EntityMetadataItem priority={3}>
         <EntityPicker
           options={projectOptions}

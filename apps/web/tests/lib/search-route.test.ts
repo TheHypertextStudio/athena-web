@@ -20,6 +20,18 @@ describe('hrefForSearchRoute', () => {
     expect(hrefForSearchRoute(route)).toBe(`/orgs/${ORG}/tasks/task_1`);
   });
 
+  it('opens the person profile for compatible member search results', () => {
+    expect(
+      hrefForSearchRoute({
+        type: 'entity',
+        organizationId: ORG,
+        entityKind: 'member',
+        entityId: 'person_1',
+        href: `/orgs/${ORG}/settings/members`,
+      }),
+    ).toBe(`/orgs/${ORG}/people/person_1`);
+  });
+
   it('normalizes broad entity routes that do not have detail pages', () => {
     expect(
       hrefForSearchRoute({

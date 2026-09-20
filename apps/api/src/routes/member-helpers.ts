@@ -4,7 +4,7 @@ import type {
   MemberInvite,
   MemberOut,
 } from '@docket/identity-access/member-contract';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
@@ -82,7 +82,8 @@ export async function acceptInvitation(
       .select()
       .from(invitation)
       .where(and(eq(invitation.token, token), eq(invitation.organizationId, orgId)))
-      .limit(1);
+      .limit(1)
+      .for('update');
     const inv = invRows[0];
     if (!inv) throw new NotFoundError('Invitation not found');
     if (inv.status !== 'pending') throw new ConflictError('Invitation is no longer pending');
@@ -95,18 +96,33 @@ export async function acceptInvitation(
       .limit(1);
     if (existing[0]) throw new ConflictError('Already a member of this organization');
 
-    const [created] = await tx
-      .insert(actor)
-      .values({
-        organizationId: orgId,
-        kind: 'human',
-        displayName: session.user.name || session.user.email,
-        userId: session.user.id,
-        roleId: inv.roleId,
-      })
-      .returning();
-    /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-    if (!created) throw new Error('member actor insert returned no row');
+    const [created] = inv.personActorId
+      ? await tx
+          .update(actor)
+          .set({ userId: session.user.id, roleId: inv.roleId })
+          .where(
+            and(
+              eq(actor.id, inv.personActorId),
+              eq(actor.organizationId, orgId),
+              eq(actor.kind, 'human'),
+              eq(actor.status, 'active'),
+              isNull(actor.archivedAt),
+              isNull(actor.userId),
+            ),
+          )
+          .returning()
+      : await tx
+          .insert(actor)
+          .values({
+            organizationId: orgId,
+            kind: 'human',
+            displayName: session.user.name || session.user.email,
+            userId: session.user.id,
+            roleId: inv.roleId,
+          })
+          .returning();
+    if (!created)
+      throw new ConflictError('The invited person is no longer available for account attachment');
 
     await tx
       .update(invitation)
@@ -149,12 +165,31 @@ export async function createInvitation(
     .limit(1);
   if (!roleRows[0]) throw new NotFoundError('Role not found');
 
+  if (body.personActorId) {
+    const [person] = await db
+      .select({ id: actor.id })
+      .from(actor)
+      .where(
+        and(
+          eq(actor.id, body.personActorId),
+          eq(actor.organizationId, orgId),
+          eq(actor.kind, 'human'),
+          eq(actor.status, 'active'),
+          isNull(actor.archivedAt),
+          isNull(actor.userId),
+        ),
+      )
+      .limit(1);
+    if (!person) throw new NotFoundError('Accountless person not found');
+  }
+
   const expiresAt = new Date(Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000);
   const inserted = await db
     .insert(invitation)
     .values({
       organizationId: orgId,
       email: body.email,
+      personActorId: body.personActorId ?? null,
       roleId: body.roleId,
       asGuest: body.asGuest ?? false,
       token: genId(),
@@ -166,4 +201,9 @@ export async function createInvitation(
   /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
   if (!row) throw new Error('invitation insert returned no row');
   return row;
+}
+
+/** Accountless people cannot preserve another member's access to the workspace. */
+export function isAccountBackedOwner(target: ActorRow, ownerRoleId: string | null): boolean {
+  return target.userId !== null && ownerRoleId !== null && target.roleId === ownerRoleId;
 }

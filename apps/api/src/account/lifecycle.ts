@@ -54,6 +54,7 @@ export const USER_KEYED_NO_FK_TABLES = [
   // `activity_highlight` needs no entry — it cascades from `activity_day`.
   dailyDigest,
   activityDay,
+  apiIdempotencyReceipt,
   idempotencyKey,
 ] as const;
 

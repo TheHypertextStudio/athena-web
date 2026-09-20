@@ -26,9 +26,9 @@ export function compileGroupJsonSql(
   if (!primaryField) throw new TypeError(`Unsupported group field: ${groupBy}`);
   const primary = compileGroupMembershipSql(primaryField, sql`e.id`);
   if (!subGroupBy) {
-    return sql`coalesce((select json_agg(json_build_object(
+    return sql`coalesce((select json_agg(jsonb_build_object(
         'path', grouped.path, 'key', grouped.key, 'label', grouped.label, 'count', grouped.count
-      ) order by grouped.label, grouped.key) from (
+      ) || case when array_to_string(grouped.path, '/') like '%source-person:%' then '{"mutable":false}'::jsonb else '{}'::jsonb end order by grouped.label, grouped.key) from (
       select array[g.key] path, g.key, g.label, count(distinct e.id)::int count
       from ${sql.raw(source)} e cross join lateral (${primary}) g
       group by g.key,g.label
@@ -37,9 +37,9 @@ export function compileGroupJsonSql(
   const secondaryField = registry[subGroupBy];
   if (!secondaryField) throw new TypeError(`Unsupported subgroup field: ${subGroupBy}`);
   const secondary = compileGroupMembershipSql(secondaryField, sql`e.id`);
-  return sql`coalesce((select json_agg(json_build_object(
+  return sql`coalesce((select json_agg(jsonb_build_object(
       'path', grouped.path, 'key', grouped.key, 'label', grouped.label, 'count', grouped.count
-    ) order by grouped.path) from (
+    ) || case when array_to_string(grouped.path, '/') like '%source-person:%' then '{"mutable":false}'::jsonb else '{}'::jsonb end order by grouped.path) from (
     select array[g.key] path, g.key, g.label, count(distinct e.id)::int count
     from ${sql.raw(source)} e cross join lateral (${primary}) g
     group by g.key,g.label

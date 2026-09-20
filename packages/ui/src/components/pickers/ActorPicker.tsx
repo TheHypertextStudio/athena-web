@@ -13,11 +13,17 @@
 import * as React from 'react';
 
 import { User } from '../../icons';
-import { OptionPicker } from './OptionPicker';
+import { OptionPicker, type OptionPickerProps } from './OptionPicker';
 import type { PickerOption } from './types';
 
 /** Props for {@link ActorPicker}. */
 export interface ActorPickerProps<TValue extends string = string> {
+  /** Optional creation action and inline confirmation. */
+  create?: OptionPickerProps<TValue>['create'];
+  confirmation?: React.ReactNode;
+  /** Optional controlled visibility for async creation completion. */
+  open?: boolean | undefined;
+  onCancelConfirmation?: (() => void) | undefined;
   /** The actor choices (each `icon` is an `ActorAvatar` built by the caller). */
   options: readonly PickerOption<TValue>[];
   /** The currently-selected actor id, or `null` when unassigned. */
@@ -69,6 +75,10 @@ export interface ActorPickerProps<TValue extends string = string> {
  */
 export function ActorPicker<TValue extends string = string>({
   options,
+  create,
+  confirmation,
+  open: controlledOpen,
+  onCancelConfirmation,
   value,
   onChange,
   placeholder = 'Assign',
@@ -91,6 +101,10 @@ export function ActorPicker<TValue extends string = string>({
   return (
     <OptionPicker<TValue>
       options={options}
+      create={create}
+      confirmation={confirmation}
+      open={controlledOpen}
+      onCancelConfirmation={onCancelConfirmation}
       value={value}
       onChange={onChange}
       placeholder={placeholder}

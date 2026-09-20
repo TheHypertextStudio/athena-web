@@ -18,6 +18,8 @@ export interface MirrorActorValue {
   readonly kind: 'actor';
   /** The actor to resolve, or null when the field is explicitly empty. */
   readonly actorId: string | null;
+  /** Preserved native IDs for unresolved imported assignments on this connection. */
+  readonly sourceExternalIds?: readonly string[];
   /** The safe text representation when the column is not a relation or native person. */
   readonly displayName: string | null;
 }

@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
 import type { MentionHydrateOut, MentionSearchOut } from '../../src/contracts/mention';
@@ -178,6 +178,69 @@ describe('mention picker — local wave', () => {
 });
 
 describe('mention hydrate', () => {
+  it('hydrates historical person mentions through workspace-scoped aliases', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const orgs = await mountOrgs();
+    const userId = await seedUserWithHub(db, schema, 'AliasMentionReader');
+    const orgId = await seedOrg(db, schema);
+    const readerActorId = await addMember(db, schema, orgId, userId, 'owner');
+    await db
+      .update(schema.role)
+      .set({ capabilities: ['manage'] })
+      .where(and(eq(schema.role.organizationId, orgId), eq(schema.role.key, 'owner')));
+    const [oldPerson, canonicalPerson] = await db
+      .insert(schema.actor)
+      .values([
+        {
+          organizationId: orgId,
+          kind: 'human',
+          displayName: 'Old Sam',
+          archivedAt: new Date(),
+          status: 'suspended',
+        },
+        { organizationId: orgId, kind: 'human', displayName: 'Sam Rivera' },
+      ])
+      .returning();
+    if (!oldPerson || !canonicalPerson) throw new Error('People were not seeded');
+    await db.insert(schema.actorAlias).values({
+      organizationId: orgId,
+      actorId: oldPerson.id,
+      canonicalActorId: canonicalPerson.id,
+      mergedBy: readerActorId,
+    });
+    await seedDocument(db, schema, {
+      orgId,
+      kind: 'member',
+      entityId: canonicalPerson.id,
+      title: 'Sam Rivera',
+    });
+    const app = appWithSession(orgs, fakeSession(userId));
+    const renamed = await app.request(`/${orgId}/members/${oldPerson.id}/profile`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ displayName: 'Sam Renamed' }),
+    });
+    expect(renamed.status).toBe(200);
+    await db
+      .update(schema.searchIndexJob)
+      .set({ runAfter: new Date(0) })
+      .where(eq(schema.searchIndexJob.entityId, canonicalPerson.id));
+    const { processSearchIndexJobs } = await import('../../src/search/process-jobs');
+    await processSearchIndexJobs({ now: new Date(1000) });
+    const response = await app.request(`/${orgId}/mentions/hydrate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        refs: [{ kind: 'entity', entityKind: 'actor', entityId: oldPerson.id }],
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(await json<MentionHydrateOut>(response)).toMatchObject({
+      items: [{ kind: 'entity', accessible: true, title: 'Sam Renamed' }],
+    });
+  });
+
   it('remains readable for a manager in a free shared workspace', async () => {
     const schema = await getDb();
     const { db } = schema;

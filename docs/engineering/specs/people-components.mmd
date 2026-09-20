@@ -1,0 +1,12 @@
+%% Component diagram: person and identity modules inside the Docket API.
+flowchart LR
+  Creation[Person creation] --> Actors[Actor persistence]
+  Invitation[Invitation acceptance] --> Actors
+  Import[Integration ingestion] --> Attribution[Source attribution]
+  Resolution[Identity resolution] --> Actors
+  Resolution --> Attribution
+  Consolidation[Person consolidation] --> Actors
+  Consolidation --> Attribution
+  Consolidation --> Aliases[Actor alias resolution]
+  Readers[Profile, search, and mention readers] --> Actors
+  Readers --> Aliases

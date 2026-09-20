@@ -66,6 +66,7 @@ interface CliArgs {
   frameStart: number;
   frameLimit: number | undefined;
   records: string | undefined;
+  clickButton: string | undefined;
 }
 
 /** The mobile remediation matrix: four viewports × two color schemes. */
@@ -106,6 +107,7 @@ function parseArgs(argv: string[]): CliArgs {
       ? Number.parseInt(flags.get('frame-limit') ?? '', 10)
       : undefined,
     records: flags.has('records') ? resolve(flags.get('records') ?? '') : undefined,
+    clickButton: flags.get('click-button'),
   };
 }
 
@@ -310,9 +312,31 @@ async function resolveSharedWorkspace(options: {
   return orgId;
 }
 
+function captureCases({
+  audit,
+  start,
+  limit,
+  routes,
+  clickButton,
+}: CliArgs): readonly MobileLayoutRouteCase[] {
+  if (audit)
+    return MOBILE_LAYOUT_ROUTE_CASES.slice(start, limit === undefined ? undefined : start + limit);
+  return routes.map((route) => ({
+    id: routeSlug(route),
+    route,
+    setup: clickButton
+      ? async (page: Page): Promise<void> => {
+          await page.getByRole('button', { name: clickButton, exact: true }).click();
+          await waitForSettledPage(page);
+        }
+      : undefined,
+  }));
+}
+
 async function main(): Promise<void> {
-  const { session, outDir, baseURL, routes, audit, start, limit, frameStart, frameLimit, records } =
-    parseArgs(process.argv.slice(2));
+  const options = parseArgs(process.argv.slice(2));
+  const { session, outDir, baseURL, audit, start, limit, frameStart, frameLimit, records } =
+    options;
   const meta = JSON.parse(readFileSync(`${session}.meta.json`, 'utf8')) as SessionMeta;
   // Apply the override first, then assert: `--base-url` points at another app in the same local
   // stack, so it must still satisfy the same locality check as the session's own origin.
@@ -334,9 +358,7 @@ async function main(): Promise<void> {
   if (frameLimit !== undefined && (!Number.isInteger(frameLimit) || frameLimit <= 0)) {
     throw new Error('capture-shots: --frame-limit must be a positive integer');
   }
-  const selectedCases: readonly MobileLayoutRouteCase[] = audit
-    ? MOBILE_LAYOUT_ROUTE_CASES.slice(start, limit === undefined ? undefined : start + limit)
-    : routes.map((route) => ({ id: routeSlug(route), route }));
+  const selectedCases = captureCases(options);
   if (selectedCases.length === 0) {
     throw new Error('capture-shots: the selected audit route set is empty');
   }

@@ -190,19 +190,30 @@ describe('people — an actor with no Docket account', () => {
     expect(profile.roleName).toBe('Member');
   });
 
-  it('defaults to the org member role so the person is not a role-less oddity', async () => {
+  it('lets contributors create people without access roles', async () => {
     const seeded = await seedOrg();
-    const w = appWithActor(members, seeded.orgId, ['manage'], seeded.ownerActorId);
+    const w = appWithActor(members, seeded.orgId, ['contribute'], seeded.ownerActorId);
     const created = await w.request('/', {
       method: 'POST',
       headers: J,
       body: JSON.stringify({ displayName: 'Sam Steward' }),
     });
     expect(created.status).toBe(201);
-    expect((await body<{ roleId: string | null }>(created)).roleId).toBe(seeded.memberRoleId);
+    expect((await body<{ roleId: string | null }>(created)).roleId).toBeNull();
   });
 
-  it('refuses a cross-org role, a personal workspace, and a caller without manage', async () => {
+  it('requires access-management authority when a contributor supplies a role', async () => {
+    const seeded = await seedOrg();
+    const w = appWithActor(members, seeded.orgId, ['contribute'], seeded.ownerActorId);
+    const response = await w.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ displayName: 'Sam', roleId: seeded.memberRoleId }),
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it('refuses foreign roles and read-only callers but permits personal people', async () => {
     const seeded = await seedOrg();
     const other = await seedOrg();
 
@@ -230,7 +241,7 @@ describe('people — an actor with no Docket account', () => {
       ).status,
     ).toBe(404);
 
-    // 409 — a personal workspace is an org-of-one, same as `POST /invitations`.
+    // Recording a person does not add another account to a personal workspace.
     const personal = await seedOrg({ personal: true });
     const p = appWithActor(members, personal.orgId, ['manage'], personal.ownerActorId);
     expect(
@@ -241,7 +252,7 @@ describe('people — an actor with no Docket account', () => {
           body: JSON.stringify({ displayName: 'Nope' }),
         })
       ).status,
-    ).toBe(409);
+    ).toBe(201);
   });
 
   it('lists interleaved with account-holders by name, never grouped by account', async () => {
@@ -276,6 +287,36 @@ describe('people — an actor with no Docket account', () => {
     // both volunteers at one end of the list.
     const accountFlags = page.items.map((m) => m.userId !== null);
     expect(accountFlags).toEqual([false, true, false, true, false]);
+  });
+
+  it('shows linked identity details only to workspace identity managers', async () => {
+    const seeded = await seedOrg();
+    const [person] = await db
+      .insert(schema.actor)
+      .values({ organizationId: seeded.orgId, kind: 'human', displayName: 'Sam' })
+      .returning();
+    const personId = assertDefined(person).id;
+    const [connection] = await db
+      .insert(schema.integration)
+      .values({ organizationId: seeded.orgId, provider: 'github', pattern: 'connector' })
+      .returning();
+    await db.insert(schema.externalActor).values({
+      organizationId: seeded.orgId,
+      integrationId: assertDefined(connection).id,
+      externalId: 'sam-source',
+      actorId: personId,
+      displayName: 'Sam external',
+    });
+    const contributor = appWithActor(members, seeded.orgId, ['contribute'], seeded.ownerActorId);
+    const restricted = await contributor.request(`/${personId}/profile`);
+    expect(restricted.status).toBe(200);
+    expect(await body(restricted)).toMatchObject({ displayName: 'Sam', linkedIdentities: [] });
+    const manager = appWithActor(members, seeded.orgId, ['manage'], seeded.ownerActorId);
+    const visible = await manager.request(`/${personId}/profile`);
+    expect(visible.status).toBe(200);
+    expect(await body(visible)).toMatchObject({
+      linkedIdentities: [{ actorId: personId, externalId: 'sam-source', provider: 'github' }],
+    });
   });
 
   it('keeps `GET /invitations` reachable now that `/:actorId/profile` exists', async () => {

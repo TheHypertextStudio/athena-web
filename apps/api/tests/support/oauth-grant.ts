@@ -129,3 +129,20 @@ export async function seedSkipConsentClient(
   rememberGrant(clientId, userId, grant.id);
   return { clientId, grantId: grant.id };
 }
+
+/** Build complete MCP token claims for a seeded test grant. */
+export function mcpClaims<
+  T extends { readonly sub: string; readonly scope: string; readonly azp?: string },
+>(claims: T) {
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const grantId = claims.azp ? seededGrantId(claims.azp, claims.sub) : undefined;
+  return {
+    iss: 'https://auth.docket.test/api/auth',
+    aud: 'https://api.docket.test/mcp',
+    iat: issuedAt,
+    exp: issuedAt + 900,
+    jti: `test-jti-${claims.sub}`,
+    ...(grantId ? { 'https://clearthedocket.com/oauth/grant': grantId } : {}),
+    ...claims,
+  };
+}

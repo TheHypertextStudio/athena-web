@@ -1,9 +1,10 @@
 'use client';
 
+import { WorkspaceActorPicker } from '@/components/people/workspace-actor-picker';
+
 /** Shared atomic bulk Properties editor for homogeneous Project and Task canvas selections. */
 import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
 import {
-  ActorPicker,
   DatePicker,
   EntityPicker,
   EnumPicker,
@@ -449,7 +450,7 @@ export default function CanvasPropertiesEditor({
           />
         </Field>
         <Field label="Assignee">
-          <ActorPicker
+          <WorkspaceActorPicker
             options={options.actorOptions}
             value={scalarValue(assignee)}
             onChange={(value) => {
@@ -682,7 +683,7 @@ export default function CanvasPropertiesEditor({
         />
       </Field>
       <Field label="Lead">
-        <ActorPicker
+        <WorkspaceActorPicker
           options={options.memberOptions}
           value={scalarValue(lead)}
           onChange={(value) => {

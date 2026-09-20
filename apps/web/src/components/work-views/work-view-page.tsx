@@ -49,10 +49,15 @@ import { transitionNameStyle } from '@/lib/view-transition';
 import { apiQueryOptions, queryKeys, type RpcResponse, useApiQuery } from '@/lib/query';
 import { objectHref } from '@/lib/actions/object';
 
+import { workBoardOrderInput } from './work-board-order-input';
 import { CARD_GRID_CLASS, CARD_INSET, CARD_MIN_HEIGHT } from './card-styles';
 import { InitiativeTimeline } from './initiative-timeline';
 import { ProjectTimelineAdapter } from './project-timeline-adapter';
-import type { WorkViewGroupSummary, WorkViewRowFor } from './renderer-types';
+import {
+  isMutableWorkViewGroupPath,
+  type WorkViewGroupSummary,
+  type WorkViewRowFor,
+} from './renderer-types';
 import { useWorkView } from './use-work-view';
 import { useWorkViewSurfaceRecovery } from './use-work-view-surface-recovery';
 import { useWorkViewOrder } from './use-work-view-order';
@@ -64,11 +69,7 @@ import { WorkList } from './work-list';
 import { visibleWorkListRows } from './work-list-groups';
 import { WorkViewOperationFailures } from './work-view-failures';
 import { WorkViewOverflowItems, WorkViewTabs } from './work-view-tabs';
-import {
-  isRouteOwnedDirectWorkViewRow,
-  workViewRowInteractionPolicy,
-  workViewSelectionObjects,
-} from './work-view-object';
+import { workViewRowInteractionPolicy, workViewSelectionObjects } from './work-view-object';
 import { supportsWorkViewRenderer } from './work-view-renderers';
 import { PAGE_COPY, resolvePageLens } from './work-view-page-copy';
 import { WorkViewToolbar } from './work-view-toolbar';
@@ -423,7 +424,8 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     openEntity(entityNavigationSnapshotFromWorkViewRow(row));
   };
   const create = (path: readonly string[] = [], returnFocusTo?: HTMLElement | null): void => {
-    if (!canContribute) return;
+    if (!canContribute || !isMutableWorkViewGroupPath(controller.response?.groups ?? [], path))
+      return;
     const applyColumn = (itemId: string): void => {
       const groupValue = path[0] ?? null;
       if (path.length === 0) return;
@@ -524,19 +526,14 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         }}
         onActivate={openRow}
         onDrop={(drop) => {
-          if (!canContribute || !isRouteOwnedDirectWorkViewRow(drop.item, organizationId)) return;
-          const groupValue = drop.destinationPath[0] ?? null;
-          const sourceGroupValue = drop.sourcePath[0] ?? null;
-          orderMutation.mutate({
+          const input = workBoardOrderInput(drop, {
             target,
             organizationId,
-            itemId: drop.item.id,
+            canContribute,
             groupField: controller.definition.arrangement.groupBy,
-            sourceGroupValue: sourceGroupValue === '__empty__' ? null : sourceGroupValue,
-            groupValue: groupValue === '__empty__' ? null : groupValue,
-            beforeId: drop.beforeId,
-            afterId: drop.afterId,
+            groups: controller.response?.groups ?? [],
           });
+          if (input) orderMutation.mutate(input);
         }}
         onLoadMore={controller.loadMoreGroup}
         hasMoreRows={controller.response?.nextCursor !== null}

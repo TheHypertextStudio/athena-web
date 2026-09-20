@@ -1,3 +1,10 @@
+import {
+  applyNotionSourcePatch,
+  notionSourceRevision,
+  insertNotionSourceEntity,
+  applyNotionTaskState,
+} from '../lib/identity/notion-source-people';
+import { notionPersonFields, loadNotionRoster } from '../lib/identity/notion-source-people';
 /**
  * `@docket/api` — reading Docket entities as mirror values.
  *
@@ -28,15 +35,12 @@ import {
   taskPriority,
   team,
   teamMember,
-  user,
 } from '@docket/db';
 import type { NotionMirrorEntity } from '@docket/connections/notion/mirror-contract';
-import { personCompanionKey } from '@docket/connections/notion/mirror-schema';
 import type { MirrorSourceValue, MirrorValue } from '@docket/connections/notion/mirror-values';
 import { defaultCycleName } from '@docket/work/cycle-contract';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
-import { setTaskState } from '../lib/task-state';
 import { landingStatus } from '../lib/work-status';
 import { enqueueSearchUpsert } from '../search/write-through';
 
@@ -54,6 +58,8 @@ import {
 export interface MirrorEntityRecord {
   /** The Docket entity's id. */
   readonly entityId: string;
+  /** Entity revision used to reject an accepted pull after a concurrent local edit. */
+  readonly updatedAt?: Date;
   /**
    * Its values, keyed by the catalog's field keys.
    *
@@ -169,26 +175,6 @@ async function actorNames(orgId: string): Promise<Map<string, string>> {
   return new Map(rows.map((row) => [row.id, row.displayName]));
 }
 
-/** A person-valued field's values, keyed by field and by its native-Notion companion. */
-type PersonFields = (field: string, id: string | null) => Record<string, MirrorSourceValue>;
-
-/**
- * Build the writer for person-valued fields, resolving display names from one lookup.
- *
- * @param names - Actor id to display name.
- * @returns a function emitting one person as both its own column and its native-Notion companion.
- */
-function personFieldsFor(names: ReadonlyMap<string, string>): PersonFields {
-  return (field, id) => {
-    const actorRef: MirrorSourceValue = {
-      kind: 'actor',
-      actorId: id,
-      displayName: id === null ? null : (names.get(id) ?? null),
-    };
-    return { [field]: actorRef, [personCompanionKey(field)]: actorRef };
-  };
-}
-
 /**
  * Load every projectable record for one entity, with its values.
  *
@@ -213,7 +199,8 @@ export async function loadEntityRows(
   integrationId: string,
   entity: NotionMirrorEntity,
 ): Promise<MirrorEntityRecord[]> {
-  const personFields = personFieldsFor(await actorNames(orgId));
+  const names = await actorNames(orgId);
+  const personFields = await notionPersonFields(orgId, integrationId, entity, names);
 
   switch (entity) {
     case 'task': {
@@ -237,10 +224,11 @@ export async function loadEntityRows(
       const labelsByTask = groupLinks(labelLinks);
       return rows.map((row) => ({
         entityId: row.id,
+        updatedAt: row.updatedAt,
         values: {
           title: text(row.title),
           state: option(row.state),
-          ...personFields('assignee', row.assigneeId),
+          ...personFields('assignee', row.assigneeId, row.id),
           dueDate: date(row.dueDate),
           startDate: date(row.startDate),
           priority: option(row.priority),
@@ -272,11 +260,12 @@ export async function loadEntityRows(
       const initiativesByProject = groupLinks(initiativeLinks);
       return rows.map((row) => ({
         entityId: row.id,
+        updatedAt: row.updatedAt,
         values: {
           name: text(row.name),
           status: option(row.status),
           health: option(row.health),
-          ...personFields('lead', row.leadId),
+          ...personFields('lead', row.leadId, row.id),
           targetDate: date(row.targetDate),
           startDate: date(row.startDate),
           summary: text(row.summary),
@@ -318,7 +307,7 @@ export async function loadEntityRows(
           status: option(row.status),
           health: option(row.health),
           priority: option(row.priority),
-          ...personFields('owner', row.ownerId),
+          ...personFields('owner', row.ownerId, row.id),
           targetDate: date(row.targetDate),
           updateCadence: option(row.updateCadence),
           summary: text(row.summary),
@@ -355,7 +344,7 @@ export async function loadEntityRows(
           name: text(row.name),
           status: option(row.status),
           health: option(row.health),
-          ...personFields('owner', row.ownerId),
+          ...personFields('owner', row.ownerId, row.id),
           summary: text(row.summary),
           description: text(row.description),
           projects: refs('project', projectsByProgram.get(row.id) ?? []),
@@ -455,25 +444,7 @@ export async function loadEntityRows(
       // an account-less person. That is the truth, and the right thing to show: falling back to
       // `external_actor.email` would be echoing Notion's own copy of the address back into Notion
       // as though Docket knew it.
-      const [rows, teamLinks] = await Promise.all([
-        db
-          .select({
-            id: actor.id,
-            displayName: actor.displayName,
-            title: actor.title,
-            userId: actor.userId,
-            email: user.email,
-          })
-          .from(actor)
-          .leftJoin(user, eq(actor.userId, user.id))
-          .where(
-            and(eq(actor.organizationId, orgId), eq(actor.kind, 'human'), isNull(actor.archivedAt)),
-          ),
-        db
-          .select({ ownerId: teamMember.actorId, relatedId: teamMember.teamId })
-          .from(teamMember)
-          .where(eq(teamMember.organizationId, orgId)),
-      ]);
+      const [rows, teamLinks] = await loadNotionRoster(orgId);
       const teamsByActor = groupLinks(teamLinks);
       return rows.map((row) => ({
         entityId: row.id,
@@ -502,10 +473,9 @@ export async function loadEntityRows(
  * @remarks
  * Deliberately narrower than the full field catalog {@link loadEntityRows} projects:
  *
- * - **Person fields** (`assignee`/`lead`) are projected as a resolved display name, and reversing
- *   free text into an actor id is a genuinely different, ambiguous problem — two actors can share
- *   a name, a typo matches nobody — that risks silently assigning the wrong person. Worse than not
- *   pulling it at all, so it is left alone.
+ * - **Person fields** are applied transactionally when source integration context is supplied.
+ *   Legacy calls that supply only an actor ID retain their scalar-only behavior.
+ *   Text names alone never establish a person link.
  * - **`docketUrl`** is derived from the entity's own id, never stored, so there is nothing to pull.
  *
  * `priority` and `health` ARE applied, but only when the pulled option exactly matches one of
@@ -519,7 +489,7 @@ export async function loadEntityRows(
  * unrecognized `priority`/`status`/`health` option.
  *
  * @param orgId - The tenant, for the scoped update.
- * @param actorId - Recorded on the emitted event for a `task.state` transition; unused otherwise.
+ * @param personContext - The editing actor and optional source integration and revision.
  * @param entityType - Which entity kind; only `task` and `project` do anything here.
  * @param entityId - The Docket entity to update.
  * @param values - Field values read from Notion, keyed by the catalog's field keys.
@@ -527,16 +497,18 @@ export async function loadEntityRows(
  */
 export async function applyPulledValues(
   orgId: string,
-  actorId: string,
+  personContext: string | { actorId: string; integrationId: string; expectedUpdatedAt?: Date },
   entityType: NotionMirrorEntity,
   entityId: string,
   values: Readonly<Record<string, MirrorValue>>,
 ): Promise<boolean> {
+  const actorId = typeof personContext === 'string' ? personContext : personContext.actorId;
+  const sourceContext = typeof personContext === 'string' ? undefined : personContext;
   switch (entityType) {
     case 'task':
-      return applyPulledTask(orgId, actorId, entityId, values);
+      return applyPulledTask(orgId, actorId, entityId, values, sourceContext);
     case 'project':
-      return applyPulledProject(orgId, entityId, values);
+      return applyPulledProject(orgId, entityId, values, sourceContext);
     default:
       // Every other entity is projection-only (`push` direction), so `pullBackEntity` never
       // reaches this with one — see `MIRROR_ENTITY_SPECS[entity].direction` in notion-sync.md §8.6.
@@ -549,6 +521,7 @@ async function applyPulledTask(
   actorId: string,
   entityId: string,
   values: Readonly<Record<string, MirrorValue>>,
+  sourceContext?: { integrationId: string; expectedUpdatedAt?: Date },
 ): Promise<boolean> {
   const title = pulledText(values, 'title');
   const description = pulledText(values, 'description');
@@ -556,11 +529,6 @@ async function applyPulledTask(
   const startDate = pulledDate(values, 'startDate');
   const estimateMinutes = pulledNumber(values, 'estimateMinutes');
   const priority = pulledEnumOption(values, 'priority', taskPriority.enumValues);
-  const stateValue = values['state'];
-  const state =
-    stateValue?.kind === 'option' && stateValue.value !== null && stateValue.value.length > 0
-      ? stateValue.value
-      : undefined;
 
   const patch = {
     // An emptied Notion title cannot become a blank Docket title (NOT NULL, not-blank CHECK) — it
@@ -574,28 +542,21 @@ async function applyPulledTask(
     ...(estimateMinutes !== undefined ? { estimateMinutes } : {}),
     ...(priority !== undefined ? { priority } : {}),
   };
-  const where = and(eq(task.id, entityId), eq(task.organizationId, orgId), isNull(task.archivedAt));
-  let exists: boolean;
-  if (Object.keys(patch).length === 0) {
-    // Nothing THIS PATCH applies changed, but the entity's existence still has to be reported
-    // honestly — a caller cannot tell "found, nothing to do" from "gone" by return value alone
-    // otherwise, and an empty Drizzle `.set({})` is not valid SQL to fall back on instead.
-    const rows = await db.select({ id: task.id }).from(task).where(where).limit(1);
-    exists = rows.length > 0;
-  } else {
-    const updated = await db.update(task).set(patch).where(where).returning({ id: task.id });
-    exists = updated.length > 0;
-  }
+  const where = and(
+    eq(task.id, entityId),
+    eq(task.organizationId, orgId),
+    isNull(task.archivedAt),
+    notionSourceRevision(task.updatedAt, sourceContext),
+  );
+  const exists = await applyNotionSourcePatch(
+    { orgId, subjectType: 'task', subjectId: entityId, values, ...sourceContext },
+    async (tx) =>
+      Object.keys(patch).length === 0
+        ? tx.select({ id: task.id }).from(task).where(where).for('update').limit(1)
+        : tx.update(task).set(patch).where(where).returning({ id: task.id }),
+  );
 
-  if (exists && state !== undefined) {
-    try {
-      await setTaskState({ organizationId: orgId, taskId: entityId, state, actorId });
-    } catch {
-      // The state key does not exist in the team's own workflow — a rename or a typo on the
-      // Notion side. Treated as "not read", the same as an unrecognized priority/status/health
-      // option: this function's only other documented failure mode for a select property.
-    }
-  }
+  await applyNotionTaskState(orgId, actorId, entityId, exists, values);
 
   return exists;
 }
@@ -604,6 +565,7 @@ async function applyPulledProject(
   orgId: string,
   entityId: string,
   values: Readonly<Record<string, MirrorValue>>,
+  sourceContext?: { integrationId: string; expectedUpdatedAt?: Date },
 ): Promise<boolean> {
   const name = pulledText(values, 'name');
   const summary = pulledText(values, 'summary');
@@ -628,14 +590,15 @@ async function applyPulledProject(
     eq(project.id, entityId),
     eq(project.organizationId, orgId),
     isNull(project.archivedAt),
+    notionSourceRevision(project.updatedAt, sourceContext),
   );
-  if (Object.keys(patch).length === 0) {
-    const rows = await db.select({ id: project.id }).from(project).where(where).limit(1);
-    return rows.length > 0;
-  }
-
-  const updated = await db.update(project).set(patch).where(where).returning({ id: project.id });
-  return updated.length > 0;
+  return applyNotionSourcePatch(
+    { orgId, subjectType: 'project', subjectId: entityId, values, ...sourceContext },
+    async (tx) =>
+      Object.keys(patch).length === 0
+        ? tx.select({ id: project.id }).from(project).where(where).for('update').limit(1)
+        : tx.update(project).set(patch).where(where).returning({ id: project.id }),
+  );
 }
 
 /**
@@ -695,27 +658,30 @@ async function adoptTask(
   const estimateMinutes = pulledNumber(values, 'estimateMinutes');
   const priority = pulledEnumOption(values, 'priority', taskPriority.enumValues);
 
-  const inserted = await db
-    .insert(task)
-    .values({
-      organizationId: orgId,
-      teamId,
-      // Same "Untitled" substitution as an edit — task.title is NOT NULL with a not-blank CHECK.
-      title: title !== undefined && title.length > 0 ? title : 'Untitled',
-      description: description !== undefined && description.length > 0 ? description : null,
-      state: landing.key,
-      statusId: landing.id,
-      // Designed-mode provenance lives entirely in `notion_mirror_row`, never these columns — a
-      // task can be linked from an existing database and projected into a designed one at once.
-      source: 'native',
-      createdBy: actorId,
-      ...(dueDate !== undefined ? { dueDate } : {}),
-      ...(startDate !== undefined ? { startDate } : {}),
-      ...(estimateMinutes !== undefined ? { estimateMinutes } : {}),
-      ...(priority !== undefined ? { priority } : {}),
-    })
-    .returning({ id: task.id });
-  const row = inserted[0];
+  const row = await insertNotionSourceEntity(
+    { orgId, integrationId: integrationRow.id, subjectType: 'task', values },
+    async (tx) =>
+      tx
+        .insert(task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          // Same "Untitled" substitution as an edit — task.title is NOT NULL with a not-blank CHECK.
+          title: title !== undefined && title.length > 0 ? title : 'Untitled',
+          description: description !== undefined && description.length > 0 ? description : null,
+          state: landing.key,
+          statusId: landing.id,
+          // Designed-mode provenance lives entirely in `notion_mirror_row`, never these columns — a
+          // task can be linked from an existing database and projected into a designed one at once.
+          source: 'native',
+          createdBy: actorId,
+          ...(dueDate !== undefined ? { dueDate } : {}),
+          ...(startDate !== undefined ? { startDate } : {}),
+          ...(estimateMinutes !== undefined ? { estimateMinutes } : {}),
+          ...(priority !== undefined ? { priority } : {}),
+        })
+        .returning({ id: task.id }),
+  );
   if (!row) return undefined;
   await enqueueSearchUpsert(orgId, 'task', row.id);
   return row.id;
@@ -740,22 +706,25 @@ async function adoptProject(
     (await pulledProjectStatus(orgId, values)) ?? (await landingStatus(orgId, 'project'));
   const projectHealth = pulledEnumOption(values, 'health', health.enumValues);
 
-  const inserted = await db
-    .insert(project)
-    .values({
-      organizationId: orgId,
-      teamId,
-      name: name !== undefined && name.length > 0 ? name : 'Untitled',
-      summary: summary !== undefined && summary.length > 0 ? summary : null,
-      description: description !== undefined && description.length > 0 ? description : null,
-      ...(targetDate !== undefined ? { targetDate } : {}),
-      ...(startDate !== undefined ? { startDate } : {}),
-      status: status.key,
-      statusId: status.id,
-      ...(projectHealth !== undefined ? { health: projectHealth } : {}),
-    })
-    .returning({ id: project.id });
-  const row = inserted[0];
+  const row = await insertNotionSourceEntity(
+    { orgId, integrationId: integrationRow.id, subjectType: 'project', values },
+    async (tx) =>
+      tx
+        .insert(project)
+        .values({
+          organizationId: orgId,
+          teamId,
+          name: name !== undefined && name.length > 0 ? name : 'Untitled',
+          summary: summary !== undefined && summary.length > 0 ? summary : null,
+          description: description !== undefined && description.length > 0 ? description : null,
+          ...(targetDate !== undefined ? { targetDate } : {}),
+          ...(startDate !== undefined ? { startDate } : {}),
+          status: status.key,
+          statusId: status.id,
+          ...(projectHealth !== undefined ? { health: projectHealth } : {}),
+        })
+        .returning({ id: project.id }),
+  );
   if (!row) return undefined;
   await enqueueSearchUpsert(orgId, 'project', row.id);
   return row.id;

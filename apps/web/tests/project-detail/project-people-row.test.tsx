@@ -9,6 +9,11 @@ import {
   type ProjectAssignedPerson,
 } from '../../src/components/project-detail/project-people-row';
 
+vi.mock('@/components/people/workspace-actor-picker', async () => {
+  const { ActorPicker } = await import('@docket/ui/components');
+  return { WorkspaceActorPicker: ActorPicker };
+});
+
 const ownerOptions: readonly PickerOption[] = [
   { value: 'owner', label: 'Ada Lovelace' },
   { value: 'grace', label: 'Grace Hopper' },

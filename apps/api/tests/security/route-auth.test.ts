@@ -489,6 +489,7 @@ describe('the unauthenticated surface is exactly the documented public one', () 
     // contains schema properties called `email` and `organizationId`, and `example` ULIDs for its
     // path parameters. What no public endpoint may carry is a real address or a credential, and
     // what the two non-document endpoints may not carry is an entity id of any kind.
+    // The generated contract deliberately includes the reserved developer@example.com example.
     const alwaysForbidden = [
       /[\w.+-]+@[\w-]+\.[a-z]{2,}/i,
       /Bearer\s+[A-Za-z0-9._-]{20,}/i,
@@ -496,7 +497,9 @@ describe('the unauthenticated surface is exactly the documented public one', () 
     ];
     const forbiddenOutsideTheDocument = [/\b01[0-9A-HJKMNP-TV-Z]{24}\b/];
     for (const path of PUBLIC_SURFACE) {
-      const text = await (await server.request(path)).text();
+      const body = await (await server.request(path)).text();
+      const text =
+        path === '/v1/openapi.json' ? body.replaceAll('developer@example.com', '') : body;
       const markers =
         path === '/v1/openapi.json'
           ? alwaysForbidden

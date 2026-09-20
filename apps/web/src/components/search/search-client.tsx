@@ -11,7 +11,6 @@ import type {
   SearchResult,
 } from '../../lib/contracts/search';
 import type { SourceSystemKind } from '@docket/connections/event-contract';
-import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
 import { EmptyState } from '@docket/ui/components';
 import { Activity, Search, type LucideIcon } from '@docket/ui/icons';
 import { Button, Input, Row, Skeleton, Stack } from '@docket/ui/primitives';
@@ -20,9 +19,10 @@ import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useAppPathname, useAppSearchParams } from '@/lib/app-location';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useSearchPeopleOverlay } from '@/components/people/cached-person-search';
+import { SearchResultGlyph } from './search-result-glyph';
 import { useActiveOrg } from '@/components/active-org';
 import { DatePicker } from '@/components/date-picker';
-import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { PartialLoadBanner } from '@/components/feedback';
 import { SEARCH_KIND_ICON, SEARCH_KIND_LABEL } from '@/components/command-palette/use-hub-search';
 import { OrgChip } from '@/components/org-chip';
@@ -261,7 +261,7 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
     });
   }, [cursor, data]);
 
-  const results = accumulatedResults;
+  const results = useSearchPeopleOverlay(scope, orgId, orgs, filters, accumulatedResults);
   const hasFilters =
     ids.length > 0 ||
     families.length > 0 ||
@@ -539,25 +539,9 @@ export interface SearchResultRowProps {
  */
 export function SearchResultRow({ result, orgName }: SearchResultRowProps): JSX.Element {
   const href = hrefForSearchResult(result);
-  const Icon = SEARCH_KIND_ICON[result.kind];
-  const subjectType = searchDisplaySubjectType(result.kind);
-  const display =
-    subjectType && result.organizationId
-      ? (result.display ?? defaultEntityDisplay(subjectType, result.entityId))
-      : null;
   const content = (
     <div className="border-outline-variant hover:bg-surface-container-low focus-visible:ring-ring flex min-w-0 gap-3 rounded-lg border px-3 py-3 transition-colors focus-visible:ring-2 focus-visible:outline-none">
-      {display ? (
-        <EntityIconGlyph
-          subjectType={display.subjectType}
-          glyph={display.glyph}
-          colorKey={display.colorKey}
-          customColor={display.customColor}
-          size={20}
-        />
-      ) : (
-        <Icon aria-hidden="true" className="text-on-surface-variant mt-0.5 size-4 shrink-0" />
-      )}
+      <SearchResultGlyph result={result} />
       <div className="min-w-0 flex-1">
         <Row gap={2} className="min-w-0 flex-wrap">
           <span className="text-on-surface truncate text-sm font-medium">{result.title}</span>
@@ -621,22 +605,6 @@ export function SearchResultRow({ result, orgName }: SearchResultRowProps): JSX.
       </div>
     </div>
   );
-}
-
-function searchDisplaySubjectType(kind: SearchDocumentKind) {
-  switch (kind) {
-    case 'team':
-    case 'task':
-    case 'project':
-    case 'program':
-    case 'initiative':
-    case 'milestone':
-    case 'cycle':
-    case 'label':
-      return kind;
-    default:
-      return null;
-  }
 }
 
 function FilterGroup({ title, children }: { title: string; children: ReactNode }): JSX.Element {

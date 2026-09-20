@@ -69,7 +69,11 @@ async function main(): Promise<void> {
   const { label, out, withMobileAuditFixture } = parseArgs(process.argv.slice(2));
 
   const browser = await chromium.launch();
-  const context = await browser.newContext({ baseURL: ORIGIN, ignoreHTTPSErrors: true });
+  const context = await browser.newContext({
+    baseURL: ORIGIN,
+    ignoreHTTPSErrors: true,
+    serviceWorkers: 'block',
+  });
   const page = await context.newPage();
   await addVirtualAuthenticator(page);
 

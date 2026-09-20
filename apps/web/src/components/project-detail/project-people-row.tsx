@@ -1,5 +1,9 @@
 'use client';
 
+import { SourcePersonControl } from '@/components/people/source-person-control';
+import type { SourcePersonReferenceOut } from '@docket/connections/integration-contract';
+import { WorkspaceActorPicker } from '@/components/people/workspace-actor-picker';
+
 /**
  * Project ownership and assigned-people context for the detail masthead.
  *
@@ -9,7 +13,7 @@
  * supporting context only: they collapse to three overlapping avatars plus a remainder count,
  * while the accessible name preserves the full deduplicated roster.
  */
-import { ActorAvatar, ActorPicker, type ActorKind, type PickerOption } from '@docket/ui/components';
+import { ActorAvatar, type ActorKind, type PickerOption } from '@docket/ui/components';
 import type { JSX } from 'react';
 
 import { ENTITY_METADATA_CHIP_CLASS } from '@/components/views/entity-detail-layout';
@@ -26,6 +30,9 @@ export interface ProjectAssignedPerson {
 
 /** Props for {@link ProjectPeopleRow}. */
 export interface ProjectPeopleRowProps {
+  /** Workspace and preserved source identities for an imported owner. */
+  readonly orgId?: string;
+  readonly sourcePeople?: readonly SourcePersonReferenceOut[] | undefined;
   /** The accountable Project owner, or `null` when unset. */
   readonly ownerId: string | null;
   /** Workspace actors eligible to own the Project. */
@@ -49,6 +56,8 @@ export interface ProjectPeopleRowProps {
  * @returns The non-wrapping masthead people row.
  */
 export function ProjectPeopleRow({
+  orgId,
+  sourcePeople,
   ownerId,
   ownerOptions,
   assignedPeople,
@@ -73,7 +82,13 @@ export function ProjectPeopleRow({
       aria-label="Project ownership"
       className="flex min-w-0 flex-nowrap items-center gap-2 overflow-hidden"
     >
-      <ActorPicker
+      {!ownerId && orgId
+        ? sourcePeople
+            ?.filter((source) => source.field === 'lead')
+            .map((source) => <SourcePersonControl key={source.id} orgId={orgId} source={source} />)
+        : null}
+      <WorkspaceActorPicker
+        orgId={orgId}
         options={ownerOptions}
         value={ownerId}
         onChange={onOwnerChange}

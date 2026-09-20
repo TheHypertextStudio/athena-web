@@ -221,6 +221,21 @@ describe('WorkViewPage creation continuity', () => {
     );
   });
 
+  it('does not write a source-person group as a native assignment', () => {
+    controller.definition.arrangement.groupBy = 'lead';
+    controller.definition.presentation.layout = 'board';
+    boardState.drop = {
+      item: { id: PROJECT_ID, organizationId: ALPHA_ID, isContext: false },
+      sourcePath: ['source-person:external-sam'],
+      destinationPath: ['__empty__'],
+      beforeId: null,
+      afterId: null,
+    };
+    render(<WorkViewPage organizationId={ALPHA_ID} target="project" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Drop grouped row' }));
+    expect(orderState.mutate).not.toHaveBeenCalled();
+  });
+
   it('does not order a grouped row owned by another organization', () => {
     controller.definition.arrangement.groupBy = 'status';
     controller.definition.presentation.layout = 'board';

@@ -163,18 +163,13 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
     return <QueryLoadFailure title="Workspace members" query={membersQ} />;
   }
 
-  const pendingInvitations = invitations.map((invitation) => ({
-    id: invitation.id,
-    email: invitation.email,
-    roleId: invitation.roleId,
-    asGuest: invitation.asGuest,
-    expiresAt: invitation.expiresAt,
-  }));
+  const pendingInvitations = invitations;
 
   return (
     <div className="flex flex-col gap-6">
       {canManage ? (
         <InviteForm
+          people={members.filter((person) => !person.userId && person.status === 'active')}
           roleOptions={roleOptions}
           defaultRoleId={memberRoleId}
           sending={inviting}

@@ -1,3 +1,4 @@
+import { mcpClaims } from '../support/oauth-grant';
 /**
  * `@docket/api` — the scope step-up's session-aware notification, in `src/mcp/server.ts`.
  *
@@ -87,7 +88,9 @@ describe('scope step-up notifies a live session about the tool it lost', () => {
   it('warns the notification stream with the required scope when a session is already open', async () => {
     const seed = await seedOrg();
     const { clientId } = await seedConsentedClient(schema, seed.userId, ['work:read']);
-    verifyAccessToken.mockResolvedValue({ sub: seed.userId, azp: clientId, scope: 'work:read' });
+    verifyAccessToken.mockResolvedValue(
+      mcpClaims({ sub: seed.userId, azp: clientId, scope: 'work:read' }),
+    );
     const bearerHeaders = {
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',

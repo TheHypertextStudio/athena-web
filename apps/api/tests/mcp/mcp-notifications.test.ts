@@ -1,3 +1,4 @@
+import { mcpClaims } from '../support/oauth-grant';
 import { Hono } from 'hono';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -10,8 +11,14 @@ import type { resetNotifications as ResetNotifications } from '../../src/mcp/not
 import { resetAuthMocks, verifyAccessToken } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
 import { seedSkipConsentClient } from '../support/oauth-grant';
-import { appWithActor, seedStatuses } from '../support/routes-harness';
+import type {
+  appWithActor as AppWithActor,
+  seedStatuses as SeedStatuses,
+} from '../support/routes-harness';
 
+// The harness loads the API environment, so OAuth must be configured before importing it.
+let appWithActor!: typeof AppWithActor;
+let seedStatuses!: typeof SeedStatuses;
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let mcpHandler!: typeof McpHandler;
@@ -24,6 +31,7 @@ beforeAll(async () => {
   db = schema.db;
   mcpHandler = (await import('../../src/mcp/server')).mcpHandler;
   resetNotifications = (await import('../../src/mcp/notify')).resetNotifications;
+  ({ appWithActor, seedStatuses } = await import('../support/routes-harness'));
 });
 
 interface Seed {
@@ -109,11 +117,13 @@ function app(): Hono {
 
 /** Authenticate the next `mcpHandler` call as `seed`'s user. */
 function authAs(seed: Seed): void {
-  verifyAccessToken.mockResolvedValue({
-    sub: seed.userId,
-    azp: seed.clientId,
-    scope: 'work:read work:write agents:run connectors:link',
-  });
+  verifyAccessToken.mockResolvedValue(
+    mcpClaims({
+      sub: seed.userId,
+      azp: seed.clientId,
+      scope: 'work:read work:write agents:run connectors:link',
+    }),
+  );
 }
 
 function authorization(seed: Seed): string {

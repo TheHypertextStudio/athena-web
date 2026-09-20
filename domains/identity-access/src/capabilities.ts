@@ -50,3 +50,9 @@ export function strongestCapability(capabilities: Iterable<Capability>): Capabil
 
   return strongest;
 }
+
+/** People operations use the existing access ladder without granting login access. */
+export const PEOPLE_CAPABILITIES = {
+  create: 'contribute',
+  manageIdentities: 'manage',
+} as const satisfies Record<string, Capability>;

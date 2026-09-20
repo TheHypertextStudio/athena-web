@@ -16,6 +16,9 @@
  *
  * @see {@link file://../../../../../docs/engineering/specs/people.md}
  */
+import type { MemberOut } from '@docket/identity-access/member-contract';
+import { useQueryClient } from '@tanstack/react-query';
+
 import { api } from '@/lib/api';
 import { fetchAllMembers, fetchAllRoles } from '@/lib/org-collection-pages';
 import { STALE, apiQueryOptions, queryKeys, unwrap, useApiMutation } from '@/lib/query';
@@ -89,7 +92,8 @@ export function personProfileQuery(orgId: string, actorId: string) {
 /** What {@link useAddPerson} sends. */
 export interface AddPersonInput {
   readonly displayName: string;
-  readonly roleId: string | null;
+  readonly roleId?: string | null;
+  readonly requestId?: string;
 }
 
 /**
@@ -103,16 +107,29 @@ export interface AddPersonInput {
  * @returns the mutation handle; invalidates the roster on success.
  */
 export function useAddPerson(orgId: string) {
+  const client = useQueryClient();
   return useApiMutation({
-    mutationFn: ({ displayName, roleId }: AddPersonInput) =>
+    mutationFn: ({ displayName, roleId, requestId }: AddPersonInput) =>
       unwrap(
         () =>
-          api.v1.orgs[':orgId'].members.$post({
-            param: { orgId },
-            json: { displayName, ...(roleId === null ? {} : { roleId }) },
-          }),
+          api.v1.orgs[':orgId'].members.$post(
+            {
+              param: { orgId },
+              json: { displayName, ...(roleId ? { roleId } : {}) },
+            },
+            { headers: requestId ? { 'Idempotency-Key': requestId } : {} },
+          ),
         'Could not add this person.',
       ),
+    onSuccess: (person) => {
+      client.setQueryData<{ items: MemberOut[] }>(queryKeys.members(orgId), (previous) => ({
+        ...previous,
+        items: [
+          ...(previous?.items ?? []).filter((item) => item.actorId !== person.actorId),
+          person,
+        ].sort((a, b) => a.displayName.localeCompare(b.displayName)),
+      }));
+    },
     invalidateKeys: [queryKeys.members(orgId)],
   });
 }

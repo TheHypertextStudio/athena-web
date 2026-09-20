@@ -27,16 +27,17 @@ import { objectKey } from '@/lib/actions/object';
 import type { WorkViewDefinitionFor } from './view-state';
 import { workViewDisplayFieldCatalog, workViewFieldCatalog } from './view-state';
 import {
-  formatWorkViewValue,
+  isMutableWorkViewGroupPath,
+  isMutableWorkViewMove,
   type WorkViewGroupPage,
   type WorkViewGroupSummary,
   type WorkViewRowFor,
   workViewGroupPathKey,
-  workViewRowDisplayValue,
   workViewRowTitle,
 } from './renderer-types';
 import { objectForWorkViewRow, type WorkViewRowInteractionPolicy } from './work-view-object';
 
+import { WorkBoardProperties } from './work-board-properties';
 import { CARD_CHECKBOX_REVEAL_CLASS, REJECTED_DROP_CLASS } from './card-styles';
 
 const MAX_MOUNTED_CARDS_PER_CELL = 100;
@@ -388,6 +389,8 @@ export function WorkBoard<TTarget extends ViewTarget>({
     canContribute &&
     groupField !== null &&
     workViewFieldCatalog(target).find((field) => field.key === groupField)?.mutableGroup === true;
+  const canMutatePath = (path: readonly string[]): boolean =>
+    mutable && isMutableWorkViewGroupPath(groups, path);
   const properties = workViewDisplayFieldCatalog(target).filter((field) =>
     definition.presentation.properties.includes(field.key),
   );
@@ -404,13 +407,13 @@ export function WorkBoard<TTarget extends ViewTarget>({
       if (!mutable || !isObjectDragData(data)) return false;
       if (data.actionScope !== 'all') return false;
       const sourcePath = activeSourcePathRef.current ?? legacyBoardSourcePath(data.sourceSurfaceId);
-      if (sourcePath === null) return false;
+      if (sourcePath === null || !isMutableWorkViewGroupPath(groups, sourcePath)) return false;
       return (
         memberships.get(boardMembershipKey(sourcePath, data.object.id))?.interaction.writable ===
         true
       );
     },
-    [memberships, mutable],
+    [groups, memberships, mutable],
   );
 
   useDragDropMonitor({
@@ -426,7 +429,7 @@ export function WorkBoard<TTarget extends ViewTarget>({
         !isObjectDragData(source) ||
         !isBoardCellData(destination) ||
         source.actionScope !== 'all' ||
-        sourcePath === null
+        !isMutableWorkViewMove(groups, sourcePath, destination.path)
       )
         return;
       const membership = memberships.get(boardMembershipKey(sourcePath, source.object.id));
@@ -473,7 +476,7 @@ export function WorkBoard<TTarget extends ViewTarget>({
               <span className="text-on-surface-variant text-label-small tabular-nums">
                 {column.count}
               </span>
-              {mutable ? (
+              {canMutatePath(column.path) ? (
                 <Button
                   type="button"
                   variant="ghost"
@@ -534,7 +537,7 @@ export function WorkBoard<TTarget extends ViewTarget>({
                     key={workViewGroupPathKey(path)}
                     path={path}
                     label={lane?.label ?? column.label}
-                    mutable={mutable}
+                    mutable={canMutatePath(path)}
                     canAcceptSource={canAcceptBoardSource}
                   >
                     {lane ? (
@@ -560,7 +563,12 @@ export function WorkBoard<TTarget extends ViewTarget>({
                             selected={key !== null && selection.isSelected(key)}
                             selectable={selectable}
                             selectionActive={selectionActive}
-                            interaction={interaction}
+                            interaction={{
+                              ...interaction,
+                              dragDisabled:
+                                interaction.dragDisabled ||
+                                !isMutableWorkViewGroupPath(groups, sourcePath),
+                            }}
                             onToggle={() => {
                               toggle(row.id);
                             }}
@@ -571,24 +579,7 @@ export function WorkBoard<TTarget extends ViewTarget>({
                               activeSourcePathRef.current = dragPath;
                             }}
                           >
-                            {properties.length > 0 ? (
-                              <dl className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-                                {properties.map((field) => (
-                                  <div
-                                    key={field.key}
-                                    className="text-on-surface-variant text-label-small flex min-w-0 gap-1"
-                                  >
-                                    <dt className="sr-only">{field.label}</dt>
-                                    <dd className="max-w-36 truncate">
-                                      {formatWorkViewValue(
-                                        workViewRowDisplayValue(row, field.key),
-                                        field.kind,
-                                      )}
-                                    </dd>
-                                  </div>
-                                ))}
-                              </dl>
-                            ) : null}
+                            <WorkBoardProperties row={row} properties={properties} />
                           </WorkBoardCard>
                         );
                       })}

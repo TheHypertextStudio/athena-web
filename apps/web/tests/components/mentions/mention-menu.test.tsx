@@ -17,6 +17,14 @@ vi.mock('@/components/mentions/use-mention-search', () => ({
 beforeEach(() => {
   HTMLElement.prototype.scrollIntoView = vi.fn();
 });
+vi.mock('@/components/mentions/use-mention-person-creation', () => ({
+  useMentionPersonCreation: () => ({
+    choice: undefined,
+    confirmation: null,
+    confirming: false,
+    cancel: vi.fn(),
+  }),
+}));
 
 afterEach(() => {
   cleanup();

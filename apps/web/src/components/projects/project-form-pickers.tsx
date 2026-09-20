@@ -1,5 +1,7 @@
 'use client';
 
+import { PersonMetadataPicker } from '@/components/people/person-metadata-picker';
+
 /**
  * The project composer's property row, split out so the template editor renders the same controls
  * the create dialog does.
@@ -15,7 +17,6 @@ import type { Health } from '@docket/work/capability-contract';
 import type { ProjectStatus } from '../../lib/contracts/project';
 import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
 import {
-  ActorPicker,
   EntityPicker,
   EnumPicker,
   LabelsPicker,
@@ -75,6 +76,8 @@ export interface ProjectComposerReferenceAxes {
 
 /** Props for {@link ProjectComposerPickers}. */
 export interface ProjectComposerPickersProps {
+  /** Destination workspace when the composer is opened outside a workspace route. */
+  orgId?: string;
   /** The chosen lifecycle status. */
   status: ProjectStatus;
   /** Report a changed status. */
@@ -96,6 +99,7 @@ export interface ProjectComposerPickersProps {
  * @returns the rendered pickers.
  */
 export function ProjectComposerPickers({
+  orgId,
   status,
   onStatusChange,
   health,
@@ -147,17 +151,15 @@ export function ProjectComposerPickers({
               disabled={disabled}
             />
           </EntityMetadataItem>
-          <EntityMetadataItem priority={3}>
-            <ActorPicker
-              options={references.actorOptions}
-              value={references.leadId}
-              onChange={references.onLeadChange}
-              placeholder="No lead"
-              clearLabel="No lead"
-              ariaLabel="Lead"
-              disabled={disabled}
-            />
-          </EntityMetadataItem>
+          <PersonMetadataPicker
+            priority={3}
+            field="Lead"
+            orgId={orgId}
+            options={references.actorOptions}
+            value={references.leadId}
+            onChange={references.onLeadChange}
+            disabled={disabled}
+          />
           {references.showProgram !== false ? (
             <EntityMetadataItem priority={4}>
               <EntityPicker

@@ -12,7 +12,7 @@
  * mutation that sent it. All controls are styled design-system components (no bare
  * inputs/selects).
  */
-import { Checkbox, Button, Input } from '@docket/ui/primitives';
+import { Checkbox, Button, Input, Select, Field } from '@docket/ui/primitives';
 import { Plus } from '@docket/ui/icons';
 import type { JSX } from 'react';
 import { useState } from 'react';
@@ -29,12 +29,16 @@ export interface InvitePayload {
   roleId: string;
   /** Whether to invite as a limited guest collaborator. */
   asGuest: boolean;
+  /** Existing person whose work the accepted account will retain. */
+  personActorId?: string;
 }
 
 /** Props for {@link InviteForm}. */
 export interface InviteFormProps {
   /** The roles assignable in this org, ordered most-privileged first. */
   roleOptions: readonly RoleOption[];
+  /** People who can receive account access without creating another record. */
+  people?: readonly { actorId: string; displayName: string }[];
   /** The default role id to preselect (typically the "member" role). */
   defaultRoleId: string | null;
   /** Whether an invitation is currently being sent. */
@@ -51,11 +55,13 @@ export interface InviteFormProps {
  */
 export function InviteForm({
   roleOptions,
+  people = [],
   defaultRoleId,
   sending,
   onInvite,
 }: InviteFormProps): JSX.Element {
   const [email, setEmail] = useState('');
+  const [personActorId, setPersonActorId] = useState('');
   const [roleId, setRoleId] = useState<string | null>(defaultRoleId);
   const [asGuest, setAsGuest] = useState(false);
 
@@ -70,10 +76,21 @@ export function InviteForm({
           event.preventDefault();
           // `canSubmit` implies a non-null role id; bail otherwise (narrows `effectiveRoleId`).
           if (!canSubmit) return;
-          onInvite({ email: email.trim(), roleId: effectiveRoleId, asGuest });
+          onInvite({
+            email: email.trim(),
+            roleId: effectiveRoleId,
+            asGuest,
+            ...(personActorId ? { personActorId } : {}),
+          });
           setEmail('');
         }}
       >
+        <InvitationPersonSelect
+          people={people}
+          value={personActorId}
+          onChange={setPersonActorId}
+          disabled={sending}
+        />
         <div className="flex flex-wrap items-center gap-2">
           <Input
             type="email"
@@ -114,5 +131,41 @@ export function InviteForm({
         </label>
       </form>
     </SettingsGroup>
+  );
+}
+
+function InvitationPersonSelect({
+  people,
+  value,
+  onChange,
+  disabled,
+}: {
+  people: NonNullable<InviteFormProps['people']>;
+  value: string;
+  onChange: (id: string) => void;
+  disabled: boolean;
+}): JSX.Element | null {
+  if (people.length === 0) return null;
+  return (
+    <Field
+      label="Person"
+      description="Keep their existing assignments and mentions when they accept."
+    >
+      <Select
+        aria-label="Person to invite"
+        value={value}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
+        disabled={disabled}
+      >
+        <option value="">Someone new</option>
+        {people.map((person) => (
+          <option key={person.actorId} value={person.actorId}>
+            {person.displayName}
+          </option>
+        ))}
+      </Select>
+    </Field>
   );
 }

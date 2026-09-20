@@ -1,5 +1,7 @@
 'use client';
 
+import { WorkspaceActorPicker } from '@/components/people/workspace-actor-picker';
+
 /** Initiative property controls rendered as an inline chip row in the entity masthead. */
 import type { Health } from '@docket/work/capability-contract';
 import type {
@@ -10,7 +12,6 @@ import type {
 import type { LabelOut } from '@docket/work/label-contract';
 import type { DateResolution, PlanningTimeframe } from '@docket/work/planning-timeframe';
 import {
-  ActorPicker,
   EnumPicker,
   LabelsPicker,
   TimeframePicker,
@@ -193,7 +194,7 @@ export function InitiativePropertiesPanel({
         />
       </EntityMetadataItem>
       <EntityMetadataItem priority={3}>
-        <ActorPicker
+        <WorkspaceActorPicker
           options={memberOptions}
           value={ownerId}
           onChange={onOwnerChange}

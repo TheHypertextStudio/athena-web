@@ -4,7 +4,6 @@ import {
   gt,
   gte,
   inArray,
-  isNotNull,
   isNull,
   lt,
   lte,
@@ -25,6 +24,10 @@ export interface ScalarFilterCompiler {
   readonly kind: Exclude<ViewFieldKind, 'relation-many'>;
   /** SQL value expression for the field. */
   readonly value: SQL;
+  /** Resolve historical IDs before comparing relation operands. */
+  readonly resolveOperand?: (operand: unknown) => unknown;
+  /** Optional emptiness rule when source attribution survives a missing canonical ID. */
+  readonly isEmpty?: SQL;
 }
 
 /** A multi-relation field compiled with correlated `EXISTS` predicates. */
@@ -123,7 +126,8 @@ function compileScalar(
   field: ScalarFilterCompiler,
   context: FilterSqlContext,
 ): SQL {
-  const value = operandValue(operand, context);
+  const normalize = scalarOperandNormalizer(field);
+  const value = normalize(operandValue(operand, context));
   const range = resolveTemporalRange(operand, field, context);
   switch (operator) {
     case 'is':
@@ -134,9 +138,9 @@ function compileScalar(
     case 'isNot':
       return sqlDistinct(field.value, value);
     case 'isAnyOf':
-      return inArray(field.value, [...list(operand, context)]);
+      return inArray(field.value, list(operand, context).map(normalize));
     case 'isNoneOf':
-      return notInArray(field.value, [...list(operand, context)]);
+      return notInArray(field.value, list(operand, context).map(normalize));
     case 'contains':
       return sql`${field.value} ilike ${`%${likeLiteral(value)}%`} escape '\\'`;
     case 'notContains':
@@ -170,9 +174,9 @@ function compileScalar(
       );
     }
     case 'isEmpty':
-      return isNull(field.value);
+      return scalarEmpty(field);
     case 'isNotEmpty':
-      return isNotNull(field.value);
+      return not(scalarEmpty(field));
     default:
       throw new TypeError(`Unsupported ${field.kind} filter operator: ${operator}`);
   }
@@ -222,4 +226,12 @@ export function compileFilterSql<TKey extends string>(
         : compileScalar(node.operator, node.operand, field, context);
     }
   }
+}
+
+function scalarEmpty(field: ScalarFilterCompiler): SQL {
+  return field.isEmpty ?? isNull(field.value);
+}
+
+function scalarOperandNormalizer(field: ScalarFilterCompiler): (value: unknown) => unknown {
+  return field.resolveOperand ?? ((value: unknown) => value);
 }

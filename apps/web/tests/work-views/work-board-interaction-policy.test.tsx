@@ -173,6 +173,7 @@ function renderBoard(
     { path: ['todo'], rows: [local, foreign, context], nextCursor: null, loading: false },
     { path: ['started'], rows: [], nextCursor: null, loading: false },
   ],
+  immutableTodo = false,
 ) {
   const onActivate = vi.fn();
   const items = workViewSelectionObjects(
@@ -193,8 +194,8 @@ function renderBoard(
             definition={definition}
             totalCount={101}
             groups={[
-              { path: ['todo'], key: 'todo', label: 'Todo', count: 101 },
-              { path: ['started'], key: 'started', label: 'Started', count: 0 },
+              { path: ['todo'], key: 'todo', label: 'Todo', count: 101, mutable: !immutableTodo },
+              { path: ['started'], key: 'started', label: 'Started', count: 0, mutable: true },
             ]}
             groupPages={groupPages}
             hiddenColumns={new Set()}
@@ -281,6 +282,32 @@ describe('WorkBoard route-owned row interaction policy', () => {
     });
 
     expect(screen.queryByRole('article', { name: 'Context task' })).toBeNull();
+  });
+
+  it('keeps source-person groups readable without creation or assignment drag targets', () => {
+    const onDrop = vi.fn();
+    dnd.source = sourceFor(local, ['todo']);
+    renderBoard(onDrop, undefined, true);
+    expect(screen.queryByRole('button', { name: 'Create in Todo' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Create in Started' })).toBeVisible();
+    expect(screen.getByRole('article', { name: 'Local task' })).not.toHaveClass('cursor-grab');
+    const cells = inputs('work-board-cell');
+    const immutableCell = cells.find((cell) => cell.data?.path?.[0] === 'todo');
+    const mutableCell = cells.find((cell) => cell.data?.path?.[0] === 'started');
+    expect(immutableCell?.disabled).toBe(true);
+    expect(mutableCell?.accept?.(dnd.source)).toBe(false);
+    for (const destination of [immutableCell, mutableCell]) {
+      for (const monitor of dnd.monitors)
+        monitor.onDragEnd?.({
+          operation: { source: dnd.source, target: { data: destination?.data } },
+        });
+    }
+    dnd.source = sourceFor(local, ['started']);
+    for (const monitor of dnd.monitors)
+      monitor.onDragEnd?.({
+        operation: { source: dnd.source, target: { data: immutableCell?.data } },
+      });
+    expect(onDrop).not.toHaveBeenCalled();
   });
 
   it('registers mutable board destinations before a pointer drag has a source', () => {

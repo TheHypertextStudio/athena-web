@@ -1,5 +1,7 @@
 'use client';
 
+import type { MentionChoice } from './mention-choice';
+
 /**
  * A plain textarea that answers `@` with the same picker the rich editor uses.
  *
@@ -88,9 +90,12 @@ export default function MentionTextarea({
   onKeyDown,
   ...rest
 }: MentionTextareaProps): React.JSX.Element {
+  const editable = !rest.readOnly && !rest.disabled;
+  const canMention = editable && orgId !== undefined;
+  const frozenCreation = useRef<{ value: string; start: number; query: string } | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
   const anchorRef = useRef<{ getBoundingClientRect: () => DOMRect } | null>(null);
-  const itemsRef = useRef<readonly MentionItem[]>([]);
+  const itemsRef = useRef<readonly MentionChoice[]>([]);
   const resolvedKeyRef = useRef<string | undefined>(undefined);
   const dismissedStartRef = useRef<number | undefined>(undefined);
   // Set for exactly one keystroke, so the Escape that dismissed the menu is swallowed and the one
@@ -108,24 +113,11 @@ export default function MentionTextarea({
   const [hasArrowed, setHasArrowed] = useState(false);
 
   // One narrowing carrying both values, rather than a boolean the JSX then has to re-check.
-  const session = orgId !== undefined && trigger !== undefined ? { orgId, trigger } : undefined;
+  const session =
+    editable && orgId !== undefined && trigger !== undefined ? { orgId, trigger } : undefined;
   const open = session !== undefined;
 
-  // Measure-then-set, in a layout effect so the height lands in the same frame as the text and the
-  // field never paints one row short. `height = auto` first because `scrollHeight` reports the
-  // content's height only when it is not already being clipped by the height we set last time.
-  //
-  // The cap is computed from the element's own resolved `lineHeight` rather than a magic pixel
-  // count, so a caller restyling the type does not silently change how many rows fit.
-  useLayoutEffect(() => {
-    const field = fieldRef.current;
-    if (!autoGrow || !field) return;
-    field.style.height = 'auto';
-    const lineHeight = Number.parseFloat(getComputedStyle(field).lineHeight);
-    const cap = Number.isFinite(lineHeight) ? lineHeight * maxRows : Number.POSITIVE_INFINITY;
-    field.style.height = `${String(Math.min(field.scrollHeight, cap))}px`;
-    field.style.overflowY = field.scrollHeight > cap ? 'auto' : 'hidden';
-  }, [autoGrow, maxRows, value]);
+  useTextareaAutoGrow(fieldRef, autoGrow, maxRows, value);
 
   const close = useCallback(() => {
     setTrigger(undefined);
@@ -147,15 +139,19 @@ export default function MentionTextarea({
     close();
   }, [close]);
 
-  const reportRows = useCallback((items: readonly MentionItem[], resolved: string | undefined) => {
-    itemsRef.current = items;
-    resolvedKeyRef.current = resolved;
-  }, []);
+  const reportRows = useCallback(
+    (items: readonly MentionChoice[], resolved: string | undefined) => {
+      if (items.length > 0) frozenCreation.current = null;
+      itemsRef.current = items;
+      resolvedKeyRef.current = resolved;
+    },
+    [],
+  );
 
   /** Re-read the caret and decide whether a mention attempt is open. */
   const syncTrigger = useCallback(() => {
     const field = fieldRef.current;
-    if (field === null || orgId === undefined) return;
+    if (field === null || orgId === undefined || !editable) return;
     const caret = field.selectionStart;
     // Only the current line matters: a mention never spans a paragraph, and scanning the whole
     // value would find an `@` the author finished with three lines ago.
@@ -177,35 +173,35 @@ export default function MentionTextarea({
     dismissedStartRef.current = undefined;
     anchorRef.current = anchorFor(measureCaretRect(field, decision.trigger.start));
     setTrigger(decision.trigger);
-  }, [close, orgId]);
+  }, [close, orgId, editable]);
 
   const selectItem = useCallback(
-    (item: MentionItem) => {
+    (item: MentionChoice) => {
+      if (item.origin === 'create-person') {
+        const active = triggerRef.current;
+        if (active) frozenCreation.current = { value, ...active };
+        item.select();
+        return;
+      }
       const field = fieldRef.current;
-      const active = triggerRef.current;
-      if (field === null || active === undefined) return;
+      const frozen = frozenCreation.current;
+      frozenCreation.current = null;
+      const active = frozen ?? triggerRef.current;
+      if (field === null || active === undefined || !editable) return;
+      if (frozen && field.value !== frozen.value) {
+        close();
+        return;
+      }
 
       const href = item.origin === 'local' ? item.href : item.url;
       const inserted =
         insertMode === 'prose' ? formatMentionLink(item.title, href, item.ref) : `@${item.title}`;
 
-      const before = value.slice(0, active.start);
-      const after = value.slice(active.start + 1 + active.query.length);
-      // A trailing space, because nobody who inserts a mention wants their next character glued
-      // to it.
-      const next = `${before}${inserted} ${after}`;
-      onChange(next);
+      insertTextareaMention(field, value, active, inserted, onChange);
       onReference?.(item);
       close();
-
-      // Restore the caret past what was inserted; setting value alone would drop it to the end.
-      const caret = before.length + inserted.length + 1;
-      requestAnimationFrame(() => {
-        field.focus();
-        field.setSelectionRange(caret, caret);
-      });
     },
-    [close, insertMode, onChange, onReference, value],
+    [close, editable, insertMode, onChange, onReference, value],
   );
 
   const handleKeyDown = useCallback(
@@ -218,7 +214,7 @@ export default function MentionTextarea({
         return;
       }
 
-      if (triggerRef.current !== undefined && orgId !== undefined) {
+      if (canMention && triggerRef.current !== undefined) {
         // ⌘Enter still means send. Losing a half-typed `@dri` as literal text is recoverable;
         // inserting an unconfirmed mention is not.
         const isSubmit = (event.metaKey || event.ctrlKey) && event.key === 'Enter';
@@ -258,7 +254,7 @@ export default function MentionTextarea({
       }
       onKeyDown?.(event);
     },
-    [dismiss, onKeyDown, orgId, selectItem],
+    [canMention, dismiss, onKeyDown, selectItem],
   );
 
   const menu = useMemo(
@@ -292,14 +288,7 @@ export default function MentionTextarea({
         // Combobox semantics only where a picker can actually appear. A field with no popup that
         // claims to be a combobox tells a screen reader to expect a list that will never exist,
         // and changes the role a plain textarea reports for no benefit.
-        {...(orgId === undefined
-          ? {}
-          : {
-              role: 'combobox',
-              'aria-expanded': open,
-              'aria-autocomplete': 'list' as const,
-              ...(open ? { 'aria-controls': listboxId, 'aria-activedescendant': activeKey } : {}),
-            })}
+        {...mentionFieldAttributes(orgId, open, listboxId, activeKey)}
         onChange={(event) => {
           onChange(event.target.value);
           // After the value lands, so the caret offset matches the text being measured.
@@ -310,7 +299,7 @@ export default function MentionTextarea({
         onBlur={(event) => {
           // A click inside the menu blurs the field; closing then would cancel the very selection
           // being made. Radix keeps focus out of the popover, so anything else is a real exit.
-          if (!event.relatedTarget?.closest('[role="listbox"]')) {
+          if (!event.relatedTarget?.closest('[data-mention-menu]')) {
             dismissedStartRef.current = undefined;
             close();
           }
@@ -321,4 +310,53 @@ export default function MentionTextarea({
       {menu}
     </>
   );
+}
+
+function useTextareaAutoGrow(
+  fieldRef: React.RefObject<HTMLTextAreaElement | null>,
+  autoGrow: boolean,
+  maxRows: number,
+  value: string,
+): void {
+  useLayoutEffect(() => {
+    const field = fieldRef.current;
+    if (!autoGrow || !field) return;
+    field.style.height = 'auto';
+    const lineHeight = Number.parseFloat(getComputedStyle(field).lineHeight);
+    const cap = Number.isFinite(lineHeight) ? lineHeight * maxRows : Number.POSITIVE_INFINITY;
+    field.style.height = `${String(Math.min(field.scrollHeight, cap))}px`;
+    field.style.overflowY = field.scrollHeight > cap ? 'auto' : 'hidden';
+  }, [autoGrow, fieldRef, maxRows, value]);
+}
+
+function insertTextareaMention(
+  field: HTMLTextAreaElement,
+  value: string,
+  active: { start: number; query: string },
+  inserted: string,
+  onChange: (value: string) => void,
+): void {
+  const before = value.slice(0, active.start);
+  const after = value.slice(active.start + 1 + active.query.length);
+  onChange(`${before}${inserted} ${after}`);
+  const caret = before.length + inserted.length + 1;
+  requestAnimationFrame(() => {
+    field.focus();
+    field.setSelectionRange(caret, caret);
+  });
+}
+
+function mentionFieldAttributes(
+  orgId: string | undefined,
+  open: boolean,
+  listboxId: string,
+  activeKey: string | undefined,
+): TextareaHTMLAttributes<HTMLTextAreaElement> {
+  if (orgId === undefined) return {};
+  return {
+    role: 'combobox',
+    'aria-expanded': open,
+    'aria-autocomplete': 'list',
+    ...(open ? { 'aria-controls': listboxId, 'aria-activedescendant': activeKey } : {}),
+  };
 }

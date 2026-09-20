@@ -1,5 +1,7 @@
 'use client';
 
+import { WorkspaceActorPicker } from '@/components/people/workspace-actor-picker';
+
 /**
  * The program composer's property row, split out so the template editor renders the same controls
  * the create dialog does.
@@ -10,7 +12,7 @@
  */
 import type { Health, Visibility } from '@docket/work/capability-contract';
 import type { ProgramStatus } from '@docket/work/program-contract';
-import { ActorPicker, EnumPicker, type PickerOption } from '@docket/ui/components';
+import { EnumPicker, type PickerOption } from '@docket/ui/components';
 import { Activity } from '@docket/ui/icons';
 import { type JSX, useMemo } from 'react';
 
@@ -20,6 +22,8 @@ import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 
 /** Props for {@link ProgramComposerPickers}. */
 export interface ProgramComposerPickersProps {
+  /** Destination workspace when the composer is opened outside a workspace route. */
+  orgId?: string;
   /** The owner options, from `useComposerOptions`. */
   actorOptions: readonly PickerOption[];
   /** The chosen owner, or null. Omitted entirely when the composer has no owner axis. */
@@ -49,6 +53,7 @@ export interface ProgramComposerPickersProps {
  * @returns the rendered pickers.
  */
 export function ProgramComposerPickers({
+  orgId,
   actorOptions,
   ownerId,
   onOwnerChange,
@@ -70,7 +75,8 @@ export function ProgramComposerPickers({
     <>
       {onOwnerChange ? (
         <EntityMetadataItem priority={1}>
-          <ActorPicker
+          <WorkspaceActorPicker
+            orgId={orgId}
             options={actorOptions}
             value={ownerId ?? null}
             onChange={onOwnerChange}

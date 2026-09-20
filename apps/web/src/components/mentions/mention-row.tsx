@@ -13,7 +13,7 @@
  * makes a menu feel fast. Extra context goes in the trailing hint; completeness belongs to the
  * hovercard.
  */
-import { MenuOption } from '@docket/ui/components';
+import { ActorAvatar, MenuOption } from '@docket/ui/components';
 import { Badge } from '@docket/ui/primitives';
 import type { MentionItem } from '../../lib/contracts/mention';
 import { CornerDownLeft } from '@docket/ui/icons';
@@ -58,7 +58,13 @@ export default function MentionRow({
     <MenuOption
       id={id}
       active={active}
-      leading={<Icon aria-hidden />}
+      leading={
+        item.origin === 'local' && item.entityKind === 'actor' ? (
+          <ActorAvatar kind="human" name={item.title} size={20} />
+        ) : (
+          <Icon aria-hidden />
+        )
+      }
       secondary={item.subtitle}
       badge={
         <Badge variant="secondary">

@@ -1,3 +1,8 @@
+import {
+  adoptSourceEntity,
+  applySourceEntityValues,
+  sourceEntityRevision,
+} from './notion-mirror-pull';
 /**
  * `@docket/api` — the Notion mirror's sync passes: provision, project, pull back.
  *
@@ -62,12 +67,7 @@ import { recordSyncConflict } from './sync-notion';
 import { runLeasedSync, type RunSyncOptions, type SyncRunRow } from './integration-sync';
 import type { IntegrationRow } from './integration-provider';
 import { contentChanged, planMirrorRow, type MirrorLocalRow } from './notion-mirror-plan';
-import {
-  adoptEntity,
-  applyPulledValues,
-  loadEntityRows,
-  type MirrorEntityRecord,
-} from './notion-mirror-entities';
+import { loadEntityRows, type MirrorEntityRecord } from './notion-mirror-entities';
 import type { MirrorDatabaseRow } from './notion-mirror-design';
 import {
   bodyStateColumns,
@@ -878,12 +878,12 @@ export async function pullBackEntity(
         bindings,
         change,
       );
-      const applied = await applyPulledValues(
-        ctx.orgId,
-        ctx.actorId,
+      const applied = await applySourceEntityValues(
+        ctx,
         design.entityType,
         local.entityId,
         values,
+        sourceEntityRevision(localRecord),
       );
       if (applied) {
         // Recompute the content hash from Docket's now-current values, not just stamp the anchor.
@@ -976,12 +976,12 @@ export async function pullBackEntity(
           remoteContent: contestedContent,
         });
         if (Object.keys(remoteOnly).length > 0) {
-          await applyPulledValues(
-            ctx.orgId,
-            ctx.actorId,
+          await applySourceEntityValues(
+            ctx,
             design.entityType,
             local.entityId,
             remoteOnly,
+            record.updatedAt,
           );
           records.invalidate();
           record = await records.get(local.entityId);
@@ -1097,13 +1097,7 @@ async function adoptPulledRow(
 ): Promise<string | undefined> {
   const pulled = await readPulledRow(ctx.mirror, design.entityType, bindings, change);
   const values = { ...pulled.properties, ...pulled.values };
-  const entityId = await adoptEntity(
-    ctx.orgId,
-    ctx.actorId,
-    ctx.integrationRow,
-    design.entityType,
-    values,
-  );
+  const entityId = await adoptSourceEntity(ctx, design.entityType, values);
   if (entityId === undefined) return undefined;
   // Just created, so anything already loaded predates it.
   records.invalidate();

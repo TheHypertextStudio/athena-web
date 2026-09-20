@@ -1,3 +1,5 @@
+import { actorAlias, db } from '@docket/db';
+import { and, eq, inArray } from 'drizzle-orm';
 /**
  * Resolve references into the cards a chip's hovercard renders.
  *
@@ -153,17 +155,31 @@ async function loadVisibleEntities(
   refs: readonly EntityRef[],
 ): Promise<Map<string, VisibleEntitySummary>> {
   if (refs.length === 0) return new Map();
+  const actorIds = refs.filter((ref) => ref.entityKind === 'actor').map((ref) => ref.entityId);
+  const aliases =
+    actorIds.length === 0
+      ? []
+      : await db
+          .select()
+          .from(actorAlias)
+          .where(and(eq(actorAlias.organizationId, orgId), inArray(actorAlias.actorId, actorIds)));
+  const canonicalIds = new Map(aliases.map((alias) => [alias.actorId, alias.canonicalActorId]));
   const rows = await loadVisibleDocuments({
     caller,
     orgId,
-    entityIds: refs.map((ref) => ref.entityId),
+    entityIds: refs.map((ref) => canonicalIds.get(ref.entityId) ?? ref.entityId),
   });
-  return new Map(
+  const summaries = new Map(
     rows.map((row) => [
       row.entityId,
       { title: row.title, summary: row.summary, body: row.body, updatedAt: row.sourceUpdatedAt },
     ]),
   );
+  for (const alias of aliases) {
+    const summary = summaries.get(alias.canonicalActorId);
+    if (summary) summaries.set(alias.actorId, summary);
+  }
+  return summaries;
 }
 
 /** Load the shared resource rows behind a batch of external refs, keyed by the URL as written. */

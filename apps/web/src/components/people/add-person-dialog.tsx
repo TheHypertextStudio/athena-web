@@ -4,8 +4,7 @@
  * "Add a person" — record someone the workspace tracks who has no Docket account.
  *
  * @remarks
- * The sibling of inviting by email, and deliberately the *shorter* of the two flows: a name and a
- * role, nothing else. A volunteer coordinator adding twelve Saturday volunteers should not have
+ * The sibling of inviting by email, and deliberately the *shorter* of the two flows: a name, nothing else. A volunteer coordinator adding twelve Saturday volunteers should not have
  * to invent twelve email addresses, and the people they add are assignable the moment they exist.
  *
  * The copy avoids framing the person as incomplete. They are not a "pending" or "unregistered"
@@ -26,7 +25,6 @@ import {
   DialogTitle,
   Field,
   Input,
-  Select,
   Text,
 } from '@docket/ui/primitives';
 import { type JSX, useCallback, useEffect, useState } from 'react';
@@ -34,14 +32,6 @@ import { type JSX, useCallback, useEffect, useState } from 'react';
 import { userErrorMessage } from '@/lib/problem';
 
 import { useAddPerson } from './people-queries';
-
-/** A role the new person can be given, in the workspace's own words. */
-export interface PersonRoleOption {
-  /** The role id. */
-  readonly id: string;
-  /** The role's display name. */
-  readonly name: string;
-}
 
 /** Props for {@link AddPersonDialog}. */
 export interface AddPersonDialogProps {
@@ -51,10 +41,6 @@ export interface AddPersonDialogProps {
   readonly open: boolean;
   /** Report an open-state change (Esc, backdrop, Cancel, or success). */
   readonly onOpenChange: (open: boolean) => void;
-  /** The roles assignable in this workspace. */
-  readonly roleOptions: readonly PersonRoleOption[];
-  /** The role selected by default — the workspace's plain "member" role when it has one. */
-  readonly defaultRoleId: string | null;
 }
 
 /**
@@ -63,40 +49,33 @@ export interface AddPersonDialogProps {
  * @param props - The {@link AddPersonDialogProps}.
  * @returns the rendered dialog.
  */
-export function AddPersonDialog({
-  orgId,
-  open,
-  onOpenChange,
-  roleOptions,
-  defaultRoleId,
-}: AddPersonDialogProps): JSX.Element {
+export function AddPersonDialog({ orgId, open, onOpenChange }: AddPersonDialogProps): JSX.Element {
   const [name, setName] = useState('');
-  const [roleId, setRoleId] = useState<string | null>(defaultRoleId);
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [error, setError] = useState<string | null>(null);
   const addPerson = useAddPerson(orgId);
 
-  // Re-arm the form each time the dialog opens, so a second person does not inherit the first
-  // one's typing, and so a late-resolving role list still lands on the intended default.
+  // Each opening represents a new person; retries within it reuse the same request identity.
   useEffect(() => {
     if (!open) return;
     setName('');
-    setRoleId(defaultRoleId);
+    setRequestId(crypto.randomUUID());
     setError(null);
-  }, [open, defaultRoleId]);
+  }, [open]);
 
   const busy = addPerson.isPending;
   const canSubmit = name.trim().length > 0 && !busy;
 
   const submit = useCallback(async (): Promise<void> => {
-    if (name.trim().length === 0) return;
+    if (!canSubmit) return;
     setError(null);
     try {
-      await addPerson.mutateAsync({ displayName: name.trim(), roleId });
+      await addPerson.mutateAsync({ displayName: name.trim(), requestId });
       onOpenChange(false);
     } catch (caught) {
       setError(userErrorMessage(caught, 'Could not add this person.'));
     }
-  }, [addPerson, name, roleId, onOpenChange]);
+  }, [addPerson, name, requestId, onOpenChange, canSubmit]);
 
   return (
     <Dialog
@@ -110,9 +89,8 @@ export function AddPersonDialog({
         <DialogHeader>
           <DialogTitle>Add a person</DialogTitle>
           <DialogDescription>
-            For someone this workspace works with who won&apos;t be signing in — a volunteer, a
-            contractor, a partner. They can be assigned work, lead projects, and own initiatives
-            just like anyone else here.
+            Creates a person record. No invitation will be sent. They can be assigned work, lead
+            projects, and own initiatives.
           </DialogDescription>
         </DialogHeader>
 
@@ -135,31 +113,11 @@ export function AddPersonDialog({
                 maxLength={120}
                 onChange={(event) => {
                   setName(event.target.value);
+                  setRequestId(crypto.randomUUID());
+                  setError(null);
                 }}
               />
             </Field>
-
-            {roleOptions.length > 0 ? (
-              <Field
-                label="Role"
-                description="What they can do here if they ever do sign in. It also sets how they're described across the workspace."
-              >
-                <Select
-                  controlSize="lg"
-                  value={roleId ?? ''}
-                  disabled={busy}
-                  onChange={(event) => {
-                    setRoleId(event.target.value === '' ? null : event.target.value);
-                  }}
-                >
-                  {roleOptions.map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            ) : null}
 
             {error ? (
               <Text as="p" role="alert" token="body-medium" tone="error">

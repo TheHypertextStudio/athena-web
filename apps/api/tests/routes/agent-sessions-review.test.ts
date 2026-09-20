@@ -184,6 +184,7 @@ async function seedActivity(
     type: 'thought' | 'action' | 'response' | 'elicitation' | 'error';
     body: Record<string, unknown>;
     approvalStatus?: 'proposed' | 'approved' | 'rejected' | 'applied';
+    createdAt?: Date;
   },
 ): Promise<string> {
   const [row] = await db
@@ -193,6 +194,7 @@ async function seedActivity(
       organizationId: orgId,
       type: values.type,
       body: values.body,
+      createdAt: values.createdAt,
       ...(values.approvalStatus ? { approvalStatus: values.approvalStatus } : {}),
     })
     .returning({ id: sessionActivity.id });
@@ -203,11 +205,16 @@ describe('GET /:id/activity', () => {
   it('returns the ordered activity stream for a session', async () => {
     const s = await seedOrg();
     const sessionId = await seedSession(s);
-    await seedActivity(sessionId, s.orgId, { type: 'thought', body: { text: 'first' } });
+    await seedActivity(sessionId, s.orgId, {
+      type: 'thought',
+      body: { text: 'first' },
+      createdAt: new Date('2026-09-19T12:00:00Z'),
+    });
     await seedActivity(sessionId, s.orgId, {
       type: 'action',
       body: { action: { kind: 'update_task', summary: 'move' } },
       approvalStatus: 'proposed',
+      createdAt: new Date('2026-09-19T12:00:01Z'),
     });
 
     const app = appFor(s.orgId, ['view'], s.humanActorId);

@@ -52,18 +52,73 @@ describe('resolveMirrorValues', () => {
     expect(out.unresolved).toEqual([]);
   });
 
+  it('preserves all unresolved source people when projecting an unrelated edit', () => {
+    const binding = assignee({ kind: 'people', representation: undefined });
+    const out = resolveMirrorValues(
+      [binding],
+      {
+        assignee: {
+          kind: 'actor',
+          actorId: null,
+          displayName: null,
+          sourceExternalIds: ['notion-sam', 'notion-lee'],
+        },
+      },
+      KNOWN,
+    );
+    expect(out.values['assignee']).toEqual({
+      kind: 'people',
+      externalIds: ['notion-sam', 'notion-lee'],
+    });
+  });
+
+  it('omits an unresolved source person relation instead of clearing it', () => {
+    const binding = assignee({ kind: 'relation', representation: 'docket_people_table' });
+    const out = resolveMirrorValues(
+      [binding],
+      {
+        assignee: {
+          kind: 'actor',
+          actorId: null,
+          displayName: null,
+          sourceExternalIds: ['notion-sam'],
+        },
+      },
+      KNOWN,
+    );
+    expect(out.values['assignee']).toBeUndefined();
+  });
+
+  it('preserves multiple source identities after they resolve to the same native person', () => {
+    const binding = assignee({ kind: 'people', representation: undefined });
+    const out = resolveMirrorValues(
+      [binding],
+      {
+        assignee: {
+          kind: 'actor',
+          actorId: 'act_1',
+          displayName: 'Sam S',
+          sourceExternalIds: ['notion-user-1', 'notion-user-2'],
+        },
+      },
+      KNOWN,
+    );
+    expect(out.values['assignee']).toEqual({
+      kind: 'people',
+      externalIds: ['notion-user-1', 'notion-user-2'],
+    });
+  });
+
   it('renders a matched person as the native Notion user', () => {
     const binding = assignee({ kind: 'people', representation: undefined });
     const out = resolveMirrorValues([binding], { assignee: ref('act_1', 'Sam S') }, KNOWN);
     expect(out.values['assignee']).toEqual({ kind: 'people', externalIds: ['notion-user-1'] });
   });
 
-  it('writes an unmatched person as an honest empty, and says it will never resolve', () => {
-    // The column's documented meaning is "the matched subset", and the name sits in the column
-    // beside it — so empty is the truth here, and retrying would not change it.
+  it('omits an unmappable person so unrelated edits cannot clear provider assignments', () => {
     const binding = assignee({ kind: 'people', representation: undefined });
     const out = resolveMirrorValues([binding], { assignee: ref('act_2', 'No Notion') }, KNOWN);
-    expect(out.values['assignee']).toEqual({ kind: 'people', externalIds: [] });
+    expect(out.values['assignee']).toBeUndefined();
     expect(out.unresolved).toEqual([
       { field: 'assignee', targetId: 'act_2', reason: 'no_notion_account', retryable: false },
     ]);
@@ -204,7 +259,7 @@ describe('resolveMirrorValues', () => {
     ]);
   });
 
-  it('clears a person relation once People is settled, rather than deferring for ever', () => {
+  it('omits an unmappable person relation after People settles', () => {
     // An assignee who is an agent actor has no People row and never will. Before `settled` this
     // was reported retryable, which would have kept the pass incomplete on every future sweep.
     const binding = assignee({ kind: 'relation', representation: 'docket_people_table' });
@@ -213,7 +268,7 @@ describe('resolveMirrorValues', () => {
       { assignee: ref('act_agent', 'Athena') },
       pagesFor('person', [], true),
     );
-    expect(out.values['assignee']).toEqual({ kind: 'relation', externalPageIds: [] });
+    expect(out.values['assignee']).toBeUndefined();
     expect(out.unresolved).toEqual([
       {
         field: 'assignee',

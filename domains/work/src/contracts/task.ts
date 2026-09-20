@@ -1,3 +1,5 @@
+import { TaskRef } from './task-reference';
+import { SourcePersonReference } from './source-person';
 /**
  * `domain packages` — Task slice DTOs.
  *
@@ -327,6 +329,7 @@ export function taskCreationEntryId(taskId: string): string {
 /** Full task representation returned by reads. */
 export const TaskOut = z
   .object({
+    sourcePeople: z.array(SourcePersonReference).optional(),
     id: TaskId.describe('Opaque task id.'),
     organizationId: OrganizationId.describe('Owning org id (the tenant key).'),
     title: z.string().describe('Task title.'),
@@ -640,21 +643,7 @@ export const SubtaskCreate = z
 /** Validated subtask-create body. */
 export type SubtaskCreate = z.infer<typeof SubtaskCreate>;
 
-/** A lightweight Task reference carrying its project for cross-project dependency display. */
-export const TaskRef = z
-  .object({
-    id: TaskId.describe('Referenced task id.'),
-    title: z.string().describe('Referenced task title, for display without a second fetch.'),
-    state: z.string().describe('Referenced task’s current workflow-state key.'),
-    projectId: ProjectId.nullable()
-      .optional()
-      .describe(
-        'Referenced task’s project; null when project-less. Lets the UI render cross-project links.',
-      ),
-  })
-  .meta({ id: 'TaskRef', description: 'A task reference with its project.' });
-/** Task reference value. */
-export type TaskRef = z.infer<typeof TaskRef>;
+export { TaskRef } from './task-reference';
 
 /**
  * The richer single-task read: the full task plus its dependency edges and subtasks.

@@ -1,5 +1,7 @@
 'use client';
 
+import type { MentionChoice } from './mention-choice';
+
 /**
  * Drive the `@` menu from inside a ProseMirror editor.
  *
@@ -15,7 +17,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/core';
 import type { EditorView } from '@tiptap/pm/view';
-import type { MentionItem, MentionRef } from '../../lib/contracts/mention';
+import type { MentionRef } from '../../lib/contracts/mention';
 import { mentionRefKey } from '../../lib/contracts/mention';
 import { readStoredJson, writeStoredJson } from '@docket/ui/lib/browser-storage';
 
@@ -44,7 +46,7 @@ export interface MentionController {
   readonly hasArrowed: boolean;
   /** Called by the menu each render, so the keyboard handler reads rows synchronously. */
   readonly reportRows: (
-    items: readonly MentionItem[],
+    items: readonly MentionChoice[],
     resolvedActiveKey: string | undefined,
   ) => void;
   readonly anchorRef: React.RefObject<CaretAnchor | null>;
@@ -53,7 +55,7 @@ export interface MentionController {
   readonly handleKeyDown: (view: EditorView, event: KeyboardEvent) => boolean;
   /** Call from the editor's update handler so the trigger tracks the caret. */
   readonly syncFromEditor: (editor: Editor) => void;
-  readonly selectItem: (item: MentionItem) => void;
+  readonly selectItem: (item: MentionChoice) => void;
   readonly close: () => void;
   /** Close because the reader asked to, which keeps this `@` shut until the caret leaves it. */
   readonly dismiss: () => void;
@@ -79,9 +81,10 @@ export function useMentionController(input: MentionControllerOptions): MentionCo
   const [trigger, setTrigger] = useState<MentionTrigger | undefined>(undefined);
   const [activeKey, setActiveKey] = useState<string | undefined>(undefined);
   const [hasArrowed, setHasArrowed] = useState(false);
+  const frozenCreation = useRef<MentionTrigger | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const anchorRef = useRef<CaretAnchor | null>(null);
-  const itemsRef = useRef<readonly MentionItem[]>([]);
+  const itemsRef = useRef<readonly MentionChoice[]>([]);
   const resolvedKeyRef = useRef<string | undefined>(undefined);
   const dismissedStartRef = useRef<number | undefined>(undefined);
   // The keyboard handler reads the trigger from here rather than from the render it closed over.
@@ -101,7 +104,8 @@ export function useMentionController(input: MentionControllerOptions): MentionCo
 
   // Rows live in a ref because the search query is mounted by the menu, which only exists while
   // the menu is open. A surface where nobody typed `@` mounts no query and needs no QueryClient.
-  const reportRows = useCallback((next: readonly MentionItem[], resolved: string | undefined) => {
+  const reportRows = useCallback((next: readonly MentionChoice[], resolved: string | undefined) => {
+    if (next.length > 0) frozenCreation.current = null;
     itemsRef.current = next;
     resolvedKeyRef.current = resolved;
   }, []);
@@ -157,43 +161,35 @@ export function useMentionController(input: MentionControllerOptions): MentionCo
       const { start } = decision.trigger;
       // Anchor to the whole `@query` range rather than to a caret point, so the menu stays glued
       // to the growing token instead of drifting as characters are added.
-      const rect = () => {
-        const box = view.coordsAtPos(start);
-        const end = view.coordsAtPos(from);
-        return new DOMRect(
-          box.left,
-          box.top,
-          Math.max(end.right - box.left, 1),
-          box.bottom - box.top,
-        );
-      };
-      anchorRef.current = { getBoundingClientRect: rect };
+      anchorRef.current = editorCaretAnchor(view, start, from);
       setTrigger(decision.trigger);
     },
     [close, input.enabled],
   );
 
   const selectItem = useCallback(
-    (item: MentionItem) => {
+    (item: MentionChoice) => {
+      if (item.origin === 'create-person') {
+        frozenCreation.current = triggerRef.current ?? null;
+        item.select();
+        return;
+      }
       const editor = editorRef.current;
-      const active = triggerRef.current;
+      const frozen = frozenCreation.current;
+      frozenCreation.current = null;
+      const active = frozen ?? triggerRef.current;
       if (editor === null || active === undefined) return;
+      if (frozen && !matchesCreationRange(editor, frozen)) {
+        close();
+        return;
+      }
 
       const ref: MentionRef = item.ref;
       const href = item.origin === 'local' ? item.href : item.url;
       const from = active.start;
       const to = from + 1 + active.query.length;
 
-      editor
-        .chain()
-        .focus()
-        .insertContentAt({ from, to }, [
-          { type: MENTION_NODE, attrs: attributesFromRef(ref, item.title, href) },
-          // A trailing space, because nobody who inserts a mention wants their next character
-          // glued to it.
-          { type: 'text', text: ' ' },
-        ])
-        .run();
+      insertPersonMention(editor, { from, to }, ref, item.title, href);
 
       rememberMention(ref);
       close();
@@ -300,4 +296,47 @@ function rememberMention(ref: MentionRef): void {
   const key = mentionRefKey(ref);
   const next = [key, ...previous.filter((k) => k !== key)].slice(0, RECENT_MENTIONS_LIMIT);
   writeStoredJson(RECENT_MENTIONS_KEY, next);
+}
+
+/** Guard async creation against edits that removed or moved its original mention text. */
+function matchesCreationRange(editor: Editor, trigger: MentionTrigger): boolean {
+  const end = trigger.start + 1 + trigger.query.length;
+  return (
+    end <= editor.state.doc.content.size &&
+    editor.state.doc.textBetween(trigger.start, end) === `@${trigger.query}`
+  );
+}
+
+function editorCaretAnchor(view: EditorView, start: number, end: number): CaretAnchor {
+  return {
+    getBoundingClientRect: () => {
+      const box = view.coordsAtPos(start);
+      const last = view.coordsAtPos(end);
+      return new DOMRect(
+        box.left,
+        box.top,
+        Math.max(last.right - box.left, 1),
+        box.bottom - box.top,
+      );
+    },
+  };
+}
+
+function insertPersonMention(
+  editor: Editor,
+  range: { from: number; to: number },
+  ref: MentionRef,
+  title: string,
+  href: string,
+): void {
+  editor
+    .chain()
+    .focus()
+    .insertContentAt(range, [
+      { type: MENTION_NODE, attrs: attributesFromRef(ref, title, href) },
+      // A trailing space, because nobody who inserts a mention wants their next character
+      // glued to it.
+      { type: 'text', text: ' ' },
+    ])
+    .run();
 }

@@ -66,3 +66,10 @@ match, group matches by relevance, and include saved Library resources.
 Generic Notion task imports require selected task databases in connection settings. An empty
 selection pauses task imports. Docket-owned mirror databases and pages are excluded from generic
 imports and writeback, including disabled mirrors. Typed Notion sync continues independently.
+## People and workspace access
+
+Docket records people independently from account access. Contributors can create a person while
+assigning work or writing an @mention, including in personal workspaces. Creation sends no invitation.
+Managers can link external identities and combine duplicate person records while preserving historical
+references. The [People specification](docs/engineering/specs/people.md) defines these interactions and
+their authorization and sync rules.

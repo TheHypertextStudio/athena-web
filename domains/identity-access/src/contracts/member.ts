@@ -59,6 +59,9 @@ export const MemberInvite = z
     roleId: RoleId.describe(
       "The id of the org role the new member will hold once they accept. MUST belong to this org (validated server-side; a foreign/unknown role yields 404), which both prevents cross-org capability leakage and determines the invitee's org-wide baseline.",
     ),
+    personActorId: ActorId.optional().describe(
+      'Existing accountless workspace person to attach when the invitation is accepted.',
+    ),
     asGuest: z
       .boolean()
       .optional()

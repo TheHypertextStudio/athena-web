@@ -41,10 +41,12 @@ async function resolvedActorId(
   organizationId: string,
   source: AgentSurfaceIdentitySource | null,
   event: CanonicalAgentEvent,
+  integrationId: string,
 ): Promise<string | null> {
   if (!source) return null;
   const resolved = await resolveExternalActor(organizationId, {
     source,
+    integrationId,
     externalId: event.actor.externalId,
     ...(event.actor.email ? { email: event.actor.email } : {}),
   });
@@ -113,20 +115,28 @@ async function applyApprovalToken(input: {
   return true;
 }
 
-/** Normalize and apply one verified external-agent inbox row. */
-export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow): Promise<void> {
-  if (!row.organizationId || !row.integrationId) return;
+async function installedAgentIntegration(
+  organizationId: string,
+  integrationId: string,
+): Promise<typeof integration.$inferSelect | undefined> {
   const [installed] = await db
     .select()
     .from(integration)
     .where(
       and(
-        eq(integration.id, row.integrationId),
-        eq(integration.organizationId, row.organizationId),
+        eq(integration.id, integrationId),
+        eq(integration.organizationId, organizationId),
         eq(integration.status, 'connected'),
       ),
     )
     .limit(1);
+  return installed;
+}
+
+/** Normalize and apply one verified external-agent inbox row. */
+export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow): Promise<void> {
+  if (!row.organizationId || !row.integrationId) return;
+  const installed = await installedAgentIntegration(row.organizationId, row.integrationId);
   if (!installed) return;
   const connection = connectionRecord(installed.connection);
   const normalized = await normalizeStoredAgentSurface(
@@ -141,7 +151,12 @@ export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow)
   if (installed.provider !== normalized?.routing.installProvider) return;
   const { provider, routing, events } = normalized;
   for (const event of events) {
-    const actorId = await resolvedActorId(row.organizationId, routing.identitySource, event);
+    const actorId = await resolvedActorId(
+      row.organizationId,
+      routing.identitySource,
+      event,
+      row.integrationId,
+    );
     if (event.type === 'session_started') {
       const createdByActorId = actorId ?? installed.createdBy;
       if (!createdByActorId) throw new Error('External agent install has no accountable actor.');

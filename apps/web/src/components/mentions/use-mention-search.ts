@@ -19,6 +19,10 @@
  * skeletons and re-expanding as the query narrows. Combined with the merge rules, the visible list
  * only ever narrows — it never blanks.
  */
+import {
+  useCachedPersonSearch,
+  mergeCachedPersonMentions,
+} from '@/components/people/cached-person-search';
 import { useMemo } from 'react';
 import type {
   MentionExternalOut,
@@ -88,7 +92,11 @@ export function useMentionSearch(input: MentionSearchInput): MentionSearchState 
         query: { q: term, limit: '8' },
       }),
     fallbackMessage: 'Could not search this workspace.',
-    options: { staleTime: STALE.volatile },
+    options: {
+      staleTime: STALE.volatile,
+      placeholderData: (previous, query) =>
+        query?.queryKey[1] === input.orgId ? previous : undefined,
+    },
   });
 
   const externalQ = useRemoteSearch<MentionExternalOut>({
@@ -103,16 +111,24 @@ export function useMentionSearch(input: MentionSearchInput): MentionSearchState 
         query: { q: term, limit: '6' },
       }),
     fallbackMessage: 'Could not search your connected apps.',
-    options: { staleTime: STALE.standard },
+    options: {
+      staleTime: STALE.standard,
+      placeholderData: (previous, query) =>
+        query?.queryKey[1] === input.orgId ? previous : undefined,
+    },
   });
 
-  const local = localQ.data?.items;
+  const cachedPeople = useCachedPersonSearch(input.enabled ? [input.orgId] : [], input.query);
+  const local = useMemo(
+    () => mergeCachedPersonMentions(localQ.data?.items ?? [], cachedPeople),
+    [localQ.data, cachedPeople],
+  );
   const external = externalQ.data?.items;
 
   const groups = useMemo(
     () =>
       buildMentionGroups({
-        local: local ?? [],
+        local,
         external: external ?? [],
         hasQuery: trimmed.length > 0,
       }),

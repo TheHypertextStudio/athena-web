@@ -579,7 +579,7 @@ export type IntegrationOut = z.infer<typeof IntegrationOut>;
 export const ExternalActorMatchedBy = z
   .enum(['email', 'manual'])
   .describe(
-    'How this mapping was resolved: `email` when Docket matched the provider email to a workspace member, or `manual` when an administrator selected the actor. Email matches may change during a later sync; manual matches do not.',
+    'How this mapping was resolved: `email` (a historical email mapping retained until explicitly corrected) or `manual` (an admin explicitly linked it via `PATCH …/external-actors/:externalActorId`; never overwritten by re-matching).',
   );
 /** External-actor match-source value. */
 export type ExternalActorMatchedBy = z.infer<typeof ExternalActorMatchedBy>;
@@ -635,31 +635,6 @@ export const ExternalActorOut = z
   });
 /** External-actor mapping representation value. */
 export type ExternalActorOut = z.infer<typeof ExternalActorOut>;
-
-/**
- * Body for manually linking or unlinking an `external_actor` mapping.
- *
- * @remarks
- * `actorId` is a required key (never omitted) so the intent is always explicit: a string
- * links (and marks `matchedBy: 'manual'`, immune to future email re-matching), `null` unlinks
- * (and clears `matchedBy` too, so a later sync may re-match it by email).
- *
- * Either way `ignoredAt` is cleared: touching a mapping at all is a decision that supersedes an
- * earlier "don't sync them", and leaving the exclusion behind would keep the row immune to the
- * re-matching this route's own contract promises.
- */
-export const ExternalActorPatch = z
-  .object({
-    actorId: ActorId.nullable().describe(
-      "Set to a Docket Actor id to link manually — the actor MUST belong to the caller's org (404 `Actor not found` otherwise); the row is marked `matchedBy: 'manual'` and survives future email re-syncs untouched. Set to `null` to unlink — this also clears `matchedBy`, so the next email sync may re-match the row. Both clear `ignoredAt`.",
-    ),
-  })
-  .meta({
-    id: 'ExternalActorPatch',
-    description: 'Manually link or unlink an external-actor identity mapping.',
-  });
-/** Validated external-actor patch body. */
-export type ExternalActorPatch = z.infer<typeof ExternalActorPatch>;
 
 /**
  * The user-facing reason a Linear two-way (`writeBack`) update is blocked on OAuth scope.
@@ -749,3 +724,10 @@ export const McpIntegrationOut = z
   .meta({ id: 'McpIntegrationOut', description: 'A connected remote MCP server.' });
 /** MCP-integration representation value. */
 export type McpIntegrationOut = z.infer<typeof McpIntegrationOut>;
+
+export {
+  ExternalActorResolve,
+  ExternalActorCandidate,
+  ExternalActorPatch,
+  SourcePersonReferenceOut,
+} from './source-identity';

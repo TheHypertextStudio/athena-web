@@ -15,10 +15,12 @@ import type { registerResources as RegisterResources } from '../../src/mcp/resou
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
 import { resetAuthMocks, verifyAccessToken } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-import { seedSkipConsentClient } from '../support/oauth-grant';
-import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
+import { mcpClaims, seedSkipConsentClient } from '../support/oauth-grant';
+import type { seedStatuses as SeedStatuses, StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
+// The harness loads the API environment, so OAuth must be configured before importing it.
+let seedStatuses!: typeof SeedStatuses;
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let registerTools!: typeof RegisterTools;
@@ -33,6 +35,7 @@ beforeAll(async () => {
   registerTools = (await import('../../src/mcp/tools')).registerTools;
   registerResources = (await import('../../src/mcp/resources')).registerResources;
   mcpHandler = (await import('../../src/mcp/server')).mcpHandler;
+  ({ seedStatuses } = await import('../support/routes-harness'));
 });
 
 interface Seed {
@@ -660,11 +663,8 @@ describe('resources', () => {
 
 describe('mcpHandler success path (authenticated)', () => {
   function authorization(seed: Seed): string {
-    verifyAccessToken.mockResolvedValue({
-      sub: seed.userId,
-      azp: seed.clientId,
-      scope: 'work:read work:write agents:run connectors:link',
-    });
+    const scope = 'work:read work:write agents:run connectors:link';
+    verifyAccessToken.mockResolvedValue(mcpClaims({ sub: seed.userId, azp: seed.clientId, scope }));
     return 'Bearer test-token';
   }
 

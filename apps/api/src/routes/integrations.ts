@@ -1,11 +1,11 @@
 import { importTaskWork, listTaskSources } from './integration-import-scope';
+import { integrationPeople } from './integration-people';
+import { loadIntegration } from './integration-load';
 /** `@docket/api` — integrations router (mounted at `/v1/orgs/:orgId/integrations`). */
-import { actor, db, externalActor, integration, syncRun, team } from '@docket/db';
+import { db, integration, syncRun, team } from '@docket/db';
 import {
   ConnectorConfig,
   ConnectorResourceListOut,
-  ExternalActorOut,
-  ExternalActorPatch,
   IntegrationCreate,
   IntegrationDirectoryOut,
   IntegrationOut,
@@ -51,12 +51,8 @@ import {
 import { runSync, toSyncRunOut } from './integration-sync';
 import { runNotionMirrorSync } from './notion-mirror-reconcile';
 import { importItems, resolveImportTeam } from './integration-import';
-import { toExternalActorOut } from './integration-identity';
-import { assertRefInOrg } from './task-helpers';
-import { listExternalActorRows, listIntegrationRows } from './integration-list-store';
+import { listIntegrationRows } from './integration-list-store';
 import { ImportBody, integrationIdParam } from './integration-route-contracts';
-/** Path params for a single external-actor mapping nested under an integration. */
-const externalActorParam = z.object({ id: z.string(), externalActorId: z.string() });
 /** Path params for a single sync run nested under an integration. */
 const runParam = z.object({ id: z.string(), runId: z.string() });
 
@@ -108,18 +104,6 @@ function scheduleConfiguredNotionMirror(row: IntegrationRow, actorId: string): b
     }
   });
   return true;
-}
-
-/** Load an org-scoped integration or 404 (existence-hiding across tenants). */
-async function loadIntegration(orgId: string, id: string): Promise<IntegrationRow> {
-  const rows = await db
-    .select()
-    .from(integration)
-    .where(and(eq(integration.id, id), eq(integration.organizationId, orgId)))
-    .limit(1);
-  const row = rows[0];
-  if (!row) throw new NotFoundError('Integration not found');
-  return row;
 }
 
 /**
@@ -240,6 +224,8 @@ async function validateTeamMappings(
 
 /** Integrations router: org-scoped CRUD over external migrations + connectors. */
 const integrations = new Hono<AppEnv>()
+  // Stored identity corrections remain available after a connector subscription ends.
+  .route('/', integrationPeople)
   .use('*', productCapabilityGuard('integrations'))
   .get(
     '/',
@@ -888,69 +874,6 @@ For a configured Notion mirror, this operation also starts a separate \`notion_m
         return c.json({ url });
       }
       throw new ConflictError('A connect URL is only available for GitHub integrations');
-    },
-  )
-  .get(
-    '/:id/external-actors',
-    capabilityGuard('manage'),
-    apiDoc({
-      tag: 'Integrations',
-      summary: 'List external actor identity mappings',
-      capability: 'manage',
-      response: pageOf(ExternalActorOut),
-      description: `List the provider users that this integration has discovered and their Docket identity mappings. \`actorId: null\` means the provider user is not linked. \`matchedBy: "email"\` means Docket may reevaluate the match during a later sync. \`matchedBy: "manual"\` preserves the explicit link. A non-null \`ignoredAt\` records an explicit exclusion and also prevents automatic matching. An absent or inaccessible integration returns 404.
-
-Results use stable external-actor-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Reuse a cursor only for the same integration. Requires \`manage\` — reviewing/curating identity mappings is an administrative task, the same bar as the other integration-configuration routes.`,
-    }),
-    zParam(integrationIdParam),
-    zQuery(CursorQuery),
-    async (c) => {
-      const { orgId } = c.get('actorCtx');
-      const { id } = c.req.valid('param');
-      const { cursor, limit } = c.req.valid('query');
-      await loadIntegration(orgId, id);
-      const rows = await listExternalActorRows(orgId, id, { cursor, limit });
-      return ok(c, pageOf(ExternalActorOut), pageResultById(rows.map(toExternalActorOut), limit));
-    },
-  )
-  .patch(
-    '/:id/external-actors/:externalActorId',
-    capabilityGuard('manage'),
-    apiDoc({
-      tag: 'Integrations',
-      summary: 'Manually link or unlink an external actor mapping',
-      capability: 'manage',
-      response: ExternalActorOut,
-      description: `Link or unlink one provider user. Set \`actorId\` to an actor in the organization to create a manual link. Later syncs preserve that link even when the provider email changes. Set \`actorId\` to null to remove the link and allow automatic email matching again. Either choice clears \`ignoredAt\` because it replaces any earlier exclusion.
-
-The integration and mapping must be visible in the organization; otherwise the request returns 404. Requires \`manage\`. Use \`GET /:id/external-actors\` to review mappings and \`POST /:id/sync\` to run automatic matching.`,
-    }),
-    zParam(externalActorParam),
-    zJson(ExternalActorPatch),
-    async (c) => {
-      const { orgId } = c.get('actorCtx');
-      const { id, externalActorId } = c.req.valid('param');
-      const body = c.req.valid('json');
-      await loadIntegration(orgId, id);
-      await assertRefInOrg(actor, orgId, body.actorId, 'Actor not found');
-
-      const updated = await db
-        .update(externalActor)
-        // `ignoredAt` clears either way: linking or unlinking is a fresh decision that supersedes
-        // an earlier exclusion, and a stale one left behind would keep the row immune to the
-        // automatic re-matching an unlink explicitly promises to restore.
-        .set({ actorId: body.actorId, matchedBy: body.actorId ? 'manual' : null, ignoredAt: null })
-        .where(
-          and(
-            eq(externalActor.id, externalActorId),
-            eq(externalActor.integrationId, id),
-            eq(externalActor.organizationId, orgId),
-          ),
-        )
-        .returning();
-      const row = updated[0];
-      if (!row) throw new NotFoundError('External actor not found');
-      return ok(c, ExternalActorOut, toExternalActorOut(row));
     },
   );
 

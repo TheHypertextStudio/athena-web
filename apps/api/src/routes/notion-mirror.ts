@@ -1,3 +1,4 @@
+import { resolveSourcePerson } from '../lib/identity/source-people';
 /**
  * `@docket/api` — the Notion mirror router (mounted at `/v1/orgs/:orgId/integrations/:id/notion`).
  *
@@ -425,50 +426,14 @@ Every action except \`skip\` clears \`ignoredAt\`. Docket returns 404 when the N
       const mapping = rows[0];
       if (!mapping) throw new NotFoundError('Person not found');
 
-      let actorId: string | null = null;
-      if (body.action === 'match_existing') {
-        if (body.actorId === undefined) throw new ConflictError('Choose someone to match them to.');
-        const found = await db
-          .select({ id: actor.id })
-          .from(actor)
-          .where(and(eq(actor.id, body.actorId), eq(actor.organizationId, orgId)))
-          .limit(1);
-        if (!found[0]) throw new NotFoundError('Actor not found');
-        actorId = body.actorId;
-      } else if (body.action === 'create_actor') {
-        const inserted = await db
-          .insert(actor)
-          .values({
-            organizationId: orgId,
-            kind: 'human',
-            // Docket's account-less person: assignable everywhere, owns no login. Exactly what a
-            // Notion member who has never used Docket should be.
-            userId: null,
-            displayName: mapping.displayName,
-            avatar: mapping.avatarUrl,
-          })
-          .returning();
-        const created = inserted[0];
-        /* v8 ignore next -- @preserve defensive: insert always returns a row */
-        if (!created) throw new NotFoundError('Actor not found');
-        actorId = created.id;
-      }
+      if (body.action === 'match_existing' && !body.actorId)
+        throw new ConflictError('Choose a workspace person to link.');
 
-      const updated = await db
-        .update(externalActor)
-        // `manual` on any explicit match, so the next sync's email pass never overrides it; and
-        // `ignoredAt` set only by `skip`, cleared by everything else — a decision about somebody
-        // supersedes an earlier decision to exclude them.
-        .set({
-          actorId,
-          matchedBy: actorId === null ? null : 'manual',
-          ignoredAt: body.action === 'skip' ? new Date() : null,
-        })
-        .where(eq(externalActor.id, mapping.id))
-        .returning();
-      const next = updated[0];
-      /* v8 ignore next -- @preserve defensive: the row was loaded in this same request. */
-      if (!next) throw new NotFoundError('Person not found');
+      const decision =
+        body.action === 'match_existing'
+          ? { action: 'match_existing' as const, actorId: body.actorId ?? '' }
+          : { action: body.action };
+      const next = await resolveSourcePerson(orgId, id, mapping.id, decision);
 
       return ok(c, NotionWorkspacePerson, {
         externalId: next.externalId,

@@ -119,6 +119,9 @@ Quick-win files to process:
   - Work-parent term stemming uses the same focused suffix application shape, clearing its final
     complexity excess while preserving all eight parent-resolution tests. The ledger is 760 files
     and 1,314 entries.
+  - `OptionPicker` now builds its optional clear row through a small helper, removing its final
+    complexity excess while preserving all 86 picker tests. The ledger is 759 files and 1,313
+    entries.
 
 ---
 

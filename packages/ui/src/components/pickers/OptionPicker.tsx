@@ -22,6 +22,13 @@ import { PickerList } from './PickerList';
 import { PropertyTrigger } from './PropertyTrigger';
 import type { PickerOption } from './types';
 
+function pickerClearOption(
+  label: string | undefined,
+  onClear: () => void,
+): { label: string; onClear: () => void } | null {
+  return label === undefined ? null : { label, onClear };
+}
+
 /** Props for {@link OptionPicker}. */
 export interface OptionPickerProps<TValue extends string = string> {
   /** The full set of choices (already resolved + vocabulary-skinned by the caller). */
@@ -125,6 +132,10 @@ export function OptionPicker<TValue extends string = string>({
     onOpenChange?.(next);
   };
   const active = value !== null ? options.find((option) => option.value === value) : undefined;
+  const clear = pickerClearOption(clearLabel, () => {
+    onChange(null);
+    setOpenState(false);
+  });
 
   // A read-only or disabled picker never opens; render the trigger affordance only.
   const trigger = (
@@ -164,17 +175,7 @@ export function OptionPicker<TValue extends string = string>({
           filter={filter}
           loading={loading}
           ariaLabel={ariaLabel}
-          clear={
-            clearLabel
-              ? {
-                  label: clearLabel,
-                  onClear: () => {
-                    onChange(null);
-                    setOpenState(false);
-                  },
-                }
-              : null
-          }
+          clear={clear}
         />
       </PopoverContent>
     </Popover>

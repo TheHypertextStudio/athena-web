@@ -261,27 +261,35 @@ async function claimLease(integrationId: string, now: Date): Promise<boolean> {
 async function finishSuccess(
   run: SyncRunRow,
   row: IntegrationRow,
-  processed: number,
-  total: number,
-  now: Date,
-  opts?: { readonly stampFullSync?: boolean | undefined },
+  opts: {
+    readonly processed: number;
+    readonly total: number;
+    readonly now: Date;
+    readonly stampFullSync?: boolean | undefined;
+  },
 ): Promise<SyncRunRow> {
   await db
     .update(integration)
     .set({
       status: 'connected',
       lastSyncStatus: 'succeeded',
-      lastSyncedAt: now,
+      lastSyncedAt: opts.now,
       lastError: null,
       lastErrorKind: null,
       lastErrorAt: null,
       syncStartedAt: null,
-      ...(opts?.stampFullSync ? { lastFullSyncedAt: now } : {}),
+      ...(opts.stampFullSync ? { lastFullSyncedAt: opts.now } : {}),
     })
     .where(eq(integration.id, row.id));
   const [updated] = await db
     .update(syncRun)
-    .set({ status: 'succeeded', processed, total, error: null, finishedAt: now })
+    .set({
+      status: 'succeeded',
+      processed: opts.processed,
+      total: opts.total,
+      error: null,
+      finishedAt: opts.now,
+    })
     .where(eq(syncRun.id, run.id))
     .returning();
   return updated ?? run;
@@ -446,7 +454,7 @@ export async function runLeasedSync(
       token: tokenResult.token,
       now,
     });
-    return await finishSuccess(run, row, processed, total, now, { stampFullSync });
+    return await finishSuccess(run, row, { processed, total, now, stampFullSync });
   } catch (err) {
     const needsReauth = isProviderAuthError(err);
     const message = err instanceof Error ? err.message : 'Connector error';

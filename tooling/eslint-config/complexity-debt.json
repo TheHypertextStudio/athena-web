@@ -619,10 +619,6 @@
     "complexity": {
       "max": 17,
       "excess": 5
-    },
-    "max-params": {
-      "max": 6,
-      "excess": 1
     }
   },
   "apps/api/src/routes/integrations-mcp-oauth.ts": {

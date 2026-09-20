@@ -30,6 +30,75 @@ function currentReturnPath(): string {
   return `${window.location.pathname}${window.location.search}`;
 }
 
+type AuthenticationInterlockReason = 'authentication' | 'cleanup-failed' | 'sign-out-failed';
+
+interface AuthenticationInterlockDialogProps {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly reason: AuthenticationInterlockReason;
+  readonly returnPath: string;
+}
+
+function AuthenticationInterlockDialog({
+  open,
+  onOpenChange,
+  reason,
+  returnPath,
+}: AuthenticationInterlockDialogProps): JSX.Element {
+  const continueToSignIn = (): void => {
+    window.location.assign(signInReturnPath(returnPath));
+  };
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {reason === 'authentication'
+              ? 'Sign in to continue'
+              : reason === 'cleanup-failed'
+                ? 'Sign-out could not finish safely'
+                : 'Sign-out could not finish'}
+          </DialogTitle>
+          <DialogDescription>
+            {reason === 'authentication'
+              ? 'Your session is no longer available for this action. Sign in to continue from this exact place, or close this to keep looking around.'
+              : reason === 'cleanup-failed'
+                ? "Docket could not clear this browser's offline data, so it stopped before another account could be affected. Close other Docket tabs and try again."
+                : 'Docket could not confirm that your session ended. Your account remains available in this tab. Check your connection and try again.'}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          {reason === 'authentication' ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  onOpenChange(false);
+                }}
+              >
+                Not now
+              </Button>
+              <Button type="button" onClick={continueToSignIn}>
+                Sign in to continue
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              onClick={() => {
+                onOpenChange(false);
+              }}
+            >
+              Close
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /**
  * Make an explicit missing-session recovery decision available to protected routes and actions.
  *
@@ -53,9 +122,7 @@ export function AuthenticationInterlockProvider({
 }): JSX.Element {
   const [returnPath, setReturnPath] = useState('/today');
   const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState<'authentication' | 'cleanup-failed' | 'sign-out-failed'>(
-    'authentication',
-  );
+  const [reason, setReason] = useState<AuthenticationInterlockReason>('authentication');
 
   const requireAuthentication = useCallback((nextPath?: string): void => {
     setReturnPath(safeSameOriginPath(nextPath ?? currentReturnPath()) ?? '/today');
@@ -73,62 +140,17 @@ export function AuthenticationInterlockProvider({
     setOpen(true);
   }, []);
 
-  function continueToSignIn(): void {
-    window.location.assign(signInReturnPath(returnPath));
-  }
-
   return (
     <AuthenticationInterlockContext.Provider
       value={{ requireAuthentication, reportSessionCleanupFailure, reportSignOutFailure }}
     >
       {children}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {reason === 'authentication'
-                ? 'Sign in to continue'
-                : reason === 'cleanup-failed'
-                  ? 'Sign-out could not finish safely'
-                  : 'Sign-out could not finish'}
-            </DialogTitle>
-            <DialogDescription>
-              {reason === 'authentication'
-                ? 'Your session is no longer available for this action. Sign in to continue from this exact place, or close this to keep looking around.'
-                : reason === 'cleanup-failed'
-                  ? "Docket could not clear this browser's offline data, so it stopped before another account could be affected. Close other Docket tabs and try again."
-                  : 'Docket could not confirm that your session ended. Your account remains available in this tab. Check your connection and try again.'}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            {reason === 'authentication' ? (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setOpen(false);
-                  }}
-                >
-                  Not now
-                </Button>
-                <Button type="button" onClick={continueToSignIn}>
-                  Sign in to continue
-                </Button>
-              </>
-            ) : (
-              <Button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                }}
-              >
-                Close
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AuthenticationInterlockDialog
+        open={open}
+        onOpenChange={setOpen}
+        reason={reason}
+        returnPath={returnPath}
+      />
     </AuthenticationInterlockContext.Provider>
   );
 }

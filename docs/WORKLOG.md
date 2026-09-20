@@ -140,6 +140,9 @@ Quick-win files to process:
   - The public privacy page now renders its long policy register through a dedicated section
     component, clearing its one-point function-length excess without changing policy copy. The
     ledger is 753 files and 1,307 entries.
+  - Authentication interlock dialog rendering now lives in a dedicated component, clearing its
+    one-point provider function-length excess while preserving all eight interlock tests. The
+    ledger is 752 files and 1,306 entries.
 
 ---
 

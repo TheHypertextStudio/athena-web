@@ -201,7 +201,7 @@ describe('SchedulingCanvas', () => {
     );
     const canvas = screen.getByRole('region', { name: 'Schedule' });
     const timedGrid = document.querySelector('[data-schedule-lane-region]')?.parentElement
-      ?.parentElement;
+      ?.parentElement?.parentElement;
     expect(timedGrid).not.toBeNull();
     if (!timedGrid) return;
     Object.defineProperties(canvas, {

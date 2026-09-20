@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-09-14
+> **Last Updated**: 2026-09-20
 
 ---
 
@@ -256,6 +256,11 @@ Quick-win files to process:
   - The same hook exposed runner function coverage at 81.81% after the workflow parser split. A
     normal valid-continuation `advanceDocket` test now exercises that path; runner coverage is
     84.84% functions / 88.52% lines across 28 tests.
+  - The pre-push web coverage run also confirmed two stale behavior fixtures rather than product
+    regressions: the scheduling zoom test was setting `offsetTop` on a nested grid instead of the
+    ref-owned timed-grid wrapper, and the schedule-version test selected a date earlier than the
+    current-date minimum. The fixtures now target the ref-owned ancestor and freeze time to
+    2026-09-05; both focused tests pass without source-contract coverage or lint exemptions.
 
 ---
 

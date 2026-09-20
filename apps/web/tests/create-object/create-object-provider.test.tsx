@@ -877,9 +877,9 @@ describe('CreateObjectProvider', () => {
     });
 
     expect(orgGet).toHaveBeenCalledWith({ param: { orgId: BRAVO_ID } });
-    expect(teamsGet).toHaveBeenCalledWith({ param: { orgId: BRAVO_ID } });
-    expect(membersGet).toHaveBeenCalledWith({ param: { orgId: BRAVO_ID } });
-    expect(rolesGet).toHaveBeenCalledWith({ param: { orgId: BRAVO_ID } });
+    const pagedBravo = { param: { orgId: BRAVO_ID }, query: { limit: '100' } };
+    for (const get of [teamsGet, membersGet, rolesGet])
+      expect(get).toHaveBeenCalledWith(pagedBravo);
   });
 
   it('keeps permission resolution loading until the signed-in identity resolves', async () => {

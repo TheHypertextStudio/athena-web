@@ -373,7 +373,10 @@ describe('CreateProgramDialog — visibility picker', () => {
       target: { value: TARGET_ORG_ID },
     });
     await waitFor(() => {
-      expect(membersGet).toHaveBeenCalledWith({ param: { orgId: TARGET_ORG_ID } });
+      expect(membersGet).toHaveBeenCalledWith({
+        param: { orgId: TARGET_ORG_ID },
+        query: { limit: '100' },
+      });
       expect(screen.getByRole('button', { name: 'Create Retainer' })).toBeEnabled();
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create Retainer' }));

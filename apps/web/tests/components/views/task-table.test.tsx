@@ -254,6 +254,7 @@ describe('TaskTable', () => {
     });
     expect(displayGet).toHaveBeenCalledWith({
       param: { orgId: ORG_ID, subjectType: 'task' },
+      query: { limit: '100' },
     });
   });
 

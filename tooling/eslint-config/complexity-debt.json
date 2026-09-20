@@ -1773,12 +1773,6 @@
       "excess": 199
     }
   },
-  "apps/api/tests/routes/me-athena-agents-stream.test.ts": {
-    "sonarjs/cognitive-complexity": {
-      "max": 16,
-      "excess": 1
-    }
-  },
   "apps/api/tests/routes/me-athena-async.test.ts": {
     "max-lines": {
       "max": 619,
@@ -1879,12 +1873,6 @@
     "max-lines": {
       "max": 1188,
       "excess": 688
-    }
-  },
-  "apps/api/tests/routes/voice-engine.test.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
     }
   },
   "apps/api/tests/routes/webhooks-extra.test.ts": {
@@ -4383,12 +4371,6 @@
     "max-lines-per-function": {
       "max": 116,
       "excess": 36
-    }
-  },
-  "apps/web/src/components/settings/notion/notion-setup-card.tsx": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
     }
   },
   "apps/web/src/components/settings/notion/notion-table-designer.tsx": {

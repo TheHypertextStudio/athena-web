@@ -36,7 +36,12 @@ import {
 } from './notion-copy';
 import { NotionConnectAction } from './notion-connect-action';
 import { NotionParentPagePicker } from './notion-parent-page-picker';
-import { useNotionParentPages, useNotionSetup } from './use-notion-mirror-controller';
+import {
+  useNotionParentPages,
+  useNotionSetup,
+  type NotionParentPageSearch,
+  type NotionSetupModel,
+} from './use-notion-mirror-controller';
 
 /** Props for {@link NotionSetupCard}. */
 export interface NotionSetupCardProps {
@@ -75,55 +80,101 @@ export function NotionSetupCard({
 
   return (
     <SettingsGroup capability={SETTINGS_NODES.connectionsNotionSetup}>
-      {noPages ? (
-        <div className="flex flex-col items-start gap-2">
-          <p className="text-on-surface-variant text-body-small max-w-prose" role="note">
-            {NO_PAGES_HINT}
-          </p>
-          <NotionConnectAction label={NO_PAGES_ACTION} disabled={!canManage} />
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-end gap-3">
-          {/* A caption, not a `<label>`: the picker's affordance is a button, and a label that
-              points at a button neither focuses it nor announces anything a screen reader wants.
-              The accessible name comes from the picker's own `ariaLabel`. */}
-          <div className="flex flex-col gap-1">
-            <span className="text-on-surface-variant text-body-small">{SETUP_PAGE_LABEL}</span>
-            <NotionParentPagePicker
-              pages={search.pages}
-              value={page}
-              onChange={setPage}
-              query={query}
-              onQueryChange={setQuery}
-              loading={search.pending}
-              // Drop the term when the popover closes, so a shut picker stops holding an active
-              // observer for `q=proj` that every window focus would refetch.
-              onOpenChange={(open) => {
-                if (!open) setQuery('');
-              }}
-              disabled={setup.creating}
-            />
-          </div>
-          <Button
-            disabled={setup.creating || page === null || !canManage}
-            onClick={() => {
-              if (page !== null) setup.create(page.id);
-            }}
-          >
-            {setup.creating ? SETUP_ACTION_BUSY : SETUP_ACTION}
-          </Button>
-        </div>
-      )}
+      <NotionSetupBody
+        canManage={canManage}
+        noPages={noPages}
+        page={page}
+        query={query}
+        search={search}
+        setPage={setPage}
+        setQuery={setQuery}
+        setup={setup}
+      />
+      <NotionSetupStatus creating={setup.creating} error={setup.error ?? search.error} />
+    </SettingsGroup>
+  );
+}
 
-      {setup.creating ? (
+interface NotionSetupBodyProps {
+  canManage: boolean;
+  noPages: boolean;
+  page: NotionParentPageOut | null;
+  query: string;
+  search: NotionParentPageSearch;
+  setPage: (page: NotionParentPageOut) => void;
+  setQuery: (query: string) => void;
+  setup: NotionSetupModel;
+}
+
+function NotionSetupBody({
+  canManage,
+  noPages,
+  page,
+  query,
+  search,
+  setPage,
+  setQuery,
+  setup,
+}: NotionSetupBodyProps): JSX.Element {
+  if (noPages) {
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-on-surface-variant text-body-small max-w-prose" role="note">
+          {NO_PAGES_HINT}
+        </p>
+        <NotionConnectAction label={NO_PAGES_ACTION} disabled={!canManage} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-end gap-3">
+      {/* A caption, not a `<label>`: the picker's affordance is a button, and a label that
+          points at a button neither focuses it nor announces anything a screen reader wants.
+          The accessible name comes from the picker's own `ariaLabel`. */}
+      <div className="flex flex-col gap-1">
+        <span className="text-on-surface-variant text-body-small">{SETUP_PAGE_LABEL}</span>
+        <NotionParentPagePicker
+          pages={search.pages}
+          value={page}
+          onChange={setPage}
+          query={query}
+          onQueryChange={setQuery}
+          loading={search.pending}
+          // Drop the term when the popover closes, so a shut picker stops holding an active
+          // observer for `q=proj` that every window focus would refetch.
+          onOpenChange={(open) => {
+            if (!open) setQuery('');
+          }}
+          disabled={setup.creating}
+        />
+      </div>
+      <Button
+        disabled={setup.creating || page === null || !canManage}
+        onClick={() => {
+          if (page !== null) setup.create(page.id);
+        }}
+      >
+        {setup.creating ? SETUP_ACTION_BUSY : SETUP_ACTION}
+      </Button>
+    </div>
+  );
+}
+
+interface NotionSetupStatusProps {
+  creating: boolean;
+  error: string | null;
+}
+
+function NotionSetupStatus({ creating, error }: NotionSetupStatusProps): JSX.Element {
+  return (
+    <>
+      {creating ? (
         <p className="text-on-surface-variant text-body-small" role="status">
           {SETUP_RUNNING}
         </p>
       ) : null}
-
-      {(setup.error ?? search.error) ? (
-        <WriteError message={setup.error ?? search.error ?? ''} />
-      ) : null}
-    </SettingsGroup>
+      {error ? <WriteError message={error} /> : null}
+    </>
   );
 }

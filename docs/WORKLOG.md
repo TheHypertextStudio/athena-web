@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,489 entries, 171,109 excess points across 870 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,303 entries, 155,581 excess points across 749 files.
 
 #### Analysis Complete
 
@@ -149,6 +149,9 @@ Quick-win files to process:
   - Agent-stream frame parsing now uses a focused parser helper, clearing the stream harness's
     final cognitive-complexity excess while preserving all seven stream tests. The ledger is 750
     files and 1,304 entries.
+  - Notion setup rendering now delegates the picker body and status messages to focused helpers,
+    clearing its final complexity excess while preserving all seven Notion setup tests. The ledger
+    is 749 files and 1,303 entries.
 
 ---
 

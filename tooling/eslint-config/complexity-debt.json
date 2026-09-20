@@ -5061,12 +5061,6 @@
       "excess": 34
     }
   },
-  "apps/web/src/components/work-views/use-project-timeline-mutations.ts": {
-    "max-lines-per-function": {
-      "max": 81,
-      "excess": 1
-    }
-  },
   "apps/web/src/components/work-views/use-work-view.ts": {
     "complexity": {
       "max": 53,

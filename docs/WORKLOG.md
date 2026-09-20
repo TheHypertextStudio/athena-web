@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,293 entries, 155,538 excess points across 743 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,292 entries, 155,537 excess points across 742 files.
 
 #### Analysis Complete
 
@@ -174,6 +174,9 @@ Quick-win files to process:
   - Task catalog label-field construction now lives in a focused helper, clearing its final
     function-length excess while preserving 21 view/catalog tests. The ledger is 743 files and
     1,293 entries.
+  - Project timeline rescheduling now uses a focused mutation hook, clearing its final
+    function-length excess while preserving nine timeline mutation/continuity tests. The ledger is
+    742 files and 1,292 entries.
 
 ---
 

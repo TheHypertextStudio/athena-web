@@ -13,6 +13,36 @@ function toWireDate(milliseconds: number): string {
   return new Date(milliseconds).toISOString().slice(0, 10);
 }
 
+interface RescheduleInput {
+  readonly project: ProjectTimelineSubject;
+  readonly span: TimelineSpan;
+}
+
+function useProjectRescheduleMutation(queryClient: ReturnType<typeof useQueryClient>) {
+  return useApiMutation<ProjectOut, RescheduleInput>({
+    mutationFn: ({ project, span }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].projects[':id'].$patch({
+            param: { orgId: project.organizationId, id: project.id },
+            json: {
+              startDate: toWireDate(span.start),
+              startDateResolution: null,
+              targetDate: toWireDate(span.end),
+              targetDateResolution: null,
+            },
+          }),
+        'Could not reschedule this project.',
+      ),
+    onSettled: (_data, _error, input) => {
+      void invalidateWorkTargetQueries(queryClient, {
+        target: 'project',
+        ownerOrganizationId: input.project.organizationId,
+      });
+    },
+  });
+}
+
 /** One Project row and the organization that owns its timeline write. */
 export interface ProjectTimelineSubject {
   readonly id: string;
@@ -38,31 +68,7 @@ export function useProjectTimelineMutations(): ProjectTimelineMutations {
   const queryClient = useQueryClient();
   const [applyingCascade, setApplyingCascade] = useState(false);
   const [cascadeError, setCascadeError] = useState<unknown>(null);
-  const rescheduleMutation = useApiMutation<
-    ProjectOut,
-    { readonly project: ProjectTimelineSubject; readonly span: TimelineSpan }
-  >({
-    mutationFn: ({ project, span }) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].projects[':id'].$patch({
-            param: { orgId: project.organizationId, id: project.id },
-            json: {
-              startDate: toWireDate(span.start),
-              startDateResolution: null,
-              targetDate: toWireDate(span.end),
-              targetDateResolution: null,
-            },
-          }),
-        'Could not reschedule this project.',
-      ),
-    onSettled: (_data, _error, input) => {
-      void invalidateWorkTargetQueries(queryClient, {
-        target: 'project',
-        ownerOrganizationId: input.project.organizationId,
-      });
-    },
-  });
+  const rescheduleMutation = useProjectRescheduleMutation(queryClient);
 
   const applyCascade = useCallback(
     (changes: readonly ProjectTimelineScheduleChange[]): void => {

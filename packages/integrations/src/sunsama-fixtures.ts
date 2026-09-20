@@ -165,6 +165,18 @@ function ok(payload: unknown): RemoteToolResult {
   return { content: JSON.stringify(payload), isError: false };
 }
 
+/** Read one string argument from a fixture tool call, returning an empty value when absent. */
+function fixtureInputString(input: unknown, key: string): string {
+  return input && typeof input === 'object' && key in input
+    ? String((input as Record<string, unknown>)[key])
+    : '';
+}
+
+/** Find a fixture task by Sunsama's id across active and archived records. */
+function findFixtureTask(id: string): Record<string, unknown> | undefined {
+  return [...SUNSAMA_FIXTURE_TASKS, ...SUNSAMA_FIXTURE_ARCHIVED].find((task) => task['_id'] === id);
+}
+
 /**
  * A deterministic offline stand-in for Sunsama's remote MCP server.
  *
@@ -235,22 +247,14 @@ export const SUNSAMA_MIGRATION_FIXTURE_SERVER: FixtureMcpServer = {
       case 'get_backlog_tasks':
         return ok({ tasks: SUNSAMA_FIXTURE_TASKS.filter((t) => t['backlog'] === true) });
       case 'get_tasks_by_day': {
-        const day =
-          input && typeof input === 'object' && 'day' in input
-            ? String((input as Record<string, unknown>)['day'])
-            : '';
+        const day = fixtureInputString(input, 'day');
         return ok({ tasks: SUNSAMA_FIXTURE_TASKS.filter((t) => t['day'] === day) });
       }
       case 'get_archived_tasks':
         return ok({ tasks: SUNSAMA_FIXTURE_ARCHIVED, hasMore: false });
       case 'get_task_by_id': {
-        const id =
-          input && typeof input === 'object' && 'taskId' in input
-            ? String((input as Record<string, unknown>)['taskId'])
-            : '';
-        const task = [...SUNSAMA_FIXTURE_TASKS, ...SUNSAMA_FIXTURE_ARCHIVED].find(
-          (t) => t['_id'] === id,
-        );
+        const id = fixtureInputString(input, 'taskId');
+        const task = findFixtureTask(id);
         return task ? ok(task) : { content: `Task not found: ${id}`, isError: true };
       }
       default:

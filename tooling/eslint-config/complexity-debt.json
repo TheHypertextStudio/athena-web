@@ -5997,12 +5997,6 @@
       "excess": 9
     }
   },
-  "packages/integrations/src/sunsama-fixtures.ts": {
-    "complexity": {
-      "max": 14,
-      "excess": 2
-    }
-  },
   "packages/integrations/src/sunsama.ts": {
     "complexity": {
       "max": 17,

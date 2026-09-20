@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,275 entries, 155,505 excess points across 725 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,274 entries, 155,503 excess points across 724 files.
 
 #### Analysis Complete
 
@@ -226,6 +226,9 @@ Quick-win files to process:
   - Resend inbound notification construction now lives in a focused helper, clearing the adapter's
     final complexity excess while preserving all 29 inbound-mail tests. The ledger is 725 files
     and 1,275 entries.
+  - Sunsama fixture input and task lookup now use focused helpers, clearing the fixture server's
+    final complexity excess while preserving 27 migration fixture/reader tests. The ledger is 724
+    files and 1,274 entries.
 
 ---
 

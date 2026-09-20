@@ -113,6 +113,27 @@ export function fallbackDraft(input: TaskDraftInput): TaskDraft {
   };
 }
 
+function parseDraftFields(
+  parsed: Record<string, unknown>,
+): Pick<TaskDraft, 'priority' | 'description' | 'dueDate'> {
+  const priority = PRIORITIES.includes(parsed['priority'] as Priority)
+    ? (parsed['priority'] as Priority)
+    : 'medium';
+  const description =
+    typeof parsed['description'] === 'string' && parsed['description'].trim().length > 0
+      ? parsed['description'].trim()
+      : undefined;
+  const dueDate =
+    typeof parsed['dueDate'] === 'string' && ISO_DATE.test(parsed['dueDate'])
+      ? parsed['dueDate']
+      : undefined;
+  return {
+    priority,
+    ...(description ? { description } : {}),
+    ...(dueDate ? { dueDate } : {}),
+  };
+}
+
 /** Parse the provider's JSON reply into a Work draft, returning `null` when malformed. */
 export function parseDraft(text: string): TaskDraft | null {
   const start = text.indexOf('{');
@@ -124,23 +145,9 @@ export function parseDraft(text: string): TaskDraft | null {
     const title = typeof parsed['title'] === 'string' ? parsed['title'].trim() : '';
     if (!title) return null;
 
-    const priority = PRIORITIES.includes(parsed['priority'] as Priority)
-      ? (parsed['priority'] as Priority)
-      : 'medium';
-    const description =
-      typeof parsed['description'] === 'string' && parsed['description'].trim().length > 0
-        ? parsed['description'].trim()
-        : undefined;
-    const dueDate =
-      typeof parsed['dueDate'] === 'string' && ISO_DATE.test(parsed['dueDate'])
-        ? parsed['dueDate']
-        : undefined;
-
     return {
       title,
-      priority,
-      ...(description ? { description } : {}),
-      ...(dueDate ? { dueDate } : {}),
+      ...parseDraftFields(parsed),
     };
   } catch {
     return null;

@@ -5565,12 +5565,6 @@
       "excess": 2
     }
   },
-  "domains/athena/src/task-drafting/adapters/anthropic.ts": {
-    "complexity": {
-      "max": 13,
-      "excess": 1
-    }
-  },
   "domains/athena/src/task-expansion/service.ts": {
     "complexity": {
       "max": 25,

@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,292 entries, 155,537 excess points across 742 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,291 entries, 155,536 excess points across 741 files.
 
 #### Analysis Complete
 
@@ -177,6 +177,9 @@ Quick-win files to process:
   - Project timeline rescheduling now uses a focused mutation hook, clearing its final
     function-length excess while preserving nine timeline mutation/continuity tests. The ledger is
     742 files and 1,292 entries.
+  - Anthropic draft-field parsing now lives in a focused helper, clearing parseDraft's final
+    complexity excess while preserving 15 task-drafting/provider tests. The ledger is 741 files and
+    1,291 entries.
 
 ---
 

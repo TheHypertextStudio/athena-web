@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,287 entries, 155,529 excess points across 737 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,286 entries, 155,527 excess points across 736 files.
 
 #### Analysis Complete
 
@@ -191,6 +191,9 @@ Quick-win files to process:
     The ledger is 738 files and 1,288 entries.
   - Discord role-member expansion now uses a focused helper, clearing its final two complexity
     points while preserving all 12 mention/relay tests. The ledger is 737 files and 1,287 entries.
+  - Canvas selection state projection now uses a shared node-selection helper, clearing its final
+    function-length excess while preserving all four selection-bridge tests. The ledger is 736 files
+    and 1,286 entries.
 
 ---
 

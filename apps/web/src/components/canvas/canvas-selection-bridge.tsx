@@ -23,6 +23,18 @@ export interface CanvasSelectionBridgeProps {
   readonly onRequestedSelectionApplied?: (node: Node) => void;
 }
 
+function withSelectionState(
+  nodes: Node[],
+  acceptedTypes: ReadonlySet<string>,
+  isSelected: (node: Node) => boolean,
+): Node[] {
+  return nodes.map((node) => {
+    if (node.type === undefined || !acceptedTypes.has(node.type)) return node;
+    const selected = isSelected(node);
+    return node.selected === selected ? node : { ...node, selected };
+  });
+}
+
 /** Publish xyflow selection through the same registry used by lists and context menus. */
 export default function CanvasSelectionBridge({
   objectKind = 'task',
@@ -61,11 +73,9 @@ export default function CanvasSelectionBridge({
   });
   useEffect(() => {
     setNodes((nodes) =>
-      nodes.map((node) => {
-        if (node.type === undefined || !acceptedTypes.has(node.type)) return node;
-        const selected = selectedKeys.has(objectKey({ kind: objectKind, id: node.id }));
-        return node.selected === selected ? node : { ...node, selected };
-      }),
+      withSelectionState(nodes, acceptedTypes, (node) =>
+        selectedKeys.has(objectKey({ kind: objectKind, id: node.id })),
+      ),
     );
   }, [acceptedTypes, objectKind, selectedKeys, setNodes]);
   useEffect(() => {
@@ -84,11 +94,11 @@ export default function CanvasSelectionBridge({
       keys: [objectKey({ kind: objectKind, id: requestedSelectionId })],
     });
     setNodes((nodes) =>
-      nodes.map((candidate) => {
-        if (candidate.type === undefined || !acceptedTypes.has(candidate.type)) return candidate;
-        const selected = candidate.id === requestedSelectionId;
-        return candidate.selected === selected ? candidate : { ...candidate, selected };
-      }),
+      withSelectionState(
+        nodes,
+        acceptedTypes,
+        (candidate) => candidate.id === requestedSelectionId,
+      ),
     );
     onChange?.([node]);
     onRequestedSelectionApplied?.(node);

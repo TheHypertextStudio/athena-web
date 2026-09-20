@@ -3063,12 +3063,6 @@
       "excess": 35
     }
   },
-  "apps/web/src/components/canvas/canvas-selection-bridge.tsx": {
-    "max-lines-per-function": {
-      "max": 82,
-      "excess": 2
-    }
-  },
   "apps/web/src/components/canvas/canvas.tsx": {
     "complexity": {
       "max": 23,

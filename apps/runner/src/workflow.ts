@@ -60,6 +60,42 @@ export function isWorkflowEventTimeout(error: unknown): boolean {
   );
 }
 
+/** Wait for one durable wake epoch and identify the documented timeout outcome. */
+async function waitForGenerationWake(
+  step: GenerationWorkflowStep,
+  epoch: number,
+): Promise<'wake' | 'timeout'> {
+  try {
+    await step.waitForEvent(`wait-for-wake-${String(epoch)}`, {
+      type: 'docket_wake',
+      timeout: '365 days',
+    });
+    return 'wake';
+  } catch (error) {
+    if (!isWorkflowEventTimeout(error)) throw error;
+    return 'timeout';
+  }
+}
+
+/** Validate and narrow the response returned by Docket's generation advance endpoint. */
+function parseGenerationAdvance(result: unknown): GenerationAdvance {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    throw new Error('Docket generation advance returned an invalid response');
+  }
+  const record = result as Record<string, unknown>;
+  if (
+    record['state'] === 'complete' ||
+    record['state'] === 'failed' ||
+    record['state'] === 'wait'
+  ) {
+    return { state: record['state'] };
+  }
+  if (record['state'] === 'continue' && isExecutionMessage(record['next'])) {
+    return { state: 'continue', next: record['next'] };
+  }
+  throw new Error('Docket generation advance returned an invalid state');
+}
+
 /**
  * Advance one persisted generation, wait durably when Docket needs a person, and fan out the next.
  *
@@ -76,13 +112,8 @@ export async function executeGenerationWorkflow(
   let advance = await step.do('advance-generation', () => effects.advance(message, 'run'));
   let epoch = 1;
   while (advance.state === 'wait') {
-    try {
-      await step.waitForEvent(`wait-for-wake-${String(epoch)}`, {
-        type: 'docket_wake',
-        timeout: '365 days',
-      });
-    } catch (error) {
-      if (!isWorkflowEventTimeout(error)) throw error;
+    const wake = await waitForGenerationWake(step, epoch);
+    if (wake === 'timeout') {
       epoch += 1;
       continue;
     }
@@ -130,22 +161,7 @@ export async function advanceDocket(
   }
   if (!response.ok)
     throw new Error(`Docket generation advance failed (${String(response.status)})`);
-  const result: unknown = await response.json();
-  if (!result || typeof result !== 'object' || Array.isArray(result)) {
-    throw new Error('Docket generation advance returned an invalid response');
-  }
-  const record = result as Record<string, unknown>;
-  if (
-    record['state'] === 'complete' ||
-    record['state'] === 'failed' ||
-    record['state'] === 'wait'
-  ) {
-    return { state: record['state'] };
-  }
-  if (record['state'] === 'continue' && isExecutionMessage(record['next'])) {
-    return { state: 'continue', next: record['next'] };
-  }
-  throw new Error('Docket generation advance returned an invalid state');
+  return parseGenerationAdvance(await response.json());
 }
 
 /** Durable Workflow class bound from `wrangler.jsonc`. */

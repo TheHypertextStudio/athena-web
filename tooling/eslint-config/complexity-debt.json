@@ -2009,12 +2009,6 @@
       "excess": 2
     }
   },
-  "apps/runner/src/workflow.ts": {
-    "complexity": {
-      "max": 14,
-      "excess": 2
-    }
-  },
   "apps/web/e2e/athena/mcp-apps-stable.spec.ts": {
     "complexity": {
       "max": 19,

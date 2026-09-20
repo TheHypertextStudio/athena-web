@@ -146,6 +146,9 @@ Quick-win files to process:
   - Voice engine timing assertions now use a focused trace helper, clearing the test's final
     complexity excess while preserving all nine voice-engine tests. The ledger is 751 files and
     1,305 entries.
+  - Agent-stream frame parsing now uses a focused parser helper, clearing the stream harness's
+    final cognitive-complexity excess while preserving all seven stream tests. The ledger is 750
+    files and 1,304 entries.
 
 ---
 

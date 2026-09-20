@@ -50,6 +50,19 @@ async function seedSession(ownerUserId: string): Promise<string> {
   ).id;
 }
 
+function parseAgentFrame(chunk: string): { event: string; id: string; data: string } | null {
+  const lines = chunk.split('\n');
+  const idLine = lines.find((line) => line.startsWith('id: '));
+  const eventLine = lines.find((line) => line.startsWith('event: '));
+  const dataLine = lines.find((line) => line.startsWith('data: '));
+  if (!eventLine) return null;
+  return {
+    event: eventLine.slice(7),
+    id: idLine?.slice(4) ?? '',
+    data: dataLine?.slice(6) ?? '',
+  };
+}
+
 /** Open the agent-updates stream and return a way to read the next frame, and to close it. */
 async function openAgentStream(userId: string, lastEventId?: string) {
   const app = appWithSession(meAthena, fakeSession(userId));
@@ -72,16 +85,8 @@ async function openAgentStream(userId: string, lastEventId?: string) {
       if (index !== -1) {
         const chunk = buffered.slice(0, index);
         buffered = buffered.slice(index + 2);
-        const idLine = chunk.split('\n').find((line) => line.startsWith('id: '));
-        const eventLine = chunk.split('\n').find((line) => line.startsWith('event: '));
-        const dataLine = chunk.split('\n').find((line) => line.startsWith('data: '));
-        if (eventLine) {
-          return {
-            event: eventLine.slice(7),
-            id: idLine ? idLine.slice(4) : '',
-            data: dataLine ? dataLine.slice(6) : '',
-          };
-        }
+        const frame = parseAgentFrame(chunk);
+        if (frame) return frame;
         continue;
       }
       const { value, done } = await reader.read();

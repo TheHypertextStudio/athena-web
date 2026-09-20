@@ -1,6 +1,4 @@
-/**
- * `@docket/api` — programs router (mounted at `/v1/orgs/:orgId/programs`).
- */
+/** Program routes mounted under an organization. */
 import { actor, cycle, db, program, project, task, update } from '@docket/db';
 import { CursorQuery, pageOf } from '../contracts/pagination';
 import { defaultCycleName } from '@docket/work/cycle-contract';
@@ -308,7 +306,7 @@ const programs = new Hono<AppEnv>()
       summary: 'Update a program',
       capability: 'manage',
       response: ProgramOut,
-      description: `Partially update a program. Every field is optional: an absent key leaves the column untouched, while \`null\` (where allowed — \`description\`, \`ownerId\`, \`health\`) clears it. \`status\` is constrained to \`active\`/\`paused\`/\`archived\` (a program has no \`completed\` state by design). Editing \`visibility\` flips a program between org-wide visibility and grant-only access. Requires \`manage\` for the same reason as create: a program is a structural container whose grants cascade to its child Projects and Tasks, so re-scoping or archiving it is an administrative act. Unlike Project/Initiative updates this route emits no observation. 404 (\`Program not found\`) when the id is absent or cross-tenant. Returns the updated {@link ProgramOut}.`,
+      description: `Update the supplied program fields and return the current {@link ProgramOut}. Omitted fields remain unchanged. Set \`description\`, \`ownerId\`, or \`health\` to null to clear it. \`status\` accepts \`active\`, \`paused\`, or \`archived\`; programs do not have a \`completed\` status. Changing \`visibility\` switches between organization-wide visibility and grant-only access. Because program grants extend to child projects and tasks, this operation requires \`manage\`. It does not add a status event to organization activity. An unavailable program returns 404.`,
     }),
     zParam(idParam),
     zJson(ProgramUpdate),
@@ -546,7 +544,7 @@ const programs = new Hono<AppEnv>()
       tag: 'Programs',
       summary: 'List program updates',
       response: UpdateFeed,
-      description: `List the status Updates posted about this program — the narrative health log (each Update carries a \`health\` verdict and a free-text \`body\`, distinct from threaded Comments). Returns only Updates whose subject is THIS program (\`subjectType = 'program'\`, \`subjectId = :id\`), org-scoped, newest first. The program is confirmed to exist in the caller's org first (404 \`Program not found\`). The response includes only the actors referenced by those rows, so the detail route can name human and agent authors without loading the organization roster.`,
+      description: `List status updates for this program, newest first. Each Update carries a \`health\` value and free-text \`body\`; threaded discussion belongs in Comments instead. The response includes the people and agents who authored the returned updates. A missing or inaccessible program returns 404.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -597,5 +595,4 @@ const programs = new Hono<AppEnv>()
       });
     },
   );
-
 export default programs;

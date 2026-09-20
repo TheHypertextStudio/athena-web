@@ -56,7 +56,7 @@ export const GrantUpsert = z
         "Per-resource visibility flip applied at this node — 'public' or 'private' — overriding the resource's inherited/stored visibility (most-specific override wins). Null (default) means inherit. Powers e.g. making one project public inside an otherwise members-only context.",
       ),
     visibility: Visibility.optional().describe(
-      'Optional stored visibility to set on the grant row itself. Distinct from `visibilityOverride`: omit unless you specifically need to set the persisted visibility column.',
+      'Optional visibility saved on this grant. This is separate from `visibilityOverride`, which changes the effective visibility of the target resource.',
     ),
     expiresAt: z.iso
       .datetime()
@@ -107,7 +107,7 @@ export const GrantOut = z
       .describe(
         "Per-resource visibility flip ('public'/'private') applied at this node, or null to inherit. Most-specific override wins when resolving a resource's effective visibility.",
       ),
-    visibility: Visibility.describe("The grant row's stored visibility ('public' | 'private')."),
+    visibility: Visibility.describe("The visibility saved on this grant ('public' or 'private')."),
     expiresAt: z
       .string()
       .nullable()

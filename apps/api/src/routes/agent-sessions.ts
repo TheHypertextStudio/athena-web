@@ -261,7 +261,7 @@ The operation returns \`202\` with a monitor URL when work continues asynchronou
       summary: 'Start a new Athena chat thread',
       capability: 'contribute',
       response: AgentSessionDetailOut,
-      description: `Start a genuinely new conversational session (\`kind: 'chat'\`), leaving the prior chat session's history in place rather than deleting or reusing it. \`GET /chat\` and \`POST /chat/messages\` always resume the newest \`kind: 'chat'\` session, so once this returns, every other door onto "the" chat thread (the ⌘J panel, the standalone page) continues from the fresh session automatically. Older chat sessions remain queryable like any other session (\`GET /:id\`, or the Agents feed) — this only changes which one is "current"; there is deliberately no dedicated past-chat browser yet. Requires \`contribute\` (starting a thread IS contributing).`,
+      description: `Create a chat session and make it the current chat. Existing chat sessions and their history remain available through \`GET /:id\` and the Agents feed. After this request, \`GET /chat\` and \`POST /chat/messages\` use the new session.`,
     }),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
@@ -384,13 +384,11 @@ Docket prevents two active runs for the same session. If an interrupted run stop
       tag: 'Agents',
       summary: 'Decide a proposal group (batch)',
       response: AgentSessionOut,
-      description: `Record one decision across every still-\`proposed\` action of a proposal group — or the subset named by \`activityIds\` — and return the {@link AgentSessionOut} after any resume.
+      description: `Approve or reject every pending action in a proposal group, or only the actions listed in \`activityIds\`. The response contains the current {@link AgentSessionOut}.
 
-\`decision: "approved"\` executes each stored tool call through the persisted executor and resumes the session. Approval never supplies missing authority: Athena requires its authenticated owner and re-resolves that owner's current human Actor and permissions for every call, and registered-agent work requires \`assign\`. Execution stores the real result.
+\`decision: "approved"\` applies each selected action after checking the caller's current permissions, then resumes the session. \`decision: "rejected"\` applies none of the selected actions, records each rejection, and resumes the session so the agent can continue with that result. The request returns 404 when the group contains no pending actions.
 
-\`decision: "rejected"\` executes nothing and writes a per-action \`rejected\` audit row, in one transaction. The session still resumes — reject-and-continue — so the agent hears each veto as an error result and adapts rather than being canceled. 404 when the group has no proposed member.
-
-Answers **202** when Athena's durable runner takes the work rather than finishing inline; the body is the same session either way, and the difference is only how much has already happened. A group carries one disposition, which is why this is a \`PUT\` to the decision rather than a \`POST\` to a verb.`,
+Docket returns 202 with a monitor URL when execution continues asynchronously. Otherwise, it returns 200 after applying the decision.`,
     }),
     zParam(groupParam),
     zJson(ProposalGroupDecision),
@@ -435,7 +433,7 @@ Answers **202** when Athena's durable runner takes the work rather than finishin
       tag: 'Agents',
       summary: "Edit a pending proposal's input",
       response: SessionActivityOut,
-      description: `Replace the stored \`toolCall.input\` of a still-\`proposed\` action — the write behind inline ghost editing (retitle/redate a translucent row before blessing it). Approval then executes the edited input verbatim. Only \`proposed\` actions with a stored tool call are editable (409 otherwise); missing or private work returns 404. Athena requires its authenticated owner; registered-agent work requires \`assign\`.`,
+      description: `Replace the \`toolCall.input\` of an action whose state is still \`proposed\`. Approval executes the edited input. An action without a pending tool call returns 409, and missing or inaccessible work returns 404. Athena requires its authenticated owner; registered-agent work requires \`assign\`.`,
     }),
     zParam(activityParam),
     zJson(ProposalEditBody),
@@ -494,15 +492,11 @@ Answers **202** when Athena's durable runner takes the work rather than finishin
       tag: 'Agents',
       summary: 'Decide a gated session activity',
       response: SessionActivityOut,
-      description: `Decide a single gated \`action\` the agent has proposed, and return the decided {@link SessionActivityOut} named by \`:activityId\`.
+      description: `Approve or reject a pending agent action and return its {@link SessionActivityOut}. The target must be an action in the named session with status \`proposed\`. Docket returns 404 when the session or activity is unavailable and 409 when the activity is no longer pending.
 
-\`decision: "approved"\` clears the gate so the mutation may apply, advancing the activity \`proposed → applied\`. \`decision: "rejected"\` leaves it \`rejected\` and the mutation is **never applied**. Either way an \`audit_event\` (\`type='approved'\`/\`'rejected'\`, \`subjectType='agent_session'\`) is written in the same transaction, attributing the **agent's** Actor as \`actorId\`, the session \`initiatorId\` as \`initiatorId\`, and the deciding approver in \`metadata\` — so the feed always shows both who acted and who authorized it.
+Approval applies the action after checking the caller's current permissions, records who approved it, and allows the session to continue. Rejection records the decision without applying the action and cancels the session after no pending action remains. Set \`scope: "all_in_session"\` to apply the same decision to every pending action in the session; the default scope decides only \`:activityId\`.
 
-The two decisions differ in what happens to the run once no proposed action remains: an approval returns the session from \`awaiting_approval\` to \`running\` so the agent continues, while a rejection moves it to \`canceled\` and stamps \`endedAt\`.
-
-Pass \`scope: "all_in_session"\` to apply the same decision to every still-\`proposed\` action in the session in one transaction; the default \`"this"\` decides only the target. The target must belong to this org-scoped session, be \`type='action'\`, and currently be \`proposed\` — otherwise 404 (\`Activity not found\` / \`Session not found\`) or 409 (\`Activity is not a proposed action\`).
-
-Athena decisions require the authenticated owner; registered-agent decisions require \`assign\`. Approval never supplies missing authority — the stored tool rechecks the Athena owner's current permissions when it executes. Answers **202** when the durable runner takes the work rather than finishing inline. Related: \`/reply\` (answer an elicitation rather than a gated action) and the session-level \`PUT /:id/decision\`.`,
+Docket returns 202 with a monitor URL when execution continues asynchronously. Otherwise, it returns 200 after applying the decision. Use \`POST /:id/activity/:activityId/reply\` to answer a request for information instead of deciding an action.`,
     }),
     zParam(activityParam),
     zJson(ActivityDecisionBody),

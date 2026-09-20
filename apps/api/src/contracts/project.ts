@@ -104,7 +104,7 @@ export const ProjectCreate = z
       .max(PROJECT_CREATE_MILESTONE_LIMIT)
       .optional()
       .describe(
-        `Optional checkpoints to create inside the new Project, in order — each entry’s position in the array is its \`sort\` unless it carries one. At most ${String(PROJECT_CREATE_MILESTONE_LIMIT)} per request; a Project needing more adds them through \`POST /projects/:id/milestones\`, which appends one at a time. Written in the same transaction as the Project, so a create never leaves a Project whose milestones are missing.`,
+        `Optional checkpoints to create with the new project, in order. Each entry's array position determines its \`sort\` value unless it supplies one. A request may include at most ${String(PROJECT_CREATE_MILESTONE_LIMIT)}; add more through \`POST /projects/:id/milestones\`. Project creation either creates every supplied milestone or creates nothing.`,
       ),
   })
   .meta({ id: 'ProjectCreate', description: 'Create a project within an organization.' });
@@ -445,9 +445,7 @@ export const ProjectProgress = z
       .number()
       .int()
       .min(0)
-      .describe(
-        'Raw number of tasks in the project (always the row count, regardless of weighting mode).',
-      ),
+      .describe('Number of tasks in the project, regardless of the progress weighting mode.'),
     completedCount: z
       .number()
       .int()
@@ -524,7 +522,7 @@ export const ProjectWorkSectionsOut = z
   .strict()
   .meta({
     id: 'ProjectWorkSectionsOut',
-    description: 'Project-scoped work rows and milestone grouping, loaded outside initial detail.',
+    description: 'Project-scoped work and milestone groups returned outside the initial detail.',
   });
 /** Deferred Project work content. */
 export type ProjectWorkSectionsOut = z.infer<typeof ProjectWorkSectionsOut>;

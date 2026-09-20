@@ -64,7 +64,7 @@ export const REFERENCE_CSS = `
   --docket-line: #ded7cc;
   --docket-accent: #b94c2f;
   --docket-panel: #f3eee6;
-  --scalar-font: "IBM Plex Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --scalar-font: "IBM Plex Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   --scalar-font-code: ui-monospace, "SFMono-Regular", Consolas, monospace;
   --scalar-background-1: var(--docket-paper);
   --scalar-background-2: var(--docket-panel);
@@ -79,7 +79,11 @@ export const REFERENCE_CSS = `
 }
 * { box-sizing: border-box; }
 html, body { min-width: 0; margin: 0; background: var(--docket-paper); color: var(--docket-ink); }
-body { font-family: var(--scalar-font); font-size: 16px; }
+body { font-family: var(--scalar-font) !important; font-size: 16px; }
+.scalar-app {
+  --scalar-font: "IBM Plex Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  font-family: var(--scalar-font) !important;
+}
 .docket-header {
   position: sticky; top: 0; z-index: 100;
   min-height: 64px; padding: 10px 18px;
@@ -112,8 +116,8 @@ body { font-family: var(--scalar-font); font-size: 16px; }
 #reference-error h1 { margin: 0 0 8px; font-size: 22px; }
 #reference-error p { line-height: 1.55; }
 #reference-error .docket-actions { margin: 18px 0 0; flex-wrap: wrap; }
-.scalar-api-reference button:not([class*="inline"]),
-.scalar-api-reference [role="button"]:not([class*="inline"]) { min-height: 44px; }
+.scalar-api-reference button,
+.scalar-api-reference [role="button"] { min-width: 44px; min-height: 44px; }
 .scalar-api-reference pre, .scalar-api-reference code { max-width: 100%; overflow-x: auto; }
 .darklight-reference { display: none !important; }
 @media (max-width: 620px) {
@@ -122,6 +126,10 @@ body { font-family: var(--scalar-font); font-size: 16px; }
   .docket-actions { position: absolute; right: 10px; top: 10px; }
   .docket-title { font-size: 15px; }
   .docket-link { padding: 0 10px; font-size: 14px; }
+}
+@media (max-width: 350px) {
+  .docket-title { font-size: 0; }
+  .docket-title::after { content: "Docket API"; font-size: 14px; }
 }
 @media (prefers-color-scheme: dark) {
   :root {

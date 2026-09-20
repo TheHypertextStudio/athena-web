@@ -149,7 +149,7 @@ const publications = new Hono<AppEnv>()
       tag: 'Publishing',
       summary: 'List published briefs',
       response: pageOf(PublicationOut),
-      description: `List every publication in the workspace in \`createdAt DESC, id DESC\` order, including withdrawn rows. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Each row's \`urls\` array is resolved live. Reads require only org membership.`,
+      description: `List every brief in the workspace in \`createdAt DESC, id DESC\` order, including withdrawn briefs. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Each item's \`urls\` array contains its current public addresses. Reads require workspace membership.`,
     }),
     zQuery(CursorQuery),
     async (c) => {
@@ -183,7 +183,7 @@ const publications = new Hono<AppEnv>()
       tag: 'Publishing',
       summary: "Read one record's publication state",
       response: PublicationStateOut,
-      description: `Return the publication state for one initiative, program, or project so a detail page can render its publish affordance correctly — published, withdrawn, or never published. A record that has never been published returns **200** with \`publication: null\` rather than a 404: "not published" is an answer, not a failure, and making the normal case an error status would force every caller to distinguish it from a genuine outage by status code alone. Scoped strictly to the caller's organization.`,
+      description: `Return whether one initiative, program, or project is published, withdrawn, or has never been published. A resource that has never been published returns 200 with \`publication: null\`. Docket returns 404 only when the subject is unavailable or inaccessible.`,
     }),
     zParam(subjectParam),
     async (c) => {
@@ -216,11 +216,11 @@ const publications = new Hono<AppEnv>()
       capability: 'contribute',
       response: PublicationOut,
       status: 201,
-      description: `Publish an initiative, program, or project to the web as a brief. The record must live in the path organization — a cross-tenant \`subjectId\` returns 404 (existence-hiding).
+      description: `Publish an initiative, program, or project as a public brief. The subject must belong to this organization; otherwise Docket returns 404.
 
-\`slug\` is the last segment of the public URL. Omit it and one is derived from the record's own title; supply it to choose. It must be 1–64 lowercase alphanumeric characters separated by single hyphens, must not be a reserved system name, and must be unused by another brief in this workspace — a clash returns **409 \`public_name_taken\`** and writes nothing.
+\`slug\` becomes the last segment of the public URL. When omitted, Docket derives it from the subject title. A slug must contain 1 to 64 lowercase letters, numbers, or single hyphens, cannot use a reserved name, and must be unique in the workspace. A conflict returns 409 \`public_name_taken\` without changing publication state.
 
-Publishing a record that was previously withdrawn restores it at its **original** URL rather than minting a new one, so shared links survive a withdrawal. Requires \`contribute\`: a brief is a view of work the caller can already author, and withdrawal is one click. \`urls\` reflects live reachability: the shared brief host (once one is configured for this deployment) plus every verified custom domain — empty only in a deployment with neither.`,
+Publishing a previously withdrawn subject restores its original URL. \`urls\` contains the currently reachable shared-host URL and URLs for verified custom domains. It is empty only when the deployment has no shared brief host and the workspace has no verified custom domain.`,
     }),
     zJson(PublicationCreate),
     async (c) => {
@@ -297,7 +297,7 @@ Publishing a record that was previously withdrawn restores it at its **original*
       summary: 'Move or withdraw a brief',
       capability: 'contribute',
       response: PublicationOut,
-      description: `Change a brief's public address (\`slug\`) or its published state (\`published\`) without losing the row. Moving a brief takes effect immediately: the old address stops resolving and the new one starts, and a clash with another brief in the same workspace returns **409 \`public_name_taken\`** with nothing written. Setting \`published: false\` withdraws the brief — the same as \`DELETE\` — and \`published: true\` restores it at the same address. Requires \`contribute\`.`,
+      description: `Change a brief's public address (\`slug\`) or published state (\`published\`) without deleting the brief. Moving it takes effect immediately: the old address stops resolving and the new one starts. An address conflict returns **409 \`public_name_taken\`** without changing the brief. Setting \`published: false\` withdraws it, and \`published: true\` restores it at the same address. Requires \`contribute\`.`,
     }),
     zParam(publicationIdParam),
     zJson(PublicationUpdate),

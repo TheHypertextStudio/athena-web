@@ -261,7 +261,7 @@ const time = new Hono<AppEnv>()
       summary: 'Read a Time Record',
       response: TimeRecordOut,
       description:
-        'Read one Time Record by id, hydrated exactly as the write endpoints return it — status, elapsed time from its interval rows, category, and typed context. This is what `Location` points at after a create, and what to re-read after a `412` when a concurrent edit invalidated an `If-Match`. A record outside the caller’s Hub is 404, not 403, so ownership is never disclosed.',
+        'Return one Time Record with its status, elapsed time, intervals, category, and typed context. This is the resource identified by `Location` after creation and the representation to read after a `412` response. A record outside the caller’s Hub returns 404 so ownership is not disclosed.',
     }),
     zParam(recordParam),
     async (c) => {
@@ -276,7 +276,7 @@ const time = new Hono<AppEnv>()
       summary: 'Edit a Time Record',
       response: TimeRecordOut,
       description:
-        'Edit only user-controlled semantic fields such as title and category. Exact duration remains in Time Interval rows and cannot be silently replaced by this endpoint.',
+        "Edit only user-controlled fields such as title and category. This operation does not change the record's intervals or calculated duration.",
     }),
     zParam(recordParam),
     zJson(TimeRecordUpdate),
@@ -365,7 +365,7 @@ const time = new Hono<AppEnv>()
       summary: 'Remove manual time from personal history',
       response: TimeRecordOut,
       description:
-        'Hide an unsubmitted manual or reconstructed record from the caller’s ledger without hard-deleting its audit row. Live, agent, and submitted records remain immutable.',
+        'Remove an unsubmitted manual or reconstructed record from the caller’s visible history while preserving its audit history. Live, agent-created, and submitted records cannot be removed.',
     }),
     zParam(recordParam),
     async (c) => {
@@ -465,7 +465,7 @@ const time = new Hono<AppEnv>()
       summary: 'Revoke a current-task share token',
       response: TimeShareTokenOut,
       description:
-        'Revoke one token immediately. The row is retained, not deleted, so the owner keeps a record of what was shared and when it was last read.',
+        'Revoke one token immediately. The owner can still see what was shared, when the token was created, and when it was last read.',
     }),
     zParam(recordParam),
     async (c) => {

@@ -178,9 +178,9 @@ Returns the created \`RoleOut\`. Assign the role to members via the invitation \
       summary: 'Update a role',
       capability: 'manage',
       response: RoleOut,
-      description: `Patch a role's \`name\`, \`capabilities\`, \`baseCapability\`, and/or \`defaultVisibility\`. Requires the \`manage\` capability. Every field is optional; only supplied fields change. The role must exist in this org — otherwise **404** (existence-hiding); the lookup and update are both scoped to \`(id, orgId)\`.
+      description: `Update a role's \`name\`, \`capabilities\`, \`baseCapability\`, or \`defaultVisibility\` and return the current \`RoleOut\`. Omitted fields remain unchanged. \`capabilities\` replaces the complete array, and \`baseCapability: null\` removes the workspace-wide baseline.
 
-Notably the update body has **no \`key\` field**: a role's \`key\` is immutable once created, which keeps it stable for the four system roles (Owner/Admin/Member/Guest) that the permission engine and seeds reference by key. System roles can still have their name/capabilities patched here (subject to the self-escalation invariant — you cannot raise a role above your own effective capability, permissions §4.5), but editing the system role bundles themselves is an Owner-privileged action in the broader model. Setting \`capabilities\` replaces the whole array; setting \`baseCapability: null\` clears the org-wide baseline. Returns the updated \`RoleOut\`.`,
+A role's \`key\` cannot be changed. A caller cannot raise a role above the caller's own effective capability. Updating a system role's capability bundle requires Owner access. An unavailable role returns 404.`,
     }),
     zParam(idParam),
     zJson(RoleUpdate),

@@ -110,9 +110,9 @@ const dailyPlan = new Hono<AppEnv>()
       tag: 'DailyPlan',
       summary: 'Get the daily plan',
       response: pageOf(DailyPlanItemOut),
-      description: `Return the caller's personal daily plan for one required calendar \`date\`, ordered by \`sort ASC, id ASC\`. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Reuse a cursor only for the same date. The daily plan is a cross-org, Hub-scoped surface and only contains the caller's own rows.
+      description: `Return the caller's personal daily plan for one required calendar \`date\`, ordered by \`sort ASC, id ASC\`. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Reuse a cursor only for the same date. The plan can contain work from several workspaces but contains only the caller's items.
 
-Session-only, no capability. 401 when unauthenticated; **404 (Hub not found)** if the session user has no Hub row. Side-effect-free read. Related: \`POST /\` to add an item, \`PATCH /:id\` to reorder/complete/timebox, \`DELETE /:id\` to remove; \`GET /hub/today\` folds this plan into the cross-org Today cockpit.`,
+Session-only, no capability. Returns 401 when unauthenticated and 404 when the caller has no Hub. This read has no side effects. Related: \`POST /\` to add an item, \`PATCH /:id\` to reorder, complete, or timebox it, \`DELETE /:id\` to remove it, and \`GET /hub/today\` for the cross-workspace Today view.`,
     }),
     zQuery(listQuery),
     async (c) => {
@@ -165,9 +165,9 @@ Session-only, no capability. 401 when unauthenticated; **404 (Hub not found)** i
       tag: 'DailyPlan',
       summary: 'Add a daily-plan item',
       response: DailyPlanItemOut,
-      description: `Pull a Task into the caller's daily plan for a date, creating a new daily-plan item. The body supplies the task reference \`(refOrganizationId, refTaskId)\`, the \`date\`, and optional \`sort\` position and timebox window. **The Task reference is authorized before insert:** the caller must be an active, unarchived human Actor in \`refOrganizationId\`, and the current Task must pass the canonical task grant/visibility resolver for that Actor. A failure returns **404 (Task not found)** — a single existence-hiding error that never reveals whether the membership, task, or grant was the problem, and never lets the caller create a pointer to work they cannot view.
+      description: `Add a visible task to the caller's daily plan for \`date\`. Supply \`refOrganizationId\` and \`refTaskId\`, plus an optional sort position and timebox. The caller must be an active member of the task's organization and must be able to view the task. Docket returns 404 when any of those conditions is not met.
 
-The owning \`hubId\` is resolved server-side from the session user and is never accepted from the body. **Side effect:** inserts a \`dailyPlanItem\` row (status defaults to \`planned\`); the new item then appears in \`GET /daily-plan\` and the Hub Today cockpit. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub. Related: \`PATCH /:id\`, \`DELETE /:id\`.`,
+The new item starts with status \`planned\` and appears in \`GET /daily-plan\` and \`GET /v1/hub/today\`. The authenticated user owns the item; the request cannot choose another owner.`,
     }),
     zJson(DailyPlanItemCreate),
     async (c) => {
@@ -252,9 +252,9 @@ The owning \`hubId\` is resolved server-side from the session user and is never 
       tag: 'DailyPlan',
       summary: 'Remove a daily-plan item',
       response: DailyPlanItemOut,
-      description: `Remove a Task from the caller's daily plan. **Side effect:** hard-deletes the \`dailyPlanItem\` row and returns the deleted item's representation (so the client can confirm/undo). This only unplans the Task for that day — the underlying Task in its org is untouched; the daily-plan item is purely a personal, Hub-scoped pointer.
+      description: `Remove a Task from the caller's daily plan and return the removed item so the client can confirm the change or offer Undo. This only removes the Task from that day. The Task itself is unchanged.
 
-The delete is constrained to the caller's own Hub (\`(id, hubId)\`); an item that isn't theirs (or a missing id) returns **404 (Daily plan item not found)**. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub.`,
+An item that does not belong to the caller, or an unknown id, returns **404 (Daily plan item not found)**. Session-only, no capability. Returns 401 when unauthenticated and 404 when the caller has no Hub.`,
     }),
     zParam(idParam),
     async (c) => {

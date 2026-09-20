@@ -48,7 +48,7 @@ export type PublicationSubjectKind = z.infer<typeof PublicationSubjectKind>;
 /** A record's publication state, as the app sees it. */
 export const PublicationOut = z
   .object({
-    id: WorkPublicationId.describe('ULID id of the publication row.'),
+    id: WorkPublicationId.describe('ULID identifier for this brief publication.'),
     organizationId: OrganizationId.describe('The owning workspace.'),
     subjectKind: PublicationSubjectKind,
     subjectId: WorkEntityId.describe('The published record.'),
@@ -56,7 +56,7 @@ export const PublicationOut = z
     published: z
       .boolean()
       .describe(
-        'Whether the brief is currently readable by the public. A withdrawn brief keeps its row (and therefore its URL) so re-publishing restores the same link.',
+        'Whether the brief is currently readable by the public. Withdrawing a brief reserves its URL so publishing it again restores the same link.',
       ),
     publishedAt: z.iso
       .datetime()
@@ -148,7 +148,7 @@ export type DomainVerificationFailureCode = z.infer<typeof DomainVerificationFai
 /** A custom domain claimed by a workspace. */
 export const WorkspaceDomainOut = z
   .object({
-    id: WorkPublicDomainId.describe('ULID id of the domain row.'),
+    id: WorkPublicDomainId.describe('ULID identifier for this custom-domain claim.'),
     organizationId: OrganizationId.describe('The claiming workspace.'),
     host: z.string().describe('The normalized hostname (no scheme, no port, no `www.`).'),
     verified: z
@@ -230,7 +230,7 @@ export const BriefWorkItem = z
     id: WorkEntityId.describe('The record id.'),
     kind: z
       .enum(['initiative', 'program', 'project', 'task', 'milestone'])
-      .describe('Which table the row came from, so the renderer can pick its glyph.'),
+      .describe('The work type, used to select its label and glyph.'),
     title: z.string().describe('The record’s own title, read live.'),
     status: z.string().nullable().describe('Raw status/state value, or `null` where none applies.'),
     health: Health.nullable().describe('Health verdict, where the record carries one.'),
@@ -244,11 +244,9 @@ export const BriefWorkItem = z
       .describe(
         'Target/due date as a bare `YYYY-MM-DD` calendar day, where the record carries one.',
       ),
-    complete: z
-      .boolean()
-      .describe('Whether the row is finished, so a reader can see progress at a glance.'),
+    complete: z.boolean().describe('Whether this work is finished.'),
   })
-  .meta({ id: 'BriefWorkItem', description: 'One row of work listed under a brief.' });
+  .meta({ id: 'BriefWorkItem', description: 'One work item listed in a brief.' });
 /** Brief work-item value. */
 export type BriefWorkItem = z.infer<typeof BriefWorkItem>;
 
@@ -258,7 +256,7 @@ export const BriefSection = z
     key: z
       .enum(['programs', 'projects', 'milestones', 'tasks'])
       .describe('Stable section key the renderer turns into a heading.'),
-    items: z.array(BriefWorkItem).describe('The rows in this section, in display order.'),
+    items: z.array(BriefWorkItem).describe('The work items in this section, in display order.'),
     total: z
       .number()
       .int()

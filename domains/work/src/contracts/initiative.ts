@@ -438,7 +438,7 @@ export const InitiativeOverviewItem = InitiativeOut.extend({
   childCount: z.number().int().min(0),
   ownerName: z.string().nullable(),
   lastUpdateAt: z.string().nullable(),
-}).meta({ id: 'InitiativeOverviewItem', description: 'One Initiative hierarchy overview row.' });
+}).meta({ id: 'InitiativeOverviewItem', description: 'One Initiative in the hierarchy overview.' });
 /** Initiative hierarchy overview row value. */
 export type InitiativeOverviewItem = z.infer<typeof InitiativeOverviewItem>;
 

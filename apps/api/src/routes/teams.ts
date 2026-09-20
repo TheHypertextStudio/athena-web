@@ -386,11 +386,9 @@ The team disappears from active team reads. Tasks remain assigned to it. Docket 
       tag: 'Teams',
       summary: "List a team's members",
       response: pageOf(TeamMemberOut),
-      description: `The people on this team — display name, org-level job \`title\`, their \`role\` on this team (manager / member / guest), and \`openTaskCount\`, being how many of the team's not-yet-closed tasks are assigned to them.
+      description: `List the people on a team. Each item includes the person's display name, organization-level job \`title\`, team \`role\` (\`manager\`, \`member\`, or \`guest\`), and \`openTaskCount\`. Members with and without Docket accounts use the same response shape. The API does not expose account status or a declared allocation percentage.
 
-There is deliberately **no field indicating whether a member holds a Docket account**. A volunteer who never signs in and a full-time staffer come back as the same shape, so no client can render one as second-class (see \`docs/engineering/specs/people.md\`). \`openTaskCount\` is the observed load signal — Docket stores no declared allocation percentage, because a maintained percentage goes stale silently while still looking authoritative.
-
-Ordered by name case-insensitively with actor id as the stable tiebreaker. The page defaults to 50 items, accepts at most 100, and omits \`nextCursor\` at exhaustion. Requires only org membership. Unknown or archived team → **404**.`,
+Results are ordered by display name, case-insensitively, with Actor ID as the stable tie-breaker. The default page size is 50 and the maximum is 100. The final page omits \`nextCursor\`. An unavailable or archived team returns 404.`,
     }),
     zParam(idParam),
     zQuery(CursorQuery),
@@ -416,13 +414,11 @@ Ordered by name case-insensitively with actor id as the stable tiebreaker. The p
       tag: 'Teams',
       summary: "Report a team's capacity and throughput",
       response: TeamActivityOut,
-      description: `Two views of the same team in one payload, because the team page shows them behind a single toggle and two fetches could disagree with each other.
+      description: `Return a team's current capacity and ${String(THROUGHPUT_WINDOW_DAYS)}-day throughput history in one response.
 
-\`capacity\` is a snapshot: every still-open task bucketed by canonical workflow-state **type** (backlog / unstarted / started) rather than by the team's own state names, so two teams that each have three differently-named in-progress columns stay comparable. Each bucket carries both a \`taskCount\` and an \`estimate\` sum; unestimated tasks contribute 0, so an \`estimate\` of 0 across every bucket means the workspace does not estimate rather than meaning the team has no work.
+\`capacity\` groups open tasks by workflow-state category: \`backlog\`, \`unstarted\`, or \`started\`. Each group includes \`taskCount\` and the sum of task estimates. Unestimated tasks add zero to the estimate. Tasks whose state no longer exists in the team's workflow are omitted from capacity.
 
-\`throughput\` is a ${String(THROUGHPUT_WINDOW_DAYS)}-day rolling series, oldest first. For each day it reports the tasks open at that day's end and the tasks completed by it; the two lines converging is the team keeping up. A task whose state key is no longer present in the team's workflow (someone replaced the whole array) is genuinely uncategorizable and is left out of \`capacity\` rather than being put in an invented bucket.
-
-Requires only org membership. Unknown or archived team → **404**.`,
+\`throughput\` is ordered from oldest to newest. Each day reports how many tasks were open at the end of that day and how many had been completed. An unavailable or archived team returns 404.`,
     }),
     zParam(idParam),
     async (c) => {

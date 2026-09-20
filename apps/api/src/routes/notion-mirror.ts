@@ -148,7 +148,7 @@ export const notionMirrorApp = new Hono<AppEnv>()
       response: pageOf(NotionMirrorDatabaseOut),
       description: `Every Docket-designed Notion database for this integration, in designer order, as a page of {@link NotionMirrorDatabaseOut}. Seeds the nine entity designs from the catalog defaults on first call, titled with the org's own vocabulary — so a nonprofit workspace sees "Campaigns" rather than "Initiatives" without configuring anything.
 
-A row here NEVER implies anything exists in Notion. \`externalDatabaseId\` is null and \`provisionedAt\` is null until the provisioning pass has actually created the database, which keeps the "never report success when nothing happened" invariant true for a design that has only been shaped.
+An item with null \`externalDatabaseId\` and \`provisionedAt\` describes a design that has not been created in Notion. Those fields receive values only after Notion confirms creation.
 
 Requires \`manage\`: shaping what a workspace publishes into a third-party tool is an administrative act, the same bar as the other integration-configuration routes.`,
     }),
@@ -169,14 +169,14 @@ Requires \`manage\`: shaping what a workspace publishes into a third-party tool 
     capabilityGuard('manage'),
     apiDoc({
       tag: 'Integrations',
-      summary: 'Read one entity"s table design and preview',
+      summary: "Read one entity's table design and preview",
       capability: 'manage',
       response: NotionMirrorDesignOut,
       description: `The table designer's payload for one entity: the current column set, every Docket field the entity could expose, and a short preview of how the Notion database will actually look.
 
-The preview rows are the workspace's **real** records wherever there are any — the point of the surface is to show your own work in the shape it will take, not a schema diagram. When the workspace has none of that entity yet, \`sample\` is true and the rows are illustrative; the UI must say so, because a designer that quietly shows invented data teaches the reader to distrust every number on it.
+The preview uses the workspace's current records when any exist. When the workspace has none of that entity, \`sample\` is true and the returned items are illustrative.
 
-\`excludedRows\` reports work withheld from the projection: tasks already linked to a database on this same integration are skipped, since projecting them would put the same work in this Notion workspace twice. Reporting the count is what stops the row total from reading as data loss.`,
+\`excludedRows\` counts work omitted because it is already linked to another database on the same integration. \`totalRows\` includes only work eligible for this database.`,
     }),
     zParam(entityParam),
     async (c) => {
@@ -192,14 +192,12 @@ The preview rows are the workspace's **real** records wherever there are any —
     capabilityGuard('manage'),
     apiDoc({
       tag: 'Integrations',
-      summary: 'Rename or reshape one entity"s Notion database',
+      summary: "Rename or reshape one entity's Notion database",
       capability: 'manage',
       response: NotionMirrorDesignOut,
-      description: `Change a designed database: its title, whether it is projected at all, and its columns. \`columns\` is a **wholesale replace** and its order is the column order, so a field omitted from the array is dropped from the design.
+      description: `Update a designed Notion database's title, enabled state, or columns. Supplying \`columns\` replaces the complete ordered column list; omitted columns are removed from the design.
 
-Two rules are enforced rather than trusted. The required title column cannot be removed (Notion requires exactly one title property, so a design without it could never be provisioned — better refused here, while the user is looking at the designer, than at provision time with no context). And a column must name a field the entity actually exposes, so a stale client cannot persist a binding the sync engine has no way to fill. Either violation is a 409.
-
-A rename never re-binds. Provisioned columns keep their Notion \`propertyId\`, which is the identity; the title is only a label. That is what makes renaming safe from either side — including a rename made inside Notion, which Docket leaves alone rather than fighting over.`,
+The required title column cannot be removed, and every column must reference a field exposed by this entity. Either violation returns 409. Renaming a provisioned column keeps its Notion \`propertyId\`, so it remains bound to the same property. Docket does not overwrite a label that was renamed in Notion.`,
     }),
     zParam(entityParam),
     zJson(NotionMirrorDesignPatch),
@@ -316,13 +314,9 @@ Requires \`manage\`. Returns 409 when another run already holds the integration'
       summary: 'Run the Notion mirror now',
       capability: 'manage',
       response: SyncRunOut,
-      description: `Run a complete mirror against the selected parent page. Docket creates missing designed databases, imports changes made in Notion, and publishes Docket records back to Notion.
+      description: `Run the configured Notion mirror. Docket creates missing designed databases, imports changes from Notion, and publishes Docket records to Notion. This operation uses the existing parent page; \`POST /provision\` selects or changes that page.
 
-Distinct from \`POST /provision\`, which *chooses* the container page and rewrites the connection's config. This one only runs, so it is the safe repeat action — and the only way to re-run the mirror after setup, which is what makes a stalled sync recoverable without reconnecting.
-
-Returns {@link SyncRunOut} and records the run in sync history. A completed request can contain \`status: "failed"\`, so clients must inspect \`status\` instead of relying on the HTTP status alone.
-
-Requires \`manage\`. Returns 409 when another run already holds the integration's lease, and 409 when no container page has been chosen yet: that is a setup step, not a sync failure, and running anyway would record a failure against a healthy connection and notify its owner about it.`,
+The response is a {@link SyncRunOut} saved in sync history. Inspect its \`status\`: a completed HTTP request may still report \`status: "failed"\`. Docket returns 409 when another mirror run is active or no parent page has been selected.`,
     }),
     zParam(mirrorParam),
     async (c) => {
@@ -353,13 +347,9 @@ Requires \`manage\`. Returns 409 when another run already holds the integration'
       summary: 'List Notion workspace members and their Docket matches',
       capability: 'manage',
       response: pageOf(NotionWorkspacePerson),
-      description: `List the Notion workspace members discovered by previous syncs and the Docket actor matched to each one. This read does not call Notion, so it remains available when the provider is unavailable. A sync refreshes the list.
+      description: `List people discovered during previous Notion syncs and the Docket Actor matched to each person. This operation reads Docket's saved roster and does not call Notion. A later sync refreshes it. Integration bots are excluded.
 
-\`actorId: null\` is an explicit, queryable unmatched state — never hidden and never quietly defaulted to somebody. An unmatched person's assignments cannot reach Docket, which is what the surface has to make obvious.
-
-\`ignoredAt\` separates the two populations that share \`actorId: null\`: a person nobody has decided about yet (\`ignoredAt: null\`) still needs an answer, while one somebody deliberately excluded does not and should stop being asked about. Read them apart rather than lumping them together, or the "needs a decision" count never reaches zero.
-
-Notion's own user list mixes integration bots in with people (a real workspace usually has several); those are filtered out at the provider edge, because offering an automation as an assignable teammate would be nonsense.`,
+\`actorId: null\` means the person is not matched, so their Notion assignments cannot map to Docket work. When \`ignoredAt\` is null, the person still needs a decision. A non-null \`ignoredAt\` means an administrator chose to exclude that person from matching.`,
     }),
     zParam(mirrorParam),
     zQuery(CursorQuery),
@@ -404,19 +394,14 @@ Notion's own user list mixes integration bots in with people (a real workspace u
       summary: 'Decide what one unmatched Notion person maps to',
       capability: 'manage',
       response: NotionWorkspacePerson,
-      description: `Resolve one Notion workspace member, returning the updated {@link NotionWorkspacePerson}.
+      description: `Choose how one Notion workspace member maps to Docket and return the updated {@link NotionWorkspacePerson}.
 
-\`create_actor\` adds the Notion member to Docket as a person without a Docket account and links future Notion assignments to that person.
+- \`create_actor\` creates a person without a Docket account and uses that person for future Notion assignments.
+- \`match_existing\` links the Notion member to the supplied \`actorId\`. Future syncs preserve this manual match.
+- \`skip\` records that the member should not be matched automatically. The member remains visible with \`ignoredAt\` set.
+- \`unignore\` removes the current match or exclusion and returns the member to the undecided state.
 
-\`match_existing\` links them to an actor you name and marks the mapping \`manual\`, which makes it immune to the email re-matching every sync performs. A human's explicit decision always outranks an automatic one.
-
-\`skip\` stamps \`ignoredAt\`. That timestamp is the whole point: leaving the row as plain \`actorId: null\` would record the decision as indistinguishable from never having made one, so the person would resurface on the next read and — because the email pass re-evaluates undecided rows — could be auto-matched anyway. An ignored row is immune to re-matching in exactly the way a \`manual\` one is. It stays visible rather than disappearing, because a deliberate exclusion is a queryable state, not an absence.
-
-\`unignore\` clears all three fields, returning the person to undecided. It undoes a match as readily as an exclusion, which keeps one reversal path instead of one per prior decision.
-
-Every non-\`skip\` action clears \`ignoredAt\`: deciding anything about somebody supersedes an earlier "don't sync them", and a stale exclusion left behind would keep the row immune to re-matching forever.
-
-Requires \`manage\`. A missing mapping 404s (\`Person not found\`); \`match_existing\` without a valid same-org \`actorId\` 404s (\`Actor not found\`).`,
+Every action except \`skip\` clears \`ignoredAt\`. Docket returns 404 when the Notion member does not exist or when \`match_existing\` names an Actor outside this organization.`,
     }),
     zParam(z.object({ id: z.string(), externalId: z.string() })),
     zJson(NotionPersonResolve),

@@ -248,9 +248,12 @@ Fallback examples use required fields only, schema defaults, the first enum memb
 legal bounds, and a recursion guard. They never contain empty IDs, sentinel integers, real
 credentials, real tenant data, or exhaustive optional fields.
 
-Public generation rejects raw TSDoc links, local paths, SQL names, obsolete hostnames, and internal
-implementation prose. Every operation description renders Purpose, Inputs and constraints, Result
-and side effects, Access, Failures and recovery, and Related operations in that order.
+Public generation converts raw TSDoc links and uses canonical production origins. Editorial review
+removes local paths, storage details, source names, and other implementation prose from the rendered
+document. The repository does not use keyword blacklists as prose tests because those tests reward
+word substitution instead of clear explanations. Structural checks still require every operation
+to render Purpose, Inputs and constraints, Result and side effects, Access, Failures and recovery,
+and Related operations in that order.
 
 The OpenAPI document must keep every field and operation explanation needed to use the API without
 reading source code. Its Brotli quality-5 representation must not exceed 350 KiB; raw JSON size is

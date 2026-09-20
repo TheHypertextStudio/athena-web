@@ -300,7 +300,7 @@ export const TeamDetail = TeamOut.extend({
   workflowStates: z
     .array(WorkflowState)
     .describe(
-      "The team's complete ordered workflow-state list (always materialized on a detail read).",
+      "The team's complete ordered workflow-state list, always included in a detail response.",
     ),
   cycleCadenceDays: z.number().int().min(1).max(365),
   cycleCadenceAnchor: z.iso.date(),

@@ -108,7 +108,7 @@ const emailSuggestions = new Hono<AppEnv>()
       tag: 'Suggestions',
       summary: 'List pending email suggestions',
       response: pageOf(EmailSuggestionOut),
-      description: `List the org's **pending** email suggestions, oldest-first, as a page of {@link EmailSuggestionOut}. Resolved ones — accepted, dismissed, expired — are deliberately absent: this is a queue to work through, not a history, and a decided suggestion has nothing left to decide.
+      description: `List pending email suggestions from oldest to newest as a page of {@link EmailSuggestionOut}. Accepted, dismissed, and expired suggestions are excluded because this collection represents the current review queue.
 
 Each item carries the synthesized draft and an \`emailMeta\` snapshot. Pages use \`createdAt ASC, id ASC\`, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Org membership suffices to read.`,
     }),
@@ -143,7 +143,7 @@ Each item carries the synthesized draft and an \`emailMeta\` snapshot. Pages use
       response: EmailThreadOut,
       description: `Fetch the source email thread behind a suggestion, live from the mail provider, as {@link EmailThreadOut} — the triage preview a reviewer reads before deciding.
 
-Message **bodies are never persisted**. Only the \`emailMeta\` snapshot is stored, and the full thread is fetched on demand and held nowhere, so a workspace's mail does not accumulate inside Docket. That is why this is a separate request rather than a field on the list rows.
+Message **bodies are never saved in Docket**. The full thread is fetched from the mail provider for this request. List responses contain only the bounded \`emailMeta\` preview.
 
 Works for a suggestion in any status, so an accepted task can still be traced back to the conversation that produced it. If the connector's grant has expired the response is 409 with a reconnect message rather than a hard failure — the suggestion is fine, the credential is not. A connector with no mail capability, or one that has gone missing, is 409/404 respectively. Org membership suffices.`,
     }),
@@ -186,13 +186,9 @@ Works for a suggestion in any status, so an accepted task can still be traced ba
       summary: 'Decide a pending email suggestion',
       capability: 'contribute',
       response: EmailSuggestionOut,
-      description: `Record the reviewer's decision on a pending suggestion and return the resolved {@link EmailSuggestionOut}, whose \`status\` is now \`accepted\` or \`dismissed\` and whose \`createdTaskId\` names the task when one was made.
+      description: `Accept or dismiss a pending email suggestion and return the updated {@link EmailSuggestionOut}. An accepted suggestion creates a task and sets \`createdTaskId\`. Use \`overrides\` to replace the proposed title, description, priority, or due date before task creation; omitted values keep the proposal. A dismissed suggestion creates no task.
 
-\`decision: "accepted"\` materializes the suggestion into a real task through the same path the \`suggestion.autoAccept\` automation action uses, so a rule and a person produce identical results. Send \`overrides\` to correct the synthesized draft first — title, description, priority, due date — and omitted fields keep what Athena proposed. \`decision: "dismissed"\` closes the suggestion and writes nothing to the workspace.
-
-A suggestion carries exactly one disposition, which is why this is a \`PUT\` to the decision rather than a \`POST\` to a verb: the decision is a value the resource holds, and re-sending the same one names the same end state. Deciding a suggestion that is no longer pending is 409 (\`Suggestion already resolved\`), and accepting with no team to accept into is 404.
-
-Requires \`contribute\`. A suggestion is a proposal until a person acting under their own capability turns it into work. Related: \`GET /{id}/thread\` to read the source email before deciding.`,
+Docket returns 409 when the suggestion is no longer pending and 404 when it cannot place an accepted suggestion into a team. Repeating the same decision keeps the same final state. Use \`GET /:id/thread\` to read the source email before deciding.`,
     }),
     zParam(idParam),
     zJson(SuggestionDisposition),

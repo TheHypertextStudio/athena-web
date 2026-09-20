@@ -19,7 +19,7 @@ export const RoleCreate = z
       .string()
       .min(1)
       .describe(
-        'Stable, immutable identifier for the role, unique within the org (the `(organization_id, key)` index). Chosen at creation and never changeable afterward (the update body has no `key`); use a URL-safe slug. The four system roles reserve the keys `owner`/`admin`/`member`/`guest`.',
+        'Stable URL-safe identifier that is unique within the organization and cannot change after creation. The system roles reserve `owner`, `admin`, `member`, and `guest`.',
       ),
     name: z
       .string()
@@ -34,7 +34,7 @@ export const RoleCreate = z
     baseCapability: GrantCapability.nullable()
       .optional()
       .describe(
-        "The org-wide baseline this role confers, materialized as a role-grant at the org root and inherited across the whole org. One of the five capabilities, or null for a grant-only role (like Guest) that has no org-wide access. Cannot exceed the creator's own effective capability (no self-escalation). Defaults to null.",
+        "The organization-wide capability granted by this role, or null for a role such as Guest that receives access only through explicit grants. It cannot exceed the creator's own capability. Defaults to null.",
       ),
     defaultVisibility: Visibility.optional().describe(
       "The role's default resource visibility — 'public' (members see all public work without a grant) or 'private' (grant-only, like Guest: sees nothing until an explicit grant). Governs the visibility fallback in the permission resolver. Defaults at the DB level when omitted.",
@@ -97,7 +97,7 @@ export const RoleOut = z
     baseCapability: GrantCapability.nullable()
       .optional()
       .describe(
-        'The org-wide baseline this role confers (one of the five capabilities), or null for a grant-only role like Guest. Materialized as a role-grant at the org root and inherited org-wide.',
+        'The organization-wide capability granted by this role, or null for a role such as Guest that receives access only through explicit grants.',
       ),
     defaultVisibility: Visibility.describe(
       "The role's default resource visibility — 'public' (members see public work without a grant) or 'private' (grant-only). Drives the permission resolver's visibility fallback.",

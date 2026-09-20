@@ -427,7 +427,7 @@ export const WorkScheduleLegacyConflictPayload = z
   .strict()
   .meta({
     id: 'WorkScheduleLegacyConflictPayload',
-    description: 'Legacy work-location rows that require a new owner-defined default schedule.',
+    description: 'Legacy work-location records that require a new owner-defined default schedule.',
   });
 /** Unmigrated legacy schedule-conflict payload. */
 export type WorkScheduleLegacyConflictPayload = z.infer<typeof WorkScheduleLegacyConflictPayload>;

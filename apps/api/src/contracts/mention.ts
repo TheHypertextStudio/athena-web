@@ -169,7 +169,7 @@ export const MentionSearchOut = z
     query: z
       .string()
       .describe('The query these items answer, echoed so a stale response is detectable.'),
-    items: z.array(MentionItem).describe('Matching rows, best first.'),
+    items: z.array(MentionItem).describe('Matching mentions, best first.'),
   })
   .meta({ id: 'MentionSearchOut', description: 'Local mention picker results.' });
 /** Local mention-search response value. */
@@ -240,7 +240,7 @@ export const MentionOut = z
       ),
     ref: MentionRef.describe('What the reference points at.'),
     externalResourceId: ExternalResourceId.nullable().describe(
-      'The deduped resource row for an external reference; null for an entity reference.',
+      'The deduplicated external resource identifier; null when the reference points to a Docket entity.',
     ),
   })
   .meta({ id: 'MentionOut', description: "A reference authored inside an entity's prose." });

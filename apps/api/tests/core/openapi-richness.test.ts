@@ -1,5 +1,7 @@
 import { brotliCompressSync, constants } from 'node:zlib';
 
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 import { describe, expect, it } from 'vitest';
 
 import { PUBLIC_TAG_GROUPS, PUBLIC_TAGS } from '../../src/lib/public-api-tags';
@@ -20,10 +22,14 @@ function isObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+let documentPromise: Promise<JsonObject> | undefined;
+
 async function publicDocument(): Promise<JsonObject> {
+  if (documentPromise) return documentPromise;
   const { openapiDocument } = await import('../../src/openapi');
   const { app, adminApp } = await import('../../src/app');
-  return (await openapiDocument(app, adminApp)) as JsonObject;
+  documentPromise = openapiDocument(app, adminApp) as Promise<JsonObject>;
+  return documentPromise;
 }
 
 function publicOperations(document: JsonObject): readonly JsonObject[] {
@@ -174,6 +180,49 @@ function auditResponses(
   }
 }
 
+type ExampleSlot = readonly [location: string, content: unknown];
+
+function exampleSlots(operation: JsonObject, operationId: string): readonly ExampleSlot[] {
+  const slots: ExampleSlot[] = [];
+  const requestBody = isObject(operation['requestBody']) ? operation['requestBody'] : undefined;
+  if (requestBody) slots.push([`${operationId}.requestBody`, requestBody['content']]);
+  const responses = isObject(operation['responses']) ? operation['responses'] : {};
+  for (const [status, response] of Object.entries(responses)) {
+    if (/^2\d\d$/.test(status) && isObject(response)) {
+      slots.push([`${operationId}.response.${status}`, response['content']]);
+    }
+  }
+  return slots;
+}
+
+function validateContentExamples(
+  validator: Ajv2020,
+  components: JsonObject,
+  location: string,
+  content: unknown,
+): readonly string[] {
+  if (!isObject(content)) return [];
+  const failures: string[] = [];
+  for (const [mediaType, media] of Object.entries(content)) {
+    if (!isObject(media) || !('example' in media) || !isObject(media['schema'])) continue;
+    const schema = {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      components,
+      ...media['schema'],
+    };
+    const validate = validator.compile(schema);
+    if (!validate(media['example'])) {
+      failures.push(
+        `${location}.${mediaType}: ${validator.errorsText(validate.errors, { separator: '; ' })}`,
+      );
+    }
+    if (JSON.stringify(media['example']).includes(String(Number.MIN_SAFE_INTEGER))) {
+      failures.push(`${location}.${mediaType}: contains a sentinel integer`);
+    }
+  }
+  return failures;
+}
+
 describe('public OpenAPI contract', () => {
   it('publishes one complete, grouped, plain-language operation contract', async () => {
     const document = await publicDocument();
@@ -213,6 +262,22 @@ describe('public OpenAPI contract', () => {
     }
     expect(audit.descriptions).toEqual([]);
     expect(audit.examples).toEqual([]);
+  });
+
+  it('publishes examples that satisfy their exact generated schemas', async () => {
+    const document = await publicDocument();
+    const components = isObject(document['components']) ? document['components'] : {};
+    const validator = new Ajv2020({ strict: false, allErrors: true, logger: false });
+    addFormats(validator);
+    const failures = publicOperations(document).flatMap((operation) => {
+      const operationId =
+        typeof operation['operationId'] === 'string' ? operation['operationId'] : 'operation';
+      return exampleSlots(operation, operationId).flatMap(([location, content]) =>
+        validateContentExamples(validator, components, location, content),
+      );
+    });
+
+    expect(failures).toEqual([]);
   });
 
   it('stays within the compressed transfer budget', async () => {

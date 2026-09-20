@@ -266,11 +266,9 @@ const integrations = new Hono<AppEnv>()
       summary: 'Connect an integration',
       capability: 'manage',
       response: IntegrationOut,
-      description: `Connect or reconnect an external provider and return the {@link IntegrationOut}. Reconnecting the same provider account keeps the existing integration ID, so linked records keep a stable \`sourceIntegrationId\`. An organization can connect several accounts for providers that supply an \`externalAccountId\`.
+      description: `Create an integration or reconnect an existing provider account. Reconnecting the same account preserves the integration ID and every linked record's \`sourceIntegrationId\`. Providers that expose an \`externalAccountId\` may have several accounts connected to one organization.
 
-Critically, **health is never taken from the body**: a new or reconnected integration always starts \`pending\` and clears any prior error. It is only promoted to \`connected\` once \`POST /:id/verify\` (or a successful sync/import) validates a real credential — the spine of the "never report success when nothing happened" rule. \`writeBack\` defaults ON for connectors that support two-way sync (e.g. Google Tasks) unless the caller overrides it, so those connect two-way out of the box.
-
-Requires \`manage\`. This request saves the connection settings but does not contact the provider; verification is a separate step. For GitHub, get the installation URL from \`GET /:id/connect-url\` after creating the integration. Related: \`POST /:id/verify\`, \`POST /:id/import\`, \`POST /:id/sync\`, and \`GET /directory\`.`,
+The integration starts with status \`pending\` and any previous error is cleared. This operation stores settings but does not contact the provider. Use \`POST /:id/verify\`, import, or sync to validate the credential and move the integration to \`connected\`. \`writeBack\` defaults to true for providers that support two-way sync unless the request overrides it. For GitHub, create the integration and then use \`GET /:id/connect-url\` to begin installation.`,
     }),
     zJson(IntegrationCreate),
     async (c) => {
@@ -455,7 +453,7 @@ Requires \`manage\` — it touches live provider credentials and configures sync
       tag: 'Integrations',
       summary: 'Read one integration sync run',
       response: SyncRunOut,
-      description: `Read a single {@link SyncRunOut} by id — the status monitor for one sync pass. \`POST /:id/sync\`, \`POST /:id/import\`, and \`POST /:id/notion/sync\` all answer **202 Accepted** with a \`Location\` header naming this URL, because the pass they start is deliberately *not* awaited: it paces writes against the provider's rate limit for minutes, far past any gateway or browser timeout. Poll here until \`status\` leaves \`running\`.
+      description: `Read the {@link SyncRunOut} used to monitor one synchronization. Operations that start asynchronous sync work return this URL in \`Location\`. Poll it until \`status\` is no longer \`running\`.
 
 Unlike \`GET /:id/runs\`, which is capped at the 20 most recent runs, this addresses a run directly and keeps working after it has aged out of that window. A run id belonging to another integration or org 404s. A read; org membership suffices.`,
     }),
@@ -488,7 +486,9 @@ Unlike \`GET /:id/runs\`, which is capped at the 20 most recent runs, this addre
       summary: 'Update an integration',
       capability: 'manage',
       response: IntegrationOut,
-      description: `Update an integration's mutable settings — \`roles\`, connector \`config\` (target team/project, \`listIds\`, \`defaultListId\`, \`pushNativeTasks\`, work-graph connectors' \`teamMappings\`, and — on mail-capable connectors — \`emailToTask: { enabled, threshold }\`, the strictly-opt-in email-to-task ingest switch validated against {@link ConnectorConfig}), \`syncMode\`, \`writeBack\`, and the one-time \`externalAccountId\` binding for a legacy connection — returning the refreshed {@link IntegrationOut}. Provider-owned \`connection\` metadata (including Linear's webhook-routing workspace id), credentials, and \`status\` are intentionally **not** accepted: identity/workspace metadata is learned from the provider during verification, and health is earned through verify/sync, so a client cannot forge routing or a healthy state. A partial update writes only accepted present fields. Enabling \`emailToTask\` also seeds the org's default automation rules once (idempotent), so the dismiss-promotions / archive-on-complete defaults exist the moment the feature turns on. Flipping \`writeBack: true\` on a Linear integration additionally requires the bound Linear identity to carry the \`write\` OAuth scope — lacking it rejects with 409 (reconnect message); a read-only (\`writeBack: false\`) update never checks scope. When \`config.teamMappings\` is present it is validated: every \`teamId\` must be a real team in the caller's org and every \`externalTeamId\` must be unique within the array — either failure 422s (\`validation_error\`) rather than persisting a mapping that would silently misroute at sync time. A missing/cross-tenant id 404s. Requires \`manage\`. Related: \`POST /:id/verify\` (re-validate after changing the connection), \`GET /:id/lists\` (to discover valid \`config.listIds\`).`,
+      description: `Update the supplied integration settings and return the current {@link IntegrationOut}. Omitted fields remain unchanged. Mutable fields include \`roles\`, \`config\`, \`syncMode\`, \`writeBack\`, and the first \`externalAccountId\` assigned to a legacy connection. The request cannot set provider-owned connection metadata, credentials, or status.
+
+Enabling \`config.emailToTask\` creates the organization's default email automation rules when they do not already exist. Enabling \`writeBack\` for Linear requires the linked Linear account to have the \`write\` OAuth scope; otherwise Docket returns 409 and the account must reconnect. Every \`config.teamMappings[].teamId\` must belong to this organization, and each \`externalTeamId\` may appear only once. Invalid mappings return 422. Use \`GET /:id/lists\` to discover provider list IDs and \`POST /:id/verify\` after changing connection settings.`,
     }),
     zParam(integrationIdParam),
     zJson(IntegrationUpdate),
@@ -611,11 +611,9 @@ Unlike \`GET /:id/runs\`, which is capped at the 20 most recent runs, this addre
       summary: 'Verify an integration connection',
       capability: 'manage',
       response: IntegrationOut,
-      description: `Verify an integration's credential against the live provider and return the **truthful** {@link IntegrationOut} reflecting the result. This is the ONLY place that promotes an integration to \`connected\` at connect time: a real \`connect()\` call must actually resolve the external account here. The connection is labeled by the linked **identity** (the account's email, resolved from its id token), not by a resource.
+      description: `Check the integration's credential with the provider and return the updated {@link IntegrationOut}. A successful check sets \`status\` to \`connected\`, clears the previous error, and stores the external account label. For Linear, Docket also records the provider workspace ID and slug used to route webhooks.
 
-Crucially, a failure is recorded, not thrown away: if the credential can't be resolved or the provider check doesn't succeed, the integration is set to \`status='error'\` with a real \`lastError\`/\`lastErrorAt\`, and that error state is returned as **200** (the honest current state) rather than an HTTP error — so the UI can show exactly why the connection is broken. A provider that doesn't support connection checks yields 409 (\`Integration provider does not support connection checks\`); a missing/cross-tenant id 404s. For Linear, a successful connect persists the provider's \`externalWorkspaceId\`/\`externalWorkspaceSlug\` onto \`connection\` (the webhook-routing key), and a \`writeBack\` Linear integration whose actor identity lacks the OAuth \`write\` scope is recorded as \`error\` with a reconnect message BEFORE the live connect call, never silently downgraded to read-only.
-
-Requires \`manage\` — it exercises live credentials and mutates health. Side effect: writes \`status\`/\`lastError\`/connection label. Related: \`POST /\` (which leaves the integration \`pending\` for this route to verify), \`POST /:id/sync\` & \`POST /:id/import\` (which also prove health on success).`,
+An invalid credential or failed provider check sets \`status\` to \`error\` and records \`lastError\` and \`lastErrorAt\`. That state is returned with HTTP 200 so the client can display the connection result from the response body. A provider that does not support verification returns 409. A Linear connection with \`writeBack: true\` also requires the linked account's \`write\` scope; otherwise the returned integration is in the error state and asks the user to reconnect.`,
     }),
     zParam(integrationIdParam),
     async (c) => {
@@ -845,15 +843,11 @@ Requires \`contribute\`. Ongoing organization-wide synchronization through \`POS
       summary: 'Trigger an integration sync',
       capability: 'manage',
       response: SyncRunOut,
-      description: `Start a manual sync run for a connector and return the created {@link SyncRunOut}. Synchronization reconciles the org's mirrored tasks with the provider's current state (and, for two-way connectors with \`writeBack\`, pushes eligible Docket changes back out). A run is durable and auditable via \`GET /:id/runs\`.
+      description: `Start a manual sync and return its {@link SyncRunOut}. The sync imports the provider's current task state. When the integration supports two-way sync and \`writeBack\` is enabled, it also publishes eligible Docket changes to the provider.
 
-Concurrency is guarded: only one sync may be in flight per integration, so if a run is already active this returns 409 (\`A sync is already in progress for this integration.\`) rather than starting a duplicate. A provider that can't sync yields 409 (\`Integration provider does not support sync\`); a missing/cross-tenant id 404s. The run is recorded with \`trigger='manual'\` (the background scheduler uses \`scheduled\`).
+Only one sync can run for an integration at a time. Docket returns 409 when another run is active or when the provider does not support sync. Use \`GET /:id/runs\` to read the outcome of this run.
 
-For a Notion connection that has a **mirror** configured (a container page chosen via \`POST /:id/notion/provision\`), this also runs the mirror pass — the opposite direction, pushing Docket's work OUT into the designed databases. Both are needed for "Sync" to mean what it says on that connection: running only the task pull would report success having never touched the mirror. They run one after the other because they contend for the same lease, and the mirror pass also refreshes the Notion people roster.
-
-The mirror pass is **started, not awaited**: it spends minutes pacing writes against Notion's rate limit, and blocking this shared endpoint on it would exceed gateway and browser timeouts for every provider. The response body is therefore the \`task_sync\` run only, and it claims nothing about the mirror. The mirror's own run is durable from the moment it starts and is the honest place to read its outcome: \`GET /:id/runs\`, keyed by \`purpose\` (\`task_sync\` / \`notion_mirror\`). Use \`POST /:id/notion/sync\` when you need to wait for a mirror pass and read its status directly.
-
-Requires \`manage\` — triggering org-wide mirroring is an administrative action (contrast the \`contribute\`-level \`POST /:id/import\`, which is a user pulling their own work in). Related: \`GET /:id/runs\`, \`POST /:id/verify\`, \`POST /:id/notion/sync\` (the mirror alone).`,
+For a configured Notion mirror, this operation also starts a separate \`notion_mirror\` run after the task sync. The response describes only the \`task_sync\` run. Read both runs through \`GET /:id/runs\`, or use \`POST /:id/notion/sync\` when the client needs to wait for the Notion mirror result directly.`,
     }),
     zParam(integrationIdParam),
     async (c) => {

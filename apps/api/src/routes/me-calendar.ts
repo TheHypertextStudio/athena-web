@@ -255,7 +255,7 @@ const meCalendar = new Hono<AppEnv>()
       summary: 'Update a logical calendar',
       response: CalendarSettingsOut,
       description:
-        'Update the preferred source or visibility for every active source in one logical calendar transaction.',
+        'Update the preferred source or visibility of a logical calendar. The change applies to every active source in the group. Either all active sources change or none do.',
     }),
     zParam(idParam),
     zJson(CalendarSourceGroupUpdate),
@@ -392,7 +392,7 @@ const meCalendar = new Hono<AppEnv>()
       summary: 'Sync Google Calendar',
       response: CalendarSyncResultOut,
       description:
-        'Run a first-party calendar sync across every linked provider account (currently Google) via the provider-neutral sync engine, then drain any provider-bound writes that are due for a backoff retry so a manual "Sync Now" also flushes the outbox.',
+        'Synchronize every linked calendar account, currently Google, and retry provider changes whose backoff period has elapsed. The response reports the completed account work and any failures.',
     }),
     async (c) => {
       const userId = requireUserId(c);

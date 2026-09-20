@@ -1,11 +1,4 @@
-/**
- * `@docket/api` — initiatives router (mounted at `/v1/orgs/:orgId/initiatives`).
- *
- * @remarks
- * Initiatives are cross-cutting themes that associate many-to-many with Projects and
- * Programs via org-scoped edges. `view` reads; `contribute` mutates + links; `manage`
- * deletes. Detail and timeline reads derive health/status from associated children.
- */
+/** Initiative routes mounted under an organization. */
 import {
   db,
   entityDisplay,
@@ -462,7 +455,7 @@ const initiatives = new Hono<AppEnv>()
       summary: 'Delete an initiative',
       capability: 'manage',
       response: InitiativeOut,
-      description: `Permanently delete an initiative. Scoped to the caller's org: 404 (\`Initiative not found\`) when the id is absent or cross-tenant. This removes only the theme itself — the associated \`initiative_project\`/\`initiative_program\` edges are cascaded away by the database, but the Programs and Projects themselves are NOT deleted (an initiative owns no work, so there is nothing to cascade into the work hierarchy). Requires \`manage\` (the highest capability) rather than \`contribute\` because deletion is irreversible structural teardown that affects how the whole portfolio rolls up, so it is restricted to administrators. Returns the deleted {@link InitiativeOut} as a tombstone. To merely retire an initiative without losing it, PATCH its \`status\` to \`completed\` instead.`,
+      description: `Permanently delete an initiative. Docket also removes the initiative's links to programs and projects, but it does not delete those programs or projects. The request returns 404 when the initiative does not exist or belongs to another organization. This operation requires the \`manage\` capability because deletion cannot be undone. The response contains the deleted {@link InitiativeOut}. To retain the initiative for historical reporting, PATCH its \`status\` to \`completed\` instead.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -722,7 +715,7 @@ const initiatives = new Hono<AppEnv>()
       tag: 'Initiatives',
       summary: 'Get initiative timeline',
       response: InitiativeTimelineOut,
-      description: `The roadmap-first roll-up for an initiative: its associated Programs returned as ongoing, undated lanes and its associated Projects returned as dated bars. Each Project includes current \`status\`/\`health\`, ISO \`startDate\`/\`targetDate\`, and the saved resolution plus fiscal basis for each endpoint; either endpoint may be null when unscheduled. The optional \`from\`/\`to\` query bounds (ISO dates, either side open) filter ONLY the Project bars to those overlapping the window — a Project overlaps when it has no dates at all (unscheduled projects always remain visible) or its \`[startDate, targetDate]\` intersects \`[from, to]\`. Program lanes are always returned in full, since they are ongoing and carry no end date. The initiative must exist in the caller's org (404 \`Initiative not found\`). Read-only; org membership suffices. Returns {@link InitiativeTimelineOut}. See \`GET /:id\` for the numeric health/status roll-up over the same children.`,
+      description: `Return an initiative timeline with associated programs as undated lanes and associated projects as dated bars. Each project includes current \`status\`, \`health\`, \`startDate\`, \`targetDate\`, and the saved date resolution and fiscal basis. Either date may be null. Optional \`from\` and \`to\` ISO dates filter projects to those that overlap the window. Unscheduled projects remain visible, and program lanes are never filtered because they have no end date. An unavailable initiative returns 404. Use \`GET /:id\` for the numeric health and status roll-up over the same children.`,
     }),
     zParam(idParam),
     zQuery(InitiativeTimelineQuery),
@@ -838,7 +831,6 @@ const initiatives = new Hono<AppEnv>()
       return ok(c, InitiativeTimelineOut, payload);
     },
   );
-
 export default new Hono<AppEnv>()
   .route('/', initiativeAggregates)
   .route('/', initiativeHierarchyRoutes)

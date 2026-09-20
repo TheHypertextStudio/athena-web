@@ -37,22 +37,22 @@ export const OrgCreate = z
       .string()
       .optional()
       .describe(
-        'A short free-text statement of what the organization is for. Backs the second field of the create-org form (name + purpose) and is shown in org settings. Optional; has no effect on slug or authorization.',
+        'A short statement of what the organization is for. It appears in organization settings and does not affect the slug or permissions.',
       ),
     slug: PublicSlug.optional().describe(
-      "The org's one identifier: its internal key and, unless a custom domain is set, the path segment its published briefs answer on by default. Must be unique across all orgs (the `organization_slug_uq` index) and not one of the reserved system names. When omitted it is auto-derived — from the name for team orgs, or `personal-<userId>` for personal spaces — and disambiguated with a numeric suffix on collision. When supplied explicitly, a collision is rejected with 409 instead of being disambiguated.",
+      "The organization's unique identifier and the default path segment for published briefs when no custom domain is set. Reserved system names are not allowed. When omitted, Docket derives it from the organization name or personal-space owner and adds a numeric suffix when needed. An explicitly supplied value returns 409 when unavailable.",
     ),
     vocabulary: z
       .enum(['startup', 'nonprofit', 'agency'])
       .default('startup')
       .describe(
-        "The terminology skin applied across the org's UI — 'startup' | 'nonprofit' | 'agency' — which relabels entities (e.g. the nonprofit skin renames Projects to Programs-of-work). Stored as the `preset` of the org's vocabulary skin. Defaults to 'startup'.",
+        "The terminology preset used throughout the organization. `startup` uses Docket's standard work labels, while `nonprofit` and `agency` use labels suited to those organizations. Defaults to `startup`.",
       ),
     isPersonal: z
       .boolean()
       .default(false)
       .describe(
-        'When true, create a personal space — an organization-of-one (`is_personal: true`) created without prompting for a name/vocabulary. Personal-space creation is idempotent per user (an existing personal org is returned rather than duplicated), and invitations/guests are rejected for it. Defaults to false (a normal team org).',
+        'When true, create a personal workspace for the caller. A person can have only one personal workspace, so Docket returns the existing one instead of creating a duplicate. Personal workspaces do not accept invitations or guests. Defaults to false.',
       ),
     intent: z
       .enum(['startup', 'nonprofit', 'personal'])

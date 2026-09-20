@@ -448,13 +448,11 @@ const tasks = new Hono<AppEnv>()
       summary: 'Create a task',
       capability: 'contribute',
       response: TaskOut,
-      description: `Create a new native task inside the org. A task is the atomic unit of work in Docket; it always belongs to exactly one team (\`teamId\`, required) and inherits that team's workflow. Requires the \`contribute\` capability — the privilege to create or edit work content.
+      description: `Create a task in the organization. \`teamId\` is required, and the task uses that team's workflow. Every supplied reference, including \`assigneeId\`, \`projectId\`, \`cycleId\`, \`milestoneId\`, and \`parentTaskId\`, must identify a resource in the same organization. A cycle must also belong to the selected team. Invalid or inaccessible references return 404; a cycle from another team returns 409 \`cadence_changed\`.
 
-The team must exist in the caller's org or the request 404s. Tenant isolation is strict: every optional reference in the body (\`assigneeId\`, \`projectId\`, \`cycleId\`, \`milestoneId\`, \`parentTaskId\`) is checked to live in the same org, and any cross-org or unknown id 404s before insert — the existence of out-of-tenant rows is never leaked. A cycle must also belong to the task's team; a cross-team cycle returns 409 \`cadence_changed\`.
+When \`state\` is omitted, Docket uses the team's first workflow state. When the selected state is completed or canceled, Docket sets the matching terminal timestamp. \`priority\` defaults to \`none\`.
 
-Workflow state: if \`state\` is omitted the task lands in the team's first \`workflow_states\` entry (typically \`backlog\`); if supplied, the key is validated against the team's states and the transition is resolved so that a task created directly in a terminal state (\`completed\`/\`canceled\`) lands with the correct derived \`completedAt\`/\`canceledAt\` timestamps. \`priority\` defaults to \`none\`.
-
-Side effects: emits a \`created\` observation onto the org's activity stream, and — when the task is created already assigned — an additional \`assignment\` observation. Returns the created {@link TaskOut}. Note that creating a task on someone else's behalf (\`assigneeId\`) is permitted under \`contribute\` at creation time; later reassignment via PATCH requires \`assign\` (see {@link TaskUpdate}). Related: \`POST /:id/subtasks\` to create children, \`POST /:id/dependencies\` to wire blockers.`,
+The new task appears in the organization's activity stream. An assigned task also produces an assignment event. Creating a task with \`assigneeId\` requires \`contribute\`; changing an existing task's assignee requires \`assign\`.`,
     }),
     zJson(TaskCreate),
     async (c) => {
@@ -1379,7 +1377,7 @@ When \`preserveSelectedSubtrees\` is true, a selected task whose ancestor is als
       summary: 'Get the bounded Task detail aggregate',
       response: TaskDetailAggregate,
       description:
-        'Returns the Task snapshot, visible-control capabilities, team workflow states, and initial document content in one request. It deliberately excludes organization-wide picker rosters and optional sections.',
+        'Return the task snapshot, the caller’s available controls, team workflow states, and initial document content in one request. Organization-wide picker rosters and optional sections are not included.',
     }),
     zParam(aggregateIdParam),
     async (c) => {
@@ -1428,10 +1426,11 @@ A cross-org or unknown id 404s (existence-hiding: another tenant's task is indis
       summary: 'Update a task',
       capability: 'contribute',
       response: TaskOut,
-      description: `Update selected task fields. Omitted fields remain unchanged, and an empty body returns the task unchanged. The base operation requires \`contribute\`.
-Changing \`assigneeId\` or \`delegateId\` also requires \`assign\`; otherwise the request returns 403. Set \`parentTaskId\` to make the task a subtask, or null to move it to the top level. A task cannot be its own parent or descendant. Docket checks the hierarchy and applies the change together, so concurrent updates cannot create a cycle. Every referenced ID must identify a visible resource in the same organization; otherwise the request returns 404. A selected cycle must belong to the task's team. When \`cycleCadenceRevision\` is present, a stale value returns 409 \`cadence_changed\` before Docket moves the task.
+      description: `Update selected task fields. Omitted fields remain unchanged, and an empty body returns the task unchanged. Every referenced resource must be visible to the caller and belong to the same organization. A selected cycle must also belong to the task's team.
 
-\`state\` must be a key in the team's \`workflowStates\`. Docket sets or clears \`completedAt\` and \`canceledAt\` from the selected state; clients do not supply those timestamps. State changes create completion or status activity, and assigning a person creates assignment activity. An absent or archived task returns 404. Returns the updated {@link TaskOut}. Use \`POST /:id/state\` when changing only the state.`,
+Changing \`assigneeId\` or \`delegateId\` requires \`assign\`; other changes require \`contribute\`. Set \`parentTaskId\` to make the task a subtask, or set it to null to move the task to the top level. A task cannot become its own parent or a child of one of its descendants. Docket checks the hierarchy while applying the change, so concurrent updates cannot create a cycle. When \`cycleCadenceRevision\` is present, a stale value returns 409 \`cadence_changed\` before Docket moves the task.
+
+\`state\` must match a key in the team's \`workflowStates\`. Docket manages \`completedAt\` and \`canceledAt\` from that state. State and assignment changes add matching activity events. Use \`POST /:id/state\` when changing only the state.`,
     }),
     zParam(idParam),
     zJson(TaskUpdate),

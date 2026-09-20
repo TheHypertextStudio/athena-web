@@ -155,7 +155,7 @@ export const WorkStatusOut = z
       .describe(
         'Stable identifier for this status within its set, stored on the work it is applied to. Assigned by the server from the name at creation and unchanged by later renames, so saved views and automation rules keep resolving.',
       ),
-    name: WorkStatusName.describe('Display name shown on rows, pickers, and group headers.'),
+    name: WorkStatusName.describe('Display name shown on work items, pickers, and group headers.'),
     description: z
       .string()
       .nullable()

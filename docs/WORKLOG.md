@@ -7,6 +7,35 @@
 
 ## Active Tasks
 
+### [API-REFERENCE-002] Finish the public Scalar reference
+
+- **Status**: COMPLETED
+- **Started**: 2026-09-19
+- **Completed**: 2026-09-19
+- **Priority**: P0
+- **Description**: Finish the prerelease public API contract so a developer can understand every
+  operation, its access rules, side effects, failures, and response shape from Scalar alone.
+- **Decision**: Keep the six-section operation structure, preserve authored route behavior, and
+  remove internal implementation narration through editorial review. Do not add keyword-based prose
+  gates. Generate examples from the published schemas and validate every request and success example
+  against the exact OpenAPI 3.1 schema.
+- **Completed work**: Rebased on current `origin/main`; replaced local export origins with production
+  origins; rewrote operation and schema descriptions across the public surface; fixed the last empty
+  and boilerplate-only result sections; made multipart files, ULIDs, bounded numbers, unions, and
+  composed schemas produce valid examples; and added schema validation for all generated examples.
+- **Validation**: The generated document contains 522 operations. Each operation has all six
+  sections and a non-generic result. Every generated JSON and multipart request and success example
+  satisfies its published schema. The 108 focused contract tests, API lint, API type checking,
+  production build, `docs:check`, formatting, and `git diff --check` pass. Browser review passed at
+  1440×900, 390×844, and 320×844 in light and dark themes. It confirmed IBM Plex Sans, 44px control
+  targets, zero horizontal overflow, same-origin runtime assets, working search and deep links, and
+  zero browser warnings or errors. The linked design scorecard records the full craft review.
+- **Blockers**: None.
+- **Learnings**: Structural checks catch missing sections and invalid schemas, but they cannot judge
+  whether prose sounds like a database comment. The final browser and editorial passes removed
+  source terminology without adding a brittle keyword blacklist. Scalar applies its own font token
+  after page CSS loads, so the owned theme must set the font on Scalar's root as well as the page.
+
 ### [OAUTH-PROVIDER-COVERAGE-001] Restore the OAuth trust-spine coverage gate
 
 - **Status**: COMPLETED

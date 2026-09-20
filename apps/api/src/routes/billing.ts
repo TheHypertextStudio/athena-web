@@ -589,7 +589,7 @@ export const billingExportDownload: Hono<AppEnv> = new Hono<AppEnv>().get(
   describeRoute({
     tags: ['Billing'],
     summary: 'Download the generated work-layer export',
-    description: `Stream the most recent work-layer export as \`application/json\` bytes. Requires the \`manage\` capability on the org, and the export must have been generated within the last ${EXPORT_TTL_DAYS} days — the \`expiresAt\` returned by \`POST /export\` is enforced here rather than merely advertised. Returns **404** when no export has been generated, when it has expired, or when the underlying object has already been swept.`,
+    description: `Download the most recent work-layer export as an \`application/json\` attachment. The export expires ${EXPORT_TTL_DAYS} days after generation at the \`expiresAt\` returned by \`POST /export\`. Docket returns 404 when no export exists, the export has expired, or its stored file is no longer available.`,
   }),
   async (c) => {
     const { orgId } = c.get('actorCtx');

@@ -505,7 +505,7 @@ const savedViews: Hono<AppEnv, SavedViewRoutes> = new Hono<AppEnv>()
       summary: 'Delete a saved view',
       capability: 'contribute',
       response: SavedWorkViewOut,
-      description: `Hard-delete a saved view. Requires \`contribute\`. The lookup is org-scoped, so a cross-org/unknown id 404s (\`Saved view not found\`). Like the labels delete, this returns the full deleted {@link SavedViewOut} row (not a bare acknowledgement) so the client can confirm exactly what was removed.`,
+      description: `Delete a saved view permanently. Requires \`contribute\`. A hidden, cross-workspace, or unknown id returns 404. The response contains the deleted {@link SavedViewOut} so the client can confirm exactly what was removed.`,
     }),
     zParam(idParam),
     async (c) => {

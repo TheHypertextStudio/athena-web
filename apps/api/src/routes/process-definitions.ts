@@ -38,7 +38,7 @@ const processDefinitions = new Hono<AppEnv>()
       summary: 'List process definitions',
       response: pageOf(ProcessDefinitionSummaryOut),
       description:
-        'List reusable process blueprints in stable definition-id order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion. Each row reports the latest immutable revision number; archived processes are excluded. Requires workspace membership.',
+        'List reusable process blueprints in stable definition-id order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion. Each item reports its latest immutable revision number. Archived processes are excluded. Requires workspace membership.',
     }),
     zQuery(CursorQuery),
     async (c) => {
@@ -143,7 +143,7 @@ const processDefinitions = new Hono<AppEnv>()
       capability: 'contribute',
       response: ProcessDefinitionDetailOut,
       description:
-        'Append a complete immutable process revision. Future series occurrences may use it; previously materialized work remains bound to its original revision.',
+        'Publish a complete immutable process revision. Future series occurrences may use it. Work already created from an older revision does not change.',
     }),
     zParam(idParam),
     zJson(ProcessDefinitionCreate),

@@ -619,7 +619,7 @@ const personalAthena = new Hono<AppEnv>()
       summary: 'Remove an assignment trigger',
       response: z.object({ ok: z.literal(true) }),
       description:
-        'Remove one trigger only when both its assignment and trigger row belong to the authenticated user. Another user receives an existence-hiding not-found response.',
+        'Remove one trigger only when the authenticated user owns both the assignment and trigger. Another user receives an existence-hiding 404 response.',
     }),
     zParam(z.object({ id: z.string(), triggerId: z.string() })),
     async (c) => {

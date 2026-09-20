@@ -130,7 +130,7 @@ export function createNotificationInboxRoutes(
         summary: 'Act on a notification',
         response: NotificationOut,
         description:
-          'Apply a low-risk inline action to one caller-owned notification. The current persisted model records handled items as read.',
+          'Apply a low-risk inline action to one caller-owned notification. Acting on a notification marks it as read.',
       }),
       zParam(idParam),
       zJson(NotificationAct),

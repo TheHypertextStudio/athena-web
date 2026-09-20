@@ -65,11 +65,9 @@ const members = new Hono<AppEnv>()
       tag: 'Members',
       summary: 'List members',
       response: pageOf(MemberOut),
-      description: `List the workspace's people with each person's display name, avatar, status, role ID, and optional Docket account ID. Agents and teams are not included. Both active and suspended people are returned so an administrator can review and reactivate suspended members.
+      description: `List active and suspended people in the workspace. Agents, teams, and pending invitations are excluded. Each person includes display name, avatar, membership status, role ID, and an optional Docket \`userId\`. A null \`userId\` identifies a person who does not have a Docket account; both kinds of person use the same response shape.
 
-**Account-holders and account-less people are one list.** A person added by \`POST /\` carries \`userId: null\`; a person who redeemed an invitation carries their Better Auth user id. Nothing filters on that column, and the ordering is a plain case-insensitive sort by \`displayName\` — never by account presence, join date, or insertion order — so the two kinds interleave by name and no client can accidentally render them as two groups.
-
-The cursor preserves that name order with person ID as its stable tiebreaker. Pages default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. Any workspace member may read the roster. Use \`GET /invitations\` to list people who have been invited but have not joined.`,
+Results are ordered by \`displayName\`, case-insensitively, with person ID as the stable tie-breaker. The default page size is 50 and the maximum is 100. The final page omits \`nextCursor\`. Use \`GET /invitations\` to list people who have not joined.`,
     }),
     zQuery(CursorQuery),
     async (c) => {
@@ -198,11 +196,11 @@ Adding a person to a personal workspace returns **409** because a personal works
       summary: 'Invite a member',
       capability: 'manage',
       response: InvitationOut,
-      description: `**Legacy alias** for \`POST /invitations\` — kept for older clients; new integrations should prefer \`POST /invitations\`. Both call the same \`createInvitation\` helper and behave identically.
+      description: `**Legacy alias** for \`POST /invitations\`. New integrations should use \`POST /invitations\`. Both operations accept the same input and produce the same result.
 
-Create a pending invitation that binds an email address to a role within this org. Requires the \`manage\` capability because issuing an invitation grants future org access. The \`organizationId\` and \`invitedBy\` are taken from the verified actor context, never the request body, so a caller cannot invite into another org or forge the inviter. The target \`roleId\` is validated to belong to THIS org — a foreign or missing role returns **404** (existence-hiding), preventing a cross-org role from being smuggled onto a new member.
+Create a pending invitation that binds an email address to a role in this organization. Docket takes the organization and inviter from the authenticated request; the body cannot override them. \`roleId\` must identify a role in this organization. Otherwise, Docket returns 404.
 
-Inviting into a **personal organization** is rejected with **409** (a personal space is an org-of-one). The invitation is created with a freshly generated opaque \`token\`, \`status = 'pending'\`, and an \`expiresAt\` 7 days out. The pending row appears in \`GET /invitations\`; redeem it via \`POST /invitations/:token/accept\` (or the legacy \`POST /accept-invite\`), or cancel it via \`DELETE /invitations/:id\`. Note: this endpoint creates the durable invitation record; email delivery of the accept link is handled by the notification/email boundary, not this handler.`,
+Inviting into a **personal organization** is rejected with **409** because a personal space can have only one member. The invitation receives an opaque \`token\`, \`status = 'pending'\`, and an \`expiresAt\` seven days in the future. The pending invitation appears in \`GET /invitations\`; redeem it through \`POST /invitations/:token/accept\` (or the legacy \`POST /accept-invite\`), or cancel it through \`DELETE /invitations/:id\`. This operation creates the invitation but does not send its acceptance link by email.`,
     }),
     zJson(MemberInvite),
     async (c) => {
@@ -217,11 +215,9 @@ Inviting into a **personal organization** is rejected with **409** (a personal s
       tag: 'Members',
       summary: 'Accept an invitation',
       response: MemberOut,
-      description: `**Legacy alias** for \`POST /invitations/:token/accept\` — same redemption logic, but the opaque token is supplied in the JSON body (\`{ token }\`) rather than the path. New clients should prefer the path form.
+      description: `Legacy alias for \`POST /invitations/:token/accept\`. New clients should use the path form. This alias reads the invitation token from the JSON body as \`{ "token": "…" }\`.
 
-Redeem a pending invitation and materialize the accepting user's **human Actor** in the org. Requires only an authenticated session (no capability): the bearer of a valid token is, by definition, the invited party, so the token IS the authorization. The whole redemption runs in one transaction: it loads the invitation by \`(token, orgId)\`, then verifies it is still \`pending\` and unexpired, that the user is not already a member, inserts the human Actor carrying the invitation's role, and flips the invitation to \`accepted\` (stamping \`acceptedAt\`).
-
-Errors: **404** when no invitation matches the token in this org (existence-hiding); **409** when the invitation is non-pending (already accepted/revoked/expired status), past its \`expiresAt\`, or the user already belongs to the org. On success returns the newly created \`MemberOut\`. The new member's capabilities flow from the invitation's role (e.g. an invitation bound to the Member role confers org-wide \`contribute\`). See \`POST /invitations\` to issue invitations and \`GET /invitations\` to list pending ones.`,
+Accept a pending invitation and return the new \`MemberOut\`. The signed-in user receives the role named by the invitation, and the invitation changes to \`accepted\` with an \`acceptedAt\` time. Docket returns 404 when the token does not identify an invitation in this organization. It returns 409 when the invitation is expired or no longer pending, or when the user is already a member.`,
     }),
     zJson(InvitationAccept),
     async (c) => {
@@ -344,11 +340,9 @@ The path uses the invitation ID, not its token. An absent, accepted, or already 
       tag: 'Members',
       summary: "Get a person's workspace profile",
       response: PersonProfileOut,
-      description: `Fetch one person's profile: their name, avatar, participation status, the org role they hold (id **and** resolved name), and the work they are on the hook for — active tasks assigned to them, projects they lead, and initiatives they own, each org-scoped and each sorted for reading rather than by insertion.
+      description: `Return one person's workspace profile, including name, avatar, participation status, organization role, active assigned tasks, led projects, and owned initiatives. Work collections are scoped to this organization and sorted for display.
 
-The target must be a human Actor in this org; anything else 404s (existence-hiding), which covers a cross-tenant id, an agent actor, and a team actor alike. Requires only org membership (no \`manage\`): who someone is and what they are carrying is roster information, the same as \`GET /\`.
-
-**This endpoint answers the same question for every person.** It has no field reporting whether the person holds a Docket account, so a client cannot branch its rendering on that — an account-less volunteer's profile resolves, renders and lists assigned work exactly like an account-holder's. Their \`userId\` is available on \`GET /\` for the few surfaces that genuinely need it (see \`docs/engineering/specs/people.md\`).`,
+The target must be a human member of this organization; an unavailable person, agent Actor, or team Actor returns 404. The response does not reveal whether the person has a Docket account. Members with and without accounts use the same profile shape. Use \`GET /v1/orgs/:orgId/members\` when a client also needs \`userId\`.`,
     }),
     zParam(actorIdParam),
     async (c) => {
@@ -365,11 +359,9 @@ The target must be a human Actor in this org; anything else 404s (existence-hidi
       summary: "Update a person's name, avatar, or job title",
       capability: 'manage',
       response: PersonProfileOut,
-      description: `Rename a person or re-point their avatar. Both fields are optional; an absent key leaves the column untouched and \`avatar: null\` clears it. Requires \`manage\`, and the target must be a human Actor in this org (404 otherwise, existence-hiding).
+      description: `Update a person's workspace display name or avatar and return the current {@link PersonProfileOut}. Omitted fields remain unchanged, and \`avatar: null\` removes the avatar. The target must be a human member of this organization; otherwise Docket returns 404.
 
-This writes \`actor.display_name\` / \`actor.avatar\` — the **workspace-owned** identity, which every human Actor has. For an account-less person it is the only place their name lives. For an account-holder it is the copy taken from their account at join time and never re-synced, so editing it renames them in this workspace without touching their account; their own Settings → Profile still governs their account name. The operation is offered on the same terms to both, so there is no person in the roster whose name the workspace cannot correct.
-
-Role and status live on \`PATCH /:actorId\` (they carry the last-owner guard); this endpoint deliberately cannot change either. Returns the person's refreshed {@link PersonProfileOut}.`,
+These values belong to the workspace. Updating them does not change the person's account profile in another workspace. This operation cannot change role or membership status; use \`PATCH /:actorId\` for those fields.`,
     }),
     zParam(actorIdParam),
     zJson(PersonUpdate),
@@ -410,13 +402,9 @@ Role and status live on \`PATCH /:actorId\` (they carry the last-owner guard); t
       summary: 'Update a member',
       capability: 'manage',
       response: MemberOut,
-      description: `Patch a member's **role** and/or **status** (\`active\` | \`suspended\`). Both fields are optional; only the supplied ones change. Requires the \`manage\` capability because re-pointing a role or suspending a member alters org access. The member is addressed by their **actor id** (\`actorId\`), and the target must be a human Actor in this org — otherwise **404** (existence-hiding).
+      description: `Update a member's \`roleId\` or \`status\` and return the current \`MemberOut\`. Omitted fields remain unchanged. The target must be a human member of this organization, and a supplied role must also belong to this organization. Otherwise, Docket returns 404.
 
-**Cross-org role guard:** when \`roleId\` is supplied it is validated to belong to THIS org before the write. \`actor.roleId → role.id\` is a bare global FK with no org constraint, and org-context resolves capabilities by joining that FK — so an unvalidated cross-org role would silently confer ANOTHER org's capabilities (a tenant break + privilege-escalation vector, permissions §4.5). A foreign/unknown role therefore returns **404**.
-
-**Last-owner guard:** if the target currently holds the Owner role and this patch would downgrade them (a \`roleId\` other than Owner) or suspend them (\`status: 'suspended'\`), the org must retain at least one other active Owner — otherwise the operation is rejected with **409**. This upholds the invariant that an org always has ≥1 active Owner. Re-pointing a non-Owner, or changing fields that don't drop the last Owner, is unaffected.
-
-Returns the updated \`MemberOut\`. Note this endpoint does NOT change \`displayName\`/\`avatar\` (those live on the user/account profile) — it is strictly role + status. To remove a member entirely use \`DELETE /:actorId\`.`,
+An organization must keep at least one active Owner. Docket returns 409 when this request would suspend or change the role of the last active Owner. This operation does not change the person's display name or avatar. Use \`DELETE /:actorId\` to remove a member.`,
     }),
     zParam(actorIdParam),
     zJson(MemberUpdate),

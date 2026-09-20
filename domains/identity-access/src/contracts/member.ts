@@ -94,7 +94,7 @@ export const InvitationAccept = z
       .string()
       .min(1)
       .describe(
-        "The invitation's opaque token (delivered in the accept link). Possession of a valid token IS the authorization to join; the server validates it is pending and unexpired before materializing the member.",
+        'The opaque token from the invitation link. A pending, unexpired token authorizes the recipient to join the organization.',
       ),
   })
   .meta({ id: 'InvitationAccept', description: 'Accept an invitation by token.' });

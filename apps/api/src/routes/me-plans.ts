@@ -127,7 +127,9 @@ const mePlans = new Hono<AppEnv>()
       tag: 'Me',
       summary: 'Confirm plan nodes',
       response: PlanCommitOut,
-      description: `Create the named draft nodes as real objects in the plan's workspace, in one transaction. Unconfirmed ancestors are included automatically so a task never lands without its project, and a task filed under another task is created as its subtask in the same project. Nodes that already exist by name in the same place are matched rather than duplicated. Requires \`contribute\` in the plan's workspace at the moment of the call; **403** otherwise, **404** when the caller is no longer a member. Returns {@link PlanCommitOut} with the updated plan, what each node became, \`createdCounts\` for the confirmation line, and the change set id to pass to \`POST /v1/me/athena/changes/{changeSetId}/undo\`.`,
+      description: `Create the selected draft plan nodes as workspace resources. Docket automatically includes required parent nodes, so a task is not created without its project and a nested task becomes a subtask in the same project. When a resource with the same name already exists in the same location, Docket links the plan node to it instead of creating a duplicate.
+
+All selected resources are created together or no resources are created. The caller needs \`contribute\` access in the plan's workspace when committing. The response includes the updated plan, the resource created or matched for each node, \`createdCounts\`, and a change-set ID that can be sent to \`POST /v1/me/athena/changes/{changeSetId}/undo\`.`,
     }),
     zParam(idParam),
     zJson(PlanCommitBody),

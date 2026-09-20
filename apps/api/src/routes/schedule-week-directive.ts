@@ -96,13 +96,9 @@ const directive = new Hono<AppEnv>()
       tag: 'Directive',
       summary: 'Read the daily directive',
       response: DirectiveOut,
-      description: `Return the caller's directive for a day: the committed plan, an attention summary, a **posture** (\`on_track\` / \`attention_needed\` / \`intervention_recommended\`), a plain-language reason safe to show verbatim, at most one narrowing recommendation, and the **gates** the day is still waiting on.
+      description: `Return the caller's committed plan and attention status for one day. \`posture\` is \`on_track\`, \`attention_needed\`, or \`intervention_recommended\`. The response includes a reason, at most one recommendation, and any incomplete day-start or day-end gates.
 
-The posture is a deterministic schedule-adherence check over timeboxes and the wall clock — no model call, no probability. It is not a judgment about whether the work matters, and the copy it produces says so: it names a block and a number of minutes.
-
-**Gates state a condition, never a mechanism.** \`day_start\` holds until the person has been through the morning agenda; \`day_end\` holds until all three steps of the evening review are done, naming which remain. Docket never says what holding should cost — a consumer maps that onto whatever it owns.
-
-**Side effect (small, and the point):** the day's directive row is upserted, and its \`directiveId\` is regenerated **only when the posture actually changes**, so a consumer that acknowledges an id is acknowledging the state it saw and a healthy day produces no churn. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub. Related: \`POST /acknowledge\` to close the loop.`,
+Docket calculates posture from scheduled timeboxes and the current time. It does not use a model or assign a probability. Reading the directive creates the day's directive when needed. Its \`directiveId\` changes only when posture changes, so \`POST /acknowledge\` can acknowledge the exact state the caller read.`,
     }),
     zQuery(dayQuery),
     async (c) => {
@@ -121,13 +117,9 @@ The posture is a deterministic schedule-adherence check over timeboxes and the w
       tag: 'Directive',
       summary: 'Acknowledge a directive',
       response: AcknowledgeDirectiveOutput,
-      description: `Record what a consuming client did with a directive: which posture it acted on, whether it changed device state, and an optional note. This is how a person (and Athena) can see whether a consumer is actually acting on what it is told, rather than assuming it is.
+      description: `Record how a client handled a directive, including the posture it used, whether it changed device state, and an optional note.
 
-**Idempotent by upsert on \`(hub, directiveId)\`** — a retried call after a dropped connection overwrites the same row rather than appending a duplicate, so \`directiveId\` doubles as the dedupe key and no separate idempotency header is needed.
-
-**Only an id this Hub was issued is accepted.** A \`directiveId\` that never belonged to the caller's Hub — or one superseded by a posture change since the read — returns **404**; re-read the directive and acknowledge the state that stands.
-
-**Side effect:** upserts one \`directive_acknowledgment\` row. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub or the directiveId was never theirs.`,
+\`directiveId\` is the deduplication key. Repeating the request replaces the existing acknowledgment instead of creating another one, so this operation does not use \`Idempotency-Key\`. Docket returns 404 when the directive was never issued to this caller or a posture change has replaced it. Read the current directive and acknowledge its new ID before retrying.`,
     }),
     zJson(AcknowledgeDirectiveInput),
     async (c) => {
@@ -151,11 +143,9 @@ The posture is a deterministic schedule-adherence check over timeboxes and the w
       tag: 'Directive',
       summary: 'Read the start-of-day handshake',
       response: DayStartOut,
-      description: `Return whether today's agenda is ready to be presented, the agenda itself, and the start-of-day gate.
+      description: `Return the start-of-day gate, readiness state, and agenda. \`readiness: "not_generated"\` means no planning run covers today. \`readiness: "empty_week"\` means a planning run exists but placed no blocks. \`agenda\` is populated only when \`ready\` is true.
 
-**A not-ready day returns a reason, never an empty agenda.** \`readiness\` is \`not_generated\` when no planning run covers today and \`empty_week\` when one does but placed nothing — two genuinely different situations that an empty array would flatten into one, causing a consumer to release its gate on a day that was simply never planned. \`agenda\` is only populated when \`ready\` is true.
-
-Side-effect-free apart from lazily creating the day's directive row. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub. Related: \`POST /day-start/acknowledge\`.`,
+Reading this operation creates the day's directive when it does not exist. It does not change the agenda or release the gate. Use \`POST /day-start/acknowledge\` after presenting the agenda.`,
     }),
     zQuery(dayQuery),
     async (c) => {
@@ -174,13 +164,9 @@ Side-effect-free apart from lazily creating the day's directive row. Session-onl
       tag: 'Directive',
       summary: 'Answer one of the morning’s proposals',
       response: DayStartOut,
-      description: `Record what the person decided about one proposed block during the morning walk-through — keep it on today, or move it out — and return the day-start payload as it now stands.
+      description: `Keep or defer one block from the morning review and return the updated day-start response. \`keep\` leaves the block on the selected day. \`defer\` moves it to \`deferTo\`, or to tomorrow when \`deferTo\` is omitted, while preserving its local clock time.
 
-**\`defer\` is a real move, not a label.** The block leaves today for \`deferTo\` (tomorrow by default), keeping its clock time so a deferral across a DST boundary does not silently shift an hour. That is the whole difference between a morning review and a morning reading: a decision that costs the day nothing is theatre, and the morning release signal that follows it would mean nothing either.
-
-**Only Docket's own blocks are deferable.** A block a person placed by hand, or one that arrived from an external calendar, is offered for review but returns **422** on a deferral — moving it would be Docket editing someone else's diary. \`keep\` is accepted for any block.
-
-**Side effects:** moves the block when deferring, and records the decision on \`day_directive.morning_decisions\` so a reload does not lose the walk-through. Decisions are keyed by calendar item id and replace wholesale, so answering twice is idempotent. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub or the key is not in today's proposals.`,
+Only blocks created by Docket's scheduler can be deferred. A hand-created or externally synced block returns 422 for \`defer\`, but it may be kept. Docket records the decision so later day-start reads return the same result. Repeating the same decision is safe. An unknown proposal returns 404.`,
     }),
     zQuery(dayQuery),
     zJson(MorningDecisionInput),
@@ -252,11 +238,9 @@ Side-effect-free apart from lazily creating the day's directive row. Session-onl
       tag: 'Directive',
       summary: "List the day's check-ins",
       response: pageOf(DayCheckInOut),
-      description: `Return the day's check-ins in order, each carrying the block it is about, how many of the day's blocks were still unfinished when it came due, application-owned prompt copy, and either the person's answer or the fact that it went unanswered.
+      description: `Return the day's check-ins in scheduled order. Each item identifies its calendar block, reports how many blocks remained unfinished when it became due, includes display-ready prompt text, and contains either the caller's response or an unanswered state.
 
-**Rows are materialized ahead of time, not derived on read.** That is what makes a *non-response* recordable: a check-in that came due and was never answered is a fact about the day rather than missing data. The schedule is anchored to block boundaries — the honest moment to ask "did that land?" is when something was supposed to finish — and topped up on a cadence, with a floor of three per day so a sparse day still gets asked and a cap of eight so a full one does not become a day of interruptions.
-
-Calling this materializes the day's rows if they do not exist yet. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub. Related: \`POST /check-ins/:id/respond\`.`,
+Docket schedules check-ins at block boundaries and adds enough evenly spaced check-ins to produce between three and eight per day. Reading the collection creates any missing check-ins for the day, which allows an unanswered check-in to remain visible later. Use \`POST /check-ins/:id/respond\` to answer one.`,
     }),
     zQuery(dayQuery),
     async (c) => {
@@ -310,13 +294,9 @@ The answer is the person's, never inferred. A \`behind\` or \`switched\` answer 
       tag: 'Directive',
       summary: 'Re-cut the remaining day',
       response: ReorganizeResultOut,
-      description: `Recompute the rest of today around what actually happened and write the result to the calendar.
+      description: `Reschedule the remaining Docket-planned blocks for today around the time that is still available. Docket moves only future blocks created by its scheduler. It does not move blocks that have started, finished, were created by the person, or came from an external calendar. Moved blocks keep their duration, order, and work-shape restrictions.
 
-**The restraint is the design.** Only blocks that have not started yet *and* that the scheduler itself placed are movable; anything in progress, already done, in the past, hand-placed, or synced from an external calendar is fixed. Movable blocks are re-placed in their original order into whatever availability is genuinely left, keeping their durations and their shape's window rules — so a shoot is never re-cut into desk hours. A schedule that rearranges itself under a person is worse than one that slips, and this will not do it.
-
-Blocks the shortened day can no longer hold are **archived, not deleted**, so the evening review still sees them and the person decides what happens to them.
-
-**Side effects:** updates the moved blocks' times, archives displaced ones, and stamps \`day_directive.last_reorganized_at\` when anything changed. Returns the moves with before/after times and how far the day had slipped. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub.`,
+Blocks that no longer fit are archived rather than deleted, so the evening review can still include them. The response lists moved blocks with their previous and new times, displaced blocks, and \`driftMinutes\`. When anything changes, Docket records \`lastReorganizedAt\`.`,
     }),
     zQuery(dayQuery),
     async (c) => {
@@ -341,13 +321,11 @@ Blocks the shortened day can no longer hold are **archived, not deleted**, so th
       tag: 'Directive',
       summary: 'Read the end-of-day review',
       response: DayReviewOut,
-      description: `Return the structured end-of-day review: its three steps and whether each is satisfied, every unfinished item awaiting a decision, the fixed reflection questions and their answers, the proposed agenda for tomorrow, and the \`day_end\` gate.
+      description: `Return the end-of-day review, including its three steps, unfinished items, reflection questions and answers, proposed agenda for tomorrow, and the \`day_end\` gate.
 
-**A defined flow, not a free-text box.** Step one lists every unfinished block and requires a decision on each — done after all, moved to a specific day, or dropped *with a reason*. Step two asks three fixed questions. Step three requires tomorrow to be explicitly confirmed. The gate names whichever steps are outstanding and releases only when none are.
+Step one requires a decision for each unfinished block: mark it done, move it to a date, or drop it with a reason. Step two contains three fixed reflection questions. Step three requires explicit confirmation of tomorrow's agenda. The gate lists incomplete steps and releases when all three are complete.
 
-The item list is materialized on first open from whatever is actually unfinished, so a person cannot dodge an item by opening the review early; once materialized it is stable, so a decision already made never reappears.
-
-**Side effect:** creates the review row on first read. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub.`,
+The first read creates a stable review from the day's unfinished items. Items do not disappear from that review after later schedule changes, and completed decisions do not reappear.`,
     }),
     zQuery(dayQuery),
     async (c) => {
@@ -366,11 +344,11 @@ The item list is materialized on first open from whatever is actually unfinished
       tag: 'Directive',
       summary: 'Decide on one unfinished item',
       response: DayReviewOut,
-      description: `Record what happens to one piece of unfinished work: it was \`completed\` after all, it is \`rescheduled\` to a named date, or it is \`dropped\` — which **requires a reason**, because a dropped commitment with no explanation is the thing that makes a review theatre.
+      description: `Record what happened to one unfinished item: it was \`completed\`, it is \`rescheduled\` to a named date, or it is \`dropped\`. Dropping an item requires a reason.
 
-The DTO enforces both conditions (a drop without a reason and a reschedule without a date are validation failures, not silently-accepted rows), so the release signal cannot be reached by dispositioning items meaninglessly.
+Dropping without a reason or rescheduling without a date returns a validation error. The day cannot be released until every unfinished item has a valid disposition.
 
-**Side effect:** updates the item inside the day's review row and returns the whole review, so the caller sees the step counters and gate move. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub or the item key is not in this review.`,
+The response contains the complete updated review, including its step counts and release state. Session-only, no capability. Returns 401 when unauthenticated and 404 when the caller has no Hub or the item key is not in this review.`,
     }),
     zQuery(dayQuery),
     zJson(ReviewDispositionInput),

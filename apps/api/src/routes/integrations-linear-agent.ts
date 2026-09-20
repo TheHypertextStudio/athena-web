@@ -100,11 +100,9 @@ const integrationsLinearAgent = new Hono<AppEnv>()
       summary: 'Get the Linear Agent platform install URL',
       capability: 'manage',
       response: linearAgentInstallOut,
-      description: `Return the **install URL** the client redirects the browser to in order to install Docket as a Linear Agent (\`actor=app\`) into the organization's Linear workspace. This is distinct from connecting Linear as a data-sync provider (\`POST /:orgId/integrations\` with \`provider: 'linear'\`): the Agent install is a single, workspace-level admin grant that lets Docket appear as an assignable/mentionable agent inside Linear, not a per-user import/mirror connection.
+      description: `Return \`{ "url": "…" }\` for installing Docket as an assignable and mentionable agent in the organization's Linear workspace. Redirect the browser to that URL. This workspace-wide agent installation is separate from a personal Linear synchronization connection created through \`POST /v1/orgs/:orgId/integrations\`.
 
-Find-or-creates the org's single \`provider: 'linear_agent'\` integration row (\`pending\` until the callback completes), signs a short-lived \`state\` binding this install to the org/integration (CSRF + tamper protection across the redirect round-trip), and returns \`{ url }\`. A 409 (\`The Linear Agent app is not configured…\`) means \`LINEAR_AGENT_CLIENT_ID\`/\`LINEAR_AGENT_CLIENT_SECRET\`/\`LINEAR_AGENT_WEBHOOK_SECRET\` are unset in this deploy.
-
-Requires \`manage\` — installing an app-level agent grant is an administrative trust decision, the same bar as \`GET /:id/connect-url\` for the GitHub App. Related: \`GET /\` (the row appears there once created, like any integration), \`DELETE /:id\` (uninstall).`,
+Docket creates or reuses the organization's pending \`linear_agent\` integration. The Linear callback completes the installation. Docket returns 409 when the Linear Agent service is unavailable in the current deployment. The integration appears in the normal integration list and can be removed through \`DELETE /v1/orgs/:orgId/integrations/:id\`.`,
     }),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');

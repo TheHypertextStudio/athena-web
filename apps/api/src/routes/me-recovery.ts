@@ -86,9 +86,9 @@ const meRecovery = new Hono<AppEnv>()
       tag: 'Me',
       summary: 'Generate recovery codes',
       response: RecoveryCodesOut,
-      description: `(Re)generate the caller's two-factor recovery codes and return the **plaintext codes exactly once**. This is the only response that ever carries the codes in the clear — they are displayed for the user to save and are never retrievable again (the status read returns only a count). **Side effect:** replaces any previous code set (invalidating old codes) and resets \`generatedAt\`.
+      description: `Generate a new set of two-factor recovery codes and return the plaintext codes once. Save them from this response; later reads return only the remaining count. Generating a new set invalidates every previous recovery code, updates \`generatedAt\`, and sends a security notice to the account holder.
 
-Like account deletion, this is a **high-risk action gated by step-up**: it requires a **freshly re-authenticated passkey session** (created within the last 5 minutes), so an unattended or hijacked session can't silently mint a new set. A stale session is rejected with **401 \`reauth_required\`** so the client re-verifies the passkey and retries. Session-only otherwise (no capability). A security-notice email confirms the change to the account holder (regardless of who triggered it). Note: the locked-out recovery flow for users with *no* session lives on the Better Auth sign-in surface (\`/two-factor/recovery-challenge\` + \`verify-backup-code\`), not here. Related: \`GET /me/recovery-codes\`.`,
+The request requires a passkey session created within the last five minutes. An older session returns 401 \`reauth_required\`; complete passkey verification and retry. A signed-out user must use the account-recovery flow instead.`,
     }),
     async (c) => {
       const { user, session } = requireSession(c);

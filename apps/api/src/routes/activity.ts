@@ -61,7 +61,9 @@ const activity = new Hono<AppEnv>().get(
     tag: 'Activity',
     summary: 'List the organization audit feed',
     response: pageOf(AuditEventOut),
-    description: `Return the organization's audit feed — domain actions over Docket's *own* entities (tasks, projects, agents, sessions, integrations, memberships, …), newest-first, as a page of {@link AuditEventOut}. This is the internal accountability ledger: who did what to which subject, written by the entity routers as side effects of their mutations. Task entries, and entries for comments attached to tasks, are returned only when the current active human actor has canonical task visibility; non-task entries retain the active-organization feed behavior. It is deliberately distinct from the **observation stream** (\`GET /v1/orgs/:orgId/stream\`), which records activity in *external* tools where the source of truth lives elsewhere.
+    description: `Return the organization's audit events from newest to oldest as a page of {@link AuditEventOut}. Events describe who acted, what changed, and which Docket resource changed. Task events and task-comment events appear only when the caller can currently view the task. Other events require active organization membership.
+
+This collection covers changes to Docket resources. Use \`GET /v1/orgs/:orgId/stream\` for observations from connected external tools.
 
 Results use \`createdAt DESC, id DESC\`, default to 50 visible items, accept at most 100, and omit \`nextCursor\` at exhaustion. Task visibility is applied before pagination. A key property for governed automation is that agent events carry both the acting agent and accountable initiator. Read-only and org-scoped.`,
   }),

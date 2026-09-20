@@ -181,7 +181,7 @@ const hubPreferenceRoutes: Hono<AppEnv, HubPreferenceRoutes> = new Hono<AppEnv>(
       summary: 'Get Hub preferences',
       response: HubPreferences,
       description:
-        'Return the signed-in user personal Hub preferences, including unified-calendar layout and creation defaults. Preferences are resolved only from the caller-owned Hub row.',
+        "Return the signed-in person's Hub preferences, including unified-calendar layout and creation defaults.",
     }),
     async (c) => {
       const session = c.get('session');
@@ -247,7 +247,7 @@ const hubRouter = new Hono<AppEnv>()
       summary: 'Complete one accepted Today item',
       response: HubTodayCompleteOut,
       description:
-        "Resolve a caller-owned personal plan row, require the caller's active membership to hold `contribute` in the Task's organization, advance the Task through the owning Team's completed workflow state, and mark the plan row done in one transaction. The client supplies no organization, Task, user, or state id.",
+        "Complete the task referenced by one caller-owned Today item and mark the item done. Docket selects the team's completed workflow state. The caller must still be an active member with `contribute` access in the task's organization. The task and Today item change together or neither changes. The request needs only `planItemId`.",
     }),
     zParam(todayItemParam),
     async (c) => {
@@ -263,9 +263,9 @@ const hubRouter = new Hono<AppEnv>()
       tag: 'Hub',
       summary: 'Get the cross-org today view',
       response: HubTodayOut,
-      description: `Aggregate the signed-in person's "what should I do now" across **every organization they belong to**, for a single \`date\` (required query param). Returns the caller's accepted personal plan, its derived \`unplanned\`/\`active\`/\`cleared\` state, a finite Now/After focus sequence, up to four grounded Project or Initiative status stories, and up to three feasible momentum suggestions. Due work remains in \`needsAttention\`; sharing a date never silently accepts a Task into the personal plan.
+      description: `Return the signed-in person's Today view across every organization they can access for the required \`date\`. The response contains the accepted daily plan; its \`unplanned\`, \`active\`, or \`cleared\` state; a finite Now/After focus sequence; up to four project or initiative status stories; and up to three feasible momentum suggestions.
 
-Candidate queries are tenant-bounded and every Task, Project, and Initiative is filtered through the shared batched resource-access resolver before selection. Ranking is deterministic; Athena supplies the interaction surface, not invented project facts. Requires only an authenticated session because the per-resource gate already ran per row. 401 when unauthenticated. Related: \`/daily-plan\`, \`/schedule/week/day/start\`, \`/v1/me/notifications/count\`, \`/hub/inbox\`, and the detailed Project/Initiative surfaces.`,
+Every returned task, project, and initiative is filtered through the caller's current resource access. Due work stays in \`needsAttention\` until the caller explicitly accepts it into the daily plan. Docket ranks results deterministically and does not invent project facts.`,
     }),
     zQuery(todayQuery),
     async (c) => {
@@ -302,9 +302,9 @@ Read-only; session-only, no capability. 401 when unauthenticated. To mutate read
       tag: 'Hub',
       summary: 'List cross-org activity',
       response: HubActivityOut,
-      description: `Return the caller's passive-awareness **audit feed** across every org they belong to — the "what's been happening" timeline. The route first resolves the caller's org ids (the orgs where they are an active human Actor), then selects audit events scoped to that org set with \`organizationId IN (...)\`, ordered by \`createdAt\` (\`order=asc|desc\`) and keyset-paginated by \`limit\`. A caller with no memberships gets an empty list immediately (no query).
+      description: `Return the caller's audit feed across every organization where they are an active member. Results are ordered by \`createdAt\` according to \`order=asc|desc\` and limited by \`limit\`. A caller with no organization memberships receives an empty list.
 
-**Pagination:** the handler fetches \`limit + 1\` rows to detect more; when there is a next page it returns \`nextCursor\` set to the last event's id (an opaque forward cursor). Read-only; session-only, no capability. 401 when unauthenticated. Distinct from \`/hub/stream\`, which is the personalized "concerns me" observation feed rather than the raw org audit log.`,
+When another page is available, the response includes an opaque \`nextCursor\`. Pass that value as \`cursor\` without modifying it. This read-only operation requires a Docket session but no workspace capability. It differs from \`/hub/stream\`, which contains personalized events that directly concern the caller.`,
     }),
     zQuery(ListQuery),
     async (c) => {
@@ -467,11 +467,9 @@ Every timeline item retains its \`organizationId\`; data from separate organizat
       tag: 'Hub',
       summary: 'Get a narrated day',
       response: HighlightsDayOut,
-      description: `Return one local day of the caller's own activity, grouped into episodes and narrated a sentence at a time. An episode is everything that happened to one subject on one day, so a run of commits on one pull request or a thread answered several times is a single entry rather than one per event.
+      description: `Return the caller's activity for one local day, grouped by subject into narrated episodes. Several events for the same subject on the same day become one episode. Each entry includes its sentence, whether the caller edited or kept it, and the source events.
 
-Each entry carries the sentence, whether a person has rewritten it, whether it is currently kept, and the underlying events. \`sources\` reports how each connected source fared for this day, as a state rather than a message: a day where a source could not be read is distinguishable from a day where nothing happened.
-
-Read-only. Building the day is a separate operation, so a response can legitimately be \`pending\` (never built), \`empty\` (built, no activity) or carry entries whose narration is still \`generating\`. Session-only, no capability; 401 when unauthenticated. \`date\` defaults to the caller's current local day and may not be in the future.`,
+\`sources\` reports the state of each connected source, which distinguishes an unavailable source from a source with no activity. The day is built separately, so \`status\` may be \`pending\`, \`empty\`, or complete while individual narration is still \`generating\`. \`date\` defaults to the caller's current local day and cannot be in the future.`,
     }),
     zQuery(highlightsQuery),
     async (c) => {

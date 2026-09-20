@@ -150,10 +150,10 @@ export type HubTodayPlanState = z.infer<typeof HubTodayPlanState>;
 
 /** An accepted daily-plan task enriched for the finite Today focus sequence. */
 export const HubTodayPlanItem = HubTaskItem.extend({
-  planItemId: DailyPlanItemId.describe('The personal daily-plan row backing this task.'),
-  planStatus: z.enum(['planned', 'done']).describe("The plan row's completion state."),
-  sort: z.number().int().describe("The plan row's persisted ordering value."),
-  position: z.number().int().describe("The plan row's accepted sort position."),
+  planItemId: DailyPlanItemId.describe('The personal daily-plan item for this task.'),
+  planStatus: z.enum(['planned', 'done']).describe("The item's completion state."),
+  sort: z.number().int().describe("The item's saved ordering value."),
+  position: z.number().int().describe("The item's position in the returned plan."),
   estimateMinutes: z
     .number()
     .int()

@@ -22,7 +22,7 @@ export function createNotificationPreferenceRoutes(preferences: NotificationPref
         summary: 'Get notification preferences',
         response: NotificationPreferenceOut,
         description:
-          'Return the caller notification preferences with default category/channel values materialized and locked security/account categories preserved.',
+          "Return the caller's notification preferences. Missing category and channel choices appear with their defaults. Security and account categories remain locked.",
       }),
       async (c) => {
         const userId = requireUserId(c);

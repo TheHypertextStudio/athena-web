@@ -26,7 +26,7 @@ export const DirectivePosture = z
   .meta({
     id: 'DirectivePosture',
     description:
-      'The current read on the day, most to least on schedule. Deliberately generic — a device-control client maps this onto whatever enforcement it owns. Docket never says what to enforce.',
+      'The current schedule status for the day, ordered from on track to intervention recommended. A client decides how each status affects its own controls.',
   });
 /** Directive-posture value. */
 export type DirectivePosture = z.infer<typeof DirectivePosture>;
@@ -47,7 +47,7 @@ export const DirectivePlanItemOut = z
     status: z
       .enum(['planned', 'done'])
       .describe(
-        "Mirrors the plan's own status exactly. There is deliberately no `deferred` value: a dropped item is removed, never relabeled.",
+        "The plan item's current status. Deferred items are removed from this plan instead of receiving a `deferred` status.",
       ),
     startsAt: z.string().nullable(),
     endsAt: z.string().nullable(),
@@ -322,7 +322,7 @@ export type ReconcileDisposition = z.infer<typeof ReconcileDisposition>;
 /** One unfinished item awaiting a decision in the evening review. */
 export const ReviewItemOut = z
   .object({
-    key: z.string().describe('Stable key: the calendar item or plan item this row stands for.'),
+    key: z.string().describe('Stable key of the calendar item or plan item under review.'),
     calendarItemId: z.string().nullable(),
     taskId: TaskId.nullable(),
     organizationId: OrganizationId.nullable(),

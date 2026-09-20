@@ -78,11 +78,9 @@ const graph = new Hono<AppEnv>().get(
     tag: 'Tasks',
     summary: 'Get the dependency graph',
     response: GraphOut,
-    description: `Return the task dependency canvas for a scope in a single read: the viewable node set plus the dependency and subtask edges among those nodes. Nodes are slim {@link TaskGraphNode} projections (id/title/state/priority/team/project/assignee/parent — no provenance or timestamps), sized for a node card and the layout engine.
+    description: `Return visible tasks and the dependency and subtask edges between them. Set \`rootTaskId\` to read a neighborhood around one task and use \`depth\` from 1 through 5; the default depth is 2. Otherwise, set \`projectId\` to read one project. With neither parameter, Docket returns active tasks across the organization.
 
-Scope is selected by query and is layered, most-specific first: \`rootTaskId\` returns a neighborhood around that task bounded by \`depth\` (1–5, default 2); otherwise \`projectId\` narrows to one project; otherwise the whole org's active tasks. Every scope is permission-filtered identically — the candidate set is reduced to what the caller may view, so the graph never reveals a task the caller couldn't open directly. Requires org membership (\`view\`).
-
-Edges are pre-pruned to the viewable set so there are no dangling endpoints: a \`dependency\` edge (\`source\` blocks \`target\`) is included only when both endpoints are viewable, and a \`subtask\` edge (\`parent → child\`) only when the parent is in the set. Each edge carries a stable synthetic \`id\` (\`dep:<a>:<b>\` or \`sub:<a>:<b>\`). Archived tasks are excluded. Returns {@link GraphOut}, ready to render as-is.`,
+Archived and inaccessible tasks are excluded. Docket also excludes any edge whose source or target is not in the returned node set. A \`dependency\` edge means \`source\` blocks \`target\`; a \`subtask\` edge points from parent to child. Each edge includes a stable ID.`,
   }),
   zQuery(GraphQuery),
   async (c) => {

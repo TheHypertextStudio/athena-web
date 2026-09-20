@@ -52,7 +52,7 @@ export const StreamRendering = z
     /** Coarse category for grouping/tone (e.g. `inbound`, `progress`, `social`). */
     category: z.string(),
   })
-  .meta({ id: 'StreamRendering', description: 'Source-agnostic rendering hints for a row.' });
+  .meta({ id: 'StreamRendering', description: 'Source-agnostic rendering hints for an event.' });
 /** Stream-rendering value. */
 export type StreamRendering = z.infer<typeof StreamRendering>;
 

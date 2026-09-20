@@ -72,7 +72,7 @@ const connectedApps = new Hono<AppEnv>()
       response: ConnectedAppsListOut,
       description: `List the third-party **OAuth 2.1 clients** the caller has authorized for the REST API or MCP — the "connected apps" the user can review and revoke in account settings. Each item identifies the registered client, the standing scopes the user approved, and when that approval was recorded. A client can hold separate resource-bound credentials for REST and MCP under this one approval.
 
-User-scoped: rows are filtered to \`userId = session.user.id\`, so a caller only ever sees their own authorizations. Session-only, no capability; **401** when unauthenticated. Distinct from \`/me/identities\` (external accounts the *user* signed in with) — these are external apps that authorized *into* Docket on the user's behalf. Related: \`DELETE /me/connected-apps/:clientId\` to revoke.`,
+The response contains only the caller's authorizations. Session-only, no capability; **401** when unauthenticated. \`/me/identities\` lists accounts the user connected to Docket, while this operation lists external apps that received access to Docket. Use \`DELETE /me/connected-apps/:clientId\` to revoke one.`,
     }),
     zQuery(CursorQuery),
     async (c) => {
@@ -116,11 +116,9 @@ User-scoped: rows are filtered to \`userId = session.user.id\`, so a caller only
       tag: 'Me',
       summary: 'Revoke a connected app',
       response: RevokeOut,
-      description: `Revoke the caller's authorization for one OAuth client identified by \`:clientId\`. Docket ends every REST and MCP grant ceremony for that client, removes its refresh path, and removes it from \`GET /me/connected-apps\`. The client must run authorization again to regain access.
+      description: `Revoke the caller's REST and MCP authorization for \`:clientId\`. The app disappears from \`GET /me/connected-apps\`, refresh tokens stop working, and existing access tokens receive 401 on their next request even when their signed expiry is later. The client must complete authorization again to regain access.
 
-**Immediate, including for an access token already issued.** Docket checks the live user, client, approval, resource grant, scopes, and revocation state on every bearer request. A held JWT therefore receives **401** on its next REST or MCP use even when its signed expiry is still in the future. Docket commits the revocation as one client-locked transaction so refresh and connected-app removal cannot race into partial state.
-
-Scoped to the caller (\`userId = session.user.id\`), so revoking only ever touches the caller's own grants. Idempotent — revoking a client the caller hasn't authorized (or has already revoked) deletes nothing and still returns \`{ revoked: true }\`. Session-only, no capability; **401** when unauthenticated.`,
+This operation affects only the signed-in user's grants. Repeating it for an unknown or already revoked client still returns \`{ "revoked": true }\`.`,
     }),
     zParam(clientIdParam),
     async (c) => {

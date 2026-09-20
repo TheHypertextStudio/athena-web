@@ -247,7 +247,7 @@ const meAccount = new Hono<AppEnv>()
       summary: 'Update profile settings',
       response: ProfileSettingsOut,
       description:
-        "Update the signed-in person's basic profile. Selected images are moved to managed blob storage before the user row is updated; null removes the image.",
+        "Update the signed-in person's name or profile image. Docket stores an uploaded image before returning the new profile. Set the image to null to remove it.",
     }),
     zJson(ProfileSettingsUpdate),
     async (c) => {
@@ -298,11 +298,11 @@ Computed by scanning the caller's Hub deletion fields, recomputing ownership blo
       tag: 'Me',
       summary: 'Schedule account deletion',
       response: AccountStatusOut,
-      description: `Synchronously record a **recoverable, 14-day-grace** deletion schedule for the caller's account and return the updated \`pending_deletion\` status. The later irreversible purge is enacted by a cron sweep once \`deleteAfterAt\` closes. It is not represented as accepted work because a successful purge removes the authenticated account resource instead of leaving a readable job monitor. Until then the schedule remains visible through \`GET /me/account\` and can be undone through \`POST /me/account/reactivation\`.
+      description: `Schedule the caller's account for deletion after a 14-day recovery period and return the updated account status. \`deleteAfterAt\` identifies the purge time. Until then, \`GET /me/account\` shows the schedule and \`POST /me/account/reactivation\` cancels it.
 
-**Two gates must pass.** First, step-up: the action requires a **freshly re-authenticated session** (created within the last 5 minutes); a passkey re-verification on the client mints a new session, and a stale session is rejected with **401 \`reauth_required\`** so the client re-challenges and retries. Second, ownership: if the caller is the sole active owner of any shared org, the request is refused with **409 \`deletion_blocked\`** (the blocking orgs are listed in account status) — they must transfer ownership or delete those orgs first.
+The request requires a session created within the last five minutes. An older session returns 401 \`reauth_required\`; complete passkey verification and retry. Docket returns 409 \`deletion_blocked\` when the caller is the only active owner of a shared organization. Transfer ownership or delete each organization listed in the account status before retrying.
 
-**Side effects** on success: marks the Hub \`pending_deletion\` with \`deleteAfterAt\`, automatically queues a fresh data export (so the user can grab everything before the purge), and emails a deletion-scheduled confirmation. Session-only otherwise (no capability). Related: \`POST /me/account/reactivation\`, \`GET /me/account\`.`,
+On success, Docket marks the account as \`pending_deletion\`, queues a fresh account export, and sends a confirmation email. The later purge permanently removes the account.`,
     }),
     async (c) => {
       const session = requireSession(c);
@@ -412,9 +412,9 @@ User-scoped to \`session.user.id\`; read-only; session-only, no capability. **40
       summary: 'Request an account export',
       response: AccountExportOut,
       status: 201,
-      description: `Queue an asynchronous **personal-data export** and return the export job. The request names the account/personal/workspace categories and exact workspace ids to include. **The request is idempotent / de-duplicated:** if the caller already has a \`pending\` manual export, that existing job is returned with **200 OK** and no new job is created; only when there is no pending manual export is a fresh one queued and returned with **201 Created**. Either way a \`Location\` header points at the new job's resource (\`/v1/me/account/exports/:id\`).
+      description: `Request a personal-data export for the selected account, personal, and workspace categories. Docket returns an existing pending manual export with 200 instead of creating another one. When no manual export is pending, Docket creates a job and returns 201. In both cases, \`Location\` points to \`/v1/me/account/exports/:exportId\`.
 
-This route only *records intent* — the actual archive generation runs in a cron sweep, which flips the job to \`ready\` (with a download link) or \`failed\`. **Side effect:** inserts an \`accountExport\` row (when none pending). Session-only, no capability; **401** when unauthenticated. The same enqueue is triggered automatically when scheduling account deletion. Related: \`GET /me/account/exports\`, and the binary \`GET …/:exportId/file\`.`,
+The job begins as \`pending\` and later becomes \`ready\` with a download URL or \`failed\`. Poll the URL in \`Location\` for status, then download the ready file through \`GET /v1/me/account/exports/:exportId/file\`. Scheduling account deletion also requests an export automatically.`,
     }),
     zJson(AccountExportRequest),
     async (c) => {

@@ -300,7 +300,7 @@ export const TeamDetail = TeamOut.extend({
   workflowStates: z
     .array(WorkflowState)
     .describe(
-      "The team's complete ordered workflow-state list (always materialized on a detail read).",
+      "The team's complete ordered workflow-state list, always included in a detail response.",
     ),
   cycleCadenceDays: z.number().int().min(1).max(365),
   cycleCadenceAnchor: z.iso.date(),
@@ -326,7 +326,7 @@ export type TeamDetail = z.infer<typeof TeamDetail>;
 export const TeamMemberRole = z
   .enum(['manager', 'member', 'guest'])
   .describe(
-    "The member's standing on this team. Deliberately not a capability — permissions resolve through grants, so 'manager' labels who runs the team without widening what they can do.",
+    "The member's standing on this team. This value identifies team responsibility; capability grants separately control what the member may do.",
   );
 /** Team-member-role value. */
 export type TeamMemberRole = z.infer<typeof TeamMemberRole>;

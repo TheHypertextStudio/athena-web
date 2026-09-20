@@ -127,7 +127,7 @@ const athenaMail = new Hono<AppEnv>()
       summary: "Get the caller's Athena inbox address",
       response: AthenaMailboxOut,
       description:
-        "Return the address people can email to reach the caller's Athena, minting it on first read. The receiving domain is read from configuration at request time and never stored, so moving Athena to her final domain changes one environment variable and no rows. When no receiving domain is configured the response reports `configured: false` with a null address rather than printing an address whose domain accepts no mail.",
+        "Return the address people can email to reach the caller's Athena, creating it on first read. When inbound mail is unavailable, the response reports `configured: false` and a null address instead of returning an address that cannot receive mail.",
     }),
     async (c) => {
       const mailbox = await ensureMailbox(requestOwner(c));
@@ -146,7 +146,7 @@ const athenaMail = new Hono<AppEnv>()
       summary: 'List messages Athena received',
       response: pageOf(AthenaMailMessageOut),
       description:
-        "List the messages Athena received natively at the caller's inbox address in receivedAt DESC, id DESC order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion. These messages live in Athena's own store and each row includes its attachment count.",
+        "List messages received at the caller's Athena address in `receivedAt DESC, id DESC` order. Pages default to 50 items, accept at most 100, and omit `nextCursor` at exhaustion. Each item includes its attachment count.",
     }),
     zQuery(listQuery),
     async (c) => {
@@ -239,7 +239,7 @@ const athenaMail = new Hono<AppEnv>()
       summary: 'Attach a received message to a Docket entity',
       response: AthenaMailAttachmentTargetOut,
       description:
-        'Attach a received message to a task, project, or initiative. The message becomes an attachment on that entity through the generic attachment table, so it renders in that entity’s own attachment list with its sender and subject and links back to its universal inbox entry. Requires the caller to be an active member of the target workspace, and the target to exist there. Attaching the same message to the same entity twice is a conflict, not a duplicate row.',
+        'Attach a received message to a task, project, or initiative. The entity’s attachment list then shows the sender and subject and links back to the inbox message. The caller must be an active member of the target workspace, and the target must exist there. Attaching the same message to the same entity twice returns a conflict.',
     }),
     zParam(idParam),
     zJson(AthenaMailAttachBody),

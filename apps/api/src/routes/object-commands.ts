@@ -2522,6 +2522,8 @@ const objectCommands = new Hono<AppEnv>()
       tag: 'Objects',
       summary: 'Check current access to replay an object command',
       response: ObjectCommandReplayAccessResult,
+      description:
+        'Check whether the signed-in actor may undo or redo every change in a prior command receipt. The response reports access without changing any Task, Project, relation, timer, or receipt. Use this immediately before showing an undo or redo action because access can change after the original command.',
     }),
     zJson(ObjectCommandReplayAccessIn),
     async (c) => {
@@ -2546,6 +2548,8 @@ const objectCommands = new Hono<AppEnv>()
       tag: 'Objects',
       summary: 'Apply, undo, or redo an object command',
       response: ObjectCommandResult,
+      description:
+        'Apply one bulk Task or Project edit, or replay a receipt returned by an earlier command. All requested object and relation changes succeed together or none are stored. The response includes the resulting objects and a receipt that can be sent back for undo or redo. `Idempotency-Key` must equal `commandId`; retry the same request with the same values after a lost response. Reusing either value for different work fails. Undo and redo fail when the targeted values no longer match the receipt, which prevents overwriting later edits. Changes may also stop active Task timers and queue follow-up notifications or integration work.',
     }),
     zJson(ObjectCommandRequest),
     async (c) => {

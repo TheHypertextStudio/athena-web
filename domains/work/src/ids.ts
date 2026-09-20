@@ -117,9 +117,7 @@ export type TemplateId = z.infer<typeof TemplateId>;
 /** Process definition identifier. */
 export const ProcessDefinitionId = ownedId
   .brand<'ProcessDefinitionId'>()
-  .describe(
-    'ULID id of a ProcessDefinition — a reusable, versioned description of work Docket can materialize.',
-  );
+  .describe('ULID identifier for a reusable, versioned process definition that can create work.');
 /** Process definition identifier value. */
 export type ProcessDefinitionId = z.infer<typeof ProcessDefinitionId>;
 /** Process revision identifier. */
@@ -159,9 +157,7 @@ export type OccurrenceId = z.infer<typeof OccurrenceId>;
 /** Materialized process instance identifier. */
 export const ProcessInstanceId = ownedId
   .brand<'ProcessInstanceId'>()
-  .describe(
-    'ULID id of a ProcessInstance — concrete Docket work materialized from one process revision.',
-  );
+  .describe('ULID identifier for work created from one process revision.');
 /** Materialized process instance identifier value. */
 export type ProcessInstanceId = z.infer<typeof ProcessInstanceId>;
 /** Entity mention identifier. */

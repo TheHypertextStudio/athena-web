@@ -187,7 +187,7 @@ export const CalendarEventOut = z
   .object({
     id: CalendarEventId.describe('Calendar event id.'),
     connectionId: CalendarConnectionId.describe('Owning linked Google account.'),
-    calendarId: CalendarListId.describe('Owning selected calendar row.'),
+    calendarId: CalendarListId.describe('The selected calendar that contains this event.'),
     externalCalendarId: z.string().describe('Provider calendar id.'),
     externalEventId: z.string().describe('Provider event id.'),
     status: z.string().describe('Provider event status, e.g. confirmed/cancelled.'),
@@ -1128,7 +1128,7 @@ export const CalendarSourceGroupOut = z
       .min(1)
       .describe('Active physical sources in the group.'),
   })
-  .meta({ id: 'CalendarSourceGroupOut', description: 'One logical calendar settings row.' });
+  .meta({ id: 'CalendarSourceGroupOut', description: 'One logical group of calendar sources.' });
 /** Logical calendar settings row value. */
 export type CalendarSourceGroupOut = z.infer<typeof CalendarSourceGroupOut>;
 

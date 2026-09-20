@@ -80,7 +80,7 @@ const workLocation = new Hono<AppEnv>()
       summary: 'Resolve current and expected work location',
       response: WorkLocationPointOut,
       description:
-        'Return independent current and expected answers at an RFC 3339 instant. The caller-owned personal Hub is the only authority; provider rows are evidence and projections, never an alternate read model.',
+        "Return the caller's current and expected work locations at an RFC 3339 instant. Docket combines the saved schedule, manual overrides, device evidence, and linked-calendar delivery state. Provider data never overrides a newer Docket change.",
     }),
     zQuery(WorkLocationPointQuery),
     async (c) => {
@@ -239,6 +239,8 @@ const workLocation = new Hono<AppEnv>()
       tag: 'Work location',
       summary: 'List explicit work-location assertions',
       response: WorkLocationAssertionListOut,
+      description:
+        "Return the signed-in person's one-off and weekly work-location assertions, including date-specific exceptions and each linked account's delivery state. Generated schedule segments are not included.",
     }),
     async (c) =>
       ok(c, WorkLocationAssertionListOut, await listWorkLocationAssertions(db, await callerHub(c))),
@@ -272,6 +274,8 @@ const workLocation = new Hono<AppEnv>()
       tag: 'Work location',
       summary: 'Update a work-location assertion',
       response: WorkLocationAssertionMutationOut,
+      description:
+        'Replace the supplied fields on one owned assertion. The response contains the current assertion and the delivery state for each linked calendar account. Calendar changes may finish after this response.',
     }),
     zParam(assertionParam),
     zJson(WorkLocationAssertionUpdate),
@@ -311,6 +315,8 @@ const workLocation = new Hono<AppEnv>()
       tag: 'Work location',
       summary: 'Cancel or replace one weekly occurrence',
       response: WorkLocationAssertionMutationOut,
+      description:
+        'Add a date-specific exception to a weekly assertion. The exception may cancel that occurrence or replace its location and time. The response reports the updated assertion and linked-calendar delivery state.',
     }),
     zParam(occurrenceParam),
     zJson(WorkLocationOccurrenceException),
@@ -342,6 +348,8 @@ const workLocation = new Hono<AppEnv>()
       tag: 'Work location',
       summary: 'Restore one weekly occurrence',
       response: WorkLocationAssertionMutationOut,
+      description:
+        'Remove the date-specific exception from a weekly assertion so that date follows the recurring rule again. The response reports the updated assertion and linked-calendar delivery state.',
     }),
     zParam(occurrenceParam),
     async (c) => {
@@ -381,6 +389,8 @@ const workLocation = new Hono<AppEnv>()
       tag: 'Work location',
       summary: 'Clear a manual current-location override',
       status: 204,
+      description:
+        "Remove the signed-in person's manual current-location override immediately. Current-location reads then fall back to schedule and device evidence. This operation does not change the work schedule or linked calendars.",
     }),
     async (c) => {
       await clearManualCurrentWorkLocation(db, await callerHub(c));

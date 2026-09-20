@@ -52,7 +52,7 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
       summary: 'List recurrence series',
       response: pageOf(RecurrenceSeriesOut),
       description:
-        'List active, paused, and ended recurrence series in stable series-id order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion. Each row reconstructs its latest trigger revision as a named discriminated union.',
+        'List active, paused, and ended recurrence series in stable series-id order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion. Each item includes its current trigger configuration.',
     }),
     zQuery(CursorQuery),
     async (c) => {
@@ -96,7 +96,7 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
       capability: 'contribute',
       response: CalendarProcessBindingOut,
       description:
-        'Bind a user-owned calendar event or provider event series to a reusable workspace process. The selected event is materialized immediately and future synced occurrences use the same recurrence series.',
+        'Bind a user-owned calendar event or provider event series to a reusable workspace process. Docket creates work for the selected event immediately. Future synchronized occurrences use the same recurrence series.',
     }),
     zJson(CalendarProcessBindingCreate),
     async (c) => {
@@ -161,7 +161,7 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
       summary: 'Get recurrence series',
       response: RecurrenceSeriesDetailOut,
       description:
-        'Get one workspace-scoped series, its current trigger, and durable expected, materialized, skipped, canceled, and completed occurrence history.',
+        'Return one workspace recurrence series, its current trigger, and the history of expected, created, skipped, canceled, and completed occurrences.',
     }),
     zParam(idParam),
     async (c) => {
@@ -199,11 +199,11 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
     capabilityGuard('contribute'),
     apiDoc({
       tag: 'Recurrence',
-      summary: 'Materialize a series occurrence',
+      summary: 'Create a series occurrence',
       capability: 'contribute',
       response: RecurrenceSeriesDetailOut,
       description:
-        'Idempotently materialize one manual or explicitly dated occurrence through the process engine, creating ordinary Docket work and retaining source mappings.',
+        'Create one manual or explicitly dated occurrence as ordinary Docket work. Repeating the same request does not create another occurrence. The created work retains its link to the recurrence series.',
     }),
     zParam(idParam),
     zJson(MaterializeSeriesOccurrence),
@@ -273,7 +273,7 @@ export const recurringTaskRoutes = new Hono<AppEnv>().post(
     capability: 'contribute',
     response: RecurringTaskCreated,
     description:
-      'Create a repeating ordinary task in one call. Docket authors a one-step process, creates a series, and materializes its rolling calendar window or first completion-anchored task.',
+      'Create a repeating task in one call. Docket creates the recurrence rule and the tasks in its current rolling window. A completion-anchored rule creates its first task immediately.',
   }),
   zJson(RecurringTaskCreate),
   async (c) => {

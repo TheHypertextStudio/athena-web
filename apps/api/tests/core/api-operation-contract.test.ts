@@ -8,6 +8,7 @@ import { onError } from '../../src/error';
 import {
   collectApiOperationContracts,
   operationContractForRequest,
+  renderOperationNarrative,
   type ApiOperationContract,
 } from '../../src/lib/api-operation-contract';
 import { apiDoc } from '../../src/lib/openapi-route';
@@ -98,6 +99,24 @@ function appWithMutationProbe(): Hono<AppEnv> {
 }
 
 describe('API operation contracts', () => {
+  it('renders direct access, failure, and related-operation guidance', () => {
+    const narrative = renderOperationNarrative({
+      ...publicProbe,
+      errors: ['unauthorized', 'not_found'],
+    });
+
+    expect(narrative).toContain('No workspace capability is required.');
+    expect(narrative).toContain(
+      '`unauthorized` (HTTP 401) — Docket could not find a valid session for this request.',
+    );
+    expect(narrative).toContain(
+      '`not_found` (HTTP 404) — The address may be wrong, or the item may no longer be available.',
+    );
+    expect(narrative).toContain('## Related operations\n\nNone.');
+    expect(narrative).not.toContain('Follow the recovery guidance');
+    expect(narrative).not.toContain('No related operation is required');
+  });
+
   it('returns a JSON receipt replay through the strict route middleware', async () => {
     await getDb();
     const userId = `strict-receipt-${crypto.randomUUID()}`;

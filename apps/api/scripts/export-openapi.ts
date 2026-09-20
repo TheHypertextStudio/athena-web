@@ -27,9 +27,9 @@ const EXPORT_ENV = {
   APP_MODE: 'test',
   NODE_ENV: 'test',
   DATABASE_URL: 'pglite://memory://',
-  API_URL: 'https://api.docket.localhost',
-  WEB_URL: 'https://docket.localhost',
-  BETTER_AUTH_URL: 'https://api.docket.localhost',
+  API_URL: 'https://api.clearthedocket.com',
+  WEB_URL: 'https://clearthedocket.com',
+  BETTER_AUTH_URL: 'https://api.clearthedocket.com',
   BETTER_AUTH_SECRET: 'export-only-secret-export-only-secret-0123',
 } as const;
 

@@ -93,7 +93,7 @@ Session-only, no capability. 401 when unauthenticated.`,
 
 **Documented defaults, not hidden fallbacks:** a caller who has never saved preferences gets a complete, usable model back with \`configured: false\` — weekday desk hours with a protected lunch, protected evenings and Sundays, Saturday field time, and weekday commute windows. That is what lets the very first planning run produce a real week; every value in it is visible here and editable via \`PUT /preferences\`.
 
-Session-only, no capability. 401 when unauthenticated; **404 (Hub not found)** if the session user has no Hub row. Side-effect-free read.`,
+Session-only, no capability. Returns 401 when unauthenticated and 404 when the caller has no Hub. This read has no side effects.`,
     }),
     async (c) => {
       const session = c.get('session');
@@ -111,9 +111,9 @@ Session-only, no capability. 401 when unauthenticated; **404 (Hub not found)** i
       response: SchedulingPreferencesOut,
       description: `Replace any subset of the caller's scheduling configuration. Every provided field replaces its value wholesale (the arrays are documents, not patch sets); omitted fields keep their current value.
 
-**This is the setup surface, and it is the only place per-item input ever happens.** Commitments written here are standing — "two filming sessions a week at this location", "meet community members twice a week with these people" — so a later \`POST /\` needs no arguments at all and asks nothing. \`backfillShapes\` is filtered to backfill-eligible shapes on write, so an ineligible choice cannot silently linger in stored configuration.
+Commitments saved here are standing instructions, such as two filming sessions per week at one location. A later \`POST /\` uses these preferences and needs no request body. Docket removes choices from \`backfillShapes\` when the selected shape does not support backfill.
 
-**Side effect:** upserts the caller's \`scheduling_preference\` row. Commitments arriving without an \`id\` are assigned one. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub.`,
+The operation saves the complete preference set. Commitments without an \`id\` receive one. Session-only, no capability. Returns 401 when unauthenticated and 404 when the caller has no Hub.`,
     }),
     zJson(SchedulingPreferencesUpdate),
     async (c) => {
@@ -132,15 +132,11 @@ Session-only, no capability. 401 when unauthenticated; **404 (Hub not found)** i
       tag: 'Scheduling',
       summary: 'Generate a scheduled week',
       response: WeekPlanOut,
-      description: `Plan one week end to end and write it to the caller's calendar. **The body is optional in its entirety** — with no body at all this plans the current week in the Hub timezone, reading availability, standing commitments, what is already booked, and the Time Ledger's own measured session lengths for itself. There is no per-item prompt and no confirmation step anywhere in the call path; the response's \`userInputCount\` records how many explicit interactions the run consumed (1).
+      description: `Generate a weekly plan and add its scheduled blocks to the caller's calendar. The request body is optional. When omitted, Docket plans the current week in the Hub timezone using saved availability, existing calendar items, scheduling preferences, and measured work durations.
 
-Each of the six work shapes is placed by its own rule: shoots and community meetings claim field windows first (longest first, and a meeting is only placed somewhere its debrief also fits); writing and architecture take contiguous desk windows and are never fragmented; a debrief is derived after every meeting-shaped block and after every pre-existing event with attendees, linked to it with a \`follow_up\` calendar relation; reading is placed **only** into travel/waiting gaps, which are inferred from consecutive commitments in different locations rather than declared; and whatever the person allowed to absorb slack fills the largest remaining holes until none exceeds their threshold.
+Docket keeps personal windows free. It places field work and meetings before desk work, keeps writing and architecture blocks contiguous, adds debriefs after meetings, and uses travel or waiting gaps for reading. The response lists work that could not be scheduled in \`unplaced\` with one of these reason codes: \`missing_location\`, \`missing_attendees\`, \`no_matching_window\`, or \`week_full\`.
 
-**Protected time is unreachable, structurally:** \`personal\` windows are subtracted from availability before the planner runs, so no pass can place work there — including a travel gap that happens to land in a protected lunch.
-
-**Side effects:** inserts one \`schedule_run\` row and one \`calendar_item\` per placed block, each carrying \`origin: 'scheduler'\`, its \`work_shape\`, and the run id. Unless \`replaceExisting\` is false, the **scheduler's own** blocks for that week are cleared first — a block a person created by hand is never touched. \`dryRun: true\` computes and returns the identical week and writes nothing.
-
-Anything that could not be placed is returned in \`unplaced\` with a stable reason code (\`missing_location\`, \`missing_attendees\`, \`no_matching_window\`, \`week_full\`), never silently dropped. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub. Related: \`GET /\` to re-read a generated week, \`PUT /preferences\` to change the inputs.`,
+By default, Docket replaces blocks that a previous scheduler run created for the same week. It never removes hand-created or externally synced calendar items. Set \`replaceExisting: false\` to keep earlier scheduled blocks. Set \`dryRun: true\` to return the proposed plan without changing the calendar.`,
     }),
     zJson(WeekPlanGenerateInput.optional()),
     async (c) => {
@@ -164,11 +160,9 @@ Anything that could not be placed is returned in \`unplaced\` with a stable reas
       tag: 'Scheduling',
       summary: 'Read a generated week',
       response: WeekPlanOut,
-      description: `Return the week as it currently stands on the calendar, with the same coverage report \`POST /\` produced: total available minutes inside declared windows, minutes actually carrying a plan, coverage as a percentage, protected minutes deliberately left alone, every remaining gap above the caller's threshold, and the longest one.
+      description: `Return the current calendar plan and coverage for one week. Coverage includes available minutes, planned minutes, percentage covered, protected minutes, remaining gaps above the caller's threshold, and the longest gap.
 
-**Read from the calendar, not from a cached plan.** The blocks returned are the live \`calendar_item\` rows, so a block the person has since moved, completed or deleted is reflected here — which is what makes the coverage figure a statement about the week rather than about the run that produced it. \`runId\` names the most recent planning run covering the week, or null if the week was never generated.
-
-\`weekStartDate\` defaults to the current week in the Hub timezone and is normalized to that week's local Monday. Side-effect-free. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub.`,
+The response reflects current calendar items, including changes made after the scheduling run. \`runId\` identifies the most recent planning run for the week or is null when the week has never been generated. \`weekStartDate\` defaults to the current week in the Hub timezone and is normalized to that week's local Monday. This operation does not change the calendar.`,
     }),
     zQuery(WeekPlanQuery),
     async (c) => {

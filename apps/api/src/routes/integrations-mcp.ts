@@ -286,7 +286,7 @@ const router = new Hono<AppEnv>()
       capability: 'manage',
       response: mcpAuthorizationOut,
       description:
-        'Discover the remote MCP server’s OAuth configuration, persist PKCE state encrypted at rest, and return its browser approval URL. The official MCP client handles RFC 9728 discovery, CIMD, dynamic registration fallback, and resource indicators.',
+        'Discover the remote MCP server’s OAuth configuration, prepare a PKCE authorization request, and return its browser approval URL. The official MCP client handles RFC 9728 discovery, CIMD, dynamic registration fallback, and resource indicators.',
     }),
     zParam(idParam),
     async (c) => {

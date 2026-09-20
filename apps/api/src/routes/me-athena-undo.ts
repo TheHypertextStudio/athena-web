@@ -109,7 +109,7 @@ const meAthenaChanges = new Hono<AppEnv>().post(
     summary: 'Undo one Athena change',
     response: AthenaUndoOut,
     description:
-      'Reverse one change made in a caller-owned Athena session or confirmed from a caller-owned planning draft, only when nothing later touched the same rows. This is what backs the Undo on the line a plan commit writes: pass the `changeSetId` that `POST /v1/me/plans/{id}/commit` returned. Undoing a plan commit also returns the nodes it created to `draft` on that plan, so `GET /v1/me/plans/{id}` shows them ready to confirm again. A change set that traces back to another user, or to neither a session nor a plan, or that was already undone, is reported as not found.',
+      'Reverse one change made in a caller-owned Athena session or confirmed from a caller-owned planning draft, but only when no later change touched the same fields or relationships. Pass the `changeSetId` returned by `POST /v1/me/plans/{id}/commit`. Undoing a plan commit returns its created nodes to `draft`, so `GET /v1/me/plans/{id}` shows them ready to confirm again. A change set owned by another user, unrelated to a session or plan, or already undone returns 404.',
   }),
   zParam(undoParam),
   async (c) => {

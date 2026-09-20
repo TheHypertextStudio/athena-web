@@ -173,7 +173,9 @@ export type AthenaMailAttachBody = z.infer<typeof AthenaMailAttachBody>;
 /** One place a received message is currently attached. */
 export const AthenaMailAttachmentTargetOut = z
   .object({
-    attachmentId: z.string().describe('Id of the attachment row linking message to entity.'),
+    attachmentId: z
+      .string()
+      .describe('Identifier for the attachment linking this message to the entity.'),
     subjectType: AttachmentSubjectType.describe('Kind of entity the message is attached to.'),
     subjectId: z.string().describe('Id of that entity.'),
     subjectTitle: z.string().describe('That entity’s current title.'),

@@ -88,7 +88,10 @@ export type UpdateAuthorReference = z.infer<typeof UpdateAuthorReference>;
 export const UpdateFeed = z
   .object({ items: z.array(UpdateOut), authors: z.array(UpdateAuthorReference) })
   .strict()
-  .meta({ id: 'UpdateFeed', description: 'Deferred update rows and their referenced authors.' });
+  .meta({
+    id: 'UpdateFeed',
+    description: 'Status updates and the people or agents who authored them.',
+  });
 /** A bounded update section and its named authors. */
 export type UpdateFeed = z.infer<typeof UpdateFeed>;
 

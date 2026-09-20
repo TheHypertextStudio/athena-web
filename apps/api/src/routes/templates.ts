@@ -219,7 +219,7 @@ const templates = new Hono<AppEnv>()
       summary: 'Update a template',
       capability: 'contribute',
       response: TemplateOut,
-      description: `Partially update a caller-visible template; only fields present in the body change (\`name\`, \`description\`, \`scope\`, \`ownerActorId\`, \`teamId\`, \`payload\`). Requires \`contribute\`. \`payload\` is replaced wholesale when supplied, and its \`targetType\` must match the template's — a template cannot change the kind it creates, because the stored draft would then describe a different entity (422). A template cannot be retargeted into another actor's personal scope or a team the caller does not belong to. Moving \`scope\` away from \`team\` clears \`teamId\`. A shipped default is an ordinary row here: editing one is allowed and permanent. A hidden, cross-org, or unknown id 404s. Returns the updated {@link TemplateOut}.`,
+      description: `Partially update a caller-visible template; only fields present in the body change (\`name\`, \`description\`, \`scope\`, \`ownerActorId\`, \`teamId\`, \`payload\`). Requires \`contribute\`. \`payload\` is replaced wholesale when supplied, and its \`targetType\` must match the template's. A template cannot be moved into another actor's personal scope or a team the caller does not belong to. Moving \`scope\` away from \`team\` clears \`teamId\`. Shipped defaults can be edited, and those changes persist. A hidden, cross-workspace, or unknown id returns 404. Returns the updated {@link TemplateOut}.`,
     }),
     zParam(idParam),
     zJson(TemplateUpdate),
@@ -287,7 +287,7 @@ const templates = new Hono<AppEnv>()
       summary: 'Delete a template',
       capability: 'contribute',
       response: TemplateOut,
-      description: `Hard-delete a caller-visible template. Requires \`contribute\`. A shipped default deletes like any other row and does not come back: the defaults are seeded only when an org holds no template at all, so a workspace that clears one has cleared it. A hidden, cross-org, or unknown id 404s (\`Template not found\`). Returns the full deleted {@link TemplateOut} so the client can confirm exactly what was removed, and can offer to restore it.`,
+      description: `Delete a caller-visible template permanently. Requires \`contribute\`. A deleted shipped default does not return automatically. Docket seeds defaults only when a workspace has no templates. A hidden, cross-workspace, or unknown id returns 404. The response contains the deleted {@link TemplateOut} so the client can confirm or offer to restore it.`,
     }),
     zParam(idParam),
     async (c) => {

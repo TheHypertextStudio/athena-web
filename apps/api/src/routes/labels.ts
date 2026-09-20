@@ -126,7 +126,9 @@ const labels = new Hono<AppEnv>()
       tag: 'Labels',
       summary: 'List labels',
       response: pageOf(LabelOut),
-      description: `List every label defined in the org — both workspace-wide labels (\`teamId\` null, offered everywhere) and team-limited labels (\`teamId\` set, offered only inside that team). Labels are Docket's one open-ended dimension: freely-applied tags used to classify and filter work (e.g. \`bug\`, \`design\`, \`needs-triage\`), orthogonal to workflow state and priority. Results use stable label-id order, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion; reuse a cursor only with the same \`withCounts\` value. Pass \`withCounts=1\` to include \`usageCount\` (total attachments across tasks, projects, initiatives, programs, and library resources). Requires org membership (\`view\`).`,
+      description: `List workspace-wide and team-specific labels. A workspace-wide label has \`teamId: null\` and may be used anywhere. A team-specific label may be used only for work in that team. Labels classify and filter work independently from workflow state and priority.
+
+Results use stable label-ID order. The default page size is 50 and the maximum is 100. The final page omits \`nextCursor\`. Reuse a cursor only with the same \`withCounts\` value. Set \`withCounts=1\` to include each label's total \`usageCount\` across supported resource types.`,
     }),
     zQuery(listQuery),
     async (c) => {
@@ -431,7 +433,9 @@ const labels = new Hono<AppEnv>()
       summary: 'Merge a label into another',
       capability: 'manage',
       response: LabelOut,
-      description: `Dissolve this label into \`intoId\`: every attachment across tasks, projects, initiatives, programs, and library resources is reassigned to the surviving label, then this one is deleted. Requires \`manage\`. The whole operation is one transaction, so a failure leaves the taxonomy exactly as it was. A subject already carrying both labels collapses to a single attachment rather than erroring. This is the affordance that makes importing from a connected tool survivable — a mirrored label set arrives with duplicates nobody chose, and re-tagging them by hand is not a real option. Merging a label into itself 422s. Returns the surviving {@link LabelOut}.`,
+      description: `Move every use of this label to \`intoId\`, delete this label, and return the surviving {@link LabelOut}. The change applies to tasks, projects, initiatives, programs, and library resources. When a resource already has both labels, it keeps one copy of the surviving label.
+
+The merge is all-or-nothing. A failure leaves both labels and their assignments unchanged. Merging a label into itself returns 422.`,
     }),
     zParam(idParam),
     zJson(LabelMerge),

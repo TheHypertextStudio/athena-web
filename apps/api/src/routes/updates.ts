@@ -196,9 +196,9 @@ const updates = new Hono<AppEnv>()
       summary: 'Post an update',
       capability: 'contribute',
       response: UpdateOut,
-      description: `Post a status update on a Project, Program, or Initiative. Requires \`contribute\`. The author is the calling actor (from context, never the body). The required \`body\` is the narrative; \`health\` is optional.
+      description: `Post a status update on a project, program, or initiative and return the created {@link UpdateOut}. Docket uses the caller as the author; the request body cannot name another author. \`body\` is required and \`health\` is optional.
 
-Key side effect: when the post includes a \`health\`, the same transaction writes that value to the subject's own \`health\` column — "the latest update sets the subject's current health" (api-rpc-contract §3.9) — so the Project/Program/Initiative health stays in sync with its newest post. A post without \`health\` leaves the subject's current health untouched. The insert and the subject-health write are one transaction so a concurrent read never sees them diverge. Also emits a \`status_change\` observation on the subject (carrying \`health\` in its payload when set). Returns the created {@link UpdateOut}.`,
+When \`health\` is supplied, Docket also sets the resource's current health to the same value. Both changes succeed together or neither change is stored. An update without \`health\` leaves the resource's current health unchanged. The operation adds a \`status_change\` event to organization activity.`,
     }),
     zJson(UpdateCreate),
     async (c) => {

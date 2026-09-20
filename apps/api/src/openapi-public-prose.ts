@@ -321,6 +321,36 @@ export function accessText(path: string, operation: JsonObject): string {
   return path.includes('/orgs/{orgId}') ? `${access} Organization membership is required.` : access;
 }
 
+function inputLocationLabel(location: string): string {
+  if (location === 'path') return 'path parameters';
+  if (location === 'query') return 'query parameters';
+  if (location === 'header') return 'headers';
+  if (location === 'cookie') return 'cookies';
+  return `${location} values`;
+}
+
+function inputLocationGuidance(locations: ReadonlySet<string>): string | undefined {
+  if (locations.size === 0) return undefined;
+  const names = [...locations];
+  if (names.every((location) => location === 'path' || location === 'query')) {
+    return `Supply the ${names.join(' and ')} parameters documented below.`;
+  }
+  const labels = names.map(inputLocationLabel);
+  const joined =
+    labels.length === 1
+      ? labels[0]
+      : `${labels.slice(0, -1).join(', ')} and ${labels.at(-1) ?? ''}`;
+  return `Supply the ${joined} documented below.`;
+}
+
+function requestBodyGuidance(requestBody: JsonObject): string {
+  const content = isObject(requestBody['content']) ? requestBody['content'] : {};
+  const mediaTypes = Object.keys(content);
+  const requirement = requestBody['required'] === true ? 'required' : 'optional';
+  const formats = mediaTypes.map((type) => `\`${type}\``).join(' or ');
+  return `The ${requirement} request body uses ${formats || 'the documented media type'}.`;
+}
+
 function inputGuidance(operation: JsonObject): string {
   const parameters = Array.isArray(operation['parameters']) ? operation['parameters'] : [];
   const locations = new Set(
@@ -330,18 +360,10 @@ function inputGuidance(operation: JsonObject): string {
       .filter(Boolean),
   );
   const requestBody = isObject(operation['requestBody']) ? operation['requestBody'] : undefined;
-  const content = requestBody && isObject(requestBody['content']) ? requestBody['content'] : {};
-  const mediaTypes = Object.keys(content);
   const parts: string[] = [];
-  if (locations.size > 0) {
-    parts.push(`Supply the ${[...locations].join(', ')} values documented below.`);
-  }
-  if (requestBody) {
-    const requirement = requestBody['required'] === true ? 'required' : 'optional';
-    parts.push(
-      `The ${requirement} request body uses ${mediaTypes.map((type) => `\`${type}\``).join(' or ') || 'the documented media type'}.`,
-    );
-  }
+  const locationGuidance = inputLocationGuidance(locations);
+  if (locationGuidance) parts.push(locationGuidance);
+  if (requestBody) parts.push(requestBodyGuidance(requestBody));
   return parts.join(' ') || 'This operation takes no path, query, header, or body input.';
 }
 
@@ -353,7 +375,7 @@ function relatedGuidance(operation: JsonObject): string {
     : [];
   return related.length > 0
     ? related.map((operationId) => `\`${operationId}\``).join(', ')
-    : 'No related operation is required to complete this request.';
+    : 'None.';
 }
 
 function resultGuidance(operation: JsonObject): string {
@@ -401,13 +423,14 @@ export function normalizeNarratives(document: JsonObject): void {
     if (current.includes('## Purpose') && current.includes('## Failures and recovery')) continue;
     const summary = stringValue(operation['summary'], 'Perform this operation').trim();
     const purpose = `${summary.replace(/[.!?]+$/, '')}.`;
+    const result = [current.trim(), resultGuidance(operation)].filter(Boolean).join('\n\n');
     operation['description'] = [
       '## Purpose',
       purpose,
       '## Inputs and constraints',
       inputGuidance(operation),
       '## Result and side effects',
-      resultGuidance(operation),
+      result,
       '## Access and permissions',
       accessText(path, operation),
       '## Failures and recovery',

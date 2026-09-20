@@ -75,11 +75,11 @@ Results use stable agent-ID order, default to 50 items, accept at most 100, and 
       summary: 'Register an agent',
       capability: 'manage',
       response: AgentOut,
-      description: `Register a new agent in the organization and return the created {@link AgentOut}. Registration resolves the agent's backing Actor one of two ways (mutually exclusive in practice): pass \`actorId\` to wrap an *existing* \`agent\`-kind Actor, or pass \`displayName\` to have Docket **materialize a fresh agent Actor** for this registration in the same transaction. Supplying neither fails with 409 (\`Either actorId or displayName is required\`).
+      description: `Register an agent and return the created {@link AgentOut}. Supply \`actorId\` to use an existing agent Actor in this organization, or supply \`displayName\` to create one. Supplying neither returns 409.
 
-Side effects & conflicts: the whole operation is transactional. When \`actorId\` is given it must reference an \`agent\`-kind Actor in this org (else 404 \`Agent actor not found\`), and that Actor must not already back another agent (else 409 \`Agent already registered for this actor\` — one agent per Actor). The new agent starts with the connection, approval policy, accountable owner, guidance, and approval routing from the body (each optional; the connection secret is never stored, only a \`credentialsRef\`).
+An existing Actor must have \`kind: "agent"\` and may back only one registered agent. An unavailable Actor returns 404, and an Actor that is already registered returns 409. The registration stores the supplied connection, approval policy, accountable owner, guidance, and approval routing. It stores a \`credentialsRef\`, not the connection secret itself.
 
-The \`manage\` capability is required because registering an agent grants a new autonomous Actor the ability to act inside the org — an administrative trust decision, not everyday contribution. Once registered, the agent can be dispatched via the sessions router; its proposed mutations remain subject to the orthogonal approval gate per its \`approvalPolicy\`. Related: \`PATCH /:id\` (reconfigure), \`DELETE /:id\` (deregister).`,
+The agent may start sessions after registration. Its actions remain subject to the configured \`approvalPolicy\`.`,
     }),
     zJson(AgentCreate),
     async (c) => {
@@ -173,9 +173,9 @@ The \`manage\` capability is required because registering an agent grants a new 
       summary: 'Update an agent',
       capability: 'manage',
       response: AgentOut,
-      description: `Reconfigure a registered agent and return the updated {@link AgentOut}. This is a partial update: only the fields present in the body are written (\`connection\`, \`approvalPolicy\`, \`accountableOwnerId\`, \`guidance\`, \`approvalRouting\`); omitted fields are left untouched, and any of the nullable fields may be explicitly set to \`null\` to clear it. The agent's backing Actor and \`id\` are immutable here — re-pointing an agent at a different Actor is not an update operation. A missing/cross-tenant id returns 404 (\`Agent not found\`).
+      description: `Update a registered agent's \`connection\`, \`approvalPolicy\`, \`accountableOwnerId\`, \`guidance\`, or \`approvalRouting\` and return the current {@link AgentOut}. Omitted fields remain unchanged. Set a nullable field to null to clear it. The agent ID and backing Actor cannot be changed; register another agent to use a different Actor.
 
-The \`manage\` capability is required because these settings govern how much autonomy the agent has (e.g. tightening \`approvalPolicy\` from \`autonomous\` to \`act_with_approval\`, or re-routing who may approve its gated actions) — a governance control, not routine contribution. Changing \`approvalPolicy\`/\`approvalRouting\` affects *future* sessions and gate decisions; it does not retroactively re-gate activities already settled. Related: \`POST /\` (register), \`DELETE /:id\` (deregister).`,
+Changes to approval policy or routing apply to future sessions and future approval decisions. They do not change actions that have already been approved or rejected. An unavailable agent returns 404.`,
     }),
     zParam(idParam),
     zJson(AgentUpdate),

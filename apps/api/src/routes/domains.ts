@@ -170,7 +170,7 @@ export function createPublishingAddressRoutes(lookupTxt: TxtLookup = resolveTxt)
         response: pageOf(WorkspaceDomainOut),
         description: `List the workspace's custom domains, oldest first. Each item includes its verification state and the exact DNS records to publish. Requires the \`manage\` capability. A caller without that permission receives 403, while an inaccessible workspace returns 404.
 
-Results use \`createdAt ASC, id ASC\`, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. \`lastFailure\` is a stable code (\`lookup-failed\` / \`no-record\` / \`token-mismatch\`), never resolver output.`,
+Results use \`createdAt ASC, id ASC\`, default to 50 items, accept at most 100, and omit \`nextCursor\` at exhaustion. \`lastFailure\` is one of \`lookup-failed\`, \`no-record\`, or \`token-mismatch\`; it never contains raw DNS provider output.`,
       }),
       zQuery(CursorQuery),
       async (c) => {
@@ -189,14 +189,11 @@ Results use \`createdAt ASC, id ASC\`, default to 50 items, accept at most 100, 
         capability: 'manage',
         response: WorkspaceDomainOut,
         status: 201,
-        description: `Claim a domain for this workspace's published briefs. The submitted value is normalized first — a full URL, mixed case, a trailing dot, and a \`www.\` prefix all collapse to one canonical host — and **that normalized host is the uniqueness key**, so \`Example.COM\`, \`https://www.example.com/x\`, and \`example.com.\` are one claim, not three.
+        description: `Claim a custom domain for this workspace's published briefs. Docket normalizes a full URL, case, a trailing dot, and a \`www.\` prefix to one host. For example, \`Example.COM\`, \`https://www.example.com/x\`, and \`example.com.\` identify the same claim.
 
-The claim starts **unverified** and serves nothing. The response carries the \`TXT\` record to publish (type, name, value, TTL) and, once a custom-domain target is configured, the \`CNAME\` that routes traffic. Call \`POST /domains/{id}/verify\` after publishing the \`TXT\`.
+The claim starts unverified and does not serve briefs. The response contains the \`TXT\` verification record and, when configured, the routing \`CNAME\`. Publish the TXT record and call \`POST /domains/{id}/verify\`.
 
-- A host already claimed by **any** workspace returns **409 \`domain_already_claimed\`** and writes nothing. Docket guarantees that only one simultaneous claim can succeed.
-- A malformed host, an IP literal, a wildcard, or one of Docket's own hosts returns **422** with a \`host\` field issue.
-
-Requires \`manage\`.`,
+A domain already claimed by any workspace returns 409 \`domain_already_claimed\`. A malformed domain, IP address, wildcard, or Docket-owned host returns 422 with a \`host\` field issue. Concurrent requests cannot claim the same domain twice.`,
       }),
       zJson(WorkspaceDomainCreate),
       async (c) => {
@@ -250,7 +247,7 @@ Requires \`manage\`.`,
         response: WorkspaceDomainVerifyOut,
         description: `Re-run the DNS ownership check for a claimed domain and record the outcome. Verification is always re-run against live DNS and never served from cache: a domain that stops proving ownership must stop serving.
 
-Success requires a \`TXT\` record at \`_docket-verify.<host>\` whose value is exactly \`docket-domain-verification=<this row's token>\`. A record containing the token as a substring does not pass, and another workspace's token does not pass.
+Success requires a \`TXT\` record at \`_docket-verify.<host>\` whose value exactly matches the \`verificationValue\` returned when the domain was claimed. A substring match or another workspace's value does not pass.
 
 The response reports \`failure\` as a stable code and \`observedCount\` as **how many** Docket-prefixed values were seen — a count, never the values, which are strings from a domain Docket does not own. \`0\` means "not published yet"; \`≥1\` with \`token-mismatch\` means "published, but the wrong token". Requires \`manage\`.`,
       }),

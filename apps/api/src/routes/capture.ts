@@ -37,11 +37,9 @@ const capture = new Hono<AppEnv>().post(
     summary: 'Quick-capture text into a task',
     capability: 'contribute',
     response: TaskOut,
-    description: `Turn freeform \`text\` into a native {@link TaskOut} in one shot — the **default** path of the hybrid Home prompt box, designed so a user can dump a thought without picking a team, state, or assignee. Its sibling escalation, "ask Athena to plan", lives at \`POST /v1/orgs/:orgId/sessions\` and invokes an agent; capture deliberately does NOT — it is a plain, deterministic task create, the same write a direct task POST performs.
+    description: `Create a task from freeform \`text\` without asking the caller to choose a team, state, or assignee. Docket uses the first non-empty line as the title, collapses repeated whitespace, and truncates the title to 120 characters. The complete input remains in the task description.
 
-Behavior: the task title is derived from the text (first non-empty line, inner whitespace collapsed, capped at 120 chars with an ellipsis) while the full text is kept as the task description, so a long paste keeps a clean title without losing detail. The task lands on the org's **default team** (the oldest active team, seeded at org-create) in that team's first workflow state (its entry/backlog column, or a neutral \`backlog\` for a stateless team), is assigned to the caller, and — when the team has a date-covering window — is attached to the current cycle (otherwise left uncommitted; capture never blocks on cycle availability). \`provenance.source\` is \`native\`.
-
-Errors: 404 (\`No team to capture into\`) when the org has no team to land in. Requires \`contribute\` — the same bar as creating a task directly. Side effect: the new task enters the org's work layer and emits activity like any other task create. Related: \`POST /v1/orgs/:orgId/sessions\` (escalate the same prompt to an agent), and the Tasks routes for full task control.`,
+The task is assigned to the caller and placed in the organization's oldest active team, using that team's first workflow state. When the team has a cycle that covers today, the task joins that cycle; otherwise it remains outside a cycle. The task has \`provenance.source: "native"\` and appears in organization activity. Docket returns 404 when the organization has no active team. Use \`POST /v1/orgs/:orgId/sessions\` when Athena should interpret or plan the text instead.`,
   }),
   zJson(CaptureBody),
   async (c) => {

@@ -198,7 +198,7 @@ const entityDisplayRouter = new Hono<AppEnv>()
       tag: 'Display',
       summary: 'List display metadata for every customized subject of one type',
       description:
-        'Returns customized display rows in stable subject-id order. Pages default to 50 items, accept at most 100, and omit nextCursor at exhaustion. Reuse a cursor only for the same subject type. Anything absent uses the stable type default.',
+        'Return customized display settings in stable subject-id order. Pages default to 50 items, accept at most 100, and omit `nextCursor` at exhaustion. Reuse a cursor only for the same subject type. A subject absent from this list uses the stable default for its type.',
       response: pageOf(EntityDisplayOut),
     }),
     zParam(z.object({ subjectType: EntityDisplaySubjectType })),

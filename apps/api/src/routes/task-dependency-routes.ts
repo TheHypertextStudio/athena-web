@@ -149,7 +149,7 @@ export const taskDependencyRoutes = new Hono<AppEnv>()
       response: TaskOut,
       description: `Create a child task under the path task. The parent is loaded first (cross-org/unknown parent 404s), then the child is inserted with \`parentTaskId\` set to the parent and \`teamId\` inherited from the parent — a subtask always lives on the parent's team and cannot be re-teamed at creation. Requires \`contribute\`.
 
-The child inherits sensible defaults but can override them: \`state\` defaults to the parent's current state (not the team's first state), \`projectId\` defaults to the parent's project when omitted, and \`priority\` defaults to \`none\`. Body-provided references (\`assigneeId\`, \`projectId\`, \`cycleId\`, \`milestoneId\`) must live in the caller's org or 404; values inherited from the already-in-org parent are not re-checked. Unlike the top-level create, this handler does not emit \`created\`/\`assignment\` observations. Returns the new child {@link TaskOut}.`,
+The child inherits sensible defaults but can override them: \`state\` defaults to the parent's current state (not the team's first state), \`projectId\` defaults to the parent's project when omitted, and \`priority\` defaults to \`none\`. Body-provided references (\`assigneeId\`, \`projectId\`, \`cycleId\`, \`milestoneId\`) must belong to the same organization or the request returns 404. This operation does not add a task-created or assignment event to the activity feed. Returns the new child {@link TaskOut}.`,
     }),
     zParam(idParam),
     zJson(SubtaskCreate),
@@ -295,9 +295,9 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
       summary: 'Add a task dependency',
       capability: 'contribute',
       response: TaskDependencyCreated,
-      description: `Add a directed \`blocking → blocked\` dependency edge involving the path task. The body supplies exactly one of \`blockingTaskId\` / \`blockedTaskId\` (the other endpoint is the path task): \`blockingTaskId\` makes that task block the path task; \`blockedTaskId\` makes the path task block that task. Requires \`contribute\`. Both endpoints must be active tasks in the caller's org (each is loaded, so a cross-org/unknown id 404s).
+      description: `Add a blocking relationship involving the task in the path. Supply exactly one of \`blockingTaskId\` or \`blockedTaskId\`. \`blockingTaskId\` makes that task block the path task. \`blockedTaskId\` makes the path task block that task. Both tasks must be active and belong to this organization; otherwise Docket returns 404.
 
-Two invariants are enforced. A task cannot depend on itself (self-edge → 422 validation error). And the edge must not introduce a cycle: the duplicate-check, an acyclic-reachability check, and the insert all run inside one SERIALIZABLE transaction — under a weaker isolation level two concurrent inserts of A→B and B→A could each pass the guard and commit, producing a 2-cycle. A duplicate edge 409s (\`ConflictError\`); an edge that would close a cycle 409s (\`CycleError\`). On success returns {@link TaskDependencyCreated} echoing the resolved \`blockingTaskId\`/\`blockedTaskId\`. Remove an edge via \`DELETE /:id/dependencies/:depId\`.`,
+A task cannot block itself, and a new relationship cannot create a dependency cycle. A self-reference returns 422. A duplicate or cyclic relationship returns 409. Concurrent requests cannot create a cycle: Docket accepts the complete valid relationship or makes no change. The response contains the resolved blocking and blocked task IDs. Use \`DELETE /:id/dependencies/:depId\` to remove the relationship.`,
     }),
     zParam(idParam),
     zJson(TaskDependencyCreate),

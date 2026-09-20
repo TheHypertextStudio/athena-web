@@ -1373,7 +1373,7 @@ const meAthena = new Hono<AppEnv>()
       summary: 'Decide the latest personal action',
       response: AthenaSessionSummaryOut,
       description:
-        'The coarse shortcut: decide the session’s latest pending action without naming it, and return the private session summary. `decision: "approved"` lets the run continue, with the underlying tool still independently authorized against the owner’s current permissions. `decision: "rejected"` cancels the private session outright. Only the authenticated owner may decide. Prefer `PUT /sessions/{id}/activity/{activityId}/decision`, which records which action was decided and can widen scope deliberately. Answers 202 when the durable runner takes the work.',
+        'Approve or reject the private session’s latest pending action without naming its activity ID. Approval checks the owner’s current permissions before applying the action and then continues the session. Rejection cancels the session without applying the action. Only the authenticated owner may decide. Use `PUT /sessions/{id}/activity/{activityId}/decision` when the client must identify the exact action or choose a wider scope. Docket returns 202 with a monitor URL when execution continues asynchronously.',
     }),
     zParam(idParam),
     zJson(ApprovalDecisionBody),

@@ -386,7 +386,7 @@ export const SchedulingPreferencesOut = z
     autoReorganizeOnDrift: z
       .boolean()
       .describe(
-        'When true, a day that has genuinely slipped gets the rest of it re-cut without being asked. When false the drift is still reported, and the re-cut waits for an explicit request.',
+        'When true, Docket automatically reschedules the rest of a day after it falls behind. When false, Docket reports the drift and waits for an explicit reorganization request.',
       ),
     maxUnplannedGapMinutes: z
       .number()
@@ -532,7 +532,7 @@ export const WeekCoverageOut = z
       .number()
       .int()
       .min(0)
-      .describe('Minutes inside declared `personal` windows — never scheduled into, by design.'),
+      .describe('Minutes inside declared `personal` windows. Docket never schedules work in them.'),
     largestGapMinutes: z
       .number()
       .int()
@@ -570,7 +570,10 @@ export const WeekPlanOut = z
         'How many explicit user interactions this run consumed. One invocation is 1; the planner never asks per item.',
       ),
   })
-  .meta({ id: 'WeekPlanOut', description: 'A generated week: blocks, coverage, and honest gaps.' });
+  .meta({
+    id: 'WeekPlanOut',
+    description: 'A generated week with blocks, coverage, and remaining gaps.',
+  });
 /** Week-plan value. */
 export type WeekPlanOut = z.infer<typeof WeekPlanOut>;
 

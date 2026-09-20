@@ -234,7 +234,7 @@ export const TaskProvenance = z
     source: z
       .enum(['native', 'linked'])
       .describe(
-        "Machine discriminator for the sync engine: 'native' (the row is Docket's own) or 'linked' (mirrored from an external integration). Never render this value — pass it through {@link taskOriginLabel}, which yields null for a native task because there is nothing user-relevant to say about one.",
+        "Where the task originated: 'native' for a task created in Docket or 'linked' for a task synchronized from an external integration.",
       ),
     sourceIntegrationId: z
       .string()
@@ -437,7 +437,7 @@ export const TaskUpdate = z
     assigneeId: ActorId.nullable()
       .optional()
       .describe(
-        'Reassign to this actor, or null to unassign. Requires the `assign` capability (not just `contribute`). Must be an actor in the caller’s org. Emits an `assignment` observation when set.',
+        'Reassign to this Actor, or set null to unassign. Changing this field requires the `assign` capability. The Actor must belong to the caller’s organization. A new assignment adds an `assignment` event.',
       ),
     delegateId: ActorId.nullable()
       .optional()
@@ -790,7 +790,7 @@ export const TaskGraphNode = z
     ),
     teamId: TeamId.describe('Owning team id.'),
     projectId: ProjectId.nullable().describe(
-      'Project id, or null when project-less. Always present (never omitted) to match the column.',
+      'Project identifier, or null when the task does not belong to a project. This field is always present.',
     ),
     programId: ProgramId.nullable().describe(
       'Program id, or null when the Task is not filed in one. Always present.',

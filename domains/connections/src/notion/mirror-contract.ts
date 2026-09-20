@@ -136,12 +136,7 @@ export const NotionColumnBinding = z
       ),
     title: z.string().min(1).describe('The column title shown in Notion. Chosen by the user.'),
     kind: NotionPropertyKind.describe('The Notion property type this column is provisioned as.'),
-    order: z
-      .number()
-      .int()
-      .describe(
-        "The column's position, left to right. Stored explicitly because `property_map` is jsonb and PostgreSQL does NOT preserve object key order — it normalizes keys by length then bytes, so relying on insertion order silently reorders the columns on the first read back.",
-      ),
+    order: z.number().int().describe("The column's position from left to right."),
     propertyId: z
       .string()
       .optional()
@@ -379,10 +374,7 @@ export const NotionParentPageOut = z
     id: z.string(),
     title: z.string().describe("The page's title, or `Untitled` when it has none."),
     url: z.string().nullable().describe('A deep link to the page in Notion.'),
-    icon: z
-      .string()
-      .nullable()
-      .describe('The page emoji. Image icons are deliberately not carried — see the client.'),
+    icon: z.string().nullable().describe('The page emoji. Image icons are omitted.'),
     lastEditedTime: z
       .string()
       .nullable()

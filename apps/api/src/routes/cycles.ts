@@ -147,7 +147,9 @@ const cycles = new Hono<AppEnv>()
       summary: 'Generate cycles through a date',
       capability: 'contribute',
       response: CycleEnsureOut,
-      description: `Materialize every native cadence window intersecting an inclusive calendar-date range. The team must belong to the caller's organization and must not have an active provider-owned cycle schedule. \`fromDate\` defaults to the team's cadence anchor; both dates must be on or after that anchor. One request may create at most 400 windows, so callers can page arbitrarily far into the future with adjacent requests. Repeated and concurrent requests are idempotent because native cycles are unique by team and start date. Requires \`contribute\`.`,
+      description: `Create each native cycle window that intersects the inclusive date range. The team must belong to this organization and must not use a provider-owned cycle schedule. \`fromDate\` defaults to the team's cadence anchor, and both dates must be on or after that anchor.
+
+One request can create at most 400 cycle windows. Use adjacent date ranges to create more. Repeating the same request or sending overlapping requests does not create duplicate cycles.`,
     }),
     zJson(CycleEnsureBody),
     async (c) => {
@@ -197,7 +199,7 @@ const cycles = new Hono<AppEnv>()
       summary: 'Create a cycle',
       capability: 'contribute',
       response: CycleOut,
-      description: `Manually create a cycle for a team. Although cycles normally auto-roll (see \`GET /current\`), this endpoint backs explicit creation. The body's \`teamId\` is required and re-read scoped to the caller's org (404 \`Team not found\`, existence-hiding) — cycles are team-scoped and cannot be created cross-tenant. \`number\` (the team-local sequence number), \`startsAt\`, and \`endsAt\` are required ISO dates/values; \`name\` is optional; \`status\` defaults to \`upcoming\`. Note the \`(teamId, number)\` pair is unique per team, so reusing a number a manual or auto-rolled cycle already holds collides at the database. Requires \`contribute\`. Returns the created {@link CycleOut} (the flat shape, without the \`stats\` roll-up — fetch \`GET /:id\` for those).`,
+      description: `Create a cycle for a team instead of waiting for the team's next automatic cycle. The required \`teamId\` must identify a team in this organization. Otherwise, the request returns 404. Supply a team-local \`number\`, \`startsAt\`, and \`endsAt\`; \`name\` is optional and \`status\` defaults to \`upcoming\`. A team cannot have two cycles with the same number. Requires \`contribute\`. The response contains the created {@link CycleOut} without calculated \`stats\`; use \`GET /:id\` to retrieve those statistics.`,
     }),
     zJson(CycleCreate),
     async (c) => {
@@ -360,7 +362,9 @@ const cycles = new Hono<AppEnv>()
       tag: 'Cycles',
       summary: 'Get cycle burn-up',
       response: CycleBurnupOut,
-      description: `The cycle's burn-up report — the data behind the "are we on pace?" chart. \`series\` walks every calendar day of the window \`[starts_at, ends_at]\` inclusive (UTC day boundaries); for each day \`planned\` is the cumulative capacity from committed tasks the caller can view (it rises as scope is added mid-cycle, which is why this is a burn-UP not a burn-down), \`completed\` is the cumulative effort whose \`completed_at\` falls on or before that day, and \`remaining = planned - completed\` is the open distance to the plan line. \`scopeChanges\` itemizes every visible task added after \`starts_at\` (its \`taskId\`, when it joined, and the estimate it added), sorted by when it joined. The flat \`capacity\` and \`stats\` mirror {@link CycleStats} so the chart and its summary come from one read. The cycle must exist in the caller's org (404 \`Cycle not found\`). Read-only; organization membership accesses the cycle while task-derived data uses canonical task visibility. Returns {@link CycleBurnupOut}.`,
+      description: `Return burn-up data for every UTC calendar day from \`startsAt\` through \`endsAt\`, inclusive. For each day, \`planned\` is cumulative visible task capacity, \`completed\` is cumulative effort completed by that day, and \`remaining\` is \`planned - completed\`. Planned capacity increases when visible work joins the cycle.
+
+\`scopeChanges\` lists visible tasks added after the cycle started, ordered by addition time, with the estimate each task added. \`capacity\` and \`stats\` contain the corresponding summary. An unavailable cycle returns 404, and task-derived values include only tasks the caller can view.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -496,7 +500,9 @@ const cycles = new Hono<AppEnv>()
       summary: 'Assign backlog tasks to a cycle',
       capability: 'contribute',
       response: CycleBackfillOut,
-      description: `Sweep this cycle's team for tasks with no cycle yet and assign them here. Only ever fills the gap: a task already on ANY cycle (this one or another) is left untouched — this never moves work someone deliberately parked elsewhere, mirroring the reviewed-carryover posture of \`POST /:id/close\`. Tasks in a terminal workflow state (\`completed\`/\`canceled\`) are excluded — a done or abandoned task has no reason to join an active cycle. Idempotent: a repeat call only ever touches tasks still missing a cycle. The cycle must exist in the caller's org (404 \`Cycle not found\`). Requires \`contribute\`. Returns {@link CycleBackfillOut} \`{ assignedCount }\`.`,
+      description: `Assign the team's active tasks that do not have a cycle to this cycle. Tasks already assigned to any cycle remain unchanged. Completed and canceled tasks are excluded.
+
+Repeating the request affects only tasks that still have no cycle. The response contains \`assignedCount\`. An unavailable cycle returns 404.`,
     }),
     zParam(idParam),
     async (c) => {

@@ -95,13 +95,11 @@ Results use stable grant-id order, default to 50 items, accept at most 100, and 
       capability: 'manage',
       status: [200, 201],
       response: GrantOut,
-      description: `Create or update a capability grant. Requires the \`manage\` capability because a grant confers access. This is an **upsert** keyed on the unique tuple \`(organizationId, subjectKind, subjectId, resourceKind, resourceId, effect)\`: a write for an existing tuple overwrites its \`capabilities\`, \`cascades\`, \`visibilityOverride\`/\`visibility\`, and \`expiresAt\` rather than creating a duplicate (idempotent per subject+resource). \`organizationId\` and \`createdBy\` come from the actor context, never the body.
+      description: `Create or replace an \`allow\` grant for one subject and resource. The subject may be an Actor or a Role. When the same subject already has an allow grant for the same resource, Docket replaces its \`capabilities\`, \`cascades\`, visibility settings, and \`expiresAt\` instead of creating another grant.
 
-**201** with a \`Location\` when the tuple was new, **200** when an existing grant was overwritten. It is a \`POST\` rather than a \`PUT\` because the key is that natural tuple and the id is server-assigned, so a caller has no address to \`PUT\` to until the grant exists.
+\`cascades\` defaults to true and extends the grant to resources below the selected resource. \`visibilityOverride\` changes effective visibility at that resource. An expired grant no longer provides access. A caller cannot grant a capability above the highest capability they hold; such a request returns 403.
 
-**Allow-only:** the handler hard-codes \`effect: 'allow'\` — the \`deny\` effect is gated off at this endpoint even though the schema models it. **No self-escalation:** before writing, the granted capability is compared against the writer's own max held capability via \`noSelfEscalation\` — you cannot grant above your own rank (permissions §4.5); a violation returns a capability error (**403**). In practice \`manage\` is the top rank, so a manager rarely trips this, but the guard is enforced unconditionally.
-
-Semantics that flow into the resolver: \`cascades\` (default true) makes the grant apply to the resource AND its whole containment subtree, overridable lower; \`visibilityOverride\` flips a resource's effective visibility (public/private) at that node; \`expiresAt\` time-boxes the grant — once \`< now\` it is inert (filtered out by the resolver), powering temporary guest access. Returns the upserted \`GrantOut\`. See \`DELETE /:grantId\` to remove and \`GET /\` to list.`,
+Docket returns 201 with \`Location\` when it creates a grant and 200 when it replaces an existing grant. Use \`DELETE /:grantId\` to remove the grant.`,
     }),
     zJson(GrantUpsert),
     async (c) => {
@@ -192,9 +190,9 @@ Semantics that flow into the resolver: \`cascades\` (default true) makes the gra
       summary: 'Remove a grant',
       capability: 'manage',
       response: GrantOut,
-      description: `Delete a capability grant by id, revoking the access it conferred. Requires the \`manage\` capability. The delete is scoped to \`(grantId, orgId, effect = 'allow')\` — only an \`allow\` grant in THIS org can be removed here, mirroring the allow-only write path and enforcing tenant isolation. A grant id that is unknown, in another org, or a (non-writable) \`deny\` grant returns **404**.
+      description: `Delete an \`allow\` grant and return the deleted \`GrantOut\`. Docket returns 404 when the grant is unavailable, belongs to another organization, or represents a \`deny\` grant that this API cannot change.
 
-Removing a cascading org-root role grant strips that role's org-wide baseline, and removing a subtree grant re-exposes the inherited capability from higher in the chain (per the resolver's cascade-with-override walk). Returns the deleted \`GrantOut\` as a tombstone. To lower rather than revoke access, \`POST /\` a narrower capability set on the same subject+resource instead.`,
+Removing a cascading organization-level role grant removes that role's workspace-wide access. Removing a more specific grant restores any capability inherited from a broader grant. To reduce access without removing it, use \`POST /\` with a narrower capability set for the same subject and resource.`,
     }),
     zParam(grantIdParam),
     async (c) => {

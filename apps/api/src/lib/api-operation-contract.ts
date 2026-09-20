@@ -6,7 +6,7 @@ import type { z } from 'zod';
 
 import type { ApiAccess } from '../auth/rest-access-policy';
 import type { AppEnv } from '../context';
-import type { ProblemCode } from '../contracts/errors';
+import { PROBLEM_CATALOG, type ProblemCode } from '../contracts/errors';
 import type { PublicTagId } from './public-api-tags';
 
 /** A stable operation identifier used by OpenAPI, links, and release comparisons. */
@@ -244,9 +244,10 @@ function accessDescription(contract: ApiOperationContract): string {
 export function renderOperationNarrative(contract: ApiOperationContract): string {
   const constraints = contract.narrative.constraints ?? [];
   const effects = contract.narrative.effects ?? [];
-  const failures = contract.errors.map(
-    (code) => `\`${code}\` — Follow the recovery guidance in the documented Problem response.`,
-  );
+  const failures = contract.errors.map((code) => {
+    const problem = PROBLEM_CATALOG[code];
+    return `\`${code}\` (HTTP ${String(problem.status)}) — ${problem.summary}`;
+  });
   return [
     '## Purpose',
     contract.narrative.purpose,
@@ -262,14 +263,14 @@ export function renderOperationNarrative(contract: ApiOperationContract): string
       accessDescription(contract),
       contract.capability
         ? `Workspace capability: \`${contract.capability}\`.`
-        : 'No additional workspace capability is declared.',
+        : 'No workspace capability is required.',
     ].join('\n\n'),
     '## Failures and recovery',
     list(failures, 'No operation-specific Problem response is declared.'),
     '## Related operations',
     list(
       contract.related.map((operationId) => `\`${operationId}\``),
-      'No related operation is required to complete this workflow.',
+      'None.',
     ),
   ].join('\n\n');
 }

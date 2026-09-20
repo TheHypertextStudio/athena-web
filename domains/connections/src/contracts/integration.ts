@@ -77,26 +77,22 @@ export const IntegrationConnection = z
       .string()
       .optional()
       .describe(
-        'An opaque reference to the stored credential (OAuth grant / token); Docket never persists the raw secret, only this pointer.',
+        'An opaque reference to the integration credential. The raw secret is never returned.',
       ),
     externalWorkspaceId: z
       .string()
       .optional()
       .describe(
-        "The provider-side workspace/organization the integration is scoped to, when the provider is multi-workspace. For Linear, this is the webhook-routing key (`connection->>'externalWorkspaceId'`); persisted at `POST /:id/verify` time.",
+        'Identifier of the provider workspace or organization linked to this integration, when the provider supports more than one.',
       ),
     externalWorkspaceSlug: z
       .string()
       .optional()
-      .describe(
-        'The provider-side workspace URL slug, when known (for Linear, its `urlKey`) — used to build canonical external URLs. Persisted at `POST /:id/verify` time alongside `externalWorkspaceId`.',
-      ),
+      .describe('Provider workspace URL slug used to build external links, when available.'),
     externalWorkspaceName: z
       .string()
       .optional()
-      .describe(
-        'The provider-side workspace display name, when known. For Linear this is persisted during verification so multiple connected workspaces are distinguishable in Settings.',
-      ),
+      .describe('Provider workspace display name shown in settings, when available.'),
     appActorId: z
       .string()
       .optional()
@@ -270,7 +266,7 @@ export const ConnectorResourceListOut = z
     resources: z
       .array(ConnectorResourceRef)
       .describe(
-        'The external containers (e.g. Google Tasks lists) the connector exposes for selection. Fetched live from the provider, so an empty array means the account genuinely has none (a broken credential surfaces as a 409 instead).',
+        'External containers, such as Google Tasks lists, available for selection. Docket reads them from the provider. An empty array means none are available; an invalid credential returns 409.',
       ),
   })
   .meta({
@@ -583,7 +579,7 @@ export type IntegrationOut = z.infer<typeof IntegrationOut>;
 export const ExternalActorMatchedBy = z
   .enum(['email', 'manual'])
   .describe(
-    'How this mapping was resolved: `email` (the sync engine matched by email against an org member; may be re-evaluated — and change or unmatch — on a future sync) or `manual` (an admin explicitly linked it via `PATCH …/external-actors/:externalActorId`; never overwritten by re-matching).',
+    'How this mapping was resolved: `email` when Docket matched the provider email to a workspace member, or `manual` when an administrator selected the actor. Email matches may change during a later sync; manual matches do not.',
   );
 /** External-actor match-source value. */
 export type ExternalActorMatchedBy = z.infer<typeof ExternalActorMatchedBy>;
@@ -599,7 +595,7 @@ export type ExternalActorMatchedBy = z.infer<typeof ExternalActorMatchedBy>;
  */
 export const ExternalActorOut = z
   .object({
-    id: z.string().describe('The external-actor mapping row id.'),
+    id: z.string().describe('The stable identifier for this provider-user mapping.'),
     externalId: z
       .string()
       .describe("The provider's native user id (e.g. a Linear user UUID) — stable across syncs."),
@@ -626,9 +622,9 @@ export const ExternalActorOut = z
       .string()
       .nullable()
       .describe(
-        'ISO-8601 timestamp somebody deliberately excluded this provider user from matching, or null. Distinguishes a decided exclusion from an undecided row — both have `actorId: null` — and, like a `manual` link, an ignored row is never re-matched by email. Linking or unlinking via `PATCH …/external-actors/:externalActorId` clears it.',
+        'ISO-8601 time when an administrator excluded this provider user from matching, or null. An excluded user and an undecided user both have `actorId: null`; only the excluded user has `ignoredAt`. Email matching does not reconsider excluded users. Linking or unlinking the user clears this value.',
       ),
-    createdAt: z.string().describe('ISO-8601 timestamp the mapping row was first created.'),
+    createdAt: z.string().describe('ISO 8601 timestamp when this mapping was created.'),
     updatedAt: z
       .string()
       .describe('ISO-8601 timestamp the mapping was last refreshed and/or re-matched.'),
@@ -725,7 +721,7 @@ export type McpIntegrationUpdate = z.infer<typeof McpIntegrationUpdate>;
 /** A connected remote MCP server (never includes the credential). */
 export const McpIntegrationOut = z
   .object({
-    id: IntegrationId.describe('The integration row id.'),
+    id: IntegrationId.describe('The stable identifier for this integration.'),
     organizationId: OrganizationId.describe('The owning organization.'),
     url: z.string().describe('The remote MCP server URL.'),
     label: z.string().describe('Display name.'),

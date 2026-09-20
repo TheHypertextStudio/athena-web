@@ -81,7 +81,7 @@ export const CycleCreate = z
       .number()
       .int()
       .describe(
-        'The team-local sequence number. Unique per team (`(teamId, number)` is unique), so reusing a number an existing/auto-rolled cycle holds collides at the database.',
+        'The sequence number within the team. A team cannot have two cycles with the same number.',
       ),
     name: z
       .string()
@@ -162,7 +162,7 @@ export const CycleOut = z
       .describe(
         'Whether today falls within this cycle’s `[startsAt, endsAt]` window — the date-derived "current cycle" signal (cycles auto-roll on a cadence, so "current" is derived from dates, not the stored `status`). Populated by reads that resolve a window (detail, list, current-window); omitted otherwise.',
       ),
-    createdAt: z.string().describe('When the cycle row was created (ISO-8601 timestamp).'),
+    createdAt: z.string().describe('When the cycle was created, as an ISO 8601 timestamp.'),
   })
   .meta({ id: 'CycleOut', description: 'A cycle.' });
 /** Cycle representation value. */
@@ -242,7 +242,7 @@ export type CycleWindowQuery = z.infer<typeof CycleWindowQuery>;
 /** Body for explicitly materializing a bounded native cycle range. */
 export const CycleEnsureBody = z
   .object({
-    teamId: TeamId.describe('Team whose native cadence should be materialized.'),
+    teamId: TeamId.describe('Team whose cadence should produce these cycles.'),
     fromDate: z.iso.date().optional().describe('Inclusive first calendar date to cover.'),
     throughDate: z.iso.date().describe('Inclusive last calendar date to cover.'),
   })
@@ -253,7 +253,7 @@ export type CycleEnsureBody = z.infer<typeof CycleEnsureBody>;
 /** Cycles covered by an explicit bounded generation request. */
 export const CycleEnsureOut = z
   .object({ items: z.array(CycleOut) })
-  .meta({ id: 'CycleEnsureOut', description: 'Materialized cycles in chronological order.' });
+  .meta({ id: 'CycleEnsureOut', description: 'Created cycles in chronological order.' });
 /** Cycle generation result. */
 export type CycleEnsureOut = z.infer<typeof CycleEnsureOut>;
 
@@ -480,7 +480,7 @@ export const CycleCloseBody = z
       .array(CycleCarryoverDecision)
       .default([])
       .describe(
-        'Per-task disposition for the cycle’s incomplete committed tasks. Defaults to `[]` (close with no explicit carryover — incomplete tasks simply remain on the closed cycle). Only incomplete committed tasks may appear here; completed tasks need no decision. All decisions plus the close apply in one transaction.',
+        'Decision for each incomplete committed task. Defaults to `[]`, which closes the cycle and leaves incomplete tasks on it. Completed tasks do not need a decision. Docket applies every decision and closes the cycle as one all-or-nothing change.',
       ),
   })
   .meta({ id: 'CycleCloseBody', description: 'Close a cycle with carryover decisions.' });

@@ -26,7 +26,7 @@ export function createContactPointRoutes(contactPoints: NotificationContactPoint
         tag: 'Me Contact Points',
         summary: 'List notification contact points',
         response: pageOf(ContactPointOut),
-        description: `List caller-owned email, phone, and push-token contact points. The primary account email is materialized as an active contact point when absent.`,
+        description: `List the caller's email, phone, and push-token contact points. If the primary account email is missing from the list, Docket adds it as an active contact point before returning the response.`,
       }),
       zQuery(CursorQuery),
       async (c) => {

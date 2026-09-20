@@ -108,7 +108,7 @@ export const TaskActivityChange = z
     label: z
       .string()
       .describe(
-        'Application-owned display label for the field (e.g. "Status", "Assignee", "Anticipated start"). Never a column name and never provider prose.',
+        'Display label for the changed field, such as "Status", "Assignee", or "Anticipated start".',
       ),
     from: z
       .string()

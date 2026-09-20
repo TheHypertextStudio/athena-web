@@ -93,7 +93,7 @@ export const AgentCreate = z
       .min(1)
       .optional()
       .describe(
-        'Materialize a NEW agent Actor with this display name. Supply instead of `actorId` when no Actor exists yet.',
+        'Display name for a new agent. Supply this instead of `actorId` when creating the agent and its actor together.',
       ),
     connection: AgentConnection.nullable()
       .optional()
@@ -295,7 +295,7 @@ const AgentSessionOutBase = z.object({
     .nullable()
     .optional()
     .describe(
-      'Idempotency key for proactively-created sessions (`observation:<observationId>:<userId>`), enforced by a unique partial index so a re-scan never spawns a duplicate run; null for directly-started sessions.',
+      'Idempotency key for a proactively created session. Reprocessing the same observation does not start another run. Null for sessions started directly.',
     ),
   startedAt: z
     .string()
@@ -376,7 +376,7 @@ export const AthenaInvocationSource = z
     type: z
       .enum(['task', 'project', 'initiative', 'program', 'calendar_item', 'stream_event'])
       .describe('The canonical kind of Docket object that supplied invocation context.'),
-    id: z.string().min(1).describe('The canonical source row id.'),
+    id: z.string().min(1).describe('The identifier of the source object.'),
   })
   .strict()
   .meta({ id: 'AthenaInvocationSource', description: 'A source object that focused Athena.' });
@@ -775,7 +775,7 @@ export const SessionFromPromptBody = z
       .string()
       .min(1)
       .describe(
-        "The freeform brief the agent should plan/act against; persisted as the session's first `response` activity and threaded through as the runtime task brief. Non-empty.",
+        "The non-empty brief the agent should plan and act against. It becomes the session's first response activity.",
       ),
     agentId: AgentId.optional().describe(
       "Bind to a specific registered agent; when omitted the org's default agent is resolved (lazily created if needed) so escalation works with no pre-setup.",

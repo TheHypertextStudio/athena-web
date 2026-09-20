@@ -83,13 +83,18 @@ export const ComposerRepeatDraft = z
         .describe('What happens to an occurrence that passes unfinished.'),
       materialization: z
         .object({
-          horizonDays: z.number().int().min(1).max(366).describe('Days ahead to materialize.'),
+          horizonDays: z
+            .number()
+            .int()
+            .min(1)
+            .max(366)
+            .describe('Days ahead to create occurrences.'),
           minimumOccurrences: z
             .number()
             .int()
             .min(1)
             .max(100)
-            .describe('The fewest upcoming copies kept materialized.'),
+            .describe('The fewest upcoming occurrences to keep ready.'),
         })
         .describe('How far ahead copies are created.'),
     }),
@@ -140,7 +145,7 @@ export const ComposerMilestoneDraft = z
     targetDate: z.iso.date().nullable().describe('The planned day, `YYYY-MM-DD`, or null.'),
     description: z.string().describe('The note, empty when none was written.'),
   })
-  .meta({ id: 'ComposerMilestoneDraft', description: 'A milestone row in a project draft.' });
+  .meta({ id: 'ComposerMilestoneDraft', description: 'One milestone in a project draft.' });
 /** Composer milestone draft value. */
 export type ComposerMilestoneDraft = z.infer<typeof ComposerMilestoneDraft>;
 
@@ -165,7 +170,7 @@ export const ProjectDraftPayload = z
       .array(ComposerMilestoneDraft)
       .max(50)
       .optional()
-      .describe('Milestone rows, in the order they will be created.'),
+      .describe('Milestones in the order they will be created.'),
   })
   .meta({ id: 'ProjectDraftPayload', description: 'A saved project composer draft.' });
 /** Project draft payload value. */

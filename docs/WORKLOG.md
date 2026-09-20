@@ -7,20 +7,36 @@
 
 ## Active Tasks
 
-### [CANVAS-HANDLE-TARGET-001] Make canvas connection handles usable
+### [CANVAS-A11Y-001] Complete Canvas accessibility follow-ups
 
-- **Status**: REVIEW
+- **Status**: COMPLETED
 - **Started**: 2026-09-19
+- **Completed**: 2026-09-19
 - **Priority**: P1
-- **Description**: Give Project and Task connection handles a visible 12px marker, a 32px pointer
-  target, clear hover/focus feedback, and non-dragging click and keyboard operation.
+- **Description**: Finish the Canvas accessibility contract after the connection-handle release:
+  retain the quiet 12px marker while meeting mobile target and non-text contrast requirements,
+  make the graph's keyboard focus visible, provide a single-pointer alternative to drag-panning,
+  and announce dependency endpoints by object name rather than internal id.
 - **Subtasks**:
   - [x] Add failing behavior tests for visual size, target size, naming, and keyboard activation.
   - [x] Implement the shared handle and make click-to-connect an explicit Canvas contract.
   - [x] Run repository checks and the authenticated production-build browser acceptance.
-  - [ ] Deploy and verify production.
-- **Validation**: The three focused suites failed in five expected assertions before the
-  implementation. They now pass all 14 tests, and the design-token policy passes all nine tests.
+  - [x] Deploy and verify the original connection-handle slice in production.
+  - [x] Raise Canvas controls to the 40px coarse-pointer floor without enlarging desktop chrome.
+  - [x] Meet 3:1 resting-handle contrast in light and dark themes.
+  - [x] Give the focusable graph frame an explicit visible focus treatment.
+  - [x] Add named directional pan commands as the single-pointer alternative to drag-panning.
+  - [x] Announce dependency edges with Project and Task names.
+  - [x] Add focused automated semantic coverage and prepare the completed slice for `main`.
+- **Plan**: Extend the existing shared handle rather than changing each node. Enforce the mobile
+  target floor at the graph frame so all Canvas controls inherit it. Keep viewport movement in the
+  existing bottom toolbar behind one named menu, and add accessible edge labels while projecting
+  domain rows into React Flow edges. Validate only the touched Canvas suites, design policy, and
+  changed-file lint before committing and integrating linearly.
+- **Validation**: The focused Canvas suites failed in seven expected assertions before the
+  implementation. They now pass all 15 tests, including the axe semantic scan, and the two tests
+  touched by the lint fixes pass all six assertions. Changed-file ESLint and `git diff --check`
+  pass. The design-token policy passes all nine tests.
   CI passed the full build, typecheck, lint, secret-scan, deploy-image, and authenticated core-screen
   gates. The first Web coverage run passed 4,441 of 4,442 tests and caught a stale no-border
   assertion; the handle now keeps the established `border-0` override and draws no marker stroke.
@@ -31,7 +47,13 @@
 - **Notes**: The first pass met only the 24px pointer-target rule. It left an 8px visual affordance
   and did not prove a keyboard path. The approved design uses React Flow's built-in click connection
   state, a focusable shared handle, and a small centered marker so accessibility does not require a
-  32px visible control on every card.
+  40px visible control on every card. The completed pass keeps the 12px marker, expands only the
+  coarse-pointer hit region, adds visible graph focus and named pan commands, and exposes hierarchy
+  and dependency meaning to assistive technology.
+- **Learnings**: React Flow supplies keyboard-operable connection state, but it does not infer the
+  product names that dependency edges need. The graph projection must provide those labels. Portal
+  menus also sit outside the graph frame, so their coarse-pointer target rule belongs on each menu
+  row instead of the frame selector.
 
 ---
 

@@ -4,18 +4,24 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { fitView, zoomIn, zoomOut, onRelayout, flowState } = vi.hoisted(() => ({
-  fitView: vi.fn(),
-  zoomIn: vi.fn(),
-  zoomOut: vi.fn(),
-  onRelayout: vi.fn(),
-  flowState: { nodes: [] as { id: string; selected: boolean }[] },
-}));
+const { fitView, getViewport, setViewport, zoomIn, zoomOut, onRelayout, flowState } = vi.hoisted(
+  () => ({
+    fitView: vi.fn(),
+    getViewport: vi.fn(() => ({ x: 20, y: 30, zoom: 1.25 })),
+    setViewport: vi.fn(),
+    zoomIn: vi.fn(),
+    zoomOut: vi.fn(),
+    onRelayout: vi.fn(),
+    flowState: { nodes: [] as { id: string; selected: boolean }[] },
+  }),
+);
 
 vi.mock('@xyflow/react', () => ({
   Panel: ({ children }: { children: ReactNode }) => <>{children}</>,
   useReactFlow: () => ({
     fitView,
+    getViewport,
+    setViewport,
     zoomIn,
     zoomOut,
     getNodes: () => flowState.nodes,
@@ -29,6 +35,8 @@ describe('CanvasViewportToolbar', () => {
   beforeEach(() => {
     flowState.nodes = [{ id: 'project-a', selected: true }];
     fitView.mockReset();
+    getViewport.mockClear();
+    setViewport.mockReset();
     onRelayout.mockReset();
   });
 
@@ -62,6 +70,15 @@ describe('CanvasViewportToolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Fit to view' }));
     expect(fitView).toHaveBeenCalledWith(expect.objectContaining({ padding: 0.2, maxZoom: 1 }));
     expect(fitView.mock.calls[0]?.[0]).not.toHaveProperty('nodes');
+  });
+
+  it('pans in named steps without requiring a drag', () => {
+    render(<CanvasViewportToolbar onRelayout={onRelayout} />);
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Pan canvas' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Pan left' }));
+
+    expect(setViewport).toHaveBeenCalledWith({ x: 140, y: 30, zoom: 1.25 }, { duration: 300 });
   });
 
   it('updates Fit selection when the controlled flow store changes selection', () => {

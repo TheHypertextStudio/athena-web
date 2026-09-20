@@ -36,6 +36,7 @@ const props = {
     onCriticalPath: false,
     isBottleneck: false,
     density: 'compact',
+    hierarchyDepth: 2,
     hierarchyChildYs: [96, 164],
   },
 } as unknown as NodeProps;
@@ -71,9 +72,13 @@ describe('TaskBranchNode', () => {
       'false',
     );
     expect(screen.getByRole('treeitem', { name: /Parent task/ })).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('treeitem', { name: /Parent task/ })).toHaveAttribute(
+      'aria-level',
+      '3',
+    );
   });
 
-  it('gives editable handles a named 32px target around a 12px marker', () => {
+  it('gives editable handles a named mobile-safe target around a contrasted 12px marker', () => {
     render(
       <SelectionProvider
         items={[
@@ -99,9 +104,17 @@ describe('TaskBranchNode', () => {
       'Connect from Parent task',
     ]);
     for (const handle of handles) {
-      expect(handle).toHaveClass('!size-8', '!border-0', '!bg-transparent');
+      expect(handle).toHaveClass(
+        '!size-8',
+        '[@media(pointer:coarse)]:!size-10',
+        '!border-0',
+        '!bg-transparent',
+      );
       expect(handle).toHaveAttribute('tabindex', '0');
-      expect(handle.querySelector('[data-canvas-handle-marker]')).toHaveClass('size-3');
+      expect(handle.querySelector('[data-canvas-handle-marker]')).toHaveClass(
+        'size-3',
+        'bg-outline',
+      );
     }
   });
 });

@@ -46,6 +46,22 @@ export interface ProjectGraphCommands {
   readonly removeDependency: (edge: Edge) => void;
 }
 
+/** Project the overview's named blocking relationships into accessible React Flow edges. */
+export function projectRowsToDependencyEdges(rows: readonly ProjectOverviewItem[]): Edge[] {
+  const names = new Map(rows.map((item) => [item.id, item.name]));
+  const rowIds = new Set(names.keys());
+  return rows.flatMap((item) =>
+    item.blockedByIds
+      .filter((upstreamId) => rowIds.has(upstreamId))
+      .map((upstreamId) => ({
+        id: `${upstreamId}->${item.id}`,
+        source: upstreamId,
+        target: item.id,
+        ariaLabel: `${names.get(upstreamId) ?? upstreamId} blocks ${item.name}`,
+      })),
+  );
+}
+
 /** Both directions of a Project's dependencies. */
 export interface ProjectPeekNeighbors {
   /** Projects that must finish first. */

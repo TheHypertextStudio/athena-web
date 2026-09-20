@@ -9,8 +9,25 @@
  * them in one row on one tone means a canvas has a single place to look for "move the view",
  * and nothing about the row depends on a context-menu gesture.
  */
-import { FitScreen, RefreshCw, Search, ZoomIn, ZoomOut } from '@docket/ui/icons';
-import { Button, Surface } from '@docket/ui/primitives';
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  FitScreen,
+  RefreshCw,
+  Search,
+  ZoomIn,
+  ZoomOut,
+} from '@docket/ui/icons';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Surface,
+} from '@docket/ui/primitives';
 import { type FitViewOptions, useReactFlow, useStore } from '@xyflow/react';
 
 /** Props for {@link CanvasViewportToolbar}. */
@@ -23,6 +40,7 @@ export interface CanvasViewportToolbarProps {
 
 /** How long a viewport move from the toolbar takes. */
 const MOVE_MS = 300;
+const PAN_STEP = 120;
 
 /** Zoom out, zoom in, and fit the whole graph to the view. */
 function ZoomControls({
@@ -76,6 +94,61 @@ function ZoomControls({
   );
 }
 
+/** Named directional viewport moves provide a single-pointer alternative to drag-panning. */
+function PanControls(): React.JSX.Element {
+  const { getViewport, setViewport } = useReactFlow();
+  const panBy = (x: number, y: number): void => {
+    const viewport = getViewport();
+    void setViewport(
+      { x: viewport.x + x, y: viewport.y + y, zoom: viewport.zoom },
+      { duration: MOVE_MS },
+    );
+  };
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="ghost" size="sm" iconOnly aria-label="Pan canvas">
+          <ChevronRight className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" width="sm">
+        <DropdownMenuItem
+          className="coarse:min-h-10"
+          onSelect={() => {
+            panBy(0, PAN_STEP);
+          }}
+        >
+          <ChevronUp /> Pan up
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="coarse:min-h-10"
+          onSelect={() => {
+            panBy(0, -PAN_STEP);
+          }}
+        >
+          <ChevronDown /> Pan down
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="coarse:min-h-10"
+          onSelect={() => {
+            panBy(PAN_STEP, 0);
+          }}
+        >
+          <ChevronLeft /> Pan left
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="coarse:min-h-10"
+          onSelect={() => {
+            panBy(-PAN_STEP, 0);
+          }}
+        >
+          <ChevronRight /> Pan right
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /** Zoom, fit, selection framing, and re-layout in one row. */
 export default function CanvasViewportToolbar({
   onRelayout,
@@ -92,6 +165,7 @@ export default function CanvasViewportToolbar({
       aria-label="Canvas view controls"
     >
       <ZoomControls fitPadding={fitPadding} />
+      <PanControls />
       <span aria-hidden="true" className="bg-outline-variant mx-1 h-5 w-px shrink-0" />
       <Button
         type="button"

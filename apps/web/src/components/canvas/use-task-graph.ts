@@ -127,17 +127,21 @@ export function taskGraphToFlow(
     };
   });
 
+  const nodeTitles = new Map(graph.nodes.map((node) => [node.id, node.title]));
   const edges: Edge[] = graph.edges
     .filter((edge) => edge.kind === 'dependency')
     .map((e) => {
       const tone = edgeTone.get(e.id) ?? 'neutral';
       const critical = insights.criticalEdgeIds.has(e.id);
+      const sourceTitle = nodeTitles.get(e.source) ?? e.source;
+      const targetTitle = nodeTitles.get(e.target) ?? e.target;
       // Critical-path edges read bold in the primary accent; others follow their blocker-completion tone.
       const stroke = critical ? 'var(--color-primary)' : TONE_STROKE[tone];
       return {
         id: e.id,
         source: e.source,
         target: e.target,
+        ariaLabel: `${sourceTitle} blocks ${targetTitle}`,
         // Keep the stable kind on data for dependency delete/reconnect gating.
         data: { kind: e.kind },
         reconnectable: false,

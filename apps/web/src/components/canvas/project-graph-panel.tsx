@@ -29,7 +29,7 @@
 import { type ProjectOverviewItem } from '../../lib/contracts/project';
 import { EmptyState } from '@docket/ui/components';
 import { FolderKanban } from '@docket/ui/icons';
-import { type Edge, type Node, type ReactFlowInstance } from '@xyflow/react';
+import { type Node, type ReactFlowInstance } from '@xyflow/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
@@ -45,6 +45,7 @@ import { useProjectGraphLayout } from '@/components/canvas/project-graph-layout'
 import ProjectNode, { type ProjectNodeData } from '@/components/canvas/project-node';
 import ProjectPeek from '@/components/canvas/project-peek';
 import {
+  projectRowsToDependencyEdges,
   useProjectGraphCommands,
   useProjectOverviewReceiptApplier,
   useProjectPeekModel,
@@ -176,18 +177,7 @@ export function ProjectGraphPanel({ rows, orgId }: ProjectGraphPanelProps): JSX.
     membersQ.data,
   );
 
-  const edges = useMemo<Edge[]>(() => {
-    const rowIds = new Set(rows.map((item) => item.id));
-    return rows.flatMap((item) =>
-      item.blockedByIds
-        .filter((upstreamId) => rowIds.has(upstreamId))
-        .map((upstreamId) => ({
-          id: `${upstreamId}->${item.id}`,
-          source: upstreamId,
-          target: item.id,
-        })),
-    );
-  }, [rows]);
+  const edges = useMemo(() => projectRowsToDependencyEdges(rows), [rows]);
 
   // The shared engine runs Dagre once per dependency component and then packs those measured
   // rectangles. Project cards remain fixed at their full-density dimensions.

@@ -135,6 +135,7 @@ function ProjectNodeComponent({ id, data, selected, isConnectable }: NodeProps):
     <ObjectSurface object={object} surfaceId="project-canvas" associationModifier="alt" href={href}>
       <div
         role="treeitem"
+        aria-level={1}
         {...selectionRowProps}
         ref={(element) => {
           selectionRef(element);

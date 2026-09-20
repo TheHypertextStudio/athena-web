@@ -109,6 +109,13 @@ export interface TaskNodeData extends Record<string, unknown> {
   density: 'compact' | 'full';
   /** Whether this node is the focus/root of a neighborhood view. */
   isRoot?: boolean;
+  /** Zero-based hierarchy depth supplied by the compound Task layout. */
+  hierarchyDepth?: number;
+}
+
+/** Convert the layout's zero-based depth to the one-based level required by ARIA. */
+function taskHierarchyLevel(hierarchyDepth?: number): number {
+  return (hierarchyDepth ?? 0) + 1;
 }
 
 /** Read the typed {@link TaskNodeData} off an xyflow node (one place for the `data` cast). */
@@ -131,6 +138,7 @@ function TaskNodeComponent({ id, data, selected, isConnectable }: NodeProps): Re
     density,
     orgId,
     parentTaskId,
+    hierarchyDepth,
   } = data as TaskNodeData;
   const compact = density === 'compact';
   const done = isEnded(stateType);
@@ -160,6 +168,7 @@ function TaskNodeComponent({ id, data, selected, isConnectable }: NodeProps): Re
     >
       <div
         role="treeitem"
+        aria-level={taskHierarchyLevel(hierarchyDepth)}
         {...selectionRowProps}
         ref={(element) => {
           selectionRef(element);

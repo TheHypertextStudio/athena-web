@@ -35,7 +35,7 @@ export default function CanvasSelectionFrame({
         containerProps.onKeyDown(event);
         if (!event.defaultPrevented) commands?.onCanvasKeyDown(event);
       }}
-      className="size-full focus:outline-none"
+      className="focus-visible:ring-primary size-full focus:outline-none focus-visible:ring-2 focus-visible:ring-inset [@media(pointer:coarse)]:[&_a[href]]:min-h-10 [@media(pointer:coarse)]:[&_a[href]]:min-w-10 [@media(pointer:coarse)]:[&_button]:min-h-10 [@media(pointer:coarse)]:[&_button]:min-w-10"
     >
       {children}
     </div>

@@ -63,6 +63,10 @@ describe('taskGraphToFlow', () => {
       estimate: null,
     });
     expect(flow.edges).toHaveLength(1);
-    expect(flow.edges[0]).toMatchObject({ id: 'dep:parent:child', reconnectable: false });
+    expect(flow.edges[0]).toMatchObject({
+      id: 'dep:parent:child',
+      reconnectable: false,
+      ariaLabel: '01J00000000000000000000010 blocks 01J00000000000000000000011',
+    });
   });
 });

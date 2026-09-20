@@ -46,20 +46,6 @@ describe('QuickAddRow', () => {
     expect(screen.getByPlaceholderText('Add a task to this cycle…')).toBeTruthy();
   });
 
-  it('hands the current title to the expanded editor without submitting it', () => {
-    const onAdd = vi.fn(async () => undefined);
-    const onExpand = vi.fn();
-    render(<QuickAddRow onAdd={onAdd} onExpand={onExpand} canEdit noun="task" />);
-
-    const field = screen.getByLabelText<HTMLInputElement>('New task name');
-    fireEvent.change(field, { target: { value: 'Write the launch brief' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add task details' }));
-
-    expect(onExpand).toHaveBeenCalledWith('Write the launch brief', expect.any(Function));
-    expect(onAdd).not.toHaveBeenCalled();
-    expect(field.value).toBe('');
-  });
-
   it('clears and keeps focus in the same turn as the submit', async () => {
     const onAdd = vi.fn(() => new Promise<void>(() => undefined));
     render(<QuickAddRow onAdd={onAdd} canEdit noun="task" />);

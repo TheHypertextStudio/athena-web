@@ -27,7 +27,6 @@ import { useEntityDisplay } from '@/components/entity-display/use-entity-display
 import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { QuickAddRow } from '@/components/views/quick-add-row';
-import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { PageContainer } from '@/components/views/page-layout';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
@@ -107,7 +106,6 @@ export function cycleSubtitle(
 export default function CycleDetailPage(): JSX.Element {
   const params = useTypedRoute('/orgs/[orgId]/cycles/[cycleId]').params;
   const { orgId, cycleId } = params;
-  const { openCreate, enqueueTask } = useCreateObject();
   const prefetch = usePrefetchApi();
 
   const cycleNoun = useVocabulary('cycle');
@@ -449,20 +447,7 @@ export default function CycleDetailPage(): JSX.Element {
             canEdit={canEditNow}
             noun={taskNoun}
             placeholder={`Add a ${taskNoun} to this ${cycleNounLower}…`}
-            onAdd={(title) =>
-              enqueueTask(() => createCycleTask.mutateAsync(title).then(() => undefined))
-            }
-            onExpand={(title, restore) => {
-              openCreate({
-                kind: 'task',
-                initialWorkspaceId: orgId,
-                defaultCycleId: cycleId,
-                defaultTitle: title,
-                onDismiss: restore,
-                sameWorkspaceCompletion: 'stay',
-                continuousDetail: true,
-              });
-            }}
+            onAdd={(title) => createCycleTask.mutateAsync(title).then(() => undefined)}
           />
         </div>
       ) : null}

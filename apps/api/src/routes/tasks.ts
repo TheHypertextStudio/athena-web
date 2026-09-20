@@ -1429,9 +1429,7 @@ A cross-org or unknown id 404s (existence-hiding: another tenant's task is indis
       capability: 'contribute',
       response: TaskOut,
       description: `Update selected task fields. Omitted fields remain unchanged, and an empty body returns the task unchanged. The base operation requires \`contribute\`.
-
-Changing \`assigneeId\` or \`delegateId\` also requires \`assign\`; otherwise the request returns 403. Set \`parentTaskId\` to make the task a subtask, or null to move it to the top level. A task cannot be its own parent or descendant. Docket checks the hierarchy and applies the change together, so concurrent updates cannot create a cycle. Every referenced ID must identify a visible resource in the same organization; otherwise the request returns 404.
- Changing \`assigneeId\` or \`delegateId\` also requires \`assign\`; otherwise the request returns 403. Set \`parentTaskId\` to make the task a subtask, or null to move it to the top level. A task cannot be its own parent or descendant. Docket checks the hierarchy and applies the change together, so concurrent updates cannot create a cycle. Every referenced ID must identify a visible resource in the same organization; otherwise the request returns 404. A selected cycle must belong to the task's team. When \`cycleCadenceRevision\` is present, a stale value returns 409 \`cadence_changed\` before Docket moves the task.
+Changing \`assigneeId\` or \`delegateId\` also requires \`assign\`; otherwise the request returns 403. Set \`parentTaskId\` to make the task a subtask, or null to move it to the top level. A task cannot be its own parent or descendant. Docket checks the hierarchy and applies the change together, so concurrent updates cannot create a cycle. Every referenced ID must identify a visible resource in the same organization; otherwise the request returns 404. A selected cycle must belong to the task's team. When \`cycleCadenceRevision\` is present, a stale value returns 409 \`cadence_changed\` before Docket moves the task.
 
 \`state\` must be a key in the team's \`workflowStates\`. Docket sets or clears \`completedAt\` and \`canceledAt\` from the selected state; clients do not supply those timestamps. State changes create completion or status activity, and assigning a person creates assignment activity. An absent or archived task returns 404. Returns the updated {@link TaskOut}. Use \`POST /:id/state\` when changing only the state.`,
     }),
@@ -1585,9 +1583,8 @@ Changing \`assigneeId\` or \`delegateId\` also requires \`assign\`; otherwise th
           or(eq(taskRelatedTask.taskId, id), eq(taskRelatedTask.relatedTaskId, id)),
         );
         await assertTaskCapability(orgId, ctx.actorId, current, 'contribute', tx);
-        if (body.assigneeId !== undefined || body.delegateId !== undefined) {
+        if (body.assigneeId !== undefined || body.delegateId !== undefined)
           await assertTaskCapability(orgId, ctx.actorId, current, 'assign', tx);
-        }
 
         if (newParentId !== null) {
           const activeTasks = await tx

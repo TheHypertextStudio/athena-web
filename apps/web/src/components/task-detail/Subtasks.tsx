@@ -2,16 +2,18 @@
 
 import type { TaskRef } from '@docket/work/task-model';
 import { StatusIcon } from '@docket/ui/components';
-import { Button } from '@docket/ui/primitives';
+import { Plus } from '@docket/ui/icons';
+import { Button, Input } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useMemo, useState } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { useTaskHierarchyDrop } from '@/components/tasks/task-hierarchy-drop';
-import { QuickAddRow } from '@/components/views/quick-add-row';
 import type { ObjectRef } from '@/lib/actions';
 import type { CategoryOfState } from '@/lib/work-category';
+
+import { TaskSection } from './task-section';
 
 /** Props for {@link Subtasks}. */
 interface SubtasksProps {
@@ -23,8 +25,6 @@ interface SubtasksProps {
   subtasks: readonly TaskRef[];
   /** Add a subtask by title; resolves when the create round-trip completes. */
   onAdd: (title: string) => Promise<void>;
-  /** Open the full Task editor with this unsubmitted subtask title. */
-  onExpand?: (title: string, restore: () => void) => void;
   /** Toggle a subtask between done and todo by its current completion. */
   onToggle: (subtask: TaskRef, done: boolean) => Promise<void>;
   /** Navigate to a subtask's own detail view. */
@@ -54,7 +54,6 @@ export function Subtasks({
   parentTaskId,
   subtasks,
   onAdd,
-  onExpand,
   onToggle,
   onOpen,
   onRename,
@@ -79,18 +78,19 @@ export function Subtasks({
   }
 
   return (
-    <section aria-labelledby="subtasks-heading" className="flex flex-col gap-2">
-      <div className="flex items-baseline justify-between">
-        <h2 id="subtasks-heading" className="text-label-large">
-          Subtasks
-        </h2>
-        {subtasks.length > 0 ? (
+    <TaskSection
+      id="subtasks"
+      title="Subtasks"
+      gap={2}
+      headerAlign="baseline"
+      headerEnd={
+        subtasks.length > 0 ? (
           <span className="text-on-surface-variant text-body-small tabular-nums">
             {doneCount}/{subtasks.length}
           </span>
-        ) : null}
-      </div>
-
+        ) : null
+      }
+    >
       {subtasks.length === 0 ? (
         <p className="text-on-surface-variant text-body-medium">No subtasks yet.</p>
       ) : (
@@ -123,14 +123,60 @@ export function Subtasks({
         </ul>
       )}
 
-      <QuickAddRow
-        onAdd={onAdd}
-        onExpand={onExpand}
-        canEdit={canEdit}
-        noun="subtask"
+      {canEdit ? <SubtaskComposer onAdd={onAdd} /> : null}
+    </TaskSection>
+  );
+}
+
+/** The composer at the foot of the list: a title and an Add button. */
+function SubtaskComposer({
+  onAdd,
+}: {
+  readonly onAdd: (title: string) => Promise<void>;
+}): JSX.Element {
+  const [title, setTitle] = useState('');
+  const [adding, setAdding] = useState(false);
+
+  async function add(): Promise<void> {
+    const trimmed = title.trim();
+    if (trimmed.length === 0) return;
+    setAdding(true);
+    try {
+      await onAdd(trimmed);
+      setTitle('');
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  return (
+    <form
+      className="flex gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void add();
+      }}
+    >
+      <Input
+        aria-label="New subtask title"
         placeholder="Add a subtask…"
+        value={title}
+        onChange={(event) => {
+          setTitle(event.target.value);
+        }}
+        className="h-8"
       />
-    </section>
+      <Button
+        type="submit"
+        size="sm"
+        variant="secondary"
+        disabled={adding || title.trim().length === 0}
+        className="gap-1"
+      >
+        <Plus className="size-4" />
+        {adding ? 'Adding…' : 'Add'}
+      </Button>
+    </form>
   );
 }
 

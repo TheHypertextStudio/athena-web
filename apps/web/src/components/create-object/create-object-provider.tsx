@@ -21,6 +21,7 @@ import {
 import { useActiveOrg } from '@/components/active-org';
 
 import { CreationContextProvider } from './creation-context';
+import { type SetActiveDraftId, useComposerInterruption } from './use-composer-interruption';
 
 export { type CompleteCreateObjectOptions, completeCreateObject } from './create-object-completion';
 
@@ -28,6 +29,8 @@ export { type CompleteCreateObjectOptions, completeCreateObject } from './create
 interface CreateObjectRequestBase {
   /** Destination chosen by the launcher; omitted to snapshot the shell workspace at open time. */
   readonly initialWorkspaceId?: string | null;
+  /** A saved draft the launcher asks the composer to reopen (the Drafts page names one). */
+  readonly draftId?: string | null;
 }
 
 /**
@@ -46,12 +49,8 @@ export interface CreateTaskRequest extends CreateObjectRequestBase {
   readonly kind: 'task';
   /** Stay on the invoking surface or open the new task when creation stays in the shell workspace. */
   readonly sameWorkspaceCompletion: SameWorkspaceCompletion;
-  /** Keep the contextual composer open so the invoking detail surface can accept rapid entries. */
-  readonly continuousDetail?: boolean;
   /** Notify the launcher after the task is created. */
   readonly onCreated?: (task: TaskOut) => void;
-  /** Restore a transferred inline draft when this composer closes without a successful Task. */
-  readonly onDismiss?: () => void;
   /**
    * Run destination-independent follow-up work after every successful Task creation.
    *
@@ -63,12 +62,6 @@ export interface CreateTaskRequest extends CreateObjectRequestBase {
   readonly afterCreate?: (task: TaskOut) => void | Promise<void>;
   /** Preselect a project in the new task draft. */
   readonly defaultProjectId?: string | null;
-  /** Preselect a cycle in the new task draft. */
-  readonly defaultCycleId?: string | null;
-  /** Create the task beneath this parent task. */
-  readonly defaultParentTaskId?: string | null;
-  /** Pre-fill the task title, for example when expanding an inline draft. */
-  readonly defaultTitle?: string | null;
   /** Preselect an assignee in the new task draft. */
   readonly defaultAssigneeId?: string | null;
   /** Apply this task template when the composer opens. */
@@ -150,10 +143,14 @@ export interface CreateObjectValue {
   readonly openCreate: (request: CreateObjectRequest, returnFocusTo?: HTMLElement | null) => void;
   /** Close the active composer and clear its destination. */
   readonly closeCreate: () => void;
-  /** Mark the transferred draft as persisted so closing does not restore it. */
-  readonly confirmCreate: () => void;
-  /** Serialize an immutable task snapshot while allowing the caller to accept the next draft. */
-  readonly enqueueTask: (run: () => Promise<void>) => Promise<void>;
+  /**
+   * Report the draft the open composer is writing to, or null once there is none.
+   *
+   * @remarks
+   * When navigation closes the composer, this is the draft the provider points the next composer
+   * of the same kind at. See {@link useComposerInterruption}.
+   */
+  readonly setActiveDraftId: SetActiveDraftId;
 }
 
 interface CreateObjectStateValue extends CreateObjectValue {
@@ -183,8 +180,6 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
   const [request, setRequest] = useState<CreateObjectRequest | null>(null);
   const [targetWorkspaceId, setTargetWorkspaceId] = useState<string | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
-  const dismissRef = useRef<(() => void) | null>(null);
-  const taskQueueRef = useRef<Promise<void>>(Promise.resolve());
   const focusRestoreGenerationRef = useRef(0);
 
   const openCreate = useCallback(
@@ -198,16 +193,12 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
       // value to follow the shell later. Kind bodies use this immutable snapshot to decide whether
       // contextual defaults remain valid after a destination switch.
       setRequest({ ...nextRequest, initialWorkspaceId });
-      dismissRef.current = nextRequest.kind === 'task' ? (nextRequest.onDismiss ?? null) : null;
       setTargetWorkspaceId(initialWorkspaceId);
     },
     [shellWorkspaceId],
   );
 
   const closeCreate = useCallback((): void => {
-    const onDismiss = dismissRef.current;
-    dismissRef.current = null;
-    onDismiss?.();
     const returnFocusTo = returnFocusRef.current;
     const focusRestoreGeneration = focusRestoreGenerationRef.current + 1;
     focusRestoreGenerationRef.current = focusRestoreGeneration;
@@ -232,18 +223,6 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
     window.setTimeout(restoreUnclaimedFocus, 200);
   }, []);
 
-  const confirmCreate = useCallback((): void => {
-    dismissRef.current = null;
-  }, []);
-
-  const enqueueTask = useCallback((run: () => Promise<void>): Promise<void> => {
-    const queued = taskQueueRef.current.then(run);
-    // A rejected snapshot is reported by its caller. The tail recovers so it cannot strand later
-    // title-only entries behind a failed request.
-    taskQueueRef.current = queued.catch(() => undefined);
-    return queued;
-  }, []);
-
   // A create may open during the shell's brief no-active-workspace frame. Wait for the shell's
   // resolved selection, rather than guessing from membership order, then freeze it exactly once.
   useEffect(() => {
@@ -261,17 +240,19 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
     if (targetWorkspaceId === null) setTargetWorkspaceId(shellWorkspaceId);
   }, [request, shellWorkspaceId, targetWorkspaceId]);
 
+  // Navigating away closes the composer; the draft it was writing is pointed at for next time.
+  const setActiveDraftId = useComposerInterruption(request, closeCreate);
+
   const value = useMemo<CreateObjectStateValue>(
     () => ({
       request,
       openCreate,
       closeCreate,
-      confirmCreate,
-      enqueueTask,
+      setActiveDraftId,
       targetWorkspaceId,
       setTargetWorkspaceId,
     }),
-    [request, openCreate, closeCreate, confirmCreate, enqueueTask, targetWorkspaceId],
+    [request, openCreate, closeCreate, setActiveDraftId, targetWorkspaceId],
   );
 
   return <CreateObjectContext.Provider value={value}>{children}</CreateObjectContext.Provider>;

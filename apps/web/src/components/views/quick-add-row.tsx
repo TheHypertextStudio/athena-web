@@ -23,8 +23,8 @@
  * entering two names that both fail leaves both of them on screen — putting them back one at a time
  * into a single box means the second one silently overwrites nothing and is simply lost.
  */
-import { Edit, Plus, RefreshCw, X } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
+import { InlineBanner } from '@docket/ui/components';
+import { Plus } from '@docket/ui/icons';
 import { type JSX, useRef, useState } from 'react';
 
 import { userErrorMessage } from '@/lib/problem';
@@ -39,8 +39,6 @@ export interface QuickAddRowProps {
   noun: string;
   /** Placeholder prompt; defaults to `Add a {noun}…`. */
   placeholder?: string;
-  /** Open the full composer with the current, unsubmitted name. */
-  onExpand?: ((value: string, restore: () => void) => void) | undefined;
 }
 
 /** A submission the server refused, kept so its words are not lost. */
@@ -67,7 +65,6 @@ export function QuickAddRow({
   canEdit,
   noun,
   placeholder = `Add a ${noun}…`,
-  onExpand,
 }: QuickAddRowProps): JSX.Element | null {
   const [value, setValue] = useState('');
   const [refused, setRefused] = useState<readonly RefusedSubmission[]>([]);
@@ -93,21 +90,6 @@ export function QuickAddRow({
     setValue('');
     inputRef.current?.focus();
     submit(submitted);
-  };
-
-  /** Hand the current draft to the full editor without creating a second task. */
-  const expand = (): void => {
-    if (onExpand === undefined) return;
-    const submitted = value.trim();
-    if (submitted.length === 0) {
-      onExpand('', () => undefined);
-      return;
-    }
-    setValue('');
-    onExpand(submitted, () => {
-      setValue((current) => (current.length === 0 ? submitted : current));
-      window.setTimeout(() => inputRef.current?.focus(), 0);
-    });
   };
 
   /** Try a refused submission again, removing its row first so a second failure re-adds it. */
@@ -143,57 +125,32 @@ export function QuickAddRow({
           }}
           className="text-body-medium text-on-surface placeholder:text-on-surface-variant h-11 flex-1 bg-transparent outline-none"
         />
-        {onExpand === undefined ? null : (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={`Add ${noun} details`}
-            title={`Add ${noun} details`}
-            onClick={expand}
-          >
-            <Edit aria-hidden className="size-4" />
-          </Button>
-        )}
       </form>
 
       {refused.length === 0 ? null : (
         <ul aria-label={`Unsent ${noun}s`} className="flex flex-col gap-1">
           {refused.map((entry) => (
-            <li
-              key={entry.key}
-              className="border-error/40 flex items-center gap-2 rounded-lg border border-dashed px-3 py-2"
-            >
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span data-refused-title className="text-on-surface text-body-medium truncate">
-                  {entry.value}
-                </span>
-                <span role="alert" className="text-error text-body-small">
-                  {entry.reason}
-                </span>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-label={`Retry adding ${entry.value}`}
-                onClick={() => {
-                  retry(entry);
+            <li key={entry.key}>
+              <InlineBanner
+                tone="critical"
+                density="compact"
+                title={entry.reason}
+                action={{
+                  label: 'Retry',
+                  ariaLabel: `Retry adding ${entry.value}`,
+                  onSelect: () => {
+                    retry(entry);
+                  },
                 }}
-              >
-                <RefreshCw aria-hidden className="size-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-label={`Discard ${entry.value}`}
-                onClick={() => {
+                dismissLabel={`Discard ${entry.value}`}
+                onDismiss={() => {
                   setRefused((current) => current.filter((item) => item.key !== entry.key));
                 }}
               >
-                <X aria-hidden className="size-4" />
-              </Button>
+                <span data-refused-title className="block truncate">
+                  {entry.value}
+                </span>
+              </InlineBanner>
             </li>
           ))}
         </ul>

@@ -31,13 +31,12 @@
  * @see {@link useComposerOptions} for the assignee / project / cycle / label option sources.
  */
 import { ActorId, TeamId } from '@docket/identity-access/ids';
-import { CycleId, LabelId, MilestoneId, ProjectId, TaskId } from '@docket/work/ids';
+import { CycleId, LabelId, MilestoneId, ProjectId } from '@docket/work/ids';
 import { type TaskOut } from '@docket/work/task-model';
 import { type TeamOut } from '../../lib/contracts/team';
 import { type WorkflowState } from '@docket/work/workflow';
 import type { Priority } from '@docket/work/task-contract';
 import { todayIso } from '@docket/ui/components';
-import { Button } from '@docket/ui/primitives';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight } from '@docket/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
@@ -47,11 +46,10 @@ import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
-import { ComposerTemplateControl } from '@/components/composer/template-menu';
-import type { EditorContribution } from '@/components/editor/editor-contribution';
 import { useComposerDraft } from '@/components/composer/use-composer-draft';
-import { templateMerge } from '@/components/templates/merge';
+import { useComposerTemplateContribution } from '@/components/composer/use-template-contribution';
 import { withComposerReset } from '@/components/composer/reset-on-open';
+import { useResumeDraft } from '@/components/create-object/use-resume-draft';
 import { completeCreateObject } from '@/components/create-object/create-object-completion';
 import {
   type CreateTaskRequest,
@@ -75,6 +73,7 @@ import {
 } from '@/components/recurrence/repeat-task-control';
 
 import { TaskComposerPickers } from './task-form-pickers';
+import { useTaskDraftPersistence } from './use-task-draft-persistence';
 
 /** The lists this composer's pickers draw from. */
 const COMPOSER_INCLUDE = ['actors', 'projects', 'labels', 'milestones'] as const;
@@ -89,7 +88,6 @@ export interface TaskDraft {
   priority: Priority;
   assigneeId: string | null;
   projectId: string | null;
-  parentTaskId: string | null;
   milestoneId: string | null;
   cycleId: string | null;
   startDate: string | null;
@@ -125,10 +123,6 @@ export interface TaskGlobalCreation {
   readonly canContribute: boolean;
   /** The target-workspace Actor id for scoping personal templates. */
   readonly currentActorId: string | null;
-  /** Keep a detail-origin composer open while it drains immutable task snapshots. */
-  readonly continuousDetail: boolean;
-  /** Shared FIFO for every Task snapshot launched from the current shell. */
-  readonly enqueueTask: (run: () => Promise<void>) => Promise<void>;
   /**
    * Complete a successful create against the selected destination.
    *
@@ -163,16 +157,14 @@ export interface CreateTaskDialogProps {
   onCreated: (task: TaskOut) => void;
   /** Pre-seed the project picker (e.g. opening from a project's Tasks tab). */
   defaultProjectId?: string | null | undefined;
-  /** Pre-seed the cycle picker from a contextual detail view. */
-  defaultCycleId?: string | null | undefined;
-  /** Create beneath this task without exposing an unrelated parent picker. */
-  defaultParentTaskId?: string | null | undefined;
-  /** Pre-seed a title transferred from a quick-add draft. */
-  defaultTitle?: string | null | undefined;
   /** Pre-seed the assignee picker (e.g. opening from My Work's "Assigned to me" tab). */
   defaultAssigneeId?: string | null | undefined;
   /** A template to apply on open, from a `?template=` compose request. */
   defaultTemplateId?: string | null | undefined;
+  /** A saved draft to reopen on mount; it takes precedence over `defaultTemplateId`. */
+  resumeDraftId?: string | null | undefined;
+  /** Receives the id of the draft row being written, and null once there is none. */
+  onDraftIdChange?: ((draftId: string | null) => void) | undefined;
   /** Destination facts when this dialog is mounted by the global creation host. */
   globalCreation?: TaskGlobalCreation | undefined;
 }
@@ -192,13 +184,13 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   onOpenChange,
   onCreated,
   defaultProjectId = null,
-  defaultCycleId = null,
-  defaultParentTaskId = null,
-  defaultTitle = null,
   defaultAssigneeId = null,
   defaultTemplateId = null,
+  resumeDraftId,
+  onDraftIdChange,
   globalCreation,
 }: CreateTaskDialogProps): JSX.Element {
+  const taskNoun = useVocabulary('task');
   const projectNoun = useVocabulary('project');
   const cycleNoun = useVocabulary('cycle');
   const previousWorkspaceId = useRef(globalCreation?.targetWorkspaceId ?? null);
@@ -209,16 +201,15 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
 
   const { scale: estimationScale } = useEstimationScale(orgId, open && destinationReady);
   const { draft, setField, updateDraft } = useComposerDraft<TaskDraft>({
-    title: contextualRequestDefaultsApply ? (defaultTitle ?? '') : '',
+    title: '',
     description: '',
     teamOverride: null,
     state: null,
     priority: 'none',
     assigneeId: contextualRequestDefaultsApply ? defaultAssigneeId : null,
     projectId: contextualRequestDefaultsApply ? defaultProjectId : null,
-    parentTaskId: contextualRequestDefaultsApply ? defaultParentTaskId : null,
     milestoneId: null,
-    cycleId: contextualRequestDefaultsApply ? defaultCycleId : null,
+    cycleId: null,
     startDate: null,
     dueDate: null,
     labelIds: [],
@@ -239,91 +230,44 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   const [completionFailed, setCompletionFailed] = useState(false);
   const [completedTask, setCompletedTask] = useState<TaskOut | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [failedSnapshots, setFailedSnapshots] = useState<
-    readonly { readonly key: number; readonly title: string; readonly retry: () => void }[]
-  >([]);
-  const localTaskQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const nextSnapshotKey = useRef(0);
   const continuation = useComposerContinuation({
     creating,
     successMessage: 'Task created. Ready to create another.',
   });
 
   const teamId = draft.teamOverride ?? defaultTeamId;
-  const continuousDetail = globalCreation?.continuousDetail ?? false;
-
-  /** Send every contextual snapshot through the shell FIFO, preserving local dialog compatibility. */
-  const enqueueTask = useCallback(
-    (title: string, run: () => Promise<void>): void => {
-      const key = nextSnapshotKey.current++;
-      const attempt = (): void => {
-        const queued = globalCreation
-          ? globalCreation.enqueueTask(run)
-          : localTaskQueueRef.current.then(run);
-        if (globalCreation === undefined) localTaskQueueRef.current = queued.catch(() => undefined);
-        void queued.catch(() => {
-          setFailedSnapshots((current) => [
-            ...current,
-            {
-              key,
-              title,
-              retry: () => {
-                setFailedSnapshots((entries) => entries.filter((entry) => entry.key !== key));
-                attempt();
-              },
-            },
-          ]);
-        });
-      };
-      attempt();
-    },
-    [globalCreation],
-  );
-  const templateContribution = useMemo<EditorContribution>(
-    () => ({
-      id: 'composer-description-templates-task',
-      renderEmptyAction: () => (
-        <ComposerTemplateControl
-          orgId={orgId}
-          kind="task"
-          open={open && destinationReady}
-          autoApplyId={contextualRequestDefaultsApply ? defaultTemplateId : null}
-          currentActorId={globalCreation?.currentActorId}
-          teamId={globalCreation === undefined ? undefined : teamId}
-          inline
-          onManage={
-            globalCreation === undefined
-              ? undefined
-              : () => {
-                  onOpenChange(false);
-                }
-          }
-          onApply={(chosen) => {
-            updateDraft((current) =>
-              templateMerge(current, templatePatch(chosen.payload, 'task'), {
-                document: 'description',
-                labels: ['title'],
-              }),
-            );
-          }}
-          disabled={creating || completedTask !== null || !destinationReady}
-        />
-      ),
-    }),
-    [
-      completedTask,
-      contextualRequestDefaultsApply,
-      creating,
-      defaultTemplateId,
-      destinationReady,
-      globalCreation,
-      onOpenChange,
-      open,
-      orgId,
-      teamId,
-      updateDraft,
-    ],
-  );
+  const persistence = useTaskDraftPersistence({
+    orgId,
+    open,
+    destinationReady,
+    draft,
+    committed: completedTask !== null,
+    updateDraft,
+    resumeDraftId,
+    onDraftIdChange,
+    options,
+    teams,
+    defaultTeamId,
+    teamId,
+    workflowStates,
+  });
+  const templateContribution = useComposerTemplateContribution<TaskDraft>({
+    kind: 'task',
+    orgId,
+    open,
+    destinationReady,
+    host: globalCreation,
+    contextualDefaultsApply: contextualRequestDefaultsApply,
+    defaultTemplateId,
+    resumeDraftId,
+    teamId,
+    creating,
+    committed: completedTask !== null,
+    onOpenChange,
+    updateDraft,
+    patch: (payload) => templatePatch(payload, 'task'),
+    rule: { document: 'description', labels: ['title'] },
+  });
 
   // A destination change retains portable text and generic task values, but a reference to a
   // member, team, project, milestone, cycle, or label in the prior workspace is never valid in
@@ -429,51 +373,6 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       }
       const trimmed = draft.title.trim();
       if (trimmed.length === 0 || !teamId || !canSubmit || !continuation.beginSubmission()) return;
-      if (continuousDetail && draft.repeat.kind === 'none') {
-        const trimmedBody = draft.description.trim();
-        const taskBody = {
-          title: trimmed,
-          teamId: TeamId.parse(teamId),
-          priority: draft.priority,
-          ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
-          ...(draft.state ? { state: draft.state } : {}),
-          ...(draft.assigneeId ? { assigneeId: ActorId.parse(draft.assigneeId) } : {}),
-          ...(draft.projectId ? { projectId: ProjectId.parse(draft.projectId) } : {}),
-          ...(draft.parentTaskId ? { parentTaskId: TaskId.parse(draft.parentTaskId) } : {}),
-          ...(draft.milestoneId ? { milestoneId: MilestoneId.parse(draft.milestoneId) } : {}),
-          ...(draft.cycleId ? { cycleId: CycleId.parse(draft.cycleId) } : {}),
-          ...(draft.startDate ? { startDate: draft.startDate } : {}),
-          ...(draft.dueDate ? { dueDate: draft.dueDate } : {}),
-          ...(draft.labelIds.length > 0
-            ? { labels: draft.labelIds.map((id) => LabelId.parse(id)) }
-            : {}),
-          ...(draft.estimate !== null ? { estimate: draft.estimate } : {}),
-        };
-        const references: TaskCreationReferences = {
-          projectId: draft.projectId,
-          milestoneId: draft.milestoneId,
-          cycleId: draft.cycleId,
-        };
-        continuation.completeContinuation(() => {
-          updateDraft(() => ({ title: '', description: '' }));
-        });
-        continuation.finishSubmission();
-        enqueueTask(trimmed, async () => {
-          const res = await api.v1.orgs[':orgId'].tasks.$post({ param: { orgId }, json: taskBody });
-          if (!res.ok) throw await readProblemError(res, 'Could not create the task.');
-          const created = await res.json();
-          try {
-            await globalCreation?.onCreated(created, references, true);
-          } catch (caught) {
-            // The task already exists. Retrying this snapshot would create a duplicate, so keep
-            // the failure in the composer-wide error channel rather than offering a retry.
-            setError(
-              userErrorMessage(caught, 'The task was created, but the page could not refresh.'),
-            );
-          }
-        });
-        return;
-      }
       setCreating(true);
       setError(null);
       let createdTask: TaskOut | null = null;
@@ -487,7 +386,6 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
           ...(draft.state ? { state: draft.state } : {}),
           ...(draft.assigneeId ? { assigneeId: ActorId.parse(draft.assigneeId) } : {}),
           ...(draft.projectId ? { projectId: ProjectId.parse(draft.projectId) } : {}),
-          ...(draft.parentTaskId ? { parentTaskId: TaskId.parse(draft.parentTaskId) } : {}),
           ...(draft.milestoneId ? { milestoneId: MilestoneId.parse(draft.milestoneId) } : {}),
           ...(draft.cycleId ? { cycleId: CycleId.parse(draft.cycleId) } : {}),
           ...(draft.startDate ? { startDate: draft.startDate } : {}),
@@ -523,6 +421,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         }
         const created = await res.json();
         createdTask = 'firstTask' in created ? created.firstTask : created;
+        await persistence.commit();
         const references: TaskCreationReferences = {
           projectId: draft.projectId,
           milestoneId: draft.milestoneId,
@@ -554,13 +453,12 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       canSubmit,
       completedTask,
       continuation,
-      continuousDetail,
       draft,
-      enqueueTask,
       globalCreation,
       onCreated,
       onOpenChange,
       orgId,
+      persistence,
       teamId,
       updateDraft,
     ],
@@ -615,7 +513,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       titleInputRef={continuation.titleInputRef}
       titlePlaceholder="Task title"
       body={draft.description}
-      bodyResetKey={continuation.bodyResetGeneration}
+      bodyResetKey={`${String(continuation.bodyResetGeneration)}:${String(persistence.loadGeneration)}`}
       onBodyChange={(next) => {
         setField('description', next);
       }}
@@ -623,6 +521,8 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       bodyContributions={[templateContribution]}
       mentionOrgId={orgId}
       error={error ?? globalCreation?.loadError ?? null}
+      drafts={persistence.controls}
+      draftNoun={taskNoun.toLowerCase()}
       statusMessage={continuation.statusMessage}
       draftCommitted={completedTask !== null}
       contentDisabled={completedTask !== null}
@@ -697,34 +597,6 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
           disabled={creating}
         />
       </EntityMetadataItem>
-      {failedSnapshots.length === 0 ? null : (
-        <div className="bg-surface-container flex flex-col gap-2 rounded-lg p-3">
-          <p role="alert" className="text-error text-body-small">
-            Some tasks could not be created.
-          </p>
-          {failedSnapshots.map((snapshot) => (
-            <div key={snapshot.key} className="flex items-center justify-between gap-3">
-              <span className="text-on-surface text-body-small truncate">{snapshot.title}</span>
-              <Button type="button" variant="ghost" size="sm" onClick={snapshot.retry}>
-                Retry
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={`Discard ${snapshot.title}`}
-                onClick={() => {
-                  setFailedSnapshots((current) =>
-                    current.filter((entry) => entry.key !== snapshot.key),
-                  );
-                }}
-              >
-                ×
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
     </ComposerShell>
   );
 });
@@ -740,18 +612,11 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
  * @returns the global Task composer, or `null` while another kind is requested.
  */
 export function GlobalTaskComposer(): JSX.Element | null {
-  const { request, closeCreate, confirmCreate, enqueueTask } = useCreateObject();
+  const { request, closeCreate } = useCreateObject();
 
   if (request?.kind !== 'task') return null;
 
-  return (
-    <GlobalTaskComposerDialog
-      request={request}
-      closeCreate={closeCreate}
-      confirmCreate={confirmCreate}
-      enqueueTask={enqueueTask}
-    />
-  );
+  return <GlobalTaskComposerDialog request={request} closeCreate={closeCreate} />;
 }
 
 /** Props for the request-bound body rendered by {@link GlobalTaskComposer}. */
@@ -760,16 +625,12 @@ interface GlobalTaskComposerDialogProps {
   readonly request: CreateTaskRequest;
   /** Close the shell-global create request. */
   readonly closeCreate: () => void;
-  readonly confirmCreate: () => void;
-  readonly enqueueTask: (run: () => Promise<void>) => Promise<void>;
 }
 
 /** Resolve the active Task request only while the global provider has one open. */
 function GlobalTaskComposerDialog({
   request,
   closeCreate,
-  confirmCreate,
-  enqueueTask,
 }: GlobalTaskComposerDialogProps): JSX.Element {
   const creation = useCreationContext();
   const { data: session } = useSession();
@@ -795,6 +656,8 @@ function GlobalTaskComposerDialog({
   // the composer before submitting.
   const targetIsOriginalWorkspace = targetWorkspaceId === initialWorkspaceId;
   const taskOrgId = targetWorkspaceId ?? initialWorkspaceId ?? '';
+  const { setActiveDraftId } = useCreateObject();
+  const resume = useResumeDraft('task', request.draftId, targetWorkspaceId, destinationReady);
 
   return (
     <VocabularyProvider skin={creation.vocabulary}>
@@ -809,22 +672,18 @@ function GlobalTaskComposerDialog({
         }}
         onCreated={() => undefined}
         defaultProjectId={targetIsOriginalWorkspace ? request.defaultProjectId : null}
-        defaultCycleId={targetIsOriginalWorkspace ? request.defaultCycleId : null}
-        defaultParentTaskId={targetIsOriginalWorkspace ? request.defaultParentTaskId : null}
-        defaultTitle={targetIsOriginalWorkspace ? request.defaultTitle : null}
         defaultAssigneeId={targetIsOriginalWorkspace ? request.defaultAssigneeId : null}
         defaultTemplateId={targetIsOriginalWorkspace ? request.defaultTemplateId : null}
+        resumeDraftId={resume.draftId}
+        onDraftIdChange={setActiveDraftId}
         globalCreation={{
           targetWorkspaceId,
           initialWorkspaceId,
-          ready: destinationReady,
+          ready: resume.ready,
           loadError: creation.loadError,
           canContribute: creation.permissions.canContribute,
           currentActorId,
-          continuousDetail: request.continuousDetail ?? false,
-          enqueueTask,
           onCreated: async (task, references, continueCreating) => {
-            confirmCreate();
             const invalidationKeys: (readonly unknown[])[] = [
               queryKeys.tasks(taskOrgId),
               // `queryKeys.taskGraph` documents this raw prefix as the canonical all-scopes key.

@@ -3,8 +3,6 @@
 import type { AttachmentOut } from '@docket/work/attachment-contract';
 import type { Health } from '@docket/work/capability-contract';
 import type { LabelOut } from '@docket/work/label-contract';
-import type { TaskOut } from '@docket/work/task-model';
-import { TeamId } from '@docket/identity-access/ids';
 import type {
   ObjectCommandReceipt,
   ObjectCommandRequest,
@@ -34,12 +32,14 @@ import {
 } from '@tanstack/react-query';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
-import TaskGraphPanel from '@/components/canvas/task-graph-panel';
+import { useHighlightedIds } from '@/components/athena/proposal-highlight';
+import { useProposedTaskChanges } from '@/lib/athena/proposed-changes';
 import { useCreateLabel } from '@/components/labels/queries';
-import { ConfirmDestructiveDialog } from '@docket/ui/components';
+import { ConfirmDestructiveDialog, InlineBanner } from '@docket/ui/components';
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
+import { PartialLoadBanner, QueryLoadFailure } from '@/components/feedback';
 import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
 import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
 import { LatestUpdateSummary } from '@/components/entity-detail/latest-update-summary';
@@ -48,8 +48,7 @@ import {
   type AgentActivityEntry,
 } from '@/components/project-detail/agent-activity-feed';
 import { AgentsStrip, type AgentHere } from '@/components/project-detail/agents-strip';
-import { MilestoneTasks } from '@/components/project-detail/milestone-tasks';
-import { useCreateObject } from '@/components/create-object/create-object-provider';
+import { ProjectTasksTab } from '@/components/project-detail/project-tasks-tab';
 import { ProjectMilestonesPanel } from '@/components/project-detail/project-milestones';
 import { ProjectDependenciesPanel } from '@/components/project-detail/project-dependencies';
 import { OverviewSummary } from '@/components/project-detail/overview-summary';
@@ -57,6 +56,8 @@ import {
   type ProjectRestoreRefreshState,
   useProjectRestoreController,
 } from '@/components/project-detail/project-restore-controller';
+import { DetailUnavailable } from '@/components/entity-detail/detail-unavailable';
+import { HeaderLoadFailureBanner } from '@/components/entity-detail/header-load-failure';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { memberActorOptions } from '@/components/pickers/options';
@@ -69,9 +70,9 @@ import { ContainerDetailLoading } from '@/components/views/entity-snapshot-metad
 import { DetailPrintSummary } from '@/components/views/detail-print-summary';
 import { useDetailTab } from '@/components/views/use-detail-tab';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
-import { useDocumentTitle } from '@/components/tabs/use-document-title';
-import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import { api } from '@/lib/api';
+import { useProjectPageIdentity } from './use-project-page-identity';
+import { fetchAllInitiatives, fetchAllPrograms } from '@/lib/org-collection-pages';
 import { useTypedRoute } from '@/lib/app-location';
 import {
   aggregateLoadState,
@@ -89,7 +90,6 @@ import {
   seedNavigationSnapshot,
 } from '@/lib/navigation-snapshot-runtime';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
-import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { orgMembersDef } from '@/lib/use-org-membership';
 import { useProjectMutations } from '@/lib/use-project-mutations';
@@ -174,10 +174,12 @@ export default function ProjectDetailPage(): JSX.Element {
   const { params } = useTypedRoute('/orgs/[orgId]/projects/[projectId]');
   const { orgId, projectId } = params;
   const router = useAppRouter();
-  const { openCreate, enqueueTask } = useCreateObject();
   const queryClient = useQueryClient();
   const accountId = useResolvedAccountId();
   const projectNoun = useVocabulary('project');
+  const projectPlural = useVocabulary('project', { plural: true });
+  const refreshTitle = `Could not refresh this ${projectNoun.toLowerCase()}`;
+  const workTitle = `${projectNoun} work could not load`;
   const taskNoun = useVocabulary('task').toLowerCase();
   const subject = ProjectSubjectRef.parse({ subjectType: 'project', subjectId: projectId });
   const navigationSnapshot = useNavigationSnapshot('project', projectId);
@@ -231,7 +233,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const programsQ = useApiQuery(
     apiQueryOptions(
       [...queryKeys.programs(orgId), 'picker'] as const,
-      () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
+      () => fetchAllPrograms(api, orgId),
       'Could not load Programs.',
       { enabled: programPickerOpen },
     ),
@@ -239,7 +241,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const initiativesQ = useApiQuery(
     apiQueryOptions(
       [...queryKeys.initiatives(orgId), 'picker'] as const,
-      () => api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId }, query: {} }),
+      () => fetchAllInitiatives(api, orgId),
       'Could not load Initiatives.',
       { enabled: initiativesPickerOpen },
     ),
@@ -270,6 +272,7 @@ export default function ProjectDetailPage(): JSX.Element {
       () =>
         api.v1.orgs[':orgId'].projects[':id'].resources.$get({
           param: { orgId, id: projectId },
+          query: { limit: '100' },
         }),
       'Could not load resources.',
       { enabled: aggregate !== null && tab === 'resources' },
@@ -303,27 +306,9 @@ export default function ProjectDetailPage(): JSX.Element {
   );
   const mutations = useProjectMutations(orgId, projectId);
   const createLabel = useCreateLabel(orgId);
+  const proposedByTaskId = useProposedTaskChanges(orgId);
+  const highlightedIds = useHighlightedIds();
   const canEdit = aggregate?.capabilities.contribute ?? false;
-  const quickCreateProjectTask = useApiMutation<TaskOut, string>({
-    mutationFn: async (title) => {
-      if (project?.teamId === null || project?.teamId === undefined) {
-        throw new Error('Project task creation requires an owning team.');
-      }
-      return unwrap(
-        () =>
-          api.v1.orgs[':orgId'].tasks.$post({
-            param: { orgId },
-            json: { title, teamId: TeamId.parse(project.teamId), projectId },
-          }),
-        'Could not create the task.',
-      );
-    },
-    onSuccess: () => {
-      void workQ.refetch();
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks(orgId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects(orgId) });
-    },
-  });
   const canDelete = aggregate?.capabilities.manage ?? false;
   const projectTaskCount = aggregate?.defaultView.progress.taskCount ?? 0;
   const linkedInitiativeIds =
@@ -410,8 +395,7 @@ export default function ProjectDetailPage(): JSX.Element {
   useEffect(() => {
     if (aggregate) seedNavigationSnapshot(aggregate.snapshot);
   }, [aggregate]);
-  useRegisterTabTitle('project', orgId, projectId, project?.name ?? navigationSnapshot?.name);
-  useDocumentTitle(project?.name ?? navigationSnapshot?.name);
+  useProjectPageIdentity(orgId, projectId, project?.name ?? navigationSnapshot?.name);
 
   const addResource = useApiMutation<AttachmentOut, { title: string; url: string }>({
     mutationFn: (json) =>
@@ -501,8 +485,6 @@ export default function ProjectDetailPage(): JSX.Element {
           : restoreController.failure === 'queued-read'
             ? `This ${projectNoun.toLowerCase()} restore is saved on this device and will sync when you're back online. Retry refresh after it syncs; Undo cannot be sent again.`
             : null;
-  const restoreMutationError =
-    restoreController.refreshState === 'idle' ? restoreController.restoreMutation.error : null;
 
   if (trashedReceipt !== null) {
     return (
@@ -516,14 +498,10 @@ export default function ProjectDetailPage(): JSX.Element {
                 : `This ${projectNoun.toLowerCase()} is hidden from active views and can be restored.`}
             </p>
           </div>
-          {(restoreFailure ?? restoreMutationError) ? (
-            <p role="alert" className="text-error text-body-medium">
-              {restoreFailure ??
-                userErrorMessage(
-                  restoreMutationError,
-                  `Could not restore this ${projectNoun.toLowerCase()}.`,
-                )}
-            </p>
+          {restoreFailure ? (
+            <InlineBanner tone="critical" title={`${projectNoun} restore did not finish`}>
+              {restoreFailure}
+            </InlineBanner>
           ) : null}
           <div className="flex flex-wrap gap-2">
             <ProjectRestorePrimaryAction
@@ -540,7 +518,7 @@ export default function ProjectDetailPage(): JSX.Element {
             />
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               onClick={() => router.push(`/orgs/${orgId}/projects`)}
             >
               Back to Projects
@@ -553,11 +531,12 @@ export default function ProjectDetailPage(): JSX.Element {
 
   if (terminalState !== null) {
     return (
-      <p role="alert" className="text-on-surface-variant mx-auto max-w-7xl p-6">
-        {terminalState === 'forbidden'
-          ? `You no longer have access to this ${projectNoun.toLowerCase()}.`
-          : `This ${projectNoun.toLowerCase()} no longer exists.`}
-      </p>
+      <DetailUnavailable
+        noun={projectNoun.toLowerCase()}
+        forbidden={terminalState === 'forbidden'}
+        backHref={`/orgs/${orgId}/projects`}
+        backLabel={`Back to ${projectPlural.toLowerCase()}`}
+      />
     );
   }
   if (aggregateState === 'loading') {
@@ -571,19 +550,15 @@ export default function ProjectDetailPage(): JSX.Element {
           snapshot={navigationSnapshot}
         />
         {aggregateQ.isError ? (
-          <p role="alert" className="text-error text-body-medium mx-auto max-w-7xl px-6 pb-6">
-            Could not refresh this {projectNoun.toLowerCase()}.
-          </p>
+          <div className="mx-auto max-w-7xl px-6 pb-6">
+            <PartialLoadBanner title={refreshTitle} onRetry={() => void aggregateQ.refetch()} />
+          </div>
         ) : null}
       </>
     );
   }
   if (aggregateState === 'error') {
-    return (
-      <p role="alert" className="text-error mx-auto max-w-7xl p-6">
-        {userErrorMessage(aggregateQ.error, `Could not load this ${projectNoun.toLowerCase()}.`)}
-      </p>
-    );
+    return <QueryLoadFailure title={`This ${projectNoun.toLowerCase()}`} query={aggregateQ} />;
   }
   if (!project) return <p className="mx-auto max-w-7xl p-6">{projectNoun} not found.</p>;
 
@@ -721,11 +696,15 @@ export default function ProjectDetailPage(): JSX.Element {
               }}
             />
           </EntityMetadataRow>
-          {mutations.propsError || (ownerPickerOpen && membersQ.isError) ? (
-            <p role="alert" className="text-error text-body-medium">
-              {mutations.propsError ?? 'Could not load members.'}
-            </p>
-          ) : null}
+          <HeaderLoadFailureBanner
+            failures={[
+              {
+                failed: ownerPickerOpen && membersQ.isError,
+                title: 'Could not load members',
+                onRetry: () => void membersQ.refetch(),
+              },
+            ]}
+          />
         </div>
       }
       actions={
@@ -761,7 +740,6 @@ export default function ProjectDetailPage(): JSX.Element {
                   <DropdownMenuItem
                     destructive
                     onSelect={() => {
-                      moveProjectToTrash.reset();
                       setConfirmDeleteOpen(true);
                     }}
                   >
@@ -793,9 +771,7 @@ export default function ProjectDetailPage(): JSX.Element {
       }
     >
       {aggregateQ.isError ? (
-        <p role="alert" className="text-error text-body-medium">
-          Could not refresh this {projectNoun.toLowerCase()}.
-        </p>
+        <PartialLoadBanner title={refreshTitle} onRetry={() => void aggregateQ.refetch()} />
       ) : null}
       {tab === 'overview' ? (
         <section
@@ -828,9 +804,7 @@ export default function ProjectDetailPage(): JSX.Element {
             placeholder="Add the Project brief…"
           />
           {workQ.isError ? (
-            <p role="alert" className="text-error text-body-medium">
-              Could not load Project work.
-            </p>
+            <PartialLoadBanner title={workTitle} onRetry={() => void workQ.refetch()} />
           ) : null}
           <OverviewSummary tasks={milestoneTasks} />
           <ProjectMilestonesPanel
@@ -847,67 +821,31 @@ export default function ProjectDetailPage(): JSX.Element {
         </section>
       ) : null}
       {tab === 'tasks' ? (
-        <section
-          role="tabpanel"
-          id="tabpanel-tasks"
-          aria-labelledby="tab-tasks"
-          className="flex flex-col gap-2"
-        >
-          {workQ.isError ? (
-            <p role="alert" className="text-error text-body-medium">
-              Could not load Project work.
-            </p>
-          ) : null}
-          <MilestoneTasks
-            orgId={orgId}
-            tasks={milestoneTasks}
-            milestones={(workQ.data?.milestones ?? []).map((milestone) => ({
-              id: milestone.id,
-              name: milestone.name,
-              targetDate: milestone.targetDate ?? null,
-            }))}
-            resolveActor={() => ({ name: 'Unknown', kind: 'human' as const })}
-            taskNoun="task"
-            onOpenTask={(task) => {
-              openTaskRecord(task);
-            }}
-            onCreate={(title, restore) => {
-              openCreate({
-                kind: 'task',
-                initialWorkspaceId: orgId,
-                defaultProjectId: projectId,
-                ...(title === undefined ? {} : { defaultTitle: title }),
-                ...(restore === undefined ? {} : { onDismiss: restore }),
-                sameWorkspaceCompletion: 'stay',
-                continuousDetail: true,
-                onCreated: () => {
-                  void workQ.refetch();
-                },
-              });
-            }}
-            onQuickAdd={(title) =>
-              enqueueTask(() => quickCreateProjectTask.mutateAsync(title).then(() => undefined))
-            }
-            onRename={() => undefined}
-            canEdit={canEdit && project.teamId !== null}
-          />
-          <div className="bg-surface-container h-96 overflow-hidden rounded-xl">
-            <TaskGraphPanel
-              scope={{ orgId, projectId }}
-              density="compact"
-              onExpand={() => {
-                router.push(`/orgs/${orgId}/graph?projectId=${projectId}`);
-              }}
-            />
-          </div>
-        </section>
+        <ProjectTasksTab
+          orgId={orgId}
+          projectId={projectId}
+          tasks={milestoneTasks}
+          milestones={(workQ.data?.milestones ?? []).map((milestone) => ({
+            id: milestone.id,
+            name: milestone.name,
+            targetDate: milestone.targetDate ?? null,
+          }))}
+          workFailure={
+            workQ.isError ? { title: workTitle, onRetry: () => void workQ.refetch() } : null
+          }
+          proposedByTaskId={proposedByTaskId}
+          highlightedIds={highlightedIds}
+          onOpenTask={(task) => {
+            openTaskRecord(task);
+          }}
+        />
       ) : null}
       {tab === 'updates' ? (
         <div role="tabpanel" id="tabpanel-updates" aria-labelledby="tab-updates">
           <UpdatesPanel
             updates={updatesQ.data?.items ?? []}
             loading={updatesQ.isPending}
-            error={updatesQ.isError ? 'Could not load updates.' : null}
+            loadFailure={updatesQ.isError ? updatesQ : null}
             resolveActor={(actorId) => ({
               name:
                 aggregate?.references.lead?.actorId === actorId
@@ -916,7 +854,6 @@ export default function ProjectDetailPage(): JSX.Element {
               kind: 'human' as const,
             })}
             posting={postUpdate.isPending}
-            postError={postUpdate.error ? 'Could not post the update.' : null}
             onPost={async (body) => {
               await postUpdate.mutateAsync({ body });
             }}
@@ -931,15 +868,7 @@ export default function ProjectDetailPage(): JSX.Element {
             loading={resourcesQ.isPending}
             canEdit={canEdit}
             pending={addResource.isPending || removeResource.isPending}
-            error={
-              resourcesQ.isError
-                ? 'Could not load resources.'
-                : addResource.error
-                  ? 'Could not add the resource.'
-                  : removeResource.error
-                    ? 'Could not remove the resource.'
-                    : null
-            }
+            error={resourcesQ.isError ? 'Could not load resources.' : null}
             onAdd={addResource.mutate}
             onRemove={removeResource.mutate}
             subject={{ type: 'project', id: projectId, organizationId: orgId }}
@@ -952,10 +881,7 @@ export default function ProjectDetailPage(): JSX.Element {
       ) : null}
       <ConfirmDestructiveDialog
         open={confirmDeleteOpen}
-        onOpenChange={(next) => {
-          if (!next) moveProjectToTrash.reset();
-          setConfirmDeleteOpen(next);
-        }}
+        onOpenChange={setConfirmDeleteOpen}
         title={`Move this ${projectNoun.toLowerCase()} to trash?`}
         description={
           projectTaskCount > 0
@@ -964,14 +890,6 @@ export default function ProjectDetailPage(): JSX.Element {
         }
         confirmLabel="Move to trash"
         pending={moveProjectToTrash.isPending}
-        error={
-          moveProjectToTrash.error
-            ? userErrorMessage(
-                moveProjectToTrash.error,
-                `Could not move this ${projectNoun.toLowerCase()} to trash.`,
-              )
-            : null
-        }
         onConfirm={() => {
           moveProjectToTrash.mutate({
             commandId: crypto.randomUUID(),

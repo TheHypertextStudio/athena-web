@@ -249,7 +249,6 @@ export function RecoveryCodesDialog({
   mode,
   onGenerated,
 }: RecoveryCodesDialogProps): JSX.Element {
-  const state = useRecoveryCodesState();
   const {
     codes,
     setCodes,
@@ -263,7 +262,7 @@ export function RecoveryCodesDialog({
     setDownloaded,
     reauth,
     resetState,
-  } = state;
+  } = useRecoveryCodesState();
   const { onConfirm, onCopy } = useRecoveryCodesHandlers(codes, reauth, {
     setCodes,
     setBusy,
@@ -296,12 +295,7 @@ export function RecoveryCodesDialog({
         </DialogHeader>
 
         {/* A full set of codes can outrun the panel, so this is the region that scrolls. */}
-        {codes !== null || error !== null ? (
-          <DialogBody className="flex flex-col gap-2">
-            {codes !== null ? <RevealedCodes codes={codes} /> : null}
-            {error !== null ? <WriteError message={error} /> : null}
-          </DialogBody>
-        ) : null}
+        <RecoveryCodesBody codes={codes} error={error} />
 
         <DialogFooter>
           <DialogFooterButtons
@@ -327,5 +321,21 @@ export function RecoveryCodesDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function RecoveryCodesBody({
+  codes,
+  error,
+}: {
+  readonly codes: readonly string[] | null;
+  readonly error: string | null;
+}): JSX.Element | null {
+  if (codes === null && error === null) return null;
+  return (
+    <DialogBody className="flex flex-col gap-2">
+      {codes !== null ? <RevealedCodes codes={codes} /> : null}
+      {error !== null ? <WriteError message={error} /> : null}
+    </DialogBody>
   );
 }

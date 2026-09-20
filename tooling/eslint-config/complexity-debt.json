@@ -4385,12 +4385,6 @@
       "excess": 30
     }
   },
-  "apps/web/src/components/settings/recovery-codes-dialog.tsx": {
-    "max-lines-per-function": {
-      "max": 81,
-      "excess": 1
-    }
-  },
   "apps/web/src/components/settings/sessions-section.tsx": {
     "complexity": {
       "max": 16,

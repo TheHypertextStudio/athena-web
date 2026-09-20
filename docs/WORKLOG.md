@@ -116,6 +116,9 @@ Quick-win files to process:
   - `domains/athena/src/conversation-terms.ts` now applies suffix normalization through a focused
     helper, removing its final complexity excess while preserving the three lexical tests. The
     ledger is 761 files and 1,315 entries.
+  - Work-parent term stemming uses the same focused suffix application shape, clearing its final
+    complexity excess while preserving all eight parent-resolution tests. The ledger is 760 files
+    and 1,314 entries.
 
 ---
 

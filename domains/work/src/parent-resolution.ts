@@ -213,6 +213,18 @@ function scoreCandidateMatch(
   return { candidate, score, matched };
 }
 
+function applyWorkParentSuffix(stem: string, suffix: string): string {
+  const shortened = stem.slice(0, -suffix.length);
+  if (suffix === 'ies' || suffix === 'ied') return `${shortened}y`;
+  if (suffix.startsWith('ing') || suffix === 'ed' || suffix === 'edly') {
+    const last = shortened.at(-1) ?? '';
+    if (shortened.length > 2 && last === shortened.at(-2) && !'lszaeiou'.includes(last)) {
+      return shortened.slice(0, -1);
+    }
+  }
+  return shortened;
+}
+
 /** Normalize a word just enough for ordinary English task phrasing to compare reliably. */
 function stemWorkParentTerm(word: string): string {
   let stem = word;
@@ -232,14 +244,7 @@ function stemWorkParentTerm(word: string): string {
     's',
   ]) {
     if (stem.length > suffix.length + 2 && stem.endsWith(suffix)) {
-      stem = stem.slice(0, -suffix.length);
-      if (suffix === 'ies' || suffix === 'ied') stem += 'y';
-      else if (suffix.startsWith('ing') || suffix === 'ed' || suffix === 'edly') {
-        const last = stem.at(-1) ?? '';
-        if (stem.length > 2 && last === stem.at(-2) && !'lszaeiou'.includes(last)) {
-          stem = stem.slice(0, -1);
-        }
-      }
+      stem = applyWorkParentSuffix(stem, suffix);
       break;
     }
   }

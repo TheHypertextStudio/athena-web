@@ -6047,12 +6047,6 @@
       "excess": 88
     }
   },
-  "packages/service-worker/src/worker/routing.ts": {
-    "complexity": {
-      "max": 15,
-      "excess": 3
-    }
-  },
   "packages/service-worker/src/worker/strategies.ts": {
     "complexity": {
       "max": 19,

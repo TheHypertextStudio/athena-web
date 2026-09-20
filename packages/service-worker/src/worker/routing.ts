@@ -51,6 +51,32 @@ const PROXIED_PREFIXES = [
   '/_mintlify',
   '/mintlify-assets',
 ] as const;
+
+/** Whether a path belongs to an application this worker must leave untouched. */
+function isProxiedPath(path: string): boolean {
+  return PROXIED_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+}
+
+/** Whether a request belongs to dev-server plumbing that must bypass the worker. */
+function isDevRequest(path: string, url: string): boolean {
+  return isDevPath(path) || url.includes('?_rsc=') || url.includes('__nextDataReq');
+}
+
+/** Resolve the strategy for image, immutable, and stable shell assets. */
+function assetStrategy(path: string, production: boolean): CacheStrategy | undefined {
+  if (path.startsWith('/_next/image')) return 'passthrough';
+  if (path.startsWith('/_next/static/')) return production ? 'cache-first' : 'passthrough';
+  if (
+    path.startsWith('/icons/') ||
+    path === '/manifest.webmanifest' ||
+    path === '/icon.svg' ||
+    path.startsWith('/apple-icon')
+  ) {
+    return 'stale-while-revalidate';
+  }
+  return undefined;
+}
+
 /** The inputs the routing decision depends on. */
 export interface RouteRequest {
   /** HTTP method. */
@@ -88,33 +114,13 @@ export function routeRequest(request: RouteRequest): CacheStrategy {
   const path = pathOf(url, origin);
 
   // --- Security floor. Never cache, never intercept. ---
-  if (PROXIED_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))) {
-    return 'passthrough';
-  }
+  if (isProxiedPath(path)) return 'passthrough';
 
   // --- Dev-server plumbing. Intercepting any of this breaks hot reload. ---
-  if (isDevPath(path) || url.includes('?_rsc=') || url.includes('__nextDataReq')) {
-    return 'passthrough';
-  }
+  if (isDevRequest(path, url)) return 'passthrough';
 
-  // Next's image optimizer negotiates on Accept headers, so a URL-keyed cache would serve the
-  // wrong format to the wrong browser.
-  if (path.startsWith('/_next/image')) return 'passthrough';
-
-  // Content-hashed and immutable in a production build. Under Turbopack in dev the same paths are
-  // rebuilt in place, so caching them would serve stale chunks.
-  if (path.startsWith('/_next/static/')) return production ? 'cache-first' : 'passthrough';
-
-  // Small, stable, and worth having offline; revalidated in the background so a redeploy is picked
-  // up without a hard refresh.
-  if (
-    path.startsWith('/icons/') ||
-    path === '/manifest.webmanifest' ||
-    path === '/icon.svg' ||
-    path.startsWith('/apple-icon')
-  ) {
-    return 'stale-while-revalidate';
-  }
+  const asset = assetStrategy(path, production);
+  if (asset !== undefined) return asset;
 
   // Documents get the offline fallback but are themselves never stored: an authenticated route's
   // HTML would otherwise be replayable to whoever opens the browser next.

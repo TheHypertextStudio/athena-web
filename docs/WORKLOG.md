@@ -12,7 +12,7 @@
 - **Status**: IN_PROGRESS
 - **Started**: 2026-09-18
 - **Priority**: P0
-- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,269 entries, 155,490 excess points across 719 files.
+- **Description**: Systematically eliminate complexity-debt.json violations. Phase 1 targets 176 files with 1-10 total excess points across all rules. Current total: 1,268 entries, 155,487 excess points across 718 files.
 
 #### Analysis Complete
 
@@ -246,6 +246,9 @@ Quick-win files to process:
   - Stream event detail expansion now lives in a focused component, clearing the line's final
     max-lines-per-function excess while preserving all seven stream-event-line tests. The ledger
     is 719 files and 1,269 entries.
+  - Service-worker route security, dev-request, and asset-strategy checks now use focused helpers,
+    clearing the routing module's final complexity excess while preserving all 16 routing tests.
+    The ledger is 718 files and 1,268 entries.
 
 ---
 

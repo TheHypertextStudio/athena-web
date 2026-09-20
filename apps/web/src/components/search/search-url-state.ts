@@ -79,6 +79,22 @@ export interface SearchHttpQueryParams {
   to?: string;
 }
 
+function setOptionalQueryParam(
+  target: Partial<SearchHttpQueryParams>,
+  key: keyof SearchHttpQueryParams,
+  value: string,
+): void {
+  if (value) target[key] = value;
+}
+
+function setOptionalCsvQueryParam(
+  target: Partial<SearchHttpQueryParams>,
+  key: keyof SearchHttpQueryParams,
+  values: readonly string[],
+): void {
+  setOptionalQueryParam(target, key, values.length > 0 ? values.join(',') : '');
+}
+
 /** Parse shareable `/search` URL params into strongly typed filter state. */
 export function parseSearchPageFilters(params: SearchParamReader): SearchPageFilters {
   const kinds = enumList<SearchDocumentKind>(params.get('kinds'), KIND_SET);
@@ -133,22 +149,32 @@ export function searchPageFiltersToHttpQuery(
   filters: SearchPageFilters,
   options: { limit: number; cursor?: string | null },
 ): SearchHttpQueryParams {
+  const optional: Partial<SearchHttpQueryParams> = {};
+  setOptionalQueryParam(optional, 'cursor', options.cursor ?? '');
+  setOptionalCsvQueryParam(optional, 'ids', filters.ids);
+  setOptionalCsvQueryParam(optional, 'families', filters.families);
+  setOptionalCsvQueryParam(optional, 'kinds', filters.kinds);
+  setOptionalCsvQueryParam(optional, 'sources', filters.sources);
+  setOptionalCsvQueryParam(optional, 'orgIds', filters.orgIds);
+  setOptionalCsvQueryParam(optional, 'ownerIds', filters.ownerIds);
+  setOptionalCsvQueryParam(optional, 'assigneeIds', filters.assigneeIds);
+  setOptionalCsvQueryParam(optional, 'labelIds', filters.labelIds);
+  setOptionalCsvQueryParam(optional, 'statuses', filters.statuses);
+  setOptionalCsvQueryParam(optional, 'healths', filters.healths);
+  setOptionalQueryParam(
+    optional,
+    'from',
+    filters.fromDate ? localDateToIso(filters.fromDate, 'start') : '',
+  );
+  setOptionalQueryParam(
+    optional,
+    'to',
+    filters.toDate ? localDateToIso(filters.toDate, 'end') : '',
+  );
   return {
     q: filters.query,
     limit: String(options.limit),
-    ...(options.cursor ? { cursor: options.cursor } : {}),
-    ...(filters.ids.length > 0 ? { ids: filters.ids.join(',') } : {}),
-    ...(filters.families.length > 0 ? { families: filters.families.join(',') } : {}),
-    ...(filters.kinds.length > 0 ? { kinds: filters.kinds.join(',') } : {}),
-    ...(filters.sources.length > 0 ? { sources: filters.sources.join(',') } : {}),
-    ...(filters.orgIds.length > 0 ? { orgIds: filters.orgIds.join(',') } : {}),
-    ...(filters.ownerIds.length > 0 ? { ownerIds: filters.ownerIds.join(',') } : {}),
-    ...(filters.assigneeIds.length > 0 ? { assigneeIds: filters.assigneeIds.join(',') } : {}),
-    ...(filters.labelIds.length > 0 ? { labelIds: filters.labelIds.join(',') } : {}),
-    ...(filters.statuses.length > 0 ? { statuses: filters.statuses.join(',') } : {}),
-    ...(filters.healths.length > 0 ? { healths: filters.healths.join(',') } : {}),
-    ...(filters.fromDate ? { from: localDateToIso(filters.fromDate, 'start') } : {}),
-    ...(filters.toDate ? { to: localDateToIso(filters.toDate, 'end') } : {}),
+    ...optional,
   };
 }
 

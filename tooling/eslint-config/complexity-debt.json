@@ -4079,12 +4079,6 @@
       "excess": 16
     }
   },
-  "apps/web/src/components/search/search-url-state.ts": {
-    "complexity": {
-      "max": 14,
-      "excess": 2
-    }
-  },
   "apps/web/src/components/selection/selection-context.tsx": {
     "max-lines-per-function": {
       "max": 140,

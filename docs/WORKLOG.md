@@ -110,6 +110,9 @@ Quick-win files to process:
   - The overlap coloring helper now delegates two-color neighbor traversal to a focused function,
     removing its one-point cognitive-complexity excess. The overlap layout suite passes; the ledger
     is 763 files and 1,317 entries.
+  - `route-match.ts` now delegates one-segment matching to a typed result helper, reducing route
+    matching cognitive complexity without changing catch-all or parameter semantics. Its 15 tests
+    pass; the ledger is 762 files and 1,316 entries.
 
 ---
 

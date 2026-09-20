@@ -76,6 +76,30 @@ export function specificity(pattern: string): number {
   return statics * 100 + segments.length - (hasCatchAll ? 10_000 : 0);
 }
 
+type SegmentMatch = 'continue' | 'fail' | 'match';
+
+function matchSegment(
+  segment: Segment | undefined,
+  index: number,
+  parts: readonly string[],
+  params: Record<string, string | readonly string[]>,
+): SegmentMatch {
+  if (!segment) return 'fail';
+  if (segment.kind === 'catch-all') {
+    const rest = parts.slice(index);
+    if (rest.length === 0) return 'fail';
+    params[segment.name] = rest.map((part) => decodeURIComponent(part));
+    return 'match';
+  }
+  const part = parts[index];
+  if (part === undefined) return 'fail';
+  if (segment.kind === 'static') {
+    return segment.value === part ? 'continue' : 'fail';
+  }
+  params[segment.name] = decodeURIComponent(part);
+  return 'continue';
+}
+
 /**
  * Match one pathname against one pattern.
  *
@@ -89,33 +113,9 @@ export function matchPattern(pattern: string, pathname: string): RouteMatch | nu
   const params: Record<string, string | readonly string[]> = {};
 
   for (let index = 0; index < segments.length; index += 1) {
-    const segment = segments[index];
-    if (!segment) {
-      return null;
-    }
-
-    if (segment.kind === 'catch-all') {
-      // Next's catch-all requires at least one segment; `[[...x]]` (optional) is not used anywhere
-      // in this app, so a bare parent path is deliberately not a match.
-      const rest = parts.slice(index);
-      if (rest.length === 0) {
-        return null;
-      }
-      params[segment.name] = rest.map((part) => decodeURIComponent(part));
-      return { pattern, params };
-    }
-
-    const part = parts[index];
-    if (part === undefined) {
-      return null;
-    }
-    if (segment.kind === 'static') {
-      if (segment.value !== part) {
-        return null;
-      }
-      continue;
-    }
-    params[segment.name] = decodeURIComponent(part);
+    const result = matchSegment(segments[index], index, parts, params);
+    if (result === 'fail') return null;
+    if (result === 'match') return { pattern, params };
   }
 
   // A trailing segment the pattern does not account for means a different, longer route.
